@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.processor;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Constants;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.Cip68Metadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.parser.Cip68DatumParser;
@@ -159,10 +160,104 @@ class Cip68ProcessorTest {
         }
     }
 
+    @Nested
+    @DisplayName("Label classification (cross-output detection)")
+    class LabelClassification {
+
+        // Common token base name "fdt" (== 464c4454 hex). The reference NFT and the
+        // user-token share this base name and only differ by the 4-byte prefix.
+        private static final String BASE_NAME_HEX = "464c4454";
+        private static final String FT_USER_TOKEN_NAME  = "0014df10" + BASE_NAME_HEX;
+        private static final String NFT_USER_TOKEN_NAME = "000de140" + BASE_NAME_HEX;
+        private static final String RFT_USER_TOKEN_NAME = "001bc280" + BASE_NAME_HEX;
+
+        @Test
+        void labelsAsFtWhenCoMintedWithFungibleUserToken() {
+            verifyLabel(FT_USER_TOKEN_NAME, Cip68Constants.LABEL_FT);
+        }
+
+        @Test
+        void labelsAsNftWhenCoMintedWithNftUserToken() {
+            verifyLabel(NFT_USER_TOKEN_NAME, Cip68Constants.LABEL_NFT);
+        }
+
+        @Test
+        void labelsAsRftWhenCoMintedWithRftUserToken() {
+            verifyLabel(RFT_USER_TOKEN_NAME, Cip68Constants.LABEL_RFT);
+        }
+
+        @Test
+        void fallsBackToFtWhenNoCoMintedUserToken() {
+            // Orphan reference NFT: only 000643b0 in the tx, no user-token prefix.
+            String datum = "d8799fa34446756e6e";
+            FungibleTokenMetadata metadata = new FungibleTokenMetadata(
+                    6L, "Orphan", null, "Orphan", "ORPH", null, 1L);
+            Amt refNftAmt = refNftAmount();
+            AddressUtxo refNftUtxo = AddressUtxo.builder()
+                    .txHash(TX_HASH).inlineDatum(datum).amounts(List.of(refNftAmt)).build();
+
+            when(cip68TokenService.extractReferenceNft(refNftUtxo)).thenReturn(Optional.of(refNftAmt));
+            when(cip68DatumParser.parse(datum)).thenReturn(Optional.of(metadata));
+            when(cip68TokenService.isValidMetadata(metadata)).thenReturn(true);
+
+            processor.processTransaction(buildEvent(100L, List.of(refNftUtxo)));
+
+            assertThat(captureSavedLabel()).isEqualTo(Cip68Constants.LABEL_FT);
+        }
+
+        // Helper: build a tx with the ref-NFT output + a co-minted user-token output
+        // having the given asset name; assert the saved row's label matches expected.
+        private void verifyLabel(String coMintedAssetName, int expectedLabel) {
+            String datum = "d8799fa34446756e6e";
+            FungibleTokenMetadata metadata = new FungibleTokenMetadata(
+                    6L, "Test", null, "Test", "TST", null, 1L);
+
+            Amt refNftAmt = refNftAmount();
+            AddressUtxo refNftUtxo = AddressUtxo.builder()
+                    .txHash(TX_HASH).inlineDatum(datum).amounts(List.of(refNftAmt)).build();
+
+            // Co-minted user token in another output of the same tx
+            Amt userTokenAmt = Amt.builder()
+                    .unit(POLICY_ID + coMintedAssetName)
+                    .quantity(BigInteger.ONE)
+                    .build();
+            AddressUtxo userTokenUtxo = AddressUtxo.builder()
+                    .txHash(TX_HASH).amounts(List.of(userTokenAmt)).build();
+
+            when(cip68TokenService.extractReferenceNft(refNftUtxo)).thenReturn(Optional.of(refNftAmt));
+            when(cip68TokenService.extractReferenceNft(userTokenUtxo)).thenReturn(Optional.empty());
+            when(cip68DatumParser.parse(datum)).thenReturn(Optional.of(metadata));
+            when(cip68TokenService.isValidMetadata(metadata)).thenReturn(true);
+
+            // Both outputs in the same tx — that's how cross-output detection sees them.
+            processor.processTransaction(buildEvent(100L, List.of(refNftUtxo, userTokenUtxo)));
+
+            assertThat(captureSavedLabel()).isEqualTo(expectedLabel);
+        }
+
+        private Amt refNftAmount() {
+            return Amt.builder()
+                    .unit(POLICY_ID + REF_NFT_ASSET_NAME)
+                    .quantity(BigInteger.ONE)
+                    .build();
+        }
+
+        private int captureSavedLabel() {
+            @SuppressWarnings("unchecked")
+            ArgumentCaptor<Iterable<Cip68Metadata>> captor = ArgumentCaptor.forClass(Iterable.class);
+            verify(metadataReferenceNftRepository).saveAll(captor.capture());
+            return captor.getValue().iterator().next().getLabel();
+        }
+    }
+
     private AddressUtxoEvent buildEvent(long slot, AddressUtxo utxo) {
+        return buildEvent(slot, List.of(utxo));
+    }
+
+    private AddressUtxoEvent buildEvent(long slot, List<AddressUtxo> outputs) {
         return AddressUtxoEvent.builder()
                 .metadata(EventMetadata.builder().slot(slot).build())
-                .txInputOutputs(List.of(TxInputOutput.builder().outputs(List.of(utxo)).build()))
+                .txInputOutputs(List.of(TxInputOutput.builder().outputs(outputs).build()))
                 .build();
     }
 

@@ -12,8 +12,12 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * Fungible token (label 333) implementation of {@link Cip68StorageReader}.
- * All queries are scoped to label 333 to avoid mixing with future NFT data.
+ * Fungible-token-facing implementation of {@link Cip68StorageReader}.
+ * <p>
+ * The {@code cip68_metadata} table stores rows for label 222 / 333 / 444; this reader
+ * filters to label 333 (FT) only — the public API surface today is FT-focused. NFT/RFT
+ * rows in the same table are dormant data, future-proofed for a later release that
+ * adds NFT/RFT-specific service methods and DTOs.
  */
 @RequiredArgsConstructor
 public class Cip68StorageReaderImpl implements Cip68StorageReader {

@@ -71,8 +71,6 @@ CREATE TABLE cip68_metadata (
     -- policy_id: exactly 28 bytes = 56 hex chars (Blake2b-224). Protocol-bounded.
     policy_id      VARCHAR(56)  NOT NULL,
     -- asset_name: 0–32 bytes = 0–64 hex chars (ledger max). Protocol-bounded.
-    -- Includes the CIP-68 label prefix on the user-token side
-    -- (000de140 NFT / 0014df10 FT / 001bc280 RFT) — i.e. the user-facing subject.
     asset_name     VARCHAR(64)  NOT NULL,
     slot           BIGINT       NOT NULL,
     -- CIP-68 label: 222 (NFT), 333 (FT), 444 (RFT). Set by Cip68Processor based
