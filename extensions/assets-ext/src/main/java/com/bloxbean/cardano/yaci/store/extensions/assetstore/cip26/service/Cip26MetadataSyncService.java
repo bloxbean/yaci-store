@@ -2,11 +2,11 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.service;
 
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.AssetsExtStoreProperties;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.Cip26NetworkDefaults;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.OffChainSyncState;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.Cip26SyncState;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.Mapping;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.MappingUpdateDetails;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.enums.SyncStatusEnum;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.repository.SyncStateRepository;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.repository.Cip26SyncStateRepository;
 import jakarta.annotation.PostConstruct;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -23,12 +23,12 @@ import java.util.stream.Collectors;
 @Service
 @Slf4j
 @RequiredArgsConstructor
-public class TokenMetadataSyncService {
+public class Cip26MetadataSyncService {
 
     private final GitService gitService;
-    private final TokenMetadataService tokenMetadataService;
+    private final Cip26MetadataService tokenMetadataService;
     private final TokenMappingService tokenMappingService;
-    private final SyncStateRepository syncStateRepository;
+    private final Cip26SyncStateRepository syncStateRepository;
     private final Cip26NetworkDefaults networkDefaults;
     private final AssetsExtStoreProperties assetsStoreProperties;
 
@@ -52,9 +52,9 @@ public class TokenMetadataSyncService {
 
         syncStatus.setStatus(SyncStatusEnum.SYNC_IN_PROGRESS);
 
-        Optional<OffChainSyncState> lastSyncState = syncStateRepository.findTopByOrderByIdDesc();
+        Optional<Cip26SyncState> lastSyncState = syncStateRepository.findTopByOrderByIdDesc();
         String lastHash = lastSyncState
-                .map(OffChainSyncState::getLastCommitHash).orElse(null);
+                .map(Cip26SyncState::getLastCommitHash).orElse(null);
 
         long syncStart = System.currentTimeMillis();
         log.info("Starting offchain sync. Last known commit: {}", lastHash != null ? lastHash : "(none — full sync)");
@@ -96,7 +96,7 @@ public class TokenMetadataSyncService {
             if (anyTransientFailure) {
                 log.warn("At least one entry hit a transient failure. Commit hash will not be advanced so those entries are retried on next sync.");
             } else if (newHashOpt.isPresent()) {
-                OffChainSyncState offChainSyncStateToSave = lastSyncState.orElse(new OffChainSyncState());
+                Cip26SyncState offChainSyncStateToSave = lastSyncState.orElse(new Cip26SyncState());
                 offChainSyncStateToSave.setLastCommitHash(newHashOpt.get());
                 offChainSyncStateToSave.setLastSyncedAt(LocalDateTime.now());
                 syncStateRepository.save(offChainSyncStateToSave);

@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.util;
 
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.TokenMetadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.Cip26Metadata;
 import lombok.extern.slf4j.Slf4j;
 import org.cardanofoundation.metadatatools.core.cip26.MetadataCreator;
 import org.cardanofoundation.metadatatools.core.cip26.ValidationError;
@@ -20,15 +20,15 @@ import java.util.stream.Collectors;
  */
 @Component
 @Slf4j
-public class TokenMetadataValidator {
+public class Cip26MetadataValidator {
 
     /**
-     * Validates that all fields in the TokenMetadata entity comply with CIP-26 specification.
+     * Validates that all fields in the Cip26Metadata entity comply with CIP-26 specification.
      *
      * @param tokenMetadata the token metadata to validate
      * @return true if valid according to CIP-26, false otherwise
      */
-    public boolean validate(TokenMetadata tokenMetadata) {
+    public boolean validate(Cip26Metadata tokenMetadata) {
         try {
             Metadata cip26Metadata = convertToMetadata(tokenMetadata);
             ValidationResult validationResult = MetadataCreator.validateMetadata(cip26Metadata);
@@ -99,7 +99,7 @@ public class TokenMetadataValidator {
         }
     }
 
-    private Metadata convertToMetadata(TokenMetadata tokenMetadata) {
+    private Metadata convertToMetadata(Cip26Metadata tokenMetadata) {
         Metadata metadata = new Metadata();
 
         if (tokenMetadata.getSubject() != null) {

@@ -1,8 +1,8 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.health;
 
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.service.SyncStatus;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.service.TokenMetadataSyncCronJob;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.service.TokenMetadataSyncService;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.service.Cip26MetadataSyncCronJob;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.service.Cip26MetadataSyncService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.actuate.health.Health;
 import org.springframework.boot.actuate.health.HealthIndicator;
@@ -24,19 +24,19 @@ import org.springframework.stereotype.Component;
  *   <li>{@code DOWN} — sync encountered an error</li>
  * </ul>
  *
- * <p>Conditional on {@link TokenMetadataSyncCronJob} — this indicator is only registered when
+ * <p>Conditional on {@link Cip26MetadataSyncCronJob} — this indicator is only registered when
  * the CIP-26 sync cron job is active. In read-only mode or when CIP-26 is disabled, the cron
  * job bean is absent and this indicator is silently skipped (reporting sync status without an
  * active sync job would be misleading).
  */
 @Component("assetStoreOffchainSync")
-@ConditionalOnBean(TokenMetadataSyncCronJob.class)
+@ConditionalOnBean(Cip26MetadataSyncCronJob.class)
 @RequiredArgsConstructor
 public class OffchainSyncHealthIndicator implements HealthIndicator {
 
     private static final String DETAIL_SYNC_STATUS = "syncStatus";
 
-    private final TokenMetadataSyncService tokenMetadataSyncService;
+    private final Cip26MetadataSyncService tokenMetadataSyncService;
 
     @Override
     public Health health() {

@@ -36,14 +36,14 @@ import java.util.stream.Collectors;
  * CIP-26 metadata DTO returned under {@code standards.cip26} when {@code show_cips_details=true}.
  * <p>
  * Shape ported 1:1 from {@code cf-token-metadata-registry}'s
- * {@code api.model.rest.TokenMetadata} so yaci-store and the CF V2 API produce
+ * {@code api.model.rest.Cip26Metadata} so yaci-store and the CF V2 API produce
  * byte-for-byte equivalent JSON for this block. Each well-known property is wrapped
  * in a {@link TokenMetadataProperty} envelope ({@code value}/{@code signatures}/{@code sequenceNumber})
  * — the data already lives in {@code ft_offchain_metadata.properties} (the original
  * CIP-26 mapping JSON), so we just lift it through.
  * <p>
- * Named {@code Cip26TokenMetadata} (not {@code TokenMetadata}) to avoid colliding with
- * the JPA entity in {@code cip26.storage.impl.model.TokenMetadata}.
+ * Named {@code Cip26TokenMetadata} (not {@code Cip26Metadata}) to avoid colliding with
+ * the JPA entity in {@code cip26.storage.impl.model.Cip26Metadata}.
  */
 @Data
 @NoArgsConstructor
@@ -132,15 +132,15 @@ public class Cip26TokenMetadata {
      * The original CIP-26 mapping JSON (with {@code Item} envelopes carrying signatures
      * and sequence numbers) is stored verbatim on the entity's {@code properties} column,
      * so we lift the envelopes straight through. The {@code logo} comes from the separate
-     * {@code TokenLogo} table — we re-wrap it using the logo's stored {@code Item} from
+     * {@code Cip26Metadata} table — we re-wrap it using the logo's stored {@code Item} from
      * the same mapping JSON to preserve signatures, while substituting the table copy as
      * the canonical value.
      *
      * @param entity   the CIP-26 JPA entity
-     * @param logoB64  base64-encoded logo string (from {@code TokenLogo}), or null
+     * @param logoB64  base64-encoded logo string (from {@code Cip26Metadata}), or null
      */
     public static Cip26TokenMetadata from(
-            com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.TokenMetadata entity,
+            com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.Cip26Metadata entity,
             @Nullable String logoB64) {
         if (entity == null) {
             return null;
@@ -158,7 +158,7 @@ public class Cip26TokenMetadata {
             builder.ticker(stringProperty(mapping.ticker(), TickerProperty::new));
             builder.decimals(decimalsProperty(mapping.decimals()));
             if (logoB64 != null) {
-                // Preserve signatures from mapping.logo() but use the canonical base64 string from TokenLogo.
+                // Preserve signatures from mapping.logo() but use the canonical base64 string from Cip26Metadata.
                 builder.logo(logoProperty(mapping.logo(), logoB64));
             }
         }

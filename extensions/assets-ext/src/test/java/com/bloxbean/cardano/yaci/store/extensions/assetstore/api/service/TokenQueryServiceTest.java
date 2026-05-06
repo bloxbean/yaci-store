@@ -7,7 +7,7 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.model.Progra
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.Cip113StorageReader;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.Item;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.Mapping;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.TokenMetadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.Cip26Metadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.Cip26StorageReader;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.AssetType;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
@@ -66,7 +66,7 @@ class TokenQueryServiceTest {
         when(cip68StorageReader.findBySubject(eq(UNKNOWN_SUBJECT), any())).thenReturn(Optional.empty());
 
         // Known subject: CIP-26 + CIP-68
-        TokenMetadata knownCip26 = new TokenMetadata();
+        Cip26Metadata knownCip26 = new Cip26Metadata();
         knownCip26.setSubject(KNOWN_SUBJECT);
         knownCip26.setName("nutcoin");
         knownCip26.setDescription("The legendary Nutcoin, the first native asset minted on Cardano.");
@@ -81,7 +81,7 @@ class TokenQueryServiceTest {
         // FLDT: CIP-26 data. The Mapping JSON is what populates the show_cips_details=true
         // standards.cip26 envelope (signatures + sequenceNumber + value), so set it here
         // alongside the entity's flat columns.
-        TokenMetadata fldtCip26 = new TokenMetadata();
+        Cip26Metadata fldtCip26 = new Cip26Metadata();
         fldtCip26.setSubject(FLDT_SUBJECT);
         fldtCip26.setName("FLDT");
         fldtCip26.setTicker("FLDT");

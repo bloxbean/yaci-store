@@ -2,8 +2,7 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore;
 
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.Cip26StorageReader;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.Cip26StorageReaderImpl;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.repository.TokenLogoRepository;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.repository.TokenMetadataRepository;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.repository.Cip26MetadataRepository;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service.Cip68TokenService;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.Cip68StorageReader;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.Cip68StorageReaderImpl;
@@ -32,9 +31,8 @@ public class AssetsExtConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public Cip26StorageReader cip26StorageReader(TokenMetadataRepository tokenMetadataRepository,
-                                                  TokenLogoRepository tokenLogoRepository) {
-        return new Cip26StorageReaderImpl(tokenMetadataRepository, tokenLogoRepository);
+    public Cip26StorageReader cip26StorageReader(Cip26MetadataRepository cip26MetadataRepository) {
+        return new Cip26StorageReaderImpl(cip26MetadataRepository);
     }
 
     @Bean

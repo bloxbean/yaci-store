@@ -6,7 +6,7 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.cip26.Cip26
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.model.ProgrammableTokenCip113;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.Cip113StorageReader;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.Cip26StorageReader;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.TokenMetadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.Cip26Metadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.AssetType;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.Cip68StorageReader;
@@ -106,8 +106,8 @@ public class TokenQueryService {
         Map<String, ProgrammableTokenCip113> cip113Map = cip113StorageReader.findByPolicyIds(policyIds);
 
         // CIP-26: one query for all metadata, one query for all logos
-        Map<String, TokenMetadata> cip26MetadataMap = cip26StorageReader.findBySubjects(subjects).stream()
-                .collect(Collectors.toMap(TokenMetadata::getSubject, Function.identity()));
+        Map<String, Cip26Metadata> cip26MetadataMap = cip26StorageReader.findBySubjects(subjects).stream()
+                .collect(Collectors.toMap(Cip26Metadata::getSubject, Function.identity()));
 
         boolean needLogos = queryProperties.isEmpty() || queryProperties.contains("logo");
         Map<String, String> cip26LogoMap = needLogos
@@ -127,7 +127,7 @@ public class TokenQueryService {
      */
     public record BatchPrefetchData(
             Map<String, ProgrammableTokenCip113> cip113Map,
-            Map<String, TokenMetadata> cip26MetadataMap,
+            Map<String, Cip26Metadata> cip26MetadataMap,
             Map<String, String> cip26LogoMap,
             Map<String, FungibleTokenMetadata> cip68MetadataMap) {
     }
@@ -194,7 +194,7 @@ public class TokenQueryService {
 
     private Optional<ResolvedMetadata> findCip26MetadataBatch(String subject, List<String> properties,
                                                                     BatchPrefetchData prefetchData) {
-        TokenMetadata entity = prefetchData.cip26MetadataMap().get(subject);
+        Cip26Metadata entity = prefetchData.cip26MetadataMap().get(subject);
         if (entity == null) {
             return Optional.empty();
         }

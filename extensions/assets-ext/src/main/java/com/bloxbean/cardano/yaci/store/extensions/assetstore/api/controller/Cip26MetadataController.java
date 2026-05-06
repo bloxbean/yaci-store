@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.api.controller;
 
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.TokenMetadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.Cip26Metadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.Cip26StorageReader;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -28,7 +28,7 @@ public class Cip26MetadataController {
                     @ApiResponse(responseCode = "404", description = "Subject not found in CIP-26 registry")
             })
     @GetMapping(path = "/cip26/{subject}", produces = {"application/json;charset=utf-8"})
-    public ResponseEntity<TokenMetadata> getMetadataBySubject(
+    public ResponseEntity<Cip26Metadata> getMetadataBySubject(
             @Parameter(description = "The subject identifier (policy ID + asset name hex)")
             @PathVariable("subject")
             @Pattern(regexp = TokenPatterns.SUBJECT_REGEX,
@@ -47,7 +47,7 @@ public class Cip26MetadataController {
                     @ApiResponse(responseCode = "404", description = "Not found in CIP-26 registry")
             })
     @GetMapping(path = "/cip26/{policyId}/{assetName}", produces = {"application/json;charset=utf-8"})
-    public ResponseEntity<TokenMetadata> getMetadataByPolicyAndAssetName(
+    public ResponseEntity<Cip26Metadata> getMetadataByPolicyAndAssetName(
             @Parameter(description = "The policy ID (56 hex characters)")
             @PathVariable("policyId")
             @Pattern(regexp = TokenPatterns.POLICY_ID_REGEX,

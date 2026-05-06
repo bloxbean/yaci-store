@@ -1,7 +1,6 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.util;
 
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.TokenLogo;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.TokenMetadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.Cip26Metadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.Item;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.Mapping;
 
@@ -17,15 +16,15 @@ public final class MappingsUtil {
     private MappingsUtil() {
     }
 
-    public static TokenMetadata toTokenMetadata(Mapping mapping, String updateBy, LocalDateTime updatedAt) {
-        TokenMetadata tokenMetadata = new TokenMetadata();
-        tokenMetadata.setSubject(mapping.subject());
-        tokenMetadata.setPolicy(mapping.policy());
-        tokenMetadata.setName(getValue(mapping.name()));
-        tokenMetadata.setTicker(getValue(mapping.ticker()));
-        tokenMetadata.setUrl(getValue(mapping.url()));
-        tokenMetadata.setDescription(getValue(mapping.description()));
-        tokenMetadata.setDecimals(getValue(mapping.decimals(), s -> {
+    public static Cip26Metadata toCip26Metadata(Mapping mapping, String updateBy, LocalDateTime updatedAt) {
+        Cip26Metadata cip26Metadata = new Cip26Metadata();
+        cip26Metadata.setSubject(mapping.subject());
+        cip26Metadata.setPolicy(mapping.policy());
+        cip26Metadata.setName(getValue(mapping.name()));
+        cip26Metadata.setTicker(getValue(mapping.ticker()));
+        cip26Metadata.setUrl(getValue(mapping.url()));
+        cip26Metadata.setDescription(getValue(mapping.description()));
+        cip26Metadata.setDecimals(getValue(mapping.decimals(), s -> {
             try {
                 return Long.valueOf(s);
             } catch (NumberFormatException e) {
@@ -33,19 +32,16 @@ public final class MappingsUtil {
                 return null;
             }
         }));
-        tokenMetadata.setUpdated(updatedAt);
-        tokenMetadata.setUpdatedBy(updateBy);
-        tokenMetadata.setProperties(mapping);
-        return tokenMetadata;
+        cip26Metadata.setUpdated(updatedAt);
+        cip26Metadata.setUpdatedBy(updateBy);
+        cip26Metadata.setProperties(mapping);
+        return cip26Metadata;
     }
 
-    public static TokenLogo toTokenLogo(Mapping mapping) {
-        TokenLogo tokenLogo = new TokenLogo();
-        tokenLogo.setSubject(mapping.subject());
-        tokenLogo.setLogo(getValue(mapping.logo()));
-        return tokenLogo;
+    /** Extract the logo's base64 string from a Mapping, or null if absent. */
+    public static String extractLogo(Mapping mapping) {
+        return getValue(mapping.logo());
     }
-
 
     private static String getValue(Item item) {
         return getValue(item, Function.identity());
@@ -54,6 +50,4 @@ public final class MappingsUtil {
     private static <T> T getValue(Item item, Function<String, T> f) {
         return Optional.ofNullable(item).map(Item::value).map(f).orElse(null);
     }
-
-
 }
