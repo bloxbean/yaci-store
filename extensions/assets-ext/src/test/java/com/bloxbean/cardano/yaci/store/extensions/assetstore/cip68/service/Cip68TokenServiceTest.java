@@ -4,8 +4,8 @@ import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.AssetType;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.MetadataReferenceNft;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.repository.MetadataReferenceNftRepository;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.Cip68Metadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.repository.Cip68MetadataRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -40,7 +40,7 @@ class Cip68TokenServiceTest {
     private static final String REF_SUBJECT = POLICY_ID + REF_ASSET_NAME;
 
     @Mock
-    private MetadataReferenceNftRepository repository;
+    private Cip68MetadataRepository repository;
 
     @InjectMocks
     private Cip68TokenService service;
@@ -241,7 +241,7 @@ class Cip68TokenServiceTest {
         @Test
         void mapsResultsKeyedByRefNftSubject() {
             List<AssetType> keys = List.of(new AssetType(POLICY_A, REF_NAME_A));
-            MetadataReferenceNft row = MetadataReferenceNft.builder()
+            Cip68Metadata row = Cip68Metadata.builder()
                     .policyId(POLICY_A).assetName(REF_NAME_A).slot(100L).label(333)
                     .name("TokenA").description("desc A").ticker("TKA").decimals(6L).version(1L).build();
             when(repository.findLatestByConcatenatedKeys(anyCollection(), eq(333)))
@@ -264,7 +264,7 @@ class Cip68TokenServiceTest {
             List<AssetType> keys = List.of(
                     new AssetType(POLICY_A, REF_NAME_A),
                     new AssetType(POLICY_B, REF_NAME_B));
-            MetadataReferenceNft rowA = MetadataReferenceNft.builder()
+            Cip68Metadata rowA = Cip68Metadata.builder()
                     .policyId(POLICY_A).assetName(REF_NAME_A).slot(100L).label(333)
                     .name("A").description("desc A").version(1L).build();
             // Only one row returned from the DB — POLICY_B has no matching row
@@ -280,7 +280,7 @@ class Cip68TokenServiceTest {
         @Test
         void appliesPropertyFilter() {
             List<AssetType> keys = List.of(new AssetType(POLICY_A, REF_NAME_A));
-            MetadataReferenceNft row = MetadataReferenceNft.builder()
+            Cip68Metadata row = Cip68Metadata.builder()
                     .policyId(POLICY_A).assetName(REF_NAME_A).slot(100L).label(333)
                     .name("TokenA").description("desc A").ticker("TKA").decimals(6L).version(1L)
                     .logo("aGVsbG8=").url("https://example.com").build();

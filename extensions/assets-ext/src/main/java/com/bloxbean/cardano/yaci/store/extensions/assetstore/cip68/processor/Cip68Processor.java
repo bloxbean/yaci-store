@@ -7,9 +7,9 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Co
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
 
 import java.time.LocalDateTime;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.MetadataReferenceNft;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.Cip68Metadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.parser.Cip68DatumParser;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.repository.MetadataReferenceNftRepository;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.repository.Cip68MetadataRepository;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service.Cip68TokenService;
 import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxoEvent;
 import lombok.RequiredArgsConstructor;
@@ -30,20 +30,20 @@ public class Cip68Processor {
 
     private final Cip68TokenService cip68TokenService;
     private final Cip68DatumParser cip68DatumParser;
-    private final MetadataReferenceNftRepository metadataReferenceNftRepository;
+    private final Cip68MetadataRepository metadataReferenceNftRepository;
 
     @EventListener
     @Transactional
     public void processTransaction(AddressUtxoEvent addressUtxoEvent) {
         Long slot = addressUtxoEvent.getMetadata().getSlot();
 
-        List<MetadataReferenceNft> entities = addressUtxoEvent.getTxInputOutputs()
+        List<Cip68Metadata> entities = addressUtxoEvent.getTxInputOutputs()
                 .stream()
                 .flatMap(txInputOutput -> txInputOutput.getOutputs().stream())
                 .flatMap(this::findReferenceNft)
                 .flatMap(this::parseDatum)
                 .filter(this::isValidMetadata)
-                .map(referenceNftUtxoData -> buildMetadataReferenceNft(
+                .map(referenceNftUtxoData -> buildCip68Metadata(
                         referenceNftUtxoData.fungibleTokenMetadata(),
                         referenceNftUtxoData.referenceNft(),
                         referenceNftUtxoData.datum(), slot))
@@ -54,8 +54,8 @@ public class Cip68Processor {
         }
     }
 
-    private MetadataReferenceNft buildMetadataReferenceNft(FungibleTokenMetadata metadata, AssetType assetType, String datum, Long slot) {
-        return MetadataReferenceNft.builder()
+    private Cip68Metadata buildCip68Metadata(FungibleTokenMetadata metadata, AssetType assetType, String datum, Long slot) {
+        return Cip68Metadata.builder()
                 .policyId(assetType.policyId())
                 .assetName(assetType.assetName())
                 .slot(slot)

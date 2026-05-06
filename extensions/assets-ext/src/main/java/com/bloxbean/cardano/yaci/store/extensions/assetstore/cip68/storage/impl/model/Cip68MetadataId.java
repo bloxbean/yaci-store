@@ -8,7 +8,7 @@ import lombok.*;
 @AllArgsConstructor
 @Builder
 @EqualsAndHashCode
-public class MetadataReferenceNftId {
+public class Cip68MetadataId {
 
     private String policyId;
     private String assetName;

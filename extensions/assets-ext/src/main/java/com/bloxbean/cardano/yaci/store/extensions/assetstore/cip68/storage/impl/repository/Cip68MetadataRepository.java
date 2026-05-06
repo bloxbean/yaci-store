@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.repository;
 
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.MetadataReferenceNft;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.MetadataReferenceNftId;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.Cip68Metadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.Cip68MetadataId;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -12,9 +12,9 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-public interface MetadataReferenceNftRepository extends JpaRepository<MetadataReferenceNft, MetadataReferenceNftId> {
+public interface Cip68MetadataRepository extends JpaRepository<Cip68Metadata, Cip68MetadataId> {
 
-    Optional<MetadataReferenceNft> findFirstByPolicyIdAndAssetNameAndLabelOrderBySlotDesc(
+    Optional<Cip68Metadata> findFirstByPolicyIdAndAssetNameAndLabelOrderBySlotDesc(
             String policyId, String assetName, int label);
 
     /**
@@ -40,7 +40,7 @@ public interface MetadataReferenceNftRepository extends JpaRepository<MetadataRe
             "ORDER BY slot DESC) AS rn FROM metadata_reference_nft WHERE label = :label " +
             "AND CONCAT(policy_id, asset_name) IN (:concatenatedKeys)) ranked WHERE rn = 1",
             nativeQuery = true)
-    List<MetadataReferenceNft> findLatestByConcatenatedKeys(
+    List<Cip68Metadata> findLatestByConcatenatedKeys(
             @Param("concatenatedKeys") Collection<String> concatenatedKeys,
             @Param("label") int label);
 

@@ -3,10 +3,10 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.processor;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.MetadataReferenceNft;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.Cip68Metadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.parser.Cip68DatumParser;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.repository.MetadataReferenceNftRepository;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.repository.Cip68MetadataRepository;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service.Cip68TokenService;
 import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxoEvent;
 import com.bloxbean.cardano.yaci.store.utxo.domain.TxInputOutput;
@@ -41,7 +41,7 @@ class Cip68ProcessorTest {
     private Cip68DatumParser cip68DatumParser;
 
     @Mock
-    private MetadataReferenceNftRepository metadataReferenceNftRepository;
+    private Cip68MetadataRepository metadataReferenceNftRepository;
 
     @InjectMocks
     private Cip68Processor processor;
@@ -74,10 +74,10 @@ class Cip68ProcessorTest {
             processor.processTransaction(buildEvent(100L, utxo));
 
             @SuppressWarnings("unchecked")
-            ArgumentCaptor<Iterable<MetadataReferenceNft>> captor = ArgumentCaptor.forClass(Iterable.class);
+            ArgumentCaptor<Iterable<Cip68Metadata>> captor = ArgumentCaptor.forClass(Iterable.class);
             verify(metadataReferenceNftRepository).saveAll(captor.capture());
 
-            MetadataReferenceNft saved = captor.getValue().iterator().next();
+            Cip68Metadata saved = captor.getValue().iterator().next();
             assertThat(saved.getPolicyId()).isEqualTo(POLICY_ID);
             assertThat(saved.getAssetName()).isEqualTo(REF_NFT_ASSET_NAME);
             assertThat(saved.getSlot()).isEqualTo(100L);
