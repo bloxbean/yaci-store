@@ -48,55 +48,80 @@ public class Cip68DatumParser {
         }
 
         try {
-            PlutusData plutusData = PlutusData.deserialize(HexUtil.decodeHexString(inlineDatum));
-
-            if (!(plutusData instanceof ConstrPlutusData cip68Data)) {
-                return Optional.empty();
-            }
-
-            List<PlutusData> dataList = cip68Data.getData().getPlutusDataList();
-            if (dataList.size() < 2 || !(dataList.getFirst() instanceof MapPlutusData properties)) {
-                return Optional.empty();
-            }
-
-            if (!(dataList.get(1) instanceof BigIntPlutusData version)) {
-                return Optional.empty();
-            }
-
-            // Typed scalars
-            Long    decimals    = getNumericProperty(DECIMALS, properties).orElse(null);
-            String  description = getStringProperty(DESCRIPTION, properties).orElse(null);
-            String  logo        = getStringProperty(LOGO, properties).orElse(null);
-            String  name        = getStringProperty(NAME, properties).orElse(null);
-            String  ticker      = getStringProperty(TICKER, properties).orElse(null);
-            String  url         = getStringProperty(URL, properties).orElse(null);
-            String  image       = getStringOrChunkedProperty(IMAGE, properties).orElse(null);
-            String  mediaType   = getStringProperty(MEDIA_TYPE, properties).orElse(null);
-
-            // files[] and additional_properties go into a single JSONB column
-            List<Map<String, Object>> files = parseFiles(properties);
-            Map<String, Object> additional = parseAdditionalProperties(properties);
-
-            Map<String, Object> propertiesJson = null;
-            if ((files != null && !files.isEmpty()) || (additional != null && !additional.isEmpty())) {
-                propertiesJson = new LinkedHashMap<>();
-                if (files != null && !files.isEmpty()) {
-                    propertiesJson.put("files", files);
-                }
-                if (additional != null && !additional.isEmpty()) {
-                    propertiesJson.put("additional_properties", additional);
-                }
-            }
-
-            return Optional.of(new ParsedCip68Datum(
-                    decimals, description, logo, name, ticker, url, version.getValue().longValue(),
-                    image, mediaType, propertiesJson));
-
+            return extractDatumProperties(inlineDatum)
+                    .map(parts -> buildParsedDatum(parts.properties(), parts.version()));
         } catch (Exception e) {
             log.warn("Unexpected error while parsing CIP-68 datum: {}", inlineDatum, e);
             return Optional.empty();
         }
     }
+
+    /**
+     * Strip the CIP-68 datum envelope: a Constr containing a {@code (Map, BigInt)} pair
+     * (the metadata properties map and the version integer). Returns empty for any datum
+     * that doesn't fit this shape.
+     */
+    private Optional<DatumParts> extractDatumProperties(String inlineDatum) throws com.bloxbean.cardano.client.exception.CborDeserializationException {
+        PlutusData plutusData = PlutusData.deserialize(HexUtil.decodeHexString(inlineDatum));
+
+        if (!(plutusData instanceof ConstrPlutusData cip68Data)) {
+            return Optional.empty();
+        }
+
+        List<PlutusData> dataList = cip68Data.getData().getPlutusDataList();
+        if (dataList.size() < 2 || !(dataList.getFirst() instanceof MapPlutusData properties)) {
+            return Optional.empty();
+        }
+
+        if (!(dataList.get(1) instanceof BigIntPlutusData version)) {
+            return Optional.empty();
+        }
+
+        return Optional.of(new DatumParts(properties, version));
+    }
+
+    /** Build the typed {@link ParsedCip68Datum} from the unwrapped (Map, version) pair. */
+    private ParsedCip68Datum buildParsedDatum(MapPlutusData properties, BigIntPlutusData version) {
+        return new ParsedCip68Datum(
+                getNumericProperty(DECIMALS, properties).orElse(null),
+                getStringProperty(DESCRIPTION, properties).orElse(null),
+                getStringProperty(LOGO, properties).orElse(null),
+                getStringProperty(NAME, properties).orElse(null),
+                getStringProperty(TICKER, properties).orElse(null),
+                getStringProperty(URL, properties).orElse(null),
+                version.getValue().longValue(),
+                getStringOrChunkedProperty(IMAGE, properties).orElse(null),
+                getStringProperty(MEDIA_TYPE, properties).orElse(null),
+                buildPropertiesJson(properties));
+    }
+
+    /**
+     * Combine {@code files[]} and any non-well-known keys into the single JSONB-backed
+     * {@code properties} column. Returns {@code null} if neither part is populated, so
+     * pure FT rows don't materialise an empty wrapper.
+     */
+    private Map<String, Object> buildPropertiesJson(MapPlutusData properties) {
+        List<Map<String, Object>> files = parseFiles(properties);
+        Map<String, Object> additional = parseAdditionalProperties(properties);
+
+        boolean hasFiles = files != null && !files.isEmpty();
+        boolean hasAdditional = additional != null && !additional.isEmpty();
+        if (!hasFiles && !hasAdditional) {
+            return null;
+        }
+
+        Map<String, Object> json = new LinkedHashMap<>();
+        if (hasFiles) {
+            json.put(FILES, files);
+        }
+        if (hasAdditional) {
+            json.put("additional_properties", additional);
+        }
+        return json;
+    }
+
+    /** Internal record for the unwrapped CIP-68 envelope ((properties Map, version BigInt)). */
+    private record DatumParts(MapPlutusData properties, BigIntPlutusData version) {}
 
     private Optional<String> getStringProperty(String propertyName, MapPlutusData mapPlutusData) {
         PlutusData property = mapPlutusData.getMap().get(BytesPlutusData.of(propertyName));
@@ -122,7 +147,7 @@ public class Cip68DatumParser {
                         sb.append(bytesToString(b.getValue()));
                     }
                 }
-                yield sb.length() == 0 ? Optional.empty() : Optional.of(sb.toString());
+                yield sb.isEmpty() ? Optional.empty() : Optional.of(sb.toString());
             }
             case null, default -> Optional.empty();
         };
