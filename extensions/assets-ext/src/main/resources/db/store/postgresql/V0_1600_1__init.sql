@@ -37,8 +37,10 @@ CREATE TABLE cip26_metadata (
     -- see MetadataValidationRules.MAX_DESCRIPTION_LENGTH in cf-tokens-cip26).
     description    VARCHAR(500),
     -- CIP-26 decimals: spec range [0, 19] inclusive (well-known property 'decimals').
-    -- INTEGER is oversized but standard; SMALLINT would also work.
-    decimals       INTEGER,
+    -- BIGINT to align with the rest of the pipeline (Java Long throughout: parser,
+    -- entity, DTO). INTEGER would suffice for spec values but introduces type-conversion
+    -- noise at every boundary; the 4-byte overhead per row is negligible.
+    decimals       BIGINT,
     -- base64-encoded image, up to ~87400 chars per CIP-26 — kept as TEXT.
     -- Postgres TOAST handles the size transparently; merging the column here keeps
     -- one row per subject and removes the need for a separate ft_offchain_logo table.
@@ -85,7 +87,9 @@ CREATE TABLE cip68_metadata (
     -- CIP-68 'url': aligns with CIP-26 url cap of 250 chars.
     url            VARCHAR(250),
     -- CIP-68 'decimals': unsigned integer in the datum. In practice 0–19.
-    decimals       INTEGER,
+    -- BIGINT to match the rest of the pipeline (Java Long); see cip26_metadata.decimals
+    -- comment above for the rationale.
+    decimals       BIGINT,
     -- base64-encoded logo (PNG/JPG/SVG). Variable-length, can be tens of KB.
     logo           TEXT,
     -- CIP-68 NFT 'image': IPFS / data: URL / https URL.

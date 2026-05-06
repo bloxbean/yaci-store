@@ -39,6 +39,7 @@ public class Cip68Metadata {
     private String assetName;
 
     @Id
+    @Column(nullable = false)
     @EqualsAndHashCode.Include
     private Long slot;
 
@@ -65,11 +66,15 @@ public class Cip68Metadata {
     @Column(length = 250)
     private String url;
 
-    /** CIP-68 'decimals': unsigned integer from the datum. In practice 0–19 per CIP-26 convention. */
+    /** CIP-68 'decimals': unsigned integer from the datum. In practice 0–19 per CIP-26 convention.
+     *  Long to match the {@code BIGINT} column and the rest of the pipeline (ParsedCip68Datum,
+     *  FungibleTokenMetadata, LongProperty) — uniform type avoids boundary conversions. */
     private Long decimals;
 
-    /** CIP-68 logo: base64-encoded image (mostly label 333 FTs). */
-    @Basic(fetch = FetchType.LAZY)
+    /** CIP-68 logo: base64-encoded image (mostly label 333 FTs). Loaded eagerly: lazy
+     *  basic-field fetch requires Hibernate bytecode enhancement, which this build does
+     *  not configure. Add the {@code org.hibernate.orm} gradle plugin if eager loading
+     *  of this column ever becomes a hotspot. */
     @Column(columnDefinition = "TEXT")
     private String logo;
 
@@ -88,8 +93,10 @@ public class Cip68Metadata {
     @Column(nullable = false)
     private Long version;
 
-    /** Full CBOR hex of the inline datum. Variable length; kept for re-parsing/auditing. */
-    @Basic(fetch = FetchType.LAZY)
+    /** Full CBOR hex of the inline datum. Variable length; kept for re-parsing/auditing.
+     *  Loaded eagerly — see {@link #logo} for the rationale (no bytecode enhancement
+     *  configured). This column is the largest per-row payload (typically 1–10 KB);
+     *  enabling lazy fetch project-wide would be the highest-impact perf change. */
     @Column(nullable = false, columnDefinition = "TEXT")
     private String datum;
 
