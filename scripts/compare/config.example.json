@@ -1,0 +1,12 @@
+{
+  "dbsync_url": "postgresql://10.4.10.135:5678/cexplorer",
+  "dbsync_user": "dbsync",
+  "dbsync_password": "dbsync",
+  "store_url": "postgresql://10.4.10.112:5432/yaci_store",
+  "store_user": "yaci",
+  "store_password": "dbpass",
+  "store_schema": "yaci_store",
+  "quiet": false,
+  "max_mismatches": 0,
+  "delay": 0
+}
