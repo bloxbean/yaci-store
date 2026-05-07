@@ -19,7 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @SuppressWarnings("java:S2187") // tests are in @Nested inner classes
 @DisplayName("Cip113RegistryNodeParser")
-class Cip113DatumParserTest {
+class Cip113RegistryNodeParserTest {
 
     // All hash-shaped values are 56 hex chars = 28 bytes (Blake2b-224 / policy id).
     private static final String POLICY_A_HEX = "0befd1269cf3b5b41cce136c92c64b45dde93e4bfe11875839b713d1";
