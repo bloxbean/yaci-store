@@ -86,7 +86,10 @@ public class TokenMetadataSubjectController {
             @Parameter(description = "whether all the CIP specific properties should be returned in the response. False by default")
             @RequestParam(value = "show_cips_details", defaultValue = "false", required = false) Boolean showCipsDetails) {
 
-        log.info("subject: {}, properties: {}, priorities: {}, showCipsDetails: {}",
+        // Per-request line at DEBUG, not INFO — at any real RPS the previous INFO level
+        // floods logs without operator value (the request is also recorded by the access log
+        // for any deployment that wants per-request observability).
+        log.debug("subject: {}, properties: {}, priorities: {}, showCipsDetails: {}",
                 subject,
                 properties != null ? String.join(",", properties) : "",
                 priorities != null ? priorities.stream().map(QueryPriority::name).collect(Collectors.joining(",")) : "",

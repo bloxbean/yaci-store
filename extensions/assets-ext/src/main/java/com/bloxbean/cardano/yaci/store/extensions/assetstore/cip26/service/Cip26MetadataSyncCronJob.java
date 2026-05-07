@@ -33,9 +33,9 @@ public class Cip26MetadataSyncCronJob implements Runnable {
     @Scheduled(timeUnit = TimeUnit.MINUTES, initialDelay = 1L,
             fixedDelayString = "${store.assets.ext.cip26.sync-interval-minutes:60}")
     public void run() {
-        log.info("about to start syncing");
+        log.info("CIP-26 offchain registry sync — starting");
         tokenMetadataSyncService.synchronizeDatabase();
-        log.info("syncing completed");
+        log.info("CIP-26 offchain registry sync — finished");
     }
 
     @PostConstruct

@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -106,7 +107,7 @@ public class Cip68Processor {
         return txIo.getOutputs().stream()
                 .flatMap(o -> o.getAmounts().stream())
                 .map(this::extractCip68UserTokenPrefix)
-                .filter(p -> p != null)
+                .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
     }
 
