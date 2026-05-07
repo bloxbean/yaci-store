@@ -5,9 +5,10 @@ import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.AssetType;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Constants;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.ParsedCip68Datum;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.parser.Cip68DatumParser;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.MetadataReferenceNft;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.repository.MetadataReferenceNftRepository;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.Cip68Metadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.repository.Cip68MetadataRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -28,15 +29,16 @@ public class Cip68TokenService {
 
     private static final String VERSION = "version";
 
-    private final MetadataReferenceNftRepository metadataReferenceNftRepository;
+    private final Cip68MetadataRepository metadataReferenceNftRepository;
 
     /**
-     * In order to be a valid FT Token Metadata Reference datum there are some constraints (name and description must be present)
+     * Validate a CIP-68 datum. Per spec, name and description are the required fields
+     * for any of the user-token labels (222 NFT / 333 FT / 444 RFT).
      *
-     * @return true if the metadata are compliant to the FT Cip68 standard
+     * @return true if the metadata satisfies CIP-68's required-field constraint
      */
-    public boolean isValidMetadata(FungibleTokenMetadata cip68TokenMetadata) {
-        return cip68TokenMetadata.name() != null && cip68TokenMetadata.description() != null;
+    public boolean isValidMetadata(ParsedCip68Datum parsed) {
+        return parsed.name() != null && parsed.description() != null;
     }
 
     /**
@@ -110,7 +112,7 @@ public class Cip68TokenService {
                         row -> toFungibleTokenMetadata(row, properties)));
     }
 
-    private FungibleTokenMetadata toFungibleTokenMetadata(MetadataReferenceNft referenceNft, List<String> properties) {
+    private FungibleTokenMetadata toFungibleTokenMetadata(Cip68Metadata referenceNft, List<String> properties) {
         return new FungibleTokenMetadata(
                 getPropertyIfRequired(Cip68DatumParser.DECIMALS, referenceNft.getDecimals(), properties),
                 getPropertyIfRequired(Cip68DatumParser.DESCRIPTION, referenceNft.getDescription(), properties),

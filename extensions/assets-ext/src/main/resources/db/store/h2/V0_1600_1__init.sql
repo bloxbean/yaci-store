@@ -3,13 +3,16 @@
 -- beyond these bounds is likely unsafe; loosening is acceptable but wasteful.
 -- Kept in sync with the postgresql and mysql dialects.
 
--- CIP-26 offchain fungible token metadata
+-- =====================================================================
+-- CIP-26 — off-chain GitHub registry
+-- One table for metadata + logo + arbitrary properties.
+-- =====================================================================
 --
 -- All text-field bounds match the CIP-26 validator in cf-tokens-cip26:
 -- name ≤ 50, ticker 2–9, url ≤ 250, description ≤ 500.
--- Anything exceeding these limits is rejected by TokenMetadataValidator before insert.
+-- Anything exceeding these limits is rejected by Cip26MetadataValidator before insert.
 -- Reference: https://github.com/cardano-foundation/CIPs/blob/main/CIP-0026/README.md
-CREATE TABLE ft_offchain_metadata (
+CREATE TABLE cip26_metadata (
     -- subject = policyId (28 bytes) + optional assetName (0-32 bytes), hex-encoded.
     -- CIP-26 spec: minLength 56, maxLength 120.
     subject        VARCHAR(120) PRIMARY KEY,
@@ -17,7 +20,7 @@ CREATE TABLE ft_offchain_metadata (
     -- NOT the 28-byte policyId hash (that lives in the first 56 hex chars of 'subject').
     -- The CIP-26 spec places NO upper bound on this field; real entries with time-locked
     -- or k-of-n multisig scripts routinely exceed 200 hex chars (MCOS at 216, Incy at 586).
-    -- An earlier VARCHAR(120) caused the DB to reject such entries; TokenMetadataService
+    -- An earlier VARCHAR(120) caused the DB to reject such entries; Cip26MetadataService
     -- caught the exception, logged ERROR, and skipped them — dropped with a log line but
     -- no fatal failure. DO NOT cap this column.
     policy         TEXT,
@@ -31,71 +34,80 @@ CREATE TABLE ft_offchain_metadata (
     -- see MetadataValidationRules.MAX_DESCRIPTION_LENGTH in cf-tokens-cip26).
     description    VARCHAR(500),
     -- CIP-26 decimals: spec range [0, 19] inclusive (well-known property 'decimals').
-    -- INTEGER is oversized but standard; SMALLINT would also work.
-    decimals       INTEGER,
+    -- BIGINT to align with the rest of the pipeline (Java Long throughout: parser,
+    -- entity, DTO). INTEGER would suffice for spec values but introduces type-conversion
+    -- noise at every boundary; the 4-byte overhead per row is negligible.
+    decimals       BIGINT,
+    -- base64-encoded image, up to ~87400 chars per CIP-26 — kept as TEXT.
+    -- Merged in here (was a separate ft_offchain_logo table previously).
+    logo           TEXT,
     updated        TIMESTAMP,
     updated_by     VARCHAR(255),
+    -- Catch-all JSON string. Holds the full original Mapping JSON with per-property
+    -- signed envelopes ({value, signatures, sequenceNumber}) and any non-well-known
+    -- properties from the registry entry.
     properties     TEXT,
     last_synced_at TIMESTAMP
 );
 
--- CIP-26 fungible token logos
-CREATE TABLE ft_offchain_logo (
-    -- Matches ft_offchain_metadata.subject bounds (CIP-26 spec).
-    subject        VARCHAR(120) PRIMARY KEY,
-    -- base64-encoded image, up to ~87400 chars per CIP-26 — kept as TEXT.
-    logo           TEXT,
-    last_synced_at TIMESTAMP
-);
-
--- CIP-26 GitHub sync state tracking
-CREATE TABLE off_chain_sync_state (
+-- CIP-26 GitHub sync state (housekeeping; one row tracks the last commit synced).
+CREATE TABLE cip26_sync_state (
     id               BIGINT AUTO_INCREMENT PRIMARY KEY,
     -- git SHA-1 hash = 40 hex chars, never varies.
     last_commit_hash VARCHAR(40) NOT NULL,
     last_synced_at   TIMESTAMP
 );
 
--- CIP-68 on-chain reference NFT metadata
---
--- On-chain columns (policy_id, asset_name) are protocol-bounded by the Cardano
--- multi-asset ledger rules. Datum-sourced string columns (name, ticker, url) use
--- lenient but explicit bounds — the datum itself is schema-flexible PlutusMap, but
--- realistic values fit within the limits below; anything exceeding them almost
--- certainly indicates a malformed or hostile datum.
-CREATE TABLE metadata_reference_nft (
+
+-- =====================================================================
+-- CIP-68 — on-chain reference NFT metadata (FT/NFT/RFT unified)
+-- =====================================================================
+CREATE TABLE cip68_metadata (
     -- policy_id: exactly 28 bytes = 56 hex chars (Blake2b-224). Protocol-bounded.
     policy_id      VARCHAR(56)  NOT NULL,
     -- asset_name: 0–32 bytes = 0–64 hex chars (ledger max). Protocol-bounded.
     asset_name     VARCHAR(64)  NOT NULL,
     slot           BIGINT       NOT NULL,
-    -- CIP-68 label: 222 (NFT), 333 (FT), 444 (RFT). Only 333 is currently indexed.
-    label          INTEGER      NOT NULL DEFAULT 333,
-    -- CIP-68 FT metadata 'name': variable UTF-8 string from the datum. 255 is lenient
-    -- but bounded; real tokens are typically ≤ 32 chars.
-    name           VARCHAR(255) NOT NULL,
-    -- CIP-68 FT 'description': can be arbitrarily long multi-sentence text. Kept as TEXT.
-    description    TEXT         NOT NULL,
-    -- CIP-68 FT 'ticker': short symbol, protocol convention 2–9 chars; 32 is lenient.
+    -- CIP-68 label: 222 (NFT), 333 (FT), 444 (RFT). Set by Cip68Processor based
+    -- on the co-minted user-token prefix observed in the same transaction's outputs.
+    label          INTEGER      NOT NULL,
+    -- CIP-68 metadata 'name': variable UTF-8 string from the datum.
+    name           VARCHAR(255),
+    -- CIP-68 'description': can be arbitrarily long multi-sentence text. Kept as TEXT.
+    description    TEXT,
+    -- CIP-68 'ticker': short symbol, typically only label=333/444.
     ticker         VARCHAR(32),
-    -- CIP-68 FT 'url': aligns with CIP-26 url cap of 250 chars.
+    -- CIP-68 'url': aligns with CIP-26 url cap of 250 chars.
     url            VARCHAR(250),
-    -- CIP-68 FT 'decimals': unsigned integer in the datum, no explicit CIP-68 spec cap.
-    -- In practice 0–19 (aligned with CIP-26's well-known 'decimals' property).
-    decimals       INTEGER,
-    -- base64-encoded image (PNG/JPG/SVG). Variable-length, can be tens of KB.
+    -- CIP-68 'decimals': unsigned integer in the datum. In practice 0–19.
+    -- BIGINT to match the rest of the pipeline (Java Long); see cip26_metadata.decimals
+    -- comment above for the rationale.
+    decimals       BIGINT,
+    -- base64-encoded logo (PNG/JPG/SVG). Variable-length, can be tens of KB.
     logo           TEXT,
-    -- CIP-68 schema version, typically 1. BIGINT is legacy; INTEGER would suffice.
+    -- CIP-68 NFT 'image': IPFS / data: URL / https URL.
+    image          TEXT,
+    -- CIP-68 NFT 'mediaType': MIME type of the image (e.g. image/png).
+    media_type     VARCHAR(255),
+    -- CIP-68 schema version, typically 1.
     version        BIGINT       NOT NULL,
     -- Full CBOR hex of the inline datum. Variable length, kept for reparsing/auditing.
     datum          TEXT         NOT NULL,
+    -- Catch-all JSON string. Holds the parsed datum's non-scalar bits:
+    --   files[]:               array of { name, mediaType, src }
+    --   additional_properties: collection-specific (attributes, traits, custom keys)
+    properties     TEXT,
     last_synced_at TIMESTAMP,
     PRIMARY KEY (policy_id, asset_name, slot)
 );
 
-CREATE INDEX idx_metadata_reference_nft_slot ON metadata_reference_nft(slot);
+CREATE INDEX idx_cip68_metadata_slot  ON cip68_metadata(slot);
+CREATE INDEX idx_cip68_metadata_label ON cip68_metadata(label);
 
--- CIP-113 programmable token registry nodes
+
+-- =====================================================================
+-- CIP-113 — programmable token registry nodes (unchanged)
+-- =====================================================================
 --
 -- The datum is an Aiken `RegistryNode` sorted linked list entry. Column names
 -- mirror the on-chain datum field names (see CIP-143 — the parent spec — and

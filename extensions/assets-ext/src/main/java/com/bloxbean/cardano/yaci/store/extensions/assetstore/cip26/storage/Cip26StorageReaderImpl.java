@@ -1,9 +1,7 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage;
 
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.TokenLogo;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.TokenMetadata;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.repository.TokenLogoRepository;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.repository.TokenMetadataRepository;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.Cip26Metadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.repository.Cip26MetadataRepository;
 import lombok.RequiredArgsConstructor;
 
 import java.util.List;
@@ -14,29 +12,31 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class Cip26StorageReaderImpl implements Cip26StorageReader {
 
-    private final TokenMetadataRepository tokenMetadataRepository;
-    private final TokenLogoRepository tokenLogoRepository;
+    private final Cip26MetadataRepository cip26MetadataRepository;
 
     @Override
-    public Optional<TokenMetadata> findBySubject(String subject) {
-        return tokenMetadataRepository.findById(subject);
+    public Optional<Cip26Metadata> findBySubject(String subject) {
+        return cip26MetadataRepository.findById(subject);
     }
 
     @Override
-    public List<TokenMetadata> findBySubjects(List<String> subjects) {
-        return tokenMetadataRepository.findAllById(subjects);
+    public List<Cip26Metadata> findBySubjects(List<String> subjects) {
+        return cip26MetadataRepository.findAllById(subjects);
     }
 
     @Override
     public Optional<String> findLogoBySubject(String subject) {
-        return tokenLogoRepository.findById(subject)
-                .map(TokenLogo::getLogo);
+        // Logo lives on the same Cip26Metadata row now (was a separate ft_offchain_logo
+        // table previously). Postgres TOAST means this single-row read still avoids
+        // pulling the multi-KB base64 unless the column is actually selected.
+        return cip26MetadataRepository.findById(subject)
+                .map(Cip26Metadata::getLogo);
     }
 
     @Override
     public Map<String, String> findLogosBySubjects(List<String> subjects) {
-        return tokenLogoRepository.findAllById(subjects).stream()
-                .filter(logo -> logo.getLogo() != null)
-                .collect(Collectors.toMap(TokenLogo::getSubject, TokenLogo::getLogo));
+        return cip26MetadataRepository.findAllById(subjects).stream()
+                .filter(row -> row.getLogo() != null)
+                .collect(Collectors.toMap(Cip26Metadata::getSubject, Cip26Metadata::getLogo));
     }
 }

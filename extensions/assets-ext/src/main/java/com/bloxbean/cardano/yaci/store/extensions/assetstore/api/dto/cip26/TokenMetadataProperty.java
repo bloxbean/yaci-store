@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.cip26;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.annotation.Nullable;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
 import lombok.AllArgsConstructor;
@@ -9,7 +10,6 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -26,13 +26,18 @@ import java.util.List;
 @AllArgsConstructor
 public class TokenMetadataProperty<T> {
 
+    // Null when the registry entry has no off-chain signature data — matches CF V2,
+    // which emits "signatures": null rather than an empty array. yaci does not
+    // persist signatures, so this is null in practice for every property.
     @JsonProperty("signatures")
     @Valid
+    @Nullable
     @Schema(name = "signatures", requiredMode = Schema.RequiredMode.REQUIRED)
-    private List<AnnotatedSignature> signatures = new ArrayList<>();
+    private List<AnnotatedSignature> signatures;
 
     @JsonProperty("sequenceNumber")
     @Valid
+    @Nullable
     @DecimalMin("0")
     @Schema(name = "sequenceNumber", requiredMode = Schema.RequiredMode.REQUIRED)
     private BigDecimal sequenceNumber;

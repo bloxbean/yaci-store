@@ -5,8 +5,8 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.Cip26NetworkD
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.Mapping;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.MappingUpdateDetails;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.enums.SyncStatusEnum;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.OffChainSyncState;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.repository.SyncStateRepository;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.Cip26SyncState;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.repository.Cip26SyncStateRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -30,25 +30,25 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-@DisplayName("TokenMetadataSyncService")
-class TokenMetadataSyncServiceTest {
+@DisplayName("Cip26MetadataSyncService")
+class Cip26MetadataSyncServiceTest {
 
     private static final String OLD_HASH = "aaaa000000000000000000000000000000000000";
     private static final String NEW_HASH = "bbbb000000000000000000000000000000000000";
 
     @Mock private GitService gitService;
-    @Mock private TokenMetadataService tokenMetadataService;
+    @Mock private Cip26MetadataService tokenMetadataService;
     @Mock private TokenMappingService tokenMappingService;
-    @Mock private SyncStateRepository syncStateRepository;
+    @Mock private Cip26SyncStateRepository syncStateRepository;
     @Mock private Cip26NetworkDefaults networkDefaults;
 
     private AssetsExtStoreProperties assetsStoreProperties;
-    private TokenMetadataSyncService service;
+    private Cip26MetadataSyncService service;
 
     @BeforeEach
     void setUp() {
         assetsStoreProperties = new AssetsExtStoreProperties();
-        service = new TokenMetadataSyncService(
+        service = new Cip26MetadataSyncService(
                 gitService, tokenMetadataService, tokenMappingService,
                 syncStateRepository, networkDefaults, assetsStoreProperties);
     }
@@ -157,7 +157,7 @@ class TokenMetadataSyncServiceTest {
 
             verify(tokenMetadataService).insertMapping(any(), any(), any());
             verify(tokenMetadataService).insertLogo(any());
-            verify(syncStateRepository).save(any(OffChainSyncState.class));
+            verify(syncStateRepository).save(any(Cip26SyncState.class));
             assertThat(service.getSyncStatus().getStatus()).isEqualTo(SyncStatusEnum.SYNC_DONE);
             assertThat(service.getSyncStatus().isInitialSyncDone()).isTrue();
         }
@@ -183,7 +183,7 @@ class TokenMetadataSyncServiceTest {
 
             service.synchronizeDatabase();
 
-            verify(syncStateRepository, never()).save(any(OffChainSyncState.class));
+            verify(syncStateRepository, never()).save(any(Cip26SyncState.class));
             assertThat(service.getSyncStatus().getStatus()).isEqualTo(SyncStatusEnum.SYNC_DONE);
         }
 
@@ -209,7 +209,7 @@ class TokenMetadataSyncServiceTest {
 
             service.synchronizeDatabase();
 
-            verify(syncStateRepository).save(any(OffChainSyncState.class));
+            verify(syncStateRepository).save(any(Cip26SyncState.class));
             verify(tokenMetadataService, never()).insertLogo(any());
         }
     }
@@ -270,7 +270,7 @@ class TokenMetadataSyncServiceTest {
 
             verifyNoInteractions(tokenMetadataService);
             // Hash still advanced — parsing failures are skipped, not errors
-            verify(syncStateRepository).save(any(OffChainSyncState.class));
+            verify(syncStateRepository).save(any(Cip26SyncState.class));
         }
 
         @Test
@@ -286,7 +286,7 @@ class TokenMetadataSyncServiceTest {
             service.synchronizeDatabase();
 
             verifyNoInteractions(tokenMetadataService);
-            verify(syncStateRepository).save(any(OffChainSyncState.class));
+            verify(syncStateRepository).save(any(Cip26SyncState.class));
         }
 
         @Test
@@ -333,12 +333,12 @@ class TokenMetadataSyncServiceTest {
 
             // Only the legit file's mapping made it through to insertMapping.
             verify(tokenMetadataService, times(1)).insertMapping(any(), any(), any());
-            verify(syncStateRepository).save(any(OffChainSyncState.class));
+            verify(syncStateRepository).save(any(Cip26SyncState.class));
         }
     }
 
-    private static OffChainSyncState offChainState(String hash) {
-        OffChainSyncState state = new OffChainSyncState();
+    private static Cip26SyncState offChainState(String hash) {
+        Cip26SyncState state = new Cip26SyncState();
         state.setLastCommitHash(hash);
         return state;
     }

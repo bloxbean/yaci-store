@@ -8,11 +8,11 @@ import lombok.Setter;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "off_chain_sync_state")
+@Table(name = "cip26_sync_state")
 @Getter
 @Setter
 @NoArgsConstructor
-public class OffChainSyncState {
+public class Cip26SyncState {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -35,7 +35,7 @@ public class OffChainSyncState {
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof OffChainSyncState that)) return false;
+        if (!(o instanceof Cip26SyncState that)) return false;
         return id != null && id.equals(that.id);
     }
 

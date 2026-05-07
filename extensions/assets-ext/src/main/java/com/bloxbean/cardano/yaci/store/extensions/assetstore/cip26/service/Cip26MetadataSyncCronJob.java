@@ -21,11 +21,11 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 @ConditionalOnProperty(name = "store.assets.ext.cip26.enabled", havingValue = "true", matchIfMissing = false)
 @ReadOnly(false)
-public class TokenMetadataSyncCronJob implements Runnable {
+public class Cip26MetadataSyncCronJob implements Runnable {
 
-    private final TokenMetadataSyncService tokenMetadataSyncService;
+    private final Cip26MetadataSyncService tokenMetadataSyncService;
 
-    public TokenMetadataSyncCronJob(TokenMetadataSyncService tokenMetadataSyncService) {
+    public Cip26MetadataSyncCronJob(Cip26MetadataSyncService tokenMetadataSyncService) {
         this.tokenMetadataSyncService = tokenMetadataSyncService;
     }
 

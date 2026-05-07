@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.api.controller;
 
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.Cip26StorageReader;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.TokenMetadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.Cip26Metadata;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -55,7 +55,7 @@ class Cip26MetadataControllerTest {
 
         @Test
         void returns200WithMetadataWhenFound() throws Exception {
-            TokenMetadata metadata = new TokenMetadata();
+            Cip26Metadata metadata = new Cip26Metadata();
             metadata.setSubject(VALID_SUBJECT);
             metadata.setName("Nutcoin");
             metadata.setDescription("A test token");
@@ -106,7 +106,7 @@ class Cip26MetadataControllerTest {
 
         @Test
         void returns200WithMetadataWhenFound() throws Exception {
-            TokenMetadata metadata = new TokenMetadata();
+            Cip26Metadata metadata = new Cip26Metadata();
             metadata.setSubject(VALID_SUBJECT);
             metadata.setName("Nutcoin");
             metadata.setDescription("A test token");

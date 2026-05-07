@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto;
 
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.TokenMetadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.Cip26Metadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
 import jakarta.annotation.Nullable;
 import lombok.Builder;
@@ -28,13 +28,13 @@ public record Metadata(StringProperty name, StringProperty description, StringPr
     }
 
     /**
-     * Build a Metadata from a CIP-26 TokenMetadata entity, applying property filtering.
+     * Build a Metadata from a CIP-26 Cip26Metadata entity, applying property filtering.
      *
      * @param entity     the CIP-26 entity
-     * @param logo       the logo string (from TokenLogo), or null if not available / not requested
+     * @param logo       the logo string (from Cip26Metadata.logo), or null if not available / not requested
      * @param properties the list of properties to include; empty means all
      */
-    public static Metadata from(TokenMetadata entity, @Nullable String logo, List<String> properties) {
+    public static Metadata from(Cip26Metadata entity, @Nullable String logo, List<String> properties) {
         StringProperty nameProp = include("name", properties) && entity.getName() != null
                 ? new StringProperty(entity.getName(), QueryPriority.CIP_26.name()) : null;
         StringProperty descProp = include("description", properties) && entity.getDescription() != null

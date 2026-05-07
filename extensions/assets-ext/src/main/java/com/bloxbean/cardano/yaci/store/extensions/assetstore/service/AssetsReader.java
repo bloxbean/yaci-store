@@ -6,7 +6,7 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.service.TokenQu
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.service.TokenQueryService.BatchPrefetchData;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.model.ProgrammableTokenCip113;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.Cip113StorageReader;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.TokenMetadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.Cip26Metadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.Cip26StorageReader;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.Cip68StorageReader;
@@ -98,7 +98,7 @@ public class AssetsReader {
     /**
      * Look up CIP-26 offchain metadata for a subject.
      */
-    public Optional<TokenMetadata> getCip26Metadata(String subject) {
+    public Optional<Cip26Metadata> getCip26Metadata(String subject) {
         return cip26StorageReader.findBySubject(subject);
     }
 

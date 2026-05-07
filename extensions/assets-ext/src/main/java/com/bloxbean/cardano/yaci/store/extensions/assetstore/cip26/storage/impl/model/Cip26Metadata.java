@@ -11,11 +11,11 @@ import org.hibernate.type.SqlTypes;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "ft_offchain_metadata")
+@Table(name = "cip26_metadata")
 @Getter
 @Setter
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
-public class TokenMetadata {
+public class Cip26Metadata {
 
     /**
      * Subject = policyId (28 bytes) + optional assetName (0-32 bytes), hex-encoded.
@@ -44,7 +44,7 @@ public class TokenMetadata {
      * </ul>
      * Under the old {@code VARCHAR(120)} PostgreSQL rejected the {@code INSERT} outright
      * with {@code "value too long for type character varying(120)"};
-     * {@code TokenMetadataService#insertMapping} catches that, logs an {@code ERROR} line
+     * {@code Cip26MetadataService#insertMapping} catches that, logs an {@code ERROR} line
      * naming the subject, and returns {@code false}. The overall sync still reports success,
      * so operators who don't tail logs or alert on {@code ERROR} counts would not notice the
      * dropped entries — but the failure is not swallowed silently at the JPA layer. The
@@ -74,6 +74,15 @@ public class TokenMetadata {
 
     /** CIP-26 decimals: spec range [0, 19] inclusive (well-known property 'decimals'). */
     private Long decimals;
+
+    /**
+     * CIP-26 logo: base64-encoded image, up to ~87,400 chars per spec. Was a separate
+     * {@code ft_offchain_logo} table previously; merged into this entity in the schema
+     * rename. PostgreSQL TOAST keeps the column off main heap pages so non-logo queries
+     * pay no scan-time cost.
+     */
+    @Column(columnDefinition = "TEXT")
+    private String logo;
 
     @Temporal(TemporalType.TIMESTAMP)
     private LocalDateTime updated;
