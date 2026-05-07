@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.Cip68Metadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.Cip68MetadataId;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -44,5 +45,13 @@ public interface Cip68MetadataRepository extends JpaRepository<Cip68Metadata, Ci
             @Param("concatenatedKeys") Collection<String> concatenatedKeys,
             @Param("label") int label);
 
-    int deleteBySlotGreaterThan(Long slot);
+    /**
+     * Bulk delete on rollback. {@code @Modifying @Query} with JPQL issues a single SQL DELETE;
+     * without these annotations Spring Data's derived deleteBy* loads each entity then deletes
+     * per-row (one round-trip per matching row), which is pathological for deep rollbacks.
+     * Caller ({@code Cip68RollbackProcessor.handleRollback}) is already {@code @Transactional}.
+     */
+    @Modifying
+    @Query("DELETE FROM Cip68Metadata e WHERE e.slot > :slot")
+    int deleteBySlotGreaterThan(@Param("slot") Long slot);
 }

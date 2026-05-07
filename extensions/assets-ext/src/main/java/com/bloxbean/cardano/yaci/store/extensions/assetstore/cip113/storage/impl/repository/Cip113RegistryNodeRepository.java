@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.imp
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.impl.model.Cip113RegistryNode;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.impl.model.Cip113RegistryNodeId;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -48,6 +49,14 @@ public interface Cip113RegistryNodeRepository extends JpaRepository<Cip113Regist
             "AND e.slot = (SELECT MAX(e2.slot) FROM Cip113RegistryNode e2 WHERE e2.key = e.key)")
     List<Cip113RegistryNode> findLatestByKeys(@Param("keys") Collection<String> keys);
 
-    int deleteBySlotGreaterThan(Long slot);
+    /**
+     * Bulk delete on rollback. {@code @Modifying @Query} with JPQL issues a single SQL DELETE;
+     * without these annotations Spring Data's derived deleteBy* loads each entity then deletes
+     * per-row (one round-trip per matching row), which is pathological for deep rollbacks.
+     * Caller ({@code Cip113RollbackProcessor.handleRollbackEvent}) is already {@code @Transactional}.
+     */
+    @Modifying
+    @Query("DELETE FROM Cip113RegistryNode e WHERE e.slot > :slot")
+    int deleteBySlotGreaterThan(@Param("slot") Long slot);
 
 }
