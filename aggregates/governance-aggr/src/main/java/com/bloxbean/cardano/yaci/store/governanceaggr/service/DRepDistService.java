@@ -58,6 +58,7 @@ public class DRepDistService {
     private final AdaPotJobStorage adaPotJobStorage;
     private final GovernanceAggrProperties governanceAggrProperties;
     private final PartitionManager partitionManager;
+    private final DRepPv9ClearEventCacheService dRepPv9ClearEventCacheService;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW, isolation = Isolation.READ_COMMITTED)
     public void takeStakeSnapshot(int currentEpoch) {
@@ -381,7 +382,8 @@ public class DRepDistService {
                          OR (unreg.slot = stale_del.slot AND unreg.tx_index > stale_del.tx_index)
                          OR (unreg.slot = stale_del.slot AND unreg.tx_index = stale_del.tx_index
                              AND unreg.cert_index > stale_del.cert_index))
-                WHERE stale_del.drep_type NOT IN ('ABSTAIN', 'NO_CONFIDENCE')
+                WHERE stale_del.address IS NOT NULL
+                AND   stale_del.drep_type NOT IN ('ABSTAIN', 'NO_CONFIDENCE')
                 AND   stale_del.epoch <= :pv9_max_epoch
                 AND   stale_del.epoch <= :epoch
                 -- old_drep must have been registered when stale_del happened; otherwise ledger
@@ -616,10 +618,17 @@ public class DRepDistService {
         end = System.currentTimeMillis();
         log.info(">> Indexes created for DRep dist temp tables <<" + (end - start) + " ms");
 
-        // Build the list of addresses whose visible latest delegation was already cleared by
-        // ledger during bootstrap/PV9.
+        // Build the snapshot-specific list of addresses whose visible latest delegation was
+        // already cleared by ledger during bootstrap/PV9. While still in bootstrap, use the
+        // bounded source query because pv9MaxEpoch is still moving. After bootstrap, reuse the
+        // persistent PV9 clear-event cache and only apply the snapshot-dependent after_del check.
         start = System.currentTimeMillis();
-        jdbcTemplate.update(pv9ClearedAddressesQuery, epochParam);
+        if (isInBootstrapPhase) {
+            jdbcTemplate.update(pv9ClearedAddressesQuery, epochParam);
+        } else {
+            dRepPv9ClearEventCacheService.ensureCacheReady(pv9MaxEpoch);
+            dRepPv9ClearEventCacheService.createSnapshotClearedAddressesTable(tableType, epoch, pv9MaxEpoch);
+        }
         jdbcTemplate.update("CREATE INDEX idx_ss_pv9_cleared_addresses ON ss_pv9_cleared_addresses(address)", Map.of());
         end = System.currentTimeMillis();
         log.info(">> ss_pv9_cleared_addresses created ({} ms)", end - start);
@@ -711,7 +720,11 @@ public class DRepDistService {
                   where
                     sd.address IS NULL
                     """ + excludeDelegationCondition + """
-                    AND rd.address NOT IN (SELECT address FROM ss_pv9_cleared_addresses)
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM ss_pv9_cleared_addresses ca
+                        WHERE ca.address = rd.address
+                    )
                   group by
                     rd.drep_hash,
                     rd.drep_type,
@@ -759,7 +772,11 @@ public class DRepDistService {
                   where
                     (rd.drep_type = 'ABSTAIN' OR rd.drep_type = 'NO_CONFIDENCE') 
                     AND sd.address IS NULL
-                    AND rd.address NOT IN (SELECT address FROM ss_pv9_cleared_addresses)
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM ss_pv9_cleared_addresses ca
+                        WHERE ca.address = rd.address
+                    )
                   group by
                     rd.drep_type
                 """;
