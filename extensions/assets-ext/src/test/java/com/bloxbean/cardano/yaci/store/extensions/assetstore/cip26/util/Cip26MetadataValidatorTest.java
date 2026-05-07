@@ -153,6 +153,13 @@ class Cip26MetadataValidatorTest {
         }
 
         @Test
+        void rejectsNonBase64Garbage() {
+            // Characters outside the base64 alphabet — Base64.getDecoder() throws IAE,
+            // which validateLogo turns into false (not a thrown exception).
+            assertThat(validator.validateLogo(VALID_SUBJECT, "this-is-not!!base64@@")).isFalse();
+        }
+
+        @Test
         void handlesInvalidSubjectGracefully() {
             // Invalid subject should not crash — validation may fail on subject, not logo
             assertThat(validator.validateLogo("invalid", null)).isTrue();

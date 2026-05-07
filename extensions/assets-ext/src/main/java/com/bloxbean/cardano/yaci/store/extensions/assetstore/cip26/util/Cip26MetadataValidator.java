@@ -3,15 +3,13 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.util;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.Cip26Metadata;
 import lombok.extern.slf4j.Slf4j;
 import org.cardanofoundation.metadatatools.core.cip26.MetadataCreator;
-import org.cardanofoundation.metadatatools.core.cip26.ValidationError;
 import org.cardanofoundation.metadatatools.core.cip26.ValidationField;
 import org.cardanofoundation.metadatatools.core.cip26.ValidationResult;
 import org.cardanofoundation.metadatatools.core.cip26.model.Metadata;
 import org.cardanofoundation.metadatatools.core.cip26.model.MetadataProperty;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Base64;
 import java.util.stream.Collectors;
 
 /**
@@ -51,8 +49,25 @@ public class Cip26MetadataValidator {
         }
     }
 
+    // CIP-26 logo size cap: ~87,400 base64 chars → 65,536 decoded bytes (64 KiB).
+    // The decoded size is what matters; base64 is a 4:3 expansion, so we check the
+    // decoded byte length directly rather than the encoded length.
+    private static final int LOGO_MAX_DECODED_BYTES = 65_536;
+
     /**
      * Validates a logo string according to CIP-26 specification.
+     *
+     * <p>Two checks: must be valid base64, and the decoded payload must not exceed
+     * {@value #LOGO_MAX_DECODED_BYTES} bytes. Image format (PNG/SVG/etc.) is
+     * intentionally NOT checked — CIP-26 currently recommends PNG but the spec may
+     * broaden, and our validator should not be stricter than upstream
+     * cf-tokens-cip26 on a format dimension.
+     *
+     * <p>The earlier implementation built a fake {@code Metadata} with {@code "dummy"}
+     * placeholder name/description fields just to bypass the upstream full-record
+     * validator's required-field checks, then post-filtered errors back to LOGO/SUBJECT.
+     * That coupled this method to internal validator quirks (e.g., dummy-name acceptance)
+     * and produced misleading log lines (a SUBJECT error reported under "logo failed").
      *
      * @param subject the token subject (for logging)
      * @param logo    the logo string to validate (can be null)
@@ -63,40 +78,22 @@ public class Cip26MetadataValidator {
             return true;
         }
 
+        byte[] decoded;
         try {
-            Metadata metadata = new Metadata();
-            metadata.setSubject(subject);
-            metadata.addProperty(ValidationField.NAME, new MetadataProperty<>("dummy"));
-            metadata.addProperty(ValidationField.DESCRIPTION, new MetadataProperty<>("dummy"));
-            metadata.addProperty(ValidationField.LOGO, new MetadataProperty<>(logo));
-
-            ValidationResult validationResult = MetadataCreator.validateMetadata(metadata);
-
-            if (!validationResult.isValid()) {
-                List<ValidationError> logoErrors = validationResult.getValidationErrorsForField(ValidationField.LOGO);
-                List<ValidationError> subjectErrors = validationResult.getValidationErrorsForField(ValidationField.SUBJECT);
-
-                if (!logoErrors.isEmpty() || !subjectErrors.isEmpty()) {
-                    List<ValidationError> relevantErrors = new ArrayList<>(logoErrors);
-                    relevantErrors.addAll(subjectErrors);
-
-                    String errorMessages = relevantErrors.stream()
-                            .map(error -> error.getField() + ": " + error.getMessage())
-                            .collect(Collectors.joining(", "));
-
-                    log.warn("CIP-26 logo validation failed for subject '{}': {}",
-                            subject, errorMessages);
-                    return false;
-                }
-            }
-
-            return true;
-
-        } catch (Exception e) {
-            log.error("Error during CIP-26 logo validation for subject '{}': {}",
-                    subject, e.getMessage(), e);
+            decoded = Base64.getDecoder().decode(logo);
+        } catch (IllegalArgumentException e) {
+            log.warn("CIP-26 logo validation failed for subject '{}': not valid base64",
+                    subject);
             return false;
         }
+
+        if (decoded.length > LOGO_MAX_DECODED_BYTES) {
+            log.warn("CIP-26 logo validation failed for subject '{}': decoded size {} > {} bytes",
+                    subject, decoded.length, LOGO_MAX_DECODED_BYTES);
+            return false;
+        }
+
+        return true;
     }
 
     private Metadata convertToMetadata(Cip26Metadata tokenMetadata) {
