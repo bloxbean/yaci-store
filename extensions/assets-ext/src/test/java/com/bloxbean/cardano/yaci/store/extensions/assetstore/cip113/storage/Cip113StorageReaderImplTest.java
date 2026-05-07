@@ -114,6 +114,50 @@ class Cip113StorageReaderImplTest {
         }
 
         @Test
+        void normalizesEmptyStringThirdPartyTransferLogicScriptToNullTypePair() {
+            // Symmetric to the transfer-logic case above — same (hash, type) invariant must hold
+            // for the third-party credential pair.
+            Cip113RegistryNode entity = Cip113RegistryNode.builder()
+                    .key("deadbeef")
+                    .transferLogicScript("script1")
+                    .transferLogicScriptType(Cip113CredentialType.SCRIPT)
+                    .thirdPartyTransferLogicScript("")
+                    .thirdPartyTransferLogicScriptType(Cip113CredentialType.VKEY)
+                    .build();
+
+            when(repository.findFirstByKeyOrderBySlotDesc("deadbeef"))
+                    .thenReturn(Optional.of(entity));
+
+            Optional<ProgrammableTokenCip113> result = reader.findByPolicyId("deadbeef");
+
+            assertThat(result).isPresent();
+            assertThat(result.get().thirdPartyTransferLogicScript()).isNull();
+            assertThat(result.get().thirdPartyTransferLogicScriptType()).isNull();
+            // Untouched neighbour stays populated.
+            assertThat(result.get().transferLogicScript()).isEqualTo("script1");
+        }
+
+        @Test
+        void normalizesEmptyStringGlobalStatePolicyIdToNull() {
+            // globalStatePolicyId has no companion type field, but the same empty-string-equals-null
+            // normalization applies so the API never emits a confusing "" string.
+            Cip113RegistryNode entity = Cip113RegistryNode.builder()
+                    .key("deadbeef")
+                    .transferLogicScript("script1")
+                    .transferLogicScriptType(Cip113CredentialType.SCRIPT)
+                    .globalStatePolicyId("")
+                    .build();
+
+            when(repository.findFirstByKeyOrderBySlotDesc("deadbeef"))
+                    .thenReturn(Optional.of(entity));
+
+            Optional<ProgrammableTokenCip113> result = reader.findByPolicyId("deadbeef");
+
+            assertThat(result).isPresent();
+            assertThat(result.get().globalStatePolicyId()).isNull();
+        }
+
+        @Test
         void returnsEmptyWhenNotFound() {
             when(repository.findFirstByKeyOrderBySlotDesc("unknown"))
                     .thenReturn(Optional.empty());
