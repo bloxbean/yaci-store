@@ -24,9 +24,9 @@ DEFAULT_ENV_FILE_PATH = SCRIPT_DIR / "drep_dist_batch_compare.env"
 ZERO_HASH = "00000000000000000000000000000000000000000000000000000000"
 
 INVALIDATION_TARGETS = {
-    "all": ("missing_address_epoch", "pv9_cleared_address_epoch"),
+    "all": ("missing_address_epoch", "pv9_cleared_address_epoch", "drep_pv9_stale_clear_event"),
     "missing-address": ("missing_address_epoch",),
-    "pv9": ("pv9_cleared_address_epoch",),
+    "pv9": ("pv9_cleared_address_epoch", "drep_pv9_stale_clear_event"),
 }
 
 PUBLIC_PROTOCOL_MAGICS = {
@@ -716,11 +716,11 @@ def timed_psql_block(name: str, block: str) -> str:
     )
 
 
-def render_session_settings(store_schema: str, settings: QuerySettings) -> str:
+def render_session_settings(store_schema: str, settings: QuerySettings, isolation_level: str = "REPEATABLE READ") -> str:
     return "\n".join(
         [
             "BEGIN;",
-            "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;",
+            "SET TRANSACTION ISOLATION LEVEL %s;" % isolation_level,
             "SET LOCAL search_path TO %s, public;" % sql_identifier(store_schema),
             "SET LOCAL client_min_messages = warning;",
             "SET LOCAL lock_timeout = %s;" % sql_literal(settings.lock_timeout),
@@ -993,6 +993,442 @@ GROUP BY g.return_address
 """ % (epoch, epoch, epoch, epoch, epoch, epoch, epoch)
 
 
+def render_pv9_stale_clear_event_insert_sql(debug_schema: str, pv9_max_epoch: int) -> str:
+    debug = sql_identifier(debug_schema)
+    return f"""
+INSERT INTO {debug}.drep_pv9_stale_clear_event (
+    pv9_max_epoch,
+    address,
+    old_drep_hash,
+    old_drep_type,
+    stale_slot,
+    stale_tx_index,
+    stale_cert_index,
+    unreg_epoch,
+    unreg_slot,
+    unreg_tx_index,
+    unreg_cert_index,
+    update_datetime
+)
+SELECT DISTINCT
+    {pv9_max_epoch},
+    stale_del.address,
+    stale_del.drep_hash,
+    stale_del.drep_type,
+    stale_del.slot,
+    stale_del.tx_index,
+    stale_del.cert_index,
+    unreg.epoch,
+    unreg.slot,
+    unreg.tx_index,
+    unreg.cert_index,
+    NOW()
+FROM delegation_vote stale_del
+INNER JOIN drep_registration unreg
+    ON unreg.drep_hash = stale_del.drep_hash
+   AND unreg.cred_type = stale_del.drep_type
+   AND unreg.type = 'UNREG_DREP_CERT'
+   AND unreg.epoch <= {pv9_max_epoch}
+   AND (
+       unreg.slot > stale_del.slot
+       OR (unreg.slot = stale_del.slot AND unreg.tx_index > stale_del.tx_index)
+       OR (
+           unreg.slot = stale_del.slot
+           AND unreg.tx_index = stale_del.tx_index
+           AND unreg.cert_index > stale_del.cert_index
+       )
+   )
+WHERE stale_del.address IS NOT NULL
+  AND stale_del.drep_type NOT IN ('ABSTAIN', 'NO_CONFIDENCE')
+  AND stale_del.epoch <= {pv9_max_epoch}
+  AND EXISTS (
+      SELECT 1
+      FROM drep_registration reg_before_stale
+      WHERE reg_before_stale.drep_hash = stale_del.drep_hash
+        AND reg_before_stale.cred_type = stale_del.drep_type
+        AND reg_before_stale.type = 'REG_DREP_CERT'
+        AND reg_before_stale.epoch <= {pv9_max_epoch}
+        AND (
+            reg_before_stale.slot < stale_del.slot
+            OR (reg_before_stale.slot = stale_del.slot AND reg_before_stale.tx_index < stale_del.tx_index)
+            OR (
+                reg_before_stale.slot = stale_del.slot
+                AND reg_before_stale.tx_index = stale_del.tx_index
+                AND reg_before_stale.cert_index < stale_del.cert_index
+            )
+        )
+        AND NOT EXISTS (
+            SELECT 1
+            FROM drep_registration unreg_before_stale
+            WHERE unreg_before_stale.drep_hash = stale_del.drep_hash
+              AND unreg_before_stale.cred_type = stale_del.drep_type
+              AND unreg_before_stale.type = 'UNREG_DREP_CERT'
+              AND unreg_before_stale.epoch <= {pv9_max_epoch}
+              AND (
+                  unreg_before_stale.slot > reg_before_stale.slot
+                  OR (
+                      unreg_before_stale.slot = reg_before_stale.slot
+                      AND unreg_before_stale.tx_index > reg_before_stale.tx_index
+                  )
+                  OR (
+                      unreg_before_stale.slot = reg_before_stale.slot
+                      AND unreg_before_stale.tx_index = reg_before_stale.tx_index
+                      AND unreg_before_stale.cert_index > reg_before_stale.cert_index
+                  )
+              )
+              AND (
+                  unreg_before_stale.slot < stale_del.slot
+                  OR (
+                      unreg_before_stale.slot = stale_del.slot
+                      AND unreg_before_stale.tx_index < stale_del.tx_index
+                  )
+                  OR (
+                      unreg_before_stale.slot = stale_del.slot
+                      AND unreg_before_stale.tx_index = stale_del.tx_index
+                      AND unreg_before_stale.cert_index < stale_del.cert_index
+                  )
+              )
+        )
+  )
+  AND NOT EXISTS (
+      SELECT 1
+      FROM drep_registration earlier_unreg
+      WHERE earlier_unreg.drep_hash = stale_del.drep_hash
+        AND earlier_unreg.cred_type = stale_del.drep_type
+        AND earlier_unreg.type = 'UNREG_DREP_CERT'
+        AND earlier_unreg.epoch <= {pv9_max_epoch}
+        AND (
+            earlier_unreg.slot > stale_del.slot
+            OR (earlier_unreg.slot = stale_del.slot AND earlier_unreg.tx_index > stale_del.tx_index)
+            OR (
+                earlier_unreg.slot = stale_del.slot
+                AND earlier_unreg.tx_index = stale_del.tx_index
+                AND earlier_unreg.cert_index > stale_del.cert_index
+            )
+        )
+        AND (
+            earlier_unreg.slot < unreg.slot
+            OR (earlier_unreg.slot = unreg.slot AND earlier_unreg.tx_index < unreg.tx_index)
+            OR (
+                earlier_unreg.slot = unreg.slot
+                AND earlier_unreg.tx_index = unreg.tx_index
+                AND earlier_unreg.cert_index < unreg.cert_index
+            )
+        )
+  )
+  AND NOT EXISTS (
+      SELECT 1
+      FROM stake_registration stake_dereg
+      WHERE stake_dereg.address = stale_del.address
+        AND stake_dereg.type = 'STAKE_DEREGISTRATION'
+        AND stake_dereg.epoch <= {pv9_max_epoch}
+        AND (
+            stake_dereg.slot > stale_del.slot
+            OR (stake_dereg.slot = stale_del.slot AND stake_dereg.tx_index > stale_del.tx_index)
+            OR (
+                stake_dereg.slot = stale_del.slot
+                AND stake_dereg.tx_index = stale_del.tx_index
+                AND stake_dereg.cert_index > stale_del.cert_index
+            )
+        )
+        AND (
+            stake_dereg.slot < unreg.slot
+            OR (stake_dereg.slot = unreg.slot AND stake_dereg.tx_index < unreg.tx_index)
+            OR (
+                stake_dereg.slot = unreg.slot
+                AND stake_dereg.tx_index = unreg.tx_index
+                AND stake_dereg.cert_index < unreg.cert_index
+            )
+        )
+        AND EXISTS (
+            SELECT 1
+            FROM delegation_vote current_before_dereg
+            WHERE current_before_dereg.address = stale_del.address
+              AND current_before_dereg.drep_hash = stale_del.drep_hash
+              AND current_before_dereg.drep_type = stale_del.drep_type
+              AND current_before_dereg.epoch <= {pv9_max_epoch}
+              AND (
+                  current_before_dereg.slot > stale_del.slot
+                  OR (
+                      current_before_dereg.slot = stale_del.slot
+                      AND current_before_dereg.tx_index > stale_del.tx_index
+                  )
+                  OR (
+                      current_before_dereg.slot = stale_del.slot
+                      AND current_before_dereg.tx_index = stale_del.tx_index
+                      AND current_before_dereg.cert_index >= stale_del.cert_index
+                  )
+              )
+              AND (
+                  current_before_dereg.slot < stake_dereg.slot
+                  OR (
+                      current_before_dereg.slot = stake_dereg.slot
+                      AND current_before_dereg.tx_index < stake_dereg.tx_index
+                  )
+                  OR (
+                      current_before_dereg.slot = stake_dereg.slot
+                      AND current_before_dereg.tx_index = stake_dereg.tx_index
+                      AND current_before_dereg.cert_index < stake_dereg.cert_index
+                  )
+              )
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM delegation_vote later_del
+                  WHERE later_del.address = stale_del.address
+                    AND later_del.epoch <= {pv9_max_epoch}
+                    AND (
+                        later_del.slot > current_before_dereg.slot
+                        OR (
+                            later_del.slot = current_before_dereg.slot
+                            AND later_del.tx_index > current_before_dereg.tx_index
+                        )
+                        OR (
+                            later_del.slot = current_before_dereg.slot
+                            AND later_del.tx_index = current_before_dereg.tx_index
+                            AND later_del.cert_index > current_before_dereg.cert_index
+                        )
+                    )
+                    AND (
+                        later_del.slot < stake_dereg.slot
+                        OR (
+                            later_del.slot = stake_dereg.slot
+                            AND later_del.tx_index < stake_dereg.tx_index
+                        )
+                        OR (
+                            later_del.slot = stake_dereg.slot
+                            AND later_del.tx_index = stake_dereg.tx_index
+                            AND later_del.cert_index < stake_dereg.cert_index
+                        )
+                    )
+              )
+        )
+  )
+  AND NOT EXISTS (
+      SELECT 1
+      FROM delegation_vote virt_del
+      WHERE virt_del.address = stale_del.address
+        AND virt_del.drep_type IN ('ABSTAIN', 'NO_CONFIDENCE')
+        AND virt_del.epoch <= {pv9_max_epoch}
+        AND (
+            virt_del.slot > stale_del.slot
+            OR (virt_del.slot = stale_del.slot AND virt_del.tx_index > stale_del.tx_index)
+            OR (
+                virt_del.slot = stale_del.slot
+                AND virt_del.tx_index = stale_del.tx_index
+                AND virt_del.cert_index > stale_del.cert_index
+            )
+        )
+        AND (
+            virt_del.slot < unreg.slot
+            OR (virt_del.slot = unreg.slot AND virt_del.tx_index < unreg.tx_index)
+            OR (
+                virt_del.slot = unreg.slot
+                AND virt_del.tx_index = unreg.tx_index
+                AND virt_del.cert_index < unreg.cert_index
+            )
+        )
+        AND EXISTS (
+            SELECT 1
+            FROM delegation_vote prev_del
+            WHERE prev_del.address = stale_del.address
+              AND prev_del.drep_hash = stale_del.drep_hash
+              AND prev_del.drep_type = stale_del.drep_type
+              AND prev_del.epoch <= {pv9_max_epoch}
+              AND (
+                  prev_del.slot < virt_del.slot
+                  OR (prev_del.slot = virt_del.slot AND prev_del.tx_index < virt_del.tx_index)
+                  OR (
+                      prev_del.slot = virt_del.slot
+                      AND prev_del.tx_index = virt_del.tx_index
+                      AND prev_del.cert_index < virt_del.cert_index
+                  )
+              )
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM delegation_vote between_del
+                  WHERE between_del.address = stale_del.address
+                    AND between_del.epoch <= {pv9_max_epoch}
+                    AND (
+                        between_del.slot > prev_del.slot
+                        OR (
+                            between_del.slot = prev_del.slot
+                            AND between_del.tx_index > prev_del.tx_index
+                        )
+                        OR (
+                            between_del.slot = prev_del.slot
+                            AND between_del.tx_index = prev_del.tx_index
+                            AND between_del.cert_index > prev_del.cert_index
+                        )
+                    )
+                    AND (
+                        between_del.slot < virt_del.slot
+                        OR (
+                            between_del.slot = virt_del.slot
+                            AND between_del.tx_index < virt_del.tx_index
+                        )
+                        OR (
+                            between_del.slot = virt_del.slot
+                            AND between_del.tx_index = virt_del.tx_index
+                            AND between_del.cert_index < virt_del.cert_index
+                        )
+                    )
+              )
+        )
+        AND NOT EXISTS (
+            SELECT 1
+            FROM delegation_vote readd_del
+            WHERE readd_del.address = stale_del.address
+              AND readd_del.drep_hash = stale_del.drep_hash
+              AND readd_del.drep_type = stale_del.drep_type
+              AND readd_del.epoch <= {pv9_max_epoch}
+              AND (
+                  readd_del.slot > virt_del.slot
+                  OR (readd_del.slot = virt_del.slot AND readd_del.tx_index > virt_del.tx_index)
+                  OR (
+                      readd_del.slot = virt_del.slot
+                      AND readd_del.tx_index = virt_del.tx_index
+                      AND readd_del.cert_index > virt_del.cert_index
+                  )
+              )
+              AND (
+                  readd_del.slot < unreg.slot
+                  OR (readd_del.slot = unreg.slot AND readd_del.tx_index < unreg.tx_index)
+                  OR (
+                      readd_del.slot = unreg.slot
+                      AND readd_del.tx_index = unreg.tx_index
+                      AND readd_del.cert_index < unreg.cert_index
+                  )
+              )
+        )
+  )
+"""
+
+
+def render_pv9_source_max_slot_sql(pv9_max_epoch: int) -> str:
+    return """
+SELECT COALESCE(MAX(source_slot), 0)::bigint AS __pv9_source_max_slot
+FROM (
+    SELECT slot AS source_slot
+    FROM delegation_vote
+    WHERE epoch <= %d
+    UNION ALL
+    SELECT slot AS source_slot
+    FROM drep_registration
+    WHERE epoch <= %d
+    UNION ALL
+    SELECT slot AS source_slot
+    FROM stake_registration
+    WHERE epoch <= %d
+) pv9_source
+""" % (pv9_max_epoch, pv9_max_epoch, pv9_max_epoch)
+
+
+def render_pv9_snapshot_cleared_insert_sql(debug_schema: str, snapshot_epoch: int, epoch: int, pv9_max_epoch: int) -> str:
+    debug = sql_identifier(debug_schema)
+    return f"""
+INSERT INTO {debug}.pv9_cleared_address_epoch (snapshot_epoch, pv9_max_epoch, address)
+SELECT DISTINCT {snapshot_epoch}, {pv9_max_epoch}, e.address
+FROM {debug}.drep_pv9_stale_clear_event e
+WHERE e.pv9_max_epoch = {pv9_max_epoch}
+  AND e.unreg_epoch <= {epoch}
+  AND NOT EXISTS (
+      SELECT 1
+      FROM delegation_vote after_del
+      WHERE after_del.address = e.address
+        AND after_del.epoch <= {epoch}
+        AND (
+            after_del.slot > e.unreg_slot
+            OR (after_del.slot = e.unreg_slot AND after_del.tx_index > e.unreg_tx_index)
+            OR (
+                after_del.slot = e.unreg_slot
+                AND after_del.tx_index = e.unreg_tx_index
+                AND after_del.cert_index > e.unreg_cert_index
+            )
+        )
+  )
+ON CONFLICT DO NOTHING
+"""
+
+
+def render_pv9_stale_clear_event_cache_sql(
+    store_schema: str,
+    debug_schema: str,
+    pv9_max_epoch: int,
+    settings: QuerySettings,
+) -> str:
+    debug = sql_identifier(debug_schema)
+    lock_key = sql_literal("%s.drep_pv9_stale_clear_event" % debug_schema)
+    return """
+SELECT pg_advisory_lock(hashtext(%s));
+%s
+SELECT CASE
+         WHEN EXISTS (
+             SELECT 1
+             FROM %s.drep_pv9_stale_clear_event_cache
+             WHERE pv9_max_epoch = %d
+         )
+         THEN 'true'
+         ELSE 'false'
+       END AS __pv9_stale_event_cache_hit \\gset
+\\echo META|pv9_stale_clear_event_cache_hit|:__pv9_stale_event_cache_hit
+\\if :__pv9_stale_event_cache_hit
+\\else
+DELETE FROM %s.drep_pv9_stale_clear_event_cache;
+DELETE FROM %s.drep_pv9_stale_clear_event;
+%s
+SELECT COUNT(*)::bigint AS __pv9_stale_event_row_count
+FROM %s.drep_pv9_stale_clear_event
+WHERE pv9_max_epoch = %d \\gset
+%s \\gset
+INSERT INTO %s.drep_pv9_stale_clear_event_cache(pv9_max_epoch, event_count, pv9_source_max_slot, update_datetime)
+VALUES (%d, :__pv9_stale_event_row_count, :__pv9_source_max_slot, NOW())
+ON CONFLICT (pv9_max_epoch)
+DO UPDATE SET
+  event_count = EXCLUDED.event_count,
+  pv9_source_max_slot = EXCLUDED.pv9_source_max_slot,
+  update_datetime = EXCLUDED.update_datetime;
+\\endif
+SELECT COALESCE((
+    SELECT event_count
+    FROM %s.drep_pv9_stale_clear_event_cache
+    WHERE pv9_max_epoch = %d
+), 0) AS __meta_value \\gset
+\\echo META|pv9_stale_clear_event_count|:__meta_value
+SELECT COALESCE((
+    SELECT pv9_source_max_slot
+    FROM %s.drep_pv9_stale_clear_event_cache
+    WHERE pv9_max_epoch = %d
+), 0) AS __meta_value \\gset
+\\echo META|pv9_source_max_slot|:__meta_value
+COMMIT;
+SELECT pg_advisory_unlock(hashtext(%s));
+""" % (
+        lock_key,
+        render_session_settings(store_schema, settings, isolation_level="READ COMMITTED"),
+        debug,
+        pv9_max_epoch,
+        debug,
+        debug,
+        timed_sql(
+            "cache_drep_pv9_stale_clear_event_build",
+            render_pv9_stale_clear_event_insert_sql(
+                debug_schema=debug_schema,
+                pv9_max_epoch=pv9_max_epoch,
+            ),
+        ),
+        debug,
+        pv9_max_epoch,
+        render_pv9_source_max_slot_sql(pv9_max_epoch).strip(),
+        debug,
+        pv9_max_epoch,
+        debug,
+        pv9_max_epoch,
+        debug,
+        pv9_max_epoch,
+        lock_key,
+    )
+
+
 def render_pv9_cleared_insert_sql(debug_schema: str, snapshot_epoch: int, epoch: int, pv9_max_epoch: int) -> str:
     debug = sql_identifier(debug_schema)
     # Cache the expensive PV9 stale reverse-clearing calculation once per epoch
@@ -1016,7 +1452,8 @@ INNER JOIN drep_registration unreg
            AND unreg.cert_index > stale_del.cert_index
        )
    )
-WHERE stale_del.drep_type NOT IN ('ABSTAIN', 'NO_CONFIDENCE')
+WHERE stale_del.address IS NOT NULL
+  AND stale_del.drep_type NOT IN ('ABSTAIN', 'NO_CONFIDENCE')
   AND stale_del.epoch <= {pv9_max_epoch}
   AND stale_del.epoch <= {epoch}
   AND EXISTS (
@@ -1306,7 +1743,18 @@ def render_prepare_sql(
     debug = sql_identifier(debug_schema)
     epoch = epoch_context.epoch
 
-    parts = [render_session_settings(store_schema, settings)]
+    parts = []
+    if not epoch_context.is_bootstrap_phase:
+        parts.append(
+            render_pv9_stale_clear_event_cache_sql(
+                store_schema=store_schema,
+                debug_schema=debug_schema,
+                pv9_max_epoch=epoch_context.pv9_max_epoch,
+                settings=settings,
+            )
+        )
+
+    parts.append(render_session_settings(store_schema, settings))
     parts.append(timed_sql("ss_current_drep_address_create", render_current_drep_delegations_sql(epoch)))
     parts.append(timed_sql("idx_ss_current_drep_address_address", "CREATE INDEX idx_ss_current_drep_address_address ON ss_current_drep_address(address)"))
     parts.append(timed_sql("analyze_ss_current_drep_address", "ANALYZE ss_current_drep_address"))
@@ -1375,9 +1823,34 @@ WHERE es.address IS NULL
         )
     )
 
+    if epoch_context.is_bootstrap_phase:
+        parts.append(
+            """
+SELECT 'false' AS __pv9_stale_event_cache_hit \\gset
+\\echo META|pv9_stale_clear_event_cache_hit|:__pv9_stale_event_cache_hit
+SELECT 0 AS __meta_value \\gset
+\\echo META|pv9_stale_clear_event_count|:__meta_value
+SELECT 0 AS __meta_value \\gset
+\\echo META|pv9_source_max_slot|:__meta_value
+"""
+        )
+        pv9_cleared_build_sql = render_pv9_cleared_insert_sql(
+            debug_schema=debug_schema,
+            snapshot_epoch=snapshot_epoch,
+            epoch=epoch,
+            pv9_max_epoch=epoch_context.pv9_max_epoch,
+        )
+    else:
+        pv9_cleared_build_sql = render_pv9_snapshot_cleared_insert_sql(
+            debug_schema=debug_schema,
+            snapshot_epoch=snapshot_epoch,
+            epoch=epoch,
+            pv9_max_epoch=epoch_context.pv9_max_epoch,
+        )
+
     parts.append(
-        # PV9 clearing is logically part of DRepDistService but expensive enough
-        # to materialize once and reuse across repeated compare runs.
+        # Keep a per-snapshot debug cache for compare runs. Bootstrap builds it
+        # directly from source rows; post-bootstrap derives it from the event cache.
         """
 SELECT CASE
          WHEN EXISTS (
@@ -1422,12 +1895,7 @@ SELECT COALESCE((
             epoch_context.pv9_max_epoch,
             timed_sql(
                 "cache_pv9_cleared_address_epoch_build",
-                render_pv9_cleared_insert_sql(
-                    debug_schema=debug_schema,
-                    snapshot_epoch=snapshot_epoch,
-                    epoch=epoch,
-                    pv9_max_epoch=epoch_context.pv9_max_epoch,
-                ),
+                pv9_cleared_build_sql,
             ),
             debug,
             snapshot_epoch,
@@ -1822,7 +2290,11 @@ LEFT JOIN stake_registration sd
 WHERE rd.drep_type NOT IN ('ABSTAIN', 'NO_CONFIDENCE')
   AND sd.address IS NULL
 %s
-  AND rd.address NOT IN (SELECT address FROM ss_pv9_cleared_addresses)
+  AND NOT EXISTS (
+      SELECT 1
+      FROM ss_pv9_cleared_addresses ca
+      WHERE ca.address = rd.address
+  )
 GROUP BY
     rd.drep_hash,
     rd.drep_type,
@@ -1854,7 +2326,11 @@ LEFT JOIN stake_registration sd
  )
 WHERE rd.drep_type IN ('ABSTAIN', 'NO_CONFIDENCE')
   AND sd.address IS NULL
-  AND rd.address NOT IN (SELECT address FROM ss_pv9_cleared_addresses)
+  AND NOT EXISTS (
+      SELECT 1
+      FROM ss_pv9_cleared_addresses ca
+      WHERE ca.address = rd.address
+  )
 GROUP BY rd.drep_type
 """
             % (sql_literal(ZERO_HASH), epoch),
@@ -1919,11 +2395,14 @@ COPY (
 def extract_prepare_cache_details(metadata: Dict[str, str]) -> Tuple[Dict[str, bool], Dict[str, int]]:
     cache_hits = {
         "missing_address_epoch": meta_bool(metadata, "missing_address_cache_hit"),
+        "drep_pv9_stale_clear_event": meta_bool(metadata, "pv9_stale_clear_event_cache_hit"),
         "pv9_cleared_address_epoch": meta_bool(metadata, "pv9_cleared_cache_hit"),
     }
     cache_counts = {
         "current_drep_address_count": meta_int(metadata, "current_drep_address_count"),
         "missing_address_count": meta_int(metadata, "missing_address_count"),
+        "pv9_stale_clear_event_count": meta_int(metadata, "pv9_stale_clear_event_count"),
+        "pv9_source_max_slot": meta_int(metadata, "pv9_source_max_slot"),
         "pv9_cleared_address_count": meta_int(metadata, "pv9_cleared_address_count"),
     }
     return cache_hits, cache_counts
@@ -1997,6 +2476,32 @@ WHERE snapshot_epoch = %d \\gset
             )
         )
 
+    if "drep_pv9_stale_clear_event" in targets:
+        parts.append(
+            """
+SELECT pg_advisory_xact_lock(hashtext(%s));
+SELECT COUNT(*) AS __meta_value
+FROM %s.drep_pv9_stale_clear_event \\gset
+\\echo META|deleted_drep_pv9_stale_clear_event_count|:__meta_value
+SELECT COUNT(*) AS __meta_value
+FROM %s.drep_pv9_stale_clear_event_cache \\gset
+\\echo META|deleted_drep_pv9_stale_clear_event_cache_count|:__meta_value
+"""
+            % (sql_literal("%s.drep_pv9_stale_clear_event" % debug_schema), debug, debug)
+        )
+        parts.append(
+            timed_sql(
+                "delete_drep_pv9_stale_clear_event_cache",
+                "DELETE FROM %s.drep_pv9_stale_clear_event_cache" % debug,
+            )
+        )
+        parts.append(
+            timed_sql(
+                "delete_drep_pv9_stale_clear_event",
+                "DELETE FROM %s.drep_pv9_stale_clear_event" % debug,
+            )
+        )
+
     if include_shadow:
         parts.append(
             """
@@ -2022,6 +2527,8 @@ def extract_invalidate_counts(metadata: Dict[str, str]) -> Dict[str, int]:
     return {
         "missing_address_epoch": meta_int(metadata, "deleted_missing_address_count"),
         "pv9_cleared_address_epoch": meta_int(metadata, "deleted_pv9_cleared_address_count"),
+        "drep_pv9_stale_clear_event": meta_int(metadata, "deleted_drep_pv9_stale_clear_event_count"),
+        "drep_pv9_stale_clear_event_cache": meta_int(metadata, "deleted_drep_pv9_stale_clear_event_cache_count"),
         "shadow_drep_dist": meta_int(metadata, "deleted_shadow_drep_dist_count"),
     }
 
@@ -2060,6 +2567,35 @@ CREATE UNLOGGED TABLE IF NOT EXISTS {debug}.pv9_cleared_address_epoch (
 
 CREATE INDEX IF NOT EXISTS idx_pv9_cleared_address_epoch_epoch
     ON {debug}.pv9_cleared_address_epoch (snapshot_epoch, pv9_max_epoch);
+
+CREATE UNLOGGED TABLE IF NOT EXISTS {debug}.drep_pv9_stale_clear_event_cache (
+    pv9_max_epoch integer NOT NULL,
+    event_count bigint NOT NULL,
+    pv9_source_max_slot bigint NOT NULL,
+    update_datetime timestamptz NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (pv9_max_epoch)
+);
+
+CREATE UNLOGGED TABLE IF NOT EXISTS {debug}.drep_pv9_stale_clear_event (
+    pv9_max_epoch integer NOT NULL,
+    address varchar(255) NOT NULL,
+    old_drep_hash varchar(56) NOT NULL,
+    old_drep_type varchar(40) NOT NULL,
+    stale_slot bigint NOT NULL,
+    stale_tx_index integer NOT NULL,
+    stale_cert_index integer NOT NULL,
+    unreg_epoch integer NOT NULL,
+    unreg_slot bigint NOT NULL,
+    unreg_tx_index integer NOT NULL,
+    unreg_cert_index integer NOT NULL,
+    update_datetime timestamptz NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_drep_pv9_clear_event_epoch_address
+    ON {debug}.drep_pv9_stale_clear_event (pv9_max_epoch, address);
+
+CREATE INDEX IF NOT EXISTS idx_drep_pv9_clear_event_unreg_order
+    ON {debug}.drep_pv9_stale_clear_event (pv9_max_epoch, unreg_epoch, unreg_slot, unreg_tx_index, unreg_cert_index);
 
 CREATE UNLOGGED TABLE IF NOT EXISTS {debug}.run_timing (
     run_id varchar(255) NOT NULL,
@@ -2514,12 +3050,13 @@ def invalidate_epoch_with_error_handling(
             save_store_sql=save_store_sql,
         )
         print_line(
-            "epoch=%d status=%s deleted_missing=%d deleted_pv9=%d deleted_shadow=%d duration_ms=%d"
+            "epoch=%d status=%s deleted_missing=%d deleted_pv9_addresses=%d deleted_pv9_events=%d deleted_shadow=%d duration_ms=%d"
             % (
                 result.epoch,
                 result.status,
                 result.deleted_counts["missing_address_epoch"],
                 result.deleted_counts["pv9_cleared_address_epoch"],
+                result.deleted_counts["drep_pv9_stale_clear_event"],
                 result.deleted_counts["shadow_drep_dist"],
                 result.duration_ms,
             )
@@ -2545,6 +3082,8 @@ def invalidate_epoch_with_error_handling(
             deleted_counts={
                 "missing_address_epoch": 0,
                 "pv9_cleared_address_epoch": 0,
+                "drep_pv9_stale_clear_event": 0,
+                "drep_pv9_stale_clear_event_cache": 0,
                 "shadow_drep_dist": 0,
             },
         )
@@ -2633,6 +3172,8 @@ def write_invalidate_summary(report_dir: Path, results: Sequence[EpochInvalidate
                 "status",
                 "deleted_missing_address_epoch",
                 "deleted_pv9_cleared_address_epoch",
+                "deleted_drep_pv9_stale_clear_event",
+                "deleted_drep_pv9_stale_clear_event_cache",
                 "deleted_shadow_drep_dist",
                 "duration_ms",
                 "report_file",
@@ -2646,6 +3187,8 @@ def write_invalidate_summary(report_dir: Path, results: Sequence[EpochInvalidate
                     result.status,
                     result.deleted_counts["missing_address_epoch"],
                     result.deleted_counts["pv9_cleared_address_epoch"],
+                    result.deleted_counts["drep_pv9_stale_clear_event"],
+                    result.deleted_counts["drep_pv9_stale_clear_event_cache"],
                     result.deleted_counts["shadow_drep_dist"],
                     result.duration_ms,
                     result.report_file,
@@ -2660,6 +3203,8 @@ def write_invalidate_summary(report_dir: Path, results: Sequence[EpochInvalidate
         "deleted_totals": {
             "missing_address_epoch": sum(result.deleted_counts["missing_address_epoch"] for result in results),
             "pv9_cleared_address_epoch": sum(result.deleted_counts["pv9_cleared_address_epoch"] for result in results),
+            "drep_pv9_stale_clear_event": sum(result.deleted_counts["drep_pv9_stale_clear_event"] for result in results),
+            "drep_pv9_stale_clear_event_cache": sum(result.deleted_counts["drep_pv9_stale_clear_event_cache"] for result in results),
             "shadow_drep_dist": sum(result.deleted_counts["shadow_drep_dist"] for result in results),
         },
     }
@@ -2938,15 +3483,17 @@ def main(argv: Sequence[str]) -> int:
         write_invalidate_summary(report_dir, results)
         error_epochs = sum(1 for result in results if result.status == "error")
         deleted_missing = sum(result.deleted_counts["missing_address_epoch"] for result in results)
-        deleted_pv9 = sum(result.deleted_counts["pv9_cleared_address_epoch"] for result in results)
+        deleted_pv9_addresses = sum(result.deleted_counts["pv9_cleared_address_epoch"] for result in results)
+        deleted_pv9_events = sum(result.deleted_counts["drep_pv9_stale_clear_event"] for result in results)
         deleted_shadow = sum(result.deleted_counts["shadow_drep_dist"] for result in results)
         print_line(
-            "done total_epochs=%d error_epochs=%d deleted_missing=%d deleted_pv9=%d deleted_shadow=%d summary=%s"
+            "done total_epochs=%d error_epochs=%d deleted_missing=%d deleted_pv9_addresses=%d deleted_pv9_events=%d deleted_shadow=%d summary=%s"
             % (
                 len(results),
                 error_epochs,
                 deleted_missing,
-                deleted_pv9,
+                deleted_pv9_addresses,
+                deleted_pv9_events,
                 deleted_shadow,
                 report_dir / "summary.json",
             )

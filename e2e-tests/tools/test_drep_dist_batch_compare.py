@@ -289,6 +289,10 @@ class SqlGenerationTest(unittest.TestCase):
         )
 
         self.assertIn('INSERT INTO "drep_debug".missing_address_epoch', sql)
+        self.assertIn('INSERT INTO "drep_debug".drep_pv9_stale_clear_event', sql)
+        self.assertIn('FROM "drep_debug".drep_pv9_stale_clear_event e', sql)
+        self.assertIn("SELECT pg_advisory_lock(hashtext('drep_debug.drep_pv9_stale_clear_event'))", sql)
+        self.assertIn("SET TRANSACTION ISOLATION LEVEL READ COMMITTED", sql)
         self.assertIn('INSERT INTO "drep_debug".pv9_cleared_address_epoch', sql)
         self.assertNotIn("INSERT INTO drep_dist", sql)
         self.assertNotIn("UPDATE drep_dist", sql)
@@ -355,7 +359,36 @@ class SqlGenerationTest(unittest.TestCase):
         self.assertIn("FROM drep_registration reg_before_stale", sql)
         self.assertIn("reg_before_stale.type = 'REG_DREP_CERT'", sql)
         self.assertIn("FROM drep_registration unreg_before_stale", sql)
+        self.assertIn("stale_del.address IS NOT NULL", sql)
         self.assertNotIn("FROM delegation_vote redel", sql)
+
+    def test_render_pv9_stale_clear_event_insert_sql_matches_persistent_cache_shape(self):
+        sql = tool.render_pv9_stale_clear_event_insert_sql(
+            debug_schema="drep_debug",
+            pv9_max_epoch=536,
+        )
+
+        self.assertIn('INSERT INTO "drep_debug".drep_pv9_stale_clear_event', sql)
+        self.assertIn("old_drep_hash", sql)
+        self.assertIn("unreg_slot", sql)
+        self.assertIn("stale_del.address IS NOT NULL", sql)
+        self.assertIn("earlier_unreg.epoch <= 536", sql)
+        self.assertIn("between_del.epoch <= 536", sql)
+        self.assertNotIn("after_del", sql)
+
+    def test_render_pv9_snapshot_cleared_insert_sql_applies_after_del_dynamically(self):
+        sql = tool.render_pv9_snapshot_cleared_insert_sql(
+            debug_schema="drep_debug",
+            snapshot_epoch=624,
+            epoch=623,
+            pv9_max_epoch=536,
+        )
+
+        self.assertIn('FROM "drep_debug".drep_pv9_stale_clear_event e', sql)
+        self.assertIn("e.unreg_epoch <= 623", sql)
+        self.assertIn("FROM delegation_vote after_del", sql)
+        self.assertIn("after_del.slot > e.unreg_slot", sql)
+        self.assertIn('INSERT INTO "drep_debug".pv9_cleared_address_epoch', sql)
 
     def test_render_invalidate_sql_targets_selected_cache_and_shadow(self):
         sql = tool.render_invalidate_sql(
@@ -367,6 +400,9 @@ class SqlGenerationTest(unittest.TestCase):
 
         self.assertIn('FROM "drep_debug".pv9_cleared_address_epoch', sql)
         self.assertIn('DELETE FROM "drep_debug".pv9_cleared_address_epoch WHERE snapshot_epoch = 624', sql)
+        self.assertIn('FROM "drep_debug".drep_pv9_stale_clear_event', sql)
+        self.assertIn('DELETE FROM "drep_debug".drep_pv9_stale_clear_event', sql)
+        self.assertIn('DELETE FROM "drep_debug".drep_pv9_stale_clear_event_cache', sql)
         self.assertIn("cache_name = 'pv9_cleared_address_epoch'", sql)
         self.assertIn('DELETE FROM "drep_debug".shadow_drep_dist WHERE snapshot_epoch = 624', sql)
         self.assertNotIn('FROM "drep_debug".missing_address_epoch', sql)
@@ -386,8 +422,10 @@ class SqlGenerationTest(unittest.TestCase):
         self.assertIn("CREATE TEMP TABLE tmp_drep_dist", sql)
         self.assertIn('DELETE FROM "drep_debug".shadow_drep_dist', sql)
         self.assertIn('INSERT INTO "drep_debug".shadow_drep_dist', sql)
+        self.assertIn("FROM ss_pv9_cleared_addresses ca", sql)
         self.assertNotIn("INSERT INTO drep_dist", sql)
         self.assertNotIn("DELETE FROM drep_dist", sql)
+        self.assertNotIn("rd.address NOT IN (SELECT address FROM ss_pv9_cleared_addresses)", sql)
         self.assertNotIn("AS excl(address, drep_hash, drep_type, slot, tx_index, cert_index)", sql)
 
 

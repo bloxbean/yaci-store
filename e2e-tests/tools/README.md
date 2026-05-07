@@ -267,8 +267,12 @@ Hybrid flow vẫn giữ nguyên:
 
 Trong `ss_pv9_cleared_addresses`, tool bám theo ledger identity hiện tại của
 `DRepDistService`: một DRep được định danh bởi cả `(drep_type, drep_hash)`.
+Sau PV9/bootstrap, tool cũng tách cache giống service: `drep_pv9_stale_clear_event`
+lưu clear event bất biến, còn `pv9_cleared_address_epoch` chỉ là cache theo
+snapshot sau khi áp dụng `after_del`.
 
-Tức là phần được tối ưu chỉ là **financial base reconstruction**, không phải business filters của DRep.
+Các tối ưu này chỉ thay đổi cách materialize/cache intermediate data, không thay đổi
+business filters của DRep.
 
 ## Kết luận nghiệp vụ
 
@@ -288,7 +292,8 @@ flowchart TD
     A["compare-range E"] --> B["resolve epoch context"]
     B --> C["prepare-range cache"]
     C --> C1["missing_address_epoch in drep_debug"]
-    C --> C2["pv9_cleared_address_epoch in drep_debug"]
+    C --> C2["drep_pv9_stale_clear_event in drep_debug"]
+    C2 --> C3["pv9_cleared_address_epoch in drep_debug"]
     B --> D["current DRep addresses"]
     D --> E{"address in epoch_stake for E-1?"}
     E -->|yes| F["base_from_epoch_stake + delta refund + delta reward_rest"]
@@ -315,8 +320,9 @@ sequenceDiagram
     U->>T: prepare-range 624-700
     T->>S: SELECT current DRep addresses
     T->>D: write missing_address_epoch
-    T->>S: SELECT PV9-related source rows
-    T->>D: write pv9_cleared_address_epoch
+    T->>S: SELECT PV9 clear-event source rows
+    T->>D: write drep_pv9_stale_clear_event
+    T->>D: derive pv9_cleared_address_epoch
 
     U->>T: compare-range 624-700
     T->>D: read cached missing_address / pv9_cleared
@@ -340,6 +346,8 @@ Các bảng debug chính:
 
 - `drep_debug.cache_state`
 - `drep_debug.missing_address_epoch`
+- `drep_debug.drep_pv9_stale_clear_event_cache`
+- `drep_debug.drep_pv9_stale_clear_event`
 - `drep_debug.pv9_cleared_address_epoch`
 - `drep_debug.run_timing`
 
@@ -603,6 +611,9 @@ Các lựa chọn cho `--cache-name`:
 - `all`
 - `missing-address`
 - `pv9`
+
+`pv9` xóa cả cache address theo epoch và cache event `drep_pv9_stale_clear_event`
+dùng chung cho post-bootstrap snapshots.
 
 Nếu muốn xóa luôn shadow snapshot đã persist trong `drep_debug.shadow_drep_dist`:
 
