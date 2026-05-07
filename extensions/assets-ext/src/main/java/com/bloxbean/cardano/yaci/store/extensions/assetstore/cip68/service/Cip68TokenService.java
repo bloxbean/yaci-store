@@ -163,22 +163,4 @@ public class Cip68TokenService {
         return Optional.empty();
     }
 
-    /**
-     * Derives the CIP-68 label from a reference NFT asset name prefix.
-     * The reference NFT always has prefix 000643b0 (label 100), but the corresponding
-     * user token label determines the token type:
-     * <ul>
-     *   <li>If the reference NFT was minted alongside a token with prefix 0014df10 → label 333 (FT)</li>
-     *   <li>If alongside prefix 000de140 → label 222 (NFT)</li>
-     *   <li>If alongside prefix 001bc280 → label 444 (RFT)</li>
-     * </ul>
-     * Since we currently only index FTs, this always returns LABEL_FT.
-     * When NFT support is added, this should inspect the minting transaction
-     * to determine which user token prefix was minted alongside the reference NFT.
-     */
-    public static int deriveLabelForReferenceNft() {
-        // TODO: When NFT support is added, derive label from co-minted user token prefix
-        return LABEL_FT;
-    }
-
 }

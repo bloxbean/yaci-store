@@ -107,17 +107,13 @@ public class Cip26TokenMetadata {
 
     @JsonAnySetter
     public void propertiesSetter(final String propertyName, final TokenMetadataProperty<?> property) {
-        if (propertyName == null) {
-            throw new IllegalArgumentException("propertyName cannot be null.");
-        }
-        final String sanitized = propertyName.trim();
-        if (sanitized.isEmpty()) {
-            throw new IllegalArgumentException("propertyName cannot be empty or blank.");
-        }
+        // Jackson never invokes @JsonAnySetter with a null/blank key (JSON object keys are
+        // strings and the parser rejects empty keys upstream), so no defensive validation
+        // is needed here. Null property → key removal, mirroring the previous behaviour.
         if (property != null) {
-            this.additionalProperties.put(sanitized, property);
+            this.additionalProperties.put(propertyName, property);
         } else {
-            this.additionalProperties.remove(sanitized);
+            this.additionalProperties.remove(propertyName);
         }
     }
 
