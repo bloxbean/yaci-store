@@ -25,7 +25,14 @@ public class CommitteeVotingEvaluator implements VotingEvaluator<VotingData> {
         if (ConstitutionCommitteeState.NO_CONFIDENCE.equals(committee.getState())) {
             return VotingStatus.NOT_PASS_THRESHOLD;
         }
-        
+
+        // Post-bootstrap: committee must meet minimum size requirement
+        if (!context.isInBootstrapPhase()
+                && context.getCommitteeMinSize() != null
+                && committee.getMembers().size() < context.getCommitteeMinSize()) {
+            return VotingStatus.NOT_PASS_THRESHOLD;
+        }
+
         var threshold = committee.getThreshold().safeRatio();
         if (threshold.equals(BigDecimal.ZERO)) {
             return VotingStatus.PASS_THRESHOLD;

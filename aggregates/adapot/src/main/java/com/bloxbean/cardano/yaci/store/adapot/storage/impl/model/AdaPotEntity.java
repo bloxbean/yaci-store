@@ -16,13 +16,11 @@ import java.time.LocalDateTime;
 @SuperBuilder
 @Entity
 @Table(name = "adapot")
-@IdClass(AdaPotId.class)
 public class AdaPotEntity {
     @Id
     @Column(name = "epoch")
     private Integer epoch;
 
-    @Id
     @Column(name = "slot")
     private Long slot;
 
