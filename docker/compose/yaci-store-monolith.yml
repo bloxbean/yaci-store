@@ -1,6 +1,6 @@
 networks:
   yaci-store-net:
-    name: yaci-store-net
+    name: yaci-store-net-${INSTANCE_NAME:-default}
 
 services:
   yaci-store-postgres:
