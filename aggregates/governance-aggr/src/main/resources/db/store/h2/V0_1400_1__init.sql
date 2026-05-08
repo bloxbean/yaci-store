@@ -27,7 +27,6 @@ create table gov_action_proposal_status
     status             varchar(20),
     epoch              int,
     voting_stats       json,
-    slot               bigint,
     update_datetime    timestamp,
     primary key (gov_action_tx_hash, gov_action_index, epoch)
 );

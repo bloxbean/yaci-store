@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.api.governanceaggr.controller;
 
 import com.bloxbean.cardano.yaci.store.api.governanceaggr.dto.ProposalDto;
 import com.bloxbean.cardano.yaci.store.api.governanceaggr.service.ProposalApiService;
+import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -42,6 +43,17 @@ public class ProposalController {
         return proposalApiService.getProposalById(txHash, index)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    @GetMapping("/proposals/current")
+    @Operation(description = "Get all proposals in the current epoch with their status and voting stats.",
+            summary = "Get current epoch proposals")
+    public ResponseEntity<List<ProposalDto>> getCurrentProposals(
+            @Parameter(description = "Filter by proposal status: ACTIVE, RATIFIED, EXPIRED")
+            @RequestParam(required = false) GovActionStatus status) {
+
+        List<ProposalDto> proposals = proposalApiService.getCurrentProposals(status);
+        return ResponseEntity.ok(proposals);
     }
 
     @GetMapping("/proposals/gov-action-id/{govActionId}")
