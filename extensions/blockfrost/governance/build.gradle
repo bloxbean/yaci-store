@@ -1,0 +1,24 @@
+import org.gradle.api.publish.maven.MavenPublication
+
+dependencies {
+
+    api project(":extensions:blockfrost:blockfrost-common")
+    api project(":stores:governance")
+    api project(":stores-api:governance-api")
+    api project(":aggregates:governance-aggr")
+    api project(":stores:utxo")
+
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.jooq:jooq'
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store Blockfrost Governance'
+                description = 'Yaci Store Blockfrost Governance API'
+            }
+        }
+    }
+}
