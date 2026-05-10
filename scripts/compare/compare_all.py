@@ -14,7 +14,7 @@ USAGE:
     python3 compare_all.py --epoch 800 --config config.json
 
     # Epoch range
-    python3 compare_all.py --start-epoch 740 --end-epoch 902 --config config.json
+    python3 compare_all.py --start-epoch 740 --end-epoch 902
 
     # Skip specific comparators
     python3 compare_all.py --epoch 800 --skip epoch_stake,reward_rest

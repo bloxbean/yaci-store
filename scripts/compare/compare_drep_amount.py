@@ -20,9 +20,6 @@ USAGE:
 
    # Compare an epoch range (510 to 520)
    python3 compare_drep_amount.py --start-epoch 510 --end-epoch 520
-   python3 compare_drep_amount.py --start-epoch 647 --end-epoch 1282 --config config.json
-   python3 compare_drep_amount.py --start-epoch 647 --end-epoch 981 --config config.json
-   python3 compare_drep_amount.py --start-epoch 492 --end-epoch 1055 --config config.json
 
    # Custom database connections (CLI args override config file)
    python3 compare_drep_amount.py --epoch 515 \\

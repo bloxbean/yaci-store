@@ -25,7 +25,6 @@ USAGE:
 
    # Compare across an epoch range
    python3 compare_reward_rest.py --start-epoch 1075 --end-epoch 1080
-   python3 compare_reward_rest.py --start-epoch 492 --end-epoch 1044 --config config.json
 
    # Custom database connections (CLI args override config file)
    python3 compare_reward_rest.py --epoch 1075 \

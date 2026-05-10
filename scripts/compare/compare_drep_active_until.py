@@ -20,7 +20,6 @@ USAGE:
 
    # Compare an epoch range (620 to 630)
    python3 compare_drep_active_until.py --start-epoch 620 --end-epoch 630
-   python3 compare_drep_active_until.py --start-epoch 492 --end-epoch 1055 --config config.json
 
    # Custom database connections (CLI args override config file)
    python3 compare_drep_active_until.py --epoch 624 \\
@@ -32,7 +31,6 @@ USAGE:
 
    # Output to log file only, suppress console output
    python3 compare_drep_active_until.py --epoch 624 --quiet
-   python3 compare_drep_amount.py --start-epoch 492 --end-epoch 1052 --config config.json
 
    # Limit the number of mismatches printed
    python3 compare_drep_active_until.py --epoch 624 --max-mismatches 50
