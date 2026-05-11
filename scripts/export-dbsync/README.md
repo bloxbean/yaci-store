@@ -1,4 +1,4 @@
-# DB-Sync Parquet Exporter
+# DB Sync Exporter
 
 Export DB Sync data needed by `scripts/compare` into Parquet files. The output
 models are comparison-oriented and are not raw one-to-one copies of DB Sync
@@ -15,49 +15,51 @@ pip3 install psycopg2-binary pyarrow
 
 ## Configuration
 
-Configuration priority:
+Configuration priority matches the `scripts/compare` convention:
 
 1. CLI arguments
-2. `.env` file or environment variables
+2. JSON config file
 3. `DEFAULTS` inside `export_dbsync_parquet.py`
 
 Supported settings:
 
-- DB connection: `PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`, `PGDATABASE`
-- `OUTPUT_DIR`
-- `START_EPOCH`
-- optional `END_EPOCH`
+- `dbsync_url`
+- optional `dbsync_user` / `dbsync_password` URL userinfo overrides
+- `output_dir`
+- `start_epoch`
+- optional `end_epoch`
+- optional `tables`
 
 Example:
 
 ```bash
-cp .env.example .env
-python3 export_dbsync_parquet.py --env-file .env
+cp config.example.json config.json
+python3 export_dbsync_parquet.py --config config.json
 ```
 
-`END_EPOCH` is optional. If it is not set, filtered exports run from
-`START_EPOCH` onward. If it is set, the export range is inclusive:
-`START_EPOCH <= epoch <= END_EPOCH`.
+`end_epoch` is optional. If it is not set, filtered exports run from
+`start_epoch` onward. If it is set, the export range is inclusive:
+`start_epoch <= epoch <= end_epoch`.
 
 ## Usage
 
 Export all comparison models:
 
 ```bash
-python3 export_dbsync_parquet.py --env-file .env
+python3 export_dbsync_parquet.py --config config.json
 ```
 
 Export a bounded epoch range:
 
 ```bash
-python3 export_dbsync_parquet.py --env-file .env --start-epoch 740 --end-epoch 902
+python3 export_dbsync_parquet.py --config config.json --start-epoch 740 --end-epoch 902
 ```
 
 Export selected models:
 
 ```bash
-python3 export_dbsync_parquet.py --env-file .env --tables adapot drep_distr
-python3 export_dbsync_parquet.py --env-file .env --tables epoch_stake
+python3 export_dbsync_parquet.py --config config.json --tables adapot drep_distr
+python3 export_dbsync_parquet.py --config config.json --tables epoch_stake
 ```
 
 CLI options:
@@ -66,19 +68,17 @@ CLI options:
 --tables          Models to export. Choices: adapot, epoch_stake,
                   drep_distr, reward_rest, gov_action_proposal
 --output-dir      Output directory for parquet files
---env-file        Path to .env file
+--config          Path to JSON config file
 --start-epoch     Starting epoch
 --end-epoch       Optional inclusive ending epoch
---pg-host         PostgreSQL host
---pg-port         PostgreSQL port
---pg-user         PostgreSQL user
---pg-password     PostgreSQL password
---pg-database     PostgreSQL database name
+--dbsync-url      DB Sync PostgreSQL connection URL
+--dbsync-user     DB Sync username override
+--dbsync-password DB Sync password override
 ```
 
 ## Exported Models
 
-| Model | Output file without `END_EPOCH` | Output file with `END_EPOCH` | Source tables | Compare script |
+| Model | Output file without `end_epoch` | Output file with `end_epoch` | Source tables | Compare script |
 | --- | --- | --- | --- | --- |
 | `adapot` | `adapot_from504.parquet` | `adapot_from504_to624.parquet` | `ada_pots` | `compare_adapot.py` |
 | `epoch_stake` | `epoch_stake_from504.parquet` | `epoch_stake_from504_to624.parquet` | `epoch_stake`, `stake_address`, `pool_hash` | `compare_epoch_stake.py` |

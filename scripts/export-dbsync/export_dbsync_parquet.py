@@ -13,9 +13,11 @@ Strategy:
 import argparse
 import datetime
 import io
+import json
 import os
 import sys
 import time
+from urllib.parse import quote, urlparse, urlunparse
 
 psycopg2 = None
 pa_csv = None
@@ -24,18 +26,17 @@ pq = None
 # =============================================================================
 # DEFAULT CONFIGURATION
 # Edit these values to hardcode your settings directly in the script.
-# These are used as fallbacks when no CLI argument or env variable is provided.
-# Priority: CLI args > .env file / env vars > defaults below
+# These are used as fallbacks when no CLI argument or JSON config value is provided.
+# Priority: CLI args > JSON config file > defaults below
 # =============================================================================
 DEFAULTS = {
-    "PGHOST": "localhost",
-    "PGPORT": "5432",
-    "PGUSER": "",
-    "PGPASSWORD": "",
-    "PGDATABASE": "dbsync",
-    "OUTPUT_DIR": ".",
-    "START_EPOCH": "504",
-    "END_EPOCH": "",
+    "dbsync_url": "postgresql://localhost:5432/dbsync",
+    "dbsync_user": None,
+    "dbsync_password": None,
+    "output_dir": ".",
+    "start_epoch": 504,
+    "end_epoch": None,
+    "tables": None,
 }
 # =============================================================================
 
@@ -195,43 +196,102 @@ def format_duration(seconds):
     return f"{seconds:.1f}s"
 
 
-def load_env_file(env_file):
-    """Load variables from a .env file into os.environ (does not override existing)."""
-    if not os.path.isfile(env_file):
-        log(f"Warning: env file '{env_file}' not found, skipping.")
-        return
-    with open(env_file) as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            key, _, value = line.partition("=")
-            key = key.strip()
-            value = value.strip().strip("\"'")
-            os.environ.setdefault(key, value)
+def load_config(config_path):
+    """Load exporter configuration from JSON."""
+    with open(config_path, "r") as f:
+        return json.load(f)
+
+
+def apply_credentials(url, user, password):
+    """Override the userinfo component of a PostgreSQL URL if provided."""
+    if not url or (user is None and password is None):
+        return url
+
+    parsed = urlparse(url)
+    existing_user = parsed.username or ""
+    existing_pass = parsed.password or ""
+    new_user = user if user is not None else existing_user
+    new_pass = password if password is not None else existing_pass
+
+    host = parsed.hostname or ""
+    if parsed.port:
+        host = f"{host}:{parsed.port}"
+
+    userinfo = ""
+    if new_user or new_pass:
+        userinfo = quote(new_user, safe="")
+        if new_pass:
+            userinfo += ":" + quote(new_pass, safe="")
+        userinfo += "@"
+
+    return urlunparse(parsed._replace(netloc=f"{userinfo}{host}"))
+
+
+def redact_url(url):
+    """Return a connection URL safe for logs."""
+    parsed = urlparse(url)
+    if parsed.password is None:
+        return url
+
+    user = quote(parsed.username or "", safe="")
+    host = parsed.hostname or ""
+    if parsed.port:
+        host = f"{host}:{parsed.port}"
+    return urlunparse(parsed._replace(netloc=f"{user}:****@{host}"))
+
+
+def normalize_tables(tables):
+    if tables is None:
+        return None
+    if isinstance(tables, str):
+        tables = [t.strip() for t in tables.split(",") if t.strip()]
+    invalid = [t for t in tables if t not in TABLE_CONFIGS]
+    if invalid:
+        choices = ", ".join(TABLE_CONFIGS.keys())
+        raise ValueError(f"invalid table(s): {', '.join(invalid)}. Choices: {choices}")
+    return list(tables)
 
 
 def resolve_config(args):
-    """Resolve configuration with priority: CLI args > env vars > DEFAULTS."""
-    def pick(cli_val, env_key):
-        if cli_val is not None:
-            return cli_val
-        return os.environ.get(env_key, DEFAULTS.get(env_key, ""))
+    """Resolve configuration with priority: CLI args > JSON config file > defaults."""
+    cfg = DEFAULTS.copy()
 
-    cfg = {
-        "host": pick(args.pg_host, "PGHOST"),
-        "port": pick(args.pg_port, "PGPORT"),
-        "user": pick(args.pg_user, "PGUSER"),
-        "password": pick(args.pg_password, "PGPASSWORD"),
-        "database": pick(args.pg_database, "PGDATABASE"),
+    if args.config:
+        cfg.update(load_config(args.config))
+
+    cli_mapping = {
+        "dbsync_url": "dbsync_url",
+        "dbsync_user": "dbsync_user",
+        "dbsync_password": "dbsync_password",
+        "output_dir": "output_dir",
+        "start_epoch": "start_epoch",
+        "end_epoch": "end_epoch",
+        "tables": "tables",
     }
 
-    missing = [k for k in ("user", "password", "database") if not cfg[k]]
-    if missing:
-        log(f"Error: missing required DB config: {', '.join(missing)}")
-        log("Provide via CLI args, env vars, .env file, or edit DEFAULTS in the script.")
-        sys.exit(1)
+    for attr, cfg_key in cli_mapping.items():
+        cli_val = getattr(args, attr, None)
+        if cli_val is not None:
+            cfg[cfg_key] = cli_val
 
+    cfg["tables"] = normalize_tables(cfg.get("tables")) or list(TABLE_CONFIGS.keys())
+    cfg["start_epoch"] = int(cfg["start_epoch"])
+    if cfg.get("end_epoch") in ("", None):
+        cfg["end_epoch"] = None
+    else:
+        cfg["end_epoch"] = int(cfg["end_epoch"])
+
+    if cfg["end_epoch"] is not None and cfg["end_epoch"] < cfg["start_epoch"]:
+        raise ValueError("end_epoch must be >= start_epoch")
+
+    if not cfg.get("dbsync_url"):
+        raise ValueError("dbsync_url is required")
+
+    cfg["dbsync_url"] = apply_credentials(
+        cfg["dbsync_url"],
+        cfg.get("dbsync_user"),
+        cfg.get("dbsync_password"),
+    )
     return cfg
 
 
@@ -395,21 +455,21 @@ def main():
         description="Export Cardano db-sync comparison models to Parquet (psycopg2 + pyarrow)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Configuration priority: CLI args > .env file / env vars > DEFAULTS in script.
+Configuration priority: CLI args > JSON config file > DEFAULTS in script.
 
 Examples:
-  python3 export_dbsync_parquet.py --env-file .env
-  python3 export_dbsync_parquet.py --env-file .env --tables adapot drep_distr
-  python3 export_dbsync_parquet.py --env-file .env --start-epoch 740 --end-epoch 902
-  python3 export_dbsync_parquet.py --pg-host localhost --pg-user admin \\
-      --pg-password secret --pg-database dbsync --output-dir /data/parquet
+  python3 export_dbsync_parquet.py --config config.json
+  python3 export_dbsync_parquet.py --config config.json --tables adapot drep_distr
+  python3 export_dbsync_parquet.py --config config.json --start-epoch 740 --end-epoch 902
+  python3 export_dbsync_parquet.py --dbsync-url postgresql://localhost:5678/cexplorer \\
+      --dbsync-user admin --dbsync-password secret --output-dir /data/parquet
         """,
     )
 
     parser.add_argument(
         "--tables", nargs="+",
         choices=list(TABLE_CONFIGS.keys()),
-        default=list(TABLE_CONFIGS.keys()),
+        default=None,
         help="Comparison models to export (default: all)",
     )
     parser.add_argument(
@@ -417,72 +477,53 @@ Examples:
         help="Output directory for parquet files",
     )
     parser.add_argument(
-        "--env-file", default=None,
-        help="Path to .env file to load DB connection variables from",
+        "--config", metavar="FILE", default=None,
+        help="Path to JSON config file (CLI args override file values)",
     )
     parser.add_argument(
         "--start-epoch", type=int, default=None,
-        help="Starting epoch for filtered exports (default: from env START_EPOCH or DEFAULTS)",
+        help="Starting epoch for filtered exports",
     )
     parser.add_argument(
         "--end-epoch", type=int, default=None,
-        help="Optional inclusive ending epoch for filtered exports (default: env END_EPOCH or unset)",
+        help="Optional inclusive ending epoch for filtered exports",
     )
 
-    db_group = parser.add_argument_group("database connection (override env vars / defaults)")
-    db_group.add_argument("--pg-host", default=None, help="PostgreSQL host")
-    db_group.add_argument("--pg-port", default=None, help="PostgreSQL port")
-    db_group.add_argument("--pg-user", default=None, help="PostgreSQL user")
-    db_group.add_argument("--pg-password", default=None, help="PostgreSQL password")
-    db_group.add_argument("--pg-database", default=None, help="PostgreSQL database name")
+    db_group = parser.add_argument_group("database connection (override JSON config / defaults)")
+    db_group.add_argument("--dbsync-url", default=None, help="DB Sync PostgreSQL connection URL")
+    db_group.add_argument("--dbsync-user", default=None, help="DB Sync username (override URL userinfo)")
+    db_group.add_argument("--dbsync-password", default=None, help="DB Sync password (override URL userinfo)")
 
     args = parser.parse_args()
 
-    if args.env_file:
-        load_env_file(args.env_file)
+    try:
+        cfg = resolve_config(args)
+    except (OSError, json.JSONDecodeError, ValueError) as e:
+        parser.error(str(e))
 
-    db_config = resolve_config(args)
-
-    output_dir = args.output_dir or os.environ.get("OUTPUT_DIR", DEFAULTS["OUTPUT_DIR"])
+    output_dir = cfg["output_dir"]
     os.makedirs(output_dir, exist_ok=True)
 
-    if args.start_epoch is not None:
-        start_epoch = args.start_epoch
-    else:
-        start_epoch = int(os.environ.get("START_EPOCH", DEFAULTS["START_EPOCH"]))
-
-    if args.end_epoch is not None:
-        end_epoch = args.end_epoch
-    else:
-        raw_end_epoch = os.environ.get("END_EPOCH", DEFAULTS["END_EPOCH"]).strip()
-        end_epoch = int(raw_end_epoch) if raw_end_epoch else None
-
-    if end_epoch is not None and end_epoch < start_epoch:
-        parser.error("--end-epoch must be >= --start-epoch")
+    start_epoch = cfg["start_epoch"]
+    end_epoch = cfg["end_epoch"]
 
     log(f"Output directory: {os.path.abspath(output_dir)}")
     log(f"Start epoch: {start_epoch}")
     log(f"End epoch: {end_epoch if end_epoch is not None else 'not set'}")
-    log(f"Connecting to PostgreSQL: {db_config['host']}:{db_config['port']}/{db_config['database']}")
+    log(f"Connecting to PostgreSQL: {redact_url(cfg['dbsync_url'])}")
 
     load_runtime_dependencies()
 
-    pg_conn = psycopg2.connect(
-        host=db_config["host"],
-        port=db_config["port"],
-        user=db_config["user"],
-        password=db_config["password"],
-        database=db_config["database"],
-    )
+    pg_conn = psycopg2.connect(cfg["dbsync_url"])
     pg_conn.autocommit = True
     log("PostgreSQL connected.")
 
-    log(f"Starting export of {len(args.tables)} table(s): {', '.join(args.tables)}")
+    log(f"Starting export of {len(cfg['tables'])} table(s): {', '.join(cfg['tables'])}")
     print(flush=True)
 
     overall_start = time.time()
     try:
-        for table_name in args.tables:
+        for table_name in cfg["tables"]:
             export_table(pg_conn, table_name, TABLE_CONFIGS[table_name], output_dir, start_epoch, end_epoch)
     finally:
         pg_conn.close()
