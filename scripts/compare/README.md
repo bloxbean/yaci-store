@@ -67,13 +67,13 @@ All scripts accept the same base flags:
 | `--epoch N` | Compare a single epoch |
 | `--start-epoch N --end-epoch M` | Compare an inclusive epoch range |
 | `--max-mismatches N` | Stop printing once `N` mismatches are reached for that epoch (0 = unlimited) |
-| `--quiet` | Write to log file only, do not echo to console |
+| `--quiet` | Write to log file only, do not echo to console. In `compare_all.py`, suppress child output but still print wrapper progress and final summary |
 
 Script-specific flags:
 
 - `compare_reward_rest.py`: `--reward-type {treasury,reserves,proposal_refund}` (default `proposal_refund`)
 - `compare_epoch_stake.py`: `--reverse` (iterate high → low), `--delay SECONDS` (sleep between epochs to avoid DB overload), `--include-zero-amount` (compare raw `epoch_stake` rows instead of ignoring `amount = 0`)
-- `compare_all.py`: `--only KEY[,KEY...]` / `--skip KEY[,KEY...]` to filter the set of comparators run, and `--reward-types treasury,reserves,proposal_refund` to choose which reward types `compare_reward_rest.py` runs for (default: all three). Comparator keys: `adapot`, `epoch_stake`, `reward_rest`, `drep_amount`, `drep_active_until`, `gov_action_proposal_status`.
+- `compare_all.py`: `--only KEY[,KEY...]` / `--skip KEY[,KEY...]` to filter the set of comparators run, `--reward-types treasury,reserves,proposal_refund` to choose which reward types `compare_reward_rest.py` runs for (default: all three), and `--summary-file FILE` to override the final summary output path. Comparator keys: `adapot`, `epoch_stake`, `reward_rest`, `drep_amount`, `drep_active_until`, `gov_action_proposal_status`.
 
 ## Run everything in one command
 
@@ -94,30 +94,44 @@ python3 compare_all.py --epoch 800 --skip epoch_stake,reward_rest --config confi
 
 # Restrict reward_rest to specific types (default runs all three)
 python3 compare_all.py --epoch 1075 --reward-types treasury,reserves --config config.json
+
+# Write the final summary to a custom file
+python3 compare_all.py --epoch 800 --summary-file /tmp/yaci_compare_summary.log --config config.json
 ```
 
-The wrapper exits with a non-zero status if any child comparator returned a non-zero exit code, so it can be wired into CI directly. Example overall summary:
+The wrapper streams each child comparator as it runs, then repeats the important result fields at the end so you do not have to scroll back through the output. It also writes the same final summary to `logs/compare_all_summary_<timestamp>.log` by default, or to `--summary-file FILE` when provided. It exits with a non-zero status if any comparator reports mismatches, errors, or an unparseable summary. Example final summary:
 
 ```
-============================================================
-OVERALL SUMMARY (compare_all)
-============================================================
-  Total runtime : 312.4s
-  Comparators   : 8
+====================================================================================================
+FINAL RESULT SUMMARY (compare_all)
+====================================================================================================
+  Started at        : 2026-05-11T10:00:00
+  Finished at       : 2026-05-11T10:05:12
+  Command           : /usr/bin/python3 compare_all.py --start-epoch 740 --end-epoch 902 --config config.json
+  Epoch scope       : epochs 740 -> 902
+  Total runtime     : 312.4s
+  Comparators run   : 8
+  Status counts     : OK=7, MISMATCH=1, ERROR=0, UNKNOWN=0
+  Total mismatches  : 12
 
-  Comparator                                 RC    Time(s)
-  ---------------------------------------- ----  ----------
-  adapot                                     OK        2.1
-  epoch_stake                                OK      120.5
-  reward_rest (type=treasury)                OK       18.2
-  reward_rest (type=reserves)                OK       17.9
-  reward_rest (type=proposal_refund)         OK       18.5
-  drep_amount                                OK       45.0
-  drep_active_until                          OK       40.1
-  gov_action_proposal_status                 OK       50.1
+  Comparator                               Status      Epochs  Bad epochs  Mismatches   RC  Time(s)
+  ---------------------------------------- --------- -------- ----------- ----------- ---- --------
+  adapot                                   OK             163       0/163           0    0      2.1
+  epoch_stake                              MISMATCH       163       4/163          12    0    120.5
+  reward_rest (type=treasury)              OK             163       0/163           0    0     18.2
+  reward_rest (type=reserves)              OK             163       0/163           0    0     17.9
+  reward_rest (type=proposal_refund)       OK             163       0/163           0    0     18.5
+  drep_amount                              OK             163       0/163           0    0     45.0
+  drep_active_until                        OK             163       0/163           0    0     40.1
+  gov_action_proposal_status               OK             163       0/163           0    0     50.1
 
-  Failures      : 0/8
-============================================================
+  Logs:
+    adapot: /path/to/scripts/compare/logs/adapot_compare_20260511_100000.log
+    epoch_stake: /path/to/scripts/compare/logs/epoch_stake_compare_20260511_100002.log
+    ...
+====================================================================================================
+
+Final summary written to: /path/to/scripts/compare/logs/compare_all_summary_20260511_100000.log
 ```
 
 ## Logging
@@ -131,6 +145,7 @@ logs/reward_rest_compare_<type>_<timestamp>.log
 logs/drep_compare_amount_<timestamp>.log
 logs/drep_compare_active_until_<timestamp>.log
 logs/gov_action_proposal_status_compare_<timestamp>.log
+logs/compare_all_summary_<timestamp>.log
 ```
 
 Each log ends with a summary block:
