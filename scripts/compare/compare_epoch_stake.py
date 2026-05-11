@@ -39,15 +39,21 @@ USAGE:
    # Limit the number of mismatches printed
    python3 compare_epoch_stake.py --epoch 800 --max-mismatches 50
 
+   # Include zero-amount rows when comparing raw table contents
+   python3 compare_epoch_stake.py --epoch 800 --include-zero-amount
+
 3. Output:
    - Prints to console (and writes to log file in logs/ directory)
    - Log file named: logs/epoch_stake_compare_<timestamp>.log
    - Compares by key: address + pool_id, value: amount
+   - By default, ignores amount=0 rows to match DB Sync's current active-stake semantics
 
 4. Notes:
    - DB Sync: epoch_stake table, epoch_no = epoch
    - Yaci Store: epoch_stake table, epoch = epoch - 2 (offset preserved from original query)
    - The script keeps this offset logic from the original Java
+   - DB Sync >= 13.7.0.3 deletes legacy amount=0 epoch_stake rows; the comparator
+     filters them by default unless --include-zero-amount is used
    - epoch_stake data can be very large; use --delay to avoid DB overload
    - Config file (JSON) provides defaults, CLI args override
 
@@ -74,30 +80,51 @@ from common import Logger, connect, add_common_args, resolve_config
 # ============================================================
 # Compare: epoch_stake
 # ============================================================
-def compare_epoch_stake(epoch, dbsync_url, store_url, store_schema, logger, max_mismatches):
-    dbsync_query = """
+def compare_epoch_stake(epoch, dbsync_url, store_url, store_schema, logger, max_mismatches, include_zero_amount):
+    amount_filter = "" if include_zero_amount else "AND es.amount <> 0"
+    dbsync_query = f"""
         SELECT sa.view, es.amount, encode(ph.hash_raw, 'hex') as pool_id
         FROM epoch_stake es
         INNER JOIN stake_address sa ON sa.id = es.addr_id
         INNER JOIN pool_hash ph ON ph.id = es.pool_id
         WHERE es.epoch_no = %s
+        {amount_filter}
         ORDER BY sa.view, encode(ph.hash_raw, 'hex'), amount
     """
+    dbsync_zero_count_query = """
+        SELECT count(*)
+        FROM epoch_stake es
+        WHERE es.epoch_no = %s
+          AND es.amount = 0
+    """
     # Yaci Store uses epoch - 2 (preserved offset logic from the original Java)
-    store_query = """
+    store_amount_filter = "" if include_zero_amount else "AND amount <> 0"
+    store_query = f"""
         SELECT address, amount, pool_id
         FROM epoch_stake
         WHERE epoch = %s - 2
+        {store_amount_filter}
         ORDER BY address, pool_id, amount
+    """
+    store_zero_count_query = """
+        SELECT count(*)
+        FROM epoch_stake
+        WHERE epoch = %s - 2
+          AND amount = 0
     """
 
     dbsync_map = {}
     store_map = {}
+    ignored_dbsync_zero_amount = 0
+    ignored_store_zero_amount = 0
 
     # --- Fetch DB Sync ---
     try:
         conn = connect(dbsync_url)
         with conn.cursor() as cur:
+            if not include_zero_amount:
+                cur.execute(dbsync_zero_count_query, (epoch,))
+                ignored_dbsync_zero_amount = int(cur.fetchone()[0])
             cur.execute(dbsync_query, (epoch,))
             for row in cur.fetchall():
                 address, amount, pool_id = row
@@ -112,6 +139,9 @@ def compare_epoch_stake(epoch, dbsync_url, store_url, store_schema, logger, max_
     try:
         conn = connect(store_url, store_schema)
         with conn.cursor() as cur:
+            if not include_zero_amount:
+                cur.execute(store_zero_count_query, (epoch,))
+                ignored_store_zero_amount = int(cur.fetchone()[0])
             cur.execute(store_query, (epoch,))
             for row in cur.fetchall():
                 address, amount, pool_id = row
@@ -125,6 +155,12 @@ def compare_epoch_stake(epoch, dbsync_url, store_url, store_schema, logger, max_
     # --- Compare ---
     mismatch_count = 0
     truncated = False
+
+    if ignored_dbsync_zero_amount or ignored_store_zero_amount:
+        logger.log(
+            "  Ignored zero-amount epoch_stake row(s): "
+            f"DB Sync={ignored_dbsync_zero_amount}, Yaci Store={ignored_store_zero_amount}"
+        )
 
     def check_limit():
         nonlocal truncated
@@ -184,6 +220,11 @@ Examples:
     parser.add_argument("--reverse", action="store_true", help="Iterate from high epoch to low (like the original Java)")
     parser.add_argument("--delay", type=float, default=None, help="Delay (seconds) between epochs to avoid DB overload (original Java used 5s)")
     parser.add_argument("--max-mismatches", type=int, default=None, help="Limit mismatches printed per epoch (0 = unlimited)")
+    parser.add_argument(
+        "--include-zero-amount",
+        action="store_true",
+        help="Include amount=0 rows in the comparison instead of using DB Sync's current active-stake semantics",
+    )
 
     add_common_args(parser)
 
@@ -213,6 +254,10 @@ Examples:
     logger.log(f"Epochs: {epochs[0]} -> {epochs[-1]} ({len(epochs)} epochs)")
     logger.log(f"DB Sync URL: {args.dbsync_url}")
     logger.log(f"Yaci Store URL: {args.store_url} (schema: {args.store_schema})")
+    logger.log(
+        "Zero-amount rows: "
+        + ("included" if args.include_zero_amount else "ignored (DB Sync active-stake semantics)")
+    )
     if args.delay > 0:
         logger.log(f"Delay between epochs: {args.delay}s")
     logger.log()
@@ -224,7 +269,13 @@ Examples:
         logger.log(f"############ Epoch {epoch} - epoch_stake ############")
 
         count = compare_epoch_stake(
-            epoch, args.dbsync_url, args.store_url, args.store_schema, logger, args.max_mismatches
+            epoch,
+            args.dbsync_url,
+            args.store_url,
+            args.store_schema,
+            logger,
+            args.max_mismatches,
+            args.include_zero_amount,
         )
 
         if count < 0:

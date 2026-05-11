@@ -72,7 +72,7 @@ All scripts accept the same base flags:
 Script-specific flags:
 
 - `compare_reward_rest.py`: `--reward-type {treasury,reserves,proposal_refund}` (default `proposal_refund`)
-- `compare_epoch_stake.py`: `--reverse` (iterate high → low), `--delay SECONDS` (sleep between epochs to avoid DB overload)
+- `compare_epoch_stake.py`: `--reverse` (iterate high → low), `--delay SECONDS` (sleep between epochs to avoid DB overload), `--include-zero-amount` (compare raw `epoch_stake` rows instead of ignoring `amount = 0`)
 - `compare_all.py`: `--only KEY[,KEY...]` / `--skip KEY[,KEY...]` to filter the set of comparators run, and `--reward-types treasury,reserves,proposal_refund` to choose which reward types `compare_reward_rest.py` runs for (default: all three). Comparator keys: `adapot`, `epoch_stake`, `reward_rest`, `drep_amount`, `drep_active_until`, `gov_action_proposal_status`.
 
 ## Run everything in one command
@@ -169,7 +169,7 @@ python3 compare_all.py --start-epoch 510 --end-epoch 520 --config config.json
 
 ## Notes on the underlying data
 
-- **epoch_stake**: Yaci Store query uses `epoch = epoch - 2`, mirroring the offset in the original Java comparator.
+- **epoch_stake**: Yaci Store query uses `epoch = epoch - 2`, mirroring the offset in the original Java comparator. By default, zero-amount rows are ignored on both sides to match current DB Sync active-stake semantics; use `--include-zero-amount` if you need to inspect raw table differences.
 - **drep_dist**: `ABSTAIN` and `NO_CONFIDENCE` are excluded from the per-hash comparison and checked separately as aggregate totals.
 - **gov_action_proposal_status**: Yaci Store has only three statuses (`ACTIVE`, `RATIFIED`, `EXPIRED`) and stores one row per (proposal, epoch) snapshot. DB Sync stores one row per proposal with end-state epoch columns; the script derives the expected Yaci status from `ratified_epoch`, `enacted_epoch`, `dropped_epoch`, `expired_epoch`, and `submit_epoch`. See the comments in `compare_gov_action_proposal_status.py` for the full lifecycle mapping.
 - **reward_rest**: compared as a multiset (counts of identical rows must match), not just presence/absence.
