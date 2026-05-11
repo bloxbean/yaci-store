@@ -21,13 +21,12 @@ USAGE:
 
    # Compare an epoch range (510 to 520)
    python3 compare_gov_action_proposal_status.py --start-epoch 510 --end-epoch 520
-   python3 compare_gov_action_proposal_status.py --start-epoch 492 --end-epoch 1048 --config config.json
 
    # Custom database connections (CLI args override config file)
    python3 compare_gov_action_proposal_status.py --epoch 515 \\
-       --dbsync-url "postgresql://10.4.10.135:5678/cexplorer" \\
+       --dbsync-url "postgresql://localhost:5678/cexplorer" \\
        --dbsync-user dbsync --dbsync-password dbsync \\
-       --store-url "postgresql://10.4.10.112:5432/yaci_store" \\
+       --store-url "postgresql://localhost:5432/yaci_store" \\
        --store-user yaci --store-password dbpass \\
        --store-schema yaci_store
 

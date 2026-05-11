@@ -23,9 +23,9 @@ USAGE:
 
    # Custom database connections (CLI args override config file)
    python3 compare_drep_active_until.py --epoch 624 \\
-       --dbsync-url "postgresql://10.4.10.135:5678/cexplorer" \\
+       --dbsync-url "postgresql://localhost:5678/cexplorer" \\
        --dbsync-user dbsync --dbsync-password dbsync \\
-       --store-url "postgresql://10.4.10.112:5432/yaci_store" \\
+       --store-url "postgresql://localhost:5432/yaci_store" \\
        --store-user yaci --store-password dbpass \\
        --store-schema yaci_store
 

@@ -30,7 +30,7 @@ USAGE:
    # Custom database connections (CLI args override config file)
    python3 compare_epoch_stake.py --epoch 800 \
        --dbsync-url "postgresql://dbsync:dbsync@10.4.10.135:5678/cexplorer" \
-       --store-url "postgresql://yaci:dbpass@10.4.10.112:5432/yaci_store" \
+       --store-url "postgresql://yaci:dbpass@localhost:5432/yaci_store" \
        --store-schema yaci_store
 
    # Output to log file only, suppress console output
