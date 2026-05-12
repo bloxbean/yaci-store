@@ -140,4 +140,5 @@ public class AssetsReader {
     public boolean isProgrammableToken(String policyId) {
         return cip113StorageReader.isProgrammableToken(policyId);
     }
+
 }

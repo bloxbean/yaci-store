@@ -116,6 +116,7 @@ public class Cip113Configuration {
             if (ids.isBlank()) {
                 return Set.of();
             }
+
             return Arrays.stream(ids.split(","))
                     .map(String::trim)
                     .filter(id -> !id.isEmpty())

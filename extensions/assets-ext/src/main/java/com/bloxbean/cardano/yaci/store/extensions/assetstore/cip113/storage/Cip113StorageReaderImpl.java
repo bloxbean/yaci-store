@@ -1,8 +1,8 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage;
 
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.Cip113Configuration;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.impl.model.Cip113RegistryNode;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.model.ProgrammableTokenCip113;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.impl.model.Cip113RegistryNode;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.impl.repository.Cip113RegistryNodeRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -63,6 +63,7 @@ public class Cip113StorageReaderImpl implements Cip113StorageReader {
         String globalState = entity.getGlobalStatePolicyId();
         boolean transferLogicAbsent = transferLogic == null || transferLogic.isEmpty();
         boolean thirdPartyAbsent = thirdParty == null || thirdParty.isEmpty();
+
         return new ProgrammableTokenCip113(
                 transferLogicAbsent ? null : transferLogic,
                 transferLogicAbsent ? null : entity.getTransferLogicScriptType(),
@@ -71,4 +72,5 @@ public class Cip113StorageReaderImpl implements Cip113StorageReader {
                 (globalState == null || globalState.isEmpty()) ? null : globalState
         );
     }
+
 }

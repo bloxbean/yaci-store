@@ -94,4 +94,5 @@ public class Cip26Metadata {
 
     @Temporal(TemporalType.TIMESTAMP)
     private LocalDateTime lastSyncedAt;
+
 }

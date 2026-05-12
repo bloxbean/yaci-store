@@ -25,4 +25,5 @@ public class AnnotatedSignature {
     @JsonProperty("publicKey")
     @Schema(name = "publicKey", requiredMode = Schema.RequiredMode.REQUIRED)
     private String publicKey;
+
 }

@@ -161,7 +161,7 @@ public class Cip113RegistryNodeParser {
             }
 
             // Invariant #3: key — ByteString, 0 to 32 bytes (head sentinel, real policy, or tail sentinel).
-            byte[] keyBytes = extractByteArray(fields.get(0));
+            byte[] keyBytes = extractByteArray(fields.getFirst());
             if (keyBytes == null || keyBytes.length > MAX_KEY_BYTE_LEN) {
                 log.warn("CIP-113 registry node: invalid 'key' field (expected ByteString of length 0..{} bytes)",
                         MAX_KEY_BYTE_LEN);
@@ -267,7 +267,7 @@ public class Cip113RegistryNodeParser {
             throw new InvalidDatumException("'" + fieldName
                     + "' Credential must have exactly 1 inner field, got " + inner.size());
         }
-        byte[] hash = extractByteArray(inner.get(0));
+        byte[] hash = extractByteArray(inner.getFirst());
         if (hash == null) {
             throw new InvalidDatumException("'" + fieldName + "' Credential inner must be a ByteString");
         }
@@ -300,6 +300,7 @@ public class Cip113RegistryNodeParser {
             throw new InvalidDatumException("'global_state_cs' must be 0 or " + HASH_BYTE_LEN
                     + " bytes, got " + bytes.length);
         }
+
         return HexUtil.encodeHexString(bytes);
     }
 
@@ -309,4 +310,5 @@ public class Cip113RegistryNodeParser {
             super(message);
         }
     }
+
 }

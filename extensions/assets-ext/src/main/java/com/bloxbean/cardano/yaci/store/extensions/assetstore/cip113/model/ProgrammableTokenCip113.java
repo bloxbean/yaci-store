@@ -55,4 +55,5 @@ public record ProgrammableTokenCip113(
 ) implements Extension {
 
     public static final String EXTENSION_KEY = "cip113";
+
 }

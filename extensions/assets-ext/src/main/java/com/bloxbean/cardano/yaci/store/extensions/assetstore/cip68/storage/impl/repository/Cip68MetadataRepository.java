@@ -60,4 +60,5 @@ public interface Cip68MetadataRepository extends JpaRepository<Cip68Metadata, Ci
     @Modifying
     @Query("DELETE FROM Cip68Metadata e WHERE e.slot > :slot")
     int deleteBySlotGreaterThan(@Param("slot") Long slot);
+
 }
