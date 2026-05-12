@@ -34,6 +34,8 @@ public class RewardStorageReaderImpl implements RewardStorageReader {
     private final Mapper mapper;
     private final DSLContext dsl;
 
+    private static final String STAKE_ADDRESS_WITHDRAWABLE_REWARD_VIEW = "stake_address_withdrawable_reward_view";
+
     @Override
     public List<InstantReward> findInstantRewardByEarnedEpoch(Integer epoch, int page, int count) {
         Pageable sortedBySlot =
@@ -293,6 +295,24 @@ public class RewardStorageReaderImpl implements RewardStorageReader {
                     return new RewardInfo(address, earnedEpoch, spendableEpoch, amount, poolId, rewardType);
                 })
                 .toList();
+    }
+
+    @Override
+    public WithdrawableReward findWithdrawableRewardByAddress(String address) {
+        var view = DSL.table(DSL.name(STAKE_ADDRESS_WITHDRAWABLE_REWARD_VIEW));
+        var addressField = DSL.field(DSL.name("address"), String.class);
+        var withdrawableAmountField = DSL.field(DSL.name("withdrawable_amount"), BigInteger.class);
+
+        var withdrawableAmount = dsl.select(withdrawableAmountField)
+                .from(view)
+                .where(addressField.eq(address))
+                .fetchOptional(withdrawableAmountField)
+                .orElse(BigInteger.ZERO);
+
+        return WithdrawableReward.builder()
+                .address(address)
+                .withdrawableAmount(withdrawableAmount)
+                .build();
     }
 
     private static RewardInfoType getRewardInfoType(String rewardCategory, String rewardTypeStr) {
