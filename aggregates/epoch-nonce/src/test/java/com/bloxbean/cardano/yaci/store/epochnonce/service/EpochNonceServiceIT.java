@@ -2,7 +2,11 @@ package com.bloxbean.cardano.yaci.store.epochnonce.service;
 
 import com.bloxbean.cardano.client.crypto.Blake2bUtil;
 import com.bloxbean.cardano.client.util.HexUtil;
+import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.store.blocks.storage.BlockStorageReader;
+import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
+import com.bloxbean.cardano.yaci.store.epoch.domain.EpochParam;
+import com.bloxbean.cardano.yaci.store.epoch.storage.EpochParamStorage;
 import com.bloxbean.cardano.yaci.store.epochnonce.domain.EpochNonce;
 import com.bloxbean.cardano.yaci.store.epochnonce.storage.EpochNonceStorage;
 import com.bloxbean.cardano.yaci.store.epochnonce.storage.EpochNonceStorageReader;
@@ -38,6 +42,9 @@ class EpochNonceServiceIT {
     @Autowired
     private BlockStorageReader blockStorageReader;
 
+    @Autowired
+    private EpochParamStorage epochParamStorage;
+
     @Test
     @SqlGroup({
             @Sql(value = "classpath:scripts/epoch_blocks_data.sql", executionPhase = BEFORE_TEST_METHOD)
@@ -68,6 +75,50 @@ class EpochNonceServiceIT {
         assertThat(nonce.getSlot()).isEqualTo(139003495);
         assertThat(nonce.getBlock()).isEqualTo(11043370);
         assertThat(nonce.getBlockTime()).isEqualTo(1730569786);
+    }
+
+    @Test
+    void computeEpochNonce_withStoredTPraosExtraEntropy_shouldIncludeEntropyFromEpochParamStorage() {
+        int completedEpoch = 258;
+        int newEpoch = 259;
+        String candidateNonce = "1111111111111111111111111111111111111111111111111111111111111111";
+        String previousLabNonce = "2222222222222222222222222222222222222222222222222222222222222222";
+        String extraEntropy = "d982e06fd33e7440b43cefad529b7ecafbaa255e38178ad4189a37e4ce9bf1fa";
+
+        epochNonceStorage.save(EpochNonce.builder()
+                .epoch(completedEpoch)
+                .nonce(candidateNonce)
+                .evolvingNonce(candidateNonce)
+                .candidateNonce(candidateNonce)
+                .labNonce(null)
+                .lastEpochBlockNonce(previousLabNonce)
+                .build());
+
+        epochParamStorage.save(EpochParam.builder()
+                .epoch(newEpoch)
+                .params(ProtocolParams.builder()
+                        .extraEntropy("1," + extraEntropy)
+                        .build())
+                .slot(1L)
+                .blockNumber(1L)
+                .blockTime(1L)
+                .build());
+
+        EventMetadata metadata = EventMetadata.builder()
+                .era(Era.Shelley)
+                .slot(2)
+                .block(2)
+                .blockTime(2)
+                .epochNumber(newEpoch)
+                .build();
+
+        epochNonceService.computeEpochNonce(newEpoch, completedEpoch, metadata, Era.Shelley);
+
+        EpochNonce result = epochNonceStorageReader.findByEpoch(newEpoch).orElseThrow();
+        String expected = HexUtil.encodeHexString(NonceUtil.combineNonces(
+                NonceUtil.combineNonces(HexUtil.decodeHexString(candidateNonce), HexUtil.decodeHexString(previousLabNonce)),
+                HexUtil.decodeHexString(extraEntropy)));
+        assertThat(result.getNonce()).isEqualTo(expected);
     }
 
     @Test
