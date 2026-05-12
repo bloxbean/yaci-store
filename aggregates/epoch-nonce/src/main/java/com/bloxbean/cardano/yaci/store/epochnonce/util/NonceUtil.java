@@ -89,4 +89,50 @@ public class NonceUtil {
         }
         return HexUtil.decodeHexString(prevHashHex);
     }
+
+    /**
+     * Converts the stored protocol-parameter extra entropy value to a nonce.
+     * <p>
+     * The stored value follows the update nonce encoding: {@code 0,} for
+     * {@code NeutralNonce}, or {@code 1,<32-byte hex>} for {@code Nonce}.
+     *
+     * @param extraEntropy stored extra entropy value, or null
+     * @return nonce bytes, or null for {@code NeutralNonce}
+     */
+    public static byte[] extraEntropyToNonce(String extraEntropy) {
+        if (extraEntropy == null || extraEntropy.isBlank()) {
+            return null;
+        }
+
+        String[] parts = extraEntropy.split(",", 2);
+        int tag;
+        try {
+            tag = Integer.parseInt(parts[0].trim());
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("Invalid extra entropy tag: " + extraEntropy, e);
+        }
+
+        if (tag == 0) {
+            return null;
+        }
+
+        if (tag != 1) {
+            throw new IllegalArgumentException("Unsupported extra entropy tag: " + tag);
+        }
+
+        if (parts.length < 2 || parts[1].isBlank()) {
+            throw new IllegalArgumentException("Missing extra entropy nonce value");
+        }
+
+        String hex = parts[1].trim();
+        if (hex.startsWith("0x") || hex.startsWith("0X") || hex.startsWith("\\x") || hex.startsWith("\\X")) {
+            hex = hex.substring(2);
+        }
+
+        if (hex.length() != 64) {
+            throw new IllegalArgumentException("Extra entropy nonce must be 32 bytes");
+        }
+
+        return HexUtil.decodeHexString(hex);
+    }
 }

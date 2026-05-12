@@ -70,7 +70,7 @@ class EpochNonceProcessorTest {
 
         epochNonceProcessor.handleEpochTransition(event);
 
-        verify(epochNonceService).computeEpochNonce(211, 210, metadata);
+        verify(epochNonceService).computeEpochNonce(211, 210, metadata, Era.Shelley);
     }
 
     @Test
@@ -91,7 +91,7 @@ class EpochNonceProcessorTest {
 
         epochNonceProcessor.handleEpochTransition(event);
 
-        verify(epochNonceService).computeEpochNonce(366, 365, metadata);
+        verify(epochNonceService).computeEpochNonce(366, 365, metadata, Era.Babbage);
     }
 
     @Test
@@ -112,7 +112,7 @@ class EpochNonceProcessorTest {
 
         epochNonceProcessor.handleEpochTransition(event);
 
-        verify(epochNonceService).computeEpochNonce(0, null, metadata);
+        verify(epochNonceService).computeEpochNonce(0, null, metadata, Era.Shelley);
     }
 
     @Test

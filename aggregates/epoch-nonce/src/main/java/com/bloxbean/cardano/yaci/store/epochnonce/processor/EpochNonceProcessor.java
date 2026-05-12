@@ -35,7 +35,7 @@ public class EpochNonceProcessor {
             return;
         }
 
-        epochNonceService.computeEpochNonce(event.getEpoch(), event.getPreviousEpoch(), event.getMetadata());
+        epochNonceService.computeEpochNonce(event.getEpoch(), event.getPreviousEpoch(), event.getMetadata(), event.getEra());
     }
 
     @EventListener
