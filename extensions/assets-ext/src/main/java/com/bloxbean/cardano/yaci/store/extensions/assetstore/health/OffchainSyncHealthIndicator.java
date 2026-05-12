@@ -50,7 +50,7 @@ public class OffchainSyncHealthIndicator implements HealthIndicator {
         String statusText = syncStatus.getStatus().toString();
 
         return switch (syncStatus.getStatus()) {
-            case SYNC_DONE, SYNC_IN_EXTRA_JOB -> Health.up()
+            case SYNC_DONE, SYNC_DISABLED -> Health.up()
                     .withDetail(DETAIL_SYNC_STATUS, statusText)
                     .build();
             case SYNC_IN_PROGRESS, SYNC_NOT_STARTED -> Health.outOfService()

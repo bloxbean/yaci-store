@@ -62,16 +62,17 @@ class OffchainSyncHealthIndicatorTest {
     }
 
     @Test
-    void upOnSyncInExtraJob() {
-        // External sync job mode: this indicator reports UP because *something else* is keeping
-        // the registry data fresh; a yaci-internal "not started" would be misleading.
+    void upOnSyncDisabled() {
+        // In-process CIP-26 sync disabled by config: this indicator reports UP on the assumption
+        // that the operator who turned the cron off is keeping the registry data fresh by some
+        // external means; returning DOWN here would falsely page on every probe.
         when(syncService.getSyncStatus())
-                .thenReturn(SyncStatus.builder().isInitialSyncDone(true).status(SyncStatusEnum.SYNC_IN_EXTRA_JOB).build());
+                .thenReturn(SyncStatus.builder().isInitialSyncDone(true).status(SyncStatusEnum.SYNC_DISABLED).build());
 
         Health health = indicator.health();
 
         assertThat(health.getStatus()).isEqualTo(Status.UP);
-        assertThat(health.getDetails()).containsEntry("syncStatus", "Sync will be done in a different job. Status unkown");
+        assertThat(health.getDetails()).containsEntry("syncStatus", "Sync disabled");
     }
 
     @Test

@@ -39,7 +39,7 @@ public class Cip26MetadataSyncService {
         if (assetsStoreProperties.getCip26().isEnabled()) {
             syncStatus = new SyncStatus(false, SyncStatusEnum.SYNC_NOT_STARTED);
         } else {
-            syncStatus = new SyncStatus(true, SyncStatusEnum.SYNC_IN_EXTRA_JOB);
+            syncStatus = new SyncStatus(true, SyncStatusEnum.SYNC_DISABLED);
         }
     }
 

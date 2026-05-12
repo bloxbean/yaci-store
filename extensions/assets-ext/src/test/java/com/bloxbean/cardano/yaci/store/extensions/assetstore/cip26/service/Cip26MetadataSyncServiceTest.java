@@ -67,11 +67,11 @@ class Cip26MetadataSyncServiceTest {
         }
 
         @Test
-        void setsExtraJobWhenCip26Disabled() {
+        void setsDisabledWhenCip26Disabled() {
             assetsStoreProperties.getCip26().setEnabled(false);
             service.initSyncStatus();
 
-            assertThat(service.getSyncStatus().getStatus()).isEqualTo(SyncStatusEnum.SYNC_IN_EXTRA_JOB);
+            assertThat(service.getSyncStatus().getStatus()).isEqualTo(SyncStatusEnum.SYNC_DISABLED);
             assertThat(service.getSyncStatus().isInitialSyncDone()).isTrue();
         }
     }
