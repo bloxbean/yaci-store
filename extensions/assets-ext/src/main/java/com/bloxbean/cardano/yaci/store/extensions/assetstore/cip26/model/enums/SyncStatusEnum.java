@@ -20,4 +20,5 @@ public enum SyncStatusEnum {
     public String toString() {
         return text;
     }
+
 }

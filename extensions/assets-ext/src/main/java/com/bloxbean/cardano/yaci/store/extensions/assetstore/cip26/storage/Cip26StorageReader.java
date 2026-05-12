@@ -31,4 +31,5 @@ public interface Cip26StorageReader {
      * Subjects without logos are omitted from the map.
      */
     Map<String, String> findLogosBySubjects(List<String> subjects);
+
 }

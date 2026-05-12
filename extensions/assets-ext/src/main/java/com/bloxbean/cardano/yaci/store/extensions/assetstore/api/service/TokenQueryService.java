@@ -215,6 +215,7 @@ public class TokenQueryService {
         if (cip68TokenMetadata == null) {
             return Optional.empty();
         }
+
         return Optional.of(new ResolvedMetadata(
                 Metadata.from(cip68TokenMetadata),
                 new Standards(null, cip68TokenMetadata)));
@@ -224,6 +225,7 @@ public class TokenQueryService {
         Map<String, Extension> extensions = new LinkedHashMap<>();
         cip113StorageReader.findByPolicyId(AssetType.fromUnit(subject).policyId())
                 .ifPresent(cip113 -> extensions.put(ProgrammableTokenCip113.EXTENSION_KEY, cip113));
+
         return extensions;
     }
 
@@ -235,4 +237,5 @@ public class TokenQueryService {
      */
     private record ResolvedMetadata(Metadata metadata, Standards standards) {
     }
+
 }

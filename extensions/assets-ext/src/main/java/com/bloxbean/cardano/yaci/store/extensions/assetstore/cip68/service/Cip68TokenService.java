@@ -3,7 +3,6 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.AssetType;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Constants;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.ParsedCip68Datum;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.parser.Cip68DatumParser;
@@ -73,12 +72,18 @@ public class Cip68TokenService {
     }
 
     /**
-     * Find fungible token metadata by policy ID and asset name.
-     * Uses label-aware query to only return FT (label 333) entries.
+     * Find the latest reference-NFT metadata for the given {@code (policyId, assetName)} pair
+     * and project it into a {@link FungibleTokenMetadata}.
+     * <p>
+     * No label filter is applied: a single reference NFT may have rows tagged with different
+     * labels across its history (the per-row label reflects whichever user-token prefix was
+     * co-minted in that transaction), so the truthful latest metadata is "max slot for this
+     * reference NFT, regardless of label" — see
+     * {@link Cip68MetadataRepository#findFirstByPolicyIdAndAssetNameOrderBySlotDesc}.
      */
     public Optional<FungibleTokenMetadata> findSubject(String policyId, String assetName, List<String> properties) {
-        return metadataReferenceNftRepository.findFirstByPolicyIdAndAssetNameAndLabelOrderBySlotDesc(
-                        policyId, assetName, LABEL_FT)
+        return metadataReferenceNftRepository.findFirstByPolicyIdAndAssetNameOrderBySlotDesc(
+                        policyId, assetName)
                 .map(referenceNft -> toFungibleTokenMetadata(referenceNft, properties));
     }
 
@@ -106,7 +111,7 @@ public class Cip68TokenService {
                 .map(AssetType::toUnit)
                 .toList();
 
-        return metadataReferenceNftRepository.findLatestByConcatenatedKeys(concatenatedKeys, LABEL_FT).stream()
+        return metadataReferenceNftRepository.findLatestByConcatenatedKeys(concatenatedKeys).stream()
                 .collect(Collectors.toMap(
                         row -> row.getPolicyId() + row.getAssetName(),
                         row -> toFungibleTokenMetadata(row, properties)));

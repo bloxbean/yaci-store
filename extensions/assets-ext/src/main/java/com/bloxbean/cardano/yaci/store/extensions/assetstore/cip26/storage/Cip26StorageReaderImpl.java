@@ -26,9 +26,6 @@ public class Cip26StorageReaderImpl implements Cip26StorageReader {
 
     @Override
     public Optional<String> findLogoBySubject(String subject) {
-        // Logo lives on the same Cip26Metadata row now (was a separate ft_offchain_logo
-        // table previously). Postgres TOAST means this single-row read still avoids
-        // pulling the multi-KB base64 unless the column is actually selected.
         return cip26MetadataRepository.findById(subject)
                 .map(Cip26Metadata::getLogo);
     }
@@ -39,4 +36,5 @@ public class Cip26StorageReaderImpl implements Cip26StorageReader {
                 .filter(row -> row.getLogo() != null)
                 .collect(Collectors.toMap(Cip26Metadata::getSubject, Cip26Metadata::getLogo));
     }
+
 }

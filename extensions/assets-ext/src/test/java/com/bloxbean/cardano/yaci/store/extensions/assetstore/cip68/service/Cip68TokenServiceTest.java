@@ -22,7 +22,6 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyCollection;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -230,13 +229,13 @@ class Cip68TokenServiceTest {
             List<AssetType> keys = List.of(
                     new AssetType(POLICY_A, REF_NAME_A),
                     new AssetType(POLICY_B, REF_NAME_B));
-            when(repository.findLatestByConcatenatedKeys(anyCollection(), eq(333)))
+            when(repository.findLatestByConcatenatedKeys(anyCollection()))
                     .thenReturn(List.of());
 
             service.findSubjects(keys, List.of());
 
             verify(repository).findLatestByConcatenatedKeys(
-                    List.of(POLICY_A + REF_NAME_A, POLICY_B + REF_NAME_B), 333);
+                    List.of(POLICY_A + REF_NAME_A, POLICY_B + REF_NAME_B));
         }
 
         @Test
@@ -245,7 +244,7 @@ class Cip68TokenServiceTest {
             Cip68Metadata row = Cip68Metadata.builder()
                     .policyId(POLICY_A).assetName(REF_NAME_A).slot(100L).label(333)
                     .name("TokenA").description("desc A").ticker("TKA").decimals(6L).version(1L).build();
-            when(repository.findLatestByConcatenatedKeys(anyCollection(), eq(333)))
+            when(repository.findLatestByConcatenatedKeys(anyCollection()))
                     .thenReturn(List.of(row));
 
             Map<String, FungibleTokenMetadata> result = service.findSubjects(keys, List.of());
@@ -269,7 +268,7 @@ class Cip68TokenServiceTest {
                     .policyId(POLICY_A).assetName(REF_NAME_A).slot(100L).label(333)
                     .name("A").description("desc A").version(1L).build();
             // Only one row returned from the DB — POLICY_B has no matching row
-            when(repository.findLatestByConcatenatedKeys(anyCollection(), eq(333)))
+            when(repository.findLatestByConcatenatedKeys(anyCollection()))
                     .thenReturn(List.of(rowA));
 
             Map<String, FungibleTokenMetadata> result = service.findSubjects(keys, List.of());
@@ -285,7 +284,7 @@ class Cip68TokenServiceTest {
                     .policyId(POLICY_A).assetName(REF_NAME_A).slot(100L).label(333)
                     .name("TokenA").description("desc A").ticker("TKA").decimals(6L).version(1L)
                     .logo("aGVsbG8=").url("https://example.com").build();
-            when(repository.findLatestByConcatenatedKeys(anyCollection(), eq(333)))
+            when(repository.findLatestByConcatenatedKeys(anyCollection()))
                     .thenReturn(List.of(row));
 
             // Request only name and decimals — everything else should be null
@@ -300,6 +299,60 @@ class Cip68TokenServiceTest {
             assertThat(md.logo()).isNull();
             assertThat(md.url()).isNull();
             assertThat(md.version()).isNull();
+        }
+
+        @Test
+        void labelIsNotPassedToRepository() {
+            // Regression: a single reference NFT may have rows under multiple labels
+            // (the cross-output classifier tags rows by whichever user-token was co-minted).
+            // The service contract is "return latest by slot, regardless of label" — i.e.
+            // the repository must be called WITHOUT a label argument. Verified observationally
+            // on mainnet for cLBC/SHLF, Buckazoids, Burballa/Pernis, Diamond, UTXO, etc.
+            List<AssetType> keys = List.of(new AssetType(POLICY_A, REF_NAME_A));
+            when(repository.findLatestByConcatenatedKeys(anyCollection()))
+                    .thenReturn(List.of());
+
+            service.findSubjects(keys, List.of());
+
+            // No label-aware overload should be invoked.
+            verify(repository).findLatestByConcatenatedKeys(anyCollection());
+        }
+    }
+
+    @Nested
+    @DisplayName("findSubject (single)")
+    class FindSubject {
+
+        private static final String POLICY = "ccccccccccccccccccccccccccccccccccccccccccccccccccccccc1";
+        private static final String REF_NAME = "000643b0cafe";
+
+        @Test
+        void returnsLatestRowRegardlessOfLabel() {
+            // The mocked repo represents the post-fix contract: it returns the row at the
+            // greatest slot for this (policy, asset_name), without any label filter. In real
+            // mainnet data, the latest row for a renamed FT (e.g. cLBC → SHLF) lands at
+            // label=222 because a 222 token was co-minted in that update transaction — the
+            // service must still surface that row's metadata.
+            Cip68Metadata latestUnderLabel222 = Cip68Metadata.builder()
+                    .policyId(POLICY).assetName(REF_NAME).slot(200L).label(222)
+                    .name("SHLF").description("SHLF").ticker("SHLF").decimals(3L).version(1L).build();
+            when(repository.findFirstByPolicyIdAndAssetNameOrderBySlotDesc(POLICY, REF_NAME))
+                    .thenReturn(Optional.of(latestUnderLabel222));
+
+            Optional<FungibleTokenMetadata> result = service.findSubject(POLICY, REF_NAME, List.of());
+
+            assertThat(result).isPresent();
+            assertThat(result.get().name()).isEqualTo("SHLF");
+            // The label-aware overload must not be invoked — see findSubject javadoc.
+            verify(repository).findFirstByPolicyIdAndAssetNameOrderBySlotDesc(POLICY, REF_NAME);
+        }
+
+        @Test
+        void returnsEmptyWhenNoRowFound() {
+            when(repository.findFirstByPolicyIdAndAssetNameOrderBySlotDesc(POLICY, REF_NAME))
+                    .thenReturn(Optional.empty());
+
+            assertThat(service.findSubject(POLICY, REF_NAME, List.of())).isEmpty();
         }
     }
 

@@ -15,35 +15,41 @@ import java.util.Optional;
 @Repository
 public interface Cip68MetadataRepository extends JpaRepository<Cip68Metadata, Cip68MetadataId> {
 
-    Optional<Cip68Metadata> findFirstByPolicyIdAndAssetNameAndLabelOrderBySlotDesc(
-            String policyId, String assetName, int label);
+    /**
+     * Returns the latest row for a given {@code (policy_id, asset_name)} reference NFT,
+     * regardless of label.
+     * <p>
+     * The cross-output classifier in {@code Cip68Processor} tags each reference-NFT update row
+     * with the co-minted user-token label observed in that transaction. A single reference NFT
+     * therefore accumulates rows under multiple labels over its lifetime (e.g. an FT whose
+     * later updates happened to be co-minted alongside a 222-prefixed NFT will have its newest
+     * row stored under label 222). Filtering by label here would silently return stale metadata.
+     */
+    Optional<Cip68Metadata> findFirstByPolicyIdAndAssetNameOrderBySlotDesc(
+            String policyId, String assetName);
 
     /**
-     * Returns the latest reference NFT row per {@code (policy_id, asset_name)} pair, filtered by label.
+     * Returns the latest reference NFT row per {@code (policy_id, asset_name)} pair, regardless of label.
      * Replaces the N+1 per-subject query pattern with a single round-trip.
      * <p>
      * Callers pass a list of {@code policy_id || asset_name} concatenated keys. Since policy IDs are
      * always exactly 56 hex characters, the concatenation is unambiguous — the DB can split the key
      * back if needed, though this method matches directly against the concatenated form.
      * <p>
-     * Uses {@code ROW_NUMBER() OVER} window function with a label filter for per-pair dedup.
-     * Portable across PostgreSQL, H2, and MySQL 8+.
+     * Uses {@code ROW_NUMBER() OVER} window function for per-pair dedup. Portable across
+     * PostgreSQL, H2, and MySQL 8+.
      * <p>
-     * For very large {@code cip68_metadata} tables, add the optional index
-     * {@code idx_cip68_metadata_policy_label} from {@code optional-indexes.sql}
-     * so the label-filtered scan becomes an index-only scan.
+     * No label filter — see {@link #findFirstByPolicyIdAndAssetNameOrderBySlotDesc} for why.
      *
      * @param concatenatedKeys list of {@code policy_id || asset_name} keys (reference-NFT asset names)
-     * @param label            CIP-68 label to filter by (e.g. 333 for fungible tokens)
      * @return one entity per matching concatenated key; pairs with no data are omitted
      */
     @Query(value = "SELECT * FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY policy_id, asset_name " +
-            "ORDER BY slot DESC) AS rn FROM cip68_metadata WHERE label = :label " +
-            "AND CONCAT(policy_id, asset_name) IN (:concatenatedKeys)) ranked WHERE rn = 1",
+            "ORDER BY slot DESC) AS rn FROM cip68_metadata " +
+            "WHERE CONCAT(policy_id, asset_name) IN (:concatenatedKeys)) ranked WHERE rn = 1",
             nativeQuery = true)
     List<Cip68Metadata> findLatestByConcatenatedKeys(
-            @Param("concatenatedKeys") Collection<String> concatenatedKeys,
-            @Param("label") int label);
+            @Param("concatenatedKeys") Collection<String> concatenatedKeys);
 
     /**
      * Bulk delete on rollback. {@code @Modifying @Query} with JPQL issues a single SQL DELETE;
