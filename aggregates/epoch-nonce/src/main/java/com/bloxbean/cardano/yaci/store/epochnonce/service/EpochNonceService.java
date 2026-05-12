@@ -6,6 +6,7 @@ import com.bloxbean.cardano.yaci.store.blocks.domain.Block;
 import com.bloxbean.cardano.yaci.store.blocks.domain.Vrf;
 import com.bloxbean.cardano.yaci.store.blocks.storage.BlockStorageReader;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
+import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
 import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.epochnonce.domain.EpochNonce;
 import com.bloxbean.cardano.yaci.store.epochnonce.storage.EpochNonceStorage;
@@ -13,6 +14,8 @@ import com.bloxbean.cardano.yaci.store.epochnonce.util.EpochNonceConfig;
 import com.bloxbean.cardano.yaci.store.epochnonce.util.NonceUtil;
 import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.store.core.storage.impl.EraMapper;
+import com.bloxbean.cardano.yaci.store.epoch.domain.EpochParam;
+import com.bloxbean.cardano.yaci.store.epoch.storage.EpochParamStorage;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,6 +27,8 @@ import java.io.FileInputStream;
 import java.io.InputStream;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Service
 @RequiredArgsConstructor
@@ -37,8 +42,14 @@ public class EpochNonceService {
     private final EpochNonceConfig epochNonceConfig;
     private final StoreProperties storeProperties;
     private final ResourceLoader resourceLoader;
+    private final Optional<EpochParamStorage> epochParamStorage;
+    private final AtomicBoolean missingEpochParamStorageWarned = new AtomicBoolean(false);
 
     public void computeEpochNonce(int newEpoch, Integer completedEpoch, EventMetadata metadata) {
+        computeEpochNonce(newEpoch, completedEpoch, metadata, metadata != null ? metadata.getEra() : null);
+    }
+
+    public void computeEpochNonce(int newEpoch, Integer completedEpoch, EventMetadata metadata, Era newEpochEra) {
         // For the very first Shelley epoch (completedEpoch is null or 0 for custom networks),
         // initialize from genesis
         EpochNonce prevState;
@@ -58,17 +69,19 @@ public class EpochNonceService {
         // used in the TICKN formula for the CURRENT epoch tick.
         byte[] ticknPrevHashNonce = decode(prevState.getLastEpochBlockNonce());
 
+        Era completedEpochEra = newEpochEra;
+
         // Query all blocks of completed epoch, sorted by slot
         if (completedEpoch != null) {
             List<Block> blocks = blockStorageReader.findBlocksByEpoch(completedEpoch);
             blocks.sort(Comparator.comparingLong(Block::getSlot));
 
             // Determine epoch era from first block to select the correct stability window
-            Era epochEra = (!blocks.isEmpty() && blocks.get(0).getEra() != null)
-                    ? EraMapper.intToEra(blocks.get(0).getEra())
-                    : null;
+            if (!blocks.isEmpty() && blocks.get(0).getEra() != null) {
+                completedEpochEra = EraMapper.intToEra(blocks.get(0).getEra());
+            }
 
-            long stabilityWindow = epochNonceConfig.getStabilityWindow(epochEra);
+            long stabilityWindow = epochNonceConfig.getStabilityWindow(completedEpochEra);
             long epochLength = epochNonceConfig.getEpochLength();
 
             // Compute first slot of next epoch once (same for all blocks in this epoch)
@@ -76,7 +89,7 @@ public class EpochNonceService {
                     ? (blocks.get(0).getSlot() - blocks.get(0).getEpochSlot()) + epochLength
                     : 0;
 
-            log.debug("Epoch {} era={}, stabilityWindow={}", completedEpoch, epochEra, stabilityWindow);
+            log.debug("Epoch {} era={}, stabilityWindow={}", completedEpoch, completedEpochEra, stabilityWindow);
 
             // Process each block — evolving/candidate update continuously
             for (Block block : blocks) {
@@ -103,8 +116,13 @@ public class EpochNonceService {
             }
         }
 
-        // TICKN: epochNonce = candidateNonce ⭒ ticknPrevHashNonce
+        // TICKN/Praos: epochNonce = candidateNonce ⭒ ticknPrevHashNonce
+        // TICKN/TPraos: epochNonce = candidateNonce ⭒ ticknPrevHashNonce ⭒ extraEntropy
         byte[] newEpochNonce = NonceUtil.combineNonces(candidateNonce, ticknPrevHashNonce);
+        Era extraEntropyEra = newEpochEra != null ? newEpochEra : completedEpochEra;
+        byte[] extraEntropy = getExtraEntropy(newEpoch, extraEntropyEra);
+        newEpochNonce = NonceUtil.combineNonces(newEpochNonce, extraEntropy);
+
         // Update ticknPrevHashNonce for the next epoch tick
         byte[] newTicknPrevHashNonce = labNonce;
 
@@ -142,6 +160,31 @@ public class EpochNonceService {
             return null;
         }
         return HexUtil.decodeHexString(vrf.getOutput());
+    }
+
+    private byte[] getExtraEntropy(int epoch, Era era) {
+        if (!usesTPraosExtraEntropy(era)) {
+            return null;
+        }
+
+        if (epochParamStorage.isEmpty()) {
+            if (missingEpochParamStorageWarned.compareAndSet(false, true)) {
+                log.warn("EpochParamStorage is not available. TPraos extra entropy will be treated as NeutralNonce. "
+                        + "Enable the epoch store for correct Shelley-Alonzo nonce calculation, including mainnet epoch 259.");
+            }
+            return null;
+        }
+
+        return epochParamStorage
+                .flatMap(storage -> storage.getProtocolParams(epoch))
+                .map(EpochParam::getParams)
+                .map(ProtocolParams::getExtraEntropy)
+                .map(NonceUtil::extraEntropyToNonce)
+                .orElse(null);
+    }
+
+    private boolean usesTPraosExtraEntropy(Era era) {
+        return era == null || era.getValue() < Era.Babbage.getValue();
     }
 
     private EpochNonce initializeGenesisNonce() {

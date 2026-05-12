@@ -5,6 +5,7 @@ import com.bloxbean.cardano.client.util.HexUtil;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class NonceUtilTest {
 
@@ -194,6 +195,44 @@ class NonceUtilTest {
 
         // Result should NOT equal the hashed value — it's raw bytes
         assertThat(result).isNotEqualTo(hashed);
+    }
+
+    // --- extraEntropyToNonce tests ---
+
+    @Test
+    void extraEntropyToNonce_nullInput_returnsNull() {
+        assertThat(NonceUtil.extraEntropyToNonce(null)).isNull();
+    }
+
+    @Test
+    void extraEntropyToNonce_neutralNonce_returnsNull() {
+        assertThat(NonceUtil.extraEntropyToNonce("0,")).isNull();
+    }
+
+    @Test
+    void extraEntropyToNonce_nonNeutralNonce_returnsDecodedBytes() {
+        String entropy = "d982e06fd33e7440b43cefad529b7ecafbaa255e38178ad4189a37e4ce9bf1fa";
+
+        byte[] result = NonceUtil.extraEntropyToNonce("1," + entropy);
+
+        assertThat(result).isEqualTo(HexUtil.decodeHexString(entropy));
+        assertThat(result).hasSize(32);
+    }
+
+    @Test
+    void extraEntropyToNonce_nonNeutralNonceWithHexPrefix_returnsDecodedBytes() {
+        String entropy = "d982e06fd33e7440b43cefad529b7ecafbaa255e38178ad4189a37e4ce9bf1fa";
+
+        byte[] result = NonceUtil.extraEntropyToNonce("1,0x" + entropy);
+
+        assertThat(result).isEqualTo(HexUtil.decodeHexString(entropy));
+    }
+
+    @Test
+    void extraEntropyToNonce_invalidNonceLength_throwsException() {
+        assertThatThrownBy(() -> NonceUtil.extraEntropyToNonce("1,abcd"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("32 bytes");
     }
 
     // --- Integration: nonce evolution sequence ---
