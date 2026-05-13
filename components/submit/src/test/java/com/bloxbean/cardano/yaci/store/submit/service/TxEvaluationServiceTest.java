@@ -4,7 +4,6 @@ import com.bloxbean.cardano.client.api.exception.ApiException;
 import com.bloxbean.cardano.yaci.store.submit.service.scalus.ScalusTxEvaluationService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.TextNode;
 import io.vavr.control.Either;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -41,13 +40,29 @@ class TxEvaluationServiceTest {
     }
 
     @Test
-    void defaultModeUsesOgmiosEvaluator() throws Exception {
+    void defaultModeUsesScalusEvaluator() throws Exception {
+        byte[] cborTx = new byte[]{1, 2, 3};
+        JsonNode additionalUtxos = objectMapper.readTree("[]");
+        TxEvaluationProperties properties = new TxEvaluationProperties();
+        when(scalusTxEvaluationService.evaluateTx(same(cborTx), same(additionalUtxos))).thenReturn(Either.right(success));
+
+        Either<JsonNode, JsonNode> result = service(properties).evaluateTx(cborTx, additionalUtxos);
+
+        assertThat(result.get()).isSameAs(success);
+        verify(scalusTxEvaluationService).evaluateTx(same(cborTx), same(additionalUtxos));
+        verify(ogmiosServiceProvider, never()).getIfAvailable();
+        verifyNoInteractions(ogmiosService);
+    }
+
+    @Test
+    void ogmiosModeUsesOgmiosEvaluator() throws Exception {
         byte[] cborTx = new byte[]{1, 2, 3};
         TxEvaluationProperties properties = new TxEvaluationProperties();
+        properties.setTxEvaluatorMode(TxEvaluatorMode.OGMIOS);
         when(ogmiosServiceProvider.getIfAvailable()).thenReturn(ogmiosService);
         when(ogmiosService.evaluateTx(same(cborTx), anySet())).thenReturn(Either.right(success));
 
-        Either<JsonNode, JsonNode> result = service(properties).evaluateTx(cborTx, TextNode.valueOf("ignored by ogmios"));
+        Either<JsonNode, JsonNode> result = service(properties).evaluateTx(cborTx, objectMapper.readTree("[]"));
 
         assertThat(result.get()).isSameAs(success);
         verify(ogmiosService).evaluateTx(same(cborTx), anySet());
@@ -72,6 +87,7 @@ class TxEvaluationServiceTest {
     @Test
     void ogmiosModeFailsClearlyWhenOgmiosBeanIsMissing() {
         TxEvaluationProperties properties = new TxEvaluationProperties();
+        properties.setTxEvaluatorMode(TxEvaluatorMode.OGMIOS);
         when(ogmiosServiceProvider.getIfAvailable()).thenReturn(null);
 
         assertThatThrownBy(() -> service(properties).evaluateTx(new byte[]{1}, null))

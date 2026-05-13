@@ -14,5 +14,5 @@ public class TxEvaluationProperties {
     /**
      * Backend used by the Blockfrost-compatible transaction evaluation endpoint.
      */
-    private TxEvaluatorMode txEvaluatorMode = TxEvaluatorMode.OGMIOS;
+    private TxEvaluatorMode txEvaluatorMode = TxEvaluatorMode.SCALUS;
 }

@@ -25,18 +25,18 @@ script supplier, and a correct `SlotConfig`.
 
 ## Decision
 
-Add Scalus as an alternative transaction evaluator in the submit module.
+Add Scalus as the default local transaction evaluator in the submit module.
 
 Evaluation backend selection will be controlled by:
 
 ```properties
-store.submit.tx-evaluator-mode=ogmios
+store.submit.tx-evaluator-mode=scalus
 ```
 
 Supported values:
 
-- `ogmios`: default; preserve current behavior.
-- `scalus`: use Scalus even if `store.cardano.ogmios-url` is configured.
+- `scalus`: default; evaluate with local Yaci Store data and Scalus.
+- `ogmios`: delegate to Ogmios when `store.cardano.ogmios-url` is configured.
 
 Bind this property as an enum-backed Spring `@ConfigurationProperties` value so
 unknown values fail during application startup instead of surfacing as a
@@ -266,8 +266,8 @@ store.submit.tx-evaluator-mode=scalus
 
 ## Final Position
 
-Scalus should be added as an explicit alternative transaction evaluator, not as a
-hidden fallback only. The release-safe design is to keep the submit module
-decoupled, use existing or minimal client interfaces for ledger context, pass an
-explicit `SlotConfig`, and perform evaluator selection at runtime for native
+Scalus should be the default local transaction evaluator, with Ogmios available
+as an explicit external evaluator. The release-safe design is to keep the submit
+module decoupled, use existing or minimal client interfaces for ledger context,
+pass an explicit `SlotConfig`, and perform evaluator selection at runtime for native
 image compatibility.

@@ -12,6 +12,13 @@ class TxEvaluationPropertiesTest {
             .withUserConfiguration(TestConfig.class);
 
     @Test
+    void defaultsToScalusEvaluatorMode() {
+        contextRunner
+                .run(context -> assertThat(context.getBean(TxEvaluationProperties.class).getTxEvaluatorMode())
+                        .isEqualTo(TxEvaluatorMode.SCALUS));
+    }
+
+    @Test
     void bindsScalusEvaluatorMode() {
         contextRunner
                 .withPropertyValues("store.submit.tx-evaluator-mode=scalus")

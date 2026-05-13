@@ -125,6 +125,6 @@ public class TxEvaluationService {
     }
 
     private TxEvaluatorMode mode() {
-        return properties.getTxEvaluatorMode() != null ? properties.getTxEvaluatorMode() : TxEvaluatorMode.OGMIOS;
+        return properties.getTxEvaluatorMode() != null ? properties.getTxEvaluatorMode() : TxEvaluatorMode.SCALUS;
     }
 }
