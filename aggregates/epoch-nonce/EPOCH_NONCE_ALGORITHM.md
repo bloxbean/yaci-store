@@ -42,13 +42,21 @@ When transitioning from epoch N to epoch N+1:
 # 1. Process all blocks from completed epoch N (updates evolving, candidate, labNonce)
 
 # 2. Compute the new epoch nonce using the ⭒ (star/combine) operator:
-epochNonce = candidateNonce ⭒ ticknPrevHashNonce
+if new epoch era <= Alonzo (TPraos):
+    epochNonce = (candidateNonce ⭒ ticknPrevHashNonce) ⭒ extraEntropy
+if new epoch era >= Babbage (Praos):
+    epochNonce = candidateNonce ⭒ ticknPrevHashNonce
 
-# 3. Carry forward the labNonce for the NEXT epoch's TICKN:
+# 3. Carry forward the completed epoch's labNonce for the NEXT epoch's TICKN:
 ticknPrevHashNonce' = labNonce
 
 # 4. evolving/candidate are NOT reset — they continue into the next epoch
 ```
+
+For TPraos, `extraEntropy` is read from the new epoch's protocol parameters.
+`null`, missing, or neutral `extraEntropy` is treated as `NeutralNonce`, so it does not change the result.
+For example, mainnet epoch 259 has non-neutral `extraEntropy` and must include it in the TICKN result.
+Praos/Babbage and later do not use `extraEntropy`.
 
 ### The ⭒ (star) operator
 
@@ -85,9 +93,9 @@ Whitespace and formatting matter — the file must be byte-for-byte identical to
 
 The stability window used for the candidate nonce freeze cutoff changed at the Conway hard fork:
 
-| Era | Haskell function | Formula | Value (k=2160, f=0.05) |
+| Era | Source/config | Formula | Value (k=2160, f=0.05) |
 |-----|---------|---------|------------------------|
-| Shelley through Babbage | `computeStabilityWindow` | `floor(3k/f)` | 129,600 (36h) |
+| Shelley through Babbage | `computeStabilityWindow` | `3k/f` | 129,600 (36h) |
 | Conway+ | `computeRandomnessStabilisationWindow` | `ceiling(4k/f)` | 172,800 (48h) |
 
 This change was introduced in **ouroboros-consensus v0.15.0.0** (backwards-incompatible), which set
@@ -96,6 +104,8 @@ instead of the previous `computeStabilityWindow` (3k/f). See also **cardano-ledg
 
 For pre-Conway eras, the consensus layer's `PraosParams.praosRandomnessStabilisationWindow` field was
 populated with `computeStabilityWindow` (3k/f) despite the naming suggesting otherwise.
+The current implementation uses `floor(3k/f)` for this value; for the supported Cardano network parameters
+`3k/f` is an integer, so this matches the ledger value.
 
 ## State Model
 
@@ -107,7 +117,7 @@ The `EpochNonce` record stores:
 | `evolvingNonce` | Post-processing evolving nonce (continuous, never reset) |
 | `candidateNonce` | Post-processing candidate nonce (continuous, never reset) |
 | `labNonce` | prevHash of the last block in the completed epoch |
-| `lastEpochBlockNonce` | The `ticknPrevHashNonce` — labNonce from the previous epoch, used in TICKN |
+| `lastEpochBlockNonce` | The completed epoch's `labNonce`, persisted so the next epoch can restore it as `ticknPrevHashNonce` |
 
 ## Haskell Reference Code
 
@@ -119,7 +129,9 @@ The implementation follows these Haskell modules in the Cardano codebase:
 
 - **Praos VRF nonce** (era >= 6): [ouroboros-consensus/.../Protocol/Praos.hs](https://github.com/IntersectMBO/ouroboros-consensus/blob/main/ouroboros-consensus-protocol/src/ouroboros-consensus-protocol/Ouroboros/Consensus/Protocol/Praos.hs) and [Praos/VRF.hs](https://github.com/IntersectMBO/ouroboros-consensus/blob/main/ouroboros-consensus-protocol/src/ouroboros-consensus-protocol/Ouroboros/Consensus/Protocol/Praos/VRF.hs)
 
-- **TICKN state machine**: [cardano-ledger/.../Shelley/Rules/Tick.hs](https://github.com/IntersectMBO/cardano-ledger/blob/master/eras/shelley/impl/src/Cardano/Ledger/Shelley/Rules/Tick.hs) — `TICKN` rule applies `candidateNonce ⭒ prevHashNonce`
+- **TPraos TICKN state machine**: [cardano-ledger/.../Shelley/Rules/Tickn.hs](https://github.com/IntersectMBO/cardano-ledger/blob/master/eras/shelley/impl/src/Cardano/Ledger/Shelley/Rules/Tickn.hs) — `TICKN` rule applies `candidateNonce ⭒ prevHashNonce ⭒ extraEntropy`
+
+- **Praos epoch transition**: [ouroboros-consensus/.../Protocol/Praos.hs](https://github.com/IntersectMBO/ouroboros-consensus/blob/main/ouroboros-consensus-protocol/src/ouroboros-consensus-protocol/Ouroboros/Consensus/Protocol/Praos.hs) — Praos applies `candidateNonce ⭒ prevHashNonce` without `extraEntropy`
 
 - **Nonce combine (⭒)**: [cardano-ledger/.../BaseTypes.hs](https://github.com/IntersectMBO/cardano-ledger/blob/master/libs/cardano-ledger-core/src/Cardano/Ledger/BaseTypes.hs) — `Nonce` type and `(⭒)` operator
 
@@ -131,3 +143,6 @@ The implementation follows these Haskell modules in the Cardano codebase:
 
 Epoch nonce values have been empirically verified against Cardano dbsync for preprod epochs 4–163+
 (spanning pre-Conway and Conway eras).
+
+Extra entropy handling has been verified against the Cardano ledger rule and mainnet epoch-param data, where epoch 259 is the only
+mainnet epoch with non-neutral `extraEntropy`.
