@@ -96,10 +96,11 @@ public class RewardController {
         return ResponseEntity.ok(accountRewardApiService.getUnwithdrawnRewardsByAddresses(List.of(address), p, count));
     }
 
-    @Operation(summary = "Get withdrawable rewards for an address", description = "Retrieve the current withdrawable rewards for a specific address.")
+    @Operation(summary = "Get withdrawable rewards for an address", description = "Retrieve withdrawable rewards for a specific address. If epoch is not provided, the latest indexed epoch is used.")
     @GetMapping("/accounts/{address}/rewards/withdrawable")
-    public ResponseEntity<WithdrawableRewardDto> getWithdrawableRewardsByAddress(@PathVariable String address) {
-        return ResponseEntity.ok(accountRewardApiService.getWithdrawableRewardByAddress(address));
+    public ResponseEntity<WithdrawableRewardDto> getWithdrawableRewardsByAddress(@PathVariable String address,
+                                                                                 @RequestParam(required = false) @Min(0) Integer epoch) {
+        return ResponseEntity.ok(accountRewardApiService.getWithdrawableRewardByAddress(address, epoch));
     }
 
     @Operation(summary = "Get available rewards for addresses", description = "Retrieve unwithdrawn rewards for a list of addresses with pagination.")

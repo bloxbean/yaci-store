@@ -1,9 +1,13 @@
 package com.bloxbean.cardano.yaci.store.api.account;
 
 import com.bloxbean.cardano.yaci.store.api.account.service.AccountService;
+import com.bloxbean.cardano.yaci.store.account.service.StakeAccountRewardProvider;
+import com.bloxbean.cardano.yaci.store.core.service.local.LocalClientProviderManager;
 import com.bloxbean.cardano.yaci.store.core.storage.api.EraStorage;
+import jakarta.annotation.Nullable;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
@@ -17,8 +21,10 @@ public class AccountApiConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public AccountService accountService(EraStorage eraStorage) {
-        return new AccountService(null, eraStorage);
+    public AccountService accountService(@Nullable LocalClientProviderManager localClientProviderManager,
+                                         EraStorage eraStorage,
+                                         ObjectProvider<StakeAccountRewardProvider> stakeAccountRewardProviders) {
+        return new AccountService(localClientProviderManager, eraStorage, stakeAccountRewardProviders.orderedStream().toList());
     }
 
 }

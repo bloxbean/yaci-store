@@ -39,4 +39,5 @@ public interface RewardStorageReader {
     List<RewardInfo> findUnwithdrawnRewardsByAddresses(List<String> addresses, int page, int count);
 
     WithdrawableReward findWithdrawableRewardByAddress(String address);
+    WithdrawableReward findWithdrawableRewardByAddress(String address, Integer epoch);
 }

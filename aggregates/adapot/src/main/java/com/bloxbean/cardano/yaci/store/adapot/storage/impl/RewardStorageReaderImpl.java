@@ -23,6 +23,7 @@ import java.math.BigInteger;
 import java.util.List;
 
 import static com.bloxbean.cardano.yaci.store.adapot.jooq.Tables.*;
+import static com.bloxbean.cardano.yaci.store.epoch.jooq.Tables.EPOCH_PARAM;
 import static com.bloxbean.cardano.yaci.store.transaction.jooq.Tables.WITHDRAWAL;
 
 @RequiredArgsConstructor
@@ -33,8 +34,6 @@ public class RewardStorageReaderImpl implements RewardStorageReader {
     private final UnclaimedRewardRestRepository unclaimedRewardRestRepository;
     private final Mapper mapper;
     private final DSLContext dsl;
-
-    private static final String STAKE_ADDRESS_WITHDRAWABLE_REWARD_VIEW = "stake_address_withdrawable_reward_view";
 
     @Override
     public List<InstantReward> findInstantRewardByEarnedEpoch(Integer epoch, int page, int count) {
@@ -299,14 +298,51 @@ public class RewardStorageReaderImpl implements RewardStorageReader {
 
     @Override
     public WithdrawableReward findWithdrawableRewardByAddress(String address) {
-        var view = DSL.table(DSL.name(STAKE_ADDRESS_WITHDRAWABLE_REWARD_VIEW));
-        var addressField = DSL.field(DSL.name("address"), String.class);
-        var withdrawableAmountField = DSL.field(DSL.name("withdrawable_amount"), BigInteger.class);
+        return findWithdrawableRewardByAddress(address, null);
+    }
 
-        var withdrawableAmount = dsl.select(withdrawableAmountField)
-                .from(view)
-                .where(addressField.eq(address))
-                .fetchOptional(withdrawableAmountField)
+    @Override
+    public WithdrawableReward findWithdrawableRewardByAddress(String address, Integer epoch) {
+        var epochCutoff = epoch != null
+                ? epoch
+                : dsl.select(DSL.max(EPOCH_PARAM.EPOCH))
+                        .from(EPOCH_PARAM)
+                        .fetchOne(0, Integer.class);
+
+        if (epochCutoff == null) {
+            return WithdrawableReward.builder()
+                    .address(address)
+                    .withdrawableAmount(BigInteger.ZERO)
+                    .build();
+        }
+
+        var lastWithdrawalSlot = dsl.select(DSL.max(WITHDRAWAL.SLOT))
+                .from(WITHDRAWAL)
+                .where(WITHDRAWAL.ADDRESS.eq(address)
+                        .and(WITHDRAWAL.EPOCH.le(epochCutoff)))
+                .fetchOne(0, Long.class);
+
+        var allRewards = dsl.select(REWARD.AMOUNT.as("amount"))
+                .from(REWARD)
+                .where(REWARD.ADDRESS.eq(address)
+                        .and(REWARD.SPENDABLE_EPOCH.le(epochCutoff))
+                        .and(lastWithdrawalSlot == null ? DSL.trueCondition() : REWARD.SLOT.gt(lastWithdrawalSlot)))
+                .unionAll(dsl.select(REWARD_REST.AMOUNT.as("amount"))
+                        .from(REWARD_REST)
+                        .where(REWARD_REST.ADDRESS.eq(address)
+                                .and(REWARD_REST.SPENDABLE_EPOCH.le(epochCutoff))
+                                .and(lastWithdrawalSlot == null ? DSL.trueCondition() : REWARD_REST.SLOT.gt(lastWithdrawalSlot))))
+                .unionAll(dsl.select(INSTANT_REWARD.AMOUNT.as("amount"))
+                        .from(INSTANT_REWARD)
+                        .where(INSTANT_REWARD.ADDRESS.eq(address)
+                                .and(INSTANT_REWARD.SPENDABLE_EPOCH.le(epochCutoff))
+                                .and(lastWithdrawalSlot == null ? DSL.trueCondition() : INSTANT_REWARD.SLOT.gt(lastWithdrawalSlot))))
+                .asTable("all_rewards");
+        var amountField = allRewards.field("amount", BigInteger.class);
+
+        var withdrawableAmount = dsl.select(DSL.coalesce(DSL.sum(amountField), BigInteger.ZERO))
+                .from(allRewards)
+                .fetchOptional(0, BigInteger.class)
                 .orElse(BigInteger.ZERO);
 
         return WithdrawableReward.builder()

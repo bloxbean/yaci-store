@@ -89,7 +89,11 @@ public class RewardApiService {
     }
 
     public WithdrawableRewardDto getWithdrawableRewardByAddress(String address) {
-        return WithdrawableRewardDto.toDto(rewardStorageReader.findWithdrawableRewardByAddress(address));
+        return getWithdrawableRewardByAddress(address, null);
+    }
+
+    public WithdrawableRewardDto getWithdrawableRewardByAddress(String address, Integer epoch) {
+        return WithdrawableRewardDto.toDto(rewardStorageReader.findWithdrawableRewardByAddress(address, epoch));
     }
 
 }

@@ -7,10 +7,14 @@ import com.bloxbean.cardano.yaci.store.account.storage.impl.AddressTxAmountStora
 import com.bloxbean.cardano.yaci.store.account.storage.impl.repository.AddressBalanceRepository;
 import com.bloxbean.cardano.yaci.store.account.storage.impl.repository.AddressTxAmountRepository;
 import com.bloxbean.cardano.yaci.store.account.storage.impl.repository.StakeBalanceRepository;
+import com.bloxbean.cardano.yaci.store.account.service.StakeAccountRewardProvider;
 import com.bloxbean.cardano.yaci.store.api.account.service.AccountService;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
+import com.bloxbean.cardano.yaci.store.core.service.local.LocalClientProviderManager;
 import com.bloxbean.cardano.yaci.store.core.storage.api.EraStorage;
+import jakarta.annotation.Nullable;
 import org.jooq.DSLContext;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
@@ -46,8 +50,10 @@ public class AccountStoreConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public AccountService accountService(EraStorage eraStorage) {
-        return new AccountService(null, eraStorage);
+    public AccountService accountService(@Nullable LocalClientProviderManager localClientProviderManager,
+                                         EraStorage eraStorage,
+                                         ObjectProvider<StakeAccountRewardProvider> stakeAccountRewardProviders) {
+        return new AccountService(localClientProviderManager, eraStorage, stakeAccountRewardProviders.orderedStream().toList());
     }
 
     @Bean
