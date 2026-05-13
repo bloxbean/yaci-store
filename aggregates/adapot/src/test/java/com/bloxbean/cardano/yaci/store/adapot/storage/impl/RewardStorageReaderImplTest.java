@@ -33,7 +33,7 @@ class RewardStorageReaderImplTest {
     }
 
     @Test
-    void findWithdrawableRewardByAddressReturnsSpendableRewardsMinusWithdrawals() {
+    void findWithdrawableRewardByAddressReturnsSpendableRewardsAfterLastWithdrawal() {
         dsl.execute("insert into epoch_param (epoch) values (10)");
 
         dsl.execute("""
@@ -68,6 +68,40 @@ class RewardStorageReaderImplTest {
     }
 
     @Test
+    void findWithdrawableRewardByAddressDoesNotReducePostWithdrawalRewardsByPreviousWithdrawals() {
+        dsl.execute("insert into epoch_param (epoch) values (10)");
+        dsl.execute("""
+                insert into withdrawal (address, tx_hash, amount, epoch, slot)
+                values (?, 'tx3', 1000, 10, 120)
+                """, ADDRESS);
+        dsl.execute("""
+                insert into reward_rest (id, address, type, amount, earned_epoch, spendable_epoch, slot)
+                values (?, ?, 'treasury', 40, 10, 10, 130)
+                """, java.util.UUID.randomUUID(), ADDRESS);
+
+        var withdrawableReward = rewardStorageReader.findWithdrawableRewardByAddress(ADDRESS);
+
+        assertThat(withdrawableReward.getWithdrawableAmount()).isEqualTo(BigInteger.valueOf(40));
+    }
+
+    @Test
+    void findWithdrawableRewardByAddressHandlesPrunedWithdrawnRewards() {
+        dsl.execute("insert into epoch_param (epoch) values (10)");
+        dsl.execute("""
+                insert into withdrawal (address, tx_hash, amount, epoch, slot)
+                values (?, 'tx_pruned', 100, 10, 120)
+                """, ADDRESS);
+        dsl.execute("""
+                insert into reward_rest (id, address, type, amount, earned_epoch, spendable_epoch, slot)
+                values (?, ?, 'treasury', 40, 10, 10, 130)
+                """, java.util.UUID.randomUUID(), ADDRESS);
+
+        var withdrawableReward = rewardStorageReader.findWithdrawableRewardByAddress(ADDRESS);
+
+        assertThat(withdrawableReward.getWithdrawableAmount()).isEqualTo(BigInteger.valueOf(40));
+    }
+
+    @Test
     void findWithdrawableRewardByAddressReturnsZeroWhenRewardsAreFullyWithdrawn() {
         dsl.execute("insert into epoch_param (epoch) values (10)");
         dsl.execute("""
@@ -82,6 +116,25 @@ class RewardStorageReaderImplTest {
         var withdrawableReward = rewardStorageReader.findWithdrawableRewardByAddress(FULLY_WITHDRAWN_ADDRESS);
 
         assertThat(withdrawableReward.getWithdrawableAmount()).isEqualTo(BigInteger.ZERO);
+    }
+
+    @Test
+    void findWithdrawableRewardByAddressAndEpochIgnoresFutureWithdrawals() {
+        dsl.execute("insert into epoch_param (epoch) values (11)");
+        dsl.execute("""
+                insert into reward (address, earned_epoch, type, pool_id, amount, spendable_epoch, slot)
+                values (?, 9, 'member', 'pool1', 40, 10, 130)
+                """, ADDRESS);
+        dsl.execute("""
+                insert into withdrawal (address, tx_hash, amount, epoch, slot)
+                values (?, 'tx4', 40, 11, 140)
+                """, ADDRESS);
+
+        var historicalReward = rewardStorageReader.findWithdrawableRewardByAddress(ADDRESS, 10);
+        var currentReward = rewardStorageReader.findWithdrawableRewardByAddress(ADDRESS);
+
+        assertThat(historicalReward.getWithdrawableAmount()).isEqualTo(BigInteger.valueOf(40));
+        assertThat(currentReward.getWithdrawableAmount()).isEqualTo(BigInteger.ZERO);
     }
 
     @Test
