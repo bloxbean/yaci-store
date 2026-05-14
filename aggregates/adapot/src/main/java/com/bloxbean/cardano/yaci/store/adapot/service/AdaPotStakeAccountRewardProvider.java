@@ -24,7 +24,7 @@ public class AdaPotStakeAccountRewardProvider implements StakeAccountRewardProvi
             return Optional.empty();
         }
 
-        var withdrawableReward = rewardStorageReader.findWithdrawableRewardByAddress(stakeAddress, latestCompletedRewardCalc.get().getEpoch());
+        var withdrawableReward = rewardStorageReader.findWithdrawableRewardByAddress(stakeAddress);
         return Optional.of(StakeAccountRewardInfo.builder()
                 .stakeAddress(stakeAddress)
                 .withdrawableAmount(withdrawableReward.getWithdrawableAmount())
