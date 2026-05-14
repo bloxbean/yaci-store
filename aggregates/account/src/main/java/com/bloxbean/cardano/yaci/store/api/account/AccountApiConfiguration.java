@@ -23,8 +23,8 @@ public class AccountApiConfiguration {
     @ConditionalOnMissingBean
     public AccountService accountService(@Nullable LocalClientProviderManager localClientProviderManager,
                                          EraStorage eraStorage,
-                                         ObjectProvider<StakeAccountRewardProvider> stakeAccountRewardProviders) {
-        return new AccountService(localClientProviderManager, eraStorage, stakeAccountRewardProviders.orderedStream().toList());
+                                         ObjectProvider<StakeAccountRewardProvider> stakeAccountRewardProvider) {
+        return new AccountService(localClientProviderManager, eraStorage, stakeAccountRewardProvider.getIfAvailable());
     }
 
 }

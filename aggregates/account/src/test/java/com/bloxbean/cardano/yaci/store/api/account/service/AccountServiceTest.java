@@ -5,7 +5,6 @@ import com.bloxbean.cardano.yaci.store.account.service.StakeAccountRewardProvide
 import org.junit.jupiter.api.Test;
 
 import java.math.BigInteger;
-import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -28,7 +27,7 @@ class AccountServiceTest {
                 .stakeAddress(stakeAddress)
                 .withdrawableAmount(BigInteger.valueOf(40))
                 .build());
-        var accountService = new AccountService(null, null, List.of(rewardProvider));
+        var accountService = new AccountService(null, null, rewardProvider);
 
         var accountInfo = accountService.getAccountInfo(STAKE_ADDRESS);
 
