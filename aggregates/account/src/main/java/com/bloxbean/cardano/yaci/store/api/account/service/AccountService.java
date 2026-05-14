@@ -20,7 +20,6 @@ import reactor.core.publisher.Mono;
 
 import java.math.BigInteger;
 import java.time.Duration;
-import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
@@ -30,18 +29,18 @@ import java.util.Set;
 public class AccountService {
     private final EraStorage eraStorage;
     private final LocalClientProviderManager localClientProviderManager;
-    private final List<StakeAccountRewardProvider> stakeAccountRewardProviders;
+    private final StakeAccountRewardProvider stakeAccountRewardProvider;
 
     public AccountService(@Nullable LocalClientProviderManager localClientProviderManager, EraStorage eraStorage) {
-        this(localClientProviderManager, eraStorage, List.of());
+        this(localClientProviderManager, eraStorage, null);
     }
 
     @Autowired
     public AccountService(@Nullable LocalClientProviderManager localClientProviderManager, EraStorage eraStorage,
-                          List<StakeAccountRewardProvider> stakeAccountRewardProviders) {
+                          @Nullable StakeAccountRewardProvider stakeAccountRewardProvider) {
         this.eraStorage = eraStorage;
         this.localClientProviderManager = localClientProviderManager;
-        this.stakeAccountRewardProviders = stakeAccountRewardProviders;
+        this.stakeAccountRewardProvider = stakeAccountRewardProvider;
     }
 
     /**
@@ -56,11 +55,8 @@ public class AccountService {
             return localAccountInfo;
         }
 
-        return stakeAccountRewardProviders.stream()
-                .map(provider -> provider.getAccountInfo(stakeAddress))
-                .filter(Optional::isPresent)
-                .map(Optional::get)
-                .findFirst();
+        return Optional.ofNullable(stakeAccountRewardProvider)
+                .flatMap(provider -> provider.getAccountInfo(stakeAddress));
     }
 
     private Optional<StakeAccountRewardInfo> getAccountInfoFromLocalState(String stakeAddress) {
