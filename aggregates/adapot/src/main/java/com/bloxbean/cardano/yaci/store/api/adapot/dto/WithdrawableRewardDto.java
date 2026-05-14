@@ -11,12 +11,16 @@ import java.math.BigInteger;
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public record WithdrawableRewardDto(
         String address,
-        BigInteger withdrawableAmount
+        BigInteger withdrawableAmount,
+        Integer epoch,
+        Long slot
 ) {
     public static WithdrawableRewardDto toDto(WithdrawableReward withdrawableReward) {
         return new WithdrawableRewardDto(
                 withdrawableReward.getAddress(),
-                withdrawableReward.getWithdrawableAmount()
+                withdrawableReward.getWithdrawableAmount(),
+                withdrawableReward.getEpoch(),
+                withdrawableReward.getSlot()
         );
     }
 }

@@ -19,4 +19,6 @@ import java.math.BigInteger;
 public class WithdrawableReward {
     private String address;
     private BigInteger withdrawableAmount;
+    private Integer epoch;
+    private Long slot;
 }

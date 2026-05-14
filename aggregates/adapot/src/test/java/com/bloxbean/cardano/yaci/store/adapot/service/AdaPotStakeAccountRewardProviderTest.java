@@ -44,7 +44,7 @@ class AdaPotStakeAccountRewardProviderTest {
                         .type(AdaPotJobType.REWARD_CALC)
                         .status(AdaPotJobStatus.COMPLETED)
                         .build()));
-        when(rewardStorageReader.findWithdrawableRewardByAddress(STAKE_ADDRESS, 10))
+        when(rewardStorageReader.findWithdrawableRewardByAddress(STAKE_ADDRESS))
                 .thenReturn(WithdrawableReward.builder()
                         .address(STAKE_ADDRESS)
                         .withdrawableAmount(BigInteger.valueOf(40))
