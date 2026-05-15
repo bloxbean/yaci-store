@@ -106,7 +106,8 @@ public class LocalEpochParamService {
         }
 
         Integer epoch = epochAndTip.get()._2;
-        Optional<LocalClientProvider> localClientProvider = localClientProviderManager.getLocalClientProvider();
+        Optional<LocalClientProvider> localClientProvider
+                = localClientProviderManager != null ? localClientProviderManager.getLocalClientProvider() : Optional.empty();
 
         try {
             var localStateQueryClient = localClientProvider.map(LocalClientProvider::getLocalStateQueryClient).orElse(null);
