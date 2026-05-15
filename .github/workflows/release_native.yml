@@ -64,10 +64,12 @@ jobs:
 
   buildAndUpload-musl:
     strategy:
+      fail-fast: false
       matrix:
         os: ["ubuntu-22.04"]
         profile: ["n2c", "all"]
     runs-on: ${{ matrix.os }}
+    continue-on-error: true
     env:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
