@@ -6,6 +6,8 @@ import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobStatus;
 import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobType;
 import com.bloxbean.cardano.yaci.store.adapot.job.storage.AdaPotJobStorage;
 import com.bloxbean.cardano.yaci.store.adapot.storage.RewardStorageReader;
+import com.bloxbean.cardano.yaci.store.staking.domain.Delegation;
+import com.bloxbean.cardano.yaci.store.staking.storage.StakingCertificateStorageReader;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigInteger;
@@ -19,14 +21,16 @@ import static org.mockito.Mockito.when;
 
 class AdaPotStakeAccountRewardProviderTest {
     private static final String STAKE_ADDRESS = "stake_test1up97ct2wt8jqlly2cnkhuwc7tvevmjpp7h6ts3rucpksy8c8cnspn";
+    private static final String POOL_HASH = "0f292d1679c3417e1e0e60a810a3e4f3e4e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8";
 
     @Test
     void getAccountInfoReturnsEmptyWhenRewardCalculationHasNotCompleted() {
         var rewardStorageReader = mock(RewardStorageReader.class);
         var adaPotJobStorage = mock(AdaPotJobStorage.class);
+        var stakingCertificateStorageReader = mock(StakingCertificateStorageReader.class);
         when(adaPotJobStorage.getLatestJobByTypeAndStatus(AdaPotJobType.REWARD_CALC, AdaPotJobStatus.COMPLETED))
                 .thenReturn(Optional.empty());
-        var provider = new AdaPotStakeAccountRewardProvider(rewardStorageReader, adaPotJobStorage);
+        var provider = new AdaPotStakeAccountRewardProvider(rewardStorageReader, adaPotJobStorage, stakingCertificateStorageReader);
 
         var accountInfo = provider.getAccountInfo(STAKE_ADDRESS);
 
@@ -35,9 +39,10 @@ class AdaPotStakeAccountRewardProviderTest {
     }
 
     @Test
-    void getAccountInfoReturnsWithdrawableRewardWhenRewardCalculationHasCompleted() {
+    void getAccountInfoReturnsWithdrawableRewardAndPoolIdWhenDelegationExists() {
         var rewardStorageReader = mock(RewardStorageReader.class);
         var adaPotJobStorage = mock(AdaPotJobStorage.class);
+        var stakingCertificateStorageReader = mock(StakingCertificateStorageReader.class);
         when(adaPotJobStorage.getLatestJobByTypeAndStatus(AdaPotJobType.REWARD_CALC, AdaPotJobStatus.COMPLETED))
                 .thenReturn(Optional.of(AdaPotJob.builder()
                         .epoch(10)
@@ -49,12 +54,46 @@ class AdaPotStakeAccountRewardProviderTest {
                         .address(STAKE_ADDRESS)
                         .withdrawableAmount(BigInteger.valueOf(40))
                         .build());
-        var provider = new AdaPotStakeAccountRewardProvider(rewardStorageReader, adaPotJobStorage);
+        when(stakingCertificateStorageReader.getLatestDelegationByAddress(STAKE_ADDRESS))
+                .thenReturn(Optional.of(Delegation.builder()
+                        .address(STAKE_ADDRESS)
+                        .poolId(POOL_HASH)
+                        .build()));
+        var provider = new AdaPotStakeAccountRewardProvider(rewardStorageReader, adaPotJobStorage, stakingCertificateStorageReader);
 
         var accountInfo = provider.getAccountInfo(STAKE_ADDRESS);
 
         assertThat(accountInfo).isPresent();
         assertThat(accountInfo.orElseThrow().getStakeAddress()).isEqualTo(STAKE_ADDRESS);
         assertThat(accountInfo.orElseThrow().getWithdrawableAmount()).isEqualTo(BigInteger.valueOf(40));
+        assertThat(accountInfo.orElseThrow().getPoolId()).startsWith("pool");
+    }
+
+    @Test
+    void getAccountInfoReturnsNullPoolIdWhenNoDelegationExists() {
+        var rewardStorageReader = mock(RewardStorageReader.class);
+        var adaPotJobStorage = mock(AdaPotJobStorage.class);
+        var stakingCertificateStorageReader = mock(StakingCertificateStorageReader.class);
+        when(adaPotJobStorage.getLatestJobByTypeAndStatus(AdaPotJobType.REWARD_CALC, AdaPotJobStatus.COMPLETED))
+                .thenReturn(Optional.of(AdaPotJob.builder()
+                        .epoch(10)
+                        .type(AdaPotJobType.REWARD_CALC)
+                        .status(AdaPotJobStatus.COMPLETED)
+                        .build()));
+        when(rewardStorageReader.findWithdrawableRewardByAddress(STAKE_ADDRESS))
+                .thenReturn(WithdrawableReward.builder()
+                        .address(STAKE_ADDRESS)
+                        .withdrawableAmount(BigInteger.valueOf(40))
+                        .build());
+        when(stakingCertificateStorageReader.getLatestDelegationByAddress(STAKE_ADDRESS))
+                .thenReturn(Optional.empty());
+        var provider = new AdaPotStakeAccountRewardProvider(rewardStorageReader, adaPotJobStorage, stakingCertificateStorageReader);
+
+        var accountInfo = provider.getAccountInfo(STAKE_ADDRESS);
+
+        assertThat(accountInfo).isPresent();
+        assertThat(accountInfo.orElseThrow().getStakeAddress()).isEqualTo(STAKE_ADDRESS);
+        assertThat(accountInfo.orElseThrow().getWithdrawableAmount()).isEqualTo(BigInteger.valueOf(40));
+        assertThat(accountInfo.orElseThrow().getPoolId()).isNull();
     }
 }
