@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.adapot.service;
 
+import com.bloxbean.cardano.yaci.core.model.certs.CertificateType;
 import com.bloxbean.cardano.yaci.store.account.domain.StakeAccountRewardInfo;
 import com.bloxbean.cardano.yaci.store.account.service.StakeAccountRewardProvider;
 import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobStatus;
@@ -28,9 +29,18 @@ public class AdaPotStakeAccountRewardProvider implements StakeAccountRewardProvi
         }
 
         var withdrawableReward = rewardStorageReader.findWithdrawableRewardByAddress(stakeAddress);
-        var poolId = stakingCertificateStorageReader.getLatestDelegationByAddress(stakeAddress)
-                .map(delegation -> PoolUtil.getBech32PoolId(delegation.getPoolId()))
-                .orElse(null);
+
+        var latestRegistration = stakingCertificateStorageReader.getRegistrationByStakeAddress(stakeAddress, Long.MAX_VALUE);
+        boolean isDeregistered = latestRegistration
+                .map(reg -> reg.getType() == CertificateType.STAKE_DEREGISTRATION)
+                .orElse(false);
+
+        String poolId = null;
+        if (!isDeregistered) {
+            poolId = stakingCertificateStorageReader.getLatestDelegationByAddress(stakeAddress)
+                    .map(delegation -> PoolUtil.getBech32PoolId(delegation.getPoolId()))
+                    .orElse(null);
+        }
 
         return Optional.of(StakeAccountRewardInfo.builder()
                 .stakeAddress(stakeAddress)
