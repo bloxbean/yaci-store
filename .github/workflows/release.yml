@@ -30,8 +30,15 @@ jobs:
           mkdir -p ~/.gradle/
           echo "${{secrets.SIGNING_KEY}}" > ~/.gradle/secring.gpg.b64
           base64 -d ~/.gradle/secring.gpg.b64 > ~/.gradle/secring.gpg
-      - name: Publish package
-        run: ./gradlew publishToSonatype closeSonatypeStagingRepository -Psigning.keyId=${{ secrets.SIGNING_KEY_ID }} -Psigning.password=${{ secrets.SIGNING_PASSWORD }} -Psigning.secretKeyRingFile=$(echo ~/.gradle/secring.gpg) --warn --stacktrace
+      - name: Publish and close staging repository
+        continue-on-error: true
+        id: publish
+        run: |
+          ./gradlew publishToSonatype closeSonatypeStagingRepository \
+            -Psigning.keyId=${{ secrets.SIGNING_KEY_ID }} \
+            -Psigning.password=${{ secrets.SIGNING_PASSWORD }} \
+            -Psigning.secretKeyRingFile=$(echo ~/.gradle/secring.gpg) \
+            --warn --stacktrace
         env:
           MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
           MAVEN_PASSWORD: ${{ secrets.OSSRH_TOKEN }}
