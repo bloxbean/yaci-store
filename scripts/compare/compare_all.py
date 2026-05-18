@@ -5,8 +5,8 @@
 ================================================================================
 
 Runs each individual compare_*.py script sequentially against the same epoch
-(or epoch range) and prints a combined summary at the end. Each child script
-still writes its own timestamped log under logs/.
+(or epoch range), collects structured child results, and writes one combined
+report directory.
 
 USAGE:
 ------
@@ -28,22 +28,36 @@ USAGE:
 """
 
 import argparse
+import json
 import os
 import re
 import shlex
+import shutil
 import subprocess
 import sys
+import tempfile
 from datetime import datetime
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
 
-# (key, script filename, extra args builder)
+from common import (  # noqa: E402
+    exit_code,
+    load_config,
+    redact_url,
+    render_summary,
+    resolve_path,
+    summary_payload,
+    write_report_files,
+)
+
+
 COMPARATORS = [
-    ("adapot",                   "compare_adapot.py"),
-    ("epoch_stake",              "compare_epoch_stake.py"),
-    ("reward_rest",              "compare_reward_rest.py"),
-    ("drep_amount",              "compare_drep_amount.py"),
-    ("drep_active_until",        "compare_drep_active_until.py"),
+    ("adapot", "compare_adapot.py"),
+    ("epoch_stake", "compare_epoch_stake.py"),
+    ("reward_rest", "compare_reward_rest.py"),
+    ("drep_amount", "compare_drep_amount.py"),
+    ("drep_active_until", "compare_drep_active_until.py"),
     ("gov_action_proposal_status", "compare_gov_action_proposal_status.py"),
 ]
 
@@ -88,45 +102,10 @@ def parse_child_output_line(line, summary):
         summary["total_mismatches"] = int(match.group(1))
 
 
-def format_count(value):
-    return "n/a" if value is None else str(value)
-
-
-def format_mismatch_epochs(result):
-    summary = result["summary"]
-    mismatch_epochs = summary["epochs_with_mismatch"]
-    total_epochs = summary["epochs_total"] or summary["epochs_compared"]
-    if mismatch_epochs is None or total_epochs is None:
-        return "n/a"
-    return f"{mismatch_epochs}/{total_epochs}"
-
-
-def result_status(result):
-    summary = result["summary"]
-    if result["rc"] != 0 or summary["reported_errors"] > 0:
-        return "ERROR"
-    if summary["total_mismatches"] is None:
-        return "UNKNOWN"
-    if summary["total_mismatches"] > 0:
-        return "MISMATCH"
-    return "OK"
-
-
 def format_epoch_scope(args):
     if args.epoch is not None:
         return f"epoch {args.epoch}"
     return f"epochs {args.start_epoch} -> {args.end_epoch}"
-
-
-def default_summary_file(started_at):
-    ts = started_at.strftime("%Y%m%d_%H%M%S")
-    return os.path.join(HERE, "logs", f"compare_all_summary_{ts}.log")
-
-
-def resolve_summary_file(path):
-    if os.path.isabs(path):
-        return path
-    return os.path.abspath(path)
 
 
 def build_epoch_args(args):
@@ -156,6 +135,8 @@ def build_passthrough_args(args):
         out += ["--store-schema", args.store_schema]
     if args.max_mismatches is not None:
         out += ["--max-mismatches", str(args.max_mismatches)]
+    if args.quiet:
+        out += ["--quiet"]
     return out
 
 
@@ -176,11 +157,54 @@ def select_comparators(args):
     return list(COMPARATORS)
 
 
-def run_one(label, script, extra_args, args):
+def safe_label(label):
+    return re.sub(r"[^A-Za-z0-9_.-]+", "_", label).strip("_")
+
+
+def load_child_result(label, rc, duration, result_json, fallback_summary):
+    if os.path.exists(result_json):
+        with open(result_json, "r", encoding="utf-8") as f:
+            payload = json.load(f)
+        result = payload.get("result")
+        if result is None and payload.get("results"):
+            result = payload["results"][0]
+        if result is not None:
+            result["return_code"] = rc
+            result["process_duration_seconds"] = round(duration, 3)
+            return result
+
+    errors = 1 if rc != 0 or fallback_summary["reported_errors"] else 0
+    total_mismatches = fallback_summary["total_mismatches"] or 0
+    status = "ERROR" if errors else ("MISMATCH" if total_mismatches else "OK")
+    return {
+        "label": label,
+        "status": status,
+        "epochs_compared": fallback_summary["epochs_compared"] or 0,
+        "epochs_with_mismatch": fallback_summary["epochs_with_mismatch"] or 0,
+        "total_mismatches": total_mismatches,
+        "errors": errors,
+        "mismatch_files": [],
+        "log_file": fallback_summary["log_file"],
+        "duration_seconds": round(duration, 3),
+        "return_code": rc,
+        "structured_result_missing": True,
+    }
+
+
+def run_one(label, script, extra_args, args, report_dir, child_results_dir):
+    result_json = os.path.join(child_results_dir, f"{safe_label(label)}.json")
     cmd = [sys.executable, "-u", os.path.join(HERE, script)]
     cmd += build_epoch_args(args)
     cmd += build_passthrough_args(args)
     cmd += extra_args
+    cmd += [
+        "--report-dir",
+        report_dir,
+        "--result-json",
+        result_json,
+        "--logs-dir",
+        args.logs_dir,
+    ]
 
     print(f"\n========================================================")
     print(f"  Running: {label}")
@@ -205,94 +229,40 @@ def run_one(label, script, extra_args, args):
 
     rc = process.wait()
     duration = (datetime.now() - started).total_seconds()
-    return {
-        "label": label,
-        "rc": rc,
-        "duration": duration,
-        "summary": summary,
-    }
+    return load_child_result(label, rc, duration, result_json, summary)
 
 
-def calculate_summary_counts(results):
-    failed = sum(1 for result in results if result_status(result) == "ERROR")
-    mismatched = sum(1 for result in results if result_status(result) == "MISMATCH")
-    unknown = sum(1 for result in results if result_status(result) == "UNKNOWN")
-    total_mismatches = sum(
-        result["summary"]["total_mismatches"]
-        for result in results
-        if result["summary"]["total_mismatches"] is not None
-    )
-    known_mismatch_counts = sum(
-        1 for result in results if result["summary"]["total_mismatches"] is not None
-    )
+def resolve_output_dirs(args):
+    reports_dir = os.path.join(HERE, "reports")
+    logs_dir = os.path.join(HERE, "logs")
+    file_cfg = {}
 
-    return failed, mismatched, unknown, total_mismatches, known_mismatch_counts
+    if args.config:
+        config_dir = os.path.dirname(os.path.abspath(args.config))
+        file_cfg = load_config(args.config)
+        if "reports_dir" in file_cfg:
+            reports_dir = resolve_path(file_cfg["reports_dir"], config_dir)
+        if "logs_dir" in file_cfg:
+            logs_dir = resolve_path(file_cfg["logs_dir"], config_dir)
+
+    if args.reports_dir:
+        reports_dir = resolve_path(args.reports_dir, os.getcwd())
+    if args.logs_dir:
+        logs_dir = resolve_path(args.logs_dir, os.getcwd())
+
+    return reports_dir, logs_dir, file_cfg
 
 
-def build_overall_summary_text(results, total_duration, started_at, finished_at, command, epoch_scope):
-    failed, mismatched, unknown, total_mismatches, known_mismatch_counts = calculate_summary_counts(results)
-    lines = []
-
-    lines.append("=" * 100)
-    lines.append("FINAL RESULT SUMMARY (compare_all)")
-    lines.append("=" * 100)
-    lines.append(f"  Started at        : {started_at.isoformat(timespec='seconds')}")
-    lines.append(f"  Finished at       : {finished_at.isoformat(timespec='seconds')}")
-    lines.append(f"  Command           : {command}")
-    lines.append(f"  Epoch scope       : {epoch_scope}")
-    lines.append(f"  Total runtime     : {total_duration:.1f}s")
-    lines.append(f"  Comparators run   : {len(results)}")
-    lines.append(f"  Status counts     : OK={sum(1 for r in results if result_status(r) == 'OK')}, "
-                 f"MISMATCH={mismatched}, ERROR={failed}, UNKNOWN={unknown}")
-    if known_mismatch_counts == len(results):
-        lines.append(f"  Total mismatches  : {total_mismatches}")
-    else:
-        lines.append(f"  Total mismatches  : {total_mismatches} known ({len(results) - known_mismatch_counts} unknown)")
-    lines.append("")
-    lines.append(f"  {'Comparator':<40} {'Status':<9} {'Epochs':>8} {'Bad epochs':>11} {'Mismatches':>11} {'RC':>4} {'Time(s)':>8}")
-    lines.append(f"  {'-'*40} {'-'*9} {'-'*8} {'-'*11} {'-'*11} {'-'*4} {'-'*8}")
-    for result in results:
-        summary = result["summary"]
-        lines.append(
-            f"  {result['label']:<40} "
-            f"{result_status(result):<9} "
-            f"{format_count(summary['epochs_compared']):>8} "
-            f"{format_mismatch_epochs(result):>11} "
-            f"{format_count(summary['total_mismatches']):>11} "
-            f"{result['rc']:>4} "
-            f"{result['duration']:>8.1f}"
-        )
-
-    lines.append("")
-    lines.append("  Logs:")
-    for result in results:
-        log_file = result["summary"]["log_file"] or "n/a"
-        lines.append(f"    {result['label']}: {log_file}")
-    lines.append("=" * 100)
-
-    return "\n".join(lines), failed, mismatched, unknown
+def resolve_summary_file(path, logs_dir, run_id):
+    if path:
+        return resolve_path(path, os.getcwd())
+    return os.path.join(logs_dir, f"compare_all_summary_{run_id}.log")
 
 
 def write_summary_file(summary_file, summary_text):
     os.makedirs(os.path.dirname(summary_file), exist_ok=True)
-    with open(summary_file, "w") as f:
+    with open(summary_file, "w", encoding="utf-8") as f:
         f.write(summary_text + "\n")
-
-
-def print_overall_summary(results, total_duration, started_at, finished_at, command, epoch_scope, summary_file):
-    summary_text, failed, mismatched, unknown = build_overall_summary_text(
-        results,
-        total_duration,
-        started_at,
-        finished_at,
-        command,
-        epoch_scope,
-    )
-
-    print("\n" + summary_text)
-    write_summary_file(summary_file, summary_text)
-    print(f"\nFinal summary written to: {summary_file}")
-    return failed, mismatched, unknown
 
 
 def main():
@@ -319,7 +289,6 @@ Comparator keys:
         help=f"Comma-separated reward types passed to compare_reward_rest.py (default: {','.join(REWARD_TYPES_DEFAULT)})",
     )
 
-    # Pass-through flags (mirror common.add_common_args)
     parser.add_argument("--config", metavar="FILE", help="Path to JSON config file")
     parser.add_argument("--dbsync-url", help="DB Sync connection URL")
     parser.add_argument("--dbsync-user", help="DB Sync username")
@@ -328,13 +297,15 @@ Comparator keys:
     parser.add_argument("--store-user", help="Yaci Store username")
     parser.add_argument("--store-password", help="Yaci Store password")
     parser.add_argument("--store-schema", help="Yaci Store schema name")
+    parser.add_argument("--reports-dir", help="Directory for structured reports")
+    parser.add_argument("--logs-dir", help="Directory for text logs")
     parser.add_argument("--quiet", action="store_true", help="Suppress child output and print only compare_all progress/summary")
     parser.add_argument("--max-mismatches", type=int, default=None,
-                        help="Limit mismatches printed per epoch in each child script")
+                        help="Limit mismatch samples printed/written per epoch in each child script")
     parser.add_argument(
         "--summary-file",
         metavar="FILE",
-        help="Write the final summary to this file (default: logs/compare_all_summary_<timestamp>.log)",
+        help="Also write the final text summary to this file (default: logs/compare_all_summary_<timestamp>.log)",
     )
 
     args = parser.parse_args()
@@ -347,36 +318,84 @@ Comparator keys:
         if args.end_epoch < args.start_epoch:
             parser.error("--end-epoch must be >= --start-epoch")
 
+    try:
+        args.reports_dir, args.logs_dir, file_cfg = resolve_output_dirs(args)
+    except (OSError, json.JSONDecodeError) as e:
+        parser.error(str(e))
+
     selected = select_comparators(args)
     reward_types = [t.strip() for t in args.reward_types.split(",") if t.strip()]
 
     started_at = datetime.now()
+    run_id = started_at.strftime("%Y%m%d_%H%M%S")
     command = shlex.join([sys.executable] + sys.argv)
     epoch_scope = format_epoch_scope(args)
-    summary_file = resolve_summary_file(args.summary_file) if args.summary_file else default_summary_file(started_at)
-    results = []
+    report_dir = os.path.join(args.reports_dir, f"compare_all_{run_id}")
+    summary_file = resolve_summary_file(args.summary_file, args.logs_dir, run_id)
+    os.makedirs(os.path.join(report_dir, "mismatches"), exist_ok=True)
 
-    for key, script in selected:
-        if key == "reward_rest":
-            for rtype in reward_types:
-                label = f"reward_rest (type={rtype})"
-                results.append(run_one(label, script, ["--reward-type", rtype], args))
-        else:
-            results.append(run_one(key, script, [], args))
+    print(f"Structured report directory: {report_dir}")
+    print(f"Text summary file: {summary_file}")
+
+    child_results_dir = tempfile.mkdtemp(prefix="compare_all_child_results_")
+    results = []
+    try:
+        for key, script in selected:
+            if key == "reward_rest":
+                for rtype in reward_types:
+                    label = f"reward_rest (type={rtype})"
+                    results.append(
+                        run_one(label, script, ["--reward-type", rtype], args, report_dir, child_results_dir)
+                    )
+            else:
+                results.append(run_one(key, script, [], args, report_dir, child_results_dir))
+    finally:
+        shutil.rmtree(child_results_dir, ignore_errors=True)
 
     finished_at = datetime.now()
-    total_duration = (finished_at - started_at).total_seconds()
-
-    failed, mismatched, unknown = print_overall_summary(
+    summary_text = render_summary(
         results,
-        total_duration,
+        "compare_all",
         started_at,
         finished_at,
         command,
         epoch_scope,
+        report_dir,
         summary_file,
     )
-    sys.exit(1 if failed or mismatched or unknown else 0)
+    payload = summary_payload(
+        results,
+        started_at,
+        finished_at,
+        command,
+        {
+            "start_epoch": args.epoch if args.epoch is not None else args.start_epoch,
+            "end_epoch": args.epoch if args.epoch is not None else args.end_epoch,
+        },
+        report_dir,
+        summary_file,
+        {
+            "selected": [key for key, _ in selected],
+            "reward_types": reward_types,
+            "dbsync_url": redact_url(args.dbsync_url or file_cfg.get("dbsync_url")),
+            "store_url": redact_url(args.store_url or file_cfg.get("store_url")),
+            "store_schema": args.store_schema or file_cfg.get("store_schema", "yaci_store"),
+            "max_mismatches": (
+                args.max_mismatches
+                if args.max_mismatches is not None
+                else file_cfg.get("max_mismatches", 0)
+            ),
+        },
+    )
+    summary_log, summary_json = write_report_files(report_dir, summary_text, payload)
+    write_summary_file(summary_file, summary_text)
+
+    print("\n" + summary_text)
+    print()
+    print(f"Summary log written to: {summary_log}")
+    print(f"Summary JSON written to: {summary_json}")
+    print(f"Text summary written to: {summary_file}")
+    sys.exit(exit_code(results))
 
 
 if __name__ == "__main__":

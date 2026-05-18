@@ -69,18 +69,39 @@ This script replaces EpochStakeDataComparator.java, with advantages:
 
 import argparse
 import os
+import shlex
 import sys
 import time
 from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import Logger, connect, add_common_args, resolve_config
+from common import (
+    Logger,
+    MismatchCsvWriter,
+    MismatchRecorder,
+    add_common_args,
+    connect,
+    exit_code,
+    finish_result,
+    new_result,
+    redact_url,
+    render_summary,
+    resolve_config,
+    run_report_dir,
+    summary_payload,
+    write_json,
+    write_report_files,
+)
+
+
+MISMATCH_FIELDS = ["epoch", "issue", "address", "pool_id", "dbsync_amount", "yaci_store_amount"]
 
 
 # ============================================================
 # Compare: epoch_stake
 # ============================================================
-def compare_epoch_stake(epoch, dbsync_url, store_url, store_schema, logger, max_mismatches, include_zero_amount):
+def compare_epoch_stake(epoch, dbsync_url, store_url, store_schema, logger,
+                        max_mismatches, include_zero_amount, mismatch_dir):
     amount_filter = "" if include_zero_amount else "AND es.amount <> 0"
     dbsync_query = f"""
         SELECT sa.view, es.amount, encode(ph.hash_raw, 'hex') as pool_id
@@ -133,7 +154,7 @@ def compare_epoch_stake(epoch, dbsync_url, store_url, store_schema, logger, max_
         conn.close()
     except Exception as e:
         logger.error(f"DB Sync query error for epoch {epoch}", e)
-        return -1
+        return -1, None
 
     # --- Fetch Yaci Store ---
     try:
@@ -150,11 +171,11 @@ def compare_epoch_stake(epoch, dbsync_url, store_url, store_schema, logger, max_
         conn.close()
     except Exception as e:
         logger.error(f"Yaci Store query error for epoch {epoch}", e)
-        return -1
+        return -1, None
 
     # --- Compare ---
-    mismatch_count = 0
-    truncated = False
+    writer = MismatchCsvWriter(mismatch_dir, f"epoch_stake_epoch_{epoch}", MISMATCH_FIELDS, max_mismatches)
+    recorder = MismatchRecorder(logger, writer, max_mismatches)
 
     if ignored_dbsync_zero_amount or ignored_store_zero_amount:
         logger.log(
@@ -162,37 +183,54 @@ def compare_epoch_stake(epoch, dbsync_url, store_url, store_schema, logger, max_
             f"DB Sync={ignored_dbsync_zero_amount}, Yaci Store={ignored_store_zero_amount}"
         )
 
-    def check_limit():
-        nonlocal truncated
-        if max_mismatches and mismatch_count >= max_mismatches:
-            if not truncated:
-                logger.log(f"  ... (reached limit of {max_mismatches} mismatches, skipping the rest)")
-                truncated = True
-            return True
-        return False
-
     for key, db_data in dbsync_map.items():
-        if check_limit():
-            break
         if key in store_map:
             store_data = store_map[key]
             if db_data["amount"] != store_data["amount"]:
-                mismatch_count += 1
-                logger.log(f"  Mismatch key: {key}")
-                logger.log(f"    DB Sync    : amount={db_data['amount']}")
-                logger.log(f"    Yaci Store : amount={store_data['amount']}")
+                recorder.record(
+                    {
+                        "epoch": epoch,
+                        "issue": "AMOUNT_MISMATCH",
+                        "address": db_data["address"],
+                        "pool_id": db_data["pool_id"],
+                        "dbsync_amount": db_data["amount"],
+                        "yaci_store_amount": store_data["amount"],
+                    },
+                    [
+                        f"  Mismatch key: {key}",
+                        f"    DB Sync    : amount={db_data['amount']}",
+                        f"    Yaci Store : amount={store_data['amount']}",
+                    ],
+                )
         else:
-            mismatch_count += 1
-            logger.log(f"  Key {key} present in DB Sync but MISSING in Yaci Store")
+            recorder.record(
+                {
+                    "epoch": epoch,
+                    "issue": "ONLY_IN_DBSYNC",
+                    "address": db_data["address"],
+                    "pool_id": db_data["pool_id"],
+                    "dbsync_amount": db_data["amount"],
+                    "yaci_store_amount": None,
+                },
+                [f"  Key {key} present in DB Sync but MISSING in Yaci Store"],
+            )
 
     for key in store_map:
-        if check_limit():
-            break
         if key not in dbsync_map:
-            mismatch_count += 1
-            logger.log(f"  Key {key} present in Yaci Store but MISSING in DB Sync")
+            store_data = store_map[key]
+            recorder.record(
+                {
+                    "epoch": epoch,
+                    "issue": "ONLY_IN_YACI",
+                    "address": store_data["address"],
+                    "pool_id": store_data["pool_id"],
+                    "dbsync_amount": None,
+                    "yaci_store_amount": store_data["amount"],
+                },
+                [f"  Key {key} present in Yaci Store but MISSING in DB Sync"],
+            )
 
-    return mismatch_count
+    return recorder.finish()
 
 
 # ============================================================
@@ -245,15 +283,21 @@ Examples:
     else:
         epochs = list(range(start_epoch, end_epoch + 1))
 
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_file = os.path.join("logs", f"epoch_stake_compare_{ts}.log")
+    started_at = datetime.now()
+    run_id = started_at.strftime("%Y%m%d_%H%M%S")
+    command = shlex.join([sys.executable] + sys.argv)
+    report_dir = run_report_dir(args, "compare_epoch_stake", run_id)
+    mismatch_dir = os.path.join(report_dir, "mismatches")
+    log_file = os.path.join(args.logs_dir, f"epoch_stake_compare_{run_id}.log")
+    os.makedirs(mismatch_dir, exist_ok=True)
     logger = Logger(log_file, quiet=args.quiet)
 
     logger.log("===== Starting Epoch Stake comparison =====")
     logger.log(f"Log file: {os.path.abspath(log_file)}")
+    logger.log(f"Report directory: {os.path.abspath(report_dir)}")
     logger.log(f"Epochs: {epochs[0]} -> {epochs[-1]} ({len(epochs)} epochs)")
-    logger.log(f"DB Sync URL: {args.dbsync_url}")
-    logger.log(f"Yaci Store URL: {args.store_url} (schema: {args.store_schema})")
+    logger.log(f"DB Sync URL: {redact_url(args.dbsync_url)}")
+    logger.log(f"Yaci Store URL: {redact_url(args.store_url)} (schema: {args.store_schema})")
     logger.log(
         "Zero-amount rows: "
         + ("included" if args.include_zero_amount else "ignored (DB Sync active-stake semantics)")
@@ -262,13 +306,15 @@ Examples:
         logger.log(f"Delay between epochs: {args.delay}s")
     logger.log()
 
-    total_mismatches = 0
-    epochs_with_mismatch = 0
+    result = new_result("epoch_stake")
+    result["epochs_compared"] = len(epochs)
+    result["log_file"] = os.path.abspath(log_file)
+    result_started = time.time()
 
     for i, epoch in enumerate(epochs):
         logger.log(f"############ Epoch {epoch} - epoch_stake ############")
 
-        count = compare_epoch_stake(
+        count, mismatch_file = compare_epoch_stake(
             epoch,
             args.dbsync_url,
             args.store_url,
@@ -276,16 +322,22 @@ Examples:
             logger,
             args.max_mismatches,
             args.include_zero_amount,
+            mismatch_dir,
         )
 
         if count < 0:
+            result["errors"] += 1
             logger.log(f"  Database connection error, skipping epoch {epoch}")
         elif count == 0:
             logger.log(f"  OK - All epoch_stake data matches")
         else:
-            epochs_with_mismatch += 1
-            total_mismatches += count
+            result["epochs_with_mismatch"] += 1
+            result["total_mismatches"] += count
+            if mismatch_file:
+                result["mismatch_files"].append(mismatch_file)
             logger.log(f"  MISMATCH: {count} mismatch(es)")
+            if mismatch_file:
+                logger.log(f"  Sample: {mismatch_file}")
 
         logger.log()
 
@@ -293,15 +345,48 @@ Examples:
         if args.delay > 0 and i < len(epochs) - 1:
             time.sleep(args.delay)
 
-    logger.log("=" * 50)
-    logger.log("SUMMARY (epoch_stake):")
-    logger.log(f"  Epochs compared     : {len(epochs)}")
-    logger.log(f"  Epochs w/ mismatch  : {epochs_with_mismatch}/{len(epochs)}")
-    logger.log(f"  Total mismatches    : {total_mismatches}")
-    logger.log("=" * 50)
+    result = finish_result(result, result_started)
+    finished_at = datetime.now()
+    epoch_scope_text = f"epochs {epochs[0]} -> {epochs[-1]}" if len(epochs) > 1 else f"epoch {epochs[0]}"
+    summary_text = render_summary(
+        [result],
+        "compare_epoch_stake",
+        started_at,
+        finished_at,
+        command,
+        epoch_scope_text,
+        report_dir,
+        os.path.abspath(log_file),
+    )
+    payload = summary_payload(
+        [result],
+        started_at,
+        finished_at,
+        command,
+        {"start_epoch": start_epoch, "end_epoch": end_epoch, "epochs": epochs},
+        report_dir,
+        os.path.abspath(log_file),
+        {
+            "dbsync_url": redact_url(args.dbsync_url),
+            "store_url": redact_url(args.store_url),
+            "store_schema": args.store_schema,
+            "include_zero_amount": args.include_zero_amount,
+            "max_mismatches": args.max_mismatches,
+            "delay": args.delay,
+            "reverse": args.reverse,
+        },
+    )
+    payload["result"] = result
 
-    if total_mismatches > 0:
-        logger.log(f"\nSee details at: {os.path.abspath(log_file)}")
+    logger.log(summary_text)
+    if args.result_json:
+        write_json(args.result_json, payload)
+    else:
+        summary_log, summary_json = write_report_files(report_dir, summary_text, payload)
+        logger.log()
+        logger.log(f"Summary log written to: {summary_log}")
+        logger.log(f"Summary JSON written to: {summary_json}")
+    sys.exit(exit_code([result]))
 
 
 if __name__ == "__main__":
