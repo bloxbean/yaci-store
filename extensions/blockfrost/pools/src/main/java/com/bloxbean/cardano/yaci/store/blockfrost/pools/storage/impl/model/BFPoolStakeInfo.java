@@ -1,6 +1,8 @@
 package com.bloxbean.cardano.yaci.store.blockfrost.pools.storage.impl.model;
 
+import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.math.RoundingMode;
 
 /**
  * Aggregated stake information for a pool from the latest epoch_stake snapshot.
@@ -35,7 +37,9 @@ public record BFPoolStakeInfo(
      */
     public double liveSize() {
         if (totalLiveStake == null || totalLiveStake.compareTo(BigInteger.ZERO) == 0 || liveStake == null) return 0.0;
-        return liveStake.doubleValue() / totalLiveStake.doubleValue();
+        return new BigDecimal(liveStake)
+                .divide(new BigDecimal(totalLiveStake), 20, RoundingMode.HALF_UP)
+                .doubleValue();
     }
 
     /**
@@ -43,7 +47,9 @@ public record BFPoolStakeInfo(
      */
     public double activeSize() {
         if (totalActiveStake == null || totalActiveStake.compareTo(BigInteger.ZERO) == 0 || activeStake == null) return 0.0;
-        return activeStake.doubleValue() / totalActiveStake.doubleValue();
+        return new BigDecimal(activeStake)
+                .divide(new BigDecimal(totalActiveStake), 20, RoundingMode.HALF_UP)
+                .doubleValue();
     }
 
     /**
@@ -65,7 +71,10 @@ public record BFPoolStakeInfo(
                 ? circulationSupply
                 : totalLiveStake;
         if (denominator == null || denominator.compareTo(BigInteger.ZERO) == 0) return 0.0;
-        double saturationThreshold = denominator.doubleValue() / nopt;
-        return liveStake.doubleValue() / saturationThreshold;
+        BigDecimal saturationThreshold = new BigDecimal(denominator)
+                .divide(BigDecimal.valueOf(nopt), 20, RoundingMode.HALF_UP);
+        return new BigDecimal(liveStake)
+                .divide(saturationThreshold, 20, RoundingMode.HALF_UP)
+                .doubleValue();
     }
 }
