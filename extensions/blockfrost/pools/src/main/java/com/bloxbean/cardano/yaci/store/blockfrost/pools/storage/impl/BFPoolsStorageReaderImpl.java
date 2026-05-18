@@ -1036,19 +1036,6 @@ public class BFPoolsStorageReaderImpl implements BFPoolsStorageReader {
                 .toList();
     }
 
-    private Table<?> aggregatedAddressAmountTable(Table<?> sourceTable, String totalAlias, String tableAlias) {
-        Field<String> address = field(name(sourceTable.getName(), "address"), String.class);
-        Field<BigInteger> amount = field(name(sourceTable.getName(), "amount"), BigInteger.class);
-
-        return dsl.select(
-                        address.as("address"),
-                        coalesce(sum(amount), BigInteger.ZERO).as(totalAlias)
-                )
-                .from(sourceTable)
-                .groupBy(address)
-                .asTable(tableAlias);
-    }
-
     private Table<?> aggregatedAddressAmountTableForAddresses(
             Table<?> sourceTable,
             Table<?> addressesTable,
@@ -1067,6 +1054,25 @@ public class BFPoolsStorageReaderImpl implements BFPoolsStorageReader {
                 .where(sourceAddress.in(
                         dsl.select(candidateAddressField).from(addressesTable)
                 ))
+                .groupBy(sourceAddress)
+                .asTable(tableAlias);
+    }
+
+    private Table<?> aggregatedAddressAmountTableInList(
+            Table<?> sourceTable,
+            List<String> addresses,
+            String totalAlias,
+            String tableAlias
+    ) {
+        Field<String> sourceAddress = field(name(sourceTable.getName(), "address"), String.class);
+        Field<BigInteger> amount = field(name(sourceTable.getName(), "amount"), BigInteger.class);
+
+        return dsl.select(
+                        sourceAddress.as("address"),
+                        coalesce(sum(amount), BigInteger.ZERO).as(totalAlias)
+                )
+                .from(sourceTable)
+                .where(sourceAddress.in(addresses))
                 .groupBy(sourceAddress)
                 .asTable(tableAlias);
     }
@@ -1160,10 +1166,17 @@ public class BFPoolsStorageReaderImpl implements BFPoolsStorageReader {
             Table<?> currentDelegators = currentDelegatorStateTable();
             Field<String> addressField = field(name("current_delegators", "address"), String.class);
             Field<String> poolIdField = field(name("current_delegators", "pool_id"), String.class);
-            Table<?> rewardTotals = aggregatedAddressAmountTable(REWARD, "reward_total", "reward_totals");
-            Table<?> rewardRestTotals = aggregatedAddressAmountTable(REWARD_REST, "reward_rest_total", "reward_rest_totals");
-            Table<?> instantRewardTotals = aggregatedAddressAmountTable(INSTANT_REWARD, "instant_reward_total", "instant_reward_totals");
-            Table<?> withdrawalTotals = aggregatedAddressAmountTable(WITHDRAWAL, "withdrawal_total", "withdrawal_totals");
+
+            Table<?> poolDelegators = dsl.select(addressField)
+                    .from(currentDelegators)
+                    .where(poolIdField.eq(poolIdHex))
+                    .asTable("pool_delegator_addresses");
+            Field<String> poolDelegatorAddressField = field(name("pool_delegator_addresses", "address"), String.class);
+
+            Table<?> rewardTotals = aggregatedAddressAmountTableForAddresses(REWARD, poolDelegators, poolDelegatorAddressField, "reward_total", "reward_totals");
+            Table<?> rewardRestTotals = aggregatedAddressAmountTableForAddresses(REWARD_REST, poolDelegators, poolDelegatorAddressField, "reward_rest_total", "reward_rest_totals");
+            Table<?> instantRewardTotals = aggregatedAddressAmountTableForAddresses(INSTANT_REWARD, poolDelegators, poolDelegatorAddressField, "instant_reward_total", "instant_reward_totals");
+            Table<?> withdrawalTotals = aggregatedAddressAmountTableForAddresses(WITHDRAWAL, poolDelegators, poolDelegatorAddressField, "withdrawal_total", "withdrawal_totals");
 
             StakeAddressBalanceView stakeBalanceView = StakeAddressBalanceView.STAKE_ADDRESS_BALANCE_VIEW.as("stake_balance_view");
             Field<BigInteger> rewardTotalField = coalesce(field(name("reward_totals", "reward_total"), BigInteger.class), BigInteger.ZERO);
@@ -1257,10 +1270,12 @@ public class BFPoolsStorageReaderImpl implements BFPoolsStorageReader {
         Table<?> currentDelegators = currentDelegatorStateTable();
         Field<String> addressField = field(name("current_delegators", "address"), String.class);
         Field<String> poolIdField = field(name("current_delegators", "pool_id"), String.class);
-        Table<?> rewardTotals = aggregatedAddressAmountTable(REWARD, "reward_total", "reward_totals");
-        Table<?> rewardRestTotals = aggregatedAddressAmountTable(REWARD_REST, "reward_rest_total", "reward_rest_totals");
-        Table<?> instantRewardTotals = aggregatedAddressAmountTable(INSTANT_REWARD, "instant_reward_total", "instant_reward_totals");
-        Table<?> withdrawalTotals = aggregatedAddressAmountTable(WITHDRAWAL, "withdrawal_total", "withdrawal_totals");
+
+        // Pool owners are a small list — scope aggregations by IN list to avoid full-table scans
+        Table<?> rewardTotals = aggregatedAddressAmountTableInList(REWARD, ownerAddresses, "reward_total", "reward_totals");
+        Table<?> rewardRestTotals = aggregatedAddressAmountTableInList(REWARD_REST, ownerAddresses, "reward_rest_total", "reward_rest_totals");
+        Table<?> instantRewardTotals = aggregatedAddressAmountTableInList(INSTANT_REWARD, ownerAddresses, "instant_reward_total", "instant_reward_totals");
+        Table<?> withdrawalTotals = aggregatedAddressAmountTableInList(WITHDRAWAL, ownerAddresses, "withdrawal_total", "withdrawal_totals");
 
         StakeAddressBalanceView stakeBalanceView = StakeAddressBalanceView.STAKE_ADDRESS_BALANCE_VIEW.as("stake_balance_view");
         Field<BigInteger> rewardTotalField = coalesce(field(name("reward_totals", "reward_total"), BigInteger.class), BigInteger.ZERO);
