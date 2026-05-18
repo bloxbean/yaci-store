@@ -616,6 +616,20 @@ public class BFPoolsStorageReaderImpl implements BFPoolsStorageReader {
     }
 
     private Table<?> latestPoolStatusTable(String status, String alias) {
+        if (BlockfrostDialectUtil.isPostgres(dsl)) {
+            return dsl.select(
+                            field("DISTINCT ON (pool_id) pool_id", String.class).as("pool_id"),
+                            POOL.SLOT.as("slot"),
+                            POOL.TX_HASH.as("tx_hash"),
+                            POOL.TX_INDEX.as("tx_index"),
+                            POOL.CERT_INDEX.as("cert_index")
+                    )
+                    .from(POOL)
+                    .where(POOL.STATUS.eq(status))
+                    .orderBy(POOL.POOL_ID.asc(), POOL.SLOT.desc(), POOL.TX_INDEX.desc(), POOL.CERT_INDEX.desc())
+                    .asTable(alias);
+        }
+
         Field<Integer> rn = rowNumber()
                 .over(partitionBy(POOL.POOL_ID).orderBy(POOL.SLOT.desc(), POOL.TX_INDEX.desc(), POOL.CERT_INDEX.desc()))
                 .as("rn");
