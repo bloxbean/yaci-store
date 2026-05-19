@@ -8,10 +8,12 @@ import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.DelegationsAnd
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.helper.LocalClientProvider;
 import com.bloxbean.cardano.yaci.store.account.domain.StakeAccountRewardInfo;
+import com.bloxbean.cardano.yaci.store.account.service.StakeAccountRewardProvider;
 import com.bloxbean.cardano.yaci.store.core.service.local.LocalClientProviderManager;
 import com.bloxbean.cardano.yaci.store.core.storage.api.EraStorage;
 import jakarta.annotation.Nullable;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
@@ -27,10 +29,18 @@ import java.util.Set;
 public class AccountService {
     private final EraStorage eraStorage;
     private final LocalClientProviderManager localClientProviderManager;
+    private final StakeAccountRewardProvider stakeAccountRewardProvider;
 
     public AccountService(@Nullable LocalClientProviderManager localClientProviderManager, EraStorage eraStorage) {
+        this(localClientProviderManager, eraStorage, null);
+    }
+
+    @Autowired
+    public AccountService(@Nullable LocalClientProviderManager localClientProviderManager, EraStorage eraStorage,
+                          @Nullable StakeAccountRewardProvider stakeAccountRewardProvider) {
         this.eraStorage = eraStorage;
         this.localClientProviderManager = localClientProviderManager;
+        this.stakeAccountRewardProvider = stakeAccountRewardProvider;
     }
 
     /**
@@ -40,8 +50,19 @@ public class AccountService {
      * @return StakeAccountInfo
      */
     public Optional<StakeAccountRewardInfo> getAccountInfo(String stakeAddress) {
-        if (localClientProviderManager == null)
-            throw new IllegalStateException("LocalClientProvider is not initialized. Please check n2c configuration.");
+        var localAccountInfo = getAccountInfoFromLocalState(stakeAddress);
+        if (localAccountInfo.isPresent()) {
+            return localAccountInfo;
+        }
+
+        return Optional.ofNullable(stakeAccountRewardProvider)
+                .flatMap(provider -> provider.getAccountInfo(stakeAddress));
+    }
+
+    private Optional<StakeAccountRewardInfo> getAccountInfoFromLocalState(String stakeAddress) {
+        if (localClientProviderManager == null) {
+            return Optional.empty();
+        }
 
         Optional<LocalClientProvider> localClientProvider = localClientProviderManager.getLocalClientProvider();
         try {
@@ -82,7 +103,7 @@ public class AccountService {
 
             return Optional.of(new StakeAccountRewardInfo(stakeAddress, poolId, rewards));
         } finally {
-            localClientProviderManager.close(localClientProvider.get());
+            localClientProvider.ifPresent(localClientProviderManager::close);
         }
     }
 }

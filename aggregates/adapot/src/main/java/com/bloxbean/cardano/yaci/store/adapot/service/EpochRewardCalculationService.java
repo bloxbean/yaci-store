@@ -27,6 +27,7 @@ import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionStorageRea
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.cardanofoundation.rewards.calculation.EpochCalculation;
+import org.cardanofoundation.rewards.calculation.config.NetworkConfig;
 import org.cardanofoundation.rewards.calculation.domain.*;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -68,11 +69,20 @@ public class EpochRewardCalculationService {
 
     @Transactional(readOnly = true)
     public RewardsCalcInput fetchRewardCalcInputs(int epoch) {
+        var networkConfig = networkConfigService.getNetworkConfig((int) storeProperties.getProtocolMagic(), epoch);
+        return fetchRewardCalcInputs(epoch, networkConfig);
+    }
+
+    private RewardsCalcInput fetchRewardCalcInputs(int epoch, NetworkConfig networkConfig) {
         //Calculating rewards at epoch "epoch"
         //Block producing epoch is epoch - 1 (Fee + MIR + DeRegistration)
         //Stake snapshot epoch is epoch - 2 (Stake, Protocol Parameters)
 
-        Era epochMinusTwoEra = eraService.getEraForEpoch(epoch - 2);
+        int activeEpoch = epoch - 2;
+        Era epochMinusTwoEra = eraService.getEraForEpoch(activeEpoch);
+        // If reward calculation is moved from epoch boundary to after the stabilization window,
+        // re-check this boundary.
+        boolean postVasilRewardRules = epoch > networkConfig.getVasilHardforkEpoch();
 
         var nonByronEpoch = eraService.getFirstNonByronEpoch().orElse(null);
         if (nonByronEpoch == null)
@@ -111,9 +121,16 @@ public class EpochRewardCalculationService {
                     .orElseThrow(() -> new RuntimeException("Protocol parameters not found for epoch " + (epoch - 2)));
         }
 
+        BigDecimal decentralisation = protocolParams.getDecentralisationParam() != null ?
+                safeRatio(protocolParams.getDecentralisationParam()) : BigDecimal.ZERO;
+        if (postVasilRewardRules) {
+            // Babbage/Vasil removed the d parameter. For post-Vasil reward rules,
+            // eta must be based on blocks produced by pools, not OBFT block count.
+            decentralisation = BigDecimal.ZERO;
+        }
+
         ProtocolParameters rewardProtocolParameters = ProtocolParameters.builder()
-                .decentralisation(protocolParams.getDecentralisationParam() != null?
-                        safeRatio(protocolParams.getDecentralisationParam()) : BigDecimal.ZERO)
+                .decentralisation(decentralisation)
                 .treasuryGrowRate(safeRatio(protocolParams.getTreasuryGrowthRate()))
                 .monetaryExpandRate(safeRatio(protocolParams.getExpansionRate()))
                 .optimalPoolCount(protocolParams.getNOpt())
@@ -121,7 +138,7 @@ public class EpochRewardCalculationService {
                 .build();
 
         //Get epoch info
-        var epochInfo = epochInfoService.getEpochInfo(epoch - 2) //should we do epoch - 2 as it's already checking active epoch
+        var epochInfo = epochInfoService.getEpochInfo(activeEpoch) //should we do epoch - 2 as it's already checking active epoch
                 .orElse(null);
         //TODO: Should we throw exception here ?
 
@@ -162,16 +179,25 @@ public class EpochRewardCalculationService {
         }
 
         //Blocks made by pools in epoch
-        List<PoolBlock> blocksMadeByPoolsInEpoch = blockInfoService.getPoolBlockCount(epoch - 2) //active epoch //TODO --  check epoch value
+        List<PoolBlock> blocksMadeByPoolsInEpoch = blockInfoService.getPoolBlockCount(activeEpoch) //active epoch //TODO --  check epoch value
                 .stream().map(poolBlock -> PoolBlock.builder()
                         .poolId(poolBlock.getPoolId())
                         .blockCount(poolBlock.getBlocks())
                         .build()).toList();
 
+        int poolBlockCount = blocksMadeByPoolsInEpoch.stream()
+                .mapToInt(poolBlock -> poolBlock.getBlockCount() != null ? poolBlock.getBlockCount() : 0)
+                .sum();
+
+        if (postVasilRewardRules && epochInfo != null) {
+            epochInfo.setBlockCount(poolBlockCount);
+            epochInfo.setNonOBFTBlockCount(poolBlockCount);
+        }
+
         //hex pool ids
         List<String> poolIds = blocksMadeByPoolsInEpoch.stream().map(PoolBlock::getPoolId).distinct().toList();
 
-        List<PoolState> poolStates = poolStateService.getHistoryOfAllPoolsInEpoch(epoch -2, blocksMadeByPoolsInEpoch);
+        List<PoolState> poolStates = poolStateService.getHistoryOfAllPoolsInEpoch(activeEpoch, blocksMadeByPoolsInEpoch);
         List<String> bech32PoolIds = poolIds.stream().map(poolId -> PoolUtil.getBech32PoolId(poolId)).toList();
 
         System.out.println("Pool ids\n" + JsonUtil.getPrettyJson(bech32PoolIds.stream().sorted().toList()));
@@ -294,7 +320,7 @@ public class EpochRewardCalculationService {
                     .build();
         }
 
-        var rewardCalcInputs = fetchRewardCalcInputs(epoch);
+        var rewardCalcInputs = fetchRewardCalcInputs(epoch, networkConfig);
 
         if(rewardCalcInputs == null) {
             log.error("Reward calculation inputs are null for epoch " + epoch);
