@@ -329,3 +329,17 @@ rollback:
         type: "epoch"
         column: "epoch"
         operator: ">="
+
+    - name: "drep_pv9_stale_clear_event_cache"
+      operation: "DELETE"
+      condition:
+        type: "epoch"
+        column: "pv9_max_epoch"
+        operator: ">="
+
+    - name: "drep_pv9_stale_clear_event"
+      operation: "DELETE"
+      condition:
+        type: "epoch"
+        column: "pv9_max_epoch"
+        operator: ">="
