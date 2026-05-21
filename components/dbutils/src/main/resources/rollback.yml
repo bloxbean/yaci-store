@@ -287,6 +287,13 @@ rollback:
         column: "slot"
         operator: ">"
           
+    - name: "epoch_nonce"
+      operation: "DELETE"
+      condition:
+        type: "epoch"
+        column: "epoch"
+        operator: ">="
+
     - name: "epoch_stake"
       operation: "DELETE"
       condition:

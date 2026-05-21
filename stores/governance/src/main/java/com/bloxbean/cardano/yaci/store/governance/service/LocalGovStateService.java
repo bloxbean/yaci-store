@@ -139,7 +139,8 @@ public class LocalGovStateService {
         if (localClientProviderManager == null)
             throw new IllegalStateException("LocalClientProvider is not initialized. Please check n2c configuration.");
 
-        Optional<LocalClientProvider> localClientProvider = localClientProviderManager.getLocalClientProvider();
+        Optional<LocalClientProvider> localClientProvider
+                = localClientProviderManager != null? localClientProviderManager.getLocalClientProvider(): Optional.empty();
 
         try {
             var localStateQueryClient = localClientProvider.map(LocalClientProvider::getLocalStateQueryClient).orElse(null);

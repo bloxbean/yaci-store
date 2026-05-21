@@ -32,6 +32,20 @@ subprojects {
         version = "${project.version}".replace("-SNAPSHOT", "-${commit_id}-SNAPSHOT")
     }
 
+    plugins.withId('com.gorylenko.gradle-git-properties') {
+        gitProperties {
+            failOnNoGitDirectory = false
+            // In git worktrees, .git is a file pointing to the real git dir.
+            // JGit may not resolve this, so point to the main repo's .git directory.
+            def dotGit = rootProject.file('.git')
+            if (dotGit.isFile()) {
+                def gitDirLine = dotGit.text.trim()
+                def mainGitDir = file(gitDirLine.replace('gitdir: ', '')).parentFile.parentFile
+                dotGitDirectory = mainGitDir
+            }
+        }
+    }
+
     dependencyManagement {
         imports {
             mavenBom("org.springframework.boot:spring-boot-dependencies:${springBootVersion}")
@@ -225,7 +239,12 @@ task dockerZip(type: Zip) {
 }
 
 def getCheckedOutGitCommitHash() {
-    grgit.head().abbreviatedId
+    try {
+        grgit.head().abbreviatedId
+    } catch (Exception e) {
+        // Fallback for git worktrees where grgit may not resolve properly
+        'git rev-parse --short HEAD'.execute(null, project.rootDir).text.trim()
+    }
 }
 
 ext.ossrhUsername = System.getenv('MAVEN_USERNAME')
