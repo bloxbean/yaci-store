@@ -24,6 +24,7 @@ public class BFProperties {
             private Address address = new Address();
             private Asset asset = new Asset();
             private Blocks blocks = new Blocks();
+            private Metadata metadata = new Metadata();
 
             @Getter
             @Setter
@@ -46,6 +47,12 @@ public class BFProperties {
             @Getter
             @Setter
             public static final class Blocks {
+                private boolean enabled = false;
+            }
+
+            @Getter
+            @Setter
+            public static final class Metadata {
                 private boolean enabled = false;
             }
 

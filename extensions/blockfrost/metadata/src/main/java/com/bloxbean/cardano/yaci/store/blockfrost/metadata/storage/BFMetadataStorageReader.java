@@ -7,6 +7,5 @@ import java.util.List;
 
 public interface BFMetadataStorageReader {
 
-
     List<BFMetadataLabelDto> findLabelsWithCount(int page, int count, Order order);
 }
