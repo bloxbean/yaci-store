@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.adminui.controller;
 import com.bloxbean.cardano.yaci.store.adminui.AdminUiProperties;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.SyncStatus;
+import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import com.bloxbean.cardano.yaci.store.core.service.StartService;
 import com.bloxbean.cardano.yaci.store.core.service.SyncStatusService;
 import io.swagger.v3.oas.annotations.Hidden;
@@ -16,6 +17,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/admin-ui/sync")
 @RequiredArgsConstructor
+@ReadOnly(false)
 @Hidden
 public class SyncStatusController {
     private final SyncStatusService syncStatusService;

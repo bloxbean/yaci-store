@@ -88,4 +88,8 @@ public class RewardApiService {
                 .stream().map(RewardInfoDto::toDto).toList();
     }
 
+    public WithdrawableRewardDto getWithdrawableRewardByAddress(String address) {
+        return WithdrawableRewardDto.toDto(rewardStorageReader.findWithdrawableRewardByAddress(address));
+    }
+
 }

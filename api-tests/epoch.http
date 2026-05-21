@@ -11,6 +11,9 @@ GET {{base_url}}/api/v1/epochs/latest/parameters
         client.assert(response.body.coins_per_utxo_size === "4310", "coins_per_utxo_size is not 4310. Actual value: " + response.body.coins_per_utxo_size)
         client.assert(response.body.cost_models.PlutusV1 !== null, "Plutus V1 Cost model is null")
         client.assert(response.body.cost_models.PlutusV2 !== null, "Plutus V2 Cost model is null")
+        client.assert(response.body.cost_models_raw.PlutusV1 !== null, "Plutus V1 Cost model is null")
+        client.assert(response.body.cost_models_raw.PlutusV2 !== null, "Plutus V2 Cost model is null")
+        client.assert(response.body.cost_models_raw.PlutusV3 !== null, "Plutus V3 Cost model is null")
     });
 %}
 
@@ -39,6 +42,9 @@ GET {{base_url}}/api/v1/epochs/{{current_epoch}}/parameters
         client.assert(response.body.coins_per_utxo_size === "4310", "coins_per_utxo_size is not 4310. Actual value: " + response.body.coins_per_utxo_size)
         client.assert(response.body.cost_models.PlutusV1 !== null, "Plutus V1 Cost model is null")
         client.assert(response.body.cost_models.PlutusV2 !== null, "Plutus V2 Cost model is null")
+        client.assert(response.body.cost_models_raw.PlutusV1 !== null, "Plutus V1 Cost model is null")
+        client.assert(response.body.cost_models_raw.PlutusV2 !== null, "Plutus V2 Cost model is null")
+        client.assert(response.body.cost_models_raw.PlutusV3 !== null, "Plutus V3 Cost model is null")
     });
 %}
 

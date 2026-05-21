@@ -58,6 +58,7 @@ include 'aggregates:epoch-aggr'
 include 'aggregates:adapot'
 include 'aggregates:governance-rules'
 include 'aggregates:governance-aggr'
+include 'aggregates:epoch-nonce'
 include 'aggregates:analytics-store'
 
 include ':starters:spring-boot-starter'
@@ -100,10 +101,16 @@ project(':extensions:blockfrost:blockfrost-asset').projectDir = new File('extens
 include ':extensions:blockfrost:blockfrost-block'
 project(':extensions:blockfrost:blockfrost-block').projectDir = new File('extensions/blockfrost/block')
 
+include ':extensions:blockfrost:blockfrost-account'
+project(':extensions:blockfrost:blockfrost-account').projectDir = new File('extensions/blockfrost/account')
+
 include ':extensions:blockfrost:blockfrost-common'
 project(':extensions:blockfrost:blockfrost-common').projectDir = new File('extensions/blockfrost/common')
 
 include ':extensions:blockfrost:blockfrost-metadata'
 project(':extensions:blockfrost:blockfrost-metadata').projectDir = new File('extensions/blockfrost/metadata')
+
+include ':extensions:blockfrost:blockfrost-transaction'
+project(':extensions:blockfrost:blockfrost-transaction').projectDir = new File('extensions/blockfrost/transaction')
 
 include 'e2e-tests'

@@ -1,0 +1,150 @@
+import { Callout } from 'nextra/components'
+
+# Analytics Store
+
+<Callout type="info">
+Analytics Store is available since **2.1.0-pre1**.
+</Callout>
+
+The Analytics Store exports Cardano blockchain data from PostgreSQL to Parquet files for analytical workloads. It supports both direct Parquet file export and DuckLake-managed catalogs with ACID transactions, time-travel queries, and schema evolution.
+
+## Quickstart
+
+### 1. Enable analytics in your configuration
+
+Activate the `analytics` Spring profile to enable analytics export.
+
+If you also need ledger state data (e.g., epoch stake, rewards) in your analytics files, enable both `ledger-state` and `analytics` profiles together.
+
+**Docker** — set in `config/env`:
+
+```env
+# Analytics only
+SPRING_PROFILES_ACTIVE=analytics
+
+# Analytics with ledger state data
+SPRING_PROFILES_ACTIVE=ledger-state,analytics
+```
+
+**Zip** — pass to the start script:
+
+```bash
+# Analytics only
+./bin/start.sh analytics
+
+# Analytics with ledger state data
+./bin/start.sh ledger-state,analytics
+```
+
+### 2. Start yaci-store
+
+By default, analytics exports are **deferred until the sync reaches chain tip** (`yaci.store.analytics.continuous-sync.export-after-sync=true`). This is recommended on mainnet to optimize resource usage during the initial sync. Set to `false` if you want exports to run during the sync.
+
+Once the sync reaches tip, exports begin automatically via the `ContinuousSyncScheduler`:
+- Uses adaptive gap detection to find and export missing daily and epoch partitions
+- **Catching up**: checks every 1 minute by default (`yaci.store.analytics.continuous-sync.catch-up-interval-minutes`)
+- **Fully synced**: checks every 15 minutes by default (`yaci.store.analytics.continuous-sync.sync-check-interval-minutes`)
+
+Exported files are written to `./data/analytics/` by default.
+
+### Docker: Increase PostgreSQL Shared Memory
+
+If running via Docker with the `ledger-state` profile enabled, increase the PostgreSQL shared memory to avoid memory issues. Edit `compose/postgres-compose.yml`:
+
+```yaml
+shm_size: 4g  # Recommended: 4g or more (default is 2g)
+```
+
+Also, configure the [DuckDB memory limit](/docs/v2/analytics/configuration#duckdb-memory-usage-in-jvm) to prevent OOM issues, especially in containerized environments.
+
+## Architecture
+
+### Data Flow
+
+```
+PostgreSQL (blockchain data)
+  |
+  v
+DuckDB (in-process, via JDBC)
+  |
+  +---> Parquet files (direct export)
+  |         or
+  +---> DuckLake catalog --> Parquet files (managed export)
+```
+
+### Module Structure
+
+```
+analytics/
+  admin/           - Admin REST controller and service
+  config/          - Spring configuration and properties
+  ducklake/        - DuckLake catalog initialization
+  exporter/        - 47 built-in table exporters (31 daily + 16 epoch)
+  gap/             - Gap detection for continuous sync
+  helper/          - DuckDB connection helper utilities
+  query/           - DuckLake query controller and service
+  scheduler/       - Export schedulers and recovery services
+  state/           - Export state management (JPA entities)
+  writer/          - Parquet and DuckLake writer services
+```
+
+### Schedulers
+
+| Scheduler | Schedule | Purpose |
+|---|---|---|
+| `ContinuousSyncScheduler` | Adaptive: 1 min (catching up) / 15 min (synced) | Detects and fills daily + epoch export gaps via `UniversalExportService` |
+| `StaleExportRecoveryService` | On startup + shutdown | Recovers stuck IN_PROGRESS exports on application lifecycle events |
+
+## Built-in Table Exporters
+
+The module includes 47 built-in table exporters covering all indexed Cardano data. Each exporter is auto-discovered by the `TableExporterRegistry`.
+
+### Daily Tables (31 — partitioned by date)
+
+`address`, `address_balance`, `address_tx_amount`, `address_utxo`, `assets`, `block`, `committee_deregistration`, `committee_registration`, `cost_model`, `datum`, `delegation`, `delegation_vote`, `drep`, `drep_registration`, `gov_action_proposal`, `invalid_transaction`, `pool`, `pool_registration`, `pool_retirement`, `protocol_params_proposal`, `rollback`, `script`, `stake_address_balance`, `stake_registration`, `transaction`, `transaction_metadata`, `transaction_scripts`, `transaction_witness`, `tx_input`, `voting_procedure`, `withdrawal`
+
+> **Note:** The `address` table is empty by default because address saving is disabled. To populate it, enable `store.utxo.save-address=true` in your configuration.
+
+### Epoch Tables (16 — partitioned by epoch)
+
+`adapot`, `committee`, `committee_member`, `committee_state`, `constitution`, `drep_dist`, `epoch`, `epoch_param`, `epoch_stake`, `gov_action_proposal_status`, `gov_epoch_activity`, `instant_reward`, `mir`, `reward`, `reward_rest`, `unclaimed_reward_rest`
+
+### Selecting Specific Tables
+
+There are two ways to control which tables are exported:
+
+**Option 1 — Whitelist (enable only specific tables):**
+
+```properties
+# Only these tables will be exported; all others are skipped
+yaci.store.analytics.enabled-tables=transaction,address_utxo,block
+```
+
+**Option 2 — Per-exporter disable (disable individual tables):**
+
+```properties
+# Disable specific exporters while keeping all others enabled
+yaci.store.analytics.exporter.reward.enabled=false
+yaci.store.analytics.exporter.epoch_stake.enabled=false
+```
+
+Both options can be combined: per-exporter flags are evaluated first, then the whitelist filter is applied.
+
+## Export State Management
+
+Each export is tracked in the `analytics_export_state` table with status transitions:
+
+```
+PENDING --> IN_PROGRESS --> COMPLETED
+                |
+                +--> FAILED --> IN_PROGRESS (retried on next scheduler run)
+```
+
+- **PENDING**: initial state when a new export record is created
+- **IN_PROGRESS**: export is running; `retryCount` increments on each retry attempt
+- **COMPLETED**: export finished successfully
+- **FAILED**: export failed; gap detection automatically retries it on the next scheduler run. Use the [admin API](/docs/v2/analytics/configuration#admin-api) to manually reset if needed.
+
+`StaleExportRecoveryService` handles two lifecycle scenarios:
+- **On startup**: resets stale `IN_PROGRESS` exports (stuck due to a previous crash, exceeding `stale-timeout-minutes`) to `FAILED` so they are retried on the next scheduler run
+- **On shutdown**: resets all active `IN_PROGRESS` exports to `FAILED` to prevent inconsistent state after the application stops

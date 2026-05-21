@@ -189,6 +189,7 @@ duckdb -c "
 | `yaci.store.analytics.continuous-sync.buffer-days` | `2` | Buffer days for continuous sync |
 | `yaci.store.analytics.continuous-sync.sync-check-interval-minutes` | `15` | Gap detection interval when fully synced |
 | `yaci.store.analytics.continuous-sync.catch-up-interval-minutes` | `1` | Gap detection interval when catching up |
+| `yaci.store.analytics.continuous-sync.export-after-sync` | `true` | Defer exports until the sync reaches chain tip. Set `false` to export during the sync |
 | `yaci.store.analytics.parquet-export.codec` | `ZSTD` | Compression codec |
 | `yaci.store.analytics.parquet-export.compression-level` | `3` | ZSTD compression level (1-22) |
 | `yaci.store.analytics.parquet-export.row-group-size` | `-1` | Parquet row group size (-1 = DuckDB default ~122,880 rows) |
@@ -198,7 +199,10 @@ duckdb -c "
 | `yaci.store.analytics.ducklake.catalog-password` | _(main datasource)_ | PostgreSQL catalog password (used when `catalog-type=postgresql`) |
 | `yaci.store.analytics.ducklake.catalog-path` | `./data/analytics/ducklake.catalog.db` | DuckDB catalog file path |
 | `yaci.store.analytics.duckdb.memory-limit` | _(empty = DuckDB default)_ | DuckDB buffer manager memory limit (e.g., `1GB`, `512MB`) |
-| `yaci.store.analytics.logging.file` | `./logs/analytics-store.log` | Dedicated analytics log file path |
+| `yaci.store.analytics.ducklake.export.codec` | `ZSTD` | Compression codec for DuckLake Parquet files |
+| `yaci.store.analytics.ducklake.export.compression-level` | `3` | ZSTD compression level (1-22) for DuckLake exports |
+| `yaci.store.analytics.ducklake.export.row-group-size` | `-1` | Row group size for DuckLake Parquet files (-1 = DuckDB default) |
+| `yaci.store.analytics.exporter.{name}.enabled` | `true` | Per-exporter enable/disable (e.g., `exporter.reward.enabled=false`) |
 
 ## Known Caveats
 

@@ -1,0 +1,88 @@
+# Querying Data
+
+Once the Analytics Store has exported data, you can query it using the DuckDB CLI or any tool that supports Parquet files.
+
+## Prerequisites: Installing DuckDB CLI
+
+Follow the official installation guide: [DuckDB Installation](https://duckdb.org/docs/installation/)
+
+If you're using DuckLake storage mode, also install the DuckLake extension:
+
+```bash
+duckdb -c "INSTALL ducklake;"
+```
+
+## DuckLake Storage Mode
+
+### Querying DuckLake with DuckDB Catalog
+
+```bash
+# Method 1: Interactive shell
+cd /path/to/yaci-store
+duckdb
+# Then in DuckDB shell:
+D INSTALL ducklake;
+D LOAD ducklake;
+D ATTACH 'ducklake:duckdb:./data/analytics/ducklake.catalog.db' AS analytics (DATA_PATH './data/analytics');
+D SELECT COUNT(*) FROM analytics.block;
+D SELECT * FROM analytics.transaction WHERE date = '2024-01-15' LIMIT 10;
+
+# Method 2: Script mode with heredoc
+cd /path/to/yaci-store
+duckdb << 'EOF'
+INSTALL ducklake;
+LOAD ducklake;
+ATTACH 'ducklake:duckdb:./data/analytics/ducklake.catalog.db' AS analytics (DATA_PATH './data/analytics');
+SELECT COUNT(*) FROM analytics.block;
+SELECT * FROM analytics.transaction WHERE date = '2024-01-15' LIMIT 10;
+SELECT epoch, sum(amount) as total_stake FROM analytics.epoch_stake WHERE epoch >= 450 group by epoch ORDER BY epoch;
+EOF
+```
+
+> **Note:** Always prefix table names with the catalog name (e.g., `analytics.block`). Querying without the prefix will fail:
+> - `SELECT * FROM block;` — Table not found
+> - `SELECT * FROM analytics.block;` — Correct
+
+### Using `read_parquet()` with DuckLake
+
+You can also query DuckLake-exported data directly via `read_parquet()`, just like in Parquet mode. Since DuckLake writes the same Parquet files under the export path, you can bypass the catalog and query files directly:
+
+```bash
+duckdb -c "SELECT * FROM read_parquet('./data/analytics/main/block/**/*.parquet', hive_partitioning=true) LIMIT 10;"
+```
+
+This can be useful for ad-hoc queries or when you don't need to attach the DuckLake catalog.
+
+### Querying DuckLake with PostgreSQL Catalog
+
+```bash
+# Important: Start from the same directory as yaci-store if using relative DATA_PATH
+cd /path/to/yaci-store
+
+duckdb -c "
+  INSTALL ducklake; LOAD ducklake;
+
+  ATTACH 'ducklake:postgres:dbname=yaci_store host=localhost port=5432 user=postgres password=pass options=-csearch_path=public'
+    AS ducklake_catalog (DATA_PATH './data/analytics');
+
+  -- Query DuckLake tables directly
+  SELECT COUNT(*) FROM ducklake_catalog.block;
+  SELECT * FROM ducklake_catalog.transaction WHERE date = '2024-01-15' LIMIT 10;
+  SELECT epoch, total_stake FROM ducklake_catalog.epoch_stake WHERE epoch >= 450 ORDER BY epoch;
+"
+```
+
+> **Tip:** If you used a relative `export-path`, you must run the DuckDB CLI from the same working directory where yaci-store was started. See [Known Caveats](/docs/v2/analytics/configuration#workspace-sensitive-catalog-path-ducklake) for details.
+
+## Parquet Storage Mode
+### Querying Parquet Files
+
+When using `parquet` storage mode, query files directly:
+
+```bash
+# Query a single partition
+duckdb -c "SELECT * FROM read_parquet('./data/analytics/block/date=2024-01-15/*.parquet') LIMIT 10;"
+
+# Query all partitions with Hive partitioning
+duckdb -c "SELECT * FROM read_parquet('./data/analytics/block/**/*.parquet', hive_partitioning=true) LIMIT 10;"
+```

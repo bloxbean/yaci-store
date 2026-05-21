@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.adminui.service;
 
 import com.bloxbean.cardano.yaci.store.adminui.dto.LedgerStateStatusDto;
 import com.bloxbean.cardano.yaci.store.common.domain.SyncStatus;
+import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import com.bloxbean.cardano.yaci.store.core.service.SyncStatusService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -16,6 +17,7 @@ import org.springframework.stereotype.Service;
  */
 @Service
 @RequiredArgsConstructor
+@ReadOnly(false)
 @Slf4j
 public class LedgerStateStatusService {
 

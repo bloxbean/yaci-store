@@ -29,17 +29,22 @@ public class SPOVotingEvaluator implements VotingEvaluator<VotingData> {
         BigInteger totalYes = spoVoteTallies.getTotalYesStake();
         BigInteger totalAbstain = spoVoteTallies.getTotalAbstainStake();
         BigInteger totalStake = spoData.getTotalStake();
-        
-        if (totalStake.equals(BigInteger.ZERO) || totalAbstain.equals(totalStake)) {
+
+        BigDecimal requiredThreshold = getRequiredThreshold(actionType, context);
+
+        // Auto-pass only when threshold is zero
+        if (requiredThreshold.compareTo(BigDecimal.ZERO) == 0) {
             return VotingStatus.PASS_THRESHOLD;
+        }
+
+        if (totalStake.equals(BigInteger.ZERO) || totalAbstain.equals(totalStake)) {
+            return VotingStatus.NOT_PASS_THRESHOLD;
         }
 
         // the ratio = yes/(total - abstain)
         BigDecimal acceptedRatio = new BigDecimal(totalYes)
             .divide(new BigDecimal(totalStake.subtract(totalAbstain)), BigNumberUtils.mathContext);
-            
-        BigDecimal requiredThreshold = getRequiredThreshold(actionType, context);
-        
+
         return BigNumberUtils.isHigherOrEquals(acceptedRatio, requiredThreshold) ?
                 VotingStatus.PASS_THRESHOLD : VotingStatus.NOT_PASS_THRESHOLD;
     }
