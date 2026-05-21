@@ -111,7 +111,7 @@ public abstract class BFScriptsMapperDecorator implements BFScriptsMapper {
                 .unitSteps(model.unitSteps() != null ? String.valueOf(model.unitSteps()) : "0")
                 .fee(model.fee() != null ? model.fee() : "0")
                 .redeemerDataHash(model.redeemerDataHash())
-                .datumHash(model.redeemerDataHash())
+                .datumHash(model.datumHash())
                 .build();
     }
 

@@ -11,8 +11,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jooq.DSLContext;
-import org.jooq.Field;
-import org.jooq.JSONB;
 import org.jooq.SortField;
 import org.jooq.impl.DSL;
 import org.springframework.stereotype.Component;
@@ -126,7 +124,6 @@ public class BFScriptsStorageReaderImpl implements BFScriptsStorageReader {
     private ExecUnitPrices fetchExecUnitPrices() {
         try {
             // epoch_param.params is JSONB; use ->> to extract text value
-            Field<String> paramsField = DSL.field("params", String.class);
             org.jooq.Table<?> epochParam = DSL.table(DSL.name("epoch_param"));
 
             String priceMemJson = dsl.select(
