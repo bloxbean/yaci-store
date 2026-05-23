@@ -9,6 +9,9 @@ REM ------------------------------------------------------------
 REM Save the current working directory
 SET CURRENT_DIR=%CD%
 
+REM Lower JVM DNS cache TTLs to avoid stale DNS cache.
+SET "JAVA_OPTS=-Dsun.net.inetaddr.ttl=60 -Dsun.net.inetaddr.negative.ttl=10 %JAVA_OPTS%"
+
 REM Uncomment the following line to enable polyglot (Python, JS) plugins support.
 :: set "JAVA_OPTS=%JAVA_OPTS% -Dloader.path=plugins,plugins/lib,plugins/ext-jars"
 
