@@ -15,8 +15,11 @@
 
 ### Accepted Limitations
 
-- **Root endpoint identity:** `url` and `version` reflect the local yaci-store service.
-  Intentional — yaci-store is a self-hosted replacement, not a proxy for Blockfrost.
+- **Root endpoint `url`:** yaci-store serves its own configured base URL — correct and
+  intentional for a self-hosted deployment. The tracked issue below covers the specific
+  case where the URL was previously hardcoded to a mainnet value instead of reading from
+  configuration; once that fix lands, the `url` field will reflect the actual configured
+  network endpoint.
 
 - **`supply.locked` = 0:** Computing true locked supply requires scanning all script-locked
   UTxOs — a heavy query with no pre-aggregated table. Marked as permanent limitation unless
@@ -26,8 +29,10 @@
   Local State Query (LSQ) protocol. Not persisted to database tables. Structural gap — cannot
   be resolved without LSQ integration.
 
-- **Conway era end null:** `GET /network/eras` returns `null` for the Conway boundary because
-  no successor era row exists yet. Will auto-populate once the next hardfork fires.
+- **Conway era end null:** `GET /network/eras` returns `null` for the Conway era's `end`
+  boundary because Conway is the current era — no successor era exists yet. This is expected
+  behavior: the `end` field will auto-populate once the next hardfork event fires and the
+  new era begins. No action required.
 
 - **Circulating supply sync lag:** ~4 ADA difference vs. Blockfrost due to AdaPot
   materialization timing. Accepted.

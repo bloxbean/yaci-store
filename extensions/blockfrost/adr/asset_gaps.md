@@ -6,7 +6,7 @@
 
 | Endpoint | Match | Notes |
 |----------|-------|-------|
-| `GET /assets` | ⚠️ | Pagination drift from phantom assets; slow without summary table |
+| `GET /assets` | ⚠️ | Slow without summary table |
 | `GET /assets/{asset}` | ⚠️ | `metadata` and `onchain_metadata` fields null |
 | `GET /assets/{asset}/history` | ✅ | |
 | `GET /assets/{asset}/txs` | ✅ | |
@@ -20,9 +20,6 @@
 
 - **Metadata fields null:** `metadata` and `onchain_metadata` are always `null` — no token
   registry or CIP-68 metadata ingestion is implemented. Requires a separate integration component.
-
-- **Phantom asset pagination drift:** 2 phantom assets in preprod data cause a 1-row shift
-  on paginated results. Root cause is a preprod data inconsistency, not a query bug.
 
 - **`asset_name` as hex:** Returned as hex substring of `unit` (chars 57+) to match Blockfrost
   convention. Intentional.
@@ -71,3 +68,5 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_transaction_tx_hash_tx_index
 
 No functional blockers. Performance of `GET /assets` is the main open item.
 Metadata fields gap is accepted (requires separate integration work).
+Phantom asset pagination drift (previously noted for 2 preprod assets) was resolved
+as part of the invalid-tx fix.

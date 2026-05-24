@@ -11,17 +11,19 @@
 | `GET /epochs/{number}/parameters` | ✅ | |
 | `GET /epochs/{number}/next` | ✅ | |
 | `GET /epochs/{number}/previous` | ✅ | |
-| `GET /epochs/{number}/stakes` | ⚠️ | `active_stake` is `null` when `store.adapot.enabled=false` |
-| `GET /epochs/{number}/stakes/{pool_id}` | ⚠️ | Same adapot dependency |
+| `GET /epochs/{number}/stakes` | ✅ | Requires `store.adapot.enabled=true`; returns `null` when disabled |
+| `GET /epochs/{number}/stakes/{pool_id}` | ✅ | Same adapot dependency |
 | `GET /epochs/{number}/blocks` | ⚠️ | Slow without composite index (see below) |
 | `GET /epochs/{number}/blocks/{pool_id}` | ⚠️ | Same performance issue |
 
 ## Open Gaps
 
-### Accepted Limitations
+### Configuration Notes
 
-- **`active_stake` null:** When `store.adapot.enabled=false`, stake fields return `null`.
-  Intentional graceful degradation — document in deployment guide.
+- **`active_stake` dependency on AdaPot job:** `active_stake` fields in `/stakes` and
+  `/stakes/{pool_id}` return `null` when `store.adapot.enabled=false`. This is not a gap —
+  it is expected behavior when the AdaPot aggregation job is not running. Enable
+  `store.adapot.enabled=true` to populate these fields.
 
 ### Tracked Issues
 
