@@ -22,7 +22,7 @@ First, unzip your yaci-store docker distribution and navigate to the directory.
 Edit the `config/env` file to enable plugin support by uncommenting the following line:
 
 ```bash
-JDK_JAVA_OPTIONS=${JDK_JAVA_OPTIONS} -Dloader.path=plugins,plugins/lib,plugins/ext-jars
+LOADER_PATH=plugins,plugins/lib,plugins/ext-jars
 ```
 
 ### 2. Understanding the Plugin Directory Structure

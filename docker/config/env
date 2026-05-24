@@ -1,11 +1,14 @@
 # Common env file
 
-# Java Options
+# Lower JVM DNS cache TTLs to avoid stale DNS cache.
+JAVA_TOOL_OPTIONS=-Dsun.net.inetaddr.ttl=60 -Dsun.net.inetaddr.negative.ttl=10
+
+# JVM options (heap, GC, etc.).
 # JDK_JAVA_OPTIONS=-Xms4G -Xmx12G
 
 ## Enable Ledger State profile
 #SPRING_PROFILES_ACTIVE=ledger-state
 
 ## Enable polyglot plugins (Python, JS) support.
-# JDK_JAVA_OPTIONS=${JDK_JAVA_OPTIONS} -Dloader.path=plugins,plugins/lib,plugins/ext-jars
+# LOADER_PATH=plugins,plugins/lib,plugins/ext-jars
 

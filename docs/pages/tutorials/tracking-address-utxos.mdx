@@ -203,7 +203,7 @@ Yaci Store uses a plugin system to extend its functionality. Let's enable it.
    Find and uncomment (remove the `#` at the beginning) this line:
 
    ```bash
-   JDK_JAVA_OPTIONS=${JDK_JAVA_OPTIONS} -Dloader.path=plugins,plugins/lib,plugins/ext-jars
+   LOADER_PATH=plugins,plugins/lib,plugins/ext-jars
    ```
 
    This tells Yaci Store to load plugins from the `plugins` directory.

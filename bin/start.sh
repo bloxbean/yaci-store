@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Lower JVM DNS cache TTLs to avoid stale DNS cache.
+JAVA_OPTS="-Dsun.net.inetaddr.ttl=60 -Dsun.net.inetaddr.negative.ttl=10 $JAVA_OPTS"
+
 # Uncomment the following line to enable polyglot (Python, JS) plugins support.
 #JAVA_OPTS="$JAVA_OPTS -Dloader.path=plugins,plugins/lib,plugins/ext-jars"
 
