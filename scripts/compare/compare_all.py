@@ -61,7 +61,7 @@ COMPARATORS = [
     ("gov_action_proposal_status", "compare_gov_action_proposal_status.py"),
 ]
 
-REWARD_TYPES_DEFAULT = ["treasury", "reserves", "proposal_refund"]
+REWARD_TYPES_DEFAULT = ["treasury", "proposal_refund"]
 
 
 def new_child_summary():
