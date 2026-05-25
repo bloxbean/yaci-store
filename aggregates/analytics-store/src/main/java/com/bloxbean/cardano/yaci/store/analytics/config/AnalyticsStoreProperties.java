@@ -111,18 +111,24 @@ public class AnalyticsStoreProperties {
     public static class DuckDb {
         /**
          * DuckDB memory_limit setting.
-         * Controls the maximum memory DuckDB's buffer manager can use per connection.
+         * Controls the maximum memory DuckDB's buffer manager can use.
          * DuckDB defaults to 80% of system RAM if not set, which can cause OOM
          * when running inside a JVM process.
          *
          * Format: DuckDB size string (e.g., "1GB", "512MB", "2GB")
          * Empty = use DuckDB default (80% of system RAM).
          * Recommended: Set explicitly in production/container environments.
-         *
-         * Note: Some aggregate functions may allocate memory outside the buffer
-         * manager, so actual usage can slightly exceed this limit.
          */
         private String memoryLimit;
+
+        /**
+         * Number of DuckDB threads for query execution.
+         * Controls parallelism within DuckDB's query engine.
+         *
+         * Defaults to available processor cores.
+         * Lower values prevent one query from monopolizing all CPU cores.
+         */
+        private int threads = Runtime.getRuntime().availableProcessors();
 
         private DuckDbDataSource datasource = new DuckDbDataSource();
         private ReaderConfig reader = new ReaderConfig();
@@ -144,14 +150,85 @@ public class AnalyticsStoreProperties {
         @Data
         public static class ReaderConfig {
             /**
-             * Maximum pool size for DuckDB reader DataSource.
+             * Maximum concurrent DuckDB read queries.
              *
-             * Defaults to available processor cores for optimal concurrent query throughput.
-             * DuckDB supports multiple concurrent readers even on file-based catalogs.
+             * Controls the semaphore size for DuckDBConnection.duplicate() based readers,
+             * or HikariCP pool size for legacy DataSource based readers.
+             * Defaults to available processor cores.
              */
             private int maximumPoolSize = Runtime.getRuntime().availableProcessors();
+
+            /**
+             * Per-query timeout in seconds.
+             * Queries exceeding this timeout are cancelled.
+             */
+            private int queryTimeoutSeconds = 30;
         }
     }
+
+    /**
+     * Analytics query layer configuration.
+     * Controls the DuckDB-based query engine that reads Parquet files directly.
+     */
+    @Data
+    public static class Query {
+        private boolean enabled = false;
+
+        /**
+         * Enable live PostgreSQL data federation via DuckDB's postgres_scanner.
+         *
+         * When enabled, unified DuckDB views are created that UNION ALL historical
+         * Parquet data with live PostgreSQL data. The boundary is determined automatically
+         * from the last completed Parquet export.
+         *
+         * This allows MCP clients to query a single unified view spanning from genesis
+         * to the current chain tip, without needing to know about the data boundary.
+         *
+         * Requires: postgres_scanner DuckDB extension (installed automatically).
+         * Default: false (backward compatible — Parquet-only mode).
+         */
+        private boolean liveDataEnabled = false;
+
+        /**
+         * Tables to exclude from live PostgreSQL federation.
+         *
+         * These tables will remain Parquet-only even when live-data-enabled=true.
+         * Useful for tables where postgres_scanner performance is poor or where
+         * live data is not needed (e.g., epoch-partitioned reference data).
+         *
+         * Example: yaci.store.analytics.query.live-data-excluded-tables=epoch_stake,reward
+         */
+        private Set<String> liveDataExcludedTables = new HashSet<>();
+
+        /**
+         * PostgreSQL statement timeout for analytics queries via postgres_scanner (in seconds).
+         *
+         * Applied as a PostgreSQL connection parameter ({@code statement_timeout}) on the
+         * attached {@code pg_live} database. Prevents heavy analytical queries from overloading
+         * the PostgreSQL server that is also used for blockchain sync.
+         *
+         * Only applies when {@code live-data-enabled=true}. Does not affect the DuckDB
+         * query timeout (controlled by {@code duckdb.reader.query-timeout-seconds}).
+         *
+         * Default: 30 seconds.
+         */
+        private int postgresStatementTimeoutSeconds = 30;
+
+        /**
+         * Enable/disable the REST API endpoints for analytics queries.
+         *
+         * When false, only the MCP tools are available for querying analytics data.
+         * The REST endpoints ({@code /api/v1/analytics/parquet/*}) will not be registered.
+         *
+         * Useful for production deployments where analytics should only be accessible
+         * through the MCP interface (gated by the LLM agent), not via direct HTTP calls.
+         *
+         * Default: true (REST endpoints enabled for backward compatibility).
+         */
+        private boolean restApiEnabled = true;
+    }
+
+    private Query query = new Query();
 
     @Data
     public static class ParquetExport {
