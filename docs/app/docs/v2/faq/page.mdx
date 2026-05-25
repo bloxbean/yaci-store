@@ -88,6 +88,10 @@ The **Yaci Store Admin CLI** provides a straightforward rollback feature:
 
 5. **Restart Yaci Store** and monitor the synchronization process
 
+<Callout type="info">
+When you run `rollback-data --epoch X`, the system finds the last block of epoch X-1 and sets the sync cursor to that point. After restart, synchronization resumes from the **first block of epoch X**.
+</Callout>
+
 **After rolling back:**
 
 - **Monitor the logs carefully** as synchronization resumes
@@ -101,6 +105,60 @@ The **Yaci Store Admin CLI** provides a straightforward rollback feature:
 - Document the epoch where errors occur for future reference
 - Test rollback procedures in non-production environments first
 - Keep your Yaci Store version up to date to benefit from the latest fixes
+
+---
+
+### How do I check if AdaPot calculation has errors?
+
+<Callout type="info">
+The `adapot_jobs` table tracks the status and errors of AdaPot/reward calculations for each epoch.
+</Callout>
+
+**Checking for errors:**
+
+Query the `adapot_jobs` table and look at the `status` and `error_message` columns:
+
+```sql
+SELECT epoch, status, error_message
+FROM adapot_jobs
+WHERE error_message IS NOT NULL
+```
+
+The `status` column can be: `NOT_STARTED`, `STARTED`, or `COMPLETED`. If a job has `STARTED` status with a non-null `error_message`, it means the calculation failed for that epoch.
+
+**How to retry failed calculations:**
+
+1. **Stop the Yaci Store application**
+
+2. **Rollback to the epoch before the failed one** using the Admin CLI:
+
+   First, try `rollback-ledger-state-data` — this rolls back only ledger state data (AdaPot, rewards, stake snapshots, DRep distribution) without affecting other indexed data (blocks, transactions, UTXOs):
+
+   ```bash
+   # Docker distribution
+   ./admin-cli.sh rollback-ledger-state-data --epoch <FAILED_EPOCH>
+
+   # ZIP distribution
+   ./bin/admin-cli.sh
+   admin-cli> rollback-ledger-state-data --epoch <FAILED_EPOCH>
+   ```
+
+   For example, if the AdaPot job failed at epoch 100, run `rollback-ledger-state-data --epoch 100`. The system will automatically find the last block of epoch 99 as the rollback point and reset all ledger state jobs from epoch 100 onward.
+
+   If the issue persists after retrying, or you suspect broader data corruption, use `rollback-data` instead to roll back all data including blocks, transactions, and UTXOs:
+
+   ```bash
+   # Docker distribution
+   ./admin-cli.sh rollback-data --epoch <FAILED_EPOCH>
+
+   # ZIP distribution
+   ./bin/admin-cli.sh
+   admin-cli> rollback-data --epoch <FAILED_EPOCH>
+   ```
+
+3. **Restart Yaci Store with the `ledger-state` profile** to re-trigger the calculation:
+
+The application will re-process the epoch and recalculate the AdaPot values from scratch.
 
 ---
 
