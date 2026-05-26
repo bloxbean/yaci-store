@@ -7,6 +7,7 @@ import com.bloxbean.cardano.yaci.store.blockfrost.address.BFAddressConfiguration
 import com.bloxbean.cardano.yaci.store.blockfrost.transaction.BFTransactionConfiguration;
 import com.bloxbean.cardano.yaci.store.blockfrost.block.BFBlockConfiguration;
 import com.bloxbean.cardano.yaci.store.blockfrost.metadata.BFMetadataConfiguration;
+import com.bloxbean.cardano.yaci.store.blockfrost.scripts.BFScriptsConfiguration;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -15,7 +16,7 @@ import org.springframework.context.annotation.Import;
 
 @AutoConfiguration
 @EnableConfigurationProperties(BFProperties.class)
-@Import({BFEpochConfiguration.class, BFAddressConfiguration.class, BFAssetConfiguration.class, BFAccountConfiguration.class, BFTransactionConfiguration.class, BFBlockConfiguration.class, BFMetadataConfiguration.class})
+@Import({BFEpochConfiguration.class, BFAddressConfiguration.class, BFAssetConfiguration.class, BFAccountConfiguration.class, BFTransactionConfiguration.class, BFBlockConfiguration.class, BFScriptsConfiguration.class, BFMetadataConfiguration.class})
 @Slf4j
 public class BFAutoConfiguration {
 
