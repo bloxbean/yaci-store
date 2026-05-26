@@ -1,0 +1,59 @@
+- table: address_utxo
+  indexes:
+    - name: idx_address_utxo_owner_addr_full
+      columns:
+        - owner_addr_full
+    - name: idx_address_utxo_block
+      columns:
+        - block_hash
+
+- table: assets
+  indexes:
+    - name: idx_assets_unit_slot
+      columns:
+        - unit
+        - slot
+    - name: idx_assets_unit_policy
+      columns:
+        - unit
+        - policy
+    - name: idx_assets_unit_qty
+      columns:
+        - unit
+        - quantity
+
+- table: transaction
+  indexes:
+    - name: idx_transaction_block_tx_index_tx_hash
+      columns:
+        - block_hash
+        - tx_index
+        - tx_hash
+
+- table: tx_input
+  indexes:
+    - name: idx_tx_input_spent_at_block_spent_tx_hash
+      columns:
+        - spent_at_block
+        - spent_tx_hash
+    - name: idx_tx_input_tx_hash
+      columns:
+        - tx_hash
+
+- table: block
+  indexes:
+    - name: idx_block_epoch_slot
+      columns:
+        - epoch
+        - slot
+
+- table: transaction_scripts
+  indexes:
+    - name: idx_transaction_scripts_purpose_not_null
+      columns:
+        - script_hash
+        - slot
+      where: purpose IS NOT NULL
+      excludes:
+        - mysql
+        - h2

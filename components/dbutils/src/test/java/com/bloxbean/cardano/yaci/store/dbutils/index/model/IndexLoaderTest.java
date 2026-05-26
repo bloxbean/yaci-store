@@ -26,4 +26,12 @@ class IndexLoaderTest {
         assertThat(indexDefinitions.get(0).getIndexes().get(0).getType()).isEqualTo("gin");
         assertThat(indexDefinitions.get(0).getIndexes().get(0).getExcludes()).hasSizeGreaterThan(0);
     }
+
+    @Test
+    void loadBlockfrostIndexes() {
+        List<IndexDefinition> indexDefinitions = new IndexLoader().loadIndexes("blockfrost-index.yml");
+        assertThat(indexDefinitions).hasSizeGreaterThan(0);
+        assertThat(indexDefinitions).hasSizeGreaterThan(5);
+        assertThat(indexDefinitions.get(0)).isInstanceOf(IndexDefinition.class);
+    }
 }

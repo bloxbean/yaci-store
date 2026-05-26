@@ -30,7 +30,8 @@ public class IndexLoader {
                 List<String> columns = (List<String>) indexMap.get("columns");
                 String type = (String) indexMap.get("type");
                 List<String> excludes = (List<String>) indexMap.get("excludes");
-                IndexDefinition.Index index = new IndexDefinition.Index(name, columns, type, excludes);
+                String where = (String) indexMap.get("where");
+                IndexDefinition.Index index = new IndexDefinition.Index(name, columns, type, excludes, where);
                 indexes.add(index);
             }
 

@@ -30,6 +30,7 @@ import static com.bloxbean.cardano.yaci.store.admin.cli.common.ConsoleWriter.*;
 public class DBCommands {
     private static final String INDEX_FILE = "index.yml";
     private static final String EXTRA_INDEX_FILE = "extra-index.yml";
+    private static final String BLOCKFROST_INDEX_FILE = "blockfrost-index.yml";
     private static final String ROLLBACK_LEDGER_STATE_FILE = "rollback-ledger-state.yml";
 
     private final IndexService indexService;
@@ -81,6 +82,12 @@ public class DBCommands {
     public void applyExtraIndexes() {
         writeLn(info("Start to apply extra index ..."));
         applyIndexes(EXTRA_INDEX_FILE);
+    }
+
+    @Command(description = "Apply Blockfrost compatibility read indexes")
+    public void applyBlockfrostIndexes() {
+        writeLn(info("Start to apply Blockfrost index ..."));
+        applyBlockfrostIndexes(BLOCKFROST_INDEX_FILE);
     }
 
     @Command(description = "Rollback data to a previous epoch")
@@ -142,6 +149,22 @@ public class DBCommands {
 
         if (!result.getSecond().isEmpty()) {
             log.warn(">> Failed to apply these indexes : " + result.getSecond());
+        }
+    }
+
+    private void applyBlockfrostIndexes(String indexFile) {
+        IndexLoader indexLoader = new IndexLoader();
+        List<IndexDefinition> indexDefinitionList = indexLoader.loadIndexes(indexFile);
+        if (indexDefinitionList == null || indexDefinitionList.isEmpty()) {
+            log.warn("No Blockfrost index found to apply");
+            writeLn(warn("No Blockfrost index found to apply : {}", indexFile));
+            return;
+        }
+
+        var result = indexService.applyIndexes(indexDefinitionList);
+
+        if (!result.getSecond().isEmpty()) {
+            log.warn(">> Failed to apply these Blockfrost indexes : " + result.getSecond());
         }
     }
 
