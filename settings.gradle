@@ -110,4 +110,7 @@ project(':extensions:blockfrost:blockfrost-common').projectDir = new File('exten
 include ':extensions:blockfrost:blockfrost-transaction'
 project(':extensions:blockfrost:blockfrost-transaction').projectDir = new File('extensions/blockfrost/transaction')
 
+include ':extensions:blockfrost:blockfrost-scripts'
+project(':extensions:blockfrost:blockfrost-scripts').projectDir = new File('extensions/blockfrost/scripts')
+
 include 'e2e-tests'

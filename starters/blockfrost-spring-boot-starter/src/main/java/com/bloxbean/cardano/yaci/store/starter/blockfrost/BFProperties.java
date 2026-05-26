@@ -26,6 +26,7 @@ public class BFProperties {
             private Account account = new Account();
             private Transaction transaction = new Transaction();
             private Blocks blocks = new Blocks();
+            private Scripts scripts = new Scripts();
 
             @Getter
             @Setter
@@ -60,6 +61,12 @@ public class BFProperties {
             @Getter
             @Setter
             public static final class Blocks {
+                private boolean enabled = false;
+            }
+
+            @Getter
+            @Setter
+            public static final class Scripts {
                 private boolean enabled = false;
             }
 
