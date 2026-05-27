@@ -4,6 +4,7 @@ import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.core.model.certs.CertificateType;
 import com.bloxbean.cardano.yaci.core.model.governance.DrepType;
 import com.bloxbean.cardano.yaci.core.model.governance.VoterType;
+import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
 import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
 import com.bloxbean.cardano.yaci.store.common.util.ListUtil;
 import com.bloxbean.cardano.yaci.store.common.util.Tuple;
@@ -35,7 +36,7 @@ import java.util.stream.Collectors;
 import static com.bloxbean.cardano.yaci.store.epoch.jooq.Tables.EPOCH_PARAM;
 import static com.bloxbean.cardano.yaci.store.governance.jooq.Tables.*;
 import static com.bloxbean.cardano.yaci.store.governance_aggr.jooq.Tables.DREP_DIST;
-import static com.bloxbean.cardano.yaci.store.governanceaggr.util.DRepExpiryUtil.isEpochRangeDormant;
+import static com.bloxbean.cardano.yaci.store.governance_aggr.jooq.Tables.GOV_ACTION_PROPOSAL_STATUS;
 
 @Service
 @RequiredArgsConstructor
@@ -44,7 +45,6 @@ public class DRepExpiryService {
     private final NamedParameterJdbcTemplate jdbcTemplate;
     private final EraService eraService;
     private final GovEpochActivityRepository govEpochActivityRepository;
-    private final GovEpochActivityService govEpochActivityService;
     private final DSLContext dsl;
     private final ObjectMapper objectMapper;
 
@@ -74,18 +74,23 @@ public class DRepExpiryService {
 
         Map<Tuple<String, DrepType>, DRepExpiryUtil.DRepRegistrationInfo> registrationMap = new ConcurrentHashMap<>();
         Map<Tuple<String, DrepType>, DRepExpiryUtil.DRepInteractionInfo> lastInteractionMap = new ConcurrentHashMap<>();
+        Map<Tuple<String, DrepType>, List<DRepExpiryUtil.DRepInteractionInfo>> interactionEventsMap = new ConcurrentHashMap<>();
 
         targetDRepsBatches.parallelStream().forEach(batch -> {
             Map<Tuple<String, DrepType>, DRepExpiryUtil.DRepRegistrationInfo> batchRegistrationMap =
                     findRegistrationInfos(batch, leftBoundaryEpoch);
             Map<Tuple<String, DrepType>, DRepExpiryUtil.DRepInteractionInfo> batchInteractionMap =
                     findLastInteractions(batch, leftBoundaryEpoch);
+            Map<Tuple<String, DrepType>, List<DRepExpiryUtil.DRepInteractionInfo>> batchInteractionEventsMap =
+                    findInteractionInfos(batch, leftBoundaryEpoch);
 
             registrationMap.putAll(batchRegistrationMap);
             lastInteractionMap.putAll(batchInteractionMap);
+            interactionEventsMap.putAll(batchInteractionEventsMap);
         });
 
         Set<Integer> dormantEpochsToLeftBoundaryEpoch = govEpochActivityRepository.findDormantEpochsInEpochRange(firstEpochNoInConwayOrLater, leftBoundaryEpoch);
+        Set<Integer> activeProposalEpochsToLeftBoundaryEpoch = findActiveProposalStatusEpochs(firstEpochNoInConwayOrLater, leftBoundaryEpoch);
 
         List<DRepExpiryUtil.ProposalSubmissionInfo> proposalSubmissionInfos = findProposalWithEpochLessThanOrEqualTo(leftBoundaryEpoch);
 
@@ -94,18 +99,7 @@ public class DRepExpiryService {
                         .reversed())
                 .toList();
 
-        DRepExpiryUtil.ProposalSubmissionInfo mostRecentProposal = proposalSubmissionInfos.stream()
-                .max(Comparator.comparingLong(DRepExpiryUtil.ProposalSubmissionInfo::slot))
-                .orElse(null);
-
         List<MapSqlParameterSource> batch = new ArrayList<>();
-
-        var recentGovEpochActivityOpt = govEpochActivityService.getGovEpochActivity(leftBoundaryEpoch);
-
-        if (recentGovEpochActivityOpt.isEmpty()) {
-            log.error("GovEpochActivityEntity not found for epoch {}", leftBoundaryEpoch);
-            return;
-        }
 
         for (Tuple<String, DrepType> dRep : targetDReps) {
             var dRepRegistration = registrationMap.get(dRep);
@@ -140,40 +134,15 @@ public class DRepExpiryService {
                     leftBoundaryEpoch
             );
 
-            /* Calculate active_until value */
-            boolean isLeftBoundaryEpochDormant = dormantEpochsToLeftBoundaryEpoch.contains(leftBoundaryEpoch);
-            int dormantEpochCount = recentGovEpochActivityOpt.get().getDormantEpochCount();
-            boolean leftBoundaryEpochHadNewProposal = false;
+            int activeUntil = DRepExpiryUtil.calculateDRepActiveUntil(
+                    dRepRegistration,
+                    interactionEventsMap.getOrDefault(dRep, Collections.emptyList()),
+                    proposalSubmissionInfos,
+                    activeProposalEpochsToLeftBoundaryEpoch,
+                    firstEpochNoInConwayOrLater,
+                    leftBoundaryEpoch
+            );
 
-            // check if the left boundary epoch had a proposal
-            if (isLeftBoundaryEpochDormant && mostRecentProposal != null) {
-                int mostRecentProposalEpoch = mostRecentProposal.epoch();
-                if (mostRecentProposalEpoch == leftBoundaryEpoch) {
-                    leftBoundaryEpochHadNewProposal = true;
-                }
-            }
-
-            int activeUntil = expiry;
-
-            /* if the left boundary epoch is dormant and there was no new proposal (dormant period is ongoing), drep is not inactive,
-             we should set activeUntil to expiry - dormantEpochCount
-             the active_until value is only updated after the dormant period ends. */
-            if (isLeftBoundaryEpochDormant && !leftBoundaryEpochHadNewProposal && expiry >= leftBoundaryEpoch) { // TODO: expiry >= leftBoundaryEpoch or expiry > leftBoundaryEpoch?
-                activeUntil = expiry - dormantEpochCount;
-            }
-
-            // continue adjusting the active_until value, if the drep was registered in a dormant period and in V9
-            if (dRepLastInteraction == null|| dRepLastInteraction.epoch() < dRepRegistration.epoch()) {
-                int dRepRegistrationEpoch = dRepRegistration.epoch();
-                // check left boundary epoch is in a dormant period , no proposal in left boundary epoch
-                // and drep was registered in this dormant period and drep registration is in V9
-                if (isEpochRangeDormant(dRepRegistrationEpoch, leftBoundaryEpoch, dormantEpochsToLeftBoundaryEpoch)
-                        && !leftBoundaryEpochHadNewProposal && dRepRegistration.protocolMajorVersion() == 9) {
-                    activeUntil = dRepRegistrationEpoch + dRepRegistration.dRepActivity();
-                }
-            }
-
-            /* active_until calculation ends */
             batch.add(new MapSqlParameterSource()
                     .addValue("drep_hash", dRep._1)
                     .addValue("drep_type", dRep._2.name())
@@ -232,10 +201,14 @@ public class DRepExpiryService {
                         DREP_REGISTRATION.CRED_TYPE,
                         DREP_REGISTRATION.SLOT,
                         DREP_REGISTRATION.EPOCH,
+                        DREP_REGISTRATION.TX_INDEX,
+                        DREP_REGISTRATION.CERT_INDEX,
                         DSL.rowNumber()
                                 .over()
                                 .partitionBy(DREP_REGISTRATION.DREP_HASH, DREP_REGISTRATION.CRED_TYPE)
-                                .orderBy(DREP_REGISTRATION.SLOT.desc())
+                                .orderBy(DREP_REGISTRATION.SLOT.desc(),
+                                        DREP_REGISTRATION.TX_INDEX.desc(),
+                                        DREP_REGISTRATION.CERT_INDEX.desc())
                                 .as("rn")
                 )
                 .from(DREP_REGISTRATION)
@@ -251,6 +224,8 @@ public class DRepExpiryService {
                     ranked.field(DREP_REGISTRATION.CRED_TYPE),
                     ranked.field(DREP_REGISTRATION.SLOT),
                     ranked.field(DREP_REGISTRATION.EPOCH),
+                    ranked.field(DREP_REGISTRATION.TX_INDEX),
+                    ranked.field(DREP_REGISTRATION.CERT_INDEX),
                     drepActivityField.cast(Integer.class).as("drep_activity"),
                     protocolMajorVerField.cast(Integer.class).as("protocol_major_ver")
             )
@@ -264,6 +239,8 @@ public class DRepExpiryService {
                     ranked.field(DREP_REGISTRATION.CRED_TYPE),
                     ranked.field(DREP_REGISTRATION.SLOT),
                     ranked.field(DREP_REGISTRATION.EPOCH),
+                    ranked.field(DREP_REGISTRATION.TX_INDEX),
+                    ranked.field(DREP_REGISTRATION.CERT_INDEX),
                     EPOCH_PARAM.PARAMS
             )
             .from(ranked)
@@ -278,6 +255,8 @@ public class DRepExpiryService {
             DrepType type = DrepType.valueOf(record.get(DREP_REGISTRATION.CRED_TYPE));
             long registrationSlot = record.get(DREP_REGISTRATION.SLOT);
             int registrationEpoch = record.get(DREP_REGISTRATION.EPOCH);
+            int txIndex = record.get(DREP_REGISTRATION.TX_INDEX);
+            int certIndex = record.get(DREP_REGISTRATION.CERT_INDEX);
             int drepActivity = 0;
             int protocolMajorVer = 0;
 
@@ -296,7 +275,116 @@ public class DRepExpiryService {
                 protocolMajorVer = record.get("protocol_major_ver", Integer.class);
             }
 
-            map.put(new Tuple<>(hash, type), new DRepExpiryUtil.DRepRegistrationInfo(registrationSlot, registrationEpoch, drepActivity, protocolMajorVer));
+            map.put(new Tuple<>(hash, type), new DRepExpiryUtil.DRepRegistrationInfo(registrationSlot, registrationEpoch, drepActivity, protocolMajorVer, txIndex, certIndex));
+        }
+
+        return map;
+    }
+
+    private Map<Tuple<String, DrepType>, List<DRepExpiryUtil.DRepInteractionInfo>> findInteractionInfos(Set<Tuple<String, DrepType>> drepHashAndTypes, int epoch) {
+        if (drepHashAndTypes.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        Field<String> drepActivityField = null;
+        SQLDialect dialect = dsl.dialect();
+
+        if (dialect.family() == SQLDialect.POSTGRES) {
+            drepActivityField = DSL.field("params->>'drep_activity'", String.class);
+        } else if (dialect.family() == SQLDialect.MYSQL) {
+            drepActivityField = DSL.function("JSON_EXTRACT", SQLDataType.VARCHAR, DSL.field("params"), DSL.inline("$.drep_activity"));
+        }
+
+        List<Condition> dRepRegConditions = drepHashAndTypes
+                .stream()
+                .map(t -> DREP_REGISTRATION.DREP_HASH.eq(t._1).and(DREP_REGISTRATION.CRED_TYPE.eq(t._2.name())))
+                .collect(Collectors.toList());
+
+        var updates = dsl.select(DREP_REGISTRATION.DREP_HASH.as("drep_hash"), DREP_REGISTRATION.CRED_TYPE.as("drep_type"),
+                        DREP_REGISTRATION.EPOCH.as("epoch"), DREP_REGISTRATION.SLOT.as("slot"),
+                        DREP_REGISTRATION.TX_INDEX.as("tx_index"), DREP_REGISTRATION.CERT_INDEX.as("event_index"))
+                .from(DREP_REGISTRATION)
+                .where(DREP_REGISTRATION.TYPE.eq(CertificateType.UPDATE_DREP_CERT.name())
+                        .and(DREP_REGISTRATION.EPOCH.le(epoch))
+                        .and(DSL.or(dRepRegConditions)));
+
+        Set<Tuple<String, VoterType>> drepAndVoterTypes = drepHashAndTypes.stream()
+                .map(t -> new Tuple<>(t._1, t._2 == DrepType.ADDR_KEYHASH ? VoterType.DREP_KEY_HASH : VoterType.DREP_SCRIPT_HASH))
+                .collect(Collectors.toSet());
+
+        List<Condition> voteConditions = drepAndVoterTypes
+                .stream()
+                .map(t -> VOTING_PROCEDURE.VOTER_HASH.eq(t._1).and(VOTING_PROCEDURE.VOTER_TYPE.eq(t._2.name())))
+                .toList();
+
+        var votes = dsl.select(VOTING_PROCEDURE.VOTER_HASH.as("drep_hash"),
+                        DSL.decode()
+                                .value(VOTING_PROCEDURE.VOTER_TYPE)
+                                .when(VoterType.DREP_KEY_HASH.name(), DrepType.ADDR_KEYHASH.name())
+                                .when(VoterType.DREP_SCRIPT_HASH.name(), DrepType.SCRIPTHASH.name())
+                                .as("drep_type"),
+                        VOTING_PROCEDURE.EPOCH.as("epoch"), VOTING_PROCEDURE.SLOT.as("slot"),
+                        VOTING_PROCEDURE.TX_INDEX.as("tx_index"), VOTING_PROCEDURE.IDX.as("event_index"))
+                .from(VOTING_PROCEDURE)
+                .where(VOTING_PROCEDURE.EPOCH.le(epoch)).and(DSL.or(voteConditions));
+
+        var interactionSubquery = updates.unionAll(votes).asTable("sub");
+
+        Result<?> result;
+        if (dialect.family() == SQLDialect.POSTGRES || dialect.family() == SQLDialect.MYSQL) {
+            result = dsl.select(
+                    interactionSubquery.field("drep_hash", String.class),
+                    interactionSubquery.field("drep_type", String.class),
+                    interactionSubquery.field("epoch", Integer.class),
+                    interactionSubquery.field("slot", Long.class),
+                    interactionSubquery.field("tx_index", Integer.class),
+                    interactionSubquery.field("event_index", Integer.class),
+                    drepActivityField.cast(Integer.class).as("drep_activity")
+            )
+            .from(interactionSubquery)
+            .join(EPOCH_PARAM).on(EPOCH_PARAM.EPOCH.eq(interactionSubquery.field("epoch", Integer.class)))
+            .fetch();
+        } else {
+            result = dsl.select(
+                    interactionSubquery.field("drep_hash", String.class),
+                    interactionSubquery.field("drep_type", String.class),
+                    interactionSubquery.field("epoch", Integer.class),
+                    interactionSubquery.field("slot", Long.class),
+                    interactionSubquery.field("tx_index", Integer.class),
+                    interactionSubquery.field("event_index", Integer.class),
+                    EPOCH_PARAM.PARAMS
+            )
+            .from(interactionSubquery)
+            .join(EPOCH_PARAM).on(EPOCH_PARAM.EPOCH.eq(interactionSubquery.field("epoch", Integer.class)))
+            .fetch();
+        }
+
+        Map<Tuple<String, DrepType>, List<DRepExpiryUtil.DRepInteractionInfo>> map = new HashMap<>();
+        for (Record record : result) {
+            String hash = record.get("drep_hash", String.class);
+            DrepType type = DrepType.valueOf(record.get("drep_type", String.class));
+            int interactionEpoch = record.get("epoch", Integer.class);
+            long slot = record.get("slot", Long.class);
+            int txIndex = record.get("tx_index", Integer.class);
+            int eventIndex = record.get("event_index", Integer.class);
+            int drepActivity = 0;
+
+            if (dialect.family() == SQLDialect.H2) {
+                var paramsJson = record.get(EPOCH_PARAM.PARAMS).data();
+                ProtocolParams protocolParam;
+                try {
+                    protocolParam = objectMapper.readValue(paramsJson, ProtocolParams.class);
+                    drepActivity = protocolParam.getDrepActivity();
+                } catch (JsonProcessingException e) {
+                    log.error("Failed to parse protocol params JSON: {}", paramsJson, e);
+                }
+            } else {
+                drepActivity = record.get("drep_activity", Integer.class);
+            }
+
+            var key = new Tuple<>(hash, type);
+            map.computeIfAbsent(key, unused -> new ArrayList<>())
+                    .add(new DRepExpiryUtil.DRepInteractionInfo(interactionEpoch, drepActivity, slot, txIndex, eventIndex));
         }
 
         return map;
@@ -410,6 +498,19 @@ public class DRepExpiryService {
         return map;
     }
 
+    private Set<Integer> findActiveProposalStatusEpochs(int fromEpoch, int toEpoch) {
+        if (fromEpoch > toEpoch) {
+            return Collections.emptySet();
+        }
+
+        return dsl.selectDistinct(GOV_ACTION_PROPOSAL_STATUS.EPOCH)
+                .from(GOV_ACTION_PROPOSAL_STATUS)
+                .where(GOV_ACTION_PROPOSAL_STATUS.STATUS.eq(GovActionStatus.ACTIVE.name())
+                        .and(GOV_ACTION_PROPOSAL_STATUS.EPOCH.ge(fromEpoch))
+                        .and(GOV_ACTION_PROPOSAL_STATUS.EPOCH.le(toEpoch)))
+                .fetchSet(GOV_ACTION_PROPOSAL_STATUS.EPOCH);
+    }
+
     private List<DRepExpiryUtil.ProposalSubmissionInfo> findProposalWithEpochLessThanOrEqualTo(int epoch) {
         Field<String> govActionLifetimeField = null;
         SQLDialect dialect = dsl.dialect();
@@ -425,6 +526,8 @@ public class DRepExpiryService {
             result = dsl.select(
                     GOV_ACTION_PROPOSAL.SLOT,
                     GOV_ACTION_PROPOSAL.EPOCH,
+                    GOV_ACTION_PROPOSAL.TX_INDEX,
+                    GOV_ACTION_PROPOSAL.IDX,
                     govActionLifetimeField.cast(Integer.class).as("gov_action_lifetime")
             )
             .from(GOV_ACTION_PROPOSAL)
@@ -435,6 +538,8 @@ public class DRepExpiryService {
             result = dsl.select(
                     GOV_ACTION_PROPOSAL.SLOT,
                     GOV_ACTION_PROPOSAL.EPOCH,
+                    GOV_ACTION_PROPOSAL.TX_INDEX,
+                    GOV_ACTION_PROPOSAL.IDX,
                     EPOCH_PARAM.PARAMS
             )
             .from(GOV_ACTION_PROPOSAL)
@@ -447,6 +552,8 @@ public class DRepExpiryService {
         for (Record record : result) {
             long slot = record.get(GOV_ACTION_PROPOSAL.SLOT);
             int proposalEpoch = record.get(GOV_ACTION_PROPOSAL.EPOCH);
+            int txIndex = record.get(GOV_ACTION_PROPOSAL.TX_INDEX);
+            int index = record.get(GOV_ACTION_PROPOSAL.IDX);
             int govActionLifetime = 0;
 
             if (dialect.family() == SQLDialect.H2) {
@@ -462,7 +569,7 @@ public class DRepExpiryService {
                 govActionLifetime = record.get("gov_action_lifetime", Integer.class);
             }
 
-            proposalInfos.add(new DRepExpiryUtil.ProposalSubmissionInfo(slot, proposalEpoch, govActionLifetime));
+            proposalInfos.add(new DRepExpiryUtil.ProposalSubmissionInfo(slot, proposalEpoch, govActionLifetime, txIndex, index));
         }
 
         return proposalInfos;

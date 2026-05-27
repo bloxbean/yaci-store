@@ -3,6 +3,8 @@ package com.bloxbean.cardano.yaci.store.governanceaggr.processor;
 import com.bloxbean.cardano.yaci.store.governanceaggr.util.DRepExpiryUtil;
 import org.junit.jupiter.api.Test;
 
+import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -690,6 +692,84 @@ public class DRepExpiryUtilTest {
                 25);
     }
 
+    @Test
+    public void shouldCalculateDbSyncActiveUntilAcrossSanchonetPv9ProposalFlushes() {
+        var registration = new DRepExpiryUtil.DRepRegistrationInfo(42596698L, 493, 20, 9, 0, 0);
+        var proposals = List.of(
+                new DRepExpiryUtil.ProposalSubmissionInfo(50184338L, 580, 60, 0, 0),
+                new DRepExpiryUtil.ProposalSubmissionInfo(51202227L, 592, 60, 0, 0)
+        );
+        var activeProposalEpochs = rangeClosed(593, 598);
+
+        assertThat(DRepExpiryUtil.calculateDRepActiveUntil(
+                registration, List.of(), proposals, activeProposalEpochs, 493, 570))
+                .isEqualTo(513);
+
+        assertThat(DRepExpiryUtil.calculateDRepActiveUntil(
+                registration, List.of(), proposals, activeProposalEpochs, 493, 582))
+                .isEqualTo(600);
+
+        assertThat(DRepExpiryUtil.calculateDRepActiveUntil(
+                registration, List.of(), proposals, activeProposalEpochs, 493, 593))
+                .isEqualTo(611);
+
+        var voteAt598 = new DRepExpiryUtil.DRepInteractionInfo(598, 20, 51679073L, 0, 0);
+        assertThat(DRepExpiryUtil.calculateDRepActiveUntil(
+                registration, List.of(voteAt598), proposals, activeProposalEpochs, 493, 599))
+                .isEqualTo(618);
+    }
+
+    @Test
+    public void shouldKeepRawActiveUntilStableDuringDormantPeriodAfterVote() {
+        var registration = new DRepExpiryUtil.DRepRegistrationInfo(1L, 990, 20, 10, 0, 0);
+        var proposals = List.of(
+                new DRepExpiryUtil.ProposalSubmissionInfo(100L, 993, 15, 0, 0),
+                new DRepExpiryUtil.ProposalSubmissionInfo(300L, 1013, 15, 0, 0)
+        );
+        var interactions = List.of(
+                new DRepExpiryUtil.DRepInteractionInfo(993, 20, 101L, 1, 0),
+                new DRepExpiryUtil.DRepInteractionInfo(1013, 20, 301L, 1, 0)
+        );
+        var activeProposalEpochs = Set.<Integer>of();
+
+        assertThat(DRepExpiryUtil.calculateDRepActiveUntil(
+                registration, interactions, proposals, activeProposalEpochs, 990, 1000))
+                .isEqualTo(1013);
+
+        assertThat(DRepExpiryUtil.calculateDRepActiveUntil(
+                registration, interactions, proposals, activeProposalEpochs, 990, 1014))
+                .isEqualTo(1033);
+    }
+
+    @Test
+    public void shouldNotCountProposalSubmissionEpochAsDormantForActiveUntil() {
+        var registration = new DRepExpiryUtil.DRepRegistrationInfo(78488970L, 908, 20, 10, 0, 0);
+        var proposals = List.of(
+                new DRepExpiryUtil.ProposalSubmissionInfo(78488971L, 908, 15, 0, 0),
+                new DRepExpiryUtil.ProposalSubmissionInfo(79111020L, 915, 15, 0, 0)
+        );
+        var voteAt910 = new DRepExpiryUtil.DRepInteractionInfo(910, 20, 78695050L, 0, 0);
+        var activeProposalEpochs = Set.of(908, 909, 910, 911, 916);
+
+        assertThat(DRepExpiryUtil.calculateDRepActiveUntil(
+                registration, List.of(voteAt910), proposals, activeProposalEpochs, 908, 916))
+                .isEqualTo(933);
+    }
+
+    @Test
+    public void shouldNotReviveInactiveDRepWhenProposalFlushesDormantCounter() {
+        var registration = new DRepExpiryUtil.DRepRegistrationInfo(1L, 0, 3, 10, 0, 0);
+        var proposals = List.of(
+                new DRepExpiryUtil.ProposalSubmissionInfo(0L, 0, 4, 0, 0),
+                new DRepExpiryUtil.ProposalSubmissionInfo(60L, 6, 4, 0, 0)
+        );
+        var activeProposalEpochs = Set.of(0, 1, 2, 3);
+
+        assertThat(DRepExpiryUtil.calculateDRepActiveUntil(
+                registration, List.of(), proposals, activeProposalEpochs, 0, 6))
+                .isEqualTo(3);
+    }
+
     private void assertExpiryV9(DRepExpiryUtil.DRepRegistrationInfo registration,
                                 DRepExpiryUtil.DRepInteractionInfo lastInteraction,
                                 Set<Integer> dormantEpochs,
@@ -722,5 +802,13 @@ public class DRepExpiryUtilTest {
                 evaluatedEpoch);
 
         assertThat(actual).isEqualTo(expected);
+    }
+
+    private Set<Integer> rangeClosed(int startInclusive, int endInclusive) {
+        Set<Integer> result = new HashSet<>();
+        for (int epoch = startInclusive; epoch <= endInclusive; epoch++) {
+            result.add(epoch);
+        }
+        return result;
     }
 }
