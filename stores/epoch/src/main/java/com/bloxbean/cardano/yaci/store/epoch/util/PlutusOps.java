@@ -691,10 +691,9 @@ public class PlutusOps {
             keys = map2.keySet();
             V2_OPS = keys.stream().sorted().toList();
 
-            Map<String, Long> map3 = objectMapper.readValue(PLUTUS_V3_COSTS, new TypeReference<SortedMap<String, Long>>() {
+            Map<String, Long> map3 = objectMapper.readValue(PLUTUS_V3_COSTS, new TypeReference<LinkedHashMap<String, Long>>() {
             });
-            keys = map3.keySet();
-            V3_OPS = keys.stream().sorted().toList();
+            V3_OPS = map3.keySet().stream().toList();
 
         } catch (Exception e) {
             throw new RuntimeException(e);

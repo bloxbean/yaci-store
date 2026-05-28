@@ -39,20 +39,28 @@ public class BFProtocolParamMapperDecorator implements BFProtocolParamMapper {
             bfProtocolParamsDto.setDecentralisationParam(BigDecimal.ZERO);
         }
 
-        if(protocolParamsDto.getCostModels() != null) {
-            Map<String, List<Long>> costModelsRaw =  protocolParamsDto.getCostModels().entrySet().stream()
+        Map<String, List<Long>> costModelsRaw = protocolParamsDto.getCostModelsRaw();
+        if(costModelsRaw == null && protocolParamsDto.getCostModels() != null) {
+            costModelsRaw = protocolParamsDto.getCostModels().entrySet().stream()
                     .collect(Collectors.toMap(
                             Map.Entry::getKey,
                             entry -> entry.getValue().entrySet().stream()
                                     .map(Map.Entry::getValue)
                                     .collect(Collectors.toList())
                     ));
+        }
+
+        if (costModelsRaw != null) {
             bfProtocolParamsDto.setCostModelsRaw(costModelsRaw);
         }
 
         bfProtocolParamsDto.setEMax(protocolParamsDto.getEMax());
         bfProtocolParamsDto.setNOpt(protocolParamsDto.getNOpt());
         bfProtocolParamsDto.setPvtPPSecurityGroup(protocolParamsDto.getPvtppSecurityGroup());
+        bfProtocolParamsDto.setGovActionDeposit(protocolParamsDto.getGovActionDeposit() != null
+                ? protocolParamsDto.getGovActionDeposit().toString() : null);
+        bfProtocolParamsDto.setDrepDeposit(protocolParamsDto.getDrepDeposit() != null
+                ? protocolParamsDto.getDrepDeposit().toString() : null);
 
         return bfProtocolParamsDto;
     }
