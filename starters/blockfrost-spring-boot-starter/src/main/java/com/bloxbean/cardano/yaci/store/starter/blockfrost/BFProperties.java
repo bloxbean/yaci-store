@@ -27,6 +27,7 @@ public class BFProperties {
             private Transaction transaction = new Transaction();
             private Blocks blocks = new Blocks();
             private Scripts scripts = new Scripts();
+            private Metadata metadata = new Metadata();
 
             @Getter
             @Setter
@@ -67,6 +68,12 @@ public class BFProperties {
             @Getter
             @Setter
             public static final class Scripts {
+                private boolean enabled = false;
+            }
+
+            @Getter
+            @Setter
+            public static final class Metadata {
                 private boolean enabled = false;
             }
 
