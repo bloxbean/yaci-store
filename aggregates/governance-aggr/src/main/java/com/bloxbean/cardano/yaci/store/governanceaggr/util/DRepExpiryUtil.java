@@ -280,11 +280,6 @@ public class DRepExpiryUtil {
         int dormantCounter = 0;
         boolean registered = false;
 
-        Set<Integer> proposalEpochs = proposalSubmissions.stream()
-                .filter(p -> p.epoch() >= eraFirstEpoch && p.epoch() <= evaluatedEpoch)
-                .map(ProposalSubmissionInfo::epoch)
-                .collect(Collectors.toSet());
-
         List<ExpiryEvent> events = new java.util.ArrayList<>();
         events.add(new ExpiryEvent(
                 EventType.REGISTRATION,
@@ -335,6 +330,13 @@ public class DRepExpiryUtil {
 
         int eventIndex = 0;
         for (int epoch = eraFirstEpoch; epoch <= evaluatedEpoch; epoch++) {
+            // Epoch boundary: increment dormant counter BEFORE processing events.
+            // Skip eraFirstEpoch because VState initializes with counter=0 and the
+            // first updateNumDormantEpochs call happens at boundary eraFirstEpoch→eraFirstEpoch+1.
+            if (epoch > eraFirstEpoch && !activeProposalEpochs.contains(epoch)) {
+                dormantCounter++;
+            }
+
             while (eventIndex < events.size() && events.get(eventIndex).epoch() == epoch) {
                 ExpiryEvent event = events.get(eventIndex);
                 switch (event.type()) {
@@ -359,10 +361,6 @@ public class DRepExpiryUtil {
                     }
                 }
                 eventIndex++;
-            }
-
-            if (!activeProposalEpochs.contains(epoch) && !proposalEpochs.contains(epoch)) {
-                dormantCounter++;
             }
         }
 

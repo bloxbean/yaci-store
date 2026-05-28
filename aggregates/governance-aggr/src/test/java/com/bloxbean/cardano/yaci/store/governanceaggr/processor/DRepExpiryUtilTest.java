@@ -699,7 +699,11 @@ public class DRepExpiryUtilTest {
                 new DRepExpiryUtil.ProposalSubmissionInfo(50184338L, 580, 60, 0, 0),
                 new DRepExpiryUtil.ProposalSubmissionInfo(51202227L, 592, 60, 0, 0)
         );
-        var activeProposalEpochs = rangeClosed(593, 598);
+        // activeProposalEpochs must include the epoch after each proposal submission
+        // (the proposal is still in newProposals at that boundary before ratification)
+        var activeProposalEpochs = new HashSet<Integer>();
+        activeProposalEpochs.add(581); // proposal at 580 still in newProposals at boundary 580→581
+        activeProposalEpochs.addAll(rangeClosed(593, 598)); // proposal at 592 active from 593
 
         assertThat(DRepExpiryUtil.calculateDRepActiveUntil(
                 registration, List.of(), proposals, activeProposalEpochs, 493, 570))
@@ -749,7 +753,9 @@ public class DRepExpiryUtilTest {
                 new DRepExpiryUtil.ProposalSubmissionInfo(79111020L, 915, 15, 0, 0)
         );
         var voteAt910 = new DRepExpiryUtil.DRepInteractionInfo(910, 20, 78695050L, 0, 0);
-        var activeProposalEpochs = Set.of(908, 909, 910, 911, 916);
+        // Proposal at 908 is active at epochs 908-911, ratified at boundary 911→912
+        // (still in newProposals at boundary 911→912, so epoch 912 is also non-dormant)
+        var activeProposalEpochs = Set.of(908, 909, 910, 911, 912, 916);
 
         assertThat(DRepExpiryUtil.calculateDRepActiveUntil(
                 registration, List.of(voteAt910), proposals, activeProposalEpochs, 908, 916))
@@ -763,11 +769,34 @@ public class DRepExpiryUtilTest {
                 new DRepExpiryUtil.ProposalSubmissionInfo(0L, 0, 4, 0, 0),
                 new DRepExpiryUtil.ProposalSubmissionInfo(60L, 6, 4, 0, 0)
         );
-        var activeProposalEpochs = Set.of(0, 1, 2, 3);
+        // Proposal at epoch 0 with lifetime 4: gasExpiresAfter=4, active for epochs 0-4
+        var activeProposalEpochs = Set.of(0, 1, 2, 3, 4);
 
         assertThat(DRepExpiryUtil.calculateDRepActiveUntil(
                 registration, List.of(), proposals, activeProposalEpochs, 0, 6))
                 .isEqualTo(3);
+    }
+
+    @Test
+    public void shouldFixPv10OffByOneWhenProposalFlushesInDormantEpoch() {
+        // DRep af0dae registered at epoch 670 (PV10, dRepActivity=20)
+        // No votes. Proposals at epochs 683, 685, 687.
+        // activeProposalEpochs: proposal at 613 (lifetime=60) active until 673,
+        // so epochs 593-673 are non-dormant. Proposal at 683 makes epoch 684 non-dormant.
+        var registration = new DRepExpiryUtil.DRepRegistrationInfo(57890157L, 670, 20, 10, 0, 0);
+        var proposals = List.of(
+                new DRepExpiryUtil.ProposalSubmissionInfo(59080597L, 683, 60, 0, 0),
+                new DRepExpiryUtil.ProposalSubmissionInfo(59184828L, 685, 60, 0, 0),
+                new DRepExpiryUtil.ProposalSubmissionInfo(59388112L, 687, 60, 0, 0)
+        );
+        var activeProposalEpochs = new HashSet<Integer>();
+        activeProposalEpochs.addAll(rangeClosed(593, 673));
+        activeProposalEpochs.add(684); // proposal at 683 still in newProposals at boundary 683→684
+
+        // At evaluatedEpoch=683: counter=10 (epochs 674-683), flush: 690+10=700
+        assertThat(DRepExpiryUtil.calculateDRepActiveUntil(
+                registration, List.of(), proposals, activeProposalEpochs, 493, 683))
+                .isEqualTo(700);
     }
 
     private void assertExpiryV9(DRepExpiryUtil.DRepRegistrationInfo registration,
