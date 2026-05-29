@@ -18,6 +18,7 @@ import org.springframework.data.util.Pair;
 import org.springframework.shell.command.annotation.Command;
 import org.springframework.shell.command.annotation.Option;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -30,7 +31,6 @@ import static com.bloxbean.cardano.yaci.store.admin.cli.common.ConsoleWriter.*;
 public class DBCommands {
     private static final String INDEX_FILE = "index.yml";
     private static final String EXTRA_INDEX_FILE = "extra-index.yml";
-    private static final String BLOCKFROST_INDEX_FILE = "blockfrost-index.yml";
     private static final String ROLLBACK_LEDGER_STATE_FILE = "rollback-ledger-state.yml";
 
     private final IndexService indexService;
@@ -70,24 +70,30 @@ public class DBCommands {
     @Command(description = "Apply the default indexes required for read operations.")
     public void applyIndexes(@Option(longNames = "skip-extra-indexes", defaultValue = "false", description = "Skip additional optional indexes.") boolean skipExtraIndexes) {
         writeLn(info("Start to apply index ..."));
-        applyIndexes(INDEX_FILE);
+        applyIndexesFromFiles(INDEX_FILE);
 
         if (!skipExtraIndexes) {
             writeLn(info("Start to apply extra index ..."));
-            applyIndexes(EXTRA_INDEX_FILE);
+            applyIndexesFromFiles(EXTRA_INDEX_FILE);
         }
     }
 
     @Command(description = "Apply only additional optional read indexes")
     public void applyExtraIndexes() {
         writeLn(info("Start to apply extra index ..."));
-        applyIndexes(EXTRA_INDEX_FILE);
+        applyIndexesFromFiles(EXTRA_INDEX_FILE);
     }
 
-    @Command(description = "Apply Blockfrost compatibility read indexes")
-    public void applyBlockfrostIndexes() {
-        writeLn(info("Start to apply Blockfrost index ..."));
-        applyBlockfrostIndexes(BLOCKFROST_INDEX_FILE);
+    @Command(description = "Apply one or more optional index definitions")
+    public void applyOptionalIndexes(
+            @Option(longNames = "indexes", label = "indexes",
+                    description = "Comma-separated optional index names (e.g., 'blockfrost-index,asset-ext-index')")
+            String indexes,
+            @Option(longNames = "index-files", label = "index-files",
+                    description = "Comma-separated index definition file paths (e.g., 'file:///path/to/index.yml')")
+            String indexFiles) {
+        writeLn(info("Start to apply optional indexes ..."));
+        applyIndexesFromFiles(getIndexFiles(indexes, indexFiles));
     }
 
     @Command(description = "Rollback data to a previous epoch")
@@ -136,12 +142,12 @@ public class DBCommands {
         }
     }
 
-    private void applyIndexes(String indexFile) {
+    private void applyIndexesFromFiles(String... indexFiles) {
         IndexLoader indexLoader = new IndexLoader();
-        List<IndexDefinition> indexDefinitionList = indexLoader.loadIndexes(indexFile);
+        List<IndexDefinition> indexDefinitionList = indexLoader.loadIndexesFromMultipleFiles(indexFiles);
         if (indexDefinitionList == null || indexDefinitionList.isEmpty()) {
             log.warn("No optional index found to apply");
-            writeLn(warn("No optional index found to apply : {}", indexFile));
+            writeLn(warn("No optional index found to apply from files: %s", String.join(", ", indexFiles)));
             return;
         }
 
@@ -149,22 +155,6 @@ public class DBCommands {
 
         if (!result.getSecond().isEmpty()) {
             log.warn(">> Failed to apply these indexes : " + result.getSecond());
-        }
-    }
-
-    private void applyBlockfrostIndexes(String indexFile) {
-        IndexLoader indexLoader = new IndexLoader();
-        List<IndexDefinition> indexDefinitionList = indexLoader.loadIndexes(indexFile);
-        if (indexDefinitionList == null || indexDefinitionList.isEmpty()) {
-            log.warn("No Blockfrost index found to apply");
-            writeLn(warn("No Blockfrost index found to apply : {}", indexFile));
-            return;
-        }
-
-        var result = indexService.applyIndexes(indexDefinitionList);
-
-        if (!result.getSecond().isEmpty()) {
-            log.warn(">> Failed to apply these Blockfrost indexes : " + result.getSecond());
         }
     }
 
@@ -205,6 +195,45 @@ public class DBCommands {
         }
 
         return new String[]{this.rollbackFiles};
+    }
+
+    private String[] getIndexFiles(String indexes, String indexFiles) {
+        List<String> files = new ArrayList<>();
+
+        if (indexes != null && !indexes.trim().isEmpty()) {
+            List<String> internalIndexes = parseCommaSeparatedFiles(indexes);
+            internalIndexes.stream()
+                    .filter(this::isResourcePath)
+                    .findFirst()
+                    .ifPresent(resourcePath -> {
+                        throw new IllegalArgumentException("External index file paths should be provided with --index-files: " + resourcePath);
+                    });
+            files.addAll(internalIndexes);
+        }
+
+        if (indexFiles != null && !indexFiles.trim().isEmpty()) {
+            files.addAll(parseCommaSeparatedFiles(indexFiles));
+        }
+
+        if (files.isEmpty()) {
+            throw new IllegalArgumentException("Index names or --index-files must be provided");
+        }
+
+        return files.toArray(String[]::new);
+    }
+
+    private List<String> parseCommaSeparatedFiles(String files) {
+        return Arrays.stream(files.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .collect(Collectors.toList());
+    }
+
+    private boolean isResourcePath(String filePath) {
+        return filePath.startsWith("classpath:") ||
+                filePath.startsWith("file:") ||
+                filePath.startsWith("http:") ||
+                filePath.startsWith("https:");
     }
 
     private void applyRollback(String[] rollbackFiles, RollbackContext rollbackContext) {
