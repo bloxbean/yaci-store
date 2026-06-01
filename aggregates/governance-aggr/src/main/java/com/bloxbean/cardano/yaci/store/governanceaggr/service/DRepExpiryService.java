@@ -503,14 +503,67 @@ public class DRepExpiryService {
             return Collections.emptySet();
         }
 
-        return dsl.selectDistinct(GOV_ACTION_PROPOSAL_STATUS.EPOCH)
+        Field<String> govActionLifetimeField = null;
+        SQLDialect dialect = dsl.dialect();
+
+        if (dialect.family() == SQLDialect.POSTGRES) {
+            govActionLifetimeField = DSL.field("params->>'gov_action_lifetime'", String.class);
+        } else if (dialect.family() == SQLDialect.MYSQL) {
+            govActionLifetimeField = DSL.function("JSON_EXTRACT", SQLDataType.VARCHAR, DSL.field("params"), DSL.inline("$.gov_action_lifetime"));
+        }
+
+        if (dialect.family() == SQLDialect.POSTGRES || dialect.family() == SQLDialect.MYSQL) {
+            Field<Integer> expiresAfter = DSL.field("{0} + {1}", Integer.class,
+                    GOV_ACTION_PROPOSAL.EPOCH,
+                    govActionLifetimeField.cast(Integer.class));
+
+            return dsl.selectDistinct(GOV_ACTION_PROPOSAL_STATUS.EPOCH)
+                    .from(GOV_ACTION_PROPOSAL_STATUS)
+                    .join(GOV_ACTION_PROPOSAL).on(GOV_ACTION_PROPOSAL_STATUS.GOV_ACTION_TX_HASH.eq(GOV_ACTION_PROPOSAL.TX_HASH)
+                            .and(GOV_ACTION_PROPOSAL_STATUS.GOV_ACTION_INDEX.eq(GOV_ACTION_PROPOSAL.IDX)))
+                    .join(EPOCH_PARAM).on(GOV_ACTION_PROPOSAL.EPOCH.eq(EPOCH_PARAM.EPOCH))
+                    .where(nonDormantProposalStatusCondition(fromEpoch, toEpoch)
+                            .and(GOV_ACTION_PROPOSAL_STATUS.EPOCH.le(expiresAfter)))
+                    .fetchSet(GOV_ACTION_PROPOSAL_STATUS.EPOCH);
+        }
+
+        Result<?> result = dsl.select(
+                        GOV_ACTION_PROPOSAL_STATUS.EPOCH.as("status_epoch"),
+                        GOV_ACTION_PROPOSAL.EPOCH.as("proposal_epoch"),
+                        EPOCH_PARAM.PARAMS
+                )
                 .from(GOV_ACTION_PROPOSAL_STATUS)
-                .where(GOV_ACTION_PROPOSAL_STATUS.STATUS.in(
-                                GovActionStatus.ACTIVE.name(),
-                                GovActionStatus.RATIFIED.name())
-                        .and(GOV_ACTION_PROPOSAL_STATUS.EPOCH.ge(fromEpoch))
-                        .and(GOV_ACTION_PROPOSAL_STATUS.EPOCH.le(toEpoch)))
-                .fetchSet(GOV_ACTION_PROPOSAL_STATUS.EPOCH);
+                .join(GOV_ACTION_PROPOSAL).on(GOV_ACTION_PROPOSAL_STATUS.GOV_ACTION_TX_HASH.eq(GOV_ACTION_PROPOSAL.TX_HASH)
+                        .and(GOV_ACTION_PROPOSAL_STATUS.GOV_ACTION_INDEX.eq(GOV_ACTION_PROPOSAL.IDX)))
+                .join(EPOCH_PARAM).on(GOV_ACTION_PROPOSAL.EPOCH.eq(EPOCH_PARAM.EPOCH))
+                .where(nonDormantProposalStatusCondition(fromEpoch, toEpoch))
+                .fetch();
+
+        Set<Integer> nonDormantEpochs = new HashSet<>();
+        for (Record record : result) {
+            int statusEpoch = record.get("status_epoch", Integer.class);
+            int proposalEpoch = record.get("proposal_epoch", Integer.class);
+
+            var paramsJson = record.get(EPOCH_PARAM.PARAMS).data();
+            try {
+                ProtocolParams protocolParam = objectMapper.readValue(paramsJson, ProtocolParams.class);
+                if (statusEpoch <= proposalEpoch + protocolParam.getGovActionLifetime()) {
+                    nonDormantEpochs.add(statusEpoch);
+                }
+            } catch (JsonProcessingException e) {
+                log.error("Failed to parse protocol params JSON: {}", paramsJson, e);
+            }
+        }
+
+        return nonDormantEpochs;
+    }
+
+    private Condition nonDormantProposalStatusCondition(int fromEpoch, int toEpoch) {
+        return GOV_ACTION_PROPOSAL_STATUS.STATUS.in(
+                        GovActionStatus.ACTIVE.name(),
+                        GovActionStatus.RATIFIED.name())
+                .and(GOV_ACTION_PROPOSAL_STATUS.EPOCH.ge(fromEpoch))
+                .and(GOV_ACTION_PROPOSAL_STATUS.EPOCH.le(toEpoch));
     }
 
     private List<DRepExpiryUtil.ProposalSubmissionInfo> findProposalWithEpochLessThanOrEqualTo(int epoch) {

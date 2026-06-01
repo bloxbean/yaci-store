@@ -89,6 +89,33 @@ class DRepExpiryServiceTest {
         assertThat(activeUntil).isEqualTo(600);
     }
 
+    @Test
+    void activeUntilDoesNotTreatRatifiedAfterProposalExpiryAsNonDormant() {
+        when(govEpochActivityRepository.findDormantEpochsInEpochRange(492, 580))
+                .thenReturn(Set.of());
+
+        insertEpochParam(492, 9, 20, 0);
+        insertEpochParam(493, 9, 20, 60);
+        insertEpochParam(580, 9, 20, 60);
+
+        insertDRepRegistration();
+        insertProposal("expired-before-ratified", 492, 42_510_119L);
+        insertProposalStatus("expired-before-ratified", 493, "RATIFIED");
+        insertProposal("proposal-flush", 580, 50_184_338L);
+        insertDRepDist(581);
+
+        dRepExpiryService.calculateAndUpdateExpiryForEpoch(581);
+
+        Integer activeUntil = jdbcTemplate.queryForObject("""
+                SELECT active_until
+                FROM drep_dist
+                WHERE epoch = 581
+                  AND drep_hash = ?
+                """, Integer.class, DREP_HASH);
+
+        assertThat(activeUntil).isEqualTo(601);
+    }
+
     private void createSchema() {
         jdbcTemplate.execute("""
                 CREATE TABLE drep_dist (

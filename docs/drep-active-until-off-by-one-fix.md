@@ -24,13 +24,14 @@ There are two root causes:
    dormant epoch for DRep registration/update/vote transactions.
 2. The non-dormant proposal epoch set was derived only from `gov_action_proposal_status.status =
    'ACTIVE'`. In yaci-store, a `RATIFIED` status row is also evidence that the proposal was present
-   in the current ratification state for that epoch. Excluding `RATIFIED` marks those epochs dormant
-   even though ledger did not.
+   in the current ratification state for that epoch. Excluding valid `RATIFIED` rows marks those
+   epochs dormant even though ledger did not.
 
 The minimal fix is:
 
 - Replay dormant increment before processing events in an epoch.
-- Use proposal status epochs with `ACTIVE` or `RATIFIED` as non-dormant epochs for `active_until`.
+- Use proposal status epochs with `ACTIVE` or `RATIFIED` as non-dormant epochs for `active_until`,
+  but only while `status_epoch <= proposal_epoch + gov_action_lifetime`.
 - Do not use `gov_epoch_activity` for `active_until`; it is still used by the separate `expiry`
   calculation path.
 
@@ -238,9 +239,10 @@ dpProposals = proposalsActions props
 
 So, for yaci-store `active_until`, `ACTIVE` alone is not a complete proxy for ledger
 non-dormancy. A `RATIFIED` status row at epoch `X` is also evidence that epoch `X` had a proposal
-present for governance evaluation, so epoch `X` must be treated as non-dormant. This does not mean
-the ratified proposal remains voteable after evaluation; it means the proposal was present at the
-epoch `X` evaluation point and will be removed by the next boundary's drop/enactment handling.
+present for governance evaluation, provided it still satisfies the ledger dormant predicate
+`X <= gasExpiresAfter`. This does not mean the ratified proposal remains voteable after evaluation;
+it means the proposal was present at the epoch `X` evaluation point and will be removed by the next
+boundary's drop/enactment handling.
 
 ## Database Evidence
 
@@ -392,17 +394,22 @@ So `RATIFIED` epochs must be included in the non-dormant epoch set used for `act
 
 File: `aggregates/governance-aggr/src/main/java/.../DRepExpiryService.java`
 
-The status query now returns proposal-status epochs that are non-dormant from the replay's
-perspective:
+The status query now returns proposal-status epochs that are non-dormant from the ledger's
+perspective: `ACTIVE` or `RATIFIED`, joined back to the original proposal and guarded by the
+proposal lifetime.
 
 ```java
 return dsl.selectDistinct(GOV_ACTION_PROPOSAL_STATUS.EPOCH)
         .from(GOV_ACTION_PROPOSAL_STATUS)
+        .join(GOV_ACTION_PROPOSAL).on(...)
+        .join(EPOCH_PARAM).on(GOV_ACTION_PROPOSAL.EPOCH.eq(EPOCH_PARAM.EPOCH))
         .where(GOV_ACTION_PROPOSAL_STATUS.STATUS.in(
                         GovActionStatus.ACTIVE.name(),
                         GovActionStatus.RATIFIED.name())
                 .and(GOV_ACTION_PROPOSAL_STATUS.EPOCH.ge(fromEpoch))
-                .and(GOV_ACTION_PROPOSAL_STATUS.EPOCH.le(toEpoch)))
+                .and(GOV_ACTION_PROPOSAL_STATUS.EPOCH.le(toEpoch))
+                .and(GOV_ACTION_PROPOSAL_STATUS.EPOCH.le(
+                        GOV_ACTION_PROPOSAL.EPOCH + govActionLifetime)))
         .fetchSet(GOV_ACTION_PROPOSAL_STATUS.EPOCH);
 ```
 
@@ -443,6 +450,8 @@ Expected coverage:
   `RATIFIED` non-dormant pattern.
 - `activeUntilTreatsRatifiedProposalStatusEpochAsNonDormant` covers the service-level SQL query
   that includes `RATIFIED` status rows.
+- `activeUntilDoesNotTreatRatifiedAfterProposalExpiryAsNonDormant` covers the ledger
+  `currentEpoch <= gasExpiresAfter` guard.
 
 After deployment, rerun:
 
