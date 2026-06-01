@@ -90,7 +90,7 @@ public class DRepExpiryService {
         });
 
         Set<Integer> dormantEpochsToLeftBoundaryEpoch = govEpochActivityRepository.findDormantEpochsInEpochRange(firstEpochNoInConwayOrLater, leftBoundaryEpoch);
-        Set<Integer> activeProposalEpochsToLeftBoundaryEpoch = findActiveProposalStatusEpochs(firstEpochNoInConwayOrLater, leftBoundaryEpoch);
+        Set<Integer> nonDormantProposalEpochsToLeftBoundaryEpoch = findNonDormantProposalStatusEpochs(firstEpochNoInConwayOrLater, leftBoundaryEpoch);
 
         List<DRepExpiryUtil.ProposalSubmissionInfo> proposalSubmissionInfos = findProposalWithEpochLessThanOrEqualTo(leftBoundaryEpoch);
 
@@ -138,7 +138,7 @@ public class DRepExpiryService {
                     dRepRegistration,
                     interactionEventsMap.getOrDefault(dRep, Collections.emptyList()),
                     proposalSubmissionInfos,
-                    activeProposalEpochsToLeftBoundaryEpoch,
+                    nonDormantProposalEpochsToLeftBoundaryEpoch,
                     firstEpochNoInConwayOrLater,
                     leftBoundaryEpoch
             );
@@ -498,14 +498,16 @@ public class DRepExpiryService {
         return map;
     }
 
-    private Set<Integer> findActiveProposalStatusEpochs(int fromEpoch, int toEpoch) {
+    private Set<Integer> findNonDormantProposalStatusEpochs(int fromEpoch, int toEpoch) {
         if (fromEpoch > toEpoch) {
             return Collections.emptySet();
         }
 
         return dsl.selectDistinct(GOV_ACTION_PROPOSAL_STATUS.EPOCH)
                 .from(GOV_ACTION_PROPOSAL_STATUS)
-                .where(GOV_ACTION_PROPOSAL_STATUS.STATUS.eq(GovActionStatus.ACTIVE.name())
+                .where(GOV_ACTION_PROPOSAL_STATUS.STATUS.in(
+                                GovActionStatus.ACTIVE.name(),
+                                GovActionStatus.RATIFIED.name())
                         .and(GOV_ACTION_PROPOSAL_STATUS.EPOCH.ge(fromEpoch))
                         .and(GOV_ACTION_PROPOSAL_STATUS.EPOCH.le(toEpoch)))
                 .fetchSet(GOV_ACTION_PROPOSAL_STATUS.EPOCH);

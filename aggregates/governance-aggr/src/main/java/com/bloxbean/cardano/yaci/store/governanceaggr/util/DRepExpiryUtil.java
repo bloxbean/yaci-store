@@ -272,7 +272,7 @@ public class DRepExpiryUtil {
             DRepRegistrationInfo registrationInfo,
             List<DRepInteractionInfo> dRepInteractions,
             List<ProposalSubmissionInfo> proposalSubmissions,
-            Set<Integer> activeProposalEpochs,
+            Set<Integer> nonDormantProposalEpochs,
             int eraFirstEpoch,
             int evaluatedEpoch
     ) {
@@ -332,8 +332,8 @@ public class DRepExpiryUtil {
         for (int epoch = eraFirstEpoch; epoch <= evaluatedEpoch; epoch++) {
             // Epoch boundary: increment dormant counter BEFORE processing events.
             // Skip eraFirstEpoch because VState initializes with counter=0 and the
-            // first updateNumDormantEpochs call happens at boundary eraFirstEpoch→eraFirstEpoch+1.
-            if (epoch > eraFirstEpoch && !activeProposalEpochs.contains(epoch)) {
+            // first updateNumDormantEpochs call happens at the next epoch boundary.
+            if (epoch > eraFirstEpoch && !nonDormantProposalEpochs.contains(epoch)) {
                 dormantCounter++;
             }
 
