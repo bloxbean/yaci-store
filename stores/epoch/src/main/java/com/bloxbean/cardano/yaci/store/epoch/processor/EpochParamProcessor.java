@@ -60,6 +60,11 @@ public class EpochParamProcessor {
                 .orElse(null);
 
         if (genesisProtocolParams != null) {
+            //Normalize direct-start genesis params (e.g. direct Conway/Babbage/Alonzo start) the same way
+            //resolveEpochParam() does, so the initial epoch_param row exposes effective protocol params
+            //(clears Alonzo minUtxo, applies Babbage byte-based UTxO cost translation).
+            ppEraChangeRules.apply(startEra, null, genesisProtocolParams);
+
             log.info("Network is starting with the following protocol params : \n" + genesisProtocolParams);
 
             EpochParam epochParam = EpochParam.builder()
