@@ -28,6 +28,7 @@ public class BFProperties {
             private Blocks blocks = new Blocks();
             private Scripts scripts = new Scripts();
             private Metadata metadata = new Metadata();
+            private Util util = new Util();
 
             @Getter
             @Setter
@@ -74,6 +75,12 @@ public class BFProperties {
             @Getter
             @Setter
             public static final class Metadata {
+                private boolean enabled = false;
+            }
+
+            @Getter
+            @Setter
+            public static final class Util {
                 private boolean enabled = false;
             }
 
