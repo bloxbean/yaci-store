@@ -42,13 +42,19 @@ public class BFEpochStorageReaderImpl implements BFEpochStorageReader {
     public List<Epoch> findPreviousEpochs(int epoch, int page, int count) {
         int offset = Math.max(page, 0) * count;
 
-        return dsl.select(EPOCH.NUMBER, EPOCH.BLOCK_COUNT, EPOCH.TRANSACTION_COUNT, EPOCH.TOTAL_OUTPUT,
-                        EPOCH.TOTAL_FEES, EPOCH.START_TIME, EPOCH.END_TIME, EPOCH.MAX_SLOT)
+        // Select N nearest predecessors (DESC), then return in ascending order to match Blockfrost spec
+        var subSelect = dsl.select(EPOCH.NUMBER)
                 .from(EPOCH)
                 .where(EPOCH.NUMBER.lt((long) epoch))
                 .orderBy(EPOCH.NUMBER.desc())
                 .limit(count)
-                .offset(offset)
+                .offset(offset);
+
+        return dsl.select(EPOCH.NUMBER, EPOCH.BLOCK_COUNT, EPOCH.TRANSACTION_COUNT, EPOCH.TOTAL_OUTPUT,
+                        EPOCH.TOTAL_FEES, EPOCH.START_TIME, EPOCH.END_TIME, EPOCH.MAX_SLOT)
+                .from(EPOCH)
+                .where(EPOCH.NUMBER.in(subSelect))
+                .orderBy(EPOCH.NUMBER.asc())
                 .fetch(this::toEpoch);
     }
 
