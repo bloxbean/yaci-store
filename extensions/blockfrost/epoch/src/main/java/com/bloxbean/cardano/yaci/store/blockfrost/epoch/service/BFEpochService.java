@@ -1,6 +1,8 @@
 package com.bloxbean.cardano.yaci.store.blockfrost.epoch.service;
 
 import com.bloxbean.cardano.yaci.store.adapot.domain.EpochStake;
+import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
+import com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig;
 import com.bloxbean.cardano.yaci.store.adapot.storage.EpochStakeStorageReader;
 import com.bloxbean.cardano.yaci.store.api.epochaggr.service.EpochReadService;
 import com.bloxbean.cardano.yaci.store.blockfrost.epoch.dto.BFEpochDto;
@@ -20,6 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigInteger;
+import java.util.Comparator;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -36,6 +39,8 @@ public class BFEpochService {
     private final ObjectProvider<EpochStakeStorageReader> epochStakeStorageProvider;
     private final BFEpochMapper bfEpochMapper = BFEpochMapper.INSTANCE;
     private final BFEpochStakeMapper bfEpochStakeMapper = BFEpochStakeMapper.INSTANCE;
+    private final GenesisConfig genesisConfig;
+    private final StoreProperties storeProperties;
 
     public BFEpochDto getLatestEpoch() {
         Epoch epoch = epochReadService.getLatestEpoch()
@@ -81,6 +86,7 @@ public class BFEpochService {
 
         List<EpochStake> stakes = stakeStorageReader.getAllActiveStakesByEpoch(number, page, count);
         return stakes.stream()
+                .sorted(Comparator.comparing(EpochStake::getAddress))
                 .map(bfEpochStakeMapper::toBFEpochStakeDto)
                 .collect(Collectors.toList());
     }
@@ -96,6 +102,7 @@ public class BFEpochService {
         String poolHash = normalizePoolHash(poolId);
         List<EpochStake> stakes = stakeStorageReader.getAllActiveStakesByEpochAndPool(number, poolHash, page, count);
         return stakes.stream()
+                .sorted(Comparator.comparing(EpochStake::getAddress))
                 .map(bfEpochStakeMapper::toBFEpochStakePoolDto)
                 .collect(Collectors.toList());
     }
@@ -118,11 +125,20 @@ public class BFEpochService {
 
     private BFEpochDto toBFEpochDto(Epoch epoch) {
         String activeStake = resolveActiveStake(epoch.getNumber());
-        return bfEpochMapper.toBFEpochDto(epoch, activeStake);
+        return toBFEpochDto(epoch, activeStake);
     }
 
     private BFEpochDto toBFEpochDto(Epoch epoch, String activeStake) {
-        return bfEpochMapper.toBFEpochDto(epoch, activeStake);
+        BFEpochDto dto = bfEpochMapper.toBFEpochDto(epoch, activeStake);
+        applyTheoreticalEpochTimes(dto, epoch.getNumber());
+        return dto;
+    }
+
+    private void applyTheoreticalEpochTimes(BFEpochDto dto, long epochNumber) {
+        long genesisTime = genesisConfig.getStartTime(storeProperties.getProtocolMagic());
+        long epochLength = genesisConfig.getEpochLength();
+        dto.setStartTime(genesisTime + epochNumber * epochLength);
+        dto.setEndTime(genesisTime + (epochNumber + 1) * epochLength);
     }
 
     private String resolveActiveStake(long epochNumber) {
