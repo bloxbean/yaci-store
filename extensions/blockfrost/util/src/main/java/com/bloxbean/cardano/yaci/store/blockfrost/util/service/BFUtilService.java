@@ -22,7 +22,8 @@ public class BFUtilService {
             Either<JsonNode, JsonNode> result = txEvaluationService.evaluateTx(cborTx, null);
             return formatResult(result, version);
         } catch (Exception e) {
-            log.error("Transaction evaluation failed", e);
+            if (log.isDebugEnabled())
+                log.error("Transaction evaluation failed", e);
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
         }
     }
@@ -35,7 +36,8 @@ public class BFUtilService {
         } catch (ResponseStatusException e) {
             throw e;
         } catch (Exception e) {
-            log.error("Transaction evaluation with utxos failed", e);
+            if (log.isDebugEnabled())
+                log.error("Transaction evaluation with utxos failed", e);
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
         }
     }
