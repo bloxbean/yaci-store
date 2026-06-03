@@ -37,6 +37,10 @@ public class BFProtocolParamMapperDecorator implements BFProtocolParamMapper {
             bfProtocolParamsDto.setCostModelsRaw(protocolParamsDto.getCostModelsRaw());
         }
 
+        if (protocolParamsDto.getGovActionDeposit() != null)
+            bfProtocolParamsDto.setGovActionDeposit(protocolParamsDto.getGovActionDeposit().toString());
+        if (protocolParamsDto.getDrepDeposit() != null)
+            bfProtocolParamsDto.setDrepDeposit(protocolParamsDto.getDrepDeposit().toString());
 
         bfProtocolParamsDto.setEMax(protocolParamsDto.getEMax());
         bfProtocolParamsDto.setNOpt(protocolParamsDto.getNOpt());
