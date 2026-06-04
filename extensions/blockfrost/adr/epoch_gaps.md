@@ -31,6 +31,13 @@
   Correct approach: use `adapot` table for past epochs; for current epoch, `SUM` transaction fees
   from the `block` table. Caching recommended for performance.
 
+- **`first_block_time` / `last_block_time` not the true first/last block times
+  ([#973](https://github.com/bloxbean/yaci-store/issues/973)):**
+  `epoch.start_time` / `epoch.end_time` (which back these fields) are computed from an
+  **unordered** block query in `EpochService`, so they come from arbitrary blocks rather than
+  the chronologically first/last block — off by seconds to hours vs Blockfrost. Code currently
+  keeps reading directly from the `epoch` columns;
+  
 - **Block query performance (#791) — ✅ resolved by `idx_block_epoch_slot`:**
   `GET /epochs/{number}/blocks` was slow specifically for `order=asc` on epochs far from
   the chain tip. Without a composite index, the JDBC prepared-statement plan walks
