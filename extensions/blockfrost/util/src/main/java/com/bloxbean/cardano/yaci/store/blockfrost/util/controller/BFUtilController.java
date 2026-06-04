@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.blockfrost.util.controller;
 
+import com.bloxbean.cardano.yaci.store.blockfrost.util.dto.BFDeriveAddressDto;
 import com.bloxbean.cardano.yaci.store.blockfrost.util.dto.BFEvaluateUtxosRequest;
 import com.bloxbean.cardano.yaci.store.blockfrost.util.service.BFUtilService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -44,5 +45,14 @@ public class BFUtilController {
                                                         @RequestParam(name = "version", defaultValue = "5") int version) {
         JsonNode result = bfUtilService.evaluateTxWithUtxos(request.getCbor(), request.getAdditionalUtxoSet(), version);
         return ResponseEntity.ok(result);
+    }
+
+    @GetMapping("/addresses/xpub/{xpub}/{role}/{index}")
+    @Operation(summary = "Derive an address",
+               description = "Derive Shelley address from an xpub.")
+    public BFDeriveAddressDto deriveAddress(@PathVariable String xpub,
+                                            @PathVariable int role,
+                                            @PathVariable int index) {
+        return bfUtilService.deriveAddress(xpub, role, index);
     }
 }

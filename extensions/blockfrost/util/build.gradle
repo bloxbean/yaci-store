@@ -3,6 +3,7 @@ import org.gradle.api.publish.maven.MavenPublication
 dependencies {
     api project(":extensions:blockfrost:blockfrost-common")
     api project(":components:submit")
+    api project(":components:common")
 
     implementation libs.vavr
     implementation 'org.springframework.boot:spring-boot-starter-web'

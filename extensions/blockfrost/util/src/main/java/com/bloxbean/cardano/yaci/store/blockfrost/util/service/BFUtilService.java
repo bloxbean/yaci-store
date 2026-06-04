@@ -1,6 +1,14 @@
 package com.bloxbean.cardano.yaci.store.blockfrost.util.service;
 
+import com.bloxbean.cardano.client.address.Address;
+import com.bloxbean.cardano.client.address.AddressProvider;
+import com.bloxbean.cardano.client.common.model.Network;
+import com.bloxbean.cardano.client.common.model.Networks;
+import com.bloxbean.cardano.client.crypto.bip32.key.HdPublicKey;
+import com.bloxbean.cardano.client.crypto.cip1852.CIP1852;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
+import com.bloxbean.cardano.yaci.store.blockfrost.util.dto.BFDeriveAddressDto;
+import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.submit.service.TxEvaluationService;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.vavr.control.Either;
@@ -18,6 +26,7 @@ import java.util.Base64;
 public class BFUtilService {
 
     private final TxEvaluationService txEvaluationService;
+    private final StoreProperties storeProperties;
 
     public JsonNode evaluateTx(byte[] cborTx, int version) {
         try {
@@ -42,6 +51,36 @@ public class BFUtilService {
                 log.error("Transaction evaluation with utxos failed", e);
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
         }
+    }
+
+    public BFDeriveAddressDto deriveAddress(String xpub, int role, int index) {
+        byte[] xpubBytes = HexUtil.decodeHexString(xpub);
+        if (xpubBytes.length != 64) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Invalid xpub length. Expected 64 bytes (public key + chain code), got " + xpubBytes.length);
+        }
+
+        CIP1852 cip1852 = new CIP1852();
+        HdPublicKey paymentKey = cip1852.getPublicKeyFromAccountPubKey(xpubBytes, role, index);
+        HdPublicKey stakeKey = cip1852.getPublicKeyFromAccountPubKey(xpubBytes, 2, 0);
+
+        Network network = getNetwork();
+        Address address = AddressProvider.getBaseAddress(paymentKey, stakeKey, network);
+
+        return BFDeriveAddressDto.builder()
+                .xpub(xpub)
+                .role(role)
+                .index(index)
+                .address(address.toBech32())
+                .build();
+    }
+
+    private Network getNetwork() {
+        long protocolMagic = storeProperties.getProtocolMagic();
+        if (protocolMagic == Networks.mainnet().getProtocolMagic()) {
+            return Networks.mainnet();
+        }
+        return Networks.testnet();
     }
 
     private byte[] decodeCbor(String cbor) {
