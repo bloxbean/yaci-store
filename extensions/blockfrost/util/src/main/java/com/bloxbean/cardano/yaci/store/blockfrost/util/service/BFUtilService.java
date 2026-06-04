@@ -10,6 +10,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.Base64;
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -28,9 +30,9 @@ public class BFUtilService {
         }
     }
 
-    public JsonNode evaluateTxWithUtxos(String cborHex, JsonNode additionalUtxoSet, int version) {
+    public JsonNode evaluateTxWithUtxos(String cbor, JsonNode additionalUtxoSet, int version) {
         try {
-            byte[] cborTx = HexUtil.decodeHexString(cborHex);
+            byte[] cborTx = decodeCbor(cbor);
             Either<JsonNode, JsonNode> result = txEvaluationService.evaluateTx(cborTx, additionalUtxoSet);
             return formatResult(result, version);
         } catch (ResponseStatusException e) {
@@ -40,6 +42,17 @@ public class BFUtilService {
                 log.error("Transaction evaluation with utxos failed", e);
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
         }
+    }
+
+    private byte[] decodeCbor(String cbor) {
+        if (cbor == null || cbor.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "cbor field is required");
+        }
+        String trimmed = cbor.trim();
+        if (trimmed.matches("[0-9a-fA-F]+")) {
+            return HexUtil.decodeHexString(trimmed);
+        }
+        return Base64.getDecoder().decode(trimmed);
     }
 
     private JsonNode formatResult(Either<JsonNode, JsonNode> result, int version) {
