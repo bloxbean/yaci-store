@@ -35,7 +35,7 @@ public class BFUtilService {
         } catch (Exception e) {
             if (log.isDebugEnabled())
                 log.error("Transaction evaluation failed", e);
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Transaction evaluation failed.");
         }
     }
 
@@ -49,7 +49,7 @@ public class BFUtilService {
         } catch (Exception e) {
             if (log.isDebugEnabled())
                 log.error("Transaction evaluation with utxos failed", e);
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Transaction evaluation failed.");
         }
     }
 
