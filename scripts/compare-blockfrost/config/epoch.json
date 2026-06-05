@@ -1,0 +1,5 @@
+{
+  "preprod": { "pool_id": "pool1lenzcfx02maescnpv8mk6gc6c59t0dramqucdgcvr4revw89xpz" },
+  "preview": { "pool_id": "pool1ynfnjspgckgxjf2zeye8s33jz3e3ndk9pcwp0qzaupzvvd8ukwt" },
+  "mainnet": { "epoch": "633", "pool_id": "pool1pu5jlj4q9w9jlxeu370a3c9myx47md5j5m2str0naunn2qnikdy" }
+}

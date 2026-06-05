@@ -1,0 +1,5 @@
+{
+  "preprod": { "script_hash": "", "datum_hash": "" },
+  "preview": { "script_hash": "", "datum_hash": "" },
+  "mainnet": { "script_hash": "", "datum_hash": "" }
+}

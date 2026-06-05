@@ -1,0 +1,5 @@
+{
+  "preprod": { "stake_address": "stake_test1uqgvl08c9kfzduvfd7r9n2eqh4n9j6nkxcxhkzuq5gv37psg34zyp" },
+  "preview": { "stake_address": "" },
+  "mainnet": { "stake_address": "" }
+}

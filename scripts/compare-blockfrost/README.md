@@ -21,31 +21,79 @@ Python scripts that compare **Yaci Store** API responses against live **Blockfro
 - Python 3.8+
 - No third-party packages (uses only stdlib: `urllib`, `json`, `csv`, `argparse`)
 
-## Setup
+## Configuration
 
-### 1. Running Yaci Store instances
+Nothing is hardcoded in the scripts anymore. Three things are configurable, all
+outside the code:
 
-The scripts expect local Yaci Store containers running on these ports:
+| What | Where | Notes |
+|---|---|---|
+| Blockfrost API keys (secrets) | `.env` | Auto-loaded; gitignored |
+| API endpoints (local + Blockfrost) | `.env` (optional) | Sensible defaults in code |
+| Per-module test data (addresses, assets, pools, …) | `config/<module>.json` | One file per module |
 
-| Network | Port |
-|---|---|
-| mainnet | `http://localhost:8101` |
-| preprod | `http://localhost:8301` |
-| preview  | `http://localhost:8201` |
+### 1. Secrets and endpoints — `.env`
 
-See `docker/deployments/` for deployment instructions.
-
-### 2. Blockfrost API keys
-
-Obtain project IDs from [blockfrost.io](https://blockfrost.io) and export them as environment variables:
+Copy the template and fill in your Blockfrost project IDs:
 
 ```bash
-export BF_PROJECT_ID_MAINNET=mainnet...
-export BF_PROJECT_ID_PREPROD=preprod...
-export BF_PROJECT_ID_PREVIEW=preview...
+cd scripts/compare-blockfrost
+cp .env.example .env
+# edit .env
 ```
 
-You only need to set the key for the network(s) you intend to test.
+`.env` is loaded automatically at startup (no manual `export` needed). A real
+shell `export` still takes precedence over the file.
+
+```bash
+# .env
+BF_PROJECT_ID_MAINNET=mainnet...
+BF_PROJECT_ID_PREPROD=preprod...
+BF_PROJECT_ID_PREVIEW=preview...
+```
+
+You only need the key(s) for the network(s) you intend to test.
+
+**Endpoint overrides (optional).** The local Yaci and Blockfrost base URLs have
+built-in defaults but can be overridden via `.env` — e.g. to point at a different
+host/port or a Blockfrost proxy:
+
+| Env var | Default |
+|---|---|
+| `YACI_LOCAL_MAINNET` / `_PREPROD` / `_PREVIEW` | `http://localhost:8101` / `8301` / `8201` |
+| `BF_URL_MAINNET` / `_PREPROD` / `_PREVIEW` | `https://cardano-<net>.blockfrost.io/api/v0` |
+| `YACI_LOCAL_PREFIX` | `/api/v1/blockfrost` |
+
+See `.env.example` for the full commented list.
+
+### 2. Test data — `config/<module>.json`
+
+Each module reads its test identifiers from `config/<module>.json`, keyed by
+network. This keeps test cases out of shared code — add cases by editing JSON,
+never the scripts.
+
+```jsonc
+// config/address.json
+{
+  "preprod": { "asset": "...", "policy_id": "...", "addresses": [] },
+  "mainnet": { "asset": "...", "addresses": ["addr1...", "addr1..."] }
+}
+```
+
+```jsonc
+// config/epoch.json
+{ "mainnet": { "epoch": "633", "pool_id": "pool1..." } }
+```
+
+If a file or network section is missing, the script falls back to
+**auto-discovering** identifiers from the local chain, so it still runs
+zero-config. Keys not present in config are auto-seeded (e.g. `block`, `slot`,
+`tx_hash`, and — when not provided — `address`/`asset`).
+
+### 3. Running Yaci Store instances
+
+The scripts expect local Yaci Store containers (see `docker/deployments/`) on the
+ports listed above. Override via `YACI_LOCAL_*` if your setup differs.
 
 ## Usage
 
@@ -54,30 +102,46 @@ Run from this directory:
 ```bash
 cd scripts/compare-blockfrost
 
-# Compare epoch endpoints on preprod
+# Compare epoch endpoints on preprod (key comes from .env automatically)
 python3 compare_epoch.py --network preprod
 
-# Compare on preview
-python3 compare_epoch.py --network preview
-
-# Compare on mainnet
-python3 compare_epoch.py --network mainnet
+# Strict mode — treat known-divergent fields as real diffs too
+python3 compare_epoch.py --network preprod --strict
 
 # Save results to a specific CSV file
 python3 compare_epoch.py --network preprod --csv /tmp/epoch_preprod.csv
-
-# Strict mode — exit non-zero if any diff found
-python3 compare_epoch.py --network preprod --strict
 ```
 
-The same flags apply to all `compare_*.py` scripts.
+The common flags apply to all `compare_*.py` scripts.
+
+### Testing multiple datasets (address module)
+
+`compare_address.py` tests **several addresses per run** for broader evidence.
+Address selection precedence:
+
+1. `--addresses a,b,c` — explicit comma-separated list (highest priority)
+2. `config/address.json` → the network's `addresses` array (if non-empty)
+3. auto-discovery — seed N distinct addresses from recent chain UTXOs
+
+```bash
+# Auto-discover and test 8 addresses
+python3 compare_address.py --network preprod --samples 8 --strict
+
+# Test specific addresses
+python3 compare_address.py --network mainnet --addresses "addr1...,addr1..."
+
+# Use the addresses pinned in config/address.json (e.g. mainnet whales)
+python3 compare_address.py --network mainnet --strict
+```
+
+Each address is exercised across all endpoints and list variants; results are
+tagged per address (see the `sample` column in the CSV).
 
 ### Paging and ordering (list endpoints)
 
-List endpoints (`/blocks`, `/stakes`, `/next`, `/previous`, …) accept Blockfrost's
-`order` and `page`/`count` query parameters. By default each list endpoint is
-compared across **both orders** (`asc`, `desc`) and **pages 1 and 2**, so a single
-run validates that ordering and pagination match Blockfrost in every combination.
+List endpoints (`/blocks`, `/stakes`, `/utxos`, `/transactions`, …) accept
+Blockfrost's `order` and `page`/`count` query parameters. By default each list
+endpoint is compared across **both orders** (`asc`, `desc`) and **pages 1 and 2**.
 
 | Flag | Default | Meaning |
 |---|---|---|
@@ -86,18 +150,11 @@ run validates that ordering and pagination match Blockfrost in every combination
 | `--count` | `100` | Page size (rows per page) for list endpoints |
 
 ```bash
-# Test both orders across the first three pages
+# Both orders across the first three pages
 python3 compare_epoch.py --network preprod --orders asc desc --pages 1 2 3
 
 # Descending only, first page, smaller page size
 python3 compare_epoch.py --network preprod --orders desc --pages 1 --count 20
-```
-
-Each (order, page) combination is reported as its own line, e.g.:
-
-```
-DIFF  /epochs/{epoch}/stakes?order=desc&page=2  (60 field(s))  [Yaci=68ms  BF=656ms]
-OK    /epochs/{epoch}/blocks?order=desc&page=1  [Yaci=104ms  BF=416ms]
 ```
 
 Non-list endpoints (e.g. `/epochs/latest`) are compared once; `order`/`page` do
@@ -105,37 +162,37 @@ not apply to them.
 
 ## Output
 
-Each run prints a summary per endpoint:
+Each run prints a per-endpoint summary:
 
 ```
-OK    /epochs/291/blocks  [Yaci=105ms  BF=473ms]
-DIFF  /epochs/291/previous  (315 field(s))  [Yaci=529ms  BF=568ms]
-      [0].fees: BF='9206177808'  Yaci='678030'
-      ...
+OK    /addresses/{address}  [Yaci=38ms  BF=870ms]
+DIFF  /addresses/{address}/utxos?order=asc&page=1  (2 field(s))  [Yaci=60ms  BF=397ms]
+      [0].tx_index: missing in Yaci
 ```
 
 - **OK** — responses match (after stripping known-volatile fields)
 - **DIFF** — field-level differences listed with BF and Yaci values
-- **SLOW** badge — Yaci response exceeded the threshold relative to BF
+- **STATUS** — HTTP status differs between Yaci and Blockfrost
+- **SKIP** — required param missing for that endpoint
+- **:warning: SLOW** badge — Yaci exceeded the latency threshold (>500 ms or >3× BF)
 
 ### CSV results
 
-Every run also appends results to a CSV. If `--csv` is not given, it defaults to:
+Every run appends results to a CSV. If `--csv` is not given, it defaults to:
 
 ```
 scripts/compare-blockfrost/report/<module>_<network>.csv
 ```
 
-e.g. `report/epoch_preprod.csv`. The directory is created automatically. Rows are
-appended (not overwritten), so repeated runs accumulate history. Pass `--csv FILE`
-to write somewhere else.
+Columns: `date, network, module, sample, endpoint, result, yaci_status,
+bf_status, yaci_ms, bf_ms, slow, diff_count, diff_fields`. The `sample` column
+identifies which dataset (e.g. address) produced the row. Rows are appended, so
+repeated runs accumulate history; delete the file for a clean slate.
 
 ## Known expected divergences
 
-Some diffs are pre-existing data issues, not bugs. They are documented in `bf_compare.py` under `IGNORE_FIELDS` / comments. Current out-of-scope items:
-
-| Field | Reason |
-|---|---|
-| `nonce` | Epoch nonce not yet computed (BUG-4, out of scope) |
-| `fees` | Fee aggregation incomplete for in-progress epochs (BUG-2) |
-| `stakes` data | Stake snapshot divergence vs Blockfrost reference data |
+Some diffs are accepted limitations rather than bugs. Strict mode (`--strict`)
+surfaces them anyway; without it, fields listed in `IGNORE_DIVERGENT` (and the
+always-volatile `IGNORE_VOLATILE`, e.g. `confirmations`, `next_block`) in
+`bf_compare.py` are ignored. Findings per module are tracked under
+`extensions/blockfrost/adr/` and in `report/` (e.g. `address_compare.html`).
