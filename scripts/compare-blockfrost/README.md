@@ -66,6 +66,20 @@ host/port or a Blockfrost proxy:
 
 See `.env.example` for the full commented list.
 
+**DB seeding (optional).** When a Postgres DSN is configured for a network, the
+scripts seed test data (recent block/slot/tx/address/asset) straight from the DB
+instead of walking the API — much faster. All keys are optional; without a DSN the
+scripts fall back to the API path.
+
+| Env var | Purpose | Default |
+|---|---|---|
+| `YACI_DB_MAINNET` / `_PREPROD` / `_PREVIEW` | libpq DSN/URI, e.g. `postgresql://user:pass@host:5432/yaci_store` | _(unset → API seeding)_ |
+| `YACI_DB_SCHEMA` | Schema holding the store tables (global default) | `yaci_store` |
+| `YACI_DB_SCHEMA_MAINNET` / `_PREPROD` / `_PREVIEW` | Per-network schema override; wins over `YACI_DB_SCHEMA`. Set only where a network's DB uses a different schema name. | _(falls back to `YACI_DB_SCHEMA`)_ |
+
+The `psql` client must be on `PATH` for DB seeding. Queries are read-only and
+bounded by a server-side `statement_timeout`.
+
 ### 2. Test data — `config/<module>.json`
 
 Each module reads its test identifiers from `config/<module>.json`, keyed by

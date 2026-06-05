@@ -8,7 +8,7 @@ Environment variables required (network-locked Blockfrost keys):
   BF_PROJECT_ID_PREPROD
   BF_PROJECT_ID_PREVIEW
 """
-import csv, datetime, json, os, sys, time, urllib.request, urllib.error
+import csv, datetime, json, os, subprocess, sys, time, urllib.request, urllib.error
 
 # ---------------------------------------------------------------------------
 # Config loading — runs before NETWORKS so endpoints can come from .env
@@ -120,6 +120,191 @@ def http_get(url, project_id=None, timeout=30):
 
 
 # ---------------------------------------------------------------------------
+# DB helpers — seeding reads test data straight from Postgres (no API calls).
+#   YACI_DB_<NET>   libpq URI, e.g. postgresql://user:pass@host:5432/yaci_store
+#   YACI_DB_SCHEMA  schema holding the store tables (default: yaci_store)
+# Requires the `psql` client binary on PATH. Seeding falls back to the API path
+# when no DSN is configured for the network.
+# ---------------------------------------------------------------------------
+
+DB_SCHEMA = os.environ.get("YACI_DB_SCHEMA", "yaci_store")
+
+
+def db_schema(net):
+    """Schema holding the store tables for a network.
+
+    Per-network override ``YACI_DB_SCHEMA_<NET>`` (e.g. YACI_DB_SCHEMA_MAINNET) wins;
+    otherwise the global ``YACI_DB_SCHEMA`` is used, defaulting to ``yaci_store``.
+    Lets networks whose DB uses a different schema name be compared without code changes.
+    """
+    return os.environ.get(f"YACI_DB_SCHEMA_{net.upper()}", DB_SCHEMA)
+
+
+def db_dsn(net):
+    """libpq DSN/URI for a network, or None when DB seeding isn't configured."""
+    return os.environ.get(f"YACI_DB_{net.upper()}")
+
+
+def db_query(net, sql, timeout=30):
+    """Run a read-only query via psql; return rows as lists of column strings.
+
+    Returns None when no DSN is set for the network or psql fails, so callers
+    can fall back to the API seeding path. A server-side statement_timeout
+    bounds each query so a heavy seed can never pin a connection.
+    """
+    dsn = db_dsn(net)
+    if not dsn:
+        return None
+    wrapped = f"SET statement_timeout = {int(timeout) * 1000}; {sql}"
+    try:
+        proc = subprocess.run(
+            ["psql", dsn, "-q", "-t", "-A", "-F", "\t", "-v", "ON_ERROR_STOP=1", "-c", wrapped],
+            capture_output=True, text=True, timeout=timeout + 5,
+        )
+    except Exception as e:
+        print(f"  ! db_query error: {e}", file=sys.stderr)
+        return None
+    if proc.returncode != 0:
+        err = proc.stderr.strip().splitlines()
+        print(f"  ! db_query failed: {err[-1] if err else proc.returncode}", file=sys.stderr)
+        return None
+    return [line.split("\t") for line in proc.stdout.splitlines() if line]
+
+
+def db_tip(net):
+    """Latest block height from the DB, or None."""
+    rows = db_query(net, f"SELECT max(number) FROM {db_schema(net)}.block")
+    if rows and rows[0] and rows[0][0]:
+        try:
+            return int(rows[0][0])
+        except ValueError:
+            return None
+    return None
+
+
+def _db_recent_block(net, depth, require_txs=True):
+    """Most recent block at/below (tip - depth) as (number, slot, epoch) strings.
+
+    Uses idx_block_number. Returns None when the DB is unreachable, () when no
+    matching block exists. `slot` then drives the tx/utxo lookups because slot
+    is indexed on transaction and address_utxo while `block` is not (avoids the
+    F5 seq scan).
+    """
+    tip = db_tip(net)
+    if tip is None:
+        return None
+    target = max(1, tip - depth)
+    cond = "AND no_of_txs > 0" if require_txs else ""
+    rows = db_query(net, f"""SELECT number, slot, epoch FROM {db_schema(net)}.block
+        WHERE number <= {target} {cond} ORDER BY number DESC LIMIT 1""")
+    if rows is None:
+        return None
+    return tuple(rows[0]) if rows and len(rows[0]) >= 3 else ()
+
+
+def _db_native_unit(net, column, value):
+    """First non-lovelace asset unit on UTXOs where address_utxo.<column> = value.
+
+    `column` MUST be an indexed column (slot or owner_addr) to stay cheap; both
+    use a btree index, so the jsonb expansion only runs over the matched rows.
+    """
+    rows = db_query(net, f"""SELECT a->>'unit' FROM {db_schema(net)}.address_utxo au,
+            jsonb_array_elements(au.amounts) a
+        WHERE au.{column} = '{value}' AND a->>'unit' <> 'lovelace' LIMIT 1""")
+    return rows[0][0] if rows and rows[0] and rows[0][0] else None
+
+
+def _db_seed_params(net, depth):
+    """Seed block/slot/epoch/tx_hash/address/asset directly from the DB.
+
+    Returns a param dict, {} when no suitable block is found, or None when the
+    DB is unreachable (caller then falls back to the API path).
+    """
+    blk = _db_recent_block(net, depth, require_txs=True)
+    if blk is None:
+        return None
+    if not blk:
+        return {}
+    number, slot, epoch = blk
+    p = {"block": number, "slot": slot}
+    try:
+        p.setdefault("epoch", str(int(epoch) - 1))   # completed epoch
+    except (ValueError, TypeError):
+        pass
+    # slot is indexed on both transaction and address_utxo (block is not).
+    txs = db_query(net, f"""SELECT tx_hash FROM {db_schema(net)}.transaction
+        WHERE slot = '{slot}' ORDER BY tx_index LIMIT 1""")
+    if txs and txs[0][0]:
+        p["tx_hash"] = txs[0][0]
+    addr = db_query(net, f"""SELECT owner_addr FROM {db_schema(net)}.address_utxo
+        WHERE slot = '{slot}' AND owner_addr IS NOT NULL
+        ORDER BY output_index LIMIT 1""")
+    if addr and addr[0][0]:
+        p["address"] = addr[0][0]
+    unit = _db_native_unit(net, "slot", slot)
+    if unit:
+        p["asset"] = unit
+        p["policy_id"] = unit[:56]
+    return p
+
+
+def _db_seed_addresses(net, want, depth, slot_window=40000):
+    """Discover up to `want` recent distinct addresses (+ one asset each) from DB.
+
+    Scans a bounded slot window via idx_address_utxo_slot, then looks up one
+    native asset per address via idx_address_utxo_owner_addr.
+    """
+    blk = _db_recent_block(net, depth, require_txs=False)
+    if blk is None:
+        return None
+    if not blk:
+        return []
+    hi = int(blk[1])
+    lo = max(0, hi - slot_window)
+    rows = db_query(net, f"""SELECT DISTINCT owner_addr FROM {db_schema(net)}.address_utxo
+        WHERE slot BETWEEN {lo} AND {hi} AND owner_addr IS NOT NULL LIMIT {want}""")
+    if rows is None:
+        return None
+    out = []
+    for r in rows:
+        addr = r[0]
+        if not addr:
+            continue
+        entry = {"address": addr}
+        unit = _db_native_unit(net, "owner_addr", addr)
+        if unit:
+            entry["asset"] = unit
+            entry["policy_id"] = unit[:56]
+        out.append(entry)
+    print(f"  seeded {len(out)} address sample(s) "
+          f"({sum('asset' in e for e in out)} with a native asset) from DB")
+    return out
+
+
+def _db_seed_assets(net, want, depth, slot_window=40000):
+    """Discover up to `want` recent distinct native asset units from DB.
+
+    Scans a bounded slot window via idx_address_utxo_slot, expanding amounts
+    only over the matched rows.
+    """
+    blk = _db_recent_block(net, depth, require_txs=False)
+    if blk is None:
+        return None
+    if not blk:
+        return []
+    hi = int(blk[1])
+    lo = max(0, hi - slot_window)
+    rows = db_query(net, f"""SELECT DISTINCT a->>'unit' FROM {db_schema(net)}.address_utxo au,
+            jsonb_array_elements(au.amounts) a
+        WHERE au.slot BETWEEN {lo} AND {hi} AND a->>'unit' <> 'lovelace' LIMIT {want}""")
+    if rows is None:
+        return None
+    out = [{"asset": r[0], "policy_id": r[0][:56]} for r in rows if r and r[0]]
+    print(f"  seeded {len(out)} asset sample(s) from DB")
+    return out
+
+
+# ---------------------------------------------------------------------------
 # Seeding: discover block/slot/epoch/tx/address/asset from local chain
 # ---------------------------------------------------------------------------
 
@@ -127,6 +312,15 @@ def seed_params(net, cfg, depth=20, module=None):
     # Base identifiers come from config/<module>.json; PARAMS is a legacy
     # fallback kept only for modules not yet migrated to config files.
     p = dict(load_config(module, net)) or dict(PARAMS.get(net, {}))
+
+    # Prefer seeding from the DB directly; fall back to the API path below.
+    if db_dsn(net):
+        seeded = _db_seed_params(net, depth)
+        if seeded is not None:
+            for k, v in seeded.items():
+                p.setdefault(k, v)
+            return p
+
     st, latest = http_get(cfg["local"] + LOCAL_PREFIX + "/blocks/latest")
     if st != 200 or not isinstance(latest, dict):
         print(f"  ! cannot read local /blocks/latest: {latest}", file=sys.stderr)
@@ -175,6 +369,13 @@ def seed_addresses(net, cfg, want=5, depth=20, scan_limit=600):
     exercised. Returns a list of param dicts: {"address", ["asset","policy_id"]}.
     """
     out, seen = [], set()
+
+    # Prefer seeding from the DB directly; fall back to the API walk below.
+    if db_dsn(net):
+        seeded = _db_seed_addresses(net, want, depth)
+        if seeded is not None:
+            return seeded
+
     st, latest = http_get(cfg["local"] + LOCAL_PREFIX + "/blocks/latest")
     if st != 200 or not isinstance(latest, dict):
         print(f"  ! cannot read local /blocks/latest: {latest}", file=sys.stderr)
@@ -223,6 +424,13 @@ def seed_assets(net, cfg, want=5, depth=20, scan_limit=600):
     present. Returns a list of param dicts: {"asset", "policy_id"}.
     """
     out, seen = [], set()
+
+    # Prefer seeding from the DB directly; fall back to the API walk below.
+    if db_dsn(net):
+        seeded = _db_seed_assets(net, want, depth)
+        if seeded is not None:
+            return seeded
+
     base = PARAMS.get(net, {})
     if base.get("asset"):
         out.append({"asset": base["asset"],
