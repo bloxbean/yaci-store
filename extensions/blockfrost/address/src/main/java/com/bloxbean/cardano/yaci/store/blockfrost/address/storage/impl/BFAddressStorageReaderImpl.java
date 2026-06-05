@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.store.blockfrost.address.storage.BFAddressStora
 import com.bloxbean.cardano.yaci.store.blockfrost.address.storage.impl.model.BFAddressTotal;
 import com.bloxbean.cardano.yaci.store.blockfrost.common.util.AmountsJsonUtil;
 import com.bloxbean.cardano.yaci.store.blockfrost.common.util.BlockfrostDialectUtil;
+import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.common.util.AddressUtil;
 import com.bloxbean.cardano.yaci.store.common.util.Tuple;
@@ -26,6 +27,8 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -144,6 +147,78 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
         .queryTimeout(WHALE_QUERY_TIMEOUT_SECONDS)
         .fetchInto(BFAddressTransactionDTO.class);
 }
+
+    @Override
+    public List<AddressUtxo> findAddressUtxos(String address, int page, int count, Order order) {
+        Condition addrCondition = addressCondition(address, ADDRESS_UTXO.OWNER_ADDR, ADDRESS_UTXO.OWNER_ADDR_FULL);
+        return fetchAddressUtxos(addrCondition, DSL.trueCondition(), page, count, order);
+    }
+
+    @Override
+    public List<AddressUtxo> findAddressUtxosForAsset(String address, String unit, int page, int count, Order order) {
+        Condition addrCondition = addressCondition(address, ADDRESS_UTXO.OWNER_ADDR, ADDRESS_UTXO.OWNER_ADDR_FULL);
+        return fetchAddressUtxos(addrCondition, unitCondition(unit), page, count, order);
+    }
+
+    /**
+     * Fetch unspent UTXOs for an address in Blockfrost-compatible on-chain order: (slot, tx_index, output_index).
+     *
+     * <p>Blockfrost orders an address' UTXOs by their on-chain position. The utxo store's generic ordering uses
+     * tx_hash as the intra-slot tiebreak, which diverges from Blockfrost whenever an address holds unspent outputs
+     * from multiple transactions in the same slot (tx_hash order != tx_index order). {@code tx_index} is not stored
+     * on {@code address_utxo}, so it is sourced via a join to {@code transaction}.
+     *
+     * <p>Performance: the join rides {@code transaction_pkey} (tx_hash is the PK) as a nested-loop index lookup over
+     * just the address' unspent set, and the owner filter rides {@code idx_address_utxo_owner_addr}; the EXPLAIN plan
+     * contains no sequential scans. The inner join is safe — every {@code address_utxo} row has a matching
+     * {@code transaction} row, so it drops no UTXOs.
+     */
+    private List<AddressUtxo> fetchAddressUtxos(Condition addrCondition, Condition extraCondition,
+                                               int page, int count, Order order) {
+        int offset = Math.max(page, 0) * count;
+        var fields = new ArrayList<>(Arrays.asList(ADDRESS_UTXO.fields()));
+        // Workaround: AddressUtxo.blockNumber maps from the column jOOQ names `block`.
+        fields.add(ADDRESS_UTXO.BLOCK.as("blockNumber"));
+
+        boolean desc = order == Order.desc;
+        SortField<?> slotSort = desc ? ADDRESS_UTXO.SLOT.desc() : ADDRESS_UTXO.SLOT.asc();
+        SortField<?> txIndexSort = desc ? TRANSACTION.TX_INDEX.desc() : TRANSACTION.TX_INDEX.asc();
+        SortField<?> outputIndexSort = desc ? ADDRESS_UTXO.OUTPUT_INDEX.desc() : ADDRESS_UTXO.OUTPUT_INDEX.asc();
+
+        return dsl.select(fields)
+                .from(ADDRESS_UTXO)
+                .leftJoin(TX_INPUT)
+                    .on(TX_INPUT.TX_HASH.eq(ADDRESS_UTXO.TX_HASH))
+                    .and(TX_INPUT.OUTPUT_INDEX.eq(ADDRESS_UTXO.OUTPUT_INDEX))
+                .join(TRANSACTION)
+                    .on(TRANSACTION.TX_HASH.eq(ADDRESS_UTXO.TX_HASH))
+                .where(addrCondition)
+                .and(TX_INPUT.TX_HASH.isNull())
+                .and(extraCondition)
+                .orderBy(slotSort, txIndexSort, outputIndexSort)
+                .offset(offset)
+                .limit(count)
+                // Bound whale /utxos: a high-activity address' unspent set can be huge, making the
+                // owner_addr scan + sort run for a long time. Without a bound such requests hold a
+                // connection and can exhaust the pool. The timeout converts that into a fast, bounded
+                // per-request failure (same rationale as the /transactions and /total aggregations).
+                .queryTimeout(WHALE_QUERY_TIMEOUT_SECONDS)
+                .fetch()
+                .into(AddressUtxo.class);
+    }
+
+    /**
+     * jsonb-containment filter selecting UTXOs whose {@code amounts} include the given asset unit.
+     * Mirrors the utxo store's unit filter; the unit value is passed as a bind parameter.
+     */
+    private Condition unitCondition(String unit) {
+        if (BlockfrostDialectUtil.isPostgres(dsl)) {
+            return DSL.condition("{0} @> {1}::jsonb", ADDRESS_UTXO.AMOUNTS,
+                    DSL.val("[{\"unit\": \"" + unit + "\"}]"));
+        }
+        return ADDRESS_UTXO.AMOUNTS.cast(String.class).contains("\"unit\": \"" + unit + "\"")
+                .or(ADDRESS_UTXO.AMOUNTS.cast(String.class).contains("\"unit\":\"" + unit + "\""));
+    }
 
     /**
      * Get received/sent totals and transaction count for an address.
