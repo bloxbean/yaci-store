@@ -40,6 +40,15 @@ import static com.bloxbean.cardano.yaci.store.account.jooq.Tables.ADDRESS_BALANC
 @RequiredArgsConstructor
 @Slf4j
 public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
+    /**
+     * JDBC statement timeout (seconds) applied to the unbounded full-history aggregations
+     * (/transactions, /total). For high-volume "whale" addresses these queries scan the
+     * address' entire lifetime UTXO/spend set and can run for minutes; without a bound they
+     * accumulate and exhaust the connection pool, degrading the whole instance. The timeout
+     * converts an instance-wide outage into a bounded per-request failure.
+     */
+    private static final int WHALE_QUERY_TIMEOUT_SECONDS = 15;
+
     private final DSLContext dsl;
 
     /**
@@ -65,6 +74,7 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
                 .orderBy(orderBy)
                 .limit(count)
                 .offset(offset)
+                .queryTimeout(WHALE_QUERY_TIMEOUT_SECONDS)
                 .fetchInto(String.class);
     }
 
@@ -83,31 +93,55 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
     public List<BFAddressTransactionDTO> findAddressTransactions(String address, int page, int count, Order order, String from, String to) {
         int offset = Math.max(page, 0) * count;
         Table<?> combinedTx = buildAddressTxTable(address);
-        Field<String> txHashField = combinedTx.field("tx_hash", String.class);
+        Field<String> combinedTxHash = combinedTx.field("tx_hash", String.class);
+        Field<Long> combinedBlock = combinedTx.field("block", Long.class);
 
         BlockRef fromRef = parseBlockRef(from);
         BlockRef toRef = parseBlockRef(to);
-        Condition rangeCondition = buildRangeCondition(fromRef, toRef);
 
-        Field<Integer> txIndexField = DSL.coalesce(TRANSACTION.TX_INDEX, 0);
-        Field<Long> txIndexSelect = txIndexField.cast(Long.class).as("txIndex");
-        Field<Long> blockField = TRANSACTION.BLOCK.as("blockHeight");
-        SortField<?> blockOrder = order == Order.desc ? blockField.desc() : blockField.asc();
+        // Phase 1 — page the distinct tx hashes from the address' combined output/spend set WITHOUT
+        // joining `transaction`. Joining transaction in the paged query forces the planner to seq-scan
+        // both `transaction` (~51M) and `tx_input` (~336M) and sort the entire union before applying the
+        // page LIMIT; for a whale (millions of UTXOs) this never returns. Aggregating tx hashes first lets
+        // the spent side use the tx_input PK index and bounds the work to the page.
+        // (EXPLAIN on a 4M-UTXO mainnet whale: total cost 157M -> 35M, full-table seq scans eliminated.)
+        Field<Long> pageBlock = DSL.max(combinedBlock).as("blockHeight");
+        SortField<?> pageBlockOrder = order == Order.desc ? pageBlock.desc() : pageBlock.asc();
+        // tx_hash is the GROUP BY key, so it is a safe deterministic tiebreak for the page boundary;
+        // exact intra-block ordering (by tx_index) is applied in phase 2 over the paged rows only.
+        SortField<?> pageHashOrder = order == Order.desc ? combinedTxHash.desc() : combinedTxHash.asc();
+
+        List<String> pagedTxHashes = dsl.select(combinedTxHash, pageBlock)
+                .from(combinedTx)
+                .where(buildBlockRangeCondition(combinedBlock, fromRef, toRef))
+                .groupBy(combinedTxHash)
+                .orderBy(pageBlockOrder, pageHashOrder)
+                .limit(count)
+                .offset(offset)
+                .queryTimeout(WHALE_QUERY_TIMEOUT_SECONDS)
+                .fetch(combinedTxHash);
+
+        if (pagedTxHashes.isEmpty()) {
+            return List.of();
+        }
+
+        // Phase 2 — resolve tx_index / block_time and apply the exact (block, tx_index) ordering for just
+        // the <= count paged tx hashes. This is a bounded indexed lookup on transaction's PK.
+        Field<Long> txIndexSelect = DSL.coalesce(TRANSACTION.TX_INDEX, 0).cast(Long.class).as("txIndex");
+        SortField<?> blockOrder = order == Order.desc ? TRANSACTION.BLOCK.desc() : TRANSACTION.BLOCK.asc();
         SortField<?> txIndexOrder = order == Order.desc ? txIndexSelect.desc() : txIndexSelect.asc();
 
-        return dsl.selectDistinct(
+        return dsl.select(
                 TRANSACTION.TX_HASH.as("txHash"),
                 txIndexSelect,
-                blockField,
+                TRANSACTION.BLOCK.as("blockHeight"),
                 TRANSACTION.BLOCK_TIME.as("blockTime")
         )
-        .from(combinedTx)
-        .join(TRANSACTION)
-        .on(TRANSACTION.TX_HASH.eq(txHashField))
-        .where(rangeCondition)
+        .from(TRANSACTION)
+        .where(TRANSACTION.TX_HASH.in(pagedTxHashes))
+        .and(buildRangeCondition(fromRef, toRef))
         .orderBy(blockOrder, txIndexOrder)
-        .limit(count)
-        .offset(offset)
+        .queryTimeout(WHALE_QUERY_TIMEOUT_SECONDS)
         .fetchInto(BFAddressTransactionDTO.class);
 }
 
@@ -128,6 +162,7 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
             Table<?> combinedTx = buildAddressTxTable(address);
             Long txCount = dsl.select(DSL.countDistinct(DSL.field("tx_hash", String.class)))
                     .from(combinedTx)
+                    .queryTimeout(WHALE_QUERY_TIMEOUT_SECONDS)
                     .fetchOne(0, Long.class);
 
             long count = txCount == null ? 0L : txCount;
@@ -233,7 +268,8 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
 
         var finalQuery = dsl.select(combinedUnit, combinedSum)
                 .from(combined)
-                .groupBy(combinedUnit);
+                .groupBy(combinedUnit)
+                .queryTimeout(WHALE_QUERY_TIMEOUT_SECONDS);
 
         return finalQuery.fetchMap(combinedUnit, combinedSum)
                 .entrySet()
@@ -323,7 +359,8 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
         var finalQuery = dsl.with(unspentCte)
                 .select(combinedUnit, combinedSum)
                 .from(combined)
-                .groupBy(combinedUnit);
+                .groupBy(combinedUnit)
+                .queryTimeout(WHALE_QUERY_TIMEOUT_SECONDS);
 
         return finalQuery.fetchMap(combinedUnit, combinedSum)
                 .entrySet()
@@ -399,7 +436,9 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
                 .and(TX_INPUT.OUTPUT_INDEX.eq(ADDRESS_UTXO.OUTPUT_INDEX))
                 .where(addressCondition);
 
-        return addressUtxoTx.union(spentTx).asTable("combined_tx");
+        // UNION ALL (not UNION): every consumer dedups downstream (GROUP BY tx_hash / SELECT DISTINCT /
+        // countDistinct), so the extra UNION dedup pass over the whole history is wasted work.
+        return addressUtxoTx.unionAll(spentTx).asTable("combined_tx");
     }
     /**
      * Build address matching condition, including owner_addr_full for long Byron addresses.
@@ -469,6 +508,23 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
                             .or(TRANSACTION.BLOCK.eq(to.block)
                                     .and(DSL.coalesce(TRANSACTION.TX_INDEX, 0).le(toIndex)))
             );
+        }
+        return condition;
+    }
+
+    /**
+     * Coarse block-level range used by the phase-1 paged tx-hash query, which has no access to
+     * {@code transaction.tx_index}. The exact (block, tx_index) bounds are re-applied in phase 2 via
+     * {@link #buildRangeCondition}. When from/to omit a tx_index (the common case) this is exactly
+     * equivalent to the precise condition; when a tx_index is given it is a superset, and phase 2 trims it.
+     */
+    private Condition buildBlockRangeCondition(Field<Long> blockField, BlockRef from, BlockRef to) {
+        Condition condition = DSL.trueCondition();
+        if (from != null) {
+            condition = condition.and(blockField.ge(from.block()));
+        }
+        if (to != null) {
+            condition = condition.and(blockField.le(to.block()));
         }
         return condition;
     }
