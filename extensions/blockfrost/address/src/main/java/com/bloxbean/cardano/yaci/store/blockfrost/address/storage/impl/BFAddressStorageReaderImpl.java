@@ -43,13 +43,6 @@ import static com.bloxbean.cardano.yaci.store.account.jooq.Tables.ADDRESS_BALANC
 @RequiredArgsConstructor
 @Slf4j
 public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
-    /**
-     * JDBC statement timeout (seconds) applied to the unbounded full-history aggregations
-     * (/transactions, /total). For high-volume "whale" addresses these queries scan the
-     * address' entire lifetime UTXO/spend set and can run for minutes; without a bound they
-     * accumulate and exhaust the connection pool, degrading the whole instance. The timeout
-     * converts an instance-wide outage into a bounded per-request failure.
-     */
     private static final int WHALE_QUERY_TIMEOUT_SECONDS = 15;
 
     private final DSLContext dsl;
@@ -102,16 +95,8 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
         BlockRef fromRef = parseBlockRef(from);
         BlockRef toRef = parseBlockRef(to);
 
-        // Phase 1 — page the distinct tx hashes from the address' combined output/spend set WITHOUT
-        // joining `transaction`. Joining transaction in the paged query forces the planner to seq-scan
-        // both `transaction` (~51M) and `tx_input` (~336M) and sort the entire union before applying the
-        // page LIMIT; for a whale (millions of UTXOs) this never returns. Aggregating tx hashes first lets
-        // the spent side use the tx_input PK index and bounds the work to the page.
-        // (EXPLAIN on a 4M-UTXO mainnet whale: total cost 157M -> 35M, full-table seq scans eliminated.)
         Field<Long> pageBlock = DSL.max(combinedBlock).as("blockHeight");
         SortField<?> pageBlockOrder = order == Order.desc ? pageBlock.desc() : pageBlock.asc();
-        // tx_hash is the GROUP BY key, so it is a safe deterministic tiebreak for the page boundary;
-        // exact intra-block ordering (by tx_index) is applied in phase 2 over the paged rows only.
         SortField<?> pageHashOrder = order == Order.desc ? combinedTxHash.desc() : combinedTxHash.asc();
 
         List<String> pagedTxHashes = dsl.select(combinedTxHash, pageBlock)
@@ -128,8 +113,6 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
             return List.of();
         }
 
-        // Phase 2 — resolve tx_index / block_time and apply the exact (block, tx_index) ordering for just
-        // the <= count paged tx hashes. This is a bounded indexed lookup on transaction's PK.
         Field<Long> txIndexSelect = DSL.coalesce(TRANSACTION.TX_INDEX, 0).cast(Long.class).as("txIndex");
         SortField<?> blockOrder = order == Order.desc ? TRANSACTION.BLOCK.desc() : TRANSACTION.BLOCK.asc();
         SortField<?> txIndexOrder = order == Order.desc ? txIndexSelect.desc() : txIndexSelect.asc();
@@ -160,19 +143,6 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
         return fetchAddressUtxos(addrCondition, unitCondition(unit), page, count, order);
     }
 
-    /**
-     * Fetch unspent UTXOs for an address in Blockfrost-compatible on-chain order: (slot, tx_index, output_index).
-     *
-     * <p>Blockfrost orders an address' UTXOs by their on-chain position. The utxo store's generic ordering uses
-     * tx_hash as the intra-slot tiebreak, which diverges from Blockfrost whenever an address holds unspent outputs
-     * from multiple transactions in the same slot (tx_hash order != tx_index order). {@code tx_index} is not stored
-     * on {@code address_utxo}, so it is sourced via a join to {@code transaction}.
-     *
-     * <p>Performance: the join rides {@code transaction_pkey} (tx_hash is the PK) as a nested-loop index lookup over
-     * just the address' unspent set, and the owner filter rides {@code idx_address_utxo_owner_addr}; the EXPLAIN plan
-     * contains no sequential scans. The inner join is safe — every {@code address_utxo} row has a matching
-     * {@code transaction} row, so it drops no UTXOs.
-     */
     private List<AddressUtxo> fetchAddressUtxos(Condition addrCondition, Condition extraCondition,
                                                int page, int count, Order order) {
         int offset = Math.max(page, 0) * count;
@@ -198,19 +168,11 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
                 .orderBy(slotSort, txIndexSort, outputIndexSort)
                 .offset(offset)
                 .limit(count)
-                // Bound whale /utxos: a high-activity address' unspent set can be huge, making the
-                // owner_addr scan + sort run for a long time. Without a bound such requests hold a
-                // connection and can exhaust the pool. The timeout converts that into a fast, bounded
-                // per-request failure (same rationale as the /transactions and /total aggregations).
                 .queryTimeout(WHALE_QUERY_TIMEOUT_SECONDS)
                 .fetch()
                 .into(AddressUtxo.class);
     }
 
-    /**
-     * jsonb-containment filter selecting UTXOs whose {@code amounts} include the given asset unit.
-     * Mirrors the utxo store's unit filter; the unit value is passed as a bind parameter.
-     */
     private Condition unitCondition(String unit) {
         if (BlockfrostDialectUtil.isPostgres(dsl)) {
             return DSL.condition("{0} @> {1}::jsonb", ADDRESS_UTXO.AMOUNTS,
@@ -511,8 +473,6 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
                 .and(TX_INPUT.OUTPUT_INDEX.eq(ADDRESS_UTXO.OUTPUT_INDEX))
                 .where(addressCondition);
 
-        // UNION ALL (not UNION): every consumer dedups downstream (GROUP BY tx_hash / SELECT DISTINCT /
-        // countDistinct), so the extra UNION dedup pass over the whole history is wasted work.
         return addressUtxoTx.unionAll(spentTx).asTable("combined_tx");
     }
     /**
@@ -587,12 +547,6 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
         return condition;
     }
 
-    /**
-     * Coarse block-level range used by the phase-1 paged tx-hash query, which has no access to
-     * {@code transaction.tx_index}. The exact (block, tx_index) bounds are re-applied in phase 2 via
-     * {@link #buildRangeCondition}. When from/to omit a tx_index (the common case) this is exactly
-     * equivalent to the precise condition; when a tx_index is given it is a superset, and phase 2 trims it.
-     */
     private Condition buildBlockRangeCondition(Field<Long> blockField, BlockRef from, BlockRef to) {
         Condition condition = DSL.trueCondition();
         if (from != null) {
