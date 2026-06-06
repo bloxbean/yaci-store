@@ -38,13 +38,12 @@ import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.ADDRESS_UTXO;
 import static com.bloxbean.cardano.yaci.store.transaction.jooq.Tables.TRANSACTION;
 import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.TX_INPUT;
 import static com.bloxbean.cardano.yaci.store.account.jooq.Tables.ADDRESS_BALANCE_CURRENT;
+import static com.bloxbean.cardano.yaci.store.common.Constants.QUERY_TIMEOUT_SECONDS;
 
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
-    private static final int WHALE_QUERY_TIMEOUT_SECONDS = 15;
-
     private final DSLContext dsl;
 
     /**
@@ -70,7 +69,7 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
                 .orderBy(orderBy)
                 .limit(count)
                 .offset(offset)
-                .queryTimeout(WHALE_QUERY_TIMEOUT_SECONDS)
+                .queryTimeout(QUERY_TIMEOUT_SECONDS)
                 .fetchInto(String.class);
     }
 
@@ -106,7 +105,7 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
                 .orderBy(pageBlockOrder, pageHashOrder)
                 .limit(count)
                 .offset(offset)
-                .queryTimeout(WHALE_QUERY_TIMEOUT_SECONDS)
+                .queryTimeout(QUERY_TIMEOUT_SECONDS)
                 .fetch(combinedTxHash);
 
         if (pagedTxHashes.isEmpty()) {
@@ -127,7 +126,7 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
         .where(TRANSACTION.TX_HASH.in(pagedTxHashes))
         .and(buildRangeCondition(fromRef, toRef))
         .orderBy(blockOrder, txIndexOrder)
-        .queryTimeout(WHALE_QUERY_TIMEOUT_SECONDS)
+        .queryTimeout(QUERY_TIMEOUT_SECONDS)
         .fetchInto(BFAddressTransactionDTO.class);
 }
 
@@ -168,7 +167,7 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
                 .orderBy(slotSort, txIndexSort, outputIndexSort)
                 .offset(offset)
                 .limit(count)
-                .queryTimeout(WHALE_QUERY_TIMEOUT_SECONDS)
+                .queryTimeout(QUERY_TIMEOUT_SECONDS)
                 .fetch()
                 .into(AddressUtxo.class);
     }
@@ -199,7 +198,7 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
             Table<?> combinedTx = buildAddressTxTable(address);
             Long txCount = dsl.select(DSL.countDistinct(DSL.field("tx_hash", String.class)))
                     .from(combinedTx)
-                    .queryTimeout(WHALE_QUERY_TIMEOUT_SECONDS)
+                    .queryTimeout(QUERY_TIMEOUT_SECONDS)
                     .fetchOne(0, Long.class);
 
             long count = txCount == null ? 0L : txCount;
@@ -306,7 +305,7 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
         var finalQuery = dsl.select(combinedUnit, combinedSum)
                 .from(combined)
                 .groupBy(combinedUnit)
-                .queryTimeout(WHALE_QUERY_TIMEOUT_SECONDS);
+                .queryTimeout(QUERY_TIMEOUT_SECONDS);
 
         return finalQuery.fetchMap(combinedUnit, combinedSum)
                 .entrySet()
@@ -397,7 +396,7 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
                 .select(combinedUnit, combinedSum)
                 .from(combined)
                 .groupBy(combinedUnit)
-                .queryTimeout(WHALE_QUERY_TIMEOUT_SECONDS);
+                .queryTimeout(QUERY_TIMEOUT_SECONDS);
 
         return finalQuery.fetchMap(combinedUnit, combinedSum)
                 .entrySet()
