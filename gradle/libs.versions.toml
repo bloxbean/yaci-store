@@ -1,9 +1,9 @@
 [libraries]
-yaci = "com.bloxbean.cardano:yaci:0.4.3"
-cardano-client-lib = "com.bloxbean.cardano:cardano-client-lib:0.7.2"
-cardano-client-backend = "com.bloxbean.cardano:cardano-client-backend:0.7.2"
-cardano-client-backend-ogmios = "com.bloxbean.cardano:cardano-client-backend-ogmios:0.7.2"
-cardano-client-backend-blockfrost = "com.bloxbean.cardano:cardano-client-backend-blockfrost:0.7.2"
+yaci = "com.bloxbean.cardano:yaci:0.4.4"
+cardano-client-lib = "com.bloxbean.cardano:cardano-client-lib:0.8.0-pre4"
+cardano-client-backend = "com.bloxbean.cardano:cardano-client-backend:0.8.0-pre4"
+cardano-client-backend-ogmios = "com.bloxbean.cardano:cardano-client-backend-ogmios:0.8.0-pre4"
+cardano-client-backend-blockfrost = "com.bloxbean.cardano:cardano-client-backend-blockfrost:0.8.0-pre4"
 scalus-bloxbean-cardano-client-lib = "org.scalus:scalus-bloxbean-cardano-client-lib_3:0.17.0"
 
 cf-rewards="org.cardanofoundation:cf-rewards-calculation:1.0.0"

@@ -1,0 +1,5 @@
+- table: test_table_1
+  indexes:
+    - name: idx_test_table_1_slot
+      columns:
+        - slot
