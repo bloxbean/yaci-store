@@ -38,6 +38,7 @@ import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -179,11 +180,16 @@ public class EpochRewardCalculationService {
         }
 
         //Blocks made by pools in epoch
-        List<PoolBlock> blocksMadeByPoolsInEpoch = blockInfoService.getPoolBlockCount(activeEpoch) //active epoch //TODO --  check epoch value
+        List<PoolBlock> blocksMadeByPoolsInEpoch = new ArrayList<>(blockInfoService.getPoolBlockCount(activeEpoch) //active epoch //TODO --  check epoch value
                 .stream().map(poolBlock -> PoolBlock.builder()
                         .poolId(poolBlock.getPoolId())
                         .blockCount(poolBlock.getBlocks())
-                        .build()).toList();
+                        .build()).toList());
+
+        // Direct Shelley-start devnets have no Byron bootstrap epoch. The Haskell ledger
+        // includes the slot-0 genesis block in epoch-0 pool block accounting; infer that
+        // block once when Yaci did not persist it as a pool-led block.
+        blocksMadeByPoolsInEpoch = includeDirectStartGenesisSlot0Block(activeEpoch, nonByronEpoch, blocksMadeByPoolsInEpoch);
 
         int poolBlockCount = blocksMadeByPoolsInEpoch.stream()
                 .mapToInt(poolBlock -> poolBlock.getBlockCount() != null ? poolBlock.getBlockCount() : 0)
@@ -281,6 +287,43 @@ public class EpochRewardCalculationService {
                 .build();
 
         return rewardsCalcInput;
+    }
+
+    List<PoolBlock> includeDirectStartGenesisSlot0Block(int activeEpoch, int nonByronEpoch, List<PoolBlock> blocksMadeByPoolsInEpoch) {
+        if (activeEpoch != 0 || nonByronEpoch != 0 || blocksMadeByPoolsInEpoch == null || blocksMadeByPoolsInEpoch.isEmpty())
+            return blocksMadeByPoolsInEpoch;
+
+        var genesisStaking = genesisConfig.getGenesisStaking();
+        if (genesisStaking == null || genesisStaking.getPools() == null || genesisStaking.getPools().isEmpty())
+            return blocksMadeByPoolsInEpoch;
+
+        // If a real pool-led slot-0 block exists in storage, reward calculation already has it.
+        // The synthetic increment is only for direct-start devnets where slot 0 is represented
+        // by genesis state instead of a normal stored pool block.
+        if (blockInfoService.hasPoolBlockAtSlot(0))
+            return blocksMadeByPoolsInEpoch;
+
+        String genesisSlot0Pool = genesisStaking.getPools().get(0).getOperator();
+        List<PoolBlock> adjustedPoolBlocks = new ArrayList<>(blocksMadeByPoolsInEpoch.size());
+        boolean adjusted = false;
+        for (PoolBlock poolBlock : blocksMadeByPoolsInEpoch) {
+            if (!adjusted && Objects.equals(genesisSlot0Pool, poolBlock.getPoolId())) {
+                int blockCount = poolBlock.getBlockCount() != null ? poolBlock.getBlockCount() : 0;
+                adjustedPoolBlocks.add(PoolBlock.builder()
+                        .poolId(poolBlock.getPoolId())
+                        .blockCount(blockCount + 1)
+                        .build());
+                adjusted = true;
+            } else {
+                adjustedPoolBlocks.add(poolBlock);
+            }
+        }
+
+        if (adjusted) {
+            log.info("Counting direct-start genesis slot 0 block for pool {} in epoch 0 reward calculation", genesisSlot0Pool);
+        }
+
+        return adjustedPoolBlocks;
     }
 
     public EpochCalculationResult calculateEpochRewards(int epoch) {
