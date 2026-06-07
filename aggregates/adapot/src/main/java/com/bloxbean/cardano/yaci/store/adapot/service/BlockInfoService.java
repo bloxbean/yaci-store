@@ -38,4 +38,16 @@ public class BlockInfoService {
                 .epoch(epoch)
                 .build(), epoch);
     }
+
+    // Used by direct-start devnets to avoid adding a synthetic slot-0 pool block
+    // when the block table already contains a real pool-led slot-0 block.
+    public boolean hasPoolBlockAtSlot(long slot) {
+        String query = """
+            select count(number) from block b
+            where b.slot = ? and b.slot_leader in (select pool_id from pool_registration)
+        """;
+
+        Integer count = jdbcTemplate.queryForObject(query, Integer.class, slot);
+        return count != null && count > 0;
+    }
 }
