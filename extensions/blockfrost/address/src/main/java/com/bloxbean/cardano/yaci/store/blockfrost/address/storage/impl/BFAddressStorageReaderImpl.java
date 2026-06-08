@@ -151,7 +151,7 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
 
         boolean desc = order == Order.desc;
         SortField<?> slotSort = desc ? ADDRESS_UTXO.SLOT.desc() : ADDRESS_UTXO.SLOT.asc();
-        SortField<?> txIndexSort = desc ? TRANSACTION.TX_INDEX.desc() : TRANSACTION.TX_INDEX.asc();
+        SortField<?> txHashSort = desc ? ADDRESS_UTXO.TX_HASH.desc() : ADDRESS_UTXO.TX_HASH.asc();
         SortField<?> outputIndexSort = desc ? ADDRESS_UTXO.OUTPUT_INDEX.desc() : ADDRESS_UTXO.OUTPUT_INDEX.asc();
 
         return dsl.select(fields)
@@ -159,12 +159,10 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
                 .leftJoin(TX_INPUT)
                     .on(TX_INPUT.TX_HASH.eq(ADDRESS_UTXO.TX_HASH))
                     .and(TX_INPUT.OUTPUT_INDEX.eq(ADDRESS_UTXO.OUTPUT_INDEX))
-                .join(TRANSACTION)
-                    .on(TRANSACTION.TX_HASH.eq(ADDRESS_UTXO.TX_HASH))
                 .where(addrCondition)
                 .and(TX_INPUT.TX_HASH.isNull())
                 .and(extraCondition)
-                .orderBy(slotSort, txIndexSort, outputIndexSort)
+                .orderBy(slotSort, txHashSort, outputIndexSort)
                 .offset(offset)
                 .limit(count)
                 .queryTimeout(QUERY_TIMEOUT_SECONDS)
