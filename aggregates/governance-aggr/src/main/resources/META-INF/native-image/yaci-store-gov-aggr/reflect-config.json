@@ -1,6 +1,24 @@
 [
   {
+    "name": "com.bloxbean.cardano.yaci.store.governance_aggr.jooq.tables.pojos.CommitteeState",
+    "allPublicConstructors": true,
+    "allPublicFields": true,
+    "allDeclaredMethods": true
+  },
+  {
     "name": "com.bloxbean.cardano.yaci.store.governance_aggr.jooq.tables.pojos.DrepDist",
+    "allPublicConstructors": true,
+    "allPublicFields": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.governance_aggr.jooq.tables.pojos.DrepPv9StaleClearEvent",
+    "allPublicConstructors": true,
+    "allPublicFields": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.governance_aggr.jooq.tables.pojos.DrepPv9StaleClearEventCache",
     "allPublicConstructors": true,
     "allPublicFields": true,
     "allDeclaredMethods": true
@@ -12,7 +30,43 @@
     "allDeclaredMethods": true
   },
   {
-    "name": "com.bloxbean.cardano.yaci.store.governance_aggr.jooq.tables.pojos.DrepExpiry ",
+    "name": "com.bloxbean.cardano.yaci.store.governance_aggr.jooq.tables.pojos.GovEpochActivity",
+    "allPublicConstructors": true,
+    "allPublicFields": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.governance_aggr.jooq.tables.records.CommitteeStateRecord",
+    "allPublicConstructors": true,
+    "allPublicFields": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.governance_aggr.jooq.tables.records.DrepDistRecord",
+    "allPublicConstructors": true,
+    "allPublicFields": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.governance_aggr.jooq.tables.records.DrepPv9StaleClearEventRecord",
+    "allPublicConstructors": true,
+    "allPublicFields": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.governance_aggr.jooq.tables.records.DrepPv9StaleClearEventCacheRecord",
+    "allPublicConstructors": true,
+    "allPublicFields": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.governance_aggr.jooq.tables.records.GovActionProposalStatusRecord",
+    "allPublicConstructors": true,
+    "allPublicFields": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.store.governance_aggr.jooq.tables.records.GovEpochActivityRecord",
     "allPublicConstructors": true,
     "allPublicFields": true,
     "allDeclaredMethods": true
