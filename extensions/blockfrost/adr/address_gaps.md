@@ -95,6 +95,38 @@ and `tx_input_pkey (output_index, tx_hash)` for the unspent anti-join (EXPLAIN i
 testing but no query exploits the `slot` column (EXPLAIN still prefers `owner_addr` + sort), so it
 gives no benefit — do not add it.
 
+## Known limitation: transaction ordering at page boundaries
+
+The `/addresses/{address}/transactions` endpoint returns transactions in pages. Internally it
+builds each page in two steps:
+
+1. **Pick the page** — list the address's transactions ordered by `(block, tx_hash)` and apply
+   the requested limit/offset.
+2. **Sort the page** — re-sort just those transactions by their real on-chain position
+   `(block, tx_index)`.
+
+**You never lose or see a duplicate transaction.** Because every `tx_hash` is unique, step 1
+gives a stable, well-defined order, so each page holds a distinct slice of the history — no
+gaps, no overlaps.
+
+**The one edge case:** if a single block contains several of the address's transactions, and
+that block happens to land right on a page boundary, the split between the two pages is decided
+by `tx_hash` instead of `tx_index`. Each page is still sorted correctly on its own, but the
+hand-off between the two pages may not follow the exact on-chain order.
+
+> Real example (mainnet): address `addr1q93k6…3cc3k8`, block 13520853 contains 49 of its
+> transactions, and their `tx_hash` order has no relation to their `tx_index` order. A page
+> boundary falling inside this block would reorder a few transactions across the two pages.
+
+**Why we accept it:** sorting strictly by `tx_index` first would force a `transaction` lookup
+for *every* transaction of the address — not just the 100 on the page. On large accounts that's
+measurably slower and only gets worse as the account grows, all for a rare, cosmetic ordering
+quirk.
+
+**Future fix:** store `tx_index` directly on `address_utxo` at write time, with an index on
+`(owner_addr, block, tx_index, output_index)`. Then this endpoint can return the exact on-chain
+order in a single, cheap query — and `/utxos` would no longer need a join either.
+
 ## Configuration
 
 | Property | Required For |
