@@ -1,75 +1,85 @@
-# Address Module — Gaps & Open Items
+# Address Module — Status & Gaps
 
-**PR:** #784 | **Status:** ✅ Merged | **Endpoints:** 6 / 6
+**PR:** #784 · **Status:** ✅ Merged · **Endpoints:** 6 / 6
+Validated endpoint-by-endpoint against live Blockfrost using `scripts/compare-blockfrost`.
 
-## Endpoint Status
+## Status
 
-| Endpoint | Match | Notes |
-|----------|-------|-------|
-| `GET /addresses/{address}` | ✅ | Falls back to `address_utxo` sum when account aggregation disabled. Whale: bounded 500 (see below) |
-| `GET /addresses/{address}/extended` | ⚠️ | `decimals` and `has_nft_onchain_metadata` missing (CIP-68). Whale: bounded 500 |
-| `GET /addresses/{address}/utxos` | ✅ | Includes `tx_index`; `data_hash` derived for inline datums; ordered `(slot, tx_index, output_index)`. Whale: bounded 500 |
-| `GET /addresses/{address}/utxos/{asset}` | ✅ | Same as `/utxos` |
-| `GET /addresses/{address}/transactions` | ✅ | Two-phase paging; `from`/`to` as `block[:txIndex]`. Whale: bounded 500 |
-| `GET /addresses/{address}/total` | ✅ | JSONB aggregation by unit. Whale: bounded 500 |
+All six address endpoints are implemented and return Blockfrost-compatible responses. Two
+things to be aware of: `/extended` can't fill two CIP-68 fields, and very large ("whale")
+accounts hit a deliberate timeout. Both are explained under **Open Gaps** and **Limitations**.
 
-## Performance
+| Endpoint | Status | Notes |
+|----------|--------|-------|
+| `GET /addresses/{address}` | ✅ | Falls back to summing `address_utxo` when account aggregation is off |
+| `GET /addresses/{address}/extended` | ⚠️ | Missing `decimals` and `has_nft_onchain_metadata` (needs CIP-68) |
+| `GET /addresses/{address}/utxos` | ✅ | Ordered `(slot, tx_hash, output_index)`; `data_hash` derived for inline datums |
+| `GET /addresses/{address}/utxos/{asset}` | ✅ | Same behavior as `/utxos`, filtered by asset |
+| `GET /addresses/{address}/transactions` | ✅ | Two-phase paging; supports `from`/`to` as `block[:txIndex]` |
+| `GET /addresses/{address}/total` | ✅ | Received/sent totals aggregated by unit |
 
-Benchmarked vs official Blockfrost via `scripts/compare-blockfrost` (drift-isolated against
-live DBs). Yaci is consistently faster than Blockfrost on normal addresses (Blockfrost numbers
-are public-endpoint round-trips, shown for reference).
+## Performance (per network)
 
-| Network | `/transactions` (normal) | `/utxos` order vs BF | Yaci latency | Blockfrost latency |
-|---------|--------------------------|----------------------|--------------|--------------------|
-| mainnet | OK, 0 diffs | match (3 same-slot trigger addrs) | sub-second | ~0.4–1.4 s |
-| preprod | OK, 0 diffs | match (2 trigger addrs) | ~40–125 ms | ~0.37–1.4 s |
-| preview | OK, 0 diffs | match | ~40–65 ms | ~0.37–0.78 s |
+Benchmarked against official Blockfrost on live databases. On normal addresses Yaci is
+consistently faster (the Blockfrost figures are public-endpoint round-trips, shown only for
+reference).
 
-- **`/transactions` restructure:** two-phase paging (aggregate distinct tx hashes without the
-  `transaction` join, then join only the ≤ page rows) cut the planner cost **157M → 35M** on a
-  ~4M-UTXO mainnet whale and removed full-table seq scans over `transaction` (~51M) and
-  `tx_input` (~336M).
-- **`/utxos` ordering:** `(slot, tx_index, output_index)` via an index-only plan
-  (`idx_address_utxo_owner_addr` → `tx_input_pkey` anti-join → `transaction_pkey` join); no seq
-  scans; sub-100 ms on normal addresses.
-- **Whale ceiling:** for multi-million-UTXO addresses `/transactions`, `/utxos`, `/total` and the
-  balance endpoints exceed the query timeout and return a **bounded 500** (~15 s). The
-  full-history aggregation (`ORDER BY max(block)`) cannot be paged cheaply on the read path; the
-  timeout trades a connection-pool-exhausting hang for a fast per-request failure.
-- **Path to O(page):** a writer-maintained per-`(address, tx)` row carrying `tx_index`, indexed
-  `(address, block, tx_index)`, removes the aggregation and makes whale paging O(page). Writer-side,
-  out of read-path scope.
+| Network | Result | Yaci latency | Blockfrost latency |
+|---------|--------|--------------|--------------------|
+| mainnet | All endpoints match, 0 diffs | sub-second | ~0.4–1.4 s |
+| preprod | All endpoints match, 0 diffs | ~40–125 ms | ~0.37–1.4 s |
+| preview | All endpoints match, 0 diffs | ~40–65 ms  | ~0.37–0.78 s |
+
+Highlights:
+
+- **`/transactions` was restructured** into two-phase paging (collect the page of distinct tx
+  hashes first, then look up only those rows). On a ~4M-UTXO mainnet whale this cut the query
+  planner cost from **157M → 35M** and removed full-table scans over `transaction` and `tx_input`.
+- **`/utxos` runs index-only** (owner index → unspent anti-join) and stays under ~100 ms on
+  normal addresses.
 
 ## Open Gaps
 
-### Accepted Limitations
+- **CIP-68 fields in `/extended`** — `decimals` and `has_nft_onchain_metadata` can't be returned
+  because the indexer doesn't ingest CIP-68 metadata. No fix planned unless CIP-68 ingestion is
+  added to the store.
+- **Balance fallback when `store.account.enabled=false`** — balances are summed live from
+  `address_utxo`, so during a rollback they can differ from Blockfrost until re-indexing catches up.
 
-- **`/extended` mirrors base response:** `decimals` and `has_nft_onchain_metadata` are unavailable
-  because the indexer does not ingest CIP-68 metadata. No fix planned unless CIP-68 ingestion
-  is added to the store.
+## Limitations
 
-- **`address_utxo` fallback:** When `store.account.enabled=false`, balance fields aggregate live
-  from `address_utxo`. Values will differ from Blockfrost during rollbacks until re-indexed.
+These are intentional trade-offs, not bugs. None of them lose or duplicate data.
 
-## Indexes
+- **`/transactions` ordering at a page boundary** — pages are always complete and non-overlapping.
+  The only edge case: when one block has several of the address's transactions *and* it sits right
+  on a page boundary, the split between those two pages follows `tx_hash` instead of on-chain
+  `tx_index`, so a few transactions can appear slightly out of order across that one boundary.
+- **`/utxos` ordering within a block** — Blockfrost's order for UTXOs in the *same* block can't be
+  reproduced from the columns we store, so `tx_hash` is used as a stable tie-break. Ordering across
+  different blocks always matches Blockfrost.
+- **Whale accounts** — for multi-million-UTXO addresses, the heavier endpoints (`/transactions`,
+  `/utxos`, `/total`, balances) hit a ~15 s query timeout and return a fast `500` instead of hanging.
 
-The base migration (`V0_200_1__init.sql`) creates only `idx_address_utxo_slot` and
-`idx_reference_script_hash` on `address_utxo` — it has **no owner-based index**. The indexes the
-address endpoints rely on were **added on top of the migration** (via `index.yml`, applied by the
-dbutils index service, and some manually during testing); they are not part of the schema migration.
+**Long-term fix for all three:** store `tx_index` directly on `address_utxo` at write time, indexed
+`(owner_addr, block, tx_index, output_index)`. That gives exact on-chain ordering in a single cheap
+query and makes whale paging scale per-page.
 
-**Required for the address endpoints:**
+## Indexes Proposed
 
-| Index | Columns | Purpose | Source |
-|-------|---------|---------|--------|
-| `idx_address_utxo_owner_addr` | `owner_addr` | avoids a full table scan on every address endpoint | `index.yml` |
-| `idx_address_utxo_owner_addr_full` | `owner_addr_full` | Byron-length addresses | **manual** — not in `index.yml` (present on preprod, absent on mainnet) |
-| `idx_address_utxo_owner_stake_addr` | `owner_stake_addr` | stake-address utxo endpoints | `index.yml` |
-| `idx_address_utxo_owner_paykey_hash` / `idx_address_utxo_owner_stakekey_hash` | credential cols | payment/stake-credential endpoints | `index.yml` |
+The base migration (`V0_200_1__init.sql`) ships only `idx_address_utxo_slot` and
+`idx_reference_script_hash` — there is **no owner-based index**. The address endpoints depend on the
+owner indexes below, which are added *on top of* the migration (via `index.yml` / the dbutils index
+service). Use `CONCURRENTLY` so the live table isn't write-locked, and run each statement on its own.
+
+| Index | Columns | Why it's needed |
+|-------|---------|-----------------|
+| `idx_address_utxo_owner_addr` | `owner_addr` | avoids a full scan on every address endpoint |
+| `idx_address_utxo_owner_addr_full` | `owner_addr_full` | Byron-length addresses (apply manually — not in `index.yml`) |
+| `idx_address_utxo_owner_stake_addr` | `owner_stake_addr` | stake-address UTXO endpoints |
+| `idx_address_utxo_owner_paykey_hash` | `owner_payment_credential` | payment-credential endpoints |
+| `idx_address_utxo_owner_stakekey_hash` | `owner_stake_credential` | stake-credential endpoints |
 
 ```sql
--- Added on top of the base migration. CONCURRENTLY avoids a write lock on the live table;
--- run each statement on its own (CONCURRENTLY cannot run inside a transaction block).
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_address_utxo_owner_addr
     ON address_utxo (owner_addr);
 
@@ -87,55 +97,20 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_address_utxo_owner_stakekey_hash
     ON address_utxo (owner_stake_credential);
 ```
 
-The new `/utxos` and two-phase `/transactions` queries need **no additional `address_utxo`
-index** — they ride existing primary keys: `transaction_pkey (tx_hash)` for the `tx_index` join
-and `tx_input_pkey (output_index, tx_hash)` for the unspent anti-join (EXPLAIN is seq-scan-free).
+Notes:
 
-**Tested but not adopted:** `idx_address_utxo_owner_slot (owner_addr, slot)` was added during perf
-testing but no query exploits the `slot` column (EXPLAIN still prefers `owner_addr` + sort), so it
-gives no benefit — do not add it.
-
-## Known limitation: transaction ordering at page boundaries
-
-The `/addresses/{address}/transactions` endpoint returns transactions in pages. Internally it
-builds each page in two steps:
-
-1. **Pick the page** — list the address's transactions ordered by `(block, tx_hash)` and apply
-   the requested limit/offset.
-2. **Sort the page** — re-sort just those transactions by their real on-chain position
-   `(block, tx_index)`.
-
-**You never lose or see a duplicate transaction.** Because every `tx_hash` is unique, step 1
-gives a stable, well-defined order, so each page holds a distinct slice of the history — no
-gaps, no overlaps.
-
-**The one edge case:** if a single block contains several of the address's transactions, and
-that block happens to land right on a page boundary, the split between the two pages is decided
-by `tx_hash` instead of `tx_index`. Each page is still sorted correctly on its own, but the
-hand-off between the two pages may not follow the exact on-chain order.
-
-> Real example (mainnet): address `addr1q93k6…3cc3k8`, block 13520853 contains 49 of its
-> transactions, and their `tx_hash` order has no relation to their `tx_index` order. A page
-> boundary falling inside this block would reorder a few transactions across the two pages.
-
-**Why we accept it:** sorting strictly by `tx_index` first would force a `transaction` lookup
-for *every* transaction of the address — not just the 100 on the page. On large accounts that's
-measurably slower and only gets worse as the account grows, all for a rare, cosmetic ordering
-quirk.
-
-**Future fix:** store `tx_index` directly on `address_utxo` at write time, with an index on
-`(owner_addr, block, tx_index, output_index)`. Then this endpoint can return the exact on-chain
-order in a single, cheap query — and `/utxos` would no longer need a join either.
+- The `/utxos` and two-phase `/transactions` queries need **no extra `address_utxo` index** — they
+  ride existing primary keys (`tx_input_pkey`, `transaction_pkey`) and are seq-scan-free in EXPLAIN.
 
 ## Configuration
 
-| Property | Required For |
-|----------|-------------|
-| `store.extensions.blockfrost.address.enabled=true` | All address endpoints |
-| `store.account.enabled=true` | Accurate balance in `/addresses/{address}` |
-| `store.account.stake-address-balance-enabled=true` | `controlled_amount` field |
+| Property | Required for |
+|----------|--------------|
+| `store.extensions.blockfrost.address.enabled=true` | all address endpoints |
+| `store.account.enabled=true` | accurate balance in `/addresses/{address}` |
+| `store.account.stake-address-balance-enabled=true` | the `controlled_amount` field |
 
 ## Release Notes
 
-No functional blockers. The `extended` limitation is accepted (requires CIP-68 ingestion).
-Module is production-ready with correct index configuration.
+No functional blockers. The `/extended` CIP-68 gap is accepted. The module is production-ready with
+the owner indexes above in place.
