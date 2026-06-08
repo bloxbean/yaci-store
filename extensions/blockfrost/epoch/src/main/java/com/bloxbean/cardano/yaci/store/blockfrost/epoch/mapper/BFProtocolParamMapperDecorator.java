@@ -30,8 +30,6 @@ public class BFProtocolParamMapperDecorator implements BFProtocolParamMapper {
             bfProtocolParamsDto.setDecentralisationParam(BigDecimal.ZERO);
         }
 
-        // cost_models: named keys (alphabetical TreeMap) from DomainMapperDecorator — pass through.
-        // cost_models_raw: original positional array already built from DB in DomainMapperDecorator — use directly.
         if (protocolParamsDto.getCostModels() != null) {
             bfProtocolParamsDto.setCostModels(protocolParamsDto.getCostModels());
             bfProtocolParamsDto.setCostModelsRaw(protocolParamsDto.getCostModelsRaw());
