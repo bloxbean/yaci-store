@@ -31,6 +31,12 @@
   Correct approach: use `adapot` table for past epochs; for current epoch, `SUM` transaction fees
   from the `block` table. Caching recommended for performance.
 
+- **`/stakes` and `/stakes/{pool_id}` ordering mismatch:**
+  `GET /epochs/{number}/stakes` and `GET /epochs/{number}/stakes/{pool_id}` in Blockfrost
+  return results ordered according to cardano-db-sync's internal row ordering. Yaci Store
+  does not replicate this ordering, so paginated responses may return rows in a different
+  sequence than Blockfrost.
+
 - **`first_block_time` / `last_block_time` not the true first/last block times
   ([#973](https://github.com/bloxbean/yaci-store/issues/973)):**
   `epoch.start_time` / `epoch.end_time` (which back these fields) are computed from an
