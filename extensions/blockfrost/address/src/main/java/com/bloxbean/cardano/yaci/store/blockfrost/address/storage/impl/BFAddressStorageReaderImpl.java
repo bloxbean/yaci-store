@@ -14,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.jooq.Condition;
 import org.jooq.DSLContext;
 import org.jooq.Field;
+import org.jooq.Record1;
 import org.jooq.Record2;
 import org.jooq.Record4;
 import org.jooq.Result;
@@ -98,9 +99,15 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
         SortField<?> pageBlockOrder = order == Order.desc ? pageBlock.desc() : pageBlock.asc();
         SortField<?> pageHashOrder = order == Order.desc ? combinedTxHash.desc() : combinedTxHash.asc();
 
+        Condition pageCondition = buildBlockRangeCondition(combinedBlock, fromRef, toRef);
+        List<String> boundaryViolators = fetchBoundaryTxIndexViolators(combinedTx, combinedBlock, fromRef, toRef);
+        if (!boundaryViolators.isEmpty()) {
+            pageCondition = pageCondition.and(combinedTxHash.notIn(boundaryViolators));
+        }
+
         List<String> pagedTxHashes = dsl.select(combinedTxHash, pageBlock)
                 .from(combinedTx)
-                .where(buildBlockRangeCondition(combinedBlock, fromRef, toRef))
+                .where(pageCondition)
                 .groupBy(combinedTxHash)
                 .orderBy(pageBlockOrder, pageHashOrder)
                 .limit(count)
@@ -553,6 +560,40 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
             condition = condition.and(blockField.le(to.block()));
         }
         return condition;
+    }
+
+    private List<String> fetchBoundaryTxIndexViolators(Table<?> combinedTx, Field<Long> combinedBlock,
+                                                       BlockRef from, BlockRef to) {
+        boolean fromBounded = from != null && from.txIndex() != null;
+        boolean toBounded = to != null && to.txIndex() != null;
+        if (!fromBounded && !toBounded) {
+            return List.of();
+        }
+
+        List<Long> boundaryBlocks = new ArrayList<>();
+        Condition violates = DSL.falseCondition();
+        if (fromBounded) {
+            boundaryBlocks.add(from.block());
+            violates = violates.or(TRANSACTION.BLOCK.eq(from.block())
+                    .and(DSL.coalesce(TRANSACTION.TX_INDEX, 0).lt(from.txIndex())));
+        }
+        if (toBounded) {
+            boundaryBlocks.add(to.block());
+            violates = violates.or(TRANSACTION.BLOCK.eq(to.block())
+                    .and(DSL.coalesce(TRANSACTION.TX_INDEX, 0).gt(to.txIndex())));
+        }
+
+        Field<String> combinedTxHash = combinedTx.field("tx_hash", String.class);
+        Select<Record1<String>> boundaryHashes = dsl.select(combinedTxHash)
+                .from(combinedTx)
+                .where(combinedBlock.in(boundaryBlocks));
+
+        return dsl.select(TRANSACTION.TX_HASH)
+                .from(TRANSACTION)
+                .where(TRANSACTION.TX_HASH.in(boundaryHashes))
+                .and(violates)
+                .queryTimeout(QUERY_TIMEOUT_SECONDS)
+                .fetchInto(String.class);
     }
 
     private record BlockRef(long block, Integer txIndex) {
