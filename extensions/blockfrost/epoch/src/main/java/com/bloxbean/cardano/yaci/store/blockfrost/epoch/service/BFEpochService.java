@@ -22,7 +22,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigInteger;
-import java.util.Comparator;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -86,7 +85,6 @@ public class BFEpochService {
 
         List<EpochStake> stakes = stakeStorageReader.getAllActiveStakesByEpoch(number, page, count);
         return stakes.stream()
-                .sorted(Comparator.comparing(EpochStake::getAddress))
                 .map(bfEpochStakeMapper::toBFEpochStakeDto)
                 .collect(Collectors.toList());
     }
@@ -102,7 +100,6 @@ public class BFEpochService {
         String poolHash = normalizePoolHash(poolId);
         List<EpochStake> stakes = stakeStorageReader.getAllActiveStakesByEpochAndPool(number, poolHash, page, count);
         return stakes.stream()
-                .sorted(Comparator.comparing(EpochStake::getAddress))
                 .map(bfEpochStakeMapper::toBFEpochStakePoolDto)
                 .collect(Collectors.toList());
     }
