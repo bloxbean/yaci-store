@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 @Tag(name = "Blockfrost Utilities")
 @RequestMapping("${blockfrost.apiPrefix}/utils")
-@ConditionalOnExpression("${store.extensions.blockfrost.util.enabled:false}")
+@ConditionalOnExpression("${store.extensions.blockfrost.util.enabled:true}")
 public class BFUtilController {
 
     private final BFUtilService bfUtilService;

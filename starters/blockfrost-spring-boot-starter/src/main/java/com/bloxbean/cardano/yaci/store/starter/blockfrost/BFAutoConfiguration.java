@@ -12,10 +12,17 @@ import com.bloxbean.cardano.yaci.store.blockfrost.util.BFUtilConfiguration;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Import;
 
 @AutoConfiguration
+@ConditionalOnProperty(
+        prefix = "store.extensions.blockfrost",
+        name = "enabled",
+        havingValue = "true",
+        matchIfMissing = false
+)
 @EnableConfigurationProperties(BFProperties.class)
 @Import({BFEpochConfiguration.class, BFAddressConfiguration.class, BFAssetConfiguration.class, BFAccountConfiguration.class, BFTransactionConfiguration.class, BFBlockConfiguration.class, BFScriptsConfiguration.class, BFMetadataConfiguration.class, BFUtilConfiguration.class})
 @Slf4j

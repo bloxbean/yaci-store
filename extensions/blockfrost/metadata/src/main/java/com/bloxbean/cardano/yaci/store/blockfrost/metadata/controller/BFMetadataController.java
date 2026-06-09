@@ -28,7 +28,7 @@ import java.util.List;
 @RequiredArgsConstructor
 @Tag(name = "Blockfrost Metadata")
 @RequestMapping("${blockfrost.apiPrefix}/metadata/txs")
-@ConditionalOnExpression("${store.extensions.blockfrost.metadata.enabled:false}")
+@ConditionalOnExpression("${store.extensions.blockfrost.metadata.enabled:true}")
 public class BFMetadataController {
 
     private final BFMetadataService bfMetadataService;

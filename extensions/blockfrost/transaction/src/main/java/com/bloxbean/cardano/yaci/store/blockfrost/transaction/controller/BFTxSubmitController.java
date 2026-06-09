@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 @Tag(name = "Blockfrost Transactions")
 @RequestMapping("${blockfrost.apiPrefix}/tx")
-@ConditionalOnExpression("${store.extensions.blockfrost.transaction.enabled:false}")
+@ConditionalOnExpression("${store.extensions.blockfrost.transaction.enabled:true}")
 public class BFTxSubmitController {
 
     private final BFTxSubmitService bfTxSubmitService;

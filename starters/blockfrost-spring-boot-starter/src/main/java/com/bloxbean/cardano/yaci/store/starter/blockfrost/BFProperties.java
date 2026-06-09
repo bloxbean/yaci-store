@@ -20,6 +20,8 @@ public class BFProperties {
         @Setter
         public static final class Blockfrost  {
 
+            private boolean enabled = false;
+
             private Epoch epoch = new Epoch();
             private Address address = new Address();
             private Asset asset = new Asset();
@@ -33,55 +35,55 @@ public class BFProperties {
             @Getter
             @Setter
             public static final class Epoch {
-                private boolean enabled = false;
+                private boolean enabled = true;
             }
 
             @Getter
             @Setter
             public static final class Address {
-                private boolean enabled = false;
+                private boolean enabled = true;
             }
 
             @Getter
             @Setter
             public static final class Asset {
-                private boolean enabled = false;
+                private boolean enabled = true;
             }
 
             @Getter
             @Setter
             public static final class Account {
-                private boolean enabled = false;
+                private boolean enabled = true;
             }
 
             @Getter
             @Setter
             public static final class Transaction {
-                private boolean enabled = false;
+                private boolean enabled = true;
             }
 
             @Getter
             @Setter
             public static final class Blocks {
-                private boolean enabled = false;
+                private boolean enabled = true;
             }
 
             @Getter
             @Setter
             public static final class Scripts {
-                private boolean enabled = false;
+                private boolean enabled = true;
             }
 
             @Getter
             @Setter
             public static final class Metadata {
-                private boolean enabled = false;
+                private boolean enabled = true;
             }
 
             @Getter
             @Setter
             public static final class Util {
-                private boolean enabled = false;
+                private boolean enabled = true;
             }
 
         }
