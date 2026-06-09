@@ -22,7 +22,7 @@ import java.util.List;
 @RequiredArgsConstructor
 @Tag(name = "Blockfrost Scripts")
 @RequestMapping("${blockfrost.apiPrefix}/scripts")
-@ConditionalOnExpression("${store.extensions.blockfrost.scripts.enabled:false}")
+@ConditionalOnExpression("${store.extensions.blockfrost.scripts.enabled:true}")
 public class BFScriptsController {
 
     private final BFScriptsService bfScriptsService;
