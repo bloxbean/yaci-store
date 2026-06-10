@@ -15,6 +15,9 @@ public interface BFAddressUtxoMapper {
 
     @Mapping(target = "address", source = "ownerAddr")
     @Mapping(target = "txHash", source = "txHash")
+    // Blockfrost's address-utxo `tx_index` is the deprecated alias of `output_index`
+    // for this endpoint (same value), so we surface output_index under both fields.
+    @Mapping(target = "txIndex", source = "outputIndex")
     @Mapping(target = "outputIndex", source = "outputIndex")
     @Mapping(target = "amount", ignore = true)
     @Mapping(target = "block", source = "blockHash")
