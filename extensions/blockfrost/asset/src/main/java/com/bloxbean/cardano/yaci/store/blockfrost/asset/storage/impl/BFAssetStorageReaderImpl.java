@@ -166,32 +166,131 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
     }
 
     /**
-     * Returns mint/burn history for an asset unit in deterministic order by slot and tx hash.
+     * Returns mint/burn history for an asset unit in exact Blockfrost order: (slot, tx_index, tx_hash).
+     *
+     * <p>Each {@code assets} row is one mint/burn event (no deduplication). Blockfrost orders events
+     * within a block by {@code tx_index}, which {@code assets} does not carry — so we join
+     * {@code transaction}. To avoid joining and sorting every event of a deep-history unit (tens of
+     * thousands), Postgres uses the same slot-window strategy as {@link #assetTxPagePostgres}: bound the
+     * work to the page's slot range, join {@code transaction} only there, rank by (slot, tx_index, tx_hash)
+     * and slice the exact page. Burn amounts are returned with their stored sign (negative) to mirror the
+     * live Blockfrost API; the OpenAPI example shows a positive amount, an intentional divergence.
      */
     @Override
     public List<BFAssetHistory> findAssetHistory(String unit, int page, int count, Order order) {
+        if (BlockfrostDialectUtil.isPostgres(dsl)) {
+            return findAssetHistoryPostgres(unit, page, count, order);
+        }
+        return findAssetHistoryFallback(unit, page, count, order);
+    }
+
+    private List<BFAssetHistory> findAssetHistoryPostgres(String unit, int page, int count, Order order) {
+        int offset = Math.max(page, 0) * count;
+        String slotOrder = order == Order.desc ? "desc nulls last" : "asc nulls last";
+        String txIndexOrder = order == Order.desc ? "desc nulls last" : "asc nulls first";
+        String txHashOrder = order == Order.desc ? "desc" : "asc";
+        String boundaryStartAgg = order == Order.desc ? "max" : "min";
+        String boundaryEndAgg = order == Order.desc ? "min" : "max";
+        String prefixCmp = order == Order.desc ? ">" : "<";
+        String candLo = order == Order.desc ? "<=" : ">=";
+        String candHi = order == Order.desc ? ">=" : "<=";
+
+        Table<?> historyPage = DSL.table(
+                """
+                (
+                    with events as materialized (
+                        select tx_hash, mint_type, quantity, slot::bigint as slot
+                        from assets
+                        where unit = {2}
+                    ),
+                    page_window as materialized (
+                        select slot, tx_hash
+                        from events
+                        order by slot %s, tx_hash %s
+                        offset {0} rows fetch next {1} rows only
+                    ),
+                    boundary as (
+                        select %s(slot) as start_slot, %s(slot) as end_slot
+                        from page_window
+                    ),
+                    prefix as (
+                        select count(*) as cnt
+                        from events
+                        where slot %s (select start_slot from boundary)
+                    ),
+                    candidates as (
+                        select e.tx_hash, e.mint_type, e.quantity, e.slot, t.tx_index
+                        from events e
+                        join transaction t on t.tx_hash = e.tx_hash, boundary b
+                        where e.slot %s b.start_slot
+                          and e.slot %s b.end_slot
+                    ),
+                    ranked as (
+                        select tx_hash, mint_type, quantity,
+                               row_number() over (order by slot %s, tx_index %s, tx_hash %s) as rn
+                        from candidates
+                    )
+                    select tx_hash, mint_type, quantity
+                    from ranked
+                    where rn > ({0} - (select cnt from prefix))
+                      and rn <= ({0} - (select cnt from prefix) + {1})
+                    order by rn
+                ) as history_page
+                """.formatted(
+                        slotOrder, txHashOrder,
+                        boundaryStartAgg, boundaryEndAgg,
+                        prefixCmp,
+                        candLo, candHi,
+                        slotOrder, txIndexOrder, txHashOrder
+                ),
+                DSL.inline(offset), DSL.inline(count), DSL.val(unit)
+        );
+
+        Field<String> txHashField = DSL.field(DSL.name("history_page", "tx_hash"), String.class);
+        Field<String> mintTypeField = DSL.field(DSL.name("history_page", "mint_type"), String.class);
+        Field<BigInteger> quantityField = DSL.field(DSL.name("history_page", "quantity"), BigInteger.class);
+
+        var query = dsl.select(txHashField, mintTypeField, quantityField).from(historyPage);
+        logQuery("findAssetHistoryPostgres", query);
+        return query.fetch(record -> toHistory(
+                record.get(txHashField),
+                record.get(mintTypeField),
+                record.get(quantityField)
+        ));
+    }
+
+    private List<BFAssetHistory> findAssetHistoryFallback(String unit, int page, int count, Order order) {
         int offset = Math.max(page, 0) * count;
         Condition assetCondition = buildAssetCondition(unit);
         SortField<?> slotOrder = order == Order.desc ? ASSETS.SLOT.desc().nullsLast() : ASSETS.SLOT.asc().nullsLast();
+        SortField<?> txIndexOrder = order == Order.desc
+                ? TRANSACTION.TX_INDEX.desc().nullsLast()
+                : TRANSACTION.TX_INDEX.asc().nullsFirst();
         SortField<?> txOrder = order == Order.desc ? ASSETS.TX_HASH.desc() : ASSETS.TX_HASH.asc();
 
         var query = dsl.select(ASSETS.TX_HASH, ASSETS.MINT_TYPE, ASSETS.QUANTITY)
                 .from(ASSETS)
+                .join(TRANSACTION).on(TRANSACTION.TX_HASH.eq(ASSETS.TX_HASH))
                 .where(assetCondition)
-                .orderBy(slotOrder, txOrder)
+                .orderBy(slotOrder, txIndexOrder, txOrder)
                 .limit(count)
                 .offset(offset);
 
-        logQuery("findAssetHistory", query);
+        logQuery("findAssetHistoryFallback", query);
+        return query.fetch(record -> toHistory(
+                record.get(ASSETS.TX_HASH),
+                record.get(ASSETS.MINT_TYPE),
+                record.get(ASSETS.QUANTITY)
+        ));
+    }
 
-        return query.fetch(record -> {
-                    String mintType = record.get(ASSETS.MINT_TYPE);
-                    String action = "BURN".equalsIgnoreCase(mintType) ? "burned" : "minted";
-                    // Preserve the stored sign (burns are negative) to mirror the live Blockfrost API;
-                    // the OpenAPI example shows a positive burn amount — an intentional divergence.
-                    BigInteger amount = toBigInteger(record.get(ASSETS.QUANTITY));
-                    return new BFAssetHistory(record.get(ASSETS.TX_HASH), action, amount);
-                });
+    /**
+     * Maps a mint/burn event row to a history entry. The stored quantity sign is preserved
+     * (burns are negative) to mirror the live Blockfrost API.
+     */
+    private BFAssetHistory toHistory(String txHash, String mintType, Object quantity) {
+        String action = "BURN".equalsIgnoreCase(mintType) ? "burned" : "minted";
+        return new BFAssetHistory(txHash, action, toBigInteger(quantity));
     }
 
     /**
