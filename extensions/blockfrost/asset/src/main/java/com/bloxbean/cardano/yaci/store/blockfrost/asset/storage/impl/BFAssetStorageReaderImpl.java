@@ -176,7 +176,6 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
         int offset = Math.max(page, 0) * count;
         String slotOrder = order == Order.desc ? "desc nulls last" : "asc nulls last";
         String txIndexOrder = order == Order.desc ? "desc nulls last" : "asc nulls first";
-        String txHashOrder = order == Order.desc ? "desc" : "asc";
         String boundaryStartAgg = order == Order.desc ? "max" : "min";
         String boundaryEndAgg = order == Order.desc ? "min" : "max";
         String prefixCmp = order == Order.desc ? ">" : "<";
@@ -194,7 +193,7 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
                     page_window as materialized (
                         select slot, tx_hash
                         from events
-                        order by slot %s, tx_hash %s
+                        order by slot %s
                         offset {0} rows fetch next {1} rows only
                     ),
                     boundary as (
@@ -215,7 +214,7 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
                     ),
                     ranked as (
                         select tx_hash, mint_type, quantity,
-                               row_number() over (order by slot %s, tx_index %s, tx_hash %s) as rn
+                               row_number() over (order by slot %s, tx_index %s) as rn
                         from candidates
                     )
                     select tx_hash, mint_type, quantity
@@ -225,11 +224,11 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
                     order by rn
                 ) as history_page
                 """.formatted(
-                        slotOrder, txHashOrder,
+                        slotOrder,
                         boundaryStartAgg, boundaryEndAgg,
                         prefixCmp,
                         candLo, candHi,
-                        slotOrder, txIndexOrder, txHashOrder
+                        slotOrder, txIndexOrder
                 ),
                 DSL.inline(offset), DSL.inline(count), DSL.val(unit)
         );
@@ -254,13 +253,12 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
         SortField<?> txIndexOrder = order == Order.desc
                 ? TRANSACTION.TX_INDEX.desc().nullsLast()
                 : TRANSACTION.TX_INDEX.asc().nullsFirst();
-        SortField<?> txOrder = order == Order.desc ? ASSETS.TX_HASH.desc() : ASSETS.TX_HASH.asc();
 
         var query = dsl.select(ASSETS.TX_HASH, ASSETS.MINT_TYPE, ASSETS.QUANTITY)
                 .from(ASSETS)
                 .join(TRANSACTION).on(TRANSACTION.TX_HASH.eq(ASSETS.TX_HASH))
                 .where(assetCondition)
-                .orderBy(slotOrder, txIndexOrder, txOrder)
+                .orderBy(slotOrder, txIndexOrder)
                 .limit(count)
                 .offset(offset);
 
@@ -501,7 +499,7 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
                             select a.tx_hash, t.tx_index
                             from assets a join transaction t on t.tx_hash = a.tx_hash
                             where a.mint_type = 'MINT' and a.unit = c.unit and a.slot = c.slot
-                            order by t.tx_index asc, a.tx_hash asc
+                            order by t.tx_index asc
                             fetch next 1 rows only
                         ) picked on true
                     ),
@@ -551,7 +549,7 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
 
         Field<Integer> rnField = DSL.rowNumber()
                 .over(DSL.partitionBy(ASSETS.UNIT)
-                        .orderBy(ASSETS.SLOT.asc().nullsLast(), TRANSACTION.TX_INDEX.asc().nullsFirst(), ASSETS.TX_HASH.asc()))
+                        .orderBy(ASSETS.SLOT.asc().nullsLast(), TRANSACTION.TX_INDEX.asc().nullsFirst()))
                 .as("rn");
 
         Table<?> rankedAssets = dsl.select(
@@ -629,7 +627,6 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
         int offset = Math.max(page, 0) * count;
         String slotOrder = order == Order.desc ? "desc nulls last" : "asc nulls last";
         String txIndexOrder = order == Order.desc ? "desc nulls last" : "asc nulls first";
-        String txHashOrder = order == Order.desc ? "desc" : "asc";
         String boundaryStartAgg = order == Order.desc ? "max" : "min";
         String boundaryEndAgg = order == Order.desc ? "min" : "max";
         String prefixCmp = order == Order.desc ? ">" : "<";
@@ -650,7 +647,7 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
                     page_window as materialized (
                         select tx_hash, slot
                         from distinct_tx
-                        order by slot %s, tx_hash %s
+                        order by slot %s
                         offset {0} rows fetch next {1} rows only
                     ),
                     boundary as (
@@ -671,7 +668,7 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
                     ),
                     ranked as (
                         select tx_hash, tx_index, block, block_time,
-                               row_number() over (order by slot %s, tx_index %s, tx_hash %s) as rn
+                               row_number() over (order by slot %s, tx_index %s) as rn
                         from candidates
                     )
                     select tx_hash, coalesce(tx_index, 0) as tx_index, block, block_time
@@ -681,11 +678,11 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
                     order by rn
                 ) as asset_tx_page
                 """.formatted(
-                        slotOrder, txHashOrder,
+                        slotOrder,
                         boundaryStartAgg, boundaryEndAgg,
                         prefixCmp,
                         candLo, candHi,
-                        slotOrder, txIndexOrder, txHashOrder
+                        slotOrder, txIndexOrder
                 ),
                 DSL.inline(offset), DSL.inline(count), DSL.val(unitJson)
         );
@@ -730,13 +727,12 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
         SortField<?> txIndexOrder = order == Order.desc
                 ? txIndexSortField.desc().nullsLast()
                 : txIndexSortField.asc().nullsFirst();
-        SortField<?> txOrder = order == Order.desc ? txHashField.desc() : txHashField.asc();
 
         var query = dsl.select(txHashField, txIndexField, blockHeightField, blockTimeField)
                 .from(distinctAssetTx)
                 .join(TRANSACTION)
                 .on(TRANSACTION.TX_HASH.eq(distinctTxHashField))
-                .orderBy(blockOrder, txIndexOrder, txOrder)
+                .orderBy(blockOrder, txIndexOrder)
                 .limit(count)
                 .offset(offset);
 
@@ -824,7 +820,7 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
                             where a.mint_type = 'MINT'
                               and a.unit = c.unit
                               and a.slot = c.slot
-                            order by t.tx_index asc, a.tx_hash asc
+                            order by t.tx_index asc
                             fetch next 1 rows only
                         ) picked on true
                     ),
@@ -868,14 +864,13 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
         Field<Long> slotField = DSL.min(ASSETS.SLOT).as("slot");
         Field<String> txHashField = DSL.min(ASSETS.TX_HASH).as("tx_hash");
         SortField<?> slotOrder = order == Order.desc ? slotField.desc().nullsLast() : slotField.asc().nullsLast();
-        SortField<?> txHashOrder = order == Order.desc ? txHashField.desc() : txHashField.asc();
         SortField<?> unitOrder = order == Order.desc ? unitField.desc() : unitField.asc();
 
         var query = dsl.select(unitField, slotField, txHashField)
                 .from(ASSETS)
                 .where(ASSETS.MINT_TYPE.eq("MINT"))
                 .groupBy(ASSETS.UNIT)
-                .orderBy(slotOrder, txHashOrder, unitOrder)
+                .orderBy(slotOrder, unitOrder)
                 .limit(count)
                 .offset(offset);
 
