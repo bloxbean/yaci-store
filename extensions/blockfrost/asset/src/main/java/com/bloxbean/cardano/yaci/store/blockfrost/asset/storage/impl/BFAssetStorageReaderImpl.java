@@ -187,7 +187,9 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
         return query.fetch(record -> {
                     String mintType = record.get(ASSETS.MINT_TYPE);
                     String action = "BURN".equalsIgnoreCase(mintType) ? "burned" : "minted";
-                    BigInteger amount = toBigInteger(record.get(ASSETS.QUANTITY)).abs();
+                    // Preserve the stored sign (burns are negative) to mirror the live Blockfrost API;
+                    // the OpenAPI example shows a positive burn amount — an intentional divergence.
+                    BigInteger amount = toBigInteger(record.get(ASSETS.QUANTITY));
                     return new BFAssetHistory(record.get(ASSETS.TX_HASH), action, amount);
                 });
     }
