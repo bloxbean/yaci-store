@@ -44,10 +44,7 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
     private final DSLContext dsl;
 
     /**
-     * Returns a paginated asset list with first-seen mint tx (per unit) and aggregated quantity for each unit.
-     * The method intentionally runs in two phases to avoid N+1:
-     * 1) resolve page units with deterministic first-seen ordering
-     * 2) aggregate quantities for only those page units.
+     * Returns one page of the asset list, each unit with its first-mint tx and total quantity.
      */
     @Override
     public List<BFPolicyAsset> findAssets(int page, int count, Order order) {
@@ -112,8 +109,7 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
     }
 
     /**
-     * Resolves full asset information for a specific unit.
-     * The earliest mint transaction hash is fetched separately from aggregates to keep both queries index-friendly.
+     * Returns the full details for a single asset unit, or empty if it was never minted.
      */
     @Override
     public Optional<BFAssetInfo> findAssetInfo(String unit) {
@@ -166,103 +162,142 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
     }
 
     /**
-     * Returns mint/burn history for an asset unit in deterministic order by slot and tx hash.
+     * Returns one page of an asset's mint/burn history, ordered to match Blockfrost.
      */
     @Override
     public List<BFAssetHistory> findAssetHistory(String unit, int page, int count, Order order) {
+        if (BlockfrostDialectUtil.isPostgres(dsl)) {
+            return findAssetHistoryPostgres(unit, page, count, order);
+        }
+        return findAssetHistoryFallback(unit, page, count, order);
+    }
+
+    private List<BFAssetHistory> findAssetHistoryPostgres(String unit, int page, int count, Order order) {
+        int offset = Math.max(page, 0) * count;
+        String slotOrder = order == Order.desc ? "desc nulls last" : "asc nulls last";
+        String txIndexOrder = order == Order.desc ? "desc nulls last" : "asc nulls first";
+        String boundaryStartAgg = order == Order.desc ? "max" : "min";
+        String boundaryEndAgg = order == Order.desc ? "min" : "max";
+        String prefixCmp = order == Order.desc ? ">" : "<";
+        String candLo = order == Order.desc ? "<=" : ">=";
+        String candHi = order == Order.desc ? ">=" : "<=";
+
+        Table<?> historyPage = DSL.table(
+                """
+                (
+                    with events as materialized (
+                        select tx_hash, mint_type, quantity, slot::bigint as slot
+                        from assets
+                        where unit = {2}
+                    ),
+                    page_window as materialized (
+                        select slot, tx_hash
+                        from events
+                        order by slot %s
+                        offset {0} rows fetch next {1} rows only
+                    ),
+                    boundary as (
+                        select %s(slot) as start_slot, %s(slot) as end_slot
+                        from page_window
+                    ),
+                    prefix as (
+                        select count(*) as cnt
+                        from events
+                        where slot %s (select start_slot from boundary)
+                    ),
+                    candidates as (
+                        select e.tx_hash, e.mint_type, e.quantity, e.slot, t.tx_index
+                        from events e
+                        join transaction t on t.tx_hash = e.tx_hash, boundary b
+                        where e.slot %s b.start_slot
+                          and e.slot %s b.end_slot
+                    ),
+                    ranked as (
+                        select tx_hash, mint_type, quantity,
+                               row_number() over (order by slot %s, tx_index %s) as rn
+                        from candidates
+                    )
+                    select tx_hash, mint_type, quantity
+                    from ranked
+                    where rn > ({0} - (select cnt from prefix))
+                      and rn <= ({0} - (select cnt from prefix) + {1})
+                    order by rn
+                ) as history_page
+                """.formatted(
+                        slotOrder,
+                        boundaryStartAgg, boundaryEndAgg,
+                        prefixCmp,
+                        candLo, candHi,
+                        slotOrder, txIndexOrder
+                ),
+                DSL.inline(offset), DSL.inline(count), DSL.val(unit)
+        );
+
+        Field<String> txHashField = DSL.field(DSL.name("history_page", "tx_hash"), String.class);
+        Field<String> mintTypeField = DSL.field(DSL.name("history_page", "mint_type"), String.class);
+        Field<BigInteger> quantityField = DSL.field(DSL.name("history_page", "quantity"), BigInteger.class);
+
+        var query = dsl.select(txHashField, mintTypeField, quantityField).from(historyPage);
+        logQuery("findAssetHistoryPostgres", query);
+        return query.fetch(record -> toHistory(
+                record.get(txHashField),
+                record.get(mintTypeField),
+                record.get(quantityField)
+        ));
+    }
+
+    private List<BFAssetHistory> findAssetHistoryFallback(String unit, int page, int count, Order order) {
         int offset = Math.max(page, 0) * count;
         Condition assetCondition = buildAssetCondition(unit);
         SortField<?> slotOrder = order == Order.desc ? ASSETS.SLOT.desc().nullsLast() : ASSETS.SLOT.asc().nullsLast();
-        SortField<?> txOrder = order == Order.desc ? ASSETS.TX_HASH.desc() : ASSETS.TX_HASH.asc();
+        SortField<?> txIndexOrder = order == Order.desc
+                ? TRANSACTION.TX_INDEX.desc().nullsLast()
+                : TRANSACTION.TX_INDEX.asc().nullsFirst();
 
         var query = dsl.select(ASSETS.TX_HASH, ASSETS.MINT_TYPE, ASSETS.QUANTITY)
                 .from(ASSETS)
+                .join(TRANSACTION).on(TRANSACTION.TX_HASH.eq(ASSETS.TX_HASH))
                 .where(assetCondition)
-                .orderBy(slotOrder, txOrder)
+                .orderBy(slotOrder, txIndexOrder)
                 .limit(count)
                 .offset(offset);
 
-        logQuery("findAssetHistory", query);
-
-        return query.fetch(record -> {
-                    String mintType = record.get(ASSETS.MINT_TYPE);
-                    String action = "BURN".equalsIgnoreCase(mintType) ? "burned" : "minted";
-                    BigInteger amount = toBigInteger(record.get(ASSETS.QUANTITY)).abs();
-                    return new BFAssetHistory(record.get(ASSETS.TX_HASH), action, amount);
-                });
+        logQuery("findAssetHistoryFallback", query);
+        return query.fetch(record -> toHistory(
+                record.get(ASSETS.TX_HASH),
+                record.get(ASSETS.MINT_TYPE),
+                record.get(ASSETS.QUANTITY)
+        ));
     }
 
     /**
-     * Returns transaction hashes related to the provided unit.
-     * The tx hash set is pre-grouped from UTXO data and then ordered by block/tx_index/hash.
+     * Builds a history entry from a mint/burn row.
+     */
+    private BFAssetHistory toHistory(String txHash, String mintType, Object quantity) {
+        String action = "BURN".equalsIgnoreCase(mintType) ? "burned" : "minted";
+        return new BFAssetHistory(txHash, action, toBigInteger(quantity));
+    }
+
+    /**
+     * Returns transaction hashes related to the provided unit, ordered by
+     * (block, tx_index, tx_hash) to match Blockfrost.
      */
     @Override
     public List<String> findAssetTxHashes(String unit, int page, int count, Order order) {
-        int offset = Math.max(page, 0) * count;
-        Table<?> distinctAssetTx = buildDistinctAssetTxTable(unit);
-        Field<String> distinctTxHashField = distinctAssetTx.field("tx_hash", String.class);
-
-        Field<String> txHashField = TRANSACTION.TX_HASH;
-        Field<Integer> txIndexSortField = TRANSACTION.TX_INDEX;
-        SortField<?> blockOrder = order == Order.desc
-                ? TRANSACTION.BLOCK.desc().nullsLast()
-                : TRANSACTION.BLOCK.asc().nullsLast();
-        SortField<?> txIndexOrder = order == Order.desc
-                ? txIndexSortField.desc().nullsLast()
-                : txIndexSortField.asc().nullsFirst();
-        SortField<?> txOrder = order == Order.desc ? txHashField.desc() : txHashField.asc();
-
-        var query = dsl.select(txHashField)
-                .from(distinctAssetTx)
-                .join(TRANSACTION)
-                .on(TRANSACTION.TX_HASH.eq(distinctTxHashField))
-                .orderBy(blockOrder, txIndexOrder, txOrder)
-                .limit(count)
-                .offset(offset);
-
-        logQuery("findAssetTxHashes", query);
-        return query.fetchInto(String.class);
+        return assetTxPage(unit, page, count, order).stream()
+                .map(AssetTxRow::txHash)
+                .toList();
     }
 
     /**
-     * Returns transaction references for the provided unit with block height/time and tx index.
+     * Returns transaction references for the provided unit with block height/time and tx index,
+     * ordered by (block, tx_index, tx_hash) to match Blockfrost.
      */
     @Override
     public List<BFAssetTransaction> findAssetTransactions(String unit, int page, int count, Order order) {
-        int offset = Math.max(page, 0) * count;
-        Table<?> distinctAssetTx = buildDistinctAssetTxTable(unit);
-        Field<String> distinctTxHashField = distinctAssetTx.field("tx_hash", String.class);
-
-        Field<String> txHashField = TRANSACTION.TX_HASH;
-        Field<Long> blockHeightField = TRANSACTION.BLOCK.as("block_height");
-        Field<Long> blockTimeField = TRANSACTION.BLOCK_TIME.as("block_time");
-        Field<Integer> txIndexSortField = TRANSACTION.TX_INDEX;
-        Field<Long> txIndexField = DSL.coalesce(txIndexSortField, 0).cast(Long.class).as("tx_index");
-
-        SortField<?> blockOrder = order == Order.desc
-                ? TRANSACTION.BLOCK.desc().nullsLast()
-                : TRANSACTION.BLOCK.asc().nullsLast();
-        SortField<?> txIndexOrder = order == Order.desc
-                ? txIndexSortField.desc().nullsLast()
-                : txIndexSortField.asc().nullsFirst();
-        SortField<?> txOrder = order == Order.desc ? txHashField.desc() : txHashField.asc();
-
-        var query = dsl.select(txHashField, txIndexField, blockHeightField, blockTimeField)
-                .from(distinctAssetTx)
-                .join(TRANSACTION)
-                .on(TRANSACTION.TX_HASH.eq(distinctTxHashField))
-                .orderBy(blockOrder, txIndexOrder, txOrder)
-                .limit(count)
-                .offset(offset);
-
-        logQuery("findAssetTransactions", query);
-
-        return query.fetch(record -> new BFAssetTransaction(
-                        record.get(txHashField),
-                        record.get(txIndexField),
-                        record.get(blockHeightField),
-                        record.get(blockTimeField)
-                ));
+        return assetTxPage(unit, page, count, order).stream()
+                .map(row -> new BFAssetTransaction(row.txHash(), row.txIndex(), row.block(), row.blockTime()))
+                .toList();
     }
 
     /**
@@ -278,66 +313,70 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
         return findAssetAddressesNonPostgres(unit, page, count, order);
     }
 
+    /**
+     * Returns current holders in Blockfrost's order, which isn't symmetric between asc and desc. For asc
+     * we order each holder by its earliest unspent UTXO (slot, tx_index, output_index); for desc we order
+     * by its latest UTXO instead. Since the two directions look at different rows, desc is not simply asc
+     * reversed. Address is the final tie-break.
+     *
+     * <p>This still scans and aggregates every holder UTXO, so it's slow on units with many holders.
+     */
     private List<BFAssetAddress> findAssetAddressesPostgres(String unit, int page, int count, Order order) {
         int offset = Math.max(page, 0) * count;
+        String dir = order == Order.desc ? "desc" : "asc";
+        String unitJson = "[{\"unit\": \"" + unit + "\"}]";
 
-        Table<?> candidateUtxo = dsl.select(
-                        ADDRESS_UTXO.TX_HASH.as("tx_hash"),
-                        ADDRESS_UTXO.OUTPUT_INDEX.as("output_index"),
-                        ADDRESS_UTXO.SLOT.as("slot"),
-                        ADDRESS_UTXO.OWNER_ADDR.as("owner_addr"),
-                        ADDRESS_UTXO.OWNER_ADDR_FULL.as("owner_addr_full"),
-                        ADDRESS_UTXO.AMOUNTS.as("amounts")
-                )
-                .from(ADDRESS_UTXO)
-                .where(buildUnitCondition(unit))
-                .andNotExists(
-                        dsl.selectOne()
-                                .from(TX_INPUT)
-                                .where(TX_INPUT.TX_HASH.eq(ADDRESS_UTXO.TX_HASH))
-                                .and(TX_INPUT.OUTPUT_INDEX.eq(ADDRESS_UTXO.OUTPUT_INDEX))
-                )
-                .asTable("candidate_utxo");
-
-        Field<String> ownerAddrField = candidateUtxo.field("owner_addr", String.class);
-        Field<String> ownerAddrFullField = candidateUtxo.field("owner_addr_full", String.class);
-        Field<Long> slotField = candidateUtxo.field("slot", Long.class);
-        Field<?> amountsField = candidateUtxo.field("amounts");
-
-        Field<String> addressField = DSL.coalesce(ownerAddrFullField, ownerAddrField).as("address");
-        Table<?> amountTable = DSL.table(
+        Table<?> assetAddresses = DSL.table(
                 """
                 (
-                    select (elem->>'quantity')::numeric as quantity
-                    from jsonb_array_elements({0}::jsonb) elem
-                    where elem->>'unit' = {1}
-                    limit 1
-                ) as amt
-                """,
-                amountsField,
-                DSL.val(unit)
+                    with cand as (
+                        select coalesce(au.owner_addr_full, au.owner_addr) as address,
+                               au.slot as slot, t.tx_index as tx_index, au.output_index as output_index,
+                               (
+                                   select (elem->>'quantity')::numeric
+                                   from jsonb_array_elements(au.amounts) elem
+                                   where elem->>'unit' = {2}
+                                   limit 1
+                               ) as quantity
+                        from address_utxo au
+                        join transaction t on t.tx_hash = au.tx_hash
+                        where au.amounts @> {3}::jsonb
+                          and not exists (
+                              select 1 from tx_input ti
+                              where ti.tx_hash = au.tx_hash and ti.output_index = au.output_index
+                          )
+                    ),
+                    keyed as (
+                        select distinct on (address)
+                               address, slot as k_slot, tx_index as k_tx_index, output_index as k_output_index
+                        from cand
+                        order by address, slot %1$s, tx_index %1$s, output_index %1$s
+                    ),
+                    agg as (
+                        select address, sum(quantity) as quantity
+                        from cand
+                        group by address
+                    )
+                    select k.address as address, a.quantity as quantity, k.k_slot as first_seen_slot
+                    from keyed k
+                    join agg a on a.address = k.address
+                    order by k.k_slot %1$s, k.k_tx_index %1$s, k.k_output_index %1$s, k.address %1$s
+                    offset {0} rows fetch next {1} rows only
+                ) as asset_addresses
+                """.formatted(dir),
+                DSL.inline(offset), DSL.inline(count), DSL.val(unit), DSL.val(unitJson)
         );
-        Field<BigDecimal> amountQuantityField = DSL.field("amt.quantity", BigDecimal.class);
-        Field<BigDecimal> quantitySumField = DSL.sum(amountQuantityField).as("quantity");
-        Field<Long> firstSeenSlotField = DSL.min(slotField).as("first_seen_slot");
 
-        SortField<?> slotOrder = order == Order.desc ? firstSeenSlotField.desc().nullsLast() : firstSeenSlotField.asc().nullsLast();
-        SortField<?> addressOrder = order == Order.desc ? addressField.desc() : addressField.asc();
+        Field<String> addressField = DSL.field(DSL.name("asset_addresses", "address"), String.class);
+        Field<BigDecimal> quantityField = DSL.field(DSL.name("asset_addresses", "quantity"), BigDecimal.class);
+        Field<Long> firstSeenSlotField = DSL.field(DSL.name("asset_addresses", "first_seen_slot"), Long.class);
 
-        var query = dsl.select(addressField, quantitySumField, firstSeenSlotField)
-                .from(candidateUtxo)
-                .join(DSL.lateral(amountTable))
-                .on(DSL.trueCondition())
-                .groupBy(addressField)
-                .orderBy(slotOrder, addressOrder)
-                .limit(count)
-                .offset(offset);
-
+        var query = dsl.select(addressField, quantityField, firstSeenSlotField).from(assetAddresses);
         logQuery("findAssetAddresses", query);
 
         return query.fetch(record -> new BFAssetAddress(
                         record.get(addressField),
-                        toBigInteger(record.get(quantitySumField)),
+                        toBigInteger(record.get(quantityField)),
                         record.get(firstSeenSlotField)
                 ));
     }
@@ -402,33 +441,136 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
     }
 
     /**
-     * Returns policy assets with first-seen tx per unit and aggregated quantity for that policy.
+     * Returns the assets under a policy, ordered to match Blockfrost.
      */
     @Override
     public List<BFPolicyAsset> findAssetsByPolicy(String policyId, int page, int count, Order order) {
+        if (BlockfrostDialectUtil.isPostgres(dsl) && policyId != null && policyId.length() == 56) {
+            return findAssetsByPolicyPostgres(policyId, page, count, order);
+        }
+        return findAssetsByPolicyFallback(policyId, page, count, order);
+    }
+
+    /**
+     * Postgres implementation of {@link #findAssetsByPolicy}.
+     *
+     * <p>Since {@code unit} is policy-prefixed, the first-mint pass runs as a unit-range index-only scan
+     * on the partial mint index instead of sorting every mint row of the policy; the slot-window then
+     * limits the {@code transaction} join and quantity aggregation to the page's units only.
+     */
+    private List<BFPolicyAsset> findAssetsByPolicyPostgres(String policyId, int page, int count, Order order) {
+        int offset = Math.max(page, 0) * count;
+        String dir = order == Order.desc ? "desc" : "asc";
+        String boundaryStartAgg = order == Order.desc ? "max" : "min";
+        String boundaryEndAgg = order == Order.desc ? "min" : "max";
+        String prefixCmp = order == Order.desc ? ">" : "<";
+        String candLo = order == Order.desc ? "<=" : ">=";
+        String candHi = order == Order.desc ? ">=" : "<=";
+
+        Table<?> policyAssets = DSL.table(
+                """
+                (
+                    with first_mints as materialized (
+                        select distinct on (unit) unit, slot::bigint as slot
+                        from assets
+                        where mint_type = 'MINT' and unit >= {2} and unit < {2} || 'g' and left(unit, 56) = {2}
+                        order by unit, slot asc nulls last
+                    ),
+                    page_window as materialized (
+                        select unit, slot from first_mints
+                        order by slot %1$s nulls last, unit %1$s
+                        offset {0} rows fetch next {1} rows only
+                    ),
+                    boundary as (
+                        select %2$s(slot) as start_slot, %3$s(slot) as end_slot from page_window
+                    ),
+                    prefix as (
+                        select count(*) as cnt from first_mints
+                        where slot %4$s (select start_slot from boundary)
+                    ),
+                    candidates as (
+                        select fm.unit, fm.slot from first_mints fm, boundary b
+                        where fm.slot %5$s b.start_slot and fm.slot %6$s b.end_slot
+                    ),
+                    enriched as (
+                        select c.unit, c.slot, picked.tx_hash, picked.tx_index
+                        from candidates c
+                        join lateral (
+                            select a.tx_hash, t.tx_index
+                            from assets a join transaction t on t.tx_hash = a.tx_hash
+                            where a.mint_type = 'MINT' and a.unit = c.unit and a.slot = c.slot
+                            order by t.tx_index asc
+                            fetch next 1 rows only
+                        ) picked on true
+                    ),
+                    ranked as (
+                        select unit, slot, tx_hash,
+                               row_number() over (order by slot %1$s nulls last, tx_index %1$s, unit %1$s) as rn
+                        from enriched
+                    ),
+                    page as (
+                        select unit, slot, tx_hash, rn from ranked
+                        where rn > ({0} - (select cnt from prefix))
+                          and rn <= ({0} - (select cnt from prefix) + {1})
+                    )
+                    select p.unit as unit, agg.quantity as quantity, p.slot as slot, p.tx_hash as tx_hash
+                    from page p
+                    join lateral (
+                        select sum(a.quantity::numeric) as quantity from assets a
+                        where a.unit = p.unit and a.policy = {2}
+                    ) agg on true
+                    order by p.rn
+                ) as policy_assets
+                """.formatted(dir, boundaryStartAgg, boundaryEndAgg, prefixCmp, candLo, candHi),
+                DSL.inline(offset), DSL.inline(count), DSL.val(policyId)
+        );
+
+        Field<String> unitField = DSL.field(DSL.name("policy_assets", "unit"), String.class);
+        Field<BigDecimal> quantityField = DSL.field(DSL.name("policy_assets", "quantity"), BigDecimal.class);
+        Field<Long> slotField = DSL.field(DSL.name("policy_assets", "slot"), Long.class);
+        Field<String> txHashField = DSL.field(DSL.name("policy_assets", "tx_hash"), String.class);
+
+        var query = dsl.select(unitField, quantityField, slotField, txHashField).from(policyAssets);
+        logQuery("findAssetsByPolicyPostgres", query);
+
+        return query.fetch(record -> new BFPolicyAsset(
+                record.get(unitField),
+                toBigInteger(record.get(quantityField)),
+                record.get(slotField),
+                record.get(txHashField)
+        ));
+    }
+
+    /**
+     * Fallback for non-Postgres dialects (and non-standard policy ids).
+     */
+    private List<BFPolicyAsset> findAssetsByPolicyFallback(String policyId, int page, int count, Order order) {
         int offset = Math.max(page, 0) * count;
 
         Field<Integer> rnField = DSL.rowNumber()
                 .over(DSL.partitionBy(ASSETS.UNIT)
-                        .orderBy(ASSETS.SLOT.asc().nullsLast(), ASSETS.TX_HASH.asc()))
+                        .orderBy(ASSETS.SLOT.asc().nullsLast(), TRANSACTION.TX_INDEX.asc().nullsFirst()))
                 .as("rn");
 
         Table<?> rankedAssets = dsl.select(
                         ASSETS.UNIT.as("unit"),
                         ASSETS.SLOT.as("slot"),
                         ASSETS.TX_HASH.as("tx_hash"),
+                        TRANSACTION.TX_INDEX.as("tx_index"),
                         rnField
                 )
                 .from(ASSETS)
-                .where(ASSETS.POLICY.eq(policyId))
+                .join(TRANSACTION).on(TRANSACTION.TX_HASH.eq(ASSETS.TX_HASH))
+                .where(ASSETS.POLICY.eq(policyId).and(ASSETS.MINT_TYPE.eq("MINT")))
                 .asTable("ranked_assets");
 
         Field<String> rankedUnitField = rankedAssets.field("unit", String.class);
         Field<Long> rankedSlotField = rankedAssets.field("slot", Long.class);
         Field<String> rankedTxHashField = rankedAssets.field("tx_hash", String.class);
+        Field<Integer> rankedTxIndexField = rankedAssets.field("tx_index", Integer.class);
         Field<Integer> rankedRnField = rankedAssets.field("rn", Integer.class);
 
-        Table<?> firstSeenAssets = dsl.select(rankedUnitField, rankedSlotField, rankedTxHashField)
+        Table<?> firstSeenAssets = dsl.select(rankedUnitField, rankedSlotField, rankedTxHashField, rankedTxIndexField)
                 .from(rankedAssets)
                 .where(rankedRnField.eq(1))
                 .asTable("first_seen_assets");
@@ -445,18 +587,19 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
         Field<String> unitField = firstSeenAssets.field("unit", String.class);
         Field<Long> slotField = firstSeenAssets.field("slot", Long.class);
         Field<String> txHashField = firstSeenAssets.field("tx_hash", String.class);
+        Field<Integer> txIndexField = firstSeenAssets.field("tx_index", Integer.class);
         Field<String> quantityUnitField = aggregatedQuantities.field("unit", String.class);
         Field<BigDecimal> quantityField = aggregatedQuantities.field("quantity", BigDecimal.class);
 
         SortField<?> slotOrder = order == Order.desc ? slotField.desc().nullsLast() : slotField.asc().nullsLast();
-        SortField<?> txOrder = order == Order.desc ? txHashField.desc() : txHashField.asc();
+        SortField<?> txIndexOrder = order == Order.desc ? txIndexField.desc().nullsLast() : txIndexField.asc().nullsFirst();
         SortField<?> unitOrder = order == Order.desc ? unitField.desc() : unitField.asc();
 
         var query = dsl.select(unitField, quantityField, slotField, txHashField)
                 .from(firstSeenAssets)
                 .leftJoin(aggregatedQuantities)
                 .on(quantityUnitField.eq(unitField))
-                .orderBy(slotOrder, txOrder, unitOrder)
+                .orderBy(slotOrder, txIndexOrder, unitOrder)
                 .limit(count)
                 .offset(offset);
 
@@ -471,14 +614,138 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
     }
 
     /**
-     * Builds a distinct tx hash table for a unit from UTXO amounts JSON.
+     * Returns one page of a unit's transactions, ordered to match Blockfrost.
      */
-    private Table<?> buildDistinctAssetTxTable(String unit) {
-        return dsl.select(ADDRESS_UTXO.TX_HASH.as("tx_hash"))
+    private List<AssetTxRow> assetTxPage(String unit, int page, int count, Order order) {
+        if (BlockfrostDialectUtil.isPostgres(dsl)) {
+            return assetTxPagePostgres(unit, page, count, order);
+        }
+        return assetTxPageFallback(unit, page, count, order);
+    }
+
+    private List<AssetTxRow> assetTxPagePostgres(String unit, int page, int count, Order order) {
+        int offset = Math.max(page, 0) * count;
+        String slotOrder = order == Order.desc ? "desc nulls last" : "asc nulls last";
+        String txIndexOrder = order == Order.desc ? "desc nulls last" : "asc nulls first";
+        String boundaryStartAgg = order == Order.desc ? "max" : "min";
+        String boundaryEndAgg = order == Order.desc ? "min" : "max";
+        String prefixCmp = order == Order.desc ? ">" : "<";
+        String candLo = order == Order.desc ? "<=" : ">=";
+        String candHi = order == Order.desc ? ">=" : "<=";
+
+        String unitJson = "[{\"unit\": \"" + unit + "\"}]";
+
+        Table<?> assetTxPage = DSL.table(
+                """
+                (
+                    with distinct_tx as materialized (
+                        select tx_hash, min(slot) as slot
+                        from address_utxo
+                        where amounts @> {2}::jsonb
+                        group by tx_hash
+                    ),
+                    page_window as materialized (
+                        select tx_hash, slot
+                        from distinct_tx
+                        order by slot %s
+                        offset {0} rows fetch next {1} rows only
+                    ),
+                    boundary as (
+                        select %s(slot) as start_slot, %s(slot) as end_slot
+                        from page_window
+                    ),
+                    prefix as (
+                        select count(*) as cnt
+                        from distinct_tx
+                        where slot %s (select start_slot from boundary)
+                    ),
+                    candidates as (
+                        select dt.tx_hash, dt.slot, t.tx_index, t.block, t.block_time
+                        from distinct_tx dt
+                        join transaction t on t.tx_hash = dt.tx_hash, boundary b
+                        where dt.slot %s b.start_slot
+                          and dt.slot %s b.end_slot
+                    ),
+                    ranked as (
+                        select tx_hash, tx_index, block, block_time,
+                               row_number() over (order by slot %s, tx_index %s) as rn
+                        from candidates
+                    )
+                    select tx_hash, coalesce(tx_index, 0) as tx_index, block, block_time
+                    from ranked
+                    where rn > ({0} - (select cnt from prefix))
+                      and rn <= ({0} - (select cnt from prefix) + {1})
+                    order by rn
+                ) as asset_tx_page
+                """.formatted(
+                        slotOrder,
+                        boundaryStartAgg, boundaryEndAgg,
+                        prefixCmp,
+                        candLo, candHi,
+                        slotOrder, txIndexOrder
+                ),
+                DSL.inline(offset), DSL.inline(count), DSL.val(unitJson)
+        );
+
+        Field<String> txHashField = DSL.field(DSL.name("asset_tx_page", "tx_hash"), String.class);
+        Field<Long> txIndexField = DSL.field(DSL.name("asset_tx_page", "tx_index"), Long.class);
+        Field<Long> blockField = DSL.field(DSL.name("asset_tx_page", "block"), Long.class);
+        Field<Long> blockTimeField = DSL.field(DSL.name("asset_tx_page", "block_time"), Long.class);
+
+        var query = dsl.select(txHashField, txIndexField, blockField, blockTimeField).from(assetTxPage);
+        logQuery("assetTxPagePostgres", query);
+        return query.fetch(record -> new AssetTxRow(
+                record.get(txHashField),
+                record.get(txIndexField),
+                record.get(blockField),
+                record.get(blockTimeField)
+        ));
+    }
+
+    /**
+     * Fallback for non-Postgres dialects (H2/MySQL tests): join every UTXO-bearing tx and sort.
+     * Correct but not slot-windowed, which is fine for the small test datasets.
+     */
+    private List<AssetTxRow> assetTxPageFallback(String unit, int page, int count, Order order) {
+        int offset = Math.max(page, 0) * count;
+        Table<?> distinctAssetTx = dsl.select(ADDRESS_UTXO.TX_HASH.as("tx_hash"))
                 .from(ADDRESS_UTXO)
                 .where(buildUnitCondition(unit))
                 .groupBy(ADDRESS_UTXO.TX_HASH)
                 .asTable("distinct_asset_tx");
+        Field<String> distinctTxHashField = distinctAssetTx.field("tx_hash", String.class);
+
+        Field<String> txHashField = TRANSACTION.TX_HASH;
+        Field<Long> blockHeightField = TRANSACTION.BLOCK.as("block_height");
+        Field<Long> blockTimeField = TRANSACTION.BLOCK_TIME.as("block_time");
+        Field<Integer> txIndexSortField = TRANSACTION.TX_INDEX;
+        Field<Long> txIndexField = DSL.coalesce(txIndexSortField, 0).cast(Long.class).as("tx_index");
+
+        SortField<?> blockOrder = order == Order.desc
+                ? TRANSACTION.BLOCK.desc().nullsLast()
+                : TRANSACTION.BLOCK.asc().nullsLast();
+        SortField<?> txIndexOrder = order == Order.desc
+                ? txIndexSortField.desc().nullsLast()
+                : txIndexSortField.asc().nullsFirst();
+
+        var query = dsl.select(txHashField, txIndexField, blockHeightField, blockTimeField)
+                .from(distinctAssetTx)
+                .join(TRANSACTION)
+                .on(TRANSACTION.TX_HASH.eq(distinctTxHashField))
+                .orderBy(blockOrder, txIndexOrder)
+                .limit(count)
+                .offset(offset);
+
+        logQuery("assetTxPageFallback", query);
+        return query.fetch(record -> new AssetTxRow(
+                record.get(txHashField),
+                record.get(txIndexField),
+                record.get(blockHeightField),
+                record.get(blockTimeField)
+        ));
+    }
+
+    private record AssetTxRow(String txHash, Long txIndex, Long block, Long blockTime) {
     }
 
     /**
@@ -553,7 +820,7 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
                             where a.mint_type = 'MINT'
                               and a.unit = c.unit
                               and a.slot = c.slot
-                            order by t.tx_index asc, a.tx_hash asc
+                            order by t.tx_index asc
                             fetch next 1 rows only
                         ) picked on true
                     ),
@@ -597,14 +864,13 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
         Field<Long> slotField = DSL.min(ASSETS.SLOT).as("slot");
         Field<String> txHashField = DSL.min(ASSETS.TX_HASH).as("tx_hash");
         SortField<?> slotOrder = order == Order.desc ? slotField.desc().nullsLast() : slotField.asc().nullsLast();
-        SortField<?> txHashOrder = order == Order.desc ? txHashField.desc() : txHashField.asc();
         SortField<?> unitOrder = order == Order.desc ? unitField.desc() : unitField.asc();
 
         var query = dsl.select(unitField, slotField, txHashField)
                 .from(ASSETS)
                 .where(ASSETS.MINT_TYPE.eq("MINT"))
                 .groupBy(ASSETS.UNIT)
-                .orderBy(slotOrder, txHashOrder, unitOrder)
+                .orderBy(slotOrder, unitOrder)
                 .limit(count)
                 .offset(offset);
 
