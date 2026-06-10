@@ -6,7 +6,7 @@ cardano-client-backend-ogmios = "com.bloxbean.cardano:cardano-client-backend-ogm
 cardano-client-backend-blockfrost = "com.bloxbean.cardano:cardano-client-backend-blockfrost:0.7.2"
 scalus-bloxbean-cardano-client-lib = "org.scalus:scalus-bloxbean-cardano-client-lib_3:0.17.0"
 
-cf-rewards="org.cardanofoundation:cf-rewards-calculation:1.0.1"
+cf-rewards="org.cardanofoundation:cf-rewards-calculation:1.0.2"
 
 rocks-types="com.bloxbean:rocks-types:0.0.1-preview6"
 
