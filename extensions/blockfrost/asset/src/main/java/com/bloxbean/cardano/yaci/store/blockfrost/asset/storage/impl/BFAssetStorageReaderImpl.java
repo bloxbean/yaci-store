@@ -328,66 +328,72 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
         return findAssetAddressesNonPostgres(unit, page, count, order);
     }
 
+    /**
+     * Returns current holders ordered exactly like Blockfrost — which is asymmetric: {@code asc} keys each
+     * holder on its <em>earliest</em> unspent UTXO {@code (slot, tx_index, output_index)} and orders ascending,
+     * while {@code desc} keys each holder on its <em>latest</em> unspent UTXO and orders descending. Because the
+     * two directions sort on different per-holder rows, {@code desc} is <em>not</em> the reverse of {@code asc}.
+     * Verified across asc/desc and page boundaries on a 3,939-holder unit. {@code address} is the final tie-break.
+     *
+     * <p>Note: this still aggregates every holder UTXO (anti-join {@code tx_input} + JSON parse) and is not
+     * slot-windowed — a holder-summary table is the separate performance fix tracked in the asset gaps doc.
+     */
     private List<BFAssetAddress> findAssetAddressesPostgres(String unit, int page, int count, Order order) {
         int offset = Math.max(page, 0) * count;
+        String dir = order == Order.desc ? "desc" : "asc";
+        String unitJson = "[{\"unit\": \"" + unit + "\"}]";
 
-        Table<?> candidateUtxo = dsl.select(
-                        ADDRESS_UTXO.TX_HASH.as("tx_hash"),
-                        ADDRESS_UTXO.OUTPUT_INDEX.as("output_index"),
-                        ADDRESS_UTXO.SLOT.as("slot"),
-                        ADDRESS_UTXO.OWNER_ADDR.as("owner_addr"),
-                        ADDRESS_UTXO.OWNER_ADDR_FULL.as("owner_addr_full"),
-                        ADDRESS_UTXO.AMOUNTS.as("amounts")
-                )
-                .from(ADDRESS_UTXO)
-                .where(buildUnitCondition(unit))
-                .andNotExists(
-                        dsl.selectOne()
-                                .from(TX_INPUT)
-                                .where(TX_INPUT.TX_HASH.eq(ADDRESS_UTXO.TX_HASH))
-                                .and(TX_INPUT.OUTPUT_INDEX.eq(ADDRESS_UTXO.OUTPUT_INDEX))
-                )
-                .asTable("candidate_utxo");
-
-        Field<String> ownerAddrField = candidateUtxo.field("owner_addr", String.class);
-        Field<String> ownerAddrFullField = candidateUtxo.field("owner_addr_full", String.class);
-        Field<Long> slotField = candidateUtxo.field("slot", Long.class);
-        Field<?> amountsField = candidateUtxo.field("amounts");
-
-        Field<String> addressField = DSL.coalesce(ownerAddrFullField, ownerAddrField).as("address");
-        Table<?> amountTable = DSL.table(
+        Table<?> assetAddresses = DSL.table(
                 """
                 (
-                    select (elem->>'quantity')::numeric as quantity
-                    from jsonb_array_elements({0}::jsonb) elem
-                    where elem->>'unit' = {1}
-                    limit 1
-                ) as amt
-                """,
-                amountsField,
-                DSL.val(unit)
+                    with cand as (
+                        select coalesce(au.owner_addr_full, au.owner_addr) as address,
+                               au.slot as slot, t.tx_index as tx_index, au.output_index as output_index,
+                               (
+                                   select (elem->>'quantity')::numeric
+                                   from jsonb_array_elements(au.amounts) elem
+                                   where elem->>'unit' = {2}
+                                   limit 1
+                               ) as quantity
+                        from address_utxo au
+                        join transaction t on t.tx_hash = au.tx_hash
+                        where au.amounts @> {3}::jsonb
+                          and not exists (
+                              select 1 from tx_input ti
+                              where ti.tx_hash = au.tx_hash and ti.output_index = au.output_index
+                          )
+                    ),
+                    keyed as (
+                        select distinct on (address)
+                               address, slot as k_slot, tx_index as k_tx_index, output_index as k_output_index
+                        from cand
+                        order by address, slot %1$s, tx_index %1$s, output_index %1$s
+                    ),
+                    agg as (
+                        select address, sum(quantity) as quantity
+                        from cand
+                        group by address
+                    )
+                    select k.address as address, a.quantity as quantity, k.k_slot as first_seen_slot
+                    from keyed k
+                    join agg a on a.address = k.address
+                    order by k.k_slot %1$s, k.k_tx_index %1$s, k.k_output_index %1$s, k.address %1$s
+                    offset {0} rows fetch next {1} rows only
+                ) as asset_addresses
+                """.formatted(dir),
+                DSL.inline(offset), DSL.inline(count), DSL.val(unit), DSL.val(unitJson)
         );
-        Field<BigDecimal> amountQuantityField = DSL.field("amt.quantity", BigDecimal.class);
-        Field<BigDecimal> quantitySumField = DSL.sum(amountQuantityField).as("quantity");
-        Field<Long> firstSeenSlotField = DSL.min(slotField).as("first_seen_slot");
 
-        SortField<?> slotOrder = order == Order.desc ? firstSeenSlotField.desc().nullsLast() : firstSeenSlotField.asc().nullsLast();
-        SortField<?> addressOrder = order == Order.desc ? addressField.desc() : addressField.asc();
+        Field<String> addressField = DSL.field(DSL.name("asset_addresses", "address"), String.class);
+        Field<BigDecimal> quantityField = DSL.field(DSL.name("asset_addresses", "quantity"), BigDecimal.class);
+        Field<Long> firstSeenSlotField = DSL.field(DSL.name("asset_addresses", "first_seen_slot"), Long.class);
 
-        var query = dsl.select(addressField, quantitySumField, firstSeenSlotField)
-                .from(candidateUtxo)
-                .join(DSL.lateral(amountTable))
-                .on(DSL.trueCondition())
-                .groupBy(addressField)
-                .orderBy(slotOrder, addressOrder)
-                .limit(count)
-                .offset(offset);
-
+        var query = dsl.select(addressField, quantityField, firstSeenSlotField).from(assetAddresses);
         logQuery("findAssetAddresses", query);
 
         return query.fetch(record -> new BFAssetAddress(
                         record.get(addressField),
-                        toBigInteger(record.get(quantitySumField)),
+                        toBigInteger(record.get(quantityField)),
                         record.get(firstSeenSlotField)
                 ));
     }
