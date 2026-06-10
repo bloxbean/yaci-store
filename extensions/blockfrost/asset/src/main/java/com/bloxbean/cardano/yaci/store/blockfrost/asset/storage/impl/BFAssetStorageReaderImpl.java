@@ -443,14 +443,110 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
     }
 
     /**
-     * Returns the assets under a policy, ordered by each unit's first mint: slot, then tx_index, then unit.
-     *
-     * <p>We pick each unit's first mint by (slot, tx_index, tx_hash), since Blockfrost breaks same-block
-     * ties by tx_index rather than tx_hash (same idea as {@link #findFirstSeenUnitsPagePostgres}, the
-     * {@code /assets} list). The quantity is the current supply, summed over every mint and burn for the unit.
+     * Returns the assets under a policy, ordered to match Blockfrost.
      */
     @Override
     public List<BFPolicyAsset> findAssetsByPolicy(String policyId, int page, int count, Order order) {
+        if (BlockfrostDialectUtil.isPostgres(dsl) && policyId != null && policyId.length() == 56) {
+            return findAssetsByPolicyPostgres(policyId, page, count, order);
+        }
+        return findAssetsByPolicyFallback(policyId, page, count, order);
+    }
+
+    /**
+     * Postgres implementation of {@link #findAssetsByPolicy}.
+     *
+     * <p>Since {@code unit} is policy-prefixed, the first-mint pass runs as a unit-range index-only scan
+     * on the partial mint index instead of sorting every mint row of the policy; the slot-window then
+     * limits the {@code transaction} join and quantity aggregation to the page's units only.
+     */
+    private List<BFPolicyAsset> findAssetsByPolicyPostgres(String policyId, int page, int count, Order order) {
+        int offset = Math.max(page, 0) * count;
+        String dir = order == Order.desc ? "desc" : "asc";
+        String boundaryStartAgg = order == Order.desc ? "max" : "min";
+        String boundaryEndAgg = order == Order.desc ? "min" : "max";
+        String prefixCmp = order == Order.desc ? ">" : "<";
+        String candLo = order == Order.desc ? "<=" : ">=";
+        String candHi = order == Order.desc ? ">=" : "<=";
+
+        Table<?> policyAssets = DSL.table(
+                """
+                (
+                    with first_mints as materialized (
+                        select distinct on (unit) unit, slot::bigint as slot
+                        from assets
+                        where mint_type = 'MINT' and unit >= {2} and unit < {2} || 'g' and left(unit, 56) = {2}
+                        order by unit, slot asc nulls last
+                    ),
+                    page_window as materialized (
+                        select unit, slot from first_mints
+                        order by slot %1$s nulls last, unit %1$s
+                        offset {0} rows fetch next {1} rows only
+                    ),
+                    boundary as (
+                        select %2$s(slot) as start_slot, %3$s(slot) as end_slot from page_window
+                    ),
+                    prefix as (
+                        select count(*) as cnt from first_mints
+                        where slot %4$s (select start_slot from boundary)
+                    ),
+                    candidates as (
+                        select fm.unit, fm.slot from first_mints fm, boundary b
+                        where fm.slot %5$s b.start_slot and fm.slot %6$s b.end_slot
+                    ),
+                    enriched as (
+                        select c.unit, c.slot, picked.tx_hash, picked.tx_index
+                        from candidates c
+                        join lateral (
+                            select a.tx_hash, t.tx_index
+                            from assets a join transaction t on t.tx_hash = a.tx_hash
+                            where a.mint_type = 'MINT' and a.unit = c.unit and a.slot = c.slot
+                            order by t.tx_index asc, a.tx_hash asc
+                            fetch next 1 rows only
+                        ) picked on true
+                    ),
+                    ranked as (
+                        select unit, slot, tx_hash,
+                               row_number() over (order by slot %1$s nulls last, tx_index %1$s, unit %1$s) as rn
+                        from enriched
+                    ),
+                    page as (
+                        select unit, slot, tx_hash, rn from ranked
+                        where rn > ({0} - (select cnt from prefix))
+                          and rn <= ({0} - (select cnt from prefix) + {1})
+                    )
+                    select p.unit as unit, agg.quantity as quantity, p.slot as slot, p.tx_hash as tx_hash
+                    from page p
+                    join lateral (
+                        select sum(a.quantity::numeric) as quantity from assets a
+                        where a.unit = p.unit and a.policy = {2}
+                    ) agg on true
+                    order by p.rn
+                ) as policy_assets
+                """.formatted(dir, boundaryStartAgg, boundaryEndAgg, prefixCmp, candLo, candHi),
+                DSL.inline(offset), DSL.inline(count), DSL.val(policyId)
+        );
+
+        Field<String> unitField = DSL.field(DSL.name("policy_assets", "unit"), String.class);
+        Field<BigDecimal> quantityField = DSL.field(DSL.name("policy_assets", "quantity"), BigDecimal.class);
+        Field<Long> slotField = DSL.field(DSL.name("policy_assets", "slot"), Long.class);
+        Field<String> txHashField = DSL.field(DSL.name("policy_assets", "tx_hash"), String.class);
+
+        var query = dsl.select(unitField, quantityField, slotField, txHashField).from(policyAssets);
+        logQuery("findAssetsByPolicyPostgres", query);
+
+        return query.fetch(record -> new BFPolicyAsset(
+                record.get(unitField),
+                toBigInteger(record.get(quantityField)),
+                record.get(slotField),
+                record.get(txHashField)
+        ));
+    }
+
+    /**
+     * Fallback for non-Postgres dialects (and non-standard policy ids).
+     */
+    private List<BFPolicyAsset> findAssetsByPolicyFallback(String policyId, int page, int count, Order order) {
         int offset = Math.max(page, 0) * count;
 
         Field<Integer> rnField = DSL.rowNumber()
