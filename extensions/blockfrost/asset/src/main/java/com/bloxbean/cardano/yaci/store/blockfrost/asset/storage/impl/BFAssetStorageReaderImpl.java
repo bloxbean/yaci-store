@@ -193,76 +193,25 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
     }
 
     /**
-     * Returns transaction hashes related to the provided unit.
-     * The tx hash set is pre-grouped from UTXO data and then ordered by block/tx_index/hash.
+     * Returns transaction hashes related to the provided unit, ordered by
+     * (block, tx_index, tx_hash) to match Blockfrost.
      */
     @Override
     public List<String> findAssetTxHashes(String unit, int page, int count, Order order) {
-        int offset = Math.max(page, 0) * count;
-        Table<?> distinctAssetTx = buildDistinctAssetTxTable(unit);
-        Field<String> distinctTxHashField = distinctAssetTx.field("tx_hash", String.class);
-
-        Field<String> txHashField = TRANSACTION.TX_HASH;
-        Field<Integer> txIndexSortField = TRANSACTION.TX_INDEX;
-        SortField<?> blockOrder = order == Order.desc
-                ? TRANSACTION.BLOCK.desc().nullsLast()
-                : TRANSACTION.BLOCK.asc().nullsLast();
-        SortField<?> txIndexOrder = order == Order.desc
-                ? txIndexSortField.desc().nullsLast()
-                : txIndexSortField.asc().nullsFirst();
-        SortField<?> txOrder = order == Order.desc ? txHashField.desc() : txHashField.asc();
-
-        var query = dsl.select(txHashField)
-                .from(distinctAssetTx)
-                .join(TRANSACTION)
-                .on(TRANSACTION.TX_HASH.eq(distinctTxHashField))
-                .orderBy(blockOrder, txIndexOrder, txOrder)
-                .limit(count)
-                .offset(offset);
-
-        logQuery("findAssetTxHashes", query);
-        return query.fetchInto(String.class);
+        return assetTxPage(unit, page, count, order).stream()
+                .map(AssetTxRow::txHash)
+                .toList();
     }
 
     /**
-     * Returns transaction references for the provided unit with block height/time and tx index.
+     * Returns transaction references for the provided unit with block height/time and tx index,
+     * ordered by (block, tx_index, tx_hash) to match Blockfrost.
      */
     @Override
     public List<BFAssetTransaction> findAssetTransactions(String unit, int page, int count, Order order) {
-        int offset = Math.max(page, 0) * count;
-        Table<?> distinctAssetTx = buildDistinctAssetTxTable(unit);
-        Field<String> distinctTxHashField = distinctAssetTx.field("tx_hash", String.class);
-
-        Field<String> txHashField = TRANSACTION.TX_HASH;
-        Field<Long> blockHeightField = TRANSACTION.BLOCK.as("block_height");
-        Field<Long> blockTimeField = TRANSACTION.BLOCK_TIME.as("block_time");
-        Field<Integer> txIndexSortField = TRANSACTION.TX_INDEX;
-        Field<Long> txIndexField = DSL.coalesce(txIndexSortField, 0).cast(Long.class).as("tx_index");
-
-        SortField<?> blockOrder = order == Order.desc
-                ? TRANSACTION.BLOCK.desc().nullsLast()
-                : TRANSACTION.BLOCK.asc().nullsLast();
-        SortField<?> txIndexOrder = order == Order.desc
-                ? txIndexSortField.desc().nullsLast()
-                : txIndexSortField.asc().nullsFirst();
-        SortField<?> txOrder = order == Order.desc ? txHashField.desc() : txHashField.asc();
-
-        var query = dsl.select(txHashField, txIndexField, blockHeightField, blockTimeField)
-                .from(distinctAssetTx)
-                .join(TRANSACTION)
-                .on(TRANSACTION.TX_HASH.eq(distinctTxHashField))
-                .orderBy(blockOrder, txIndexOrder, txOrder)
-                .limit(count)
-                .offset(offset);
-
-        logQuery("findAssetTransactions", query);
-
-        return query.fetch(record -> new BFAssetTransaction(
-                        record.get(txHashField),
-                        record.get(txIndexField),
-                        record.get(blockHeightField),
-                        record.get(blockTimeField)
-                ));
+        return assetTxPage(unit, page, count, order).stream()
+                .map(row -> new BFAssetTransaction(row.txHash(), row.txIndex(), row.block(), row.blockTime()))
+                .toList();
     }
 
     /**
@@ -471,14 +420,148 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
     }
 
     /**
-     * Builds a distinct tx hash table for a unit from UTXO amounts JSON.
+     * Resolves one page of an asset's transactions in exact (block, tx_index, tx_hash) order.
+     *
+     * <p>Naively this means joining {@code transaction} for <em>every</em> UTXO-bearing tx of the
+     * unit (tens of thousands for a high-activity asset) and sorting — the source of the multi-second
+     * latency. Instead, on Postgres we bound the work with a slot window: pick the page's slot range
+     * from {@code address_utxo} alone (slot is monotonic 1:1 with block height), join {@code transaction}
+     * only for txs in that range, rank by (slot, tx_index, tx_hash) and slice the exact page. This keeps
+     * the transaction probes proportional to the page size while preserving Blockfrost's ordering across
+     * page boundaries. Mirrors {@link #findFirstSeenUnitsPagePostgres} used by the asset list endpoint.
      */
-    private Table<?> buildDistinctAssetTxTable(String unit) {
-        return dsl.select(ADDRESS_UTXO.TX_HASH.as("tx_hash"))
+    private List<AssetTxRow> assetTxPage(String unit, int page, int count, Order order) {
+        if (BlockfrostDialectUtil.isPostgres(dsl)) {
+            return assetTxPagePostgres(unit, page, count, order);
+        }
+        return assetTxPageFallback(unit, page, count, order);
+    }
+
+    private List<AssetTxRow> assetTxPagePostgres(String unit, int page, int count, Order order) {
+        int offset = Math.max(page, 0) * count;
+        String slotOrder = order == Order.desc ? "desc nulls last" : "asc nulls last";
+        String txIndexOrder = order == Order.desc ? "desc nulls last" : "asc nulls first";
+        String txHashOrder = order == Order.desc ? "desc" : "asc";
+        String boundaryStartAgg = order == Order.desc ? "max" : "min";
+        String boundaryEndAgg = order == Order.desc ? "min" : "max";
+        String prefixCmp = order == Order.desc ? ">" : "<";
+        String candLo = order == Order.desc ? "<=" : ">=";
+        String candHi = order == Order.desc ? ">=" : "<=";
+
+        String unitJson = "[{\"unit\": \"" + unit + "\"}]";
+
+        Table<?> assetTxPage = DSL.table(
+                """
+                (
+                    with distinct_tx as materialized (
+                        select tx_hash, min(slot) as slot
+                        from address_utxo
+                        where amounts @> {2}::jsonb
+                        group by tx_hash
+                    ),
+                    page_window as materialized (
+                        select tx_hash, slot
+                        from distinct_tx
+                        order by slot %s, tx_hash %s
+                        offset {0} rows fetch next {1} rows only
+                    ),
+                    boundary as (
+                        select %s(slot) as start_slot, %s(slot) as end_slot
+                        from page_window
+                    ),
+                    prefix as (
+                        select count(*) as cnt
+                        from distinct_tx
+                        where slot %s (select start_slot from boundary)
+                    ),
+                    candidates as (
+                        select dt.tx_hash, dt.slot, t.tx_index, t.block, t.block_time
+                        from distinct_tx dt
+                        join transaction t on t.tx_hash = dt.tx_hash, boundary b
+                        where dt.slot %s b.start_slot
+                          and dt.slot %s b.end_slot
+                    ),
+                    ranked as (
+                        select tx_hash, tx_index, block, block_time,
+                               row_number() over (order by slot %s, tx_index %s, tx_hash %s) as rn
+                        from candidates
+                    )
+                    select tx_hash, coalesce(tx_index, 0) as tx_index, block, block_time
+                    from ranked
+                    where rn > ({0} - (select cnt from prefix))
+                      and rn <= ({0} - (select cnt from prefix) + {1})
+                    order by rn
+                ) as asset_tx_page
+                """.formatted(
+                        slotOrder, txHashOrder,
+                        boundaryStartAgg, boundaryEndAgg,
+                        prefixCmp,
+                        candLo, candHi,
+                        slotOrder, txIndexOrder, txHashOrder
+                ),
+                DSL.inline(offset), DSL.inline(count), DSL.val(unitJson)
+        );
+
+        Field<String> txHashField = DSL.field(DSL.name("asset_tx_page", "tx_hash"), String.class);
+        Field<Long> txIndexField = DSL.field(DSL.name("asset_tx_page", "tx_index"), Long.class);
+        Field<Long> blockField = DSL.field(DSL.name("asset_tx_page", "block"), Long.class);
+        Field<Long> blockTimeField = DSL.field(DSL.name("asset_tx_page", "block_time"), Long.class);
+
+        var query = dsl.select(txHashField, txIndexField, blockField, blockTimeField).from(assetTxPage);
+        logQuery("assetTxPagePostgres", query);
+        return query.fetch(record -> new AssetTxRow(
+                record.get(txHashField),
+                record.get(txIndexField),
+                record.get(blockField),
+                record.get(blockTimeField)
+        ));
+    }
+
+    /**
+     * Dialect-agnostic fallback (H2/MySQL tests): join every UTXO-bearing tx and sort.
+     * Correct but not slot-windowed — acceptable for the small datasets used by non-Postgres dialects.
+     */
+    private List<AssetTxRow> assetTxPageFallback(String unit, int page, int count, Order order) {
+        int offset = Math.max(page, 0) * count;
+        Table<?> distinctAssetTx = dsl.select(ADDRESS_UTXO.TX_HASH.as("tx_hash"))
                 .from(ADDRESS_UTXO)
                 .where(buildUnitCondition(unit))
                 .groupBy(ADDRESS_UTXO.TX_HASH)
                 .asTable("distinct_asset_tx");
+        Field<String> distinctTxHashField = distinctAssetTx.field("tx_hash", String.class);
+
+        Field<String> txHashField = TRANSACTION.TX_HASH;
+        Field<Long> blockHeightField = TRANSACTION.BLOCK.as("block_height");
+        Field<Long> blockTimeField = TRANSACTION.BLOCK_TIME.as("block_time");
+        Field<Integer> txIndexSortField = TRANSACTION.TX_INDEX;
+        Field<Long> txIndexField = DSL.coalesce(txIndexSortField, 0).cast(Long.class).as("tx_index");
+
+        SortField<?> blockOrder = order == Order.desc
+                ? TRANSACTION.BLOCK.desc().nullsLast()
+                : TRANSACTION.BLOCK.asc().nullsLast();
+        SortField<?> txIndexOrder = order == Order.desc
+                ? txIndexSortField.desc().nullsLast()
+                : txIndexSortField.asc().nullsFirst();
+        SortField<?> txOrder = order == Order.desc ? txHashField.desc() : txHashField.asc();
+
+        var query = dsl.select(txHashField, txIndexField, blockHeightField, blockTimeField)
+                .from(distinctAssetTx)
+                .join(TRANSACTION)
+                .on(TRANSACTION.TX_HASH.eq(distinctTxHashField))
+                .orderBy(blockOrder, txIndexOrder, txOrder)
+                .limit(count)
+                .offset(offset);
+
+        logQuery("assetTxPageFallback", query);
+        return query.fetch(record -> new AssetTxRow(
+                record.get(txHashField),
+                record.get(txIndexField),
+                record.get(blockHeightField),
+                record.get(blockTimeField)
+        ));
+    }
+
+    private record AssetTxRow(String txHash, Long txIndex, Long block, Long blockTime) {
     }
 
     /**
