@@ -458,7 +458,13 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
     }
 
     /**
-     * Returns policy assets with first-seen tx per unit and aggregated quantity for that policy.
+     * Returns policy assets with first-mint tx per unit and aggregated quantity for that policy,
+     * ordered exactly like Blockfrost: by each unit's first-mint {@code (slot, tx_index, unit)}.
+     *
+     * <p>The first-mint row per unit is ranked by {@code (slot, tx_index, tx_hash)} — Blockfrost
+     * tie-breaks units that were first minted in the same block by {@code tx_index}, not {@code tx_hash}.
+     * Mirrors {@link #findFirstSeenUnitsPagePostgres} (the {@code /assets} list). The aggregated quantity
+     * still sums every mint/burn row for the unit (current supply).
      */
     @Override
     public List<BFPolicyAsset> findAssetsByPolicy(String policyId, int page, int count, Order order) {
@@ -466,25 +472,28 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
 
         Field<Integer> rnField = DSL.rowNumber()
                 .over(DSL.partitionBy(ASSETS.UNIT)
-                        .orderBy(ASSETS.SLOT.asc().nullsLast(), ASSETS.TX_HASH.asc()))
+                        .orderBy(ASSETS.SLOT.asc().nullsLast(), TRANSACTION.TX_INDEX.asc().nullsFirst(), ASSETS.TX_HASH.asc()))
                 .as("rn");
 
         Table<?> rankedAssets = dsl.select(
                         ASSETS.UNIT.as("unit"),
                         ASSETS.SLOT.as("slot"),
                         ASSETS.TX_HASH.as("tx_hash"),
+                        TRANSACTION.TX_INDEX.as("tx_index"),
                         rnField
                 )
                 .from(ASSETS)
-                .where(ASSETS.POLICY.eq(policyId))
+                .join(TRANSACTION).on(TRANSACTION.TX_HASH.eq(ASSETS.TX_HASH))
+                .where(ASSETS.POLICY.eq(policyId).and(ASSETS.MINT_TYPE.eq("MINT")))
                 .asTable("ranked_assets");
 
         Field<String> rankedUnitField = rankedAssets.field("unit", String.class);
         Field<Long> rankedSlotField = rankedAssets.field("slot", Long.class);
         Field<String> rankedTxHashField = rankedAssets.field("tx_hash", String.class);
+        Field<Integer> rankedTxIndexField = rankedAssets.field("tx_index", Integer.class);
         Field<Integer> rankedRnField = rankedAssets.field("rn", Integer.class);
 
-        Table<?> firstSeenAssets = dsl.select(rankedUnitField, rankedSlotField, rankedTxHashField)
+        Table<?> firstSeenAssets = dsl.select(rankedUnitField, rankedSlotField, rankedTxHashField, rankedTxIndexField)
                 .from(rankedAssets)
                 .where(rankedRnField.eq(1))
                 .asTable("first_seen_assets");
@@ -501,18 +510,19 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
         Field<String> unitField = firstSeenAssets.field("unit", String.class);
         Field<Long> slotField = firstSeenAssets.field("slot", Long.class);
         Field<String> txHashField = firstSeenAssets.field("tx_hash", String.class);
+        Field<Integer> txIndexField = firstSeenAssets.field("tx_index", Integer.class);
         Field<String> quantityUnitField = aggregatedQuantities.field("unit", String.class);
         Field<BigDecimal> quantityField = aggregatedQuantities.field("quantity", BigDecimal.class);
 
         SortField<?> slotOrder = order == Order.desc ? slotField.desc().nullsLast() : slotField.asc().nullsLast();
-        SortField<?> txOrder = order == Order.desc ? txHashField.desc() : txHashField.asc();
+        SortField<?> txIndexOrder = order == Order.desc ? txIndexField.desc().nullsLast() : txIndexField.asc().nullsFirst();
         SortField<?> unitOrder = order == Order.desc ? unitField.desc() : unitField.asc();
 
         var query = dsl.select(unitField, quantityField, slotField, txHashField)
                 .from(firstSeenAssets)
                 .leftJoin(aggregatedQuantities)
                 .on(quantityUnitField.eq(unitField))
-                .orderBy(slotOrder, txOrder, unitOrder)
+                .orderBy(slotOrder, txIndexOrder, unitOrder)
                 .limit(count)
                 .offset(offset);
 
