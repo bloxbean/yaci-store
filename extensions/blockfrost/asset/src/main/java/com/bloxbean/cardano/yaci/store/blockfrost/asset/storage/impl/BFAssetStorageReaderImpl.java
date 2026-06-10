@@ -44,10 +44,7 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
     private final DSLContext dsl;
 
     /**
-     * Returns a paginated asset list with first-seen mint tx (per unit) and aggregated quantity for each unit.
-     * The method intentionally runs in two phases to avoid N+1:
-     * 1) resolve page units with deterministic first-seen ordering
-     * 2) aggregate quantities for only those page units.
+     * Returns one page of the asset list, each unit with its first-mint tx and total quantity.
      */
     @Override
     public List<BFPolicyAsset> findAssets(int page, int count, Order order) {
@@ -112,8 +109,7 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
     }
 
     /**
-     * Resolves full asset information for a specific unit.
-     * The earliest mint transaction hash is fetched separately from aggregates to keep both queries index-friendly.
+     * Returns the full details for a single asset unit, or empty if it was never minted.
      */
     @Override
     public Optional<BFAssetInfo> findAssetInfo(String unit) {
@@ -166,15 +162,7 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
     }
 
     /**
-     * Returns mint/burn history for an asset unit in exact Blockfrost order: (slot, tx_index, tx_hash).
-     *
-     * <p>Each {@code assets} row is one mint/burn event (no deduplication). Blockfrost orders events
-     * within a block by {@code tx_index}, which {@code assets} does not carry — so we join
-     * {@code transaction}. To avoid joining and sorting every event of a deep-history unit (tens of
-     * thousands), Postgres uses the same slot-window strategy as {@link #assetTxPagePostgres}: bound the
-     * work to the page's slot range, join {@code transaction} only there, rank by (slot, tx_index, tx_hash)
-     * and slice the exact page. Burn amounts are returned with their stored sign (negative) to mirror the
-     * live Blockfrost API; the OpenAPI example shows a positive amount, an intentional divergence.
+     * Returns one page of an asset's mint/burn history, ordered to match Blockfrost.
      */
     @Override
     public List<BFAssetHistory> findAssetHistory(String unit, int page, int count, Order order) {
@@ -285,8 +273,7 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
     }
 
     /**
-     * Maps a mint/burn event row to a history entry. The stored quantity sign is preserved
-     * (burns are negative) to mirror the live Blockfrost API.
+     * Builds a history entry from a mint/burn row.
      */
     private BFAssetHistory toHistory(String txHash, String mintType, Object quantity) {
         String action = "BURN".equalsIgnoreCase(mintType) ? "burned" : "minted";
@@ -329,14 +316,12 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
     }
 
     /**
-     * Returns current holders ordered exactly like Blockfrost — which is asymmetric: {@code asc} keys each
-     * holder on its <em>earliest</em> unspent UTXO {@code (slot, tx_index, output_index)} and orders ascending,
-     * while {@code desc} keys each holder on its <em>latest</em> unspent UTXO and orders descending. Because the
-     * two directions sort on different per-holder rows, {@code desc} is <em>not</em> the reverse of {@code asc}.
-     * Verified across asc/desc and page boundaries on a 3,939-holder unit. {@code address} is the final tie-break.
+     * Returns current holders in Blockfrost's order, which isn't symmetric between asc and desc. For asc
+     * we order each holder by its earliest unspent UTXO (slot, tx_index, output_index); for desc we order
+     * by its latest UTXO instead. Since the two directions look at different rows, desc is not simply asc
+     * reversed. Address is the final tie-break.
      *
-     * <p>Note: this still aggregates every holder UTXO (anti-join {@code tx_input} + JSON parse) and is not
-     * slot-windowed — a holder-summary table is the separate performance fix tracked in the asset gaps doc.
+     * <p>This still scans and aggregates every holder UTXO, so it's slow on units with many holders.
      */
     private List<BFAssetAddress> findAssetAddressesPostgres(String unit, int page, int count, Order order) {
         int offset = Math.max(page, 0) * count;
@@ -458,13 +443,11 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
     }
 
     /**
-     * Returns policy assets with first-mint tx per unit and aggregated quantity for that policy,
-     * ordered exactly like Blockfrost: by each unit's first-mint {@code (slot, tx_index, unit)}.
+     * Returns the assets under a policy, ordered by each unit's first mint: slot, then tx_index, then unit.
      *
-     * <p>The first-mint row per unit is ranked by {@code (slot, tx_index, tx_hash)} — Blockfrost
-     * tie-breaks units that were first minted in the same block by {@code tx_index}, not {@code tx_hash}.
-     * Mirrors {@link #findFirstSeenUnitsPagePostgres} (the {@code /assets} list). The aggregated quantity
-     * still sums every mint/burn row for the unit (current supply).
+     * <p>We pick each unit's first mint by (slot, tx_index, tx_hash), since Blockfrost breaks same-block
+     * ties by tx_index rather than tx_hash (same idea as {@link #findFirstSeenUnitsPagePostgres}, the
+     * {@code /assets} list). The quantity is the current supply, summed over every mint and burn for the unit.
      */
     @Override
     public List<BFPolicyAsset> findAssetsByPolicy(String policyId, int page, int count, Order order) {
@@ -537,15 +520,7 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
     }
 
     /**
-     * Resolves one page of an asset's transactions in exact (block, tx_index, tx_hash) order.
-     *
-     * <p>Naively this means joining {@code transaction} for <em>every</em> UTXO-bearing tx of the
-     * unit (tens of thousands for a high-activity asset) and sorting — the source of the multi-second
-     * latency. Instead, on Postgres we bound the work with a slot window: pick the page's slot range
-     * from {@code address_utxo} alone (slot is monotonic 1:1 with block height), join {@code transaction}
-     * only for txs in that range, rank by (slot, tx_index, tx_hash) and slice the exact page. This keeps
-     * the transaction probes proportional to the page size while preserving Blockfrost's ordering across
-     * page boundaries. Mirrors {@link #findFirstSeenUnitsPagePostgres} used by the asset list endpoint.
+     * Returns one page of a unit's transactions, ordered to match Blockfrost.
      */
     private List<AssetTxRow> assetTxPage(String unit, int page, int count, Order order) {
         if (BlockfrostDialectUtil.isPostgres(dsl)) {
@@ -635,8 +610,8 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
     }
 
     /**
-     * Dialect-agnostic fallback (H2/MySQL tests): join every UTXO-bearing tx and sort.
-     * Correct but not slot-windowed — acceptable for the small datasets used by non-Postgres dialects.
+     * Fallback for non-Postgres dialects (H2/MySQL tests): join every UTXO-bearing tx and sort.
+     * Correct but not slot-windowed, which is fine for the small test datasets.
      */
     private List<AssetTxRow> assetTxPageFallback(String unit, int page, int count, Order order) {
         int offset = Math.max(page, 0) * count;
