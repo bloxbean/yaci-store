@@ -104,6 +104,57 @@ subprojects {
     }
 }
 
+def mavenCentralPublicationProjects = {
+    allprojects.findAll { candidate ->
+        def publishing = candidate.extensions.findByType(org.gradle.api.publish.PublishingExtension)
+        publishing != null && publishing.publications.findByName('mavenJava') != null
+    }
+}
+
+tasks.register('validateMavenCentralArtifacts') {
+    group = 'verification'
+    description = 'Verifies that each Maven Central publication has a POM, sources JAR, and javadoc JAR.'
+
+    doLast {
+        def errors = []
+
+        mavenCentralPublicationProjects().each { publishedProject ->
+            def publishing = publishedProject.extensions.findByType(org.gradle.api.publish.PublishingExtension)
+            def publication = publishing.publications.findByName('mavenJava')
+
+            def expectedFiles = [
+                    pom    : publishedProject.layout.buildDirectory.file("publications/${publication.name}/pom-default.xml").get().asFile,
+                    jar    : publishedProject.tasks.named('jar').get().archiveFile.get().asFile,
+                    sources: publishedProject.tasks.named('sourceJar').get().archiveFile.get().asFile,
+                    javadoc: publishedProject.tasks.named('javadocJar').get().archiveFile.get().asFile
+            ]
+
+            expectedFiles.each { type, artifactFile ->
+                if (!artifactFile.isFile()) {
+                    errors << "${publishedProject.path}:${publication.name} missing ${type} artifact: ${artifactFile}"
+                } else if (artifactFile.length() == 0) {
+                    errors << "${publishedProject.path}:${publication.name} has empty ${type} artifact: ${artifactFile}"
+                }
+            }
+        }
+
+        if (!errors.isEmpty()) {
+            throw new GradleException("Maven Central publication validation failed:\n - " + errors.join("\n - "))
+        }
+    }
+}
+
+gradle.projectsEvaluated {
+    tasks.named('validateMavenCentralArtifacts') {
+        mavenCentralPublicationProjects().each { publishedProject ->
+            dependsOn publishedProject.tasks.named('jar')
+            dependsOn publishedProject.tasks.named('sourceJar')
+            dependsOn publishedProject.tasks.named('javadocJar')
+            dependsOn publishedProject.tasks.named('generatePomFileForMavenJavaPublication')
+        }
+    }
+}
+
 def commit_id=getCheckedOutGitCommitHash()
 def final_version = project.version
 if (project.version.endsWith("-SNAPSHOT")) {
@@ -251,6 +302,12 @@ ext.ossrhUsername = System.getenv('MAVEN_USERNAME')
 ext.ossrhPassword = System.getenv('MAVEN_PASSWORD')
 
 nexusPublishing {
+    def githubRunId = System.getenv('GITHUB_RUN_ID')
+    if (githubRunId) {
+        def githubRunAttempt = System.getenv('GITHUB_RUN_ATTEMPT') ?: '1'
+        repositoryDescription.set("${project.group}:${project.name}:${project.version}:${githubRunId}:${githubRunAttempt}")
+    }
+
     repositories {
         sonatype {
             nexusUrl.set(uri("https://ossrh-staging-api.central.sonatype.com/service/local/"))
