@@ -52,6 +52,7 @@ jobs:
       - name: Wait for Sonatype staging consistency
         run: sleep 90
       - name: Close Sonatype staging repository
+        continue-on-error: true
         run: ./gradlew findSonatypeStagingRepository closeSonatypeStagingRepository --warn --stacktrace
         env:
           MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
