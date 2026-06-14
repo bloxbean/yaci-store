@@ -26,7 +26,7 @@ import java.util.List;
 @RequiredArgsConstructor
 @Tag(name = "Blockfrost Blocks")
 @RequestMapping("${blockfrost.apiPrefix}/blocks")
-@ConditionalOnExpression("${store.extensions.blockfrost.blocks.enabled:false}")
+@ConditionalOnExpression("${store.extensions.blockfrost.blocks.enabled:true}")
 public class BFBlockController {
 
     private final BFBlockService bfBlockService;

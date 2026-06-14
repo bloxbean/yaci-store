@@ -67,7 +67,7 @@ public class UtxoStorageReaderImpl implements UtxoStorageReader {
                 .using(field(ADDRESS_UTXO.TX_HASH), field(ADDRESS_UTXO.OUTPUT_INDEX))
                 .where(unitCondition)
                 .and(TX_INPUT.TX_HASH.isNull())
-                .orderBy(order.equals(Order.desc) ? ADDRESS_UTXO.SLOT.desc() : ADDRESS_UTXO.SLOT.asc())  //TODO: Ordering
+                .orderBy(utxoSort(order))
                 .offset(pageable.getOffset())
                 .limit(pageable.getPageSize());
 
@@ -91,7 +91,7 @@ public class UtxoStorageReaderImpl implements UtxoStorageReader {
                 .where(ADDRESS_UTXO.OWNER_ADDR.eq(address))
                 .and(TX_INPUT.TX_HASH.isNull())
                 .and(unitCondition)
-                .orderBy(order.equals(Order.desc) ? ADDRESS_UTXO.SLOT.desc() : ADDRESS_UTXO.SLOT.asc())  //TODO: Ordering
+                .orderBy(utxoSort(order))
                 .offset(pageable.getOffset())
                 .limit(pageable.getPageSize());
 
@@ -125,7 +125,7 @@ public class UtxoStorageReaderImpl implements UtxoStorageReader {
                 .where(ADDRESS_UTXO.OWNER_PAYMENT_CREDENTIAL.eq(paymentCredential))
                 .and(TX_INPUT.TX_HASH.isNull())
                 .and(unitCondition)
-                .orderBy(order.equals(Order.desc) ? ADDRESS_UTXO.SLOT.desc() : ADDRESS_UTXO.SLOT.asc()) //TODO ordering
+                .orderBy(utxoSort(order))
                 .offset(pageable.getOffset())
                 .limit(pageable.getPageSize());
 
@@ -161,7 +161,7 @@ public class UtxoStorageReaderImpl implements UtxoStorageReader {
                 .where(ADDRESS_UTXO.OWNER_STAKE_ADDR.eq(stakeAddress))
                 .and(TX_INPUT.TX_HASH.isNull())
                 .and(unitCondition)
-                .orderBy(order.equals(Order.desc) ? ADDRESS_UTXO.SLOT.desc() : ADDRESS_UTXO.SLOT.asc())  //TODO: ordering
+                .orderBy(utxoSort(order))
                 .offset(pageable.getOffset())
                 .limit(pageable.getPageSize());
 
@@ -275,5 +275,18 @@ public class UtxoStorageReaderImpl implements UtxoStorageReader {
     private static PageRequest getPageable(int page, int count, Order order) {
         return PageRequest.of(page, count)
                 .withSort(order.equals(Order.desc) ? Sort.Direction.DESC : Sort.Direction.ASC, "slot", "txHash", "outputIndex");
+    }
+
+    /**
+     * Deterministic UTXO ordering for the jOOQ asset/credential queries. Sorting by slot alone
+     * leaves UTXOs from the same transaction (and same slot) in arbitrary order, which differs from
+     * Blockfrost and is unstable across calls. Adding tx_hash + output_index as tiebreakers matches
+     * the {@link #getPageable} sort used by the repository-backed paths.
+     */
+    private static SortField<?>[] utxoSort(Order order) {
+        if (order.equals(Order.desc)) {
+            return new SortField<?>[]{ADDRESS_UTXO.SLOT.desc(), ADDRESS_UTXO.TX_HASH.desc(), ADDRESS_UTXO.OUTPUT_INDEX.desc()};
+        }
+        return new SortField<?>[]{ADDRESS_UTXO.SLOT.asc(), ADDRESS_UTXO.TX_HASH.asc(), ADDRESS_UTXO.OUTPUT_INDEX.asc()};
     }
 }

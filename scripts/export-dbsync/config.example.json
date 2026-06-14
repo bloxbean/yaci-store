@@ -1,0 +1,15 @@
+{
+  "dbsync_url": "postgresql://localhost:5678/cexplorer",
+  "dbsync_user": "dbsync",
+  "dbsync_password": "dbsync",
+  "output_dir": "./output",
+  "start_epoch": 504,
+  "end_epoch": null,
+  "tables": [
+    "adapot",
+    "epoch_stake",
+    "drep_distr",
+    "reward_rest",
+    "gov_action_proposal"
+  ]
+}

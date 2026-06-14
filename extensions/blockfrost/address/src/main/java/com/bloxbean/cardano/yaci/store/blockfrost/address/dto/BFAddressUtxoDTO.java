@@ -18,6 +18,7 @@ import java.util.List;
 public class BFAddressUtxoDTO {
     private String address;
     private String txHash;
+    private int txIndex;
     private int outputIndex;
     private List<Amount> amount;
     private String block;

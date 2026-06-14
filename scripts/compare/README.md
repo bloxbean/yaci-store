@@ -40,6 +40,8 @@ Connections can be supplied through a JSON config file, environment URLs, or ind
   "store_user": "yaci",
   "store_password": "dbpass",
   "store_schema": "yaci_store",
+  "reports_dir": "./reports",
+  "logs_dir": "./logs",
   "quiet": false,
   "max_mismatches": 0,
   "delay": 0
@@ -64,20 +66,22 @@ All scripts accept the same base flags:
 | `--store-url URL` | Yaci Store PostgreSQL connection URL |
 | `--store-user` / `--store-password` | Override userinfo on the Yaci Store URL |
 | `--store-schema NAME` | Yaci Store schema (default `yaci_store`) |
+| `--reports-dir DIR` | Directory for structured report folders |
+| `--logs-dir DIR` | Directory for text logs |
 | `--epoch N` | Compare a single epoch |
 | `--start-epoch N --end-epoch M` | Compare an inclusive epoch range |
-| `--max-mismatches N` | Stop printing once `N` mismatches are reached for that epoch (0 = unlimited) |
+| `--max-mismatches N` | Limit mismatch samples printed/written per epoch; total mismatch counts still include all mismatches (0 = unlimited) |
 | `--quiet` | Write to log file only, do not echo to console. In `compare_all.py`, suppress child output but still print wrapper progress and final summary |
 
 Script-specific flags:
 
 - `compare_reward_rest.py`: `--reward-type {treasury,reserves,proposal_refund}` (default `proposal_refund`)
 - `compare_epoch_stake.py`: `--reverse` (iterate high → low), `--delay SECONDS` (sleep between epochs to avoid DB overload), `--include-zero-amount` (compare raw `epoch_stake` rows instead of ignoring `amount = 0`)
-- `compare_all.py`: `--only KEY[,KEY...]` / `--skip KEY[,KEY...]` to filter the set of comparators run, `--reward-types treasury,reserves,proposal_refund` to choose which reward types `compare_reward_rest.py` runs for (default: all three), and `--summary-file FILE` to override the final summary output path. Comparator keys: `adapot`, `epoch_stake`, `reward_rest`, `drep_amount`, `drep_active_until`, `gov_action_proposal_status`.
+- `compare_all.py`: `--only KEY[,KEY...]` / `--skip KEY[,KEY...]` to filter the set of comparators run, `--reward-types treasury,reserves,proposal_refund` to choose which reward types `compare_reward_rest.py` runs for (default: all three), and `--summary-file FILE` to write an extra text-summary copy. Comparator keys: `adapot`, `epoch_stake`, `reward_rest`, `drep_amount`, `drep_active_until`, `gov_action_proposal_status`.
 
 ## Run everything in one command
 
-`compare_all.py` is a wrapper that runs every comparator in this directory sequentially against the same epoch (or epoch range), forwards all common flags, and prints a combined summary at the end. Each child script still writes its own timestamped log under `logs/`.
+`compare_all.py` is a wrapper that runs every comparator in this directory sequentially against the same epoch (or epoch range), forwards all common flags, and prints a combined summary at the end. Each child script still writes its own timestamped log under `logs/`, while the wrapper writes one structured report directory under `reports/`.
 
 ```bash
 # Run every comparator for a single epoch
@@ -95,11 +99,11 @@ python3 compare_all.py --epoch 800 --skip epoch_stake,reward_rest --config confi
 # Restrict reward_rest to specific types (default runs all three)
 python3 compare_all.py --epoch 1075 --reward-types treasury,reserves --config config.json
 
-# Write the final summary to a custom file
+# Write an extra text-summary copy to a custom file
 python3 compare_all.py --epoch 800 --summary-file /tmp/yaci_compare_summary.log --config config.json
 ```
 
-The wrapper streams each child comparator as it runs, then repeats the important result fields at the end so you do not have to scroll back through the output. It also writes the same final summary to `logs/compare_all_summary_<timestamp>.log` by default, or to `--summary-file FILE` when provided. It exits with a non-zero status if any comparator reports mismatches, errors, or an unparseable summary. Example final summary:
+The wrapper streams each child comparator as it runs, then repeats the important result fields at the end so you do not have to scroll back through the output. The JSON summary is the source of truth for automation. It exits with `0` when all comparisons match, `1` when at least one comparator finds mismatches, and `2` when any comparator reports an error. Example final summary:
 
 ```
 ====================================================================================================
@@ -111,32 +115,48 @@ FINAL RESULT SUMMARY (compare_all)
   Epoch scope       : epochs 740 -> 902
   Total runtime     : 312.4s
   Comparators run   : 8
-  Status counts     : OK=7, MISMATCH=1, ERROR=0, UNKNOWN=0
+  Status counts     : OK=7, MISMATCH=1, ERROR=0
   Total mismatches  : 12
 
-  Comparator                               Status      Epochs  Bad epochs  Mismatches   RC  Time(s)
-  ---------------------------------------- --------- -------- ----------- ----------- ---- --------
-  adapot                                   OK             163       0/163           0    0      2.1
-  epoch_stake                              MISMATCH       163       4/163          12    0    120.5
-  reward_rest (type=treasury)              OK             163       0/163           0    0     18.2
-  reward_rest (type=reserves)              OK             163       0/163           0    0     17.9
-  reward_rest (type=proposal_refund)       OK             163       0/163           0    0     18.5
-  drep_amount                              OK             163       0/163           0    0     45.0
-  drep_active_until                        OK             163       0/163           0    0     40.1
-  gov_action_proposal_status               OK             163       0/163           0    0     50.1
+  Comparator                               Status      Epochs  Bad epochs  Mismatches  Errors  Time(s)
+  ---------------------------------------- --------- -------- ----------- ----------- ------- --------
+  adapot                                   OK             163       0/163           0       0      2.1
+  epoch_stake                              MISMATCH       163       4/163          12       0    120.5
+  reward_rest (type=treasury)              OK             163       0/163           0       0     18.2
+  reward_rest (type=reserves)              OK             163       0/163           0       0     17.9
+  reward_rest (type=proposal_refund)       OK             163       0/163           0       0     18.5
+  drep_amount                              OK             163       0/163           0       0     45.0
+  drep_active_until                        OK             163       0/163           0       0     40.1
+  gov_action_proposal_status               OK             163       0/163           0       0     50.1
 
-  Logs:
-    adapot: /path/to/scripts/compare/logs/adapot_compare_20260511_100000.log
-    epoch_stake: /path/to/scripts/compare/logs/epoch_stake_compare_20260511_100002.log
-    ...
+  Report directory  : /path/to/scripts/compare/reports/compare_all_20260511_100000
+  Log file          : /path/to/scripts/compare/logs/compare_all_summary_20260511_100000.log
 ====================================================================================================
-
-Final summary written to: /path/to/scripts/compare/logs/compare_all_summary_20260511_100000.log
 ```
 
-## Logging
+## Reports
 
-Every run writes a timestamped log file under `logs/`:
+Every direct comparator run writes a structured report directory:
+
+```text
+reports/compare_<model>_<timestamp>/
+  summary.json
+  summary.log
+  mismatches/
+    <model>_epoch_<epoch>.csv
+```
+
+`compare_all.py` writes one combined report directory and stores all child mismatch CSV samples under the same `mismatches/` folder:
+
+```text
+reports/compare_all_<timestamp>/
+  summary.json
+  summary.log
+  mismatches/
+    <model>_epoch_<epoch>.csv
+```
+
+Every run also writes timestamped text logs under `logs/`:
 
 ```
 logs/adapot_compare_<timestamp>.log
@@ -146,15 +166,6 @@ logs/drep_compare_amount_<timestamp>.log
 logs/drep_compare_active_until_<timestamp>.log
 logs/gov_action_proposal_status_compare_<timestamp>.log
 logs/compare_all_summary_<timestamp>.log
-```
-
-Each log ends with a summary block:
-
-```
-SUMMARY (...):
-  Epochs compared     : N
-  Epochs w/ mismatch  : X/N
-  Total mismatches    : M
 ```
 
 ## Examples

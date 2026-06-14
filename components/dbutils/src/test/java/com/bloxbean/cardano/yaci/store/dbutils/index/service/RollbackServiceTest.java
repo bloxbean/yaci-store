@@ -78,6 +78,8 @@ class RollbackServiceTest {
         verify(jdbcTemplate, times(1)).update(eq("DELETE FROM gov_action_proposal_status WHERE epoch >= :epoch"), any(SqlParameterSource.class));
         verify(jdbcTemplate, times(1)).update(eq("DELETE FROM gov_epoch_activity WHERE epoch >= :epoch"), any(SqlParameterSource.class));
         verify(jdbcTemplate, times(1)).update(eq("DELETE FROM committee_state WHERE epoch >= :epoch"), any(SqlParameterSource.class));
+        verify(jdbcTemplate, times(1)).update(eq("DELETE FROM drep_pv9_stale_clear_event_cache WHERE pv9_max_epoch >= :epoch"), any(SqlParameterSource.class));
+        verify(jdbcTemplate, times(1)).update(eq("DELETE FROM drep_pv9_stale_clear_event WHERE pv9_max_epoch >= :epoch"), any(SqlParameterSource.class));
 
         verify(plainJdbcTemplate, times(1)).update(contains("TRUNCATE TABLE cursor_"));
         verify(jdbcTemplate, times(1)).update(contains("INSERT INTO cursor_"), any(SqlParameterSource.class));
@@ -213,6 +215,31 @@ class RollbackServiceTest {
         // Verify cursor_ and account_config were NOT modified
         verify(jdbcTemplate, never()).getJdbcTemplate();
         verify(jdbcTemplate, times(1)).update(eq("DELETE FROM assets WHERE slot > :slot"), any(SqlParameterSource.class));
+    }
+
+    @Test
+    void testExecuteRollback_WithLedgerStateYamlConfig_ShouldIncludeDrepPv9Tables() {
+        String configFilePath = "rollback-ledger-state.yml";
+        RollbackContext context = RollbackContext.builder()
+                .epoch(100)
+                .eventPublisherId(1L)
+                .rollbackLedgerState(true)
+                .build();
+
+        when(databaseUtils.tableExists(anyString())).thenReturn(true);
+        when(jdbcTemplate.queryForObject(anyString(), any(SqlParameterSource.class), any(RowMapper.class))).thenReturn(
+                createMockRollbackBlock(100, 1000L, "block_hash_123", 2000L, 50, 5)
+        );
+        when(jdbcTemplate.update(anyString(), any(SqlParameterSource.class))).thenReturn(1);
+
+        RollbackConfig config = configLoader.loadRollbackConfig(configFilePath);
+        Pair<List<TableRollbackAction>, Boolean> result = rollbackService.executeRollback(config, context);
+
+        assertNotNull(result);
+        assertTrue(result.getSecond());
+
+        verify(jdbcTemplate, times(1)).update(eq("DELETE FROM drep_pv9_stale_clear_event_cache WHERE pv9_max_epoch >= :epoch"), any(SqlParameterSource.class));
+        verify(jdbcTemplate, times(1)).update(eq("DELETE FROM drep_pv9_stale_clear_event WHERE pv9_max_epoch >= :epoch"), any(SqlParameterSource.class));
     }
 
     @Test

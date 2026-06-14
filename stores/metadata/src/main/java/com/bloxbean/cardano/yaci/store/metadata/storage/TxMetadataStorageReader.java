@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.metadata.storage;
 
+import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.metadata.domain.TxMetadataLabel;
 
 import java.util.List;
@@ -7,4 +8,5 @@ import java.util.List;
 public interface TxMetadataStorageReader {
     List<TxMetadataLabel> findByTxHash(String txHash);
     List<TxMetadataLabel> findByLabel(String label, int page, int count);
+    List<TxMetadataLabel> findByLabel(String label, int page, int count, Order order);
 }

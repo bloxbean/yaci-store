@@ -79,7 +79,10 @@ public final class VoteTallyCalculator {
             totalYesStake = totalYesStake.add(delegateToNoConfidenceDRep);
         }
 
-        BigInteger totalAbstainStake = abstainVote.add(delegateAutoAbstainDRep);
+        BigInteger totalAbstainStake = abstainVote;
+        if (type != GovActionType.HARD_FORK_INITIATION_ACTION) {
+            totalAbstainStake = totalAbstainStake.add(delegateAutoAbstainDRep);
+        }
 
         // In bootstrap phase, all do not vote stake is considered as abstain stake except for HardForkInitiationAction
         if (isInBootstrapPhase && type != GovActionType.HARD_FORK_INITIATION_ACTION) {
