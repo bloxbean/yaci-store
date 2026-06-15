@@ -218,6 +218,7 @@ task distZip(type: Zip) {
 
     from('./config') {
         include 'application.properties'
+        include 'application-blockfrost.properties'
         include 'application-ledger-state.properties'
         include 'application-plugins.yml'
         include 'application-analytics.properties'
@@ -264,6 +265,7 @@ task dockerZip(type: Zip) {
         into(zipDirName + '/config')
         include 'env'
         include 'application.properties'
+        include 'application-blockfrost.properties'
         include 'application-ledger-state.properties'
         include 'application-plugins.yml'
         include 'application-analytics.properties'

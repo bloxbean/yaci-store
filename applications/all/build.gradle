@@ -105,7 +105,9 @@ task distNativeZip(type: Zip) {
 
     from('../../config') {
         include 'application.properties'
+        include 'application-blockfrost.properties'
         include 'application-ledger-state.properties'
+        include 'application-analytics.properties'
         into zipDirName + '/' + configDir
     }
 
