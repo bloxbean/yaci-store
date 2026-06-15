@@ -1,0 +1,63 @@
+import { Callout } from 'nextra/components'
+
+# Blockfrost APIs
+
+Yaci Store ships REST endpoints whose paths and response shapes follow the [Blockfrost API](https://docs.blockfrost.io).
+<Callout type="info">
+The Blockfrost-compatible API Support is available since **3.0.0-beta3**, and sub-modules now auto-enable with the parent flag.
+</Callout>
+
+## Sub-modules
+
+The Blockfrost extension is composed of nine sub-modules, each backing one resource group:
+
+| Sub-module | Provides |
+|---|---|
+| `address` | Address info, UTXOs, transactions |
+| `account` | Stake-account info, rewards, delegations, history |
+| `asset` | Native assets, policy listings, asset history |
+| `block` | Block lookup, block transactions, block addresses |
+| `epoch` | Epoch info, protocol parameters, epoch stake |
+| `metadata` | Transaction metadata by label |
+| `scripts` | Scripts, datums, redeemers |
+| `transaction` | Transaction details, IO, certificates, withdrawals, and tx submit |
+| `util` | Tx execution-units evaluation and xpub-derived addresses |
+
+Each sub-module loads only when the parent extension is enabled, and can be disabled individually. See [Configuration](/docs/v2/blockfrost/configuration).
+
+## Modules in development
+
+The following Blockfrost modules are still in development and will be added in later Yaci Store releases:
+
+- **Pools**
+- **Governance**
+- **Network**
+
+## Quickstart
+
+**1. Enable the extension** in `application.properties` (or use the bundled `blockfrost` profile, which sets both lines for you):
+
+```properties
+store.extensions.blockfrost.enabled=true
+blockfrost.apiPrefix=/api/v1/blockfrost
+```
+
+`blockfrost.apiPrefix` has no default and is required — without it, the app fails to start.
+
+**2. Start yaci-store** and let it sync.
+
+**3. Test the latest block** to confirm the API is up:
+
+```bash
+curl http://localhost:8080/api/v1/blockfrost/blocks/latest
+```
+
+A JSON response with `hash`, `slot`, `epoch`, etc. means the extension is wired correctly.
+
+## API base path
+
+All Blockfrost controllers are mapped under `${blockfrost.apiPrefix}`. The `blockfrost` profile sets it to `/api/v1/blockfrost` so Blockfrost endpoints stay separate from yaci-store's own `/api/v1/...` controllers. See [Configuration → API base path](/docs/v2/blockfrost/configuration#api-base-path).
+
+## Endpoint contracts
+
+Request and response formats follow the official Blockfrost OpenAPI spec. Use [docs.blockfrost.io](https://docs.blockfrost.io) as the per-endpoint reference; this section only documents what is enabled and how to call it. See [Supported Endpoints](/docs/v2/blockfrost/endpoints) for the endpoint-group map.

@@ -1,0 +1,100 @@
+import { Callout } from 'nextra/components'
+
+# Supported Endpoints
+
+This page lists which Blockfrost resource groups yaci-store exposes and what each group covers. Per-endpoint request and response contracts follow the [official Blockfrost OpenAPI spec](https://docs.blockfrost.io) — link to the relevant tag from each section below.
+
+All paths are prefixed with `${blockfrost.apiPrefix}`. The `blockfrost` profile sets it to `/api/v1/blockfrost`; the examples below use that value.
+
+<Callout type="info">
+Activate the `ledger-state` Spring profile alongside `blockfrost` for full data coverage. Account, rewards, and epoch-stake data depend on values that are only computed when `ledger-state` is on.
+</Callout>
+
+## Summary
+
+| Group | Base path | Config flag |
+|---|---|---|
+| Blocks | `/blocks` | `store.extensions.blockfrost.blocks.enabled` |
+| Epochs | `/epochs` | `store.extensions.blockfrost.epoch.enabled` |
+| Transactions | `/txs` | `store.extensions.blockfrost.transaction.enabled` |
+| Tx Submit | `/tx/submit` | `store.extensions.blockfrost.transaction.enabled` |
+| Addresses | `/addresses` | `store.extensions.blockfrost.address.enabled` |
+| Accounts | `/accounts` | `store.extensions.blockfrost.account.enabled` |
+| Assets | `/assets` | `store.extensions.blockfrost.asset.enabled` |
+| Scripts | `/scripts` | `store.extensions.blockfrost.scripts.enabled` |
+| Metadata | `/metadata/txs` | `store.extensions.blockfrost.metadata.enabled` |
+| Utilities | `/utils` | `store.extensions.blockfrost.util.enabled` |
+
+## Blocks
+
+Base path: `/blocks` — block lookup by hash, number, slot, or epoch+slot, plus block-relative navigation (`next`, `previous`), block transaction lists (with optional CBOR), and addresses involved in a block.
+
+Includes a `latest` shortcut: `GET /blocks/latest`, `GET /blocks/latest/txs`, `GET /blocks/latest/txs/cbor`.
+
+Reference: [Blockfrost — Cardano Blocks](https://docs.blockfrost.io/#tag/cardano--blocks).
+
+## Epochs
+
+Base path: `/epochs` — epoch info, `latest` shortcut, neighbours (`next`, `previous`), protocol parameters per epoch (and `latest/parameters`), epoch stake by pool, and blocks produced per pool.
+
+Reference: [Blockfrost — Cardano Epochs](https://docs.blockfrost.io/#tag/cardano--epochs).
+
+## Transactions
+
+Base path: `/txs` — transaction details, inputs and outputs, raw CBOR, metadata (JSON and CBOR), redeemers, stake-related certificates, delegations, withdrawals, MIRs, pool updates and retirements, and required signers.
+
+Reference: [Blockfrost — Cardano Transactions](https://docs.blockfrost.io/#tag/cardano--transactions).
+
+## Tx Submit
+
+Base path: `/tx/submit` — `POST` a CBOR-serialized transaction (`Content-Type: application/cbor`). The response body is the transaction hash.
+
+Submission is delegated to the `submit` component. See [Configuration → Transaction submit](/docs/v2/blockfrost/configuration#transaction-submit).
+
+Reference: [Blockfrost — Submit a transaction](https://docs.blockfrost.io/#tag/cardano--transactions/POST/tx/submit).
+
+## Addresses
+
+Base path: `/addresses` — address info (default and `extended`), totals, UTXOs (filterable by asset), and transactions touching the address.
+
+Reference: [Blockfrost — Cardano Addresses](https://docs.blockfrost.io/#tag/cardano--addresses).
+
+<Callout type="warning">
+The internal `address` table is populated only when `store.utxo.save-address=true`. Without it, address-derived endpoints may return empty results for newly indexed data.
+</Callout>
+
+## Accounts
+
+Base path: `/accounts` (stake addresses) — account info, reward history, account history, delegations, registrations, withdrawals, MIRs, the payment addresses linked to a stake account, asset holdings across those addresses, totals, UTXOs, and transactions.
+
+Reference: [Blockfrost — Cardano Accounts](https://docs.blockfrost.io/#tag/cardano--accounts).
+
+## Assets
+
+Base path: `/assets` — list assets, asset details, history, transactions, holding addresses, and per-policy listings.
+
+Reference: [Blockfrost — Cardano Assets](https://docs.blockfrost.io/#tag/cardano--assets).
+
+## Scripts
+
+Base path: `/scripts` — list scripts, script details, JSON or CBOR script body, script redeemers, and datum lookup by datum hash (JSON or CBOR).
+
+Reference: [Blockfrost — Cardano Scripts](https://docs.blockfrost.io/#tag/cardano--scripts).
+
+## Metadata
+
+Base path: `/metadata/txs` — list metadata labels (`/labels`), and look up transactions by label as JSON (`/labels/{label}`) or CBOR (`/labels/{label}/cbor`).
+
+Reference: [Blockfrost — Cardano Metadata](https://docs.blockfrost.io/#tag/cardano--metadata).
+
+## Utilities
+
+Base path: `/utils` — yaci-store-specific helpers that follow Blockfrost conventions:
+
+- `POST /utils/txs/evaluate` — evaluate execution units for a CBOR-serialized transaction. Body: raw CBOR (`Content-Type: application/cbor`). Optional query param: `version` (default `5`).
+- `POST /utils/txs/evaluate/utxos` — same, with an additional UTXO set supplied alongside the transaction. Body: JSON `{ "cbor": "...", "additionalUtxoSet": [...] }`.
+- `GET /utils/addresses/xpub/{xpub}/{role}/{index}` — derive a Shelley address from an xpub, role, and index.
+
+Evaluation requires a configured tx-evaluation backend (Ogmios, or a Scalus-backed local evaluator surfaced through the `submit` component).
+
+Reference: [Blockfrost — Utilities](https://docs.blockfrost.io/#tag/cardano--utilities).
