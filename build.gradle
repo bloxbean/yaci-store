@@ -218,11 +218,11 @@ task distZip(type: Zip) {
 
     from('./config') {
         include 'application.properties'
+        include 'application-analytics.properties'
         include 'application-blockfrost.properties'
+        include 'application-custom-exporters.yml'
         include 'application-ledger-state.properties'
         include 'application-plugins.yml'
-        include 'application-analytics.properties'
-        include 'application-custom-exporters.yml'
         into zipDirName + '/' + configDir
     }
 
