@@ -1,0 +1,406 @@
+---
+title: "Indexing NFT Mints for a Policy"
+---
+
+import { Callout } from 'nextra/components'
+
+# Indexing NFT Mints for a Specific Policy
+
+## Introduction
+
+In this tutorial you'll build a **scope indexer** with Yaci Store: a lightweight Cardano indexer that captures **only the NFT mints and CIP-25 metadata for a single minting policy**, ignoring everything else on the chain.
+
+**What is a "scope indexer"?**
+Yaci Store can index the whole Cardano blockchain, but most applications only care about a tiny slice of it. Using the **plugin framework**, you can disable the stores you don't need and add a one-line filter so that only the data in your *scope* is ever written to the database. This is exactly what "granular scope indexing" means.
+
+**What will you build?**
+By the end of this tutorial, you'll have a running Yaci Store instance that:
+- Synchronizes with the Cardano blockchain
+- Stores **only the mint events for one NFT policy** (ignoring all other tokens)
+- Keeps the matching **CIP-25 (`721`) metadata** for that collection
+- Stays tiny — megabytes instead of gigabytes
+
+**Why is this useful?**
+- An NFT project wants a private, self-hosted index of just their collection's mint history
+- You need the on-chain metadata JSON for one policy to power a gallery or marketplace
+- You want a cheap, fast alternative to scanning the whole chain or paying an API provider
+
+**What you'll learn:**
+- How to enable only the `assets` and `metadata` stores
+- How to write **MVEL filter plugins** (no scripting files needed — just a one-line expression)
+- How `mintType` and metadata `label` let you scope ingestion precisely
+- How to query your collection's mints and metadata from PostgreSQL
+
+This is the *purest* scope indexer — two stores enabled, two one-line filters, and nothing else. Let's get started!
+
+<Callout type="info">
+New to the plugin framework? You may want to skim the [Write Your First Plugin](/docs/v2/plugins/write-first-plugin) guide first. If you've already done the [Tracking UTXOs for a Specific Address](/docs/v2/tutorials/tracking-address-utxos) tutorial, this one is even simpler — it uses inline MVEL expressions instead of JavaScript files.
+</Callout>
+
+---
+
+## Prerequisites
+
+Before we begin, make sure you have:
+
+- **Docker and Docker Compose** installed on your system
+  - [Install Docker Desktop](https://www.docker.com/products/docker-desktop/) for Mac or Windows
+  - [Install Docker Engine](https://docs.docker.com/engine/install/) for Linux
+- **A minting policy ID** you want to track (a 56-character hex string). You can copy one from any mint transaction on a [preprod explorer](https://preprod.cardanoscan.io/).
+- **Estimated time:** 20-30 minutes
+
+<Callout type="info">
+This tutorial uses the Cardano **preprod** testnet, which is perfect for learning without dealing with real ADA or requiring extensive storage.
+</Callout>
+
+---
+
+## Step 1: Download Yaci Store
+
+First, let's get the Yaci Store Docker distribution.
+
+1. **Download the latest release**
+
+   Visit the [Yaci Store releases page](https://github.com/bloxbean/yaci-store/releases) and download the Docker distribution archive (look for `yaci-store-docker-<version>.zip`).
+
+2. **Extract the archive**
+
+   ```bash
+   unzip yaci-store-docker-<version>.zip
+   cd yaci-store-docker-<version>
+   ```
+
+3. **Explore the directory structure**
+
+   ```
+   yaci-store/
+   ├── yaci-store.sh          # Main script to start/stop Yaci Store
+   ├── admin-cli.sh           # Admin operations
+   ├── psql.sh                # Quick database access
+   ├── compose/               # Docker compose files
+   ├── config/                # Configuration files
+   │   ├── env                # Environment variables
+   │   ├── application.properties
+   │   └── application-plugins.yml
+   └── plugins/               # Where plugins live
+       ├── ext-jars
+       └── scripts
+   ```
+
+<Callout type="info">
+The `yaci-store.sh` script is your main interface. It handles starting, stopping, and managing the Docker containers for you.
+</Callout>
+
+---
+
+## Step 2: Configure Network Connection
+
+Open `config/application.properties` and point Yaci Store at the Cardano **preprod** testnet:
+
+```properties
+# Cardano Network Configuration
+store.cardano.host=preprod-node.play.dev.cardano.org
+store.cardano.port=3001
+store.cardano.protocol-magic=1
+```
+
+The Docker distribution comes pre-configured for database access:
+
+```properties
+spring.datasource.url=jdbc:postgresql://yaci-store-postgres:5432/yaci_store?currentSchema=yaci_store
+spring.datasource.username=yaci
+spring.datasource.password=dbpass
+```
+
+<Callout type="warning">
+These are development credentials. For production use, change the database password!
+</Callout>
+
+---
+
+## Step 3: Scope to Assets and Metadata Only
+
+This is the heart of a scope indexer: turn **off** every store you don't need, and keep **only** the two stores that hold NFT mint and metadata data.
+
+1. **Continue editing `config/application.properties`**
+
+2. **Disable the stores you don't need, and enable `assets` + `metadata`:**
+
+   ```properties
+   # Disable everything we don't need
+   store.blocks.enabled=false
+   store.transaction.enabled=false
+   store.utxo.enabled=false
+   store.epoch.enabled=false
+   store.mir.enabled=false
+   store.script.enabled=false
+   store.staking.enabled=false
+   store.governance.enabled=false
+
+   # Keep these two — this is our scope
+   store.assets.enabled=true
+   store.metadata.enabled=true
+   ```
+
+3. **Set a recent starting point**
+
+   NFT mints are sparse, so syncing from genesis wastes time. Start from a slot **before** your collection's first mint. If you're tracking an ongoing/future drop, you can start near the current tip.
+
+   ```properties
+   # Start syncing from a recent slot (adjust to your collection's first mint)
+   store.cardano.sync-start-slot=107754724
+   store.cardano.sync-start-blockhash=534d3c2d1c3915523ea8843449dd91fcf4d647719d9ef2dc64a97d47be39447b
+   ```
+
+   <Callout type="info">
+   To get a recent preprod slot and block hash, visit [Cardano Explorer (Preprod)](https://preprod.cardanoscan.io/). Mints that happened **before** your start slot will not be captured — choose your start point accordingly.
+   </Callout>
+
+---
+
+## Step 4: Enable the Plugin System
+
+### 4.1 Enable Plugin Loading
+
+Edit `config/env` and uncomment (remove the leading `#`) this line:
+
+```bash
+JDK_JAVA_OPTIONS=${JDK_JAVA_OPTIONS} -Dloader.path=plugins,plugins/lib,plugins/ext-jars
+```
+
+### 4.2 Enable Plugins in Configuration
+
+Open `config/application-plugins.yml` and make sure the plugin system is on:
+
+```yaml
+store:
+  plugins:
+    enabled: true
+```
+
+---
+
+## Step 5: Add the Scope Filters
+
+Unlike the UTXO tutorial, we won't write any JavaScript files. The entire scope is expressed as **two one-line MVEL filter expressions** directly in the configuration.
+
+Yaci Store evaluates a filter `expression` against **each item** before it's saved. If the expression returns `true`, the item is kept; otherwise it's discarded.
+
+We'll use two extension points:
+- **`asset.save`** — runs for every native-asset mint/burn (domain object [`TxAsset`](/docs/v2/plugins/plugin-api-guide#txasset): `policy`, `assetName`, `quantity`, `mintType`)
+- **`metadata.save`** — runs for every transaction metadata label (domain object [`TxMetadataLabel`](/docs/v2/plugins/plugin-api-guide#txmetadatalabel): `label`, `body`)
+
+Open `config/application-plugins.yml` and replace its contents with:
+
+```yaml
+store:
+  plugins:
+    enabled: true
+    api-enabled: false
+    metrics:
+      enabled: false
+
+    # Filters run BEFORE data is saved. Keep only what matches.
+    filters:
+      # Keep only MINT operations for our policy
+      asset.save:
+        - name: "Keep one policy's NFT mints"
+          lang: mvel
+          expression: 'policy == "REPLACE_WITH_YOUR_POLICY_ID" && mintType.name() == "MINT"'
+          exit-on-error: false
+
+      # Keep only CIP-25 (NFT) metadata
+      metadata.save:
+        - name: "Keep CIP-25 metadata"
+          lang: mvel
+          expression: 'label == "721"'
+          exit-on-error: false
+```
+
+Replace `REPLACE_WITH_YOUR_POLICY_ID` with the 56-character hex policy ID you want to track.
+
+**How the filters work:**
+- The `asset.save` filter keeps a row only when its `policy` matches yours **and** the operation is a mint (`mintType` is the `MINT`/`BURN` enum — we compare with `mintType.name() == "MINT"`). Change it to `"BURN"` to track burns instead, or drop that clause to capture both.
+- The `metadata.save` filter keeps the `721` label, which is the [CIP-25](https://cips.cardano.org/cip/CIP-25) standard for NFT metadata.
+
+<Callout type="info">
+The `label == "721"` filter keeps CIP-25 metadata for **all** policies, not just yours. That's usually fine — metadata rows are small. To narrow metadata to a single policy, replace the inline expression with a short MVEL function that inspects the metadata body:
+
+```yaml
+      metadata.save:
+        - name: "Keep CIP-25 metadata for our policy"
+          lang: mvel
+          inline-script: |
+            result = [];
+            for (item : items) {
+                if (item.label == "721" && item.body != null
+                        && item.body.contains("REPLACE_WITH_YOUR_POLICY_ID")) {
+                    result.add(item);
+                }
+            }
+            return result;
+```
+
+The `inline-script` form receives the whole list as `items` and returns the filtered list — use it whenever a one-line `expression` isn't enough.
+</Callout>
+
+---
+
+## Step 6: Start Yaci Store
+
+```bash
+./yaci-store.sh start
+```
+
+This will:
+- Pull the necessary Docker images (first time only)
+- Start the PostgreSQL database
+- Start Yaci Store and begin synchronizing from your configured slot
+
+Watch the logs:
+
+```bash
+./yaci-store.sh logs:yaci-store
+```
+
+---
+
+## Step 7: Query Your Collection
+
+Let's verify only your policy's mints were stored.
+
+1. **Connect to the database**
+
+   ```bash
+   ./psql.sh
+   ```
+
+2. **Set the schema**
+
+   ```sql
+   SET search_path TO yaci_store;
+   ```
+
+3. **List the mints captured for your policy**
+
+   ```sql
+   SELECT
+     policy,
+     encode(decode(asset_name, 'hex'), 'escape') AS asset_name_ascii,
+     asset_name,
+     quantity,
+     mint_type,
+     tx_hash,
+     slot
+   FROM assets
+   ORDER BY slot DESC
+   LIMIT 20;
+   ```
+
+   Because the filter only saved your policy's mints, **every** row here belongs to your collection.
+
+4. **Count the distinct NFTs minted under the policy**
+
+   ```sql
+   SELECT COUNT(DISTINCT asset_name) AS distinct_assets,
+          SUM(quantity)              AS total_minted
+   FROM assets
+   WHERE mint_type = 'MINT';
+   ```
+
+5. **Read the CIP-25 metadata JSON**
+
+   ```sql
+   SELECT tx_hash, slot, body
+   FROM transaction_metadata
+   WHERE label = '721'
+   ORDER BY slot DESC
+   LIMIT 10;
+   ```
+
+   The `body` column holds the raw CIP-25 metadata JSON (name, image, traits, etc.) for each mint transaction.
+
+6. **Exit**
+
+   ```sql
+   \q
+   ```
+
+<Callout type="info">
+No rows yet? The policy may not have minted anything after your `sync-start-slot`. Double-check the policy ID and lower the start slot to a point before the first mint.
+</Callout>
+
+---
+
+## Step 8: Understanding Your Setup
+
+### What's happening behind the scenes?
+
+1. **Yaci Store connects to the Cardano node** and streams blocks from your start slot.
+2. For every block, the **assets store** extracts native-asset mint/burn operations and the **metadata store** extracts transaction metadata.
+3. **Before anything is saved**, your two filters run:
+   - `asset.save` → keep the row only if `policy` matches and it's a `MINT`
+   - `metadata.save` → keep the row only if `label == "721"`
+4. Everything else is discarded and never touches the database.
+
+### Resource usage
+
+Because your scope is one policy:
+- **Database size:** tiny (megabytes)
+- **CPU / memory:** minimal
+- **Sync time:** fast — only matching rows are written
+
+### Customizing for your needs
+
+- **Track multiple policies:** change the `asset.save` expression to `policy == "P1" || policy == "P2"`, or use the `inline-script` form with a list of policies.
+- **Track burns too:** drop the `mintType.name() == "MINT"` clause to capture both mints and burns.
+- **Track fungible tokens:** the same filters work for any native token — just point at a fungible policy.
+
+---
+
+## Troubleshooting
+
+### Plugins not loading?
+- Uncommented the plugin loader line in `config/env`?
+- `store.plugins.enabled: true` in `config/application-plugins.yml`?
+- The MVEL `expression` is valid YAML — keep it wrapped in single quotes.
+
+### No data appearing?
+- Is your `policy` exactly 56 hex characters, with no `0x` prefix?
+- Did your collection mint **after** `store.cardano.sync-start-slot`?
+- Is Yaci Store connected to the network (check the logs)?
+
+### Need to restart from scratch?
+
+```bash
+./yaci-store.sh stop
+sudo rm -rf db-data
+./yaci-store.sh start
+```
+
+---
+
+## Next Steps
+
+Congratulations! You've built a minimal NFT scope indexer with nothing but two MVEL filters.
+
+### Learn more
+- **[Plugin API Reference](/docs/v2/plugins/plugin-api-guide)** — every extension point and domain field, including [`asset.save`](/docs/v2/plugins/plugin-api-guide#assetsave) and [`metadata.save`](/docs/v2/plugins/plugin-api-guide#metadatasave)
+- **[Write Your First Plugin](/docs/v2/plugins/write-first-plugin)** — filters, pre/post-actions, event handlers, and schedulers
+- **[Governance Watch tutorial](/docs/v2/tutorials/governance-watch)** — scope-index Conway-era proposals and votes
+
+### Try these modifications
+- Send a Discord/webhook notification on each new mint using an event handler and the [HTTP client](/docs/v2/plugins/variables-reference-guide/http-client) (see the notification step in the [UTXO tutorial](/docs/v2/tutorials/tracking-address-utxos))
+- Add a `post-action` on `asset.save` that maintains a running mint count in plugin state
+
+---
+
+## Summary
+
+In this tutorial, you learned:
+- ✅ How to scope an indexer to just the `assets` and `metadata` stores
+- ✅ How to write one-line **MVEL filter expressions** for `asset.save` and `metadata.save`
+- ✅ How `mintType` and the CIP-25 `721` label let you narrow ingestion precisely
+- ✅ How to query your collection's mints and metadata from PostgreSQL
+
+You now have a fast, tiny indexer that stores exactly one NFT collection — the essence of granular scope indexing. 🚀
