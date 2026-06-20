@@ -286,7 +286,6 @@ Let's verify only your policy's mints were stored.
    ```sql
    SELECT
      policy,
-     encode(decode(asset_name, 'hex'), 'escape') AS asset_name_ascii,
      asset_name,
      quantity,
      mint_type,
