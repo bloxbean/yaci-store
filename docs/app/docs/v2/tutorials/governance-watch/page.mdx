@@ -1,0 +1,381 @@
+---
+title: "A Minimal Conway Governance Indexer"
+---
+
+import { Callout } from 'nextra/components'
+
+# A Minimal Conway Governance Indexer (Governance Watch)
+
+## Introduction
+
+In this tutorial you'll build a **scope indexer** focused entirely on **Cardano governance** (the Conway era / [CIP-1694](https://cips.cardano.org/cip/CIP-1694)). Instead of indexing the whole chain, you'll keep only governance **proposals** and **votes**, and you'll narrow even further to the **action types you care about** — for example, treasury withdrawals and protocol-parameter changes.
+
+**What will you build?**
+By the end of this tutorial, you'll have a running Yaci Store instance that:
+- Synchronizes with the Cardano blockchain
+- Stores **only governance data** (proposals, votes, DReps) — every other store is off
+- Uses an **MVEL filter** to keep only selected governance action types
+- Uses an **MVEL post-action** to log new proposals as they're indexed
+- Lets you compute a live **YES / NO / ABSTAIN tally** per proposal with plain SQL
+
+**Why is this useful?**
+- Treasury and community monitors who want to watch specific governance actions
+- DRep tooling and dashboards that need proposal and vote data without a full chain index
+- Researchers analyzing on-chain participation in CIP-1694 governance
+
+**What you'll learn:**
+- How to scope Yaci Store to the `governance` store only
+- How to write an **MVEL filter** that matches on an enum (`GovActionType`)
+- How to write an **MVEL post-action** that aggregates data in plugin state
+- How to query proposals and tally votes from PostgreSQL
+
+<Callout type="info">
+This tutorial assumes you're comfortable with the basics from [Tracking UTXOs for a Specific Address](/docs/v2/tutorials/tracking-address-utxos) or [Indexing NFT Mints for a Policy](/docs/v2/tutorials/tracking-nft-mints). It introduces a second plugin type (post-actions) and enum-based filtering.
+</Callout>
+
+---
+
+## Prerequisites
+
+- **Docker and Docker Compose** installed
+  - [Install Docker Desktop](https://www.docker.com/products/docker-desktop/) (Mac/Windows) or [Docker Engine](https://docs.docker.com/engine/install/) (Linux)
+- **Basic familiarity with Cardano governance** (proposals, votes, DReps). The [Governance Guide](https://cips.cardano.org/cip/CIP-1694) is a good primer.
+- **Estimated time:** 25-35 minutes
+
+<Callout type="info">
+Governance data only exists from the **Conway era** onward. The **preprod** testnet (protocol magic `1`) is in the Conway era and has active governance, so we'll use it here.
+</Callout>
+
+---
+
+## Step 1: Download Yaci Store
+
+1. Download the Docker distribution from the [Yaci Store releases page](https://github.com/bloxbean/yaci-store/releases) (`yaci-store-docker-<version>.zip`).
+
+2. Extract and enter the folder:
+
+   ```bash
+   unzip yaci-store-docker-<version>.zip
+   cd yaci-store-docker-<version>
+   ```
+
+   The relevant files are `yaci-store.sh`, `psql.sh`, `config/` (with `env`, `application.properties`, `application-plugins.yml`), and `plugins/`.
+
+---
+
+## Step 2: Configure Network Connection
+
+Edit `config/application.properties` and connect to **preprod**:
+
+```properties
+# Cardano Network Configuration
+store.cardano.host=preprod-node.play.dev.cardano.org
+store.cardano.port=3001
+store.cardano.protocol-magic=1
+```
+
+The database settings come pre-configured:
+
+```properties
+spring.datasource.url=jdbc:postgresql://yaci-store-postgres:5432/yaci_store?currentSchema=yaci_store
+spring.datasource.username=yaci
+spring.datasource.password=dbpass
+```
+
+<Callout type="warning">
+These are development credentials. Change the database password for any production deployment.
+</Callout>
+
+---
+
+## Step 3: Scope to Governance Only
+
+Disable every store except `governance`. That single store captures proposals, votes, DReps, and committee data.
+
+```properties
+# Disable everything we don't need
+store.blocks.enabled=false
+store.transaction.enabled=false
+store.utxo.enabled=false
+store.assets.enabled=false
+store.epoch.enabled=false
+store.mir.enabled=false
+store.script.enabled=false
+store.staking.enabled=false
+store.metadata.enabled=false
+
+# Keep governance — this is our scope
+store.governance.enabled=true
+```
+
+**Choosing a start slot.** Governance proposals are sparse, so syncing from genesis is wasteful. Set a start slot **before** the proposals you want to capture. Proposals submitted earlier than this slot won't be indexed.
+
+```properties
+# Start before the proposals you want to capture.
+# Lower this value to backfill older proposals; raise it to only see new activity.
+store.cardano.sync-start-slot=107754724
+store.cardano.sync-start-blockhash=534d3c2d1c3915523ea8843449dd91fcf4d647719d9ef2dc64a97d47be39447b
+```
+
+<Callout type="info">
+Get a recent preprod slot/block hash from [Cardano Explorer (Preprod)](https://preprod.cardanoscan.io/). To study currently-active proposals, pick a slot from a few epochs back so their submission falls inside your sync window.
+</Callout>
+
+---
+
+## Step 4: Enable the Plugin System
+
+### 4.1 Enable Plugin Loading
+
+In `config/env`, uncomment:
+
+```bash
+JDK_JAVA_OPTIONS=${JDK_JAVA_OPTIONS} -Dloader.path=plugins,plugins/lib,plugins/ext-jars
+```
+
+### 4.2 Turn on Plugins
+
+In `config/application-plugins.yml`:
+
+```yaml
+store:
+  plugins:
+    enabled: true
+```
+
+---
+
+## Step 5: Filter Governance Actions by Type
+
+Now we narrow our scope **inside** the governance domain. The **`governance.gov_action_proposal.save`** extension point runs for every proposal before it's saved. Its domain object is [`GovActionProposal`](/docs/v2/plugins/plugin-api-guide#govactionproposal), whose `type` field is a `GovActionType` enum.
+
+The full set of governance action types is:
+
+| `GovActionType` value          | Meaning                          |
+| ------------------------------ | -------------------------------- |
+| `PARAMETER_CHANGE_ACTION`      | Protocol parameter change        |
+| `HARD_FORK_INITIATION_ACTION`  | Hard fork initiation             |
+| `TREASURY_WITHDRAWALS_ACTION`  | Treasury withdrawal              |
+| `NO_CONFIDENCE`                | Motion of no confidence          |
+| `UPDATE_COMMITTEE`             | Update the constitutional committee |
+| `NEW_CONSTITUTION`             | New constitution                 |
+| `INFO_ACTION`                  | Informational action             |
+
+We'll keep only treasury withdrawals and parameter changes. Replace the contents of `config/application-plugins.yml` with:
+
+```yaml
+store:
+  plugins:
+    enabled: true
+    api-enabled: false
+    metrics:
+      enabled: false
+
+    # Filters run BEFORE data is saved. Keep only the action types we care about.
+    filters:
+      governance.gov_action_proposal.save:
+        - name: "Watch treasury & parameter actions"
+          lang: mvel
+          expression: 'type.name() == "TREASURY_WITHDRAWALS_ACTION" || type.name() == "PARAMETER_CHANGE_ACTION"'
+          exit-on-error: false
+
+    # Post-actions run AFTER data is saved (they cannot modify it).
+    # Here we just log new proposals and keep a running count in plugin state.
+    post-actions:
+      governance.gov_action_proposal.save:
+        - name: "Log new proposals"
+          lang: mvel
+          inline-script: |
+            count = state.get('proposalCount');
+            if (count == null) count = 0;
+            count = count + items.size();
+            state.put('proposalCount', count);
+            for (p : items) {
+                System.out.println("New governance proposal: " + p.type
+                    + " | deposit=" + p.deposit + " | tx=" + p.txHash);
+            }
+          exit-on-error: false
+```
+
+**How this works:**
+- The **filter** keeps a proposal only when its `type` is one of the two we selected. `type` is an enum, so we compare with `type.name()` (the [Plugin API Guide](/docs/v2/plugins/plugin-api-guide#governance-store-extension-points-conway-era) explains enum access). You could also filter by size with `deposit > 50000000000`.
+- The **post-action** receives the saved proposals as `items` (a list of `GovActionProposal`), increments a counter in plugin `state`, and prints each one to the logs.
+
+<Callout type="info">
+**Want to index every proposal type?** Remove the `filters:` block (or widen the expression). The `governance` store on its own is already a scope — the filter simply narrows it further.
+</Callout>
+
+**About votes.** We deliberately don't filter votes, so the `voting_procedure` table captures every vote. When we query, we'll join votes back to the proposals we kept, so only relevant tallies appear.
+
+<Callout type="info">
+To capture only DRep votes (ignoring SPO and committee votes), add a filter on the vote extension point:
+
+```yaml
+      governance.voting_procedure.save:
+        - name: "DRep votes only"
+          lang: mvel
+          expression: 'voterType.name() == "DREP_KEY_HASH" || voterType.name() == "DREP_SCRIPT_HASH"'
+          exit-on-error: false
+```
+
+The `VoterType` enum also includes `CONSTITUTIONAL_COMMITTEE_HOT_KEY_HASH`, `CONSTITUTIONAL_COMMITTEE_HOT_SCRIPT_HASH`, and `STAKING_POOL_KEY_HASH`.
+</Callout>
+
+---
+
+## Step 6: Start Yaci Store
+
+```bash
+./yaci-store.sh start
+```
+
+Watch the logs — you'll see your post-action print each new proposal:
+
+```bash
+./yaci-store.sh logs:yaci-store
+```
+
+---
+
+## Step 7: Query Proposals and Tally Votes
+
+1. **Connect to the database**
+
+   ```bash
+   ./psql.sh
+   ```
+
+2. **Set the schema**
+
+   ```sql
+   SET search_path TO yaci_store;
+   ```
+
+3. **List the proposals you captured**
+
+   ```sql
+   SELECT
+     tx_hash,
+     idx           AS proposal_index,
+     type          AS action_type,
+     deposit,
+     return_address,
+     epoch
+   FROM gov_action_proposal
+   ORDER BY slot DESC;
+   ```
+
+   Every row is a treasury-withdrawal or parameter-change proposal (the types our filter kept).
+
+4. **Tally YES / NO / ABSTAIN per proposal**
+
+   Votes reference a proposal by `gov_action_tx_hash` + `gov_action_index`. Join them to your proposals and pivot the `vote` column:
+
+   ```sql
+   SELECT
+     p.tx_hash,
+     p.idx                                                   AS proposal_index,
+     p.type                                                  AS action_type,
+     COUNT(v.*) FILTER (WHERE v.vote = 'YES')                AS yes,
+     COUNT(v.*) FILTER (WHERE v.vote = 'NO')                 AS no,
+     COUNT(v.*) FILTER (WHERE v.vote = 'ABSTAIN')            AS abstain
+   FROM gov_action_proposal p
+   LEFT JOIN voting_procedure v
+     ON v.gov_action_tx_hash = p.tx_hash
+    AND v.gov_action_index   = p.idx
+   GROUP BY p.tx_hash, p.idx, p.type
+   ORDER BY (yes + no + abstain) DESC;
+   ```
+
+5. **Break a tally down by voter type** (DRep vs SPO vs committee)
+
+   ```sql
+   SELECT
+     v.gov_action_tx_hash,
+     v.gov_action_index,
+     v.voter_type,
+     v.vote,
+     COUNT(*) AS votes
+   FROM voting_procedure v
+   GROUP BY v.gov_action_tx_hash, v.gov_action_index, v.voter_type, v.vote
+   ORDER BY v.gov_action_tx_hash, v.voter_type;
+   ```
+
+6. **Exit**
+
+   ```sql
+   \q
+   ```
+
+<Callout type="info">
+No proposals yet? Conway governance activity is sparse on preprod. Lower `store.cardano.sync-start-slot` to backfill older epochs, and confirm `store.governance.enabled=true`.
+</Callout>
+
+---
+
+## Step 8: Understanding Your Setup
+
+### What's happening behind the scenes?
+
+1. **Yaci Store streams blocks** from the Cardano node starting at your slot.
+2. The **governance store** extracts proposals, votes, DReps, and committee changes from each block.
+3. **Before a proposal is saved**, your `governance.gov_action_proposal.save` filter decides whether its `type` is in scope.
+4. **After each save**, your post-action logs the proposal and updates the in-state counter.
+5. Votes flow into `voting_procedure` unfiltered, ready to be tallied with SQL at query time.
+
+### Why tally votes in SQL instead of a plugin?
+
+Yaci Store processes blocks in **parallel batches** during initial sync and can **roll back** near the chain tip. Maintaining a running aggregate inside a plugin would have to handle both carefully. Computing the tally from the `voting_procedure` table with `GROUP BY` is always correct and automatically reflects rollbacks — so we keep the plugin for *filtering and logging*, and let SQL do the *aggregation*.
+
+### Resource usage
+
+Scoping to governance keeps the database tiny and sync fast, since only governance rows are written.
+
+---
+
+## Troubleshooting
+
+### Plugins not loading?
+- Uncommented the loader line in `config/env`?
+- `store.plugins.enabled: true` set?
+- The MVEL `expression` is wrapped in single quotes and uses `type.name()` for the enum.
+
+### No governance data?
+- Confirm you're on **preprod** (Conway era) and `store.governance.enabled=true`.
+- Make sure proposals were submitted **after** your `sync-start-slot`.
+
+### Want to start over?
+
+```bash
+./yaci-store.sh stop
+sudo rm -rf db-data
+./yaci-store.sh start
+```
+
+---
+
+## Next Steps
+
+You've built a focused CIP-1694 governance indexer using an MVEL filter and an MVEL post-action.
+
+### Learn more
+- **[Plugin API Reference — Governance extension points](/docs/v2/plugins/plugin-api-guide#governance-store-extension-points-conway-era)** — `gov_action_proposal.save`, `voting_procedure.save`, `drep.save`, and more
+- **[Write Your First Plugin](/docs/v2/plugins/write-first-plugin)** — filters, pre/post-actions, event handlers, schedulers
+- **[Indexing NFT Mints for a Policy](/docs/v2/tutorials/tracking-nft-mints)** — another scope indexer, using filters on assets and metadata
+
+### Try these modifications
+- **Notify on new proposals:** add an event handler that posts to Discord/Slack via the [HTTP client](/docs/v2/plugins/variables-reference-guide/http-client) when a proposal of interest appears.
+- **Track DRep registrations:** add a filter/post-action on `governance.drep_registration.save` to watch DRep activity.
+- **Persist aggregates:** write per-proposal tallies into a custom table from a scheduled plugin using the [database access](/docs/v2/plugins/variables-reference-guide/database-access) variable.
+
+---
+
+## Summary
+
+In this tutorial, you learned:
+- ✅ How to scope an indexer to the `governance` store only
+- ✅ How to write an **MVEL filter** that matches on the `GovActionType` enum
+- ✅ How to write an **MVEL post-action** that aggregates and logs saved data
+- ✅ How to tally YES / NO / ABSTAIN votes per proposal with SQL
+
+You now have a lightweight, queryable governance database — a focused window into Cardano's on-chain decision making. 🗳️
