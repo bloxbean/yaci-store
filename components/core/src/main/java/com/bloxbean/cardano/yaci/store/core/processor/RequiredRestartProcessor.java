@@ -2,7 +2,6 @@ package com.bloxbean.cardano.yaci.store.core.processor;
 
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
-import com.bloxbean.cardano.yaci.store.core.service.HealthService;
 import com.bloxbean.cardano.yaci.store.core.service.StartService;
 import com.bloxbean.cardano.yaci.store.events.internal.RequiredSyncRestartEvent;
 import lombok.RequiredArgsConstructor;
@@ -11,7 +10,6 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Lock;
@@ -23,21 +21,18 @@ import java.util.concurrent.locks.ReentrantLock;
 @Slf4j
 public class RequiredRestartProcessor {
     private final StartService startService;
-    private final HealthService healthService;
     private final StoreProperties storeProperties;
 
     private final AtomicLong lastRestartAttempt = new AtomicLong(0);
     private final AtomicInteger restartCount = new AtomicInteger(0);
     private final Lock restartLock = new ReentrantLock();
-    private final AtomicBoolean monitoringHealth = new AtomicBoolean(false);
 
-    // Track successful sync period
-    private static final long SUCCESS_THRESHOLD_MS = 300000; // 5 minutes
-    private static final long HEALTH_CHECK_INTERVAL_MS = 30000; // 30 seconds
+    // If there's been no restart for this long, the attempt counter is reset so a new
+    // outage starts fresh instead of inheriting the count of an old, resolved one.
+    static final long RESTART_WINDOW_MS = 600000; // 10 minutes
 
     @EventListener
     public void handleRequiredRestart(RequiredSyncRestartEvent event) {
-
         Thread.startVirtualThread(() -> handleRestartInterval(event));
     }
 
@@ -53,22 +48,11 @@ public class RequiredRestartProcessor {
         }
 
         try {
-            // Check debounce window
-            long now = System.currentTimeMillis();
-            long lastAttempt = lastRestartAttempt.get();
-            if (now - lastAttempt < storeProperties.getAutoRestartDebounceWindowMs()) {
-                log.info("Within debounce window. Ignoring restart event: {}", event.getReason());
-                return;
+            int attemptNumber = evaluateRestartAttempt(System.currentTimeMillis(), event);
+            if (attemptNumber <= 0) {
+                return; // debounced or rate-limited
             }
 
-            // Check retry limit
-            if (restartCount.get() >= storeProperties.getAutoRestartMaxAttempts()) {
-                log.error("Max restart attempts reached. Manual intervention required.");
-                return;
-            }
-
-            // Calculate backoff
-            int attemptNumber = restartCount.incrementAndGet();
             long backoffMs = calculateBackoff(attemptNumber);
 
             log.info("Scheduling sync restart. Reason: {}, Attempt: {}, Backoff: {}ms",
@@ -80,13 +64,45 @@ public class RequiredRestartProcessor {
             // Perform restart
             performRestart(event);
 
-            lastRestartAttempt.set(System.currentTimeMillis());
-
         } catch (Exception e) {
             log.error("Error during sync restart", e);
         } finally {
             restartLock.unlock();
         }
+    }
+
+    /**
+     * Applies the debounce window, the sliding-window counter reset and the
+     * max-attempts limit. Returns the 1-based attempt number when a restart should go
+     * ahead, or 0 to skip. {@code now} is a parameter so the windowing can be tested
+     * without waiting.
+     */
+    int evaluateRestartAttempt(long now, RequiredSyncRestartEvent event) {
+        long lastAttempt = lastRestartAttempt.get();
+
+        if (now - lastAttempt < storeProperties.getAutoRestartDebounceWindowMs()) {
+            log.info("Within debounce window. Ignoring restart event: {}", event.getReason());
+            return 0;
+        }
+
+        // A gap longer than the window means the previous burst is over, so start counting again.
+        if (lastAttempt > 0 && now - lastAttempt > RESTART_WINDOW_MS) {
+            int previous = restartCount.getAndSet(0);
+            if (previous > 0) {
+                log.info("No restart attempt in the last {} ms. Resetting restart attempt counter from {} to 0.",
+                         RESTART_WINDOW_MS, previous);
+            }
+        }
+
+        if (restartCount.get() >= storeProperties.getAutoRestartMaxAttempts()) {
+            log.warn("Reached max restart attempts ({}) within the last {} ms. " +
+                     "Pausing further restarts until the window resets.",
+                     storeProperties.getAutoRestartMaxAttempts(), RESTART_WINDOW_MS);
+            return 0;
+        }
+
+        lastRestartAttempt.set(now);
+        return restartCount.incrementAndGet();
     }
 
     private void performRestart(RequiredSyncRestartEvent event) {
@@ -106,11 +122,6 @@ public class RequiredRestartProcessor {
         startService.start();
 
         log.info("Sync restart completed for reason: {}", event.getReason());
-
-        // Start health monitoring thread only if we have restart attempts
-        if (restartCount.get() > 0) {
-            startHealthMonitoring();
-        }
     }
 
     private long calculateBackoff(int attemptNumber) {
@@ -118,68 +129,5 @@ public class RequiredRestartProcessor {
             storeProperties.getAutoRestartBackoffBaseMs() * (long)Math.pow(2, attemptNumber - 1),
             60000L // Max 1 minute
         );
-    }
-
-    private void startHealthMonitoring() {
-        // Only start monitoring if not already running
-        if (!monitoringHealth.compareAndSet(false, true)) {
-            log.debug("Health monitoring already in progress");
-            return;
-        }
-
-        Thread.startVirtualThread(() -> {
-            log.info("Starting health monitoring to reset restart counter after stable sync");
-            long monitoringStartTime = System.currentTimeMillis();
-            long lastSuccessfulSyncTime = 0;
-
-            try {
-                while (monitoringHealth.get() && restartCount.get() > 0) {
-                    // Check sync health using HealthService
-                    var healthStatus = healthService.getHealthStatus();
-                    
-                    if (healthStatus.isConnectionAlive() && !healthStatus.isError()) {
-                        long lastBlockTime = healthStatus.getLastReceivedBlockTime();
-                        long currentTime = System.currentTimeMillis();
-
-                        // Check if we're receiving blocks (within last minute)
-                        if (lastBlockTime > 0 && (currentTime - lastBlockTime) < 60000) {
-                            // We're successfully syncing
-                            if (lastSuccessfulSyncTime == 0) {
-                                lastSuccessfulSyncTime = currentTime;
-                                log.debug("Started tracking successful sync period");
-                            } else if (currentTime - lastSuccessfulSyncTime > SUCCESS_THRESHOLD_MS) {
-                                // 5 minutes of stable sync, reset counter
-                                log.info("Sync has been stable for 5 minutes. Resetting restart counter.");
-                                restartCount.set(0);
-                                break; // Exit monitoring
-                            }
-                        } else {
-                            // Not receiving blocks, reset success tracking
-                            lastSuccessfulSyncTime = 0;
-                        }
-                    } else {
-                        // Not running or in error state, reset success tracking
-                        lastSuccessfulSyncTime = 0;
-                    }
-
-                    // Stop monitoring after 10 minutes regardless
-                    if (System.currentTimeMillis() - monitoringStartTime > 600000) {
-                        log.info("Health monitoring timeout reached (10 minutes). Stopping monitoring.");
-                        break;
-                    }
-
-                    // Sleep for check interval
-                    try {
-                        TimeUnit.MILLISECONDS.sleep(HEALTH_CHECK_INTERVAL_MS);
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        break;
-                    }
-                }
-            } finally {
-                monitoringHealth.set(false);
-                log.info("Health monitoring stopped. Restart counter: {}", restartCount.get());
-            }
-        });
     }
 }
