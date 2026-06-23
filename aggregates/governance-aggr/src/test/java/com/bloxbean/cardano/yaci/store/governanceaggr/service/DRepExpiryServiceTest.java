@@ -63,6 +63,29 @@ class DRepExpiryServiceTest {
     }
 
     @Test
+    void activeUntilCountsFirstConwayEpochDormancyBeforeFirstProposal() {
+        when(govEpochActivityRepository.findDormantEpochsInEpochRange(492, 492))
+                .thenReturn(Set.of(492));
+
+        insertEpochParam(492, 9, 20, 60);
+
+        insertDRepRegistration(492, 42_509_000L);
+        insertProposal("first-conway-proposal", 492, 42_510_000L);
+        insertDRepDist(493);
+
+        dRepExpiryService.calculateAndUpdateExpiryForEpoch(493);
+
+        Integer activeUntil = jdbcTemplate.queryForObject("""
+                SELECT active_until
+                FROM drep_dist
+                WHERE epoch = 493
+                  AND drep_hash = ?
+                """, Integer.class, DREP_HASH);
+
+        assertThat(activeUntil).isEqualTo(513);
+    }
+
+    @Test
     void activeUntilTreatsRatifiedProposalStatusEpochAsNonDormant() {
         when(govEpochActivityRepository.findDormantEpochsInEpochRange(492, 580))
                 .thenReturn(Set.of());
@@ -187,11 +210,15 @@ class DRepExpiryServiceTest {
     }
 
     private void insertDRepRegistration() {
+        insertDRepRegistration(493, 42596698);
+    }
+
+    private void insertDRepRegistration(int epoch, long slot) {
         jdbcTemplate.update("""
                 INSERT INTO drep_registration
                     (tx_hash, cert_index, tx_index, type, drep_hash, cred_type, epoch, slot)
-                VALUES ('drep-reg', 0, 0, 'REG_DREP_CERT', ?, 'ADDR_KEYHASH', 493, 42596698)
-                """, DREP_HASH);
+                VALUES ('drep-reg', 0, 0, 'REG_DREP_CERT', ?, 'ADDR_KEYHASH', ?, ?)
+                """, DREP_HASH, epoch, slot);
     }
 
     private void insertProposal(String txHash, int epoch, long slot) {

@@ -328,7 +328,7 @@ public class DRepExpiryUtil {
         int eventIndex = 0;
         for (int epoch = eraFirstEpoch; epoch <= evaluatedEpoch; epoch++) {
             // Ledger updates the dormant counter at the epoch boundary before in-epoch events.
-            if (epoch > eraFirstEpoch && !nonDormantProposalEpochs.contains(epoch)) {
+            if (!nonDormantProposalEpochs.contains(epoch)) {
                 dormantCounter++;
             }
 
