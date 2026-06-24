@@ -27,10 +27,6 @@ public class RequiredRestartProcessor {
     private final AtomicInteger restartCount = new AtomicInteger(0);
     private final Lock restartLock = new ReentrantLock();
 
-    // If there's been no restart for this long, the attempt counter is reset so a new
-    // outage starts fresh instead of inheriting the count of an old, resolved one.
-    static final long RESTART_WINDOW_MS = 600000; // 10 minutes
-
     @EventListener
     public void handleRequiredRestart(RequiredSyncRestartEvent event) {
         Thread.startVirtualThread(() -> handleRestartInterval(event));
@@ -78,26 +74,27 @@ public class RequiredRestartProcessor {
      * without waiting.
      */
     int evaluateRestartAttempt(long now, RequiredSyncRestartEvent event) {
-        long lastAttempt = lastRestartAttempt.get();
+        long lastAttemptEpochMs = lastRestartAttempt.get();
+        long windowMs = storeProperties.getAutoRestartWindowMs();
 
-        if (now - lastAttempt < storeProperties.getAutoRestartDebounceWindowMs()) {
+        if (now - lastAttemptEpochMs < storeProperties.getAutoRestartDebounceWindowMs()) {
             log.info("Within debounce window. Ignoring restart event: {}", event.getReason());
             return 0;
         }
 
         // A gap longer than the window means the previous burst is over, so start counting again.
-        if (lastAttempt > 0 && now - lastAttempt > RESTART_WINDOW_MS) {
+        if (lastAttemptEpochMs > 0 && now - lastAttemptEpochMs > windowMs) {
             int previous = restartCount.getAndSet(0);
             if (previous > 0) {
                 log.info("No restart attempt in the last {} ms. Resetting restart attempt counter from {} to 0.",
-                         RESTART_WINDOW_MS, previous);
+                         windowMs, previous);
             }
         }
 
         if (restartCount.get() >= storeProperties.getAutoRestartMaxAttempts()) {
             log.warn("Reached max restart attempts ({}) within the last {} ms. " +
                      "Pausing further restarts until the window resets.",
-                     storeProperties.getAutoRestartMaxAttempts(), RESTART_WINDOW_MS);
+                     storeProperties.getAutoRestartMaxAttempts(), windowMs);
             return 0;
         }
 

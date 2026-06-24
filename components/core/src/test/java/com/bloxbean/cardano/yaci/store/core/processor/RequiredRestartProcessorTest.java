@@ -19,6 +19,7 @@ class RequiredRestartProcessorTest {
 
     private static final long DEBOUNCE_MS = 30_000L;
     private static final int MAX_ATTEMPTS = 3;
+    private static final long WINDOW_MS = 600_000L;
     private static final long BASE_NOW = 1_000_000L;
 
     @Mock
@@ -36,6 +37,7 @@ class RequiredRestartProcessorTest {
     void setUp() {
         lenient().when(storeProperties.getAutoRestartDebounceWindowMs()).thenReturn(DEBOUNCE_MS);
         lenient().when(storeProperties.getAutoRestartMaxAttempts()).thenReturn(MAX_ATTEMPTS);
+        lenient().when(storeProperties.getAutoRestartWindowMs()).thenReturn(WINDOW_MS);
     }
 
     @Test
@@ -70,7 +72,7 @@ class RequiredRestartProcessorTest {
         processor.evaluateRestartAttempt(lastAttempt, event); // budget exhausted
         assertThat(processor.evaluateRestartAttempt(BASE_NOW + 180_000, event)).isZero();
 
-        long afterWindow = lastAttempt + RequiredRestartProcessor.RESTART_WINDOW_MS + 1;
+        long afterWindow = lastAttempt + WINDOW_MS + 1;
         assertThat(processor.evaluateRestartAttempt(afterWindow, event)).isEqualTo(1);
     }
 

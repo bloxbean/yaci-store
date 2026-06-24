@@ -181,6 +181,7 @@ public class YaciStoreProperties {
         private long debounceWindowMs = 30000;
         private int maxAttempts = 5;
         private long backoffBaseMs = 5000;
+        private long windowMs = 600000;
     }
 
 }
