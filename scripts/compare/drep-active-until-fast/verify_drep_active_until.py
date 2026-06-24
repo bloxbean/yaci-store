@@ -610,6 +610,7 @@ def compare_epoch(
         "non_dormant_epochs": 0,
         "dbsync_rows": 0,
         "era_first_epoch": None,
+        "recompute_seconds": 0.0,
     }
 
     conn = connect(args.store_url, args.store_schema)
@@ -646,6 +647,7 @@ def compare_epoch(
     expected_by_hash: Dict[str, int] = {}
     target_hashes = {key[0] for key in targets}
     result_rows: List[Dict[str, object]] = []
+    recompute_started = time.perf_counter()
     for key, yaci_active_until in targets.items():
         drep_hash, drep_type = key
         registration = registrations.get(key)
@@ -748,6 +750,8 @@ def compare_epoch(
                     f"    DB Sync    : active_until = {dbsync_active_until}",
                 ],
             )
+
+    stats["recompute_seconds"] = round(time.perf_counter() - recompute_started, 6)
 
     if dbsync_map:
         for drep_hash, dbsync_active_until in dbsync_map.items():
@@ -865,7 +869,9 @@ Examples:
     result["epochs_compared"] = end_epoch - start_epoch + 1
     result["log_file"] = os.path.abspath(log_file)
     result_started = time.time()
+    process_started = time.perf_counter()
     epoch_stats = {}
+    total_recompute_seconds = 0.0
 
     for epoch in range(start_epoch, end_epoch + 1):
         logger.log(f"############ Epoch {epoch} - recompute active_until ############")
@@ -880,12 +886,14 @@ Examples:
                 run_id,
             )
             epoch_stats[str(epoch)] = stats
+            total_recompute_seconds += stats.get("recompute_seconds", 0.0)
             logger.log(
                 "  Loaded: "
                 f"targets={stats['targets']}, registrations={stats['registrations']}, "
                 f"interactions={stats['interactions']}, proposals={stats['proposals']}, "
                 f"non_dormant_epochs={stats['non_dormant_epochs']}, dbsync_rows={stats['dbsync_rows']}"
             )
+            logger.log(f"  Recompute active_until time: {stats['recompute_seconds']:.6f}s")
             if result_file:
                 logger.log(f"  Result CSV: {result_file}")
             if count == 0:
@@ -904,6 +912,8 @@ Examples:
         logger.log()
 
     result = finish_result(result, result_started)
+    result["recompute_seconds"] = round(total_recompute_seconds, 6)
+    process_seconds = time.perf_counter() - process_started
     finished_at = datetime.now()
     epoch_scope = f"epochs {start_epoch} -> {end_epoch}" if start_epoch != end_epoch else f"epoch {start_epoch}"
     summary_text = render_summary(
@@ -938,6 +948,9 @@ Examples:
     payload["result"] = result
     payload["epoch_stats"] = epoch_stats
 
+    logger.log(f"Total recompute active_until time: {total_recompute_seconds:.6f}s")
+    logger.log(f"Total verification process time: {process_seconds:.3f}s")
+    logger.log()
     logger.log(summary_text)
     summary_log, summary_json = write_report_files(report_dir, summary_text, payload)
     logger.log(f"Summary log written to: {summary_log}")

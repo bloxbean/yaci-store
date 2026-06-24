@@ -135,6 +135,7 @@ The tool writes:
 
 - console output unless `--quiet` is used
 - a text log under `scripts/compare/logs`
+- per-epoch `active_until` recompute timing and total recompute/process timing in the log
 - a structured report under `scripts/compare/reports`
 - full per-epoch result CSV files under the run's `results` directory
 - mismatch samples as CSV under the run's `mismatches` directory
