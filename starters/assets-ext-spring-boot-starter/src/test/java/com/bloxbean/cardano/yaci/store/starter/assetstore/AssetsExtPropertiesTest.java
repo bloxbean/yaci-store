@@ -72,10 +72,12 @@ class AssetsExtPropertiesTest {
     }
 
     @Test
-    @DisplayName("master extension flag is disabled by default")
-    void rootEnabledIsFalseByDefault() {
-        // The whole assets-ext extension stays dormant unless an operator
-        // opts in via store.assets.ext.enabled=true.
-        assertThat(new AssetsExtProperties().isEnabled()).isFalse();
+    @DisplayName("master extension flag is enabled by default (auto-enables on the classpath)")
+    void rootEnabledIsTrueByDefault() {
+        // Mirrors the AssetsExtConfiguration @ConditionalOnProperty(matchIfMissing = true)
+        // gate: like the core stores (blocks, utxo, ...), the extension auto-enables when
+        // the starter is on the classpath. The standalone build opts out explicitly in
+        // application-all.properties; CIP-26/CIP-113 stay off via their own defaults.
+        assertThat(new AssetsExtProperties().isEnabled()).isTrue();
     }
 }

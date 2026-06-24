@@ -17,10 +17,16 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 
 @Configuration
+// matchIfMissing = true: presence of the starter on the classpath enables the extension,
+// mirroring the core stores (BlocksStoreConfiguration, UtxoStoreConfiguration, etc., all
+// matchIfMissing = true). The cheap on-chain work (CIP-68) then runs by default, while the
+// per-CIP gates keep the things with external/side effects opt-in: CIP-26's GitHub-registry
+// sync cron and CIP-113 (not yet live on mainnet) both default off (matchIfMissing = false).
+// The standalone build sets store.assets.ext.enabled explicitly in application-all.properties.
 @ConditionalOnProperty(
         name = "store.assets.ext.enabled",
         havingValue = "true",
-        matchIfMissing = false
+        matchIfMissing = true
 )
 @ComponentScan(basePackages = {"com.bloxbean.cardano.yaci.store.extensions.assetstore"})
 @EnableJpaRepositories(basePackages = {"com.bloxbean.cardano.yaci.store.extensions.assetstore"})

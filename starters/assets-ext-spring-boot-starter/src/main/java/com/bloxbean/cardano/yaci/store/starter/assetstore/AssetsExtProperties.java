@@ -12,7 +12,10 @@ import java.util.List;
 @Setter
 @ConfigurationProperties(prefix = "store.assets.ext", ignoreUnknownFields = true)
 public class AssetsExtProperties {
-    private boolean enabled = false;
+    // Defaults mirror the @ConditionalOnProperty gates so config metadata matches runtime:
+    // master + CIP-68 default on (matchIfMissing = true, like the core stores), while CIP-26
+    // (external GitHub-registry sync) and CIP-113 (pre-mainnet) default off.
+    private boolean enabled = true;
     private Cip26 cip26 = new Cip26();
     private Cip68 cip68 = new Cip68();
     private Cip113 cip113 = new Cip113();
