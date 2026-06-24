@@ -12,6 +12,5 @@ public class Cip113RegistryNodeId {
 
     private String key;
     private Long slot;
-    private String txHash;
 
 }

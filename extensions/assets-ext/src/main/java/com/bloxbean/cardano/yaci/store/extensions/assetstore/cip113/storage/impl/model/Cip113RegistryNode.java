@@ -78,9 +78,15 @@ public class Cip113RegistryNode {
     @EqualsAndHashCode.Include
     private Long slot;
 
-    @Id
+    /**
+     * Transaction hash of the registry-node output this row was indexed from. Kept as provenance,
+     * but deliberately NOT part of the primary key: the key is {@code (key, slot)} so that two
+     * updates to the same registry node within the same slot collapse to a single last-writer-wins
+     * row (the registry is a current-state store, not a per-tx audit trail). Keeping {@code tx_hash}
+     * in the key would let same-slot updates produce multiple rows, which then breaks the
+     * "one latest row per key" contract the readers rely on. See {@link #slot}.
+     */
     @Column(name = "tx_hash", length = 64, nullable = false)
-    @EqualsAndHashCode.Include
     private String txHash;
 
     /** Aiken {@code Credential} (28-byte vkey or script hash, 56 hex chars). Protocol-bounded. */

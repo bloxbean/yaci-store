@@ -110,7 +110,7 @@ in H2 and MySQL (but not in PostgreSQL) so those two dialects quote them.
 |---|---|---|
 | `key` | `VARCHAR(64)` NOT NULL | Three possible values: empty string (head sentinel), 56 hex chars (real policy ID), or 58–64 hex chars (tail sentinel). **Do not shrink to 56.** Quoted as `"key"` (H2) / `` `key` `` (MySQL). |
 | `slot` | `BIGINT` NOT NULL | |
-| `tx_hash` | `VARCHAR(64)` NOT NULL | Cardano transaction hash: 32 B = 64 hex. |
+| `tx_hash` | `VARCHAR(64)` NOT NULL | Cardano transaction hash: 32 B = 64 hex. Provenance only — **not** part of the PK (see below). |
 | `transfer_logic_script` | `VARCHAR(56)` | Aiken Credential inner hash (28 B = 56 hex). Both NULL together when the on-chain Credential field encodes "absent"; both non-NULL otherwise. |
 | `transfer_logic_script_type` | `VARCHAR(8)` | Companion to above: `"VKEY"` or `"SCRIPT"`. |
 | `third_party_transfer_logic_script` | `VARCHAR(56)` | Same pattern. |
@@ -120,8 +120,15 @@ in H2 and MySQL (but not in PostgreSQL) so those two dialects quote them.
 | `datum` | `TEXT` (PG/H2) / `LONGTEXT` (MySQL) NOT NULL | Full CBOR hex of the inline datum. |
 | `last_synced_at` | `TIMESTAMP` | |
 
-PK: `(key, slot, tx_hash)`. Index: `idx_cip113_slot`
+PK: `(key, slot)`. Index: `idx_cip113_slot`
 (used by `Cip113RegistryNodeRepository.deleteBySlotGreaterThan`).
+
+`tx_hash` is intentionally excluded from the PK. The registry is a current-state store, not a
+per-transaction audit trail, so two updates to the same registry node within a single slot
+(possible only via intra-block transaction chaining — extremely rare) collapse to one
+last-writer-wins row rather than producing duplicate `(key, slot)` rows. This keeps the
+"one latest row per key" guarantee the readers rely on: `findLatestByKeys` resolves each key to
+exactly one row, so `Cip113StorageReaderImpl.findByPolicyIds` cannot hit a duplicate-key collision.
 
 ---
 

@@ -59,7 +59,7 @@ CREATE TABLE cip113_registry_node (
     `next`                                 VARCHAR(64)  NOT NULL,
     datum                                  LONGTEXT     NOT NULL,
     last_synced_at                         TIMESTAMP NULL,
-    PRIMARY KEY (`key`, slot, tx_hash)
+    PRIMARY KEY (`key`, slot)
 );
 
 CREATE INDEX idx_cip113_slot ON cip113_registry_node(slot);
