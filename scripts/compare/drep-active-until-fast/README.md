@@ -39,7 +39,40 @@ So you can validate an epoch or a specific DRep hash without mutating Yaci Store
 Install the Python dependency if needed:
 
 ```bash
-pip3 install psycopg2-binary
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install psycopg2-binary
+```
+
+On Debian 13 (trixie) and other distributions that enforce PEP 668, `pip3 install
+psycopg2-binary` against the system Python can fail with `This environment is externally
+managed`. Use the virtual environment above instead of passing `--break-system-packages`.
+
+If `python3 -m venv` is unavailable, install the Debian venv support first:
+
+```bash
+sudo apt update
+sudo apt install python3-venv python3-pip
+```
+
+If the server still reports missing venv components, install the full Python package:
+
+```bash
+sudo apt install python3-full
+```
+
+After the venv is created, run the verifier with the venv Python:
+
+```bash
+.venv/bin/python verify_drep_active_until.py --epoch 624 --config config.json
+```
+
+Alternatively, if you prefer Debian-packaged dependencies and have permission to install them:
+
+```bash
+sudo apt install python3-psycopg2
+python3 verify_drep_active_until.py --epoch 624 --config config.json
 ```
 
 The tool uses the same connection argument style as the scripts in `scripts/compare`.
