@@ -18,7 +18,7 @@ store.auto-restart.backoff-base-ms=5000
 
 - **`store.auto-restart.enabled`** (default: `true`): Enable or disable the auto-restart feature
 - **`store.auto-restart.debounce-window-ms`** (default: `30000`): Time window in milliseconds to prevent multiple restart attempts. If multiple restart events occur within this window, only the first one will be processed
-- **`store.auto-restart.max-attempts`** (default: `5`): Maximum number of restart attempts before giving up and requiring manual intervention
+- **`store.auto-restart.max-attempts`** (default: `5`): Maximum number of restart attempts allowed within a sliding window (~10 min). Once the limit is reached within the window, new restarts pause until the window elapses and then resume automatically — no manual restart required
 - **`store.auto-restart.backoff-base-ms`** (default: `5000`): Base delay in milliseconds for exponential backoff between restart attempts
 
 ## How It Works
@@ -27,11 +27,11 @@ The auto-restart system automatically handles:
 - **IntersectionNotFound errors**: When the node can't find a common intersection point after network issues
 - **Health check failures**: When the auto-recovery service detects sync problems
 
-The system includes safeguards to prevent restart storms:
+The system includes safeguards to prevent restart storms and enable automatic recovery:
 - **Debouncing**: Ignores rapid restart requests within the configured window
 - **Exponential backoff**: Increases delay between retry attempts (5s, 10s, 20s, 40s, 60s max)
-- **Retry limits**: Stops trying after the maximum attempts are reached
-- **Success tracking**: Resets the retry counter after 5 minutes of stable sync
+- **Sliding-window rate limiting**: Resets the retry counter if no restart has been attempted within ~10 minutes, allowing fresh restart attempts for new or recovered outages without manual intervention
+- **Max-attempts per window**: Within the sliding window, stops attempting restarts after reaching the configured limit to prevent excessive restart storms
 
 <Callout>
 The auto-restart feature is enabled by default since IntersectionNotFound is a valid scenario that should be handled automatically, especially in production environments.
