@@ -101,6 +101,7 @@ You can also pass `--config` with the same shape used by the existing compare sc
   "store_url": "postgresql://yaci:dbpass@localhost:5432/yaci_store",
   "store_schema": "yaci_store",
   "dbsync_url": "postgresql://dbsync:dbsync@localhost:5678/cexplorer",
+  "skip_dbsync": false,
   "reports_dir": "./reports",
   "logs_dir": "./logs",
   "max_mismatches": 50
@@ -114,6 +115,18 @@ python3 verify_drep_active_until.py --epoch 624 --config config.json
 ```
 
 CLI values override config-file values.
+
+For a server without DB Sync, omit `dbsync_url` and enable recompute-only mode:
+
+```json
+{
+  "store_url": "postgresql://yaci:dbpass@localhost:5432/yaci_store",
+  "store_schema": "yaci_store",
+  "skip_dbsync": true,
+  "reports_dir": "./reports",
+  "logs_dir": "./logs"
+}
+```
 
 ## Conway first epoch
 

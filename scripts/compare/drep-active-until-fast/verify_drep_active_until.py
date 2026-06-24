@@ -22,6 +22,7 @@ from common import (  # noqa: E402
     connect,
     exit_code,
     finish_result,
+    load_config,
     new_result,
     normalize_hash,
     redact_url,
@@ -821,8 +822,13 @@ Examples:
     parser.add_argument("--max-mismatches", type=int, default=None, help="Limit mismatch samples per epoch (0 = unlimited)")
 
     add_common_args(parser)
-    args = resolve_config(parser.parse_args())
-    args.skip_dbsync = bool(args.skip_dbsync)
+    parsed_args = parser.parse_args()
+    config_skip_dbsync = False
+    if parsed_args.config:
+        config_skip_dbsync = bool(load_config(parsed_args.config).get("skip_dbsync", False))
+
+    args = resolve_config(parsed_args)
+    args.skip_dbsync = bool(args.skip_dbsync) or config_skip_dbsync
     args.result_table = validate_table_name(args.result_table)
 
     if args.epoch is not None:
