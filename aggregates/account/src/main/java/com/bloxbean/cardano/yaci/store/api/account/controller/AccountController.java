@@ -39,7 +39,13 @@ import static com.bloxbean.cardano.yaci.core.util.Constants.LOVELACE;
 @RequestMapping("${apiPrefix}")
 @RequiredArgsConstructor
 @Slf4j
-@Tag(name = "Account API", description = "APIs for account related operations. This is an experimental module. Some apis may not be stable.")
+@Tag(name = "Account API",
+        description = "Account-related queries for Cardano addresses and stake accounts. " +
+                "Includes current and historical address balances, aggregated stake balances, live UTxO-based amounts, " +
+                "and full stake-account details (controlled ADA, withdrawable rewards, delegated pool).\n\n" +
+                "Depending on the endpoint, data is served from pre-aggregated balance tables, by live UTxO aggregation, " +
+                "or by querying the connected local Cardano node (n2c). Endpoints whose required feature flag is " +
+                "disabled return HTTP 503; see each endpoint description for specifics.")
 public class AccountController {
     private final AccountBalanceStorage accountBalanceStorage;
     private final AccountService accountService;
@@ -48,10 +54,21 @@ public class AccountController {
     private final AccountConfigService accountConfigService;
 
     @GetMapping("/addresses/{address}/balance")
-    @Operation(description = "Get current balance at an address")
+    @Operation(description =
+            "Returns the current balance (lovelace and native assets) at a payment-type address.\n\n" +
+            "Address: Bech32 payment address (`addr...`) — payment, base, enterprise, or pointer.\n\n" +
+            "Data source: pre-aggregated address balance table.\n\n" +
+            "Requires `store.account.balance-aggregation-enabled=true` AND `store.account.address-balance-enabled=true`; " +
+            "otherwise returns HTTP 503.\n\n" +
+            "Returns 404 if the address has no positive balance.")
     public Optional<AddressBalanceDto> getAddressBalance(@PathVariable @NonNull String address) {
         if (!accountStoreProperties.isBalanceAggregationEnabled())
-            throw new UnsupportedOperationException("Address balance aggregation is not enabled");
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "Balance aggregation is not enabled (store.account.balance-aggregation-enabled)");
+
+        if (!accountStoreProperties.isAddressBalanceEnabled())
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "Address balance aggregation is not enabled (store.account.address-balance-enabled)");
 
         var addresssBalances = accountBalanceStorage.getAddressBalance(address)
                 .stream()
@@ -67,7 +84,16 @@ public class AccountController {
     }
 
     @GetMapping("/accounts/{stakeAddress}/balance")
-    @Operation(description = "Get current balance at a stake address")
+    @Operation(description =
+            "Returns the current aggregated lovelace balance for a stake account. " +
+            "Withdrawable rewards are NOT included.\n\n" +
+            "Address: Bech32 stake address (`stake...`).\n\n" +
+            "Data source: pre-aggregated stake-address balance table.\n\n" +
+            "Requires `store.account.balance-aggregation-enabled=true` AND " +
+            "`store.account.stake-address-balance-enabled=true` " +
+            "(the latter controls whether the stake-address balance table is populated). " +
+            "If `balance-aggregation-enabled` is false, the endpoint returns HTTP 503.\n\n" +
+            "Returns an empty body when no positive balance exists for the stake address.")
     public Optional<StakeAddressBalance> getStakeAddressBalance(@PathVariable @NonNull String stakeAddress) {
         if (!accountStoreProperties.isBalanceAggregationEnabled())
             throw new UnsupportedOperationException("Address balance aggregation is not enabled");
@@ -77,10 +103,23 @@ public class AccountController {
     }
 
     @GetMapping("/addresses/{address}/{unit}/{timeInSec}/balance")
-    @Operation(description = "Get current balance at an address at a specific time. This is an experimental feature.")
+    @Operation(description =
+            "Returns the historical balance for a single asset `unit` at or before `timeInSec`.\n\n" +
+            "Address: Bech32 payment address (`addr...`).\n" +
+            "Unit: `lovelace` or hex `policyId+assetNameHex`.\n" +
+            "timeInSec: UNIX seconds.\n\n" +
+            "Data source: historical entries in the address balance table.\n\n" +
+            "Requires `store.account.balance-aggregation-enabled=true` AND `store.account.address-balance-enabled=true`; " +
+            "otherwise returns HTTP 503.\n\n" +
+            "Returns 404 if no record exists at the requested time.")
     public Optional<AddressBalanceDto> getAddressBalanceAtTime(@PathVariable String address,@PathVariable String unit,@PathVariable long timeInSec) {
         if (!accountStoreProperties.isBalanceAggregationEnabled())
-            throw new UnsupportedOperationException("Address balance aggregation is not enabled");
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "Balance aggregation is not enabled (store.account.balance-aggregation-enabled)");
+
+        if (!accountStoreProperties.isAddressBalanceEnabled())
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "Address balance aggregation is not enabled (store.account.address-balance-enabled)");
 
         var addressBalances = accountBalanceStorage.getAddressBalanceByTime(address, unit, timeInSec)
                 .filter(addressBalance -> addressBalance.getQuantity().compareTo(BigInteger.ZERO) > 0)
@@ -90,7 +129,17 @@ public class AccountController {
     }
 
     @GetMapping("/accounts/{stakeAddress}/{timeInSec}/balance")
-    @Operation(description = "Get current balance at a stake address at a specific time. This is an experimental feature.")
+    @Operation(description =
+            "Returns the historical aggregated lovelace balance for a stake account at or before " +
+            "`timeInSec`. Withdrawable rewards are NOT included.\n\n" +
+            "Address: Bech32 stake address (`stake...`).\n" +
+            "timeInSec: UNIX seconds.\n\n" +
+            "Data source: historical entries in the stake-address balance table.\n\n" +
+            "Requires `store.account.balance-aggregation-enabled=true` AND " +
+            "`store.account.stake-address-balance-enabled=true` " +
+            "(the latter controls whether the stake-address balance table is populated). " +
+            "If `balance-aggregation-enabled` is false, the endpoint returns HTTP 503.\n\n" +
+            "Returns 404 if no record exists at the requested time.")
     public StakeAddressBalance getStakeAddressBalanceAtTime(@PathVariable @NonNull String stakeAddress,
                                                             @PathVariable long timeInSec) {
         if (!accountStoreProperties.isBalanceAggregationEnabled())
@@ -103,10 +152,16 @@ public class AccountController {
     }
 
     @GetMapping("/accounts/{stakeAddress}")
-    @Operation(description = "Obtain information about a specific stake account." +
-            "It gets stake account balance from aggregated stake account balance if aggregation is enabled, " +
-            "otherwise it calculates the current lovelace balance by aggregating all current utxos for the stake address" +
-            "and get rewards amount directly from node.")
+    @Operation(description =
+            "Returns details for a stake account: `controlledAmount`, `withdrawableAmount`, and `poolId`.\n\n" +
+            "Address: Bech32 stake address (`stake...`). Returns 400 for any other prefix.\n\n" +
+            "`controlledAmount` = lovelace held by the stake credential + withdrawable rewards.\n\n" +
+            "Lovelace source: pre-aggregated stake-address balance table when " +
+            "`store.account.balance-aggregation-enabled=true`; otherwise computed at request time by summing all " +
+            "current UTxOs for the stake address (may be slow for accounts with many UTxOs).\n\n" +
+            "`withdrawableAmount` and `poolId`: obtained from the connected local Cardano node (n2c) via the " +
+            "`DelegationsAndRewardAccounts` query, with fallback to the AdaPot reward provider when available. " +
+            "If neither source is reachable, `poolId` is null and `withdrawableAmount` is 0.")
     public StakeAccountInfo getStakeAccountDetails(@PathVariable @NonNull String stakeAddress) {
         if (!stakeAddress.startsWith(Bech32Prefixes.STAKE_ADDR_PREFIX))
             throw new IllegalArgumentException("Invalid stake address");
@@ -140,8 +195,13 @@ public class AccountController {
     }
 
     @GetMapping("/addresses/{address}/amounts")
-    @Operation(description = "Get amounts at an address. For stake address, only lovelace is returned." +
-            "It calculates the current balance at the address by aggregating all currrent utxos for the stake address. It may be slow for addresses with too many utxos.")
+    @Operation(description =
+            "Returns the live amounts (lovelace and native assets) held at an address by summing all current UTxOs " +
+            "at request time.\n\n" +
+            "Address: any Bech32 address — payment (`addr...`) or stake (`stake...`).\n" +
+            "For stake addresses, only the lovelace entry is returned.\n\n" +
+            "Data source: live UTxO aggregation. Does NOT depend on the balance-aggregation flags, so it works even " +
+            "when address or stake balance aggregation is disabled. May be slow for addresses with very many UTxOs.")
     public List<Amount> getAddressAmounts(@PathVariable @NonNull String address) {
         List<Amount> amounts = utxoAccountService.getAmountsAtAddress(address);
         if (amounts == null || amounts.size() == 0)

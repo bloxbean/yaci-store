@@ -6,16 +6,22 @@ on:
   push:
     tags:
       - 'v*'
+
+concurrency:
+  group: maven-central-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Set up JDK 21
-        uses: actions/setup-java@v2
+        uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'liberica'
+          cache: 'gradle'
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
       - name: 'Get Version Number'
@@ -30,15 +36,24 @@ jobs:
           mkdir -p ~/.gradle/
           echo "${{secrets.SIGNING_KEY}}" > ~/.gradle/secring.gpg.b64
           base64 -d ~/.gradle/secring.gpg.b64 > ~/.gradle/secring.gpg
-      - name: Publish and close staging repository
-        continue-on-error: true
+      - name: Validate Maven Central artifacts
+        run: ./gradlew validateMavenCentralArtifacts -PskipSigning=true --no-parallel --warn --stacktrace
+      - name: Publish to Sonatype staging repository
         id: publish
         run: |
-          ./gradlew publishToSonatype closeSonatypeStagingRepository \
+          ./gradlew publishToSonatype \
             -Psigning.keyId=${{ secrets.SIGNING_KEY_ID }} \
             -Psigning.password=${{ secrets.SIGNING_PASSWORD }} \
             -Psigning.secretKeyRingFile=$(echo ~/.gradle/secring.gpg) \
-            --warn --stacktrace
+            --no-parallel --warn --stacktrace
+        env:
+          MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
+          MAVEN_PASSWORD: ${{ secrets.OSSRH_TOKEN }}
+      - name: Wait for Sonatype staging consistency
+        run: sleep 90
+      - name: Close Sonatype staging repository
+        continue-on-error: true
+        run: ./gradlew findSonatypeStagingRepository closeSonatypeStagingRepository --warn --stacktrace
         env:
           MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
           MAVEN_PASSWORD: ${{ secrets.OSSRH_TOKEN }}

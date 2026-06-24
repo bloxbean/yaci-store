@@ -1,0 +1,36 @@
+import { Callout } from 'nextra/components'
+
+# Database Indexes
+
+Some Blockfrost endpoints — address lookups, asset history, transaction filters — run faster with extra database indexes that are not part of the default index set. These optional indexes ship as `blockfrost-index` and can be applied through the Admin CLI.
+
+<Callout type="info">
+Indexes are recommended for production use. Without them, some endpoints still work but can be slow on large datasets, especially on mainnet.
+</Callout>
+
+## Apply the Blockfrost indexes
+
+Run the Admin CLI after the initial sync is complete:
+
+```bash
+./admin-cli.sh apply-optional-indexes --indexes blockfrost-index
+```
+
+In an interactive Admin CLI prompt, run the same command without the script name:
+
+```bash
+yaci-store> apply-optional-indexes --indexes blockfrost-index
+```
+
+The command reads `blockfrost-index.yml` from the classpath. You can also pass a custom YAML file with `--index-files`.
+
+## When to apply
+
+- Run it once after the initial sync and before exposing the Blockfrost API to clients.
+- Run it again after upgrading if the release adds new Blockfrost indexes.
+- Avoid running it during the initial sync because index creation can slow down writes.
+
+<Callout type="warning">
+`verify-indexes` checks the default `index.yml` and `extra-index.yml` sets. It does not check `blockfrost-index.yml`.
+</Callout>
+

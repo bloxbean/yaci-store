@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.store.blockfrost.address.storage.BFAddressStora
 import com.bloxbean.cardano.yaci.store.blockfrost.address.storage.impl.model.BFAddressTotal;
 import com.bloxbean.cardano.yaci.store.blockfrost.common.util.AmountsJsonUtil;
 import com.bloxbean.cardano.yaci.store.blockfrost.common.util.BlockfrostDialectUtil;
+import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.common.util.AddressUtil;
 import com.bloxbean.cardano.yaci.store.common.util.Tuple;
@@ -26,6 +27,8 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -35,6 +38,7 @@ import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.ADDRESS_UTXO;
 import static com.bloxbean.cardano.yaci.store.transaction.jooq.Tables.TRANSACTION;
 import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.TX_INPUT;
 import static com.bloxbean.cardano.yaci.store.account.jooq.Tables.ADDRESS_BALANCE_CURRENT;
+import static com.bloxbean.cardano.yaci.store.common.Constants.QUERY_TIMEOUT_SECONDS;
 
 @Component
 @RequiredArgsConstructor
@@ -65,6 +69,7 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
                 .orderBy(orderBy)
                 .limit(count)
                 .offset(offset)
+                .queryTimeout(QUERY_TIMEOUT_SECONDS)
                 .fetchInto(String.class);
     }
 
@@ -83,33 +88,96 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
     public List<BFAddressTransactionDTO> findAddressTransactions(String address, int page, int count, Order order, String from, String to) {
         int offset = Math.max(page, 0) * count;
         Table<?> combinedTx = buildAddressTxTable(address);
-        Field<String> txHashField = combinedTx.field("tx_hash", String.class);
+        Field<String> combinedTxHash = combinedTx.field("tx_hash", String.class);
+        Field<Long> combinedBlock = combinedTx.field("block", Long.class);
 
         BlockRef fromRef = parseBlockRef(from);
         BlockRef toRef = parseBlockRef(to);
-        Condition rangeCondition = buildRangeCondition(fromRef, toRef);
 
-        Field<Integer> txIndexField = DSL.coalesce(TRANSACTION.TX_INDEX, 0);
-        Field<Long> txIndexSelect = txIndexField.cast(Long.class).as("txIndex");
-        Field<Long> blockField = TRANSACTION.BLOCK.as("blockHeight");
-        SortField<?> blockOrder = order == Order.desc ? blockField.desc() : blockField.asc();
+        Field<Long> pageBlock = DSL.max(combinedBlock).as("blockHeight");
+        SortField<?> pageBlockOrder = order == Order.desc ? pageBlock.desc() : pageBlock.asc();
+        SortField<?> pageHashOrder = order == Order.desc ? combinedTxHash.desc() : combinedTxHash.asc();
+
+        List<String> pagedTxHashes = dsl.select(combinedTxHash, pageBlock)
+                .from(combinedTx)
+                .where(buildBlockRangeCondition(combinedBlock, fromRef, toRef))
+                .groupBy(combinedTxHash)
+                .orderBy(pageBlockOrder, pageHashOrder)
+                .limit(count)
+                .offset(offset)
+                .queryTimeout(QUERY_TIMEOUT_SECONDS)
+                .fetch(combinedTxHash);
+
+        if (pagedTxHashes.isEmpty()) {
+            return List.of();
+        }
+
+        Field<Long> txIndexSelect = DSL.coalesce(TRANSACTION.TX_INDEX, 0).cast(Long.class).as("txIndex");
+        SortField<?> blockOrder = order == Order.desc ? TRANSACTION.BLOCK.desc() : TRANSACTION.BLOCK.asc();
         SortField<?> txIndexOrder = order == Order.desc ? txIndexSelect.desc() : txIndexSelect.asc();
 
-        return dsl.selectDistinct(
+        return dsl.select(
                 TRANSACTION.TX_HASH.as("txHash"),
                 txIndexSelect,
-                blockField,
+                TRANSACTION.BLOCK.as("blockHeight"),
                 TRANSACTION.BLOCK_TIME.as("blockTime")
         )
-        .from(combinedTx)
-        .join(TRANSACTION)
-        .on(TRANSACTION.TX_HASH.eq(txHashField))
-        .where(rangeCondition)
+        .from(TRANSACTION)
+        .where(TRANSACTION.TX_HASH.in(pagedTxHashes))
+        .and(buildRangeCondition(fromRef, toRef))
         .orderBy(blockOrder, txIndexOrder)
-        .limit(count)
-        .offset(offset)
+        .queryTimeout(QUERY_TIMEOUT_SECONDS)
         .fetchInto(BFAddressTransactionDTO.class);
 }
+
+    @Override
+    public List<AddressUtxo> findAddressUtxos(String address, int page, int count, Order order) {
+        Condition addrCondition = addressCondition(address, ADDRESS_UTXO.OWNER_ADDR, ADDRESS_UTXO.OWNER_ADDR_FULL);
+        return fetchAddressUtxos(addrCondition, DSL.trueCondition(), page, count, order);
+    }
+
+    @Override
+    public List<AddressUtxo> findAddressUtxosForAsset(String address, String unit, int page, int count, Order order) {
+        Condition addrCondition = addressCondition(address, ADDRESS_UTXO.OWNER_ADDR, ADDRESS_UTXO.OWNER_ADDR_FULL);
+        return fetchAddressUtxos(addrCondition, unitCondition(unit), page, count, order);
+    }
+
+    private List<AddressUtxo> fetchAddressUtxos(Condition addrCondition, Condition extraCondition,
+                                               int page, int count, Order order) {
+        int offset = Math.max(page, 0) * count;
+        var fields = new ArrayList<>(Arrays.asList(ADDRESS_UTXO.fields()));
+        // Workaround: AddressUtxo.blockNumber maps from the column jOOQ names `block`.
+        fields.add(ADDRESS_UTXO.BLOCK.as("blockNumber"));
+
+        boolean desc = order == Order.desc;
+        SortField<?> slotSort = desc ? ADDRESS_UTXO.SLOT.desc() : ADDRESS_UTXO.SLOT.asc();
+        SortField<?> txHashSort = desc ? ADDRESS_UTXO.TX_HASH.desc() : ADDRESS_UTXO.TX_HASH.asc();
+        SortField<?> outputIndexSort = desc ? ADDRESS_UTXO.OUTPUT_INDEX.desc() : ADDRESS_UTXO.OUTPUT_INDEX.asc();
+
+        return dsl.select(fields)
+                .from(ADDRESS_UTXO)
+                .leftJoin(TX_INPUT)
+                    .on(TX_INPUT.TX_HASH.eq(ADDRESS_UTXO.TX_HASH))
+                    .and(TX_INPUT.OUTPUT_INDEX.eq(ADDRESS_UTXO.OUTPUT_INDEX))
+                .where(addrCondition)
+                .and(TX_INPUT.TX_HASH.isNull())
+                .and(extraCondition)
+                .orderBy(slotSort, txHashSort, outputIndexSort)
+                .offset(offset)
+                .limit(count)
+                .queryTimeout(QUERY_TIMEOUT_SECONDS)
+                .fetch()
+                .into(AddressUtxo.class);
+    }
+
+    private Condition unitCondition(String unit) {
+        if (BlockfrostDialectUtil.isPostgres(dsl)) {
+            return DSL.condition("{0} @> {1}::jsonb", ADDRESS_UTXO.AMOUNTS,
+                    DSL.val("[{\"unit\": \"" + unit + "\"}]"));
+        }
+        return ADDRESS_UTXO.AMOUNTS.cast(String.class).contains("\"unit\": \"" + unit + "\"")
+                .or(ADDRESS_UTXO.AMOUNTS.cast(String.class).contains("\"unit\":\"" + unit + "\""));
+    }
 
     /**
      * Get received/sent totals and transaction count for an address.
@@ -128,6 +196,7 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
             Table<?> combinedTx = buildAddressTxTable(address);
             Long txCount = dsl.select(DSL.countDistinct(DSL.field("tx_hash", String.class)))
                     .from(combinedTx)
+                    .queryTimeout(QUERY_TIMEOUT_SECONDS)
                     .fetchOne(0, Long.class);
 
             long count = txCount == null ? 0L : txCount;
@@ -233,7 +302,8 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
 
         var finalQuery = dsl.select(combinedUnit, combinedSum)
                 .from(combined)
-                .groupBy(combinedUnit);
+                .groupBy(combinedUnit)
+                .queryTimeout(QUERY_TIMEOUT_SECONDS);
 
         return finalQuery.fetchMap(combinedUnit, combinedSum)
                 .entrySet()
@@ -323,7 +393,8 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
         var finalQuery = dsl.with(unspentCte)
                 .select(combinedUnit, combinedSum)
                 .from(combined)
-                .groupBy(combinedUnit);
+                .groupBy(combinedUnit)
+                .queryTimeout(QUERY_TIMEOUT_SECONDS);
 
         return finalQuery.fetchMap(combinedUnit, combinedSum)
                 .entrySet()
@@ -399,7 +470,7 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
                 .and(TX_INPUT.OUTPUT_INDEX.eq(ADDRESS_UTXO.OUTPUT_INDEX))
                 .where(addressCondition);
 
-        return addressUtxoTx.union(spentTx).asTable("combined_tx");
+        return addressUtxoTx.unionAll(spentTx).asTable("combined_tx");
     }
     /**
      * Build address matching condition, including owner_addr_full for long Byron addresses.
@@ -469,6 +540,17 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
                             .or(TRANSACTION.BLOCK.eq(to.block)
                                     .and(DSL.coalesce(TRANSACTION.TX_INDEX, 0).le(toIndex)))
             );
+        }
+        return condition;
+    }
+
+    private Condition buildBlockRangeCondition(Field<Long> blockField, BlockRef from, BlockRef to) {
+        Condition condition = DSL.trueCondition();
+        if (from != null) {
+            condition = condition.and(blockField.ge(from.block()));
+        }
+        if (to != null) {
+            condition = condition.and(blockField.le(to.block()));
         }
         return condition;
     }

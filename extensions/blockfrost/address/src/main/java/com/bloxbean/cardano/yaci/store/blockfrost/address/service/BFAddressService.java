@@ -94,7 +94,9 @@ public class BFAddressService {
     }
 
     public List<BFAddressUtxoDTO> getAddressUtxos(@NonNull String address, int page, int count, Order order) {
-        List<AddressUtxo> addressUtxos = utxoStorageReader.findUtxoByAddress(address, page, count, order);
+        // Served by the blockfrost reader (not the utxo store) so UTXOs come back in Blockfrost-compatible
+        // on-chain order (slot, tx_index, output_index); the utxo store cannot reference transaction.tx_index.
+        List<AddressUtxo> addressUtxos = bfAddressStorageReader.findAddressUtxos(address, page, count, order);
 
         return addressUtxos.stream()
                 .map(BFAddressUtxoMapper.INSTANCE::toBFAddressUtxoDTO)
@@ -102,7 +104,8 @@ public class BFAddressService {
     }
 
     public List<BFAddressUtxoDTO> getAddressUtxosForAsset(@NonNull String address, @NonNull String asset, int page, int count, Order order) {
-        List<AddressUtxo> addressUtxos = utxoStorageReader.findUtxoByAddressAndAsset(address, asset, page, count, order);
+        // See getAddressUtxos: routed through the blockfrost reader for Blockfrost-compatible on-chain ordering.
+        List<AddressUtxo> addressUtxos = bfAddressStorageReader.findAddressUtxosForAsset(address, asset, page, count, order);
 
         return addressUtxos.stream()
                 .map(BFAddressUtxoMapper.INSTANCE::toBFAddressUtxoDTO)

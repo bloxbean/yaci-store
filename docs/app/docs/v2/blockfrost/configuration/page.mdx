@@ -1,0 +1,93 @@
+import { Callout } from 'nextra/components'
+
+# Configuration
+
+## Properties
+
+| Property | Default | Description |
+|---|---|---|
+| `store.extensions.blockfrost.enabled` | `false` | Master switch. The Blockfrost auto-configuration only loads when this is `true`. |
+| `store.extensions.blockfrost.account.enabled` | `true` | Account / stake-address endpoints (`/accounts`). |
+| `store.extensions.blockfrost.address.enabled` | `true` | Address and address-UTXO endpoints (`/addresses`). |
+| `store.extensions.blockfrost.asset.enabled` | `true` | Native asset and policy endpoints (`/assets`). |
+| `store.extensions.blockfrost.blocks.enabled` | `true` | Block and block-tx endpoints (`/blocks`). |
+| `store.extensions.blockfrost.epoch.enabled` | `true` | Epoch and protocol-parameter endpoints (`/epochs`). |
+| `store.extensions.blockfrost.metadata.enabled` | `true` | Transaction metadata-by-label endpoints (`/metadata/txs`). |
+| `store.extensions.blockfrost.scripts.enabled` | `true` | Script and datum endpoints (`/scripts`). |
+| `store.extensions.blockfrost.transaction.enabled` | `true` | Transaction read endpoints (`/txs`) and tx submit (`/tx/submit`). |
+| `store.extensions.blockfrost.util.enabled` | `true` | Tx execution-units evaluate and xpub-derive utilities (`/utils`). |
+| `blockfrost.apiPrefix` | _(none — required)_ | URL prefix prepended to every Blockfrost controller path. Set by the `blockfrost` profile to `/api/v1/blockfrost`. |
+
+<Callout type="info">
+`store.extensions.blockfrost.enabled` gates the entire extension. When it is `false` (the default), the auto-configuration does not load and the sub-module flags have no effect. When it is `true`, all sub-module flags default to `true`, so a single line is enough to enable the full surface.
+</Callout>
+
+## Profile shortcut
+
+A ready-made profile lives at `config/application-blockfrost.properties` (and the same file under `docker/config/`). Activate it instead of editing your own configuration:
+
+```bash
+SPRING_PROFILES_ACTIVE=ledger-state,blockfrost
+```
+
+The profile sets `store.extensions.blockfrost.enabled=true` and overrides `blockfrost.apiPrefix=/api/v1/blockfrost` so the Blockfrost endpoints don't collide with yaci-store's own `/api/v1/...` controllers.
+
+## API base path
+
+`blockfrost.apiPrefix` is a required property when the extension is enabled — every Blockfrost controller is mapped under `${blockfrost.apiPrefix}`. It has no default; if missing, the application fails to start.
+
+The `blockfrost` profile sets it for you:
+
+```properties
+blockfrost.apiPrefix=/api/v1/blockfrost
+```
+
+Set it explicitly when not using that profile:
+
+```properties
+blockfrost.apiPrefix=/api/v1/blockfrost
+```
+
+<Callout type="info">
+Yaci-store's native stores-api controllers use a separate `apiPrefix` property (`/api/v1` in the bundled apps). Keeping `blockfrost.apiPrefix` distinct (e.g. `/api/v1/blockfrost`) prevents path collisions between the two surfaces.
+</Callout>
+
+## Store dependencies
+
+Blockfrost controllers read from data the underlying yaci-store modules have indexed. The bundled `applications/all` distribution enables every store by default, so no extra wiring is needed.
+<Callout type="info">
+**Recommended: activate `ledger-state` alongside `blockfrost`.** Account info, rewards, and epoch-stake data depend on values that are only computed when the `ledger-state` profile is active. Without it, those endpoints return empty or partial responses.
+
+```bash
+SPRING_PROFILES_ACTIVE=ledger-state,blockfrost
+```
+</Callout>
+
+## Transaction submit
+
+`POST /tx/submit` routes through the `submit` component. It tries backends in this order; the first one configured wins:
+
+1. **Submit API** — set `store.cardano.submit-api-url` (Recommended)
+2. **Ogmios** — set `store.cardano.ogmios-url`.
+3. **Local node-to-client socket** — set `store.cardano.n2c-node-socket-path` (or `store.cardano.n2c-host` + `store.cardano.n2c-port`).
+
+Configuring more than one is fine — the priority above decides which is used. If none is configured, `/tx/submit` returns `500`. See `config/application.properties` for the full submission options.
+
+## Transaction evaluation
+
+`POST /utils/txs/evaluate*` runs through a separate evaluator selected by `store.submit.tx-evaluator-mode`:
+
+| Value | Backend | Requires |
+|---|---|---|
+| `SCALUS` _(default)_ | Local Scalus evaluator embedded in the JVM | None |
+| `OGMIOS` | Remote Ogmios | `store.cardano.ogmios-url` |
+
+The evaluator setting is independent of the submit priority above — for example, you can submit through Submit API while evaluating with Scalus locally.
+
+## Health check
+
+After enabling, confirm the API is reachable (path depends on your `blockfrost.apiPrefix`):
+
+```bash
+curl http://localhost:8080/api/v1/blockfrost/blocks/latest
+```

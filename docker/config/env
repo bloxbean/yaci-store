@@ -12,6 +12,12 @@
 ## Enable both Ledger State and Analytics profiles
 #SPRING_PROFILES_ACTIVE=ledger-state,analytics
 
+## Enable Ledger State and Blockfrost profiles
+#SPRING_PROFILES_ACTIVE=ledger-state,blockfrost
+
+## Enable Ledger State, Analytics, Blockfrost profiles
+#SPRING_PROFILES_ACTIVE=ledger-state,analytics,blockfrost
+
 ## Enable polyglot plugins (Python, JS) support.
 # JDK_JAVA_OPTIONS=${JDK_JAVA_OPTIONS} -Dloader.path=plugins,plugins/lib,plugins/ext-jars
 

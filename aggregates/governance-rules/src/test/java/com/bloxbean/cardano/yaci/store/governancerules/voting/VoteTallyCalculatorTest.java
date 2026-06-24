@@ -83,7 +83,7 @@ class VoteTallyCalculatorTest {
     void computeSPOTalliesPostBootstrapPhaseWhenActionIsNotHardForkInit() {
         VotingData.SPOVotes votes = VotingData.SPOVotes.builder()
                 .yesVoteStake(BigInteger.valueOf(120))
-                .delegateToAutoAbstainDRepStake(BigInteger.ZERO)
+                .delegateToAutoAbstainDRepStake(BigInteger.valueOf(15))
                 .delegateToNoConfidenceDRepStake(BigInteger.ZERO)
                 .abstainVoteStake(BigInteger.valueOf(50))
                 .doNotVoteStake(BigInteger.valueOf(10))
@@ -93,8 +93,26 @@ class VoteTallyCalculatorTest {
         VoteTallies.SPOTallies tallies = VoteTallyCalculator.computeSPOTallies(votes, GovActionType.UPDATE_COMMITTEE, false);
 
         assertEquals(BigInteger.valueOf(120), tallies.getTotalYesStake());
-        assertEquals(BigInteger.valueOf(50), tallies.getTotalAbstainStake());
-        assertEquals(BigInteger.valueOf(30), tallies.getTotalNoStake());
+        assertEquals(BigInteger.valueOf(65), tallies.getTotalAbstainStake());
+        assertEquals(BigInteger.valueOf(15), tallies.getTotalNoStake());
+    }
+
+    @Test
+    void computeSPOTalliesHardForkInitTreatsNonVotingSPOsAsNoEvenWhenDelegatedToAlwaysAbstain() {
+        VotingData.SPOVotes votes = VotingData.SPOVotes.builder()
+                .yesVoteStake(BigInteger.valueOf(100))
+                .delegateToAutoAbstainDRepStake(BigInteger.valueOf(30))
+                .delegateToNoConfidenceDRepStake(BigInteger.ZERO)
+                .abstainVoteStake(BigInteger.valueOf(10))
+                .doNotVoteStake(BigInteger.valueOf(20))
+                .totalStake(BigInteger.valueOf(200))
+                .build();
+
+        VoteTallies.SPOTallies tallies = VoteTallyCalculator.computeSPOTallies(votes, GovActionType.HARD_FORK_INITIATION_ACTION, false);
+
+        assertEquals(BigInteger.valueOf(100), tallies.getTotalYesStake());
+        assertEquals(BigInteger.valueOf(10), tallies.getTotalAbstainStake());
+        assertEquals(BigInteger.valueOf(90), tallies.getTotalNoStake());
     }
 
     @Test
