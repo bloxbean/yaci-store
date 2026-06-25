@@ -701,6 +701,7 @@ public class DRepExpiryUtilTest {
         );
         // Non-dormant epochs are epochs with proposal state visible at the boundary.
         var nonDormantProposalEpochs = new HashSet<Integer>();
+        nonDormantProposalEpochs.add(493);
         nonDormantProposalEpochs.add(581);
         nonDormantProposalEpochs.addAll(rangeClosed(593, 598));
 
