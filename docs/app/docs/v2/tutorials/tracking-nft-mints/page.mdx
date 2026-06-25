@@ -223,27 +223,6 @@ Replace `REPLACE_WITH_YOUR_POLICY_ID` with the 56-character hex policy ID you wa
 - The `asset.save` filter keeps a row only when its `policy` matches yours **and** the operation is a mint (`mintType` is the `MINT`/`BURN` enum — we compare with `mintType.name() == "MINT"`). Change it to `"BURN"` to track burns instead, or drop that clause to capture both.
 - The `metadata.save` filter keeps the `721` label, which is the [CIP-25](https://cips.cardano.org/cip/CIP-25) standard for NFT metadata.
 
-<Callout type="info">
-The `label == "721"` filter keeps CIP-25 metadata for **all** policies, not just yours. That's usually fine — metadata rows are small. To narrow metadata to a single policy, replace the inline expression with a short MVEL function that inspects the metadata body:
-
-```yaml
-      metadata.save:
-        - name: "Keep CIP-25 metadata for our policy"
-          lang: mvel
-          inline-script: |
-            result = [];
-            for (item : items) {
-                if (item.label == "721" && item.body != null
-                        && item.body.contains("REPLACE_WITH_YOUR_POLICY_ID")) {
-                    result.add(item);
-                }
-            }
-            return result;
-```
-
-The `inline-script` form receives the whole list as `items` and returns the filtered list — use it whenever a one-line `expression` isn't enough.
-</Callout>
-
 ---
 
 ## Step 6: Start Yaci Store
@@ -303,8 +282,7 @@ Let's verify only your policy's mints were stored.
    ```sql
    SELECT COUNT(DISTINCT asset_name) AS distinct_assets,
           SUM(quantity)              AS total_minted
-   FROM assets
-   WHERE mint_type = 'MINT';
+   FROM assets;
    ```
 
 5. **Read the CIP-25 metadata JSON**
@@ -312,7 +290,6 @@ Let's verify only your policy's mints were stored.
    ```sql
    SELECT tx_hash, slot, body
    FROM transaction_metadata
-   WHERE label = '721'
    ORDER BY slot DESC
    LIMIT 10;
    ```
