@@ -12,10 +12,11 @@ import java.util.List;
 @Setter
 @ConfigurationProperties(prefix = "store.assets.ext", ignoreUnknownFields = true)
 public class AssetsExtProperties {
-    // Defaults mirror the @ConditionalOnProperty gates so config metadata matches runtime:
-    // master + CIP-68 default on (matchIfMissing = true, like the core stores), while CIP-26
-    // (external GitHub-registry sync) and CIP-113 (pre-mainnet) default off.
-    private boolean enabled = true;
+    // Defaults mirror the @ConditionalOnProperty gates so config metadata matches runtime.
+    // Blockfrost-extension pattern: the master flag is OFF by default; the sub-flags CIP-26 and
+    // CIP-68 default ON, so enabling the master flag alone yields the default behaviour. CIP-113
+    // is the exception and stays OFF until it is live on mainnet.
+    private boolean enabled = false;
     private Cip26 cip26 = new Cip26();
     private Cip68 cip68 = new Cip68();
     private Cip113 cip113 = new Cip113();
@@ -44,11 +45,12 @@ public class AssetsExtProperties {
     @Getter
     @Setter
     public static final class Cip26 {
-        // Disabled by default. Operators must explicitly opt in via
-        // store.assets.ext.cip26.enabled=true. The off-chain GitHub registry
-        // is a separate trust source from the chain itself; defaulting it on
-        // pulled in mainnet metadata for projects that didn't ask for it.
-        private boolean enabled = false;
+        // Enabled by default (blockfrost-extension pattern): once the master flag
+        // store.assets.ext.enabled is on, CIP-26 sync runs as part of the default behaviour.
+        // The git-* fields below stay null so Cip26NetworkDefaults resolves the correct
+        // registry per protocol-magic — that per-network resolution, not a default-off flag,
+        // is what prevents a preprod node from indexing mainnet metadata.
+        private boolean enabled = true;
         @Nullable private String gitOrganization;
         @Nullable private String gitProjectName;
         @Nullable private String gitMappingsFolder;

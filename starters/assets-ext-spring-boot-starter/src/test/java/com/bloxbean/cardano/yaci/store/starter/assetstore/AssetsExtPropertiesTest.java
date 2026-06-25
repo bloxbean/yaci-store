@@ -42,13 +42,13 @@ class AssetsExtPropertiesTest {
     }
 
     @Test
-    @DisplayName("CIP-26 is disabled by default — operators must opt in explicitly")
-    void cip26IsDisabledByDefault() {
-        // Team decision: the off-chain GitHub registry is a separate trust source
-        // from the chain. Default-on pulled mainnet metadata into stores that
-        // didn't ask for it. Flipping this back to true requires an equivalent
-        // discussion + release note.
-        assertThat(new AssetsExtProperties.Cip26().isEnabled()).isFalse();
+    @DisplayName("CIP-26 is enabled by default once the master flag is on (blockfrost pattern)")
+    void cip26IsEnabledByDefault() {
+        // Aligned with the blockfrost extension: sub-flags default on, so enabling the
+        // master flag (store.assets.ext.enabled) alone gives the default behaviour. The
+        // safeguard against a preprod node indexing mainnet metadata is the per-network
+        // git-* resolution (see cip26GitFieldsAreNullByDefault), not a default-off flag.
+        assertThat(new AssetsExtProperties.Cip26().isEnabled()).isTrue();
     }
 
     @Test
@@ -72,12 +72,12 @@ class AssetsExtPropertiesTest {
     }
 
     @Test
-    @DisplayName("master extension flag is enabled by default (auto-enables on the classpath)")
-    void rootEnabledIsTrueByDefault() {
-        // Mirrors the AssetsExtConfiguration @ConditionalOnProperty(matchIfMissing = true)
-        // gate: like the core stores (blocks, utxo, ...), the extension auto-enables when
-        // the starter is on the classpath. The standalone build opts out explicitly in
-        // application-all.properties; CIP-26/CIP-113 stay off via their own defaults.
-        assertThat(new AssetsExtProperties().isEnabled()).isTrue();
+    @DisplayName("master extension flag is disabled by default (blockfrost pattern — opt in via one flag)")
+    void rootEnabledIsFalseByDefault() {
+        // Mirrors the AssetsExtConfiguration @ConditionalOnProperty(matchIfMissing = false)
+        // master gate, matching the blockfrost extension (BFAutoConfiguration): the whole
+        // extension stays off until an operator sets store.assets.ext.enabled=true, which
+        // then brings up CIP-26 + CIP-68 by default (CIP-113 stays off).
+        assertThat(new AssetsExtProperties().isEnabled()).isFalse();
     }
 }

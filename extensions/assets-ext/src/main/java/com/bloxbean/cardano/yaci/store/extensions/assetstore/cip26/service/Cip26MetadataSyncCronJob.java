@@ -19,7 +19,7 @@ import java.util.concurrent.TimeUnit;
  */
 @Service
 @Slf4j
-@ConditionalOnProperty(name = "store.assets.ext.cip26.enabled", havingValue = "true", matchIfMissing = false)
+@ConditionalOnProperty(name = "store.assets.ext.cip26.enabled", havingValue = "true", matchIfMissing = true)
 @ReadOnly(false)
 public class Cip26MetadataSyncCronJob implements Runnable {
 

@@ -17,16 +17,16 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 
 @Configuration
-// matchIfMissing = true: presence of the starter on the classpath enables the extension,
-// mirroring the core stores (BlocksStoreConfiguration, UtxoStoreConfiguration, etc., all
-// matchIfMissing = true). The cheap on-chain work (CIP-68) then runs by default, while the
-// per-CIP gates keep the things with external/side effects opt-in: CIP-26's GitHub-registry
-// sync cron and CIP-113 (not yet live on mainnet) both default off (matchIfMissing = false).
-// The standalone build sets store.assets.ext.enabled explicitly in application-all.properties.
+// Master gate, blockfrost-extension pattern (see BFAutoConfiguration): the master flag is
+// OFF by default (matchIfMissing = false), so enabling the single store.assets.ext.enabled
+// flag is the one opt-in an operator needs. The per-CIP sub-flags then default ON
+// (matchIfMissing = true) for CIP-26 and CIP-68, so the master flag alone gives the default
+// behaviour. CIP-113 is the one exception — it stays OFF by default (matchIfMissing = false)
+// until it is live on mainnet.
 @ConditionalOnProperty(
         name = "store.assets.ext.enabled",
         havingValue = "true",
-        matchIfMissing = true
+        matchIfMissing = false
 )
 @ComponentScan(basePackages = {"com.bloxbean.cardano.yaci.store.extensions.assetstore"})
 @EnableJpaRepositories(basePackages = {"com.bloxbean.cardano.yaci.store.extensions.assetstore"})
