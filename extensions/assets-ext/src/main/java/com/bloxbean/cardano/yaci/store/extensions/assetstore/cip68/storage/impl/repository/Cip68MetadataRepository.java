@@ -25,7 +25,7 @@ public interface Cip68MetadataRepository extends JpaRepository<Cip68Metadata, Ci
      * later updates happened to be co-minted alongside a 222-prefixed NFT will have its newest
      * row stored under label 222). Filtering by label here would silently return stale metadata.
      */
-    Optional<Cip68Metadata> findFirstByPolicyIdAndAssetNameOrderBySlotDesc(
+    Optional<Cip68Metadata> findFirstByPolicyIdAndAssetNameOrderBySlotDescTxIndexDesc(
             String policyId, String assetName);
 
     /**
@@ -39,13 +39,13 @@ public interface Cip68MetadataRepository extends JpaRepository<Cip68Metadata, Ci
      * Uses {@code ROW_NUMBER() OVER} window function for per-pair dedup. Portable across
      * PostgreSQL, H2, and MySQL 8+.
      * <p>
-     * No label filter — see {@link #findFirstByPolicyIdAndAssetNameOrderBySlotDesc} for why.
+     * No label filter — see {@link #findFirstByPolicyIdAndAssetNameOrderBySlotDescTxIndexDesc} for why.
      *
      * @param concatenatedKeys list of {@code policy_id || asset_name} keys (reference-NFT asset names)
      * @return one entity per matching concatenated key; pairs with no data are omitted
      */
     @Query(value = "SELECT * FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY policy_id, asset_name " +
-            "ORDER BY slot DESC) AS rn FROM cip68_metadata " +
+            "ORDER BY slot DESC, tx_index DESC) AS rn FROM cip68_metadata " +
             "WHERE CONCAT(policy_id, asset_name) IN (:concatenatedKeys)) ranked WHERE rn = 1",
             nativeQuery = true)
     List<Cip68Metadata> findLatestByConcatenatedKeys(

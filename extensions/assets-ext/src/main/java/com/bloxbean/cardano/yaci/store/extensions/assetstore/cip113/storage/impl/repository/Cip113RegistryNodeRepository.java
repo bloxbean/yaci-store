@@ -30,23 +30,28 @@ import java.util.Optional;
 public interface Cip113RegistryNodeRepository extends JpaRepository<Cip113RegistryNode, Cip113RegistryNodeId> {
 
     /**
-     * Returns the most recent registry node state (highest slot) for a given key.
+     * Returns the most recent registry node state for a given key — highest slot, and within that
+     * slot the highest tx_index (so intra-block updates resolve deterministically to the last one).
      * Callers typically pass the 56-hex policy ID of the token they're looking up.
      */
-    Optional<Cip113RegistryNode> findFirstByKeyOrderBySlotDesc(String key);
+    Optional<Cip113RegistryNode> findFirstByKeyOrderBySlotDescTxIndexDesc(String key);
 
     /**
-     * Returns the latest registry node state for each of the given keys — one row per key,
-     * the row with the highest slot. Written as JPQL with a correlated subquery so that the
-     * reserved-word {@code key} identifier does not need dialect-specific quoting in the SQL.
+     * Returns the latest registry node state for each of the given keys — exactly one row per key.
+     * "Latest" = highest slot, and within that slot the highest tx_index, so the (key, slot, tx_index)
+     * history collapses to a single deterministic current-state row per key. The two correlated
+     * subqueries pin the row to MAX(slot) then MAX(tx_index) within that slot; since
+     * (key, slot, tx_index) is unique this yields one row per key and never a duplicate-key collision
+     * downstream. Written as JPQL so the reserved-word {@code key} identifier needs no dialect quoting.
      *
-     * <p>The correlated {@code MAX(slot)} subquery is efficient given the
-     * {@code (key, slot)} portion of the primary key; PostgreSQL / H2 / MySQL all plan this
-     * as an index-backed per-key lookup.
+     * <p>Index-backed per-key lookups on PostgreSQL / H2 / MySQL given the
+     * {@code (key, slot, tx_index)} primary key.
      */
     @Query("SELECT e FROM Cip113RegistryNode e " +
             "WHERE e.key IN :keys " +
-            "AND e.slot = (SELECT MAX(e2.slot) FROM Cip113RegistryNode e2 WHERE e2.key = e.key)")
+            "AND e.slot = (SELECT MAX(e2.slot) FROM Cip113RegistryNode e2 WHERE e2.key = e.key) " +
+            "AND e.txIndex = (SELECT MAX(e3.txIndex) FROM Cip113RegistryNode e3 " +
+            "WHERE e3.key = e.key AND e3.slot = e.slot)")
     List<Cip113RegistryNode> findLatestByKeys(@Param("keys") Collection<String> keys);
 
     /**

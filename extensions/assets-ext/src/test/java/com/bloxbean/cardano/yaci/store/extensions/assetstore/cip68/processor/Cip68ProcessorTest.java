@@ -35,6 +35,7 @@ class Cip68ProcessorTest {
     private static final String POLICY_ID = "aabbccdd11223344aabbccdd11223344aabbccdd11223344aabbccdd";
     private static final String REF_NFT_ASSET_NAME = "000643b0464c4454";
     private static final String TX_HASH = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
+    private static final int TX_INDEX = 3;
 
     @Mock
     private Cip68TokenService cip68TokenService;
@@ -65,6 +66,7 @@ class Cip68ProcessorTest {
 
             AddressUtxo utxo = AddressUtxo.builder()
                     .txHash(TX_HASH)
+                    .txIndex(TX_INDEX)
                     .inlineDatum(datum)
                     .amounts(List.of(refNftAmt))
                     .build();
@@ -83,6 +85,8 @@ class Cip68ProcessorTest {
             assertThat(saved.getPolicyId()).isEqualTo(POLICY_ID);
             assertThat(saved.getAssetName()).isEqualTo(REF_NFT_ASSET_NAME);
             assertThat(saved.getSlot()).isEqualTo(100L);
+            assertThat(saved.getTxHash()).isEqualTo(TX_HASH);
+            assertThat(saved.getTxIndex()).isEqualTo(TX_INDEX);
             assertThat(saved.getName()).isEqualTo("TestToken");
             assertThat(saved.getDescription()).isEqualTo("A test token");
             assertThat(saved.getTicker()).isEqualTo("TST");
@@ -122,6 +126,7 @@ class Cip68ProcessorTest {
 
             AddressUtxo utxo = AddressUtxo.builder()
                     .txHash(TX_HASH)
+                    .txIndex(TX_INDEX)
                     .inlineDatum(datum)
                     .amounts(List.of(refNftAmt))
                     .build();
@@ -147,6 +152,7 @@ class Cip68ProcessorTest {
 
             AddressUtxo utxo = AddressUtxo.builder()
                     .txHash(TX_HASH)
+                    .txIndex(TX_INDEX)
                     .inlineDatum(datum)
                     .amounts(List.of(refNftAmt))
                     .build();

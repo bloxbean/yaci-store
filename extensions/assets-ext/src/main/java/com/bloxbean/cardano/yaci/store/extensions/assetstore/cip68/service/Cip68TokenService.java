@@ -79,10 +79,10 @@ public class Cip68TokenService {
      * labels across its history (the per-row label reflects whichever user-token prefix was
      * co-minted in that transaction), so the truthful latest metadata is "max slot for this
      * reference NFT, regardless of label" — see
-     * {@link Cip68MetadataRepository#findFirstByPolicyIdAndAssetNameOrderBySlotDesc}.
+     * {@link Cip68MetadataRepository#findFirstByPolicyIdAndAssetNameOrderBySlotDescTxIndexDesc}.
      */
     public Optional<FungibleTokenMetadata> findSubject(String policyId, String assetName, List<String> properties) {
-        return metadataReferenceNftRepository.findFirstByPolicyIdAndAssetNameOrderBySlotDesc(
+        return metadataReferenceNftRepository.findFirstByPolicyIdAndAssetNameOrderBySlotDescTxIndexDesc(
                         policyId, assetName)
                 .map(referenceNft -> toFungibleTokenMetadata(referenceNft, properties));
     }

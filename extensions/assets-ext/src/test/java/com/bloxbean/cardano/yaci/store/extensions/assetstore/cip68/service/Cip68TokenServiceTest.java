@@ -336,7 +336,7 @@ class Cip68TokenServiceTest {
             Cip68Metadata latestUnderLabel222 = Cip68Metadata.builder()
                     .policyId(POLICY).assetName(REF_NAME).slot(200L).label(222)
                     .name("SHLF").description("SHLF").ticker("SHLF").decimals(3L).version(1L).build();
-            when(repository.findFirstByPolicyIdAndAssetNameOrderBySlotDesc(POLICY, REF_NAME))
+            when(repository.findFirstByPolicyIdAndAssetNameOrderBySlotDescTxIndexDesc(POLICY, REF_NAME))
                     .thenReturn(Optional.of(latestUnderLabel222));
 
             Optional<FungibleTokenMetadata> result = service.findSubject(POLICY, REF_NAME, List.of());
@@ -344,12 +344,12 @@ class Cip68TokenServiceTest {
             assertThat(result).isPresent();
             assertThat(result.get().name()).isEqualTo("SHLF");
             // The label-aware overload must not be invoked — see findSubject javadoc.
-            verify(repository).findFirstByPolicyIdAndAssetNameOrderBySlotDesc(POLICY, REF_NAME);
+            verify(repository).findFirstByPolicyIdAndAssetNameOrderBySlotDescTxIndexDesc(POLICY, REF_NAME);
         }
 
         @Test
         void returnsEmptyWhenNoRowFound() {
-            when(repository.findFirstByPolicyIdAndAssetNameOrderBySlotDesc(POLICY, REF_NAME))
+            when(repository.findFirstByPolicyIdAndAssetNameOrderBySlotDescTxIndexDesc(POLICY, REF_NAME))
                     .thenReturn(Optional.empty());
 
             assertThat(service.findSubject(POLICY, REF_NAME, List.of())).isEmpty();

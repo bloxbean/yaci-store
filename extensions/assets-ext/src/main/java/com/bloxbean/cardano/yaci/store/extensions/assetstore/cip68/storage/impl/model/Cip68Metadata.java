@@ -16,7 +16,7 @@ import java.util.Map;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-// Business-key equals/hashCode: all three PK components are app-assigned and non-null at
+// Business-key equals/hashCode: all four PK components are app-assigned and non-null at
 // construction, so they're stable across the transient → managed → detached lifecycle.
 // Lombok's generated equals uses `instanceof` (proxy-safe for lazy-loaded associations).
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
@@ -42,6 +42,25 @@ public class Cip68Metadata {
     @Column(nullable = false)
     @EqualsAndHashCode.Include
     private Long slot;
+
+    /**
+     * Transaction hash of the reference-NFT output this row was indexed from. Part of the
+     * primary key — tx identity is what makes each update a distinct row, so the table keeps
+     * full history rather than overwriting in place. Matches the rest of yaci-store, where
+     * on-chain history tables key on {@code tx_hash} (stake_registration, governance, etc.).
+     */
+    @Id
+    @Column(name = "tx_hash", length = 64, nullable = false)
+    @EqualsAndHashCode.Include
+    private String txHash;
+
+    /**
+     * Index of the producing transaction within its block. Not part of the primary key; kept as
+     * an ordering column so the latest row is resolved deterministically by
+     * {@code ORDER BY slot DESC, tx_index DESC} (disambiguating same-slot intra-block updates).
+     */
+    @Column(name = "tx_index", nullable = false)
+    private Integer txIndex;
 
     /**
      * CIP-68 label: 222 (NFT), 333 (FT), 444 (RFT). Set by Cip68Processor based on the

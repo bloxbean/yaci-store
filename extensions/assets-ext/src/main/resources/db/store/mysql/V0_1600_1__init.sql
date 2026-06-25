@@ -27,6 +27,8 @@ CREATE TABLE cip68_metadata (
     policy_id      VARCHAR(56)  NOT NULL,
     asset_name     VARCHAR(64)  NOT NULL,
     slot           BIGINT       NOT NULL,
+    tx_hash        VARCHAR(64)  NOT NULL,
+    tx_index       INTEGER      NOT NULL,
     label          INTEGER      NOT NULL,
     name           VARCHAR(255),
     description    TEXT,
@@ -40,7 +42,7 @@ CREATE TABLE cip68_metadata (
     datum          LONGTEXT     NOT NULL,
     properties     JSON,
     last_synced_at TIMESTAMP NULL,
-    PRIMARY KEY (policy_id, asset_name, slot)
+    PRIMARY KEY (policy_id, asset_name, slot, tx_hash)
 );
 
 CREATE INDEX idx_cip68_metadata_slot  ON cip68_metadata(slot);
@@ -51,6 +53,7 @@ CREATE TABLE cip113_registry_node (
     `key`                                  VARCHAR(64)  NOT NULL,
     slot                                   BIGINT       NOT NULL,
     tx_hash                                VARCHAR(64)  NOT NULL,
+    tx_index                               INTEGER      NOT NULL,
     transfer_logic_script                  VARCHAR(56),
     transfer_logic_script_type             VARCHAR(8),
     third_party_transfer_logic_script      VARCHAR(56),
@@ -59,7 +62,7 @@ CREATE TABLE cip113_registry_node (
     `next`                                 VARCHAR(64)  NOT NULL,
     datum                                  LONGTEXT     NOT NULL,
     last_synced_at                         TIMESTAMP NULL,
-    PRIMARY KEY (`key`, slot)
+    PRIMARY KEY (`key`, slot, tx_hash)
 );
 
 CREATE INDEX idx_cip113_slot ON cip113_registry_node(slot);

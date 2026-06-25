@@ -13,5 +13,6 @@ public class Cip68MetadataId {
     private String policyId;
     private String assetName;
     private Long slot;
+    private String txHash;
 
 }

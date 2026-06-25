@@ -57,7 +57,8 @@ public class Cip68Processor {
                         AssetType refNftAssetType = AssetType.fromUnit(refNftAmt.getUnit());
                         int label = deriveLabel(refNftAssetType, coMintedPrefixesInTx);
                         entities.add(buildCip68Metadata(
-                                parsed, refNftAssetType, output.getInlineDatum(), slot, label));
+                                parsed, refNftAssetType, output.getInlineDatum(), slot,
+                                output.getTxHash(), output.getTxIndex(), label));
                     });
                 });
             }
@@ -131,11 +132,15 @@ public class Cip68Processor {
                                              AssetType assetType,
                                              String datum,
                                              Long slot,
+                                             String txHash,
+                                             Integer txIndex,
                                              int label) {
         return Cip68Metadata.builder()
                 .policyId(assetType.policyId())
                 .assetName(assetType.assetName())
                 .slot(slot)
+                .txHash(txHash)
+                .txIndex(txIndex)
                 .label(label)
                 .name(parsed.name())
                 .description(parsed.description())

@@ -59,6 +59,7 @@ public class Cip113Processor {
                         .key(parsed.key())
                         .slot(slot)
                         .txHash(utxo.getTxHash())
+                        .txIndex(utxo.getTxIndex())
                         .transferLogicScript(parsed.transferLogicScript())
                         .transferLogicScriptType(parsed.transferLogicScriptType())
                         .thirdPartyTransferLogicScript(parsed.thirdPartyTransferLogicScript())

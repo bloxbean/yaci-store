@@ -40,6 +40,7 @@ class Cip113ProcessorTest {
     private static final String TRANSFER_LOGIC = "11111111111111111111111111111111111111111111111111111111";
     private static final String THIRD_PARTY_LOGIC = "22222222222222222222222222222222222222222222222222222222";
     private static final String TX_HASH = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
+    private static final int TX_INDEX = 3;
 
     @Mock
     private Cip113RegistryNodeRepository repository;
@@ -87,6 +88,7 @@ class Cip113ProcessorTest {
             assertThat(saved.getKey()).isEqualTo(REGISTERED_POLICY_ID);
             assertThat(saved.getSlot()).isEqualTo(100L);
             assertThat(saved.getTxHash()).isEqualTo(TX_HASH);
+            assertThat(saved.getTxIndex()).isEqualTo(TX_INDEX);
             assertThat(saved.getTransferLogicScript()).isEqualTo(TRANSFER_LOGIC);
             assertThat(saved.getTransferLogicScriptType()).isEqualTo(Cip113CredentialType.VKEY);
             assertThat(saved.getThirdPartyTransferLogicScript()).isEqualTo(THIRD_PARTY_LOGIC);
@@ -199,6 +201,7 @@ class Cip113ProcessorTest {
                                          String inlineDatum, String txHash) {
         AddressUtxo utxo = AddressUtxo.builder()
                 .txHash(txHash)
+                .txIndex(TX_INDEX)
                 .inlineDatum(inlineDatum)
                 .amounts(List.of(Amt.builder()
                         .policyId(nftPolicyId)

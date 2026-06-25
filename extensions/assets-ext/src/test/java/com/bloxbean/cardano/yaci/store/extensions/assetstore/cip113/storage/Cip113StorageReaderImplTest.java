@@ -54,7 +54,7 @@ class Cip113StorageReaderImplTest {
                     .globalStatePolicyId("globalState")
                     .build();
 
-            when(repository.findFirstByKeyOrderBySlotDesc("deadbeef"))
+            when(repository.findFirstByKeyOrderBySlotDescTxIndexDesc("deadbeef"))
                     .thenReturn(Optional.of(entity));
 
             Optional<ProgrammableTokenCip113> result = reader.findByPolicyId("deadbeef");
@@ -79,7 +79,7 @@ class Cip113StorageReaderImplTest {
                     .globalStatePolicyId(null)
                     .build();
 
-            when(repository.findFirstByKeyOrderBySlotDesc("deadbeef"))
+            when(repository.findFirstByKeyOrderBySlotDescTxIndexDesc("deadbeef"))
                     .thenReturn(Optional.of(entity));
 
             Optional<ProgrammableTokenCip113> result = reader.findByPolicyId("deadbeef");
@@ -103,7 +103,7 @@ class Cip113StorageReaderImplTest {
                     .thirdPartyTransferLogicScriptType(Cip113CredentialType.VKEY)
                     .build();
 
-            when(repository.findFirstByKeyOrderBySlotDesc("deadbeef"))
+            when(repository.findFirstByKeyOrderBySlotDescTxIndexDesc("deadbeef"))
                     .thenReturn(Optional.of(entity));
 
             Optional<ProgrammableTokenCip113> result = reader.findByPolicyId("deadbeef");
@@ -125,7 +125,7 @@ class Cip113StorageReaderImplTest {
                     .thirdPartyTransferLogicScriptType(Cip113CredentialType.VKEY)
                     .build();
 
-            when(repository.findFirstByKeyOrderBySlotDesc("deadbeef"))
+            when(repository.findFirstByKeyOrderBySlotDescTxIndexDesc("deadbeef"))
                     .thenReturn(Optional.of(entity));
 
             Optional<ProgrammableTokenCip113> result = reader.findByPolicyId("deadbeef");
@@ -148,7 +148,7 @@ class Cip113StorageReaderImplTest {
                     .globalStatePolicyId("")
                     .build();
 
-            when(repository.findFirstByKeyOrderBySlotDesc("deadbeef"))
+            when(repository.findFirstByKeyOrderBySlotDescTxIndexDesc("deadbeef"))
                     .thenReturn(Optional.of(entity));
 
             Optional<ProgrammableTokenCip113> result = reader.findByPolicyId("deadbeef");
@@ -159,7 +159,7 @@ class Cip113StorageReaderImplTest {
 
         @Test
         void returnsEmptyWhenNotFound() {
-            when(repository.findFirstByKeyOrderBySlotDesc("unknown"))
+            when(repository.findFirstByKeyOrderBySlotDescTxIndexDesc("unknown"))
                     .thenReturn(Optional.empty());
 
             assertThat(reader.findByPolicyId("unknown")).isEmpty();

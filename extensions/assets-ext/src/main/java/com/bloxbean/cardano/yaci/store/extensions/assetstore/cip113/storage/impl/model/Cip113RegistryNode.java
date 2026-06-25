@@ -79,15 +79,25 @@ public class Cip113RegistryNode {
     private Long slot;
 
     /**
-     * Transaction hash of the registry-node output this row was indexed from. Kept as provenance,
-     * but deliberately NOT part of the primary key: the key is {@code (key, slot)} so that two
-     * updates to the same registry node within the same slot collapse to a single last-writer-wins
-     * row (the registry is a current-state store, not a per-tx audit trail). Keeping {@code tx_hash}
-     * in the key would let same-slot updates produce multiple rows, which then breaks the
-     * "one latest row per key" contract the readers rely on. See {@link #slot}.
+     * Transaction hash of the registry-node output this row was indexed from. Part of the primary
+     * key {@code (key, slot, tx_hash)} — tx identity is what makes each update a distinct row, so
+     * the registry keeps full history rather than doing in-place updates. Matches the rest of
+     * yaci-store, where on-chain history tables key on {@code tx_hash} (stake_registration,
+     * governance, etc.).
      */
+    @Id
     @Column(name = "tx_hash", length = 64, nullable = false)
+    @EqualsAndHashCode.Include
     private String txHash;
+
+    /**
+     * Index of the producing transaction within its block. Not part of the primary key; kept as an
+     * ordering column so the latest node state is resolved deterministically by
+     * {@code ORDER BY slot DESC, tx_index DESC} (disambiguating same-slot intra-block updates),
+     * giving the readers a single "latest row per key" without collapsing history.
+     */
+    @Column(name = "tx_index", nullable = false)
+    private Integer txIndex;
 
     /** Aiken {@code Credential} (28-byte vkey or script hash, 56 hex chars). Protocol-bounded. */
     @Nullable

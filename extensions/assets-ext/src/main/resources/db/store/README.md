@@ -58,18 +58,23 @@ One row per *reference-NFT update*. Holds rows for all three CIP-68 label types
 `Cip68Processor` classifies each row at index time using cross-output detection
 (observing the co-minted user-token prefix in the same transaction's outputs).
 
-Primary key is `(policy_id, asset_name, slot)` — the table preserves the full history
-of reference-NFT updates. **`label` is per-row, not per-asset**: a single reference
+Primary key is `(policy_id, asset_name, slot, tx_hash)` — keying on `tx_hash` (like the rest of
+yaci-store: stake_registration, governance, etc.) means the table preserves the full history of
+reference-NFT updates, including multiple updates within the same slot (intra-block tx chaining),
+without in-place overwrites. `tx_index` is a non-key ordering column: the latest row is resolved by
+`ORDER BY slot DESC, tx_index DESC`. **`label` is per-row, not per-asset**: a single reference
 NFT accumulates rows under multiple labels over its lifetime (an FT whose later
 updates happened to be co-minted alongside a 222-prefixed NFT will have its newest
 row stored under label=222). Read-path queries must **not** filter by label — see
-`Cip68MetadataRepository.findFirstByPolicyIdAndAssetNameOrderBySlotDesc`.
+`Cip68MetadataRepository.findFirstByPolicyIdAndAssetNameOrderBySlotDescTxIndexDesc`.
 
 | Column | Type | Bound / Rationale |
 |---|---|---|
 | `policy_id` | `VARCHAR(56)` NOT NULL | 28 B Blake2b-224. Protocol-bounded. |
 | `asset_name` | `VARCHAR(64)` NOT NULL | 0–32 B ledger max. |
 | `slot` | `BIGINT` NOT NULL | |
+| `tx_hash` | `VARCHAR(64)` NOT NULL | Cardano transaction hash. PK component — tx identity preserves per-update history. |
+| `tx_index` | `INTEGER` NOT NULL | Producing tx's index within its block. Non-key ordering column — disambiguates same-slot updates. |
 | `label` | `INTEGER` NOT NULL | 222 / 333 / 444. See note above. |
 | `name` | `VARCHAR(255)` | CIP-68 datum field. |
 | `description` | `TEXT` | Can be arbitrarily long. |
@@ -110,7 +115,8 @@ in H2 and MySQL (but not in PostgreSQL) so those two dialects quote them.
 |---|---|---|
 | `key` | `VARCHAR(64)` NOT NULL | Three possible values: empty string (head sentinel), 56 hex chars (real policy ID), or 58–64 hex chars (tail sentinel). **Do not shrink to 56.** Quoted as `"key"` (H2) / `` `key` `` (MySQL). |
 | `slot` | `BIGINT` NOT NULL | |
-| `tx_hash` | `VARCHAR(64)` NOT NULL | Cardano transaction hash: 32 B = 64 hex. Provenance only — **not** part of the PK (see below). |
+| `tx_hash` | `VARCHAR(64)` NOT NULL | Cardano transaction hash: 32 B = 64 hex. PK component — tx identity preserves per-update history. |
+| `tx_index` | `INTEGER` NOT NULL | Producing tx's index within its block. Non-key ordering column — disambiguates same-slot updates. |
 | `transfer_logic_script` | `VARCHAR(56)` | Aiken Credential inner hash (28 B = 56 hex). Both NULL together when the on-chain Credential field encodes "absent"; both non-NULL otherwise. |
 | `transfer_logic_script_type` | `VARCHAR(8)` | Companion to above: `"VKEY"` or `"SCRIPT"`. |
 | `third_party_transfer_logic_script` | `VARCHAR(56)` | Same pattern. |
@@ -120,15 +126,17 @@ in H2 and MySQL (but not in PostgreSQL) so those two dialects quote them.
 | `datum` | `TEXT` (PG/H2) / `LONGTEXT` (MySQL) NOT NULL | Full CBOR hex of the inline datum. |
 | `last_synced_at` | `TIMESTAMP` | |
 
-PK: `(key, slot)`. Index: `idx_cip113_slot`
+PK: `(key, slot, tx_hash)`. Index: `idx_cip113_slot`
 (used by `Cip113RegistryNodeRepository.deleteBySlotGreaterThan`).
 
-`tx_hash` is intentionally excluded from the PK. The registry is a current-state store, not a
-per-transaction audit trail, so two updates to the same registry node within a single slot
-(possible only via intra-block transaction chaining — extremely rare) collapse to one
-last-writer-wins row rather than producing duplicate `(key, slot)` rows. This keeps the
-"one latest row per key" guarantee the readers rely on: `findLatestByKeys` resolves each key to
-exactly one row, so `Cip113StorageReaderImpl.findByPolicyIds` cannot hit a duplicate-key collision.
+Keying on `tx_hash` keeps full per-transaction history rather than doing in-place updates —
+consistent with the rest of yaci-store (stake registration, governance, etc., all key on
+`tx_hash`). Two updates to the same registry node within a single slot (possible via intra-block
+transaction chaining) are preserved as distinct `(key, slot, tx_hash)` rows. `tx_index` is a
+non-key ordering column: the readers resolve a single current-state row per key by
+`ORDER BY slot DESC, tx_index DESC` — `findLatestByKeys` pins each key to its MAX(slot) then
+MAX(tx_index), so `Cip113StorageReaderImpl.findByPolicyIds` returns exactly one row per key and
+cannot hit a duplicate-key collision.
 
 ---
 

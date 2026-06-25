@@ -35,7 +35,7 @@ public class Cip113StorageReaderImpl implements Cip113StorageReader {
         if (!cip113Configuration.isEnabled()) {
             return Optional.empty();
         }
-        return cip113RegistryNodeRepository.findFirstByKeyOrderBySlotDesc(policyId)
+        return cip113RegistryNodeRepository.findFirstByKeyOrderBySlotDescTxIndexDesc(policyId)
                 .map(Cip113StorageReaderImpl::toDto);
     }
 
