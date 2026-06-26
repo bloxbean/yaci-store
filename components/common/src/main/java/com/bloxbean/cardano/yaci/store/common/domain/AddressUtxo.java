@@ -21,6 +21,9 @@ import java.util.List;
 public class AddressUtxo extends BlockAwareDomain implements Serializable {
     private String txHash;
     private Integer outputIndex;
+    /** Index of the producing transaction within its block (0-based). Populated by the
+     *  utxo processors so downstream consumers can order same-slot updates deterministically. */
+    private Integer txIndex;
     private Long slot;
     private String blockHash;
     private Integer epoch;
