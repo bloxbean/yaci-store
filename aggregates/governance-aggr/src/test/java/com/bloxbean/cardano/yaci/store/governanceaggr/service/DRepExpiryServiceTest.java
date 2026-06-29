@@ -64,11 +64,16 @@ class DRepExpiryServiceTest {
 
     @Test
     void activeUntilCountsFirstConwayEpochDormancyBeforeFirstProposal() {
+        // The first Conway epoch has no proposal visible at its boundary, so it
+        // contributes one pending dormant epoch before any in-epoch events.
         when(govEpochActivityRepository.findDormantEpochsInEpochRange(492, 492))
                 .thenReturn(Set.of(492));
 
         insertEpochParam(492, 9, 20, 60);
 
+        // The DRep registers before the first proposal in epoch 492. PV9
+        // registration stores 492 + 20, then the proposal flushes the pending
+        // first-Conway dormant epoch into active_until.
         insertDRepRegistration(492, 42_509_000L);
         insertProposal("first-conway-proposal", 492, 42_510_000L);
         insertDRepDist(493);
@@ -87,6 +92,8 @@ class DRepExpiryServiceTest {
 
     @Test
     void activeUntilTreatsRatifiedProposalStatusEpochAsNonDormant() {
+        // Proposal status at epoch 493 represents proposal presence at the
+        // boundary, so epoch 493 must not be counted as dormant.
         when(govEpochActivityRepository.findDormantEpochsInEpochRange(492, 580))
                 .thenReturn(Set.of());
 
@@ -94,6 +101,9 @@ class DRepExpiryServiceTest {
         insertEpochParam(493, 9, 20, 60);
         insertEpochParam(580, 9, 20, 60);
 
+        // This mirrors a proposal submitted at Conway start and observed as
+        // RATIFIED in epoch 493, followed by a later proposal that flushes the
+        // dormant counter accumulated after the DRep registration.
         insertDRepRegistration();
         insertProposal("proposal-at-era-start", 492, 42_510_119L);
         insertProposalStatus("proposal-at-era-start", 493, "RATIFIED");
@@ -113,17 +123,23 @@ class DRepExpiryServiceTest {
     }
 
     @Test
-    void activeUntilDoesNotTreatRatifiedAfterProposalExpiryAsNonDormant() {
+    void activeUntilTreatsExpiredProposalStatusEpochAsDormant() {
+        // With lifetime 2, the epoch-492 proposal is active through epoch 494.
+        // Its EXPIRED status in epoch 495 must not make that epoch non-dormant.
         when(govEpochActivityRepository.findDormantEpochsInEpochRange(492, 580))
                 .thenReturn(Set.of());
 
-        insertEpochParam(492, 9, 20, 0);
-        insertEpochParam(493, 9, 20, 60);
+        insertEpochParam(492, 9, 20, 2);
+        insertEpochParam(495, 9, 20, 60);
         insertEpochParam(580, 9, 20, 60);
 
-        insertDRepRegistration();
-        insertProposal("expired-before-ratified", 492, 42_510_119L);
-        insertProposalStatus("expired-before-ratified", 493, "RATIFIED");
+        // The DRep registers in the expired-status epoch, so that epoch remains
+        // dormant and is included in the later proposal flush.
+        insertDRepRegistration(495, 42_700_000L);
+        insertProposal("expires-before-registration", 492, 42_510_119L);
+        insertProposalStatus("expires-before-registration", 493, "ACTIVE");
+        insertProposalStatus("expires-before-registration", 494, "ACTIVE");
+        insertProposalStatus("expires-before-registration", 495, "EXPIRED");
         insertProposal("proposal-flush", 580, 50_184_338L);
         insertDRepDist(581);
 
@@ -210,6 +226,8 @@ class DRepExpiryServiceTest {
     }
 
     private void insertDRepRegistration() {
+        // Default fixture: the DRep registers in epoch 493 after the Conway-start
+        // proposal, matching the preprod mismatch scenario.
         insertDRepRegistration(493, 42596698);
     }
 
@@ -238,6 +256,7 @@ class DRepExpiryServiceTest {
     }
 
     private void insertDRepDist(int epoch) {
+        // Seed the row that calculateAndUpdateExpiryForEpoch updates.
         jdbcTemplate.update("""
                 INSERT INTO drep_dist
                     (drep_hash, drep_type, amount, epoch)
