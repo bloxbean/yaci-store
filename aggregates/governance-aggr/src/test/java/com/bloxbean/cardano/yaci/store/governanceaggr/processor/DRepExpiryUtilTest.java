@@ -3,6 +3,8 @@ package com.bloxbean.cardano.yaci.store.governanceaggr.processor;
 import com.bloxbean.cardano.yaci.store.governanceaggr.util.DRepExpiryUtil;
 import org.junit.jupiter.api.Test;
 
+import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -690,6 +692,134 @@ public class DRepExpiryUtilTest {
                 25);
     }
 
+    @Test
+    public void shouldReplayActiveUntilAcrossPv9ProposalFlushes() {
+        int eraFirstEpoch = 492;
+        var registration = new DRepExpiryUtil.DRepRegistrationInfo(42596698L, 493, 20, 9, 0, 0);
+        var proposals = List.of(
+                new DRepExpiryUtil.ProposalSubmissionInfo(42510119L, 492, 60, 0, 0),
+                new DRepExpiryUtil.ProposalSubmissionInfo(50184338L, 580, 60, 0, 0),
+                new DRepExpiryUtil.ProposalSubmissionInfo(51202227L, 592, 60, 0, 0)
+        );
+        // Non-dormant epochs are epochs with proposal state visible at the boundary.
+        var nonDormantProposalEpochs = new HashSet<Integer>();
+        nonDormantProposalEpochs.add(493);
+        nonDormantProposalEpochs.add(581);
+        nonDormantProposalEpochs.addAll(rangeClosed(593, 598));
+
+        // PV9 registration keeps the stored active_until at epoch + dRepActivity:
+        // 493 + 20 = 513. The epoch-492 proposal has already flushed the first
+        // Conway dormant epoch, and epochs after registration remain pending
+        // in the dormant counter until a later proposal arrives.
+        assertThat(DRepExpiryUtil.calculateDRepActiveUntil(
+                registration, List.of(), proposals, nonDormantProposalEpochs, eraFirstEpoch, 570))
+                .isEqualTo(513);
+
+        // The proposal submitted in epoch 580 flushes pending dormant epochs
+        // 494-580 into the stored active_until: 513 + 87 = 600.
+        assertThat(DRepExpiryUtil.calculateDRepActiveUntil(
+                registration, List.of(), proposals, nonDormantProposalEpochs, eraFirstEpoch, 582))
+                .isEqualTo(600);
+
+        // The next proposal flushes dormant epochs 582-592, moving the stored
+        // active_until from 600 to 611.
+        assertThat(DRepExpiryUtil.calculateDRepActiveUntil(
+                registration, List.of(), proposals, nonDormantProposalEpochs, eraFirstEpoch, 593))
+                .isEqualTo(611);
+
+        var voteAt598 = new DRepExpiryUtil.DRepInteractionInfo(598, 20, 51679073L, 0, 0);
+        // Epochs 593-598 are non-dormant, so the vote recomputes active_until
+        // from the current epoch without subtracting a pending counter: 598 + 20.
+        assertThat(DRepExpiryUtil.calculateDRepActiveUntil(
+                registration, List.of(voteAt598), proposals, nonDormantProposalEpochs, eraFirstEpoch, 599))
+                .isEqualTo(618);
+    }
+
+    @Test
+    public void shouldKeepRawActiveUntilStableDuringDormantPeriodAfterVote() {
+        var registration = new DRepExpiryUtil.DRepRegistrationInfo(1L, 990, 20, 10, 0, 0);
+        var proposals = List.of(
+                new DRepExpiryUtil.ProposalSubmissionInfo(100L, 993, 15, 0, 0),
+                new DRepExpiryUtil.ProposalSubmissionInfo(300L, 1013, 15, 0, 0)
+        );
+        var interactions = List.of(
+                new DRepExpiryUtil.DRepInteractionInfo(993, 20, 101L, 1, 0),
+                new DRepExpiryUtil.DRepInteractionInfo(1013, 20, 301L, 1, 0)
+        );
+        var nonDormantProposalEpochs = Set.<Integer>of();
+
+        // In PV10, registration/vote stores epoch + dRepActivity - pending
+        // dormant counter. The proposal and vote in epoch 993 leave the stored
+        // value at 993 + 20 = 1013; later dormant epochs only remain pending.
+        assertThat(DRepExpiryUtil.calculateDRepActiveUntil(
+                registration, interactions, proposals, nonDormantProposalEpochs, 990, 1000))
+                .isEqualTo(1013);
+
+        // The proposal in epoch 1013 flushes the pending dormant counter, then
+        // the same-epoch vote recomputes the stored active_until to 1013 + 20.
+        assertThat(DRepExpiryUtil.calculateDRepActiveUntil(
+                registration, interactions, proposals, nonDormantProposalEpochs, 990, 1014))
+                .isEqualTo(1033);
+    }
+
+    @Test
+    public void shouldNotCountProposalSubmissionEpochAsDormantForActiveUntil() {
+        var registration = new DRepExpiryUtil.DRepRegistrationInfo(78488970L, 908, 20, 10, 0, 0);
+        var proposals = List.of(
+                new DRepExpiryUtil.ProposalSubmissionInfo(78488971L, 908, 15, 0, 0),
+                new DRepExpiryUtil.ProposalSubmissionInfo(79111020L, 915, 15, 0, 0)
+        );
+        var voteAt910 = new DRepExpiryUtil.DRepInteractionInfo(910, 20, 78695050L, 0, 0);
+        // Valid RATIFIED status still represents proposal presence for that epoch.
+        var nonDormantProposalEpochs = Set.of(908, 909, 910, 911, 912, 916);
+
+        // The proposal/status epoch 908 is non-dormant, so PV10 registration is
+        // not penalized by a dormant counter. The vote sets 910 + 20 = 930, and
+        // the epoch-915 proposal flushes dormant epochs 913-915: 930 + 3 = 933.
+        assertThat(DRepExpiryUtil.calculateDRepActiveUntil(
+                registration, List.of(voteAt910), proposals, nonDormantProposalEpochs, 908, 916))
+                .isEqualTo(933);
+    }
+
+    @Test
+    public void shouldNotReviveInactiveDRepWhenProposalFlushesDormantCounter() {
+        var registration = new DRepExpiryUtil.DRepRegistrationInfo(1L, 0, 3, 10, 0, 0);
+        var proposals = List.of(
+                new DRepExpiryUtil.ProposalSubmissionInfo(0L, 0, 4, 0, 0),
+                new DRepExpiryUtil.ProposalSubmissionInfo(60L, 6, 4, 0, 0)
+        );
+        // Proposal at epoch 0 with lifetime 4 is active through epoch 4.
+        var nonDormantProposalEpochs = Set.of(0, 1, 2, 3, 4);
+
+        // By epoch 6 the DRep is already inactive: stored active_until 3 plus pending
+        // dormant epochs 5-6 gives effective active_until 5, which is still
+        // before the proposal epoch. The flush resets the counter without reviving it.
+        assertThat(DRepExpiryUtil.calculateDRepActiveUntil(
+                registration, List.of(), proposals, nonDormantProposalEpochs, 0, 6))
+                .isEqualTo(3);
+    }
+
+    @Test
+    public void shouldFlushDormantCounterWhenPv10ProposalArrivesInDormantEpoch() {
+        // Earlier proposal state keeps epochs 593-673 non-dormant.
+        var registration = new DRepExpiryUtil.DRepRegistrationInfo(57890157L, 670, 20, 10, 0, 0);
+        var proposals = List.of(
+                new DRepExpiryUtil.ProposalSubmissionInfo(59080597L, 683, 60, 0, 0),
+                new DRepExpiryUtil.ProposalSubmissionInfo(59184828L, 685, 60, 0, 0),
+                new DRepExpiryUtil.ProposalSubmissionInfo(59388112L, 687, 60, 0, 0)
+        );
+        var nonDormantProposalEpochs = new HashSet<Integer>();
+        nonDormantProposalEpochs.addAll(rangeClosed(593, 673));
+        nonDormantProposalEpochs.add(684);
+
+        // Before registration, there are 100 pending dormant epochs from
+        // 493-592. PV10 stores 670 + 20 - 100 = 590, and the proposal in epoch
+        // 683 flushes all 110 pending dormant epochs into that active DRep.
+        assertThat(DRepExpiryUtil.calculateDRepActiveUntil(
+                registration, List.of(), proposals, nonDormantProposalEpochs, 493, 683))
+                .isEqualTo(700);
+    }
+
     private void assertExpiryV9(DRepExpiryUtil.DRepRegistrationInfo registration,
                                 DRepExpiryUtil.DRepInteractionInfo lastInteraction,
                                 Set<Integer> dormantEpochs,
@@ -722,5 +852,13 @@ public class DRepExpiryUtilTest {
                 evaluatedEpoch);
 
         assertThat(actual).isEqualTo(expected);
+    }
+
+    private Set<Integer> rangeClosed(int startInclusive, int endInclusive) {
+        Set<Integer> result = new HashSet<>();
+        for (int epoch = startInclusive; epoch <= endInclusive; epoch++) {
+            result.add(epoch);
+        }
+        return result;
     }
 }
