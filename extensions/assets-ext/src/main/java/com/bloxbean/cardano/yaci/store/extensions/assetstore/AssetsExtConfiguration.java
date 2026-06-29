@@ -1,0 +1,49 @@
+package com.bloxbean.cardano.yaci.store.extensions.assetstore;
+
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.Cip26StorageReader;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.Cip26StorageReaderImpl;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.repository.Cip26MetadataRepository;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service.Cip68TokenService;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.Cip68StorageReader;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.Cip68StorageReaderImpl;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.domain.EntityScan;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
+import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.transaction.annotation.EnableTransactionManagement;
+
+@Configuration
+// Master gate, blockfrost-extension pattern (see BFAutoConfiguration): the master flag is
+// OFF by default (matchIfMissing = false), so enabling the single store.assets.ext.enabled
+// flag is the one opt-in an operator needs. The per-CIP sub-flags then default ON
+// (matchIfMissing = true) for CIP-26 and CIP-68, so the master flag alone gives the default
+// behaviour. CIP-113 is the one exception — it stays OFF by default (matchIfMissing = false)
+// until it is live on mainnet.
+@ConditionalOnProperty(
+        name = "store.assets.ext.enabled",
+        havingValue = "true",
+        matchIfMissing = false
+)
+@ComponentScan(basePackages = {"com.bloxbean.cardano.yaci.store.extensions.assetstore"})
+@EnableJpaRepositories(basePackages = {"com.bloxbean.cardano.yaci.store.extensions.assetstore"})
+@EntityScan(basePackages = {"com.bloxbean.cardano.yaci.store.extensions.assetstore"})
+@EnableTransactionManagement
+@EnableScheduling
+public class AssetsExtConfiguration {
+
+    @Bean
+    @ConditionalOnMissingBean
+    public Cip26StorageReader cip26StorageReader(Cip26MetadataRepository cip26MetadataRepository) {
+        return new Cip26StorageReaderImpl(cip26MetadataRepository);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public Cip68StorageReader cip68StorageReader(Cip68TokenService cip68TokenService) {
+        return new Cip68StorageReaderImpl(cip68TokenService);
+    }
+}

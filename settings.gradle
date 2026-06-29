@@ -83,4 +83,9 @@ include ':starters:adapot-spring-boot-starter'
 include ':extensions:utxo-rocksdb'
 include ':extensions:account-rocksdb'
 
+include ':extensions:assets-ext'
+project(':extensions:assets-ext').projectDir = new File('extensions/assets-ext')
+
+include ':starters:assets-ext-spring-boot-starter'
+
 include 'e2e-tests'
