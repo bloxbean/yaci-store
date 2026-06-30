@@ -11,26 +11,30 @@ import com.bloxbean.cardano.client.backend.model.TransactionContent;
 import com.bloxbean.cardano.client.common.model.Networks;
 import com.bloxbean.cardano.client.crypto.cip1852.DerivationPath;
 import com.bloxbean.cardano.client.util.JsonUtil;
+import com.bloxbean.cardano.yaci.core.model.governance.GovActionId;
 import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobStatus;
 import com.bloxbean.cardano.yaci.store.adapot.job.storage.impl.AdaPotJobRepository;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.model.GovActionProposalStatusEntity;
+import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.repository.GovActionProposalStatusRepository;
+import org.awaitility.core.ConditionTimeoutException;
 
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import static org.awaitility.Awaitility.await;
 
 public class BaseE2ETest {
-    public static final String DEVKIT_ADMIN_BASE_URL = "http://localhost:10000/";
+    public static final String DEVKIT_ADMIN_BASE_URL = DevKitAdminClient.DEFAULT_BASE_URL;
     public static final String DEFAULT_MNEMONICS = "test test test test test test test test test test test test test test test test test test test test test test test sauce";
 
     public static final BackendService backendService = new BFBackendService("http://localhost:8080/api/v1/", "Dummy");
+    protected static final DevKitAdminClient devKitAdminClient = new DevKitAdminClient(DEVKIT_ADMIN_BASE_URL);
 
     protected Account account0 = new Account(Networks.testnet(), DEFAULT_MNEMONICS);
     protected Account account1 = new Account(Networks.testnet(), DEFAULT_MNEMONICS, DerivationPath.createExternalAddressDerivationPathForAccount(1));
@@ -40,129 +44,27 @@ public class BaseE2ETest {
     }
 
     protected static void topUpFund(String address, long adaAmount) {
-        try {
-            // URL to the top-up API
-            String url = DEVKIT_ADMIN_BASE_URL + "local-cluster/api/addresses/topup";
-            URL obj = new URL(url);
-            HttpURLConnection connection = (HttpURLConnection) obj.openConnection();
-
-            // Set request method to POST
-            connection.setRequestMethod("POST");
-            connection.setRequestProperty("Content-Type", "application/json; utf-8");
-            connection.setRequestProperty("Accept", "application/json");
-            connection.setDoOutput(true);
-
-            // Create JSON payload
-            String jsonInputString = String.format("{\"address\": \"%s\", \"adaAmount\": %d}", address, adaAmount);
-
-            // Send the request
-            try (OutputStream os = connection.getOutputStream()) {
-                byte[] input = jsonInputString.getBytes(StandardCharsets.UTF_8);
-                os.write(input, 0, input.length);
-            }
-
-            // Check the response code
-            int responseCode = connection.getResponseCode();
-            if (responseCode == HttpURLConnection.HTTP_OK) {
-                System.out.println("Funds topped up successfully.");
-            } else {
-                System.out.println("Failed to top up funds. Response code: " + responseCode);
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        devKitAdminClient.topUpFund(address, adaAmount);
     }
 
     protected static void resetDevNet() {
-        try {
-            // URL to reset the network
-            String url = DEVKIT_ADMIN_BASE_URL + "local-cluster/api/admin/devnet/reset";
-            URL obj = new URL(url);
-            HttpURLConnection connection = (HttpURLConnection) obj.openConnection();
-
-            // Set request method to POST
-            connection.setRequestMethod("POST");
-            connection.setRequestProperty("Content-Type", "application/json; utf-8");
-            connection.setRequestProperty("Accept", "application/json");
-            connection.setDoOutput(true);
-
-            // Check the response code
-            int responseCode = connection.getResponseCode();
-            if (responseCode == HttpURLConnection.HTTP_OK) {
-                System.out.println("Devnet reset successful");
-            } else {
-                System.out.println("Failed to reset the network. Response code: " + responseCode);
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        devKitAdminClient.resetDevNet();
     }
 
     protected static void createDevNet(Map<String, String> config) {
-        try {
-            // URL to create the network with the provided configuration
-            String url = DEVKIT_ADMIN_BASE_URL + "local-cluster/api/admin/devnet/create";
-            URL obj = new URL(url);
-            HttpURLConnection connection = (HttpURLConnection) obj.openConnection();
-
-            // Set request method to POST
-            connection.setRequestMethod("POST");
-            connection.setRequestProperty("Content-Type", "application/json; utf-8");
-            connection.setRequestProperty("Accept", "application/json");
-            connection.setDoOutput(true);
-
-            // Convert the config Map to JSON string using Gson
-            ObjectMapper objectMapper = new ObjectMapper();
-            String jsonPayload = objectMapper.writeValueAsString(config);
-
-            // Send the JSON payload in the POST request body
-            try (OutputStream os = connection.getOutputStream()) {
-                byte[] input = jsonPayload.getBytes("utf-8");
-                os.write(input, 0, input.length);
-            }
-
-            // Check the response code
-            int responseCode = connection.getResponseCode();
-            if (responseCode == HttpURLConnection.HTTP_OK) {
-                System.out.println("Create devnet is successful");
-            } else {
-                System.out.println("Failed to create the network. Response code: " + responseCode);
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        devKitAdminClient.createDevNet(config);
     }
 
     protected int getCurrentEpoch() {
-        String url = DEVKIT_ADMIN_BASE_URL + "local-cluster/api/epochs/latest";
-        try {
-            URL obj = new URL(url);
-            HttpURLConnection connection = (HttpURLConnection) obj.openConnection();
+        return devKitAdminClient.getCurrentEpoch();
+    }
 
-            connection.setRequestMethod("GET");
-            connection.setRequestProperty("Accept", "application/json");
+    protected static void assertDevKitAdminAvailable() {
+        devKitAdminClient.assertAdminAvailable();
+    }
 
-            int responseCode = connection.getResponseCode();
-            if (responseCode == HttpURLConnection.HTTP_OK) {
-                StringBuilder response;
-                try (var reader = new java.io.BufferedReader(new java.io.InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8))) {
-                    response = new StringBuilder();
-                    String line;
-                    while ((line = reader.readLine()) != null) {
-                        response.append(line.trim());
-                    }
-                }
-
-                var jsonObject = new com.fasterxml.jackson.databind.ObjectMapper().readTree(response.toString());
-                return jsonObject.get("epoch").asInt();
-            } else {
-                System.out.println("Failed to fetch current epoch. Response code: " + responseCode);
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        return -1;
-
+    protected static void waitForEpoch(int epoch) {
+        devKitAdminClient.waitForEpoch(epoch);
     }
 
     protected void waitForTransaction(Result<String> result) {
@@ -204,7 +106,139 @@ public class BaseE2ETest {
     }
 
     protected void waitTillAdaPotJobDone(AdaPotJobRepository adaPotJobRepository, long epoch) {
-        await().atMost(Duration.ofSeconds(100))
-                .until(() -> adaPotJobRepository.findById(epoch).filter(adaPotJobEntity -> adaPotJobEntity.getStatus() == AdaPotJobStatus.COMPLETED).isPresent());
+        waitTillAdaPotJobDone(adaPotJobRepository, epoch, () -> "");
+    }
+
+    protected void waitTillAdaPotJobDone(AdaPotJobRepository adaPotJobRepository, long epoch, Supplier<String> extraDiagnostics) {
+        try {
+            await().atMost(Duration.ofSeconds(100))
+                    .until(() -> adaPotJobRepository.findById(epoch)
+                            .filter(adaPotJobEntity -> adaPotJobEntity.getStatus() == AdaPotJobStatus.COMPLETED)
+                            .isPresent());
+        } catch (ConditionTimeoutException e) {
+            throw new AssertionError(buildAdaPotJobTimeoutMessage(adaPotJobRepository, epoch, extraDiagnostics), e);
+        }
+    }
+
+    protected Supplier<String> proposalStatusDiagnostics(GovActionProposalStatusRepository proposalStatusRepository,
+                                                         GovActionId govActionId) {
+        return () -> proposalStatusRepository.findAll().stream()
+                .filter(status -> status.getGovActionTxHash().equals(govActionId.getTransactionId())
+                        && status.getGovActionIndex() == govActionId.getGov_action_index())
+                .sorted(Comparator.comparing(GovActionProposalStatusEntity::getEpoch))
+                .map(this::formatProposalStatus)
+                .collect(Collectors.joining("; ", "Proposal status rows: ", ""));
+    }
+
+    protected static Map<String, String> permissiveGovernanceConfig(int epochLength, int govActionLifetime) {
+        Map<String, String> config = baseGovernanceConfig(epochLength, govActionLifetime);
+
+        putPoolThresholds(config, "0");
+        putDRepThresholds(config, "0");
+        config.put("dvtTreasuryWithdrawal", "0");
+        config.put("ccThresholdNumerator", "0");
+        config.put("committeeMinSize", "0");
+        config.put("constitutionScript", "");
+
+        return config;
+    }
+
+    protected static Map<String, String> votedGovernanceConfig(int epochLength, int govActionLifetime) {
+        Map<String, String> config = baseGovernanceConfig(epochLength, govActionLifetime);
+
+        putPoolThresholds(config, "0.51");
+        putDRepThresholds(config, "0.51");
+        config.put("dvtTreasuryWithdrawal", "0.51");
+        config.put("ccThresholdNumerator", "1");
+        config.put("committeeMinSize", "1");
+        config.put("constitutionScript", "");
+
+        return config;
+    }
+
+    protected static Map<String, String> bootstrapGovernanceConfig(int epochLength, int govActionLifetime) {
+        Map<String, String> config = permissiveGovernanceConfig(epochLength, govActionLifetime);
+        config.put("protocolMajorVer", "9");
+        return config;
+    }
+
+    private static Map<String, String> baseGovernanceConfig(int epochLength, int govActionLifetime) {
+        Map<String, String> config = new LinkedHashMap<>();
+        config.put("conwayHardForkAtEpoch", "0");
+        config.put("shiftStartTimeBehind", "false");
+        config.put("epochLength", String.valueOf(epochLength));
+        config.put("govActionLifetime", String.valueOf(govActionLifetime));
+        return config;
+    }
+
+    private static void putPoolThresholds(Map<String, String> config, String value) {
+        config.put("pvtcommitteeNormal", value);
+        config.put("pvtCommitteeNoConfidence", value);
+        config.put("pvtHardForkInitiation", value);
+        config.put("pvtMotionNoConfidence", value);
+        config.put("pvtPPSecurityGroup", value);
+    }
+
+    private static void putDRepThresholds(Map<String, String> config, String value) {
+        config.put("dvtMotionNoConfidence", value);
+        config.put("dvtCommitteeNormal", value);
+        config.put("dvtCommitteeNoConfidence", value);
+        config.put("dvtUpdateToConstitution", value);
+        config.put("dvtHardForkInitiation", value);
+        config.put("dvtPPNetworkGroup", value);
+        config.put("dvtPPEconomicGroup", value);
+        config.put("dvtPPTechnicalGroup", value);
+        config.put("dvtPPGovGroup", value);
+    }
+
+    private String buildAdaPotJobTimeoutMessage(AdaPotJobRepository adaPotJobRepository, long epoch, Supplier<String> extraDiagnostics) {
+        StringBuilder message = new StringBuilder();
+        message.append("Timed out waiting for AdaPot job epoch ")
+                .append(epoch)
+                .append(" to reach COMPLETED.");
+        message.append("\nDevKit current epoch: ").append(safeCurrentEpoch());
+        message.append("\nTarget AdaPot job: ")
+                .append(adaPotJobRepository.findById(epoch).map(this::formatAdaPotJob).orElse("not found"));
+        message.append("\nRecent AdaPot jobs: ").append(recentAdaPotJobs(adaPotJobRepository));
+
+        String extra = extraDiagnostics == null ? "" : extraDiagnostics.get();
+        if (extra != null && !extra.isBlank()) {
+            message.append("\n").append(extra);
+        }
+
+        return message.toString();
+    }
+
+    private String recentAdaPotJobs(AdaPotJobRepository adaPotJobRepository) {
+        return adaPotJobRepository.findAll().stream()
+                .sorted(Comparator.comparingLong(job -> -job.getEpoch()))
+                .limit(10)
+                .map(this::formatAdaPotJob)
+                .collect(Collectors.joining("; "));
+    }
+
+    private String formatAdaPotJob(com.bloxbean.cardano.yaci.store.adapot.job.storage.impl.AdaPotJobEntity job) {
+        return "epoch=" + job.getEpoch()
+                + ", type=" + job.getType()
+                + ", status=" + job.getStatus()
+                + ", slot=" + job.getSlot()
+                + ", error=" + job.getErrorMessage();
+    }
+
+    private String formatProposalStatus(GovActionProposalStatusEntity status) {
+        return "epoch=" + status.getEpoch()
+                + ", txHash=" + status.getGovActionTxHash()
+                + ", index=" + status.getGovActionIndex()
+                + ", type=" + status.getType()
+                + ", status=" + status.getStatus()
+                + ", votingStats=" + status.getVotingStats();
+    }
+
+    private String safeCurrentEpoch() {
+        try {
+            return String.valueOf(getCurrentEpoch());
+        } catch (RuntimeException e) {
+            return "unavailable (" + e.getMessage() + ")";
+        }
     }
 }
