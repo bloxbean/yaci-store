@@ -79,9 +79,11 @@ class GovernanceProposalLifecycleIT extends BaseE2ETest {
 
     @BeforeAll
     void setup() {
+        // The helper lifetime must match the devnet protocol parameter used below.
         governanceTxHelper = new GovernanceTxHelper(backendService, govActionProposalStorage, GOV_ACTION_LIFETIME);
         governanceAssertionHelper = new GovernanceAssertionHelper(govActionProposalStorage, proposalStatusRepository, proposalApiService);
 
+        // Start every run from a clean voted-governance devnet so no-vote proposals cannot pass.
         assertDevKitAdminAvailable();
         createDevNet(votedGovernanceConfig(EPOCH_LENGTH_SECONDS, GOV_ACTION_LIFETIME));
     }
@@ -93,11 +95,14 @@ class GovernanceProposalLifecycleIT extends BaseE2ETest {
     @Test
     @Order(1)
     void devnetProposals_shouldExpireRefundAndRemainStableAcrossEpochDrift() {
+        // The return address must be registered before proposal deposits can be refunded.
         governanceTxHelper.registerStakeAddress(account0, account0.stakeAddress());
 
+        // Info actions never ratify, so they are the simplest real-chain expiry baseline.
         CreatedProposal infoProposal = governanceTxHelper.createInfoProposalAndWait(account0, account0.stakeAddress());
         assertIndexedProposal(infoProposal, GovActionType.INFO_ACTION);
 
+        // Create the second proposal in a later epoch to exercise drift across staggered lifecycles.
         waitForEpoch(infoProposal.createdEpoch() + 1);
         CreatedProposal parameterChangeProposal = governanceTxHelper.createProposalAndWait(
                 account0,
@@ -106,6 +111,7 @@ class GovernanceProposalLifecycleIT extends BaseE2ETest {
         assertIndexedProposal(parameterChangeProposal, GovActionType.PARAMETER_CHANGE_ACTION);
         assertThat(parameterChangeProposal.createdEpoch()).isGreaterThan(infoProposal.createdEpoch());
 
+        // The polling window covers every status epoch for both proposals plus the refund epoch.
         int firstStatusEpoch = infoProposal.createdEpoch() + 1;
         int lastStatusEpoch = Math.max(infoProposal.expiryStatusEpoch(), parameterChangeProposal.expiryStatusEpoch()) + 1;
         List<CreatedProposal> proposals = List.of(infoProposal, parameterChangeProposal);
@@ -115,6 +121,7 @@ class GovernanceProposalLifecycleIT extends BaseE2ETest {
             waitTillAdaPotJobDone(adaPotJobRepository, epoch, statusDiagnostics(proposals));
 
             for (CreatedProposal proposal : proposals) {
+                // A proposal only has derived status rows after entering the next epoch.
                 if (epoch > proposal.createdEpoch()) {
                     assertLatestStatusAfterCompletedJob(proposal, epoch);
                 }
@@ -123,6 +130,7 @@ class GovernanceProposalLifecycleIT extends BaseE2ETest {
             assertNoDuplicateStatusRows(proposals);
         }
 
+        // Final assertions are explicit so a failure points to lifecycle, refund, or API mapping.
         assertActiveUntilLastOpportunity(infoProposal);
         assertExpiredAtLifecycleBoundary(infoProposal);
         assertProposalRefund(infoProposal, account0.stakeAddress());
@@ -140,26 +148,32 @@ class GovernanceProposalLifecycleIT extends BaseE2ETest {
     @Test
     @Order(2)
     void getProposalById_shouldTranslateCurrentAndStaleStorageStatuses() {
+        // ProposalApiService treats the latest completed AdaPot epoch as the current status boundary.
         int latestCompletedEpoch = latestCompletedAdaPotEpoch();
         assertThat(latestCompletedEpoch).isGreaterThan(0);
         int staleEpoch = latestCompletedEpoch - 1;
 
+        // ACTIVE at the current boundary is still a live proposal.
         GovActionProposal currentActive = saveSyntheticProposal("api-current-active", latestCompletedEpoch, GovActionType.INFO_ACTION);
         saveStatus(currentActive, latestCompletedEpoch, GovActionStatus.ACTIVE);
         governanceAssertionHelper.assertLatestApiStatus(currentActive.getTxHash(), (int) currentActive.getIndex(), ProposalStatus.LIVE);
 
+        // EXPIRED is terminal and should not be remapped by later AdaPot jobs.
         GovActionProposal expired = saveSyntheticProposal("api-expired", staleEpoch, GovActionType.INFO_ACTION);
         saveStatus(expired, staleEpoch, GovActionStatus.EXPIRED);
         governanceAssertionHelper.assertLatestApiStatus(expired.getTxHash(), (int) expired.getIndex(), ProposalStatus.EXPIRED);
 
+        // A stale ACTIVE row means the proposal disappeared from current state, so the API reports DROPPED.
         GovActionProposal staleActive = saveSyntheticProposal("api-stale-active", staleEpoch, GovActionType.PARAMETER_CHANGE_ACTION);
         saveStatus(staleActive, staleEpoch, GovActionStatus.ACTIVE);
         governanceAssertionHelper.assertLatestApiStatus(staleActive.getTxHash(), (int) staleActive.getIndex(), ProposalStatus.DROPPED);
 
+        // RATIFIED at the current boundary is visible as ratified until a later completed job advances.
         GovActionProposal currentRatified = saveSyntheticProposal("api-current-ratified", latestCompletedEpoch, GovActionType.PARAMETER_CHANGE_ACTION);
         saveStatus(currentRatified, latestCompletedEpoch, GovActionStatus.RATIFIED);
         governanceAssertionHelper.assertLatestApiStatus(currentRatified.getTxHash(), (int) currentRatified.getIndex(), ProposalStatus.RATIFIED);
 
+        // Once RATIFIED is stale, the API exposes it as enacted.
         GovActionProposal staleRatified = saveSyntheticProposal("api-stale-ratified", staleEpoch, GovActionType.PARAMETER_CHANGE_ACTION);
         saveStatus(staleRatified, staleEpoch, GovActionStatus.RATIFIED);
         governanceAssertionHelper.assertLatestApiStatus(staleRatified.getTxHash(), (int) staleRatified.getIndex(), ProposalStatus.ENACTED);
@@ -172,8 +186,10 @@ class GovernanceProposalLifecycleIT extends BaseE2ETest {
     @Test
     @Order(3)
     void getCurrentProposals_shouldRespectStatusFilter() {
+        // getCurrentProposals reads rows at the latest indexed block epoch.
         int currentEpoch = latestIndexedEpoch();
 
+        // Use one synthetic row per storage status so each filter can be checked independently.
         GovActionProposal active = saveSyntheticProposal("current-active", currentEpoch, GovActionType.INFO_ACTION);
         GovActionProposal ratified = saveSyntheticProposal("current-ratified", currentEpoch, GovActionType.PARAMETER_CHANGE_ACTION);
         GovActionProposal expired = saveSyntheticProposal("current-expired", currentEpoch, GovActionType.INFO_ACTION);
@@ -182,17 +198,20 @@ class GovernanceProposalLifecycleIT extends BaseE2ETest {
         saveStatus(ratified, currentEpoch, GovActionStatus.RATIFIED);
         saveStatus(expired, currentEpoch, GovActionStatus.EXPIRED);
 
+        // The unfiltered view should include all current rows; filtered views should be exact.
         assertCurrentProposals(null, List.of(active, ratified, expired), List.of());
         assertCurrentProposals(GovActionStatus.ACTIVE, List.of(active), List.of(ratified, expired));
         assertCurrentProposals(GovActionStatus.RATIFIED, List.of(ratified), List.of(active, expired));
         assertCurrentProposals(GovActionStatus.EXPIRED, List.of(expired), List.of(active, ratified));
 
+        // Current proposal listings use public API status names, not storage enum names.
         assertCurrentProposalApiStatus(active, ProposalStatus.LIVE);
         assertCurrentProposalApiStatus(ratified, ProposalStatus.RATIFIED);
         assertCurrentProposalApiStatus(expired, ProposalStatus.EXPIRED);
     }
 
     private void assertIndexedProposal(CreatedProposal proposal, GovActionType expectedType) {
+        // First validate the helper's cached proposal, then re-read through storage.
         assertThat(proposal.proposal()).isNotNull();
         assertThat(proposal.proposal().getType()).isEqualTo(expectedType);
 
@@ -203,6 +222,7 @@ class GovernanceProposalLifecycleIT extends BaseE2ETest {
     }
 
     private void assertActiveUntilLastOpportunity(CreatedProposal proposal) {
+        // Status evaluation starts in the epoch after proposal submission.
         for (int epoch = proposal.createdEpoch() + 1; epoch <= proposal.maxVotingEpoch(); epoch++) {
             governanceAssertionHelper.assertStatusAtEpoch(proposal.txHash(), proposal.index(), epoch, GovActionStatus.ACTIVE);
         }
@@ -213,6 +233,7 @@ class GovernanceProposalLifecycleIT extends BaseE2ETest {
     }
 
     private void assertProposalRefund(CreatedProposal proposal, String stakeAddress) {
+        // Proposal refunds become spendable one epoch after the EXPIRED status row.
         waitTillAdaPotJobDone(adaPotJobRepository, proposal.expiryStatusEpoch() + 1, statusDiagnostics(List.of(proposal)));
 
         var proposalRefund = rewardRestRepository.findBySpendableEpochAndType(proposal.expiryStatusEpoch() + 1, RewardRestType.proposal_refund)
@@ -224,11 +245,13 @@ class GovernanceProposalLifecycleIT extends BaseE2ETest {
     }
 
     private void assertLatestStatusAfterCompletedJob(CreatedProposal proposal, int completedEpoch) {
+        // This detects drift where an older or missing row becomes the latest API-visible state.
         Optional<GovActionProposalStatusEntity> latestStatus = latestStatus(proposal, completedEpoch);
         assertThat(latestStatus)
                 .as("latest status for %s#%s after AdaPot epoch %s", proposal.txHash(), proposal.index(), completedEpoch)
                 .isPresent();
 
+        // After expiry, the latest row should remain the expiry row even as later epochs complete.
         var expectedStatus = completedEpoch < proposal.expiryStatusEpoch()
                 ? GovActionStatus.ACTIVE
                 : GovActionStatus.EXPIRED;
@@ -242,6 +265,7 @@ class GovernanceProposalLifecycleIT extends BaseE2ETest {
     }
 
     private Optional<GovActionProposalStatusEntity> latestStatus(CreatedProposal proposal, int upToEpoch) {
+        // Limit by completed epoch so the assertion matches what the chain has made observable.
         return proposalStatusRepository.findAll()
                 .stream()
                 .filter(status -> status.getGovActionTxHash().equals(proposal.txHash()))
@@ -251,6 +275,7 @@ class GovernanceProposalLifecycleIT extends BaseE2ETest {
     }
 
     private void assertNoDuplicateStatusRows(List<CreatedProposal> proposals) {
+        // Re-processing an epoch should replace rows for that epoch, not append duplicates.
         var proposalKeys = proposals.stream()
                 .map(proposal -> proposal.txHash() + "#" + proposal.index())
                 .collect(Collectors.toSet());
@@ -270,18 +295,21 @@ class GovernanceProposalLifecycleIT extends BaseE2ETest {
     }
 
     private Supplier<String> statusDiagnostics(List<CreatedProposal> proposals) {
+        // Diagnostics are evaluated only on timeout, keeping normal test output small.
         return () -> proposals.stream()
                 .map(proposal -> proposalStatusDiagnostics(proposalStatusRepository, proposal.storeGovActionId()).get())
                 .collect(Collectors.joining("\n"));
     }
 
     private int latestCompletedAdaPotEpoch() {
+        // API status translation depends on completed AdaPot jobs, not merely the tip epoch.
         var recentJobs = adaPotJobStorage.getRecentCompletedJobs(1);
         assertThat(recentJobs).isNotEmpty();
         return recentJobs.getFirst().getEpoch();
     }
 
     private int latestIndexedEpoch() {
+        // Current-proposal queries use the latest indexed block epoch as their target epoch.
         return blockStorage.findRecentBlock()
                 .orElseThrow(() -> new AssertionError("No recent block found"))
                 .getEpochNumber();
@@ -309,6 +337,7 @@ class GovernanceProposalLifecycleIT extends BaseE2ETest {
     }
 
     private void saveStatus(GovActionProposal proposal, int epoch, GovActionStatus status) {
+        // The API reader consumes the same persisted status rows produced by governance-aggr.
         proposalStatusRepository.save(GovActionProposalStatusEntity.builder()
                 .govActionTxHash(proposal.getTxHash())
                 .govActionIndex((int) proposal.getIndex())
@@ -320,6 +349,7 @@ class GovernanceProposalLifecycleIT extends BaseE2ETest {
     }
 
     private ProposalVotingStats emptyVotingStats() {
+        // API DTOs expect voting stats to be present, even when a synthetic row has no votes.
         return ProposalVotingStats.builder()
                 .spoTotalYesStake(BigInteger.ZERO)
                 .spoTotalNoStake(BigInteger.ZERO)
@@ -347,6 +377,7 @@ class GovernanceProposalLifecycleIT extends BaseE2ETest {
     private void assertCurrentProposals(GovActionStatus filter,
                                         List<GovActionProposal> expectedPresent,
                                         List<GovActionProposal> expectedAbsent) {
+        // Compare by tx hash because every synthetic proposal uses action index zero.
         List<String> txHashes = proposalApiService.getCurrentProposals(filter)
                 .stream()
                 .map(ProposalDto::getTxHash)
@@ -365,6 +396,7 @@ class GovernanceProposalLifecycleIT extends BaseE2ETest {
     }
 
     private String syntheticTxHash() {
+        // Keep the value hash-shaped so storage/API formatting paths stay realistic.
         return "ff" + String.format("%062x", SYNTHETIC_ID.getAndIncrement());
     }
 }
