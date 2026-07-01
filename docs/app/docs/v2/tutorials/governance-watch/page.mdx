@@ -278,13 +278,14 @@ Watch the logs — you'll see your post-action print each new proposal:
      p.type                                                  AS action_type,
      COUNT(v.*) FILTER (WHERE v.vote = 'YES')                AS yes,
      COUNT(v.*) FILTER (WHERE v.vote = 'NO')                 AS no,
-     COUNT(v.*) FILTER (WHERE v.vote = 'ABSTAIN')            AS abstain
+     COUNT(v.*) FILTER (WHERE v.vote = 'ABSTAIN')            AS abstain,
+     COUNT(v.*)                                              AS total_votes
    FROM gov_action_proposal p
    LEFT JOIN voting_procedure v
      ON v.gov_action_tx_hash = p.tx_hash
     AND v.gov_action_index   = p.idx
    GROUP BY p.tx_hash, p.idx, p.type
-   ORDER BY (yes + no + abstain) DESC;
+   ORDER BY total_votes DESC;
    ```
 
 5. **Break a tally down by voter type** (DRep vs SPO vs committee)
