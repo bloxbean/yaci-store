@@ -21,7 +21,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -58,17 +57,10 @@ public class InfoProposalLifeCycleIT extends BaseE2ETest {
         transactionHelper = new TransactionHelper(backendService);
         System.out.println("Resetting the network before running tests ...");
 
-        Map<String, String> devNetConfig = new HashMap<>();
-        devNetConfig.put("conwayHardForkAtEpoch", "0");
-        devNetConfig.put("shiftStartTimeBehind", "false");
-        devNetConfig.put("epochLength", "20");
-        devNetConfig.put("govActionLifetime", String.valueOf(GOV_ACTION_LIFETIME));
-
-        devNetConfig.put("dvtTreasuryWithdrawal", "0");
-        devNetConfig.put("ccThresholdNumerator", "0");
-        devNetConfig.put("committeeMinSize", "0");
-        devNetConfig.put("constitutionScript", ""); //To disable constitution scirpt
-
+        // Local fast DevKit default:
+        // Map<String, String> devNetConfig = permissiveGovernanceConfig(20, GOV_ACTION_LIFETIME);
+        Map<String, String> devNetConfig = permissiveGovernanceConfig(20, GOV_ACTION_LIFETIME);
+        assertDevKitAdminAvailable();
         createDevNet(devNetConfig);
     }
 
@@ -84,9 +76,10 @@ public class InfoProposalLifeCycleIT extends BaseE2ETest {
         //Create a new info proposal
         var proposalTxResult = transactionHelper.createInfoProposal(account0, account0.stakeAddress(), null);
         assertThat(proposalTxResult.isSuccessful()).isTrue();
+        var govActionId = new GovActionId(proposalTxResult.getValue(), 0);
 
         //check db if the proposal has been created or not
-        var govActionProposal = govActionProposalStorage.findByGovActionIds(List.of(new GovActionId(proposalTxResult.getValue(), 0))).stream()
+        var govActionProposal = govActionProposalStorage.findByGovActionIds(List.of(govActionId)).stream()
                 .findFirst().orElse(null);
         assertThat(govActionProposal).isNotNull();
 
@@ -94,7 +87,8 @@ public class InfoProposalLifeCycleIT extends BaseE2ETest {
         int expectdExpiryEpoch = createEpoch + GOV_ACTION_LIFETIME + 1;
 
         //Wait till adaPot job for expectedExpiryEpoch is done.
-        waitTillAdaPotJobDone(adaPotJobRepository, expectdExpiryEpoch);
+        waitTillAdaPotJobDone(adaPotJobRepository, expectdExpiryEpoch,
+                proposalStatusDiagnostics(proposalStatusRepository, govActionId));
 
         //Find proposal entry at different epochs
         var govActionCreateEpoch = proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.ACTIVE, createEpoch + 1);
@@ -115,7 +109,8 @@ public class InfoProposalLifeCycleIT extends BaseE2ETest {
         assertThat(govActionExpiredEpoch.get(0).getGovAction().getType()).isEqualTo(GovActionType.INFO_ACTION);
 
         //Wait till adaPot job for expectedExpiryEpoch + 1 is done.
-        waitTillAdaPotJobDone(adaPotJobRepository, (long) expectdExpiryEpoch + 1);
+        waitTillAdaPotJobDone(adaPotJobRepository, (long) expectdExpiryEpoch + 1,
+                proposalStatusDiagnostics(proposalStatusRepository, govActionId));
 
         //check proposal refund in expired_epoch + 1
         var proposalRefund = rewardRestRepository.findBySpendableEpochAndType(expectdExpiryEpoch + 1, RewardRestType.proposal_refund)
