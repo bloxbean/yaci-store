@@ -28,6 +28,9 @@ import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.TestMethodOrder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.ApplicationContextInitializer;
+import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.test.context.ContextConfiguration;
 
 import java.math.BigInteger;
 import java.util.Comparator;
@@ -45,6 +48,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * status translation rules.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@ContextConfiguration(initializers = GovernanceProposalLifecycleIT.DevKitInitializer.class)
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class GovernanceProposalLifecycleIT extends BaseE2ETest {
@@ -82,10 +86,15 @@ class GovernanceProposalLifecycleIT extends BaseE2ETest {
         // The helper lifetime must match the devnet protocol parameter used below.
         governanceTxHelper = new GovernanceTxHelper(backendService, govActionProposalStorage, GOV_ACTION_LIFETIME);
         governanceAssertionHelper = new GovernanceAssertionHelper(govActionProposalStorage, proposalStatusRepository, proposalApiService);
+    }
 
-        // Start every run from a clean voted-governance devnet so no-vote proposals cannot pass.
-        assertDevKitAdminAvailable();
-        createDevNet(votedGovernanceConfig(EPOCH_LENGTH_SECONDS, GOV_ACTION_LIFETIME));
+    static class DevKitInitializer implements ApplicationContextInitializer<ConfigurableApplicationContext> {
+        @Override
+        public void initialize(ConfigurableApplicationContext applicationContext) {
+            // Create the devnet before Spring downloads genesis files and starts chain sync.
+            assertDevKitAdminAvailable();
+            createDevNet(votedGovernanceConfig(EPOCH_LENGTH_SECONDS, GOV_ACTION_LIFETIME));
+        }
     }
 
     /**
@@ -104,17 +113,17 @@ class GovernanceProposalLifecycleIT extends BaseE2ETest {
 
         // Create the second proposal in a later epoch to exercise drift across staggered lifecycles.
         waitForEpoch(infoProposal.createdEpoch() + 1);
-        CreatedProposal parameterChangeProposal = governanceTxHelper.createProposalAndWait(
+        CreatedProposal noConfidenceProposal = governanceTxHelper.createProposalAndWait(
                 account0,
                 account0.stakeAddress(),
-                GovernanceTxHelper.parameterChangeAction());
-        assertIndexedProposal(parameterChangeProposal, GovActionType.PARAMETER_CHANGE_ACTION);
-        assertThat(parameterChangeProposal.createdEpoch()).isGreaterThan(infoProposal.createdEpoch());
+                GovernanceTxHelper.noConfidenceAction());
+        assertIndexedProposal(noConfidenceProposal, GovActionType.NO_CONFIDENCE);
+        assertThat(noConfidenceProposal.createdEpoch()).isGreaterThan(infoProposal.createdEpoch());
 
         // The polling window covers every status epoch for both proposals plus the refund epoch.
         int firstStatusEpoch = infoProposal.createdEpoch() + 1;
-        int lastStatusEpoch = Math.max(infoProposal.expiryStatusEpoch(), parameterChangeProposal.expiryStatusEpoch()) + 1;
-        List<CreatedProposal> proposals = List.of(infoProposal, parameterChangeProposal);
+        int lastStatusEpoch = Math.max(infoProposal.expiryStatusEpoch(), noConfidenceProposal.expiryStatusEpoch()) + 1;
+        List<CreatedProposal> proposals = List.of(infoProposal, noConfidenceProposal);
 
         // Check the status history after each completed AdaPot job, not only at the final epoch.
         for (int epoch = firstStatusEpoch; epoch <= lastStatusEpoch; epoch++) {
@@ -136,9 +145,9 @@ class GovernanceProposalLifecycleIT extends BaseE2ETest {
         assertProposalRefund(infoProposal, account0.stakeAddress());
         governanceAssertionHelper.assertLatestApiStatus(infoProposal.txHash(), infoProposal.index(), ProposalStatus.EXPIRED);
 
-        assertActiveUntilLastOpportunity(parameterChangeProposal);
-        assertExpiredAtLifecycleBoundary(parameterChangeProposal);
-        governanceAssertionHelper.assertLatestApiStatus(parameterChangeProposal.txHash(), parameterChangeProposal.index(), ProposalStatus.EXPIRED);
+        assertActiveUntilLastOpportunity(noConfidenceProposal);
+        assertExpiredAtLifecycleBoundary(noConfidenceProposal);
+        governanceAssertionHelper.assertLatestApiStatus(noConfidenceProposal.txHash(), noConfidenceProposal.index(), ProposalStatus.EXPIRED);
     }
 
     /**
@@ -304,6 +313,11 @@ class GovernanceProposalLifecycleIT extends BaseE2ETest {
     private int latestCompletedAdaPotEpoch() {
         // API status translation depends on completed AdaPot jobs, not merely the tip epoch.
         var recentJobs = adaPotJobStorage.getRecentCompletedJobs(1);
+        if (recentJobs.isEmpty()) {
+            waitForEpoch(1);
+            waitTillAdaPotJobDone(adaPotJobRepository, 1);
+            recentJobs = adaPotJobStorage.getRecentCompletedJobs(1);
+        }
         assertThat(recentJobs).isNotEmpty();
         return recentJobs.getFirst().getEpoch();
     }
@@ -384,7 +398,10 @@ class GovernanceProposalLifecycleIT extends BaseE2ETest {
                 .toList();
 
         assertThat(txHashes).containsAll(expectedPresent.stream().map(GovActionProposal::getTxHash).toList());
-        assertThat(txHashes).doesNotContainAnyElementsOf(expectedAbsent.stream().map(GovActionProposal::getTxHash).toList());
+        var absentTxHashes = expectedAbsent.stream().map(GovActionProposal::getTxHash).toList();
+        if (!absentTxHashes.isEmpty()) {
+            assertThat(txHashes).doesNotContainAnyElementsOf(absentTxHashes);
+        }
     }
 
     private void assertCurrentProposalApiStatus(GovActionProposal proposal, ProposalStatus expectedStatus) {

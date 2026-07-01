@@ -108,7 +108,7 @@ public class ProposalApiService {
 
         Map<String, GovActionProposalStatus> statusMap = statuses.stream()
                 .collect(Collectors.toMap(
-                        s -> s.getGovActionTxHash() + "#" + s.getGovActionIndex(),
+                        s -> proposalStatusKey(s.getGovActionTxHash(), s.getGovActionIndex()),
                         s -> s
                 ));
 
@@ -127,16 +127,28 @@ public class ProposalApiService {
 
         // Include proposals submitted at this epoch that don't have a status entry yet (newly created)
         if (statusFilter == null || statusFilter == GovActionStatus.ACTIVE) {
+            Set<String> proposalKeysWithStatus = statusMap.keySet();
+            if (statusFilter == GovActionStatus.ACTIVE) {
+                proposalKeysWithStatus = statusReader.findByEpoch(targetEpoch, null)
+                        .stream()
+                        .map(s -> proposalStatusKey(s.getGovActionTxHash(), s.getGovActionIndex()))
+                        .collect(Collectors.toSet());
+            }
+
             List<GovActionProposal> submittedAtEpoch = proposalReader.findByEpoch(targetEpoch);
             for (var proposal : submittedAtEpoch) {
-                String key = proposal.getTxHash() + "#" + proposal.getIndex();
-                if (!statusMap.containsKey(key)) {
+                String key = proposalStatusKey(proposal.getTxHash(), (int) proposal.getIndex());
+                if (!proposalKeysWithStatus.contains(key)) {
                     result.add(buildProposalDto(proposal, ProposalStatus.LIVE, new ProposalVotingStats()));
                 }
             }
         }
 
         return result;
+    }
+
+    private String proposalStatusKey(String txHash, int index) {
+        return txHash + "#" + index;
     }
 
     private ProposalStatus toEpochProposalStatus(GovActionStatus govActionStatus) {
