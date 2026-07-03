@@ -24,8 +24,8 @@
 
 ### Latest Releases
 
-- **Stable Release**: [v2.0.1](https://github.com/bloxbean/yaci-store/releases/tag/v2.0.1) - Production-ready release
-- **Pre-release**: [v2.1.0-pre3](https://github.com/bloxbean/yaci-store/releases/tag/v2.1.0-pre3) - Latest pre-release with new features and improvements
+- **Stable Release**: [v2.0.2](https://github.com/bloxbean/yaci-store/releases/tag/v2.0.2) - Production-ready release
+- **Pre-release**: [v3.0.0-beta3](https://github.com/bloxbean/yaci-store/releases/tag/v3.0.0-beta3) - Latest pre-release with new features and improvements
 
 ### Core Stores
 
