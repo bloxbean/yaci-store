@@ -17,6 +17,7 @@ import com.bloxbean.cardano.yaci.store.governanceaggr.domain.ProposalVotingStats
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.model.GovActionProposalStatusEntity;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.repository.GovActionProposalStatusRepository;
 import com.bloxbean.cardano.yaci.store.test.e2e.common.BaseE2ETest;
+import com.bloxbean.cardano.yaci.store.test.e2e.common.GovernanceApiAssertionHelper;
 import com.bloxbean.cardano.yaci.store.test.e2e.common.GovernanceAssertionHelper;
 import com.bloxbean.cardano.yaci.store.test.e2e.common.GovernanceTxHelper;
 import com.bloxbean.cardano.yaci.store.test.e2e.common.GovernanceTxHelper.CreatedProposal;
@@ -59,6 +60,7 @@ class GovernanceProposalLifecycleIT extends BaseE2ETest {
 
     private GovernanceTxHelper governanceTxHelper;
     private GovernanceAssertionHelper governanceAssertionHelper;
+    private GovernanceApiAssertionHelper governanceApiAssertionHelper;
 
     @Autowired
     private GovActionProposalStorage govActionProposalStorage;
@@ -85,7 +87,8 @@ class GovernanceProposalLifecycleIT extends BaseE2ETest {
     void setup() {
         // The helper lifetime must match the devnet protocol parameter used below.
         governanceTxHelper = new GovernanceTxHelper(backendService, govActionProposalStorage, GOV_ACTION_LIFETIME);
-        governanceAssertionHelper = new GovernanceAssertionHelper(govActionProposalStorage, proposalStatusRepository, proposalApiService);
+        governanceAssertionHelper = new GovernanceAssertionHelper(govActionProposalStorage, proposalStatusRepository);
+        governanceApiAssertionHelper = new GovernanceApiAssertionHelper(proposalApiService);
     }
 
     static class DevKitInitializer implements ApplicationContextInitializer<ConfigurableApplicationContext> {
@@ -143,11 +146,11 @@ class GovernanceProposalLifecycleIT extends BaseE2ETest {
         assertActiveUntilLastOpportunity(infoProposal);
         assertExpiredAtLifecycleBoundary(infoProposal);
         assertProposalRefund(infoProposal, account0.stakeAddress());
-        governanceAssertionHelper.assertLatestApiStatus(infoProposal.txHash(), infoProposal.index(), ProposalStatus.EXPIRED);
+        governanceApiAssertionHelper.assertLatestApiStatus(infoProposal.txHash(), infoProposal.index(), ProposalStatus.EXPIRED);
 
         assertActiveUntilLastOpportunity(noConfidenceProposal);
         assertExpiredAtLifecycleBoundary(noConfidenceProposal);
-        governanceAssertionHelper.assertLatestApiStatus(noConfidenceProposal.txHash(), noConfidenceProposal.index(), ProposalStatus.EXPIRED);
+        governanceApiAssertionHelper.assertLatestApiStatus(noConfidenceProposal.txHash(), noConfidenceProposal.index(), ProposalStatus.EXPIRED);
     }
 
     /**
@@ -165,27 +168,27 @@ class GovernanceProposalLifecycleIT extends BaseE2ETest {
         // ACTIVE at the current boundary is still a live proposal.
         GovActionProposal currentActive = saveSyntheticProposal("api-current-active", latestCompletedEpoch, GovActionType.INFO_ACTION);
         saveStatus(currentActive, latestCompletedEpoch, GovActionStatus.ACTIVE);
-        governanceAssertionHelper.assertLatestApiStatus(currentActive.getTxHash(), (int) currentActive.getIndex(), ProposalStatus.LIVE);
+        governanceApiAssertionHelper.assertLatestApiStatus(currentActive.getTxHash(), (int) currentActive.getIndex(), ProposalStatus.LIVE);
 
         // EXPIRED is terminal and should not be remapped by later AdaPot jobs.
         GovActionProposal expired = saveSyntheticProposal("api-expired", staleEpoch, GovActionType.INFO_ACTION);
         saveStatus(expired, staleEpoch, GovActionStatus.EXPIRED);
-        governanceAssertionHelper.assertLatestApiStatus(expired.getTxHash(), (int) expired.getIndex(), ProposalStatus.EXPIRED);
+        governanceApiAssertionHelper.assertLatestApiStatus(expired.getTxHash(), (int) expired.getIndex(), ProposalStatus.EXPIRED);
 
         // A stale ACTIVE row means the proposal disappeared from current state, so the API reports DROPPED.
         GovActionProposal staleActive = saveSyntheticProposal("api-stale-active", staleEpoch, GovActionType.PARAMETER_CHANGE_ACTION);
         saveStatus(staleActive, staleEpoch, GovActionStatus.ACTIVE);
-        governanceAssertionHelper.assertLatestApiStatus(staleActive.getTxHash(), (int) staleActive.getIndex(), ProposalStatus.DROPPED);
+        governanceApiAssertionHelper.assertLatestApiStatus(staleActive.getTxHash(), (int) staleActive.getIndex(), ProposalStatus.DROPPED);
 
         // RATIFIED at the current boundary is visible as ratified until a later completed job advances.
         GovActionProposal currentRatified = saveSyntheticProposal("api-current-ratified", latestCompletedEpoch, GovActionType.PARAMETER_CHANGE_ACTION);
         saveStatus(currentRatified, latestCompletedEpoch, GovActionStatus.RATIFIED);
-        governanceAssertionHelper.assertLatestApiStatus(currentRatified.getTxHash(), (int) currentRatified.getIndex(), ProposalStatus.RATIFIED);
+        governanceApiAssertionHelper.assertLatestApiStatus(currentRatified.getTxHash(), (int) currentRatified.getIndex(), ProposalStatus.RATIFIED);
 
         // Once RATIFIED is stale, the API exposes it as enacted.
         GovActionProposal staleRatified = saveSyntheticProposal("api-stale-ratified", staleEpoch, GovActionType.PARAMETER_CHANGE_ACTION);
         saveStatus(staleRatified, staleEpoch, GovActionStatus.RATIFIED);
-        governanceAssertionHelper.assertLatestApiStatus(staleRatified.getTxHash(), (int) staleRatified.getIndex(), ProposalStatus.ENACTED);
+        governanceApiAssertionHelper.assertLatestApiStatus(staleRatified.getTxHash(), (int) staleRatified.getIndex(), ProposalStatus.ENACTED);
     }
 
     /**

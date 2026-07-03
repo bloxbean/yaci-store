@@ -1,9 +1,6 @@
 package com.bloxbean.cardano.yaci.store.test.e2e.common;
 
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionId;
-import com.bloxbean.cardano.yaci.store.api.governanceaggr.dto.ProposalDto;
-import com.bloxbean.cardano.yaci.store.api.governanceaggr.dto.ProposalStatus;
-import com.bloxbean.cardano.yaci.store.api.governanceaggr.service.ProposalApiService;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
 import com.bloxbean.cardano.yaci.store.governance.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.governance.storage.GovActionProposalStorage;
@@ -22,14 +19,11 @@ import static org.awaitility.Awaitility.await;
 public class GovernanceAssertionHelper {
     private final GovActionProposalStorage govActionProposalStorage;
     private final GovActionProposalStatusRepository govActionProposalStatusRepository;
-    private final ProposalApiService proposalApiService;
 
     public GovernanceAssertionHelper(GovActionProposalStorage govActionProposalStorage,
-                                     GovActionProposalStatusRepository govActionProposalStatusRepository,
-                                     ProposalApiService proposalApiService) {
+                                     GovActionProposalStatusRepository govActionProposalStatusRepository) {
         this.govActionProposalStorage = govActionProposalStorage;
         this.govActionProposalStatusRepository = govActionProposalStatusRepository;
-        this.proposalApiService = proposalApiService;
     }
 
     public record StatusEpochs(int createdEpoch, int maxVotingEpoch, int expiryStatusEpoch) {
@@ -51,15 +45,6 @@ public class GovernanceAssertionHelper {
         await().atMost(Duration.ofSeconds(30))
                 .pollInterval(Duration.ofSeconds(1))
                 .untilAsserted(() -> assertThat(findProposalStatus(txHash, index, epoch)).isEmpty());
-    }
-
-    public ProposalDto assertLatestApiStatus(String txHash, int index, ProposalStatus expectedStatus) {
-        await().atMost(Duration.ofSeconds(60))
-                .pollInterval(Duration.ofSeconds(1))
-                .untilAsserted(() -> assertThat(proposalApiService.getProposalById(txHash, index))
-                        .hasValueSatisfying(proposal -> assertThat(proposal.getStatus()).isEqualTo(expectedStatus)));
-
-        return proposalApiService.getProposalById(txHash, index).orElseThrow();
     }
 
     public ProposalVotingStats assertVotingStats(String txHash,

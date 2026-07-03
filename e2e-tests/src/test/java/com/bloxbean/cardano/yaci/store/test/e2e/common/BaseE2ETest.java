@@ -19,6 +19,8 @@ import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.repository.Go
 import org.awaitility.core.ConditionTimeoutException;
 
 import java.time.Duration;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -156,6 +158,22 @@ public class BaseE2ETest {
         return config;
     }
 
+    protected static Map<String, String> standardGovernanceConfig(int epochLength, int govActionLifetime, BigDecimal threshold) {
+        Map<String, String> config = baseGovernanceConfig(epochLength, govActionLifetime);
+        String thresholdValue = threshold.stripTrailingZeros().toPlainString();
+
+        putPoolThresholds(config, thresholdValue);
+        putDRepThresholds(config, thresholdValue);
+        config.put("dvtTreasuryWithdrawal", thresholdValue);
+        putCommitteeThreshold(config, threshold);
+        config.put("committeeMinSize", "1");
+        config.put("committeeMaxTermLength", "200");
+        config.put("constitutionScript", "");
+        config.put("protocolMajorVer", "10");
+
+        return config;
+    }
+
     protected static Map<String, String> bootstrapGovernanceConfig(int epochLength, int govActionLifetime) {
         Map<String, String> config = permissiveGovernanceConfig(epochLength, govActionLifetime);
         config.put("protocolMajorVer", "9");
@@ -189,6 +207,12 @@ public class BaseE2ETest {
         config.put("dvtPPEconomicGroup", value);
         config.put("dvtPPTechnicalGroup", value);
         config.put("dvtPPGovGroup", value);
+    }
+
+    private static void putCommitteeThreshold(Map<String, String> config, BigDecimal threshold) {
+        BigDecimal scaled = threshold.setScale(2, RoundingMode.UNNECESSARY).movePointRight(2);
+        config.put("ccThresholdNumerator", scaled.toBigIntegerExact().toString());
+        config.put("ccThresholdDenominator", "100");
     }
 
     private String buildAdaPotJobTimeoutMessage(AdaPotJobRepository adaPotJobRepository, long epoch, Supplier<String> extraDiagnostics) {
