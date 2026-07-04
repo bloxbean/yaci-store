@@ -28,6 +28,7 @@ public class TransactionStoreAutoConfiguration {
         transactionStoreProperties.setPruningSafeSlots(properties.getTransaction().getPruningSafeSlots());
         transactionStoreProperties.setSaveWitness(properties.getTransaction().isSaveWitness());
         transactionStoreProperties.setSaveCbor(properties.getTransaction().isSaveCbor());
+        transactionStoreProperties.setSaveFullTxCbor(properties.getTransaction().isSaveFullTxCbor());
         transactionStoreProperties.setCborPruningEnabled(properties.getTransaction().isCborPruningEnabled());
         transactionStoreProperties.setCborPruningSafeSlots(properties.getTransaction().getCborPruningSafeSlots());
 
