@@ -23,8 +23,8 @@ class FullTxCborReassemblerTest {
 
     private static final String INPUT_TX_HASH = "9f8e77293350ba62c88bb1ee1633912a3e64950be96fb6b1613e421b52c6971d";
     private static final String OUTPUT_ADDRESS = "addr_test1vpfwv0ezc5g8a4mkku8hhy3y3vp92t7s3ul8g778g5yegsgalc6gc";
-    // 32-byte vkey / 64-byte signature -- structurally valid hex lengths (not real key material;
-    // this test exercises CBOR reassembly/round-tripping, not signature verification).
+    // Placeholder hex values with the correct verification key and signature byte lengths. They are
+    // not real key material; the test verifies CBOR reassembly and round tripping, not signatures.
     private static final String VKEY_HEX = "0123456789abcdef".repeat(4);
     private static final String SIGNATURE_HEX = "0123456789abcdef".repeat(8);
 

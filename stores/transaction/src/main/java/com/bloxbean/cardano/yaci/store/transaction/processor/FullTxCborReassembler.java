@@ -17,7 +17,9 @@ import com.bloxbean.cardano.client.transaction.spec.BootstrapWitness;
 import com.bloxbean.cardano.client.transaction.spec.TransactionWitnessSet;
 import com.bloxbean.cardano.client.transaction.spec.VkeyWitness;
 import com.bloxbean.cardano.client.transaction.spec.script.NativeScript;
+import com.bloxbean.cardano.yaci.core.model.AuxData;
 import com.bloxbean.cardano.yaci.core.model.PlutusScript;
+import com.bloxbean.cardano.yaci.core.model.Witnesses;
 import com.bloxbean.cardano.yaci.core.util.CborSerializationUtil;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import lombok.extern.slf4j.Slf4j;
@@ -108,11 +110,57 @@ public class FullTxCborReassembler {
     private static TransactionWitnessSet buildWitnessSet(com.bloxbean.cardano.yaci.helper.model.Transaction tx) {
         TransactionWitnessSet.TransactionWitnessSetBuilder builder = TransactionWitnessSet.builder();
 
-        var witnesses = tx.getWitnesses();
+        Witnesses witnesses = tx.getWitnesses();
         if (witnesses == null) {
             return builder.build();
         }
 
+        String txHash = tx.getTxHash();
+
+        List<VkeyWitness> vkeyWitnesses = mapVkeyWitnesses(witnesses, txHash);
+        if (!vkeyWitnesses.isEmpty()) {
+            builder.vkeyWitnesses(vkeyWitnesses);
+        }
+
+        List<BootstrapWitness> bootstrapWitnesses = mapBootstrapWitnesses(witnesses, txHash);
+        if (!bootstrapWitnesses.isEmpty()) {
+            builder.bootstrapWitnesses(bootstrapWitnesses);
+        }
+
+        List<PlutusV1Script> plutusV1Scripts = mapWitnessPlutusV1Scripts(witnesses, txHash);
+        if (!plutusV1Scripts.isEmpty()) {
+            builder.plutusV1Scripts(plutusV1Scripts);
+        }
+
+        List<PlutusV2Script> plutusV2Scripts = mapWitnessPlutusV2Scripts(witnesses, txHash);
+        if (!plutusV2Scripts.isEmpty()) {
+            builder.plutusV2Scripts(plutusV2Scripts);
+        }
+
+        List<PlutusV3Script> plutusV3Scripts = mapWitnessPlutusV3Scripts(witnesses, txHash);
+        if (!plutusV3Scripts.isEmpty()) {
+            builder.plutusV3Scripts(plutusV3Scripts);
+        }
+
+        List<NativeScript> nativeScripts = mapWitnessNativeScripts(witnesses, txHash);
+        if (!nativeScripts.isEmpty()) {
+            builder.nativeScripts(nativeScripts);
+        }
+
+        List<Redeemer> redeemers = mapRedeemers(witnesses, txHash);
+        if (!redeemers.isEmpty()) {
+            builder.redeemers(redeemers);
+        }
+
+        List<PlutusData> plutusDataList = mapWitnessDatums(witnesses, txHash);
+        if (!plutusDataList.isEmpty()) {
+            builder.plutusDataList(plutusDataList);
+        }
+
+        return builder.build();
+    }
+
+    private static List<VkeyWitness> mapVkeyWitnesses(Witnesses witnesses, String txHash) {
         List<VkeyWitness> vkeyWitnesses = new ArrayList<>();
         if (witnesses.getVkeyWitnesses() != null) {
             for (var vkeyWitness : witnesses.getVkeyWitnesses()) {
@@ -121,14 +169,14 @@ public class FullTxCborReassembler {
                             HexUtil.decodeHexString(vkeyWitness.getKey()),
                             HexUtil.decodeHexString(vkeyWitness.getSignature())));
                 } catch (Exception e) {
-                    log.debug("Skipping malformed vkey witness for tx {}: {}", tx.getTxHash(), e.getMessage());
+                    log.debug("Skipping malformed vkey witness for tx {}: {}", txHash, e.getMessage());
                 }
             }
         }
-        if (!vkeyWitnesses.isEmpty()) {
-            builder.vkeyWitnesses(vkeyWitnesses);
-        }
+        return vkeyWitnesses;
+    }
 
+    private static List<BootstrapWitness> mapBootstrapWitnesses(Witnesses witnesses, String txHash) {
         List<BootstrapWitness> bootstrapWitnesses = new ArrayList<>();
         if (witnesses.getBootstrapWitnesses() != null) {
             for (var bootstrapWitness : witnesses.getBootstrapWitnesses()) {
@@ -140,71 +188,71 @@ public class FullTxCborReassembler {
                             .attributes(HexUtil.decodeHexString(bootstrapWitness.getAttributes()))
                             .build());
                 } catch (Exception e) {
-                    log.debug("Skipping malformed bootstrap witness for tx {}: {}", tx.getTxHash(), e.getMessage());
+                    log.debug("Skipping malformed bootstrap witness for tx {}: {}", txHash, e.getMessage());
                 }
             }
         }
-        if (!bootstrapWitnesses.isEmpty()) {
-            builder.bootstrapWitnesses(bootstrapWitnesses);
-        }
+        return bootstrapWitnesses;
+    }
 
+    private static List<PlutusV1Script> mapWitnessPlutusV1Scripts(Witnesses witnesses, String txHash) {
         List<PlutusV1Script> plutusV1Scripts = new ArrayList<>();
         if (witnesses.getPlutusV1Scripts() != null) {
             for (PlutusScript plutusScript : witnesses.getPlutusV1Scripts()) {
                 try {
                     plutusV1Scripts.add(PlutusV1Script.deserialize(decodeAsByteString(plutusScript.getContent())));
                 } catch (Exception e) {
-                    log.debug("Skipping malformed PlutusV1 script for tx {}: {}", tx.getTxHash(), e.getMessage());
+                    log.debug("Skipping malformed PlutusV1 script for tx {}: {}", txHash, e.getMessage());
                 }
             }
         }
-        if (!plutusV1Scripts.isEmpty()) {
-            builder.plutusV1Scripts(plutusV1Scripts);
-        }
+        return plutusV1Scripts;
+    }
 
+    private static List<PlutusV2Script> mapWitnessPlutusV2Scripts(Witnesses witnesses, String txHash) {
         List<PlutusV2Script> plutusV2Scripts = new ArrayList<>();
         if (witnesses.getPlutusV2Scripts() != null) {
             for (PlutusScript plutusScript : witnesses.getPlutusV2Scripts()) {
                 try {
                     plutusV2Scripts.add(PlutusV2Script.deserialize(decodeAsByteString(plutusScript.getContent())));
                 } catch (Exception e) {
-                    log.debug("Skipping malformed PlutusV2 script for tx {}: {}", tx.getTxHash(), e.getMessage());
+                    log.debug("Skipping malformed PlutusV2 script for tx {}: {}", txHash, e.getMessage());
                 }
             }
         }
-        if (!plutusV2Scripts.isEmpty()) {
-            builder.plutusV2Scripts(plutusV2Scripts);
-        }
+        return plutusV2Scripts;
+    }
 
+    private static List<PlutusV3Script> mapWitnessPlutusV3Scripts(Witnesses witnesses, String txHash) {
         List<PlutusV3Script> plutusV3Scripts = new ArrayList<>();
         if (witnesses.getPlutusV3Scripts() != null) {
             for (PlutusScript plutusScript : witnesses.getPlutusV3Scripts()) {
                 try {
                     plutusV3Scripts.add(PlutusV3Script.deserialize(decodeAsByteString(plutusScript.getContent())));
                 } catch (Exception e) {
-                    log.debug("Skipping malformed PlutusV3 script for tx {}: {}", tx.getTxHash(), e.getMessage());
+                    log.debug("Skipping malformed PlutusV3 script for tx {}: {}", txHash, e.getMessage());
                 }
             }
         }
-        if (!plutusV3Scripts.isEmpty()) {
-            builder.plutusV3Scripts(plutusV3Scripts);
-        }
+        return plutusV3Scripts;
+    }
 
-        // Native script JSON shape may not map cleanly onto CCL's NativeScript -- skip silently per-item on failure.
+    // Native script JSON shape may not map cleanly onto CCL's NativeScript -- skip silently per-item on failure.
+    private static List<NativeScript> mapWitnessNativeScripts(Witnesses witnesses, String txHash) {
         List<NativeScript> nativeScripts = new ArrayList<>();
         if (witnesses.getNativeScripts() != null) {
             for (var nativeScript : witnesses.getNativeScripts()) {
                 try {
                     nativeScripts.add(NativeScript.deserializeJson(nativeScript.getContent()));
                 } catch (Exception e) {
-                    log.debug("Skipping native script for tx {}: {}", tx.getTxHash(), e.getMessage());
+                    log.debug("Skipping native script for tx {}: {}", txHash, e.getMessage());
                 }
             }
         }
-        if (!nativeScripts.isEmpty()) {
-            builder.nativeScripts(nativeScripts);
-        }
+        return nativeScripts;
+    }
 
+    private static List<Redeemer> mapRedeemers(Witnesses witnesses, String txHash) {
         List<Redeemer> redeemers = new ArrayList<>();
         if (witnesses.getRedeemers() != null) {
             for (var redeemer : witnesses.getRedeemers()) {
@@ -215,29 +263,25 @@ public class FullTxCborReassembler {
                     DataItem redeemerDataItem = CborSerializationUtil.deserializeOne(HexUtil.decodeHexString(redeemer.getCbor()));
                     redeemers.add(Redeemer.deserializePreConway((Array) redeemerDataItem));
                 } catch (Exception e) {
-                    log.debug("Skipping malformed redeemer for tx {}: {}", tx.getTxHash(), e.getMessage());
+                    log.debug("Skipping malformed redeemer for tx {}: {}", txHash, e.getMessage());
                 }
             }
         }
-        if (!redeemers.isEmpty()) {
-            builder.redeemers(redeemers);
-        }
+        return redeemers;
+    }
 
+    private static List<PlutusData> mapWitnessDatums(Witnesses witnesses, String txHash) {
         List<PlutusData> plutusDataList = new ArrayList<>();
         if (witnesses.getDatums() != null) {
             for (var datum : witnesses.getDatums()) {
                 try {
                     plutusDataList.add(PlutusData.deserialize(HexUtil.decodeHexString(datum.getCbor())));
                 } catch (Exception e) {
-                    log.debug("Skipping malformed datum for tx {}: {}", tx.getTxHash(), e.getMessage());
+                    log.debug("Skipping malformed datum for tx {}: {}", txHash, e.getMessage());
                 }
             }
         }
-        if (!plutusDataList.isEmpty()) {
-            builder.plutusDataList(plutusDataList);
-        }
-
-        return builder.build();
+        return plutusDataList;
     }
 
     /**
@@ -246,87 +290,117 @@ public class FullTxCborReassembler {
      * there's no aux data at all, or nothing could be mapped from it (caller then emits CBOR {@code null}).
      */
     private static AuxiliaryData buildAuxiliaryData(com.bloxbean.cardano.yaci.helper.model.Transaction tx) {
-        var auxData = tx.getAuxData();
+        AuxData auxData = tx.getAuxData();
         if (auxData == null) {
             return null;
         }
 
+        String txHash = tx.getTxHash();
         AuxiliaryData.AuxiliaryDataBuilder builder = AuxiliaryData.builder();
         boolean hasContent = false;
 
-        String metadataCborHex = auxData.getMetadataCbor();
-        if (metadataCborHex != null && !metadataCborHex.isEmpty()) {
-            try {
-                DataItem metadataDataItem = CborSerializationUtil.deserializeOne(HexUtil.decodeHexString(metadataCborHex));
-                CBORMetadata cborMetadata = CBORMetadata.deserialize((Map) metadataDataItem);
-                builder.metadata(cborMetadata);
-                hasContent = true;
-            } catch (Exception e) {
-                log.debug("Skipping malformed auxiliary metadata for tx {}: {}", tx.getTxHash(), e.getMessage());
-            }
+        CBORMetadata cborMetadata = mapAuxiliaryMetadata(auxData, txHash);
+        if (cborMetadata != null) {
+            builder.metadata(cborMetadata);
+            hasContent = true;
         }
 
-        List<NativeScript> nativeScripts = new ArrayList<>();
-        if (auxData.getNativeScripts() != null) {
-            for (var nativeScript : auxData.getNativeScripts()) {
-                try {
-                    nativeScripts.add(NativeScript.deserializeJson(nativeScript.getContent()));
-                } catch (Exception e) {
-                    log.debug("Skipping malformed auxiliary native script for tx {}: {}", tx.getTxHash(), e.getMessage());
-                }
-            }
-        }
+        List<NativeScript> nativeScripts = mapAuxiliaryNativeScripts(auxData, txHash);
         if (!nativeScripts.isEmpty()) {
             builder.nativeScripts(nativeScripts);
             hasContent = true;
         }
 
-        List<PlutusV1Script> plutusV1Scripts = new ArrayList<>();
-        if (auxData.getPlutusV1Scripts() != null) {
-            for (PlutusScript plutusScript : auxData.getPlutusV1Scripts()) {
-                try {
-                    plutusV1Scripts.add(PlutusV1Script.deserialize(decodeAsByteString(plutusScript.getContent())));
-                } catch (Exception e) {
-                    log.debug("Skipping malformed auxiliary PlutusV1 script for tx {}: {}", tx.getTxHash(), e.getMessage());
-                }
-            }
-        }
+        List<PlutusV1Script> plutusV1Scripts = mapAuxiliaryPlutusV1Scripts(auxData, txHash);
         if (!plutusV1Scripts.isEmpty()) {
             builder.plutusV1Scripts(plutusV1Scripts);
             hasContent = true;
         }
 
-        List<PlutusV2Script> plutusV2Scripts = new ArrayList<>();
-        if (auxData.getPlutusV2Scripts() != null) {
-            for (PlutusScript plutusScript : auxData.getPlutusV2Scripts()) {
-                try {
-                    plutusV2Scripts.add(PlutusV2Script.deserialize(decodeAsByteString(plutusScript.getContent())));
-                } catch (Exception e) {
-                    log.debug("Skipping malformed auxiliary PlutusV2 script for tx {}: {}", tx.getTxHash(), e.getMessage());
-                }
-            }
-        }
+        List<PlutusV2Script> plutusV2Scripts = mapAuxiliaryPlutusV2Scripts(auxData, txHash);
         if (!plutusV2Scripts.isEmpty()) {
             builder.plutusV2Scripts(plutusV2Scripts);
             hasContent = true;
         }
 
-        List<PlutusV3Script> plutusV3Scripts = new ArrayList<>();
-        if (auxData.getPlutusV3Scripts() != null) {
-            for (PlutusScript plutusScript : auxData.getPlutusV3Scripts()) {
-                try {
-                    plutusV3Scripts.add(PlutusV3Script.deserialize(decodeAsByteString(plutusScript.getContent())));
-                } catch (Exception e) {
-                    log.debug("Skipping malformed auxiliary PlutusV3 script for tx {}: {}", tx.getTxHash(), e.getMessage());
-                }
-            }
-        }
+        List<PlutusV3Script> plutusV3Scripts = mapAuxiliaryPlutusV3Scripts(auxData, txHash);
         if (!plutusV3Scripts.isEmpty()) {
             builder.plutusV3Scripts(plutusV3Scripts);
             hasContent = true;
         }
 
         return hasContent ? builder.build() : null;
+    }
+
+    private static CBORMetadata mapAuxiliaryMetadata(AuxData auxData, String txHash) {
+        String metadataCborHex = auxData.getMetadataCbor();
+        if (metadataCborHex == null || metadataCborHex.isEmpty()) {
+            return null;
+        }
+
+        try {
+            DataItem metadataDataItem = CborSerializationUtil.deserializeOne(HexUtil.decodeHexString(metadataCborHex));
+            return CBORMetadata.deserialize((Map) metadataDataItem);
+        } catch (Exception e) {
+            log.debug("Skipping malformed auxiliary metadata for tx {}: {}", txHash, e.getMessage());
+            return null;
+        }
+    }
+
+    private static List<NativeScript> mapAuxiliaryNativeScripts(AuxData auxData, String txHash) {
+        List<NativeScript> nativeScripts = new ArrayList<>();
+        if (auxData.getNativeScripts() != null) {
+            for (var nativeScript : auxData.getNativeScripts()) {
+                try {
+                    nativeScripts.add(NativeScript.deserializeJson(nativeScript.getContent()));
+                } catch (Exception e) {
+                    log.debug("Skipping malformed auxiliary native script for tx {}: {}", txHash, e.getMessage());
+                }
+            }
+        }
+        return nativeScripts;
+    }
+
+    private static List<PlutusV1Script> mapAuxiliaryPlutusV1Scripts(AuxData auxData, String txHash) {
+        List<PlutusV1Script> plutusV1Scripts = new ArrayList<>();
+        if (auxData.getPlutusV1Scripts() != null) {
+            for (PlutusScript plutusScript : auxData.getPlutusV1Scripts()) {
+                try {
+                    plutusV1Scripts.add(PlutusV1Script.deserialize(decodeAsByteString(plutusScript.getContent())));
+                } catch (Exception e) {
+                    log.debug("Skipping malformed auxiliary PlutusV1 script for tx {}: {}", txHash, e.getMessage());
+                }
+            }
+        }
+        return plutusV1Scripts;
+    }
+
+    private static List<PlutusV2Script> mapAuxiliaryPlutusV2Scripts(AuxData auxData, String txHash) {
+        List<PlutusV2Script> plutusV2Scripts = new ArrayList<>();
+        if (auxData.getPlutusV2Scripts() != null) {
+            for (PlutusScript plutusScript : auxData.getPlutusV2Scripts()) {
+                try {
+                    plutusV2Scripts.add(PlutusV2Script.deserialize(decodeAsByteString(plutusScript.getContent())));
+                } catch (Exception e) {
+                    log.debug("Skipping malformed auxiliary PlutusV2 script for tx {}: {}", txHash, e.getMessage());
+                }
+            }
+        }
+        return plutusV2Scripts;
+    }
+
+    private static List<PlutusV3Script> mapAuxiliaryPlutusV3Scripts(AuxData auxData, String txHash) {
+        List<PlutusV3Script> plutusV3Scripts = new ArrayList<>();
+        if (auxData.getPlutusV3Scripts() != null) {
+            for (PlutusScript plutusScript : auxData.getPlutusV3Scripts()) {
+                try {
+                    plutusV3Scripts.add(PlutusV3Script.deserialize(decodeAsByteString(plutusScript.getContent())));
+                } catch (Exception e) {
+                    log.debug("Skipping malformed auxiliary PlutusV3 script for tx {}: {}", txHash, e.getMessage());
+                }
+            }
+        }
+        return plutusV3Scripts;
     }
 
     /**

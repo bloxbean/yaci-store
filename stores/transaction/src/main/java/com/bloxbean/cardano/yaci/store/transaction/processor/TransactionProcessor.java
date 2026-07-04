@@ -131,9 +131,7 @@ public class TransactionProcessor {
                     .invalid(transaction.isInvalid())
                     .build();
 
-            if (collectCbor) {
-                collectTransactionCbor(transaction, txnCborList);
-            }
+            collectCborIfEnabled(collectCbor, transaction, txnCborList);
 
             if (fee == null && transaction.isInvalid()) { //will be resolved in pre-commit event as it can't be resolved now due to parallel processing.
                 invalidUnresolvedFeeTxns.add(new Tuple<>(txn, transaction));
@@ -152,10 +150,19 @@ public class TransactionProcessor {
             publisher.publishEvent(new TxnEvent(event.getMetadata(), txList));
         }
 
+        saveCollectedCbor(collectCbor, txnCborList);
+    }
+
+    private void collectCborIfEnabled(boolean collectCbor, Transaction transaction, List<TxnCbor> txnCborList) {
+        if (collectCbor) {
+            collectTransactionCbor(transaction, txnCborList);
+        }
+    }
+
+    private void saveCollectedCbor(boolean collectCbor, List<TxnCbor> txnCborList) {
         if (collectCbor && !txnCborList.isEmpty()) {
             transactionCborStorage.save(txnCborList);
         }
-
     }
 
     //Resolve collateral fee for invalid transactions -- Required during parallel processing
@@ -300,7 +307,6 @@ public class TransactionProcessor {
                 .build());
     }
 
-
     /**
     private TxResolvedInput resolveInput(String txHash, int outputIndex) {
         return utxoRepository.findById(new UtxoId(txHash, outputIndex))
@@ -320,6 +326,7 @@ public class TransactionProcessor {
     }
 
      **/
+
     private TxOuput convertOutput(TransactionOutput output) {
         if (output == null)
             return null;
