@@ -141,7 +141,7 @@ public class GovernanceTxHelper extends TransactionHelper {
     }
 
     public static ParameterChangeAction parameterChangeAction(ProtocolParamUpdate protocolParamUpdate, boolean securityGroup) {
-        return parameterChangeAction(protocolParamUpdate, securityGroup ? alwaysTrueScriptHash() : null);
+        return parameterChangeAction(protocolParamUpdate, alwaysTrueScriptHash());
     }
 
     public static TreasuryWithdrawalsAction treasuryWithdrawalsAction(String rewardAddress, BigInteger lovelace) {

@@ -47,13 +47,29 @@ public class GovernanceRuleAssertionHelper {
                     assertThat(status)
                             .as("DB status row for %s at epoch %s", govActionId, epoch)
                             .hasValueSatisfying(row -> assertThat(row.getStatus()).isEqualTo(expectedStatus));
-                    assertThat(proposalStateClient.getProposalsByStatusAndEpoch(expectedStatus, epoch))
-                            .as("ProposalStateClient %s proposals at epoch %s", expectedStatus, epoch)
-                            .anySatisfy(proposal -> {
-                                assertThat(proposal.getTxHash()).isEqualTo(govActionId.getTransactionId());
-                                assertThat(proposal.getIndex()).isEqualTo(govActionId.getGov_action_index());
-                            });
+                    assertProposalStateClientContains(govActionId, epoch, expectedStatus);
                     statusRef.set(status.orElseThrow());
+                });
+
+        return statusRef.get();
+    }
+
+    public GovActionProposalStatusEntity assertLatestDbStatus(GovActionId govActionId,
+                                                              GovActionStatus expectedStatus) {
+        AtomicReference<GovActionProposalStatusEntity> statusRef = new AtomicReference<>();
+
+        await().atMost(Duration.ofSeconds(120))
+                .pollInterval(Duration.ofSeconds(1))
+                .untilAsserted(() -> {
+                    Optional<GovActionProposalStatusEntity> status = findProposalStatuses(govActionId).stream()
+                            .filter(row -> row.getStatus() == expectedStatus)
+                            .max(Comparator.comparing(GovActionProposalStatusEntity::getEpoch));
+                    assertThat(status)
+                            .as("latest %s DB status for %s", expectedStatus, govActionId)
+                            .isPresent();
+                    GovActionProposalStatusEntity row = status.orElseThrow();
+                    assertProposalStateClientContains(govActionId, row.getEpoch(), expectedStatus);
+                    statusRef.set(row);
                 });
 
         return statusRef.get();
@@ -96,7 +112,7 @@ public class GovernanceRuleAssertionHelper {
     }
 
     public GovActionProposalStatusEntity assertMatchesLedger(GovActionId govActionId, GovActionStatus expectedStatus) {
-        GovActionProposalStatusEntity status = awaitLatestStatus(govActionId, expectedStatus);
+        GovActionProposalStatusEntity status = assertLatestDbStatus(govActionId, expectedStatus);
         assertLedgerSnapshotMatchesDb(govActionId, expectedStatus);
         return status;
     }
@@ -129,22 +145,15 @@ public class GovernanceRuleAssertionHelper {
                 .toList();
     }
 
-    private GovActionProposalStatusEntity awaitLatestStatus(GovActionId govActionId, GovActionStatus expectedStatus) {
-        AtomicReference<GovActionProposalStatusEntity> statusRef = new AtomicReference<>();
-
-        await().atMost(Duration.ofSeconds(120))
-                .pollInterval(Duration.ofSeconds(1))
-                .untilAsserted(() -> {
-                    Optional<GovActionProposalStatusEntity> status = findProposalStatuses(govActionId).stream()
-                            .filter(row -> row.getStatus() == expectedStatus)
-                            .max(Comparator.comparing(GovActionProposalStatusEntity::getEpoch));
-                    assertThat(status)
-                            .as("latest %s DB status for %s", expectedStatus, govActionId)
-                            .isPresent();
-                    statusRef.set(status.orElseThrow());
+    private void assertProposalStateClientContains(GovActionId govActionId,
+                                                   int epoch,
+                                                   GovActionStatus expectedStatus) {
+        assertThat(proposalStateClient.getProposalsByStatusAndEpoch(expectedStatus, epoch))
+                .as("ProposalStateClient %s proposals at epoch %s", expectedStatus, epoch)
+                .anySatisfy(proposal -> {
+                    assertThat(proposal.getTxHash()).isEqualTo(govActionId.getTransactionId());
+                    assertThat(proposal.getIndex()).isEqualTo(govActionId.getGov_action_index());
                 });
-
-        return statusRef.get();
     }
 
     private void assertLedgerSnapshotMatchesStatus(ProposalLedgerSnapshot snapshot, GovActionStatus dbStatus) {
