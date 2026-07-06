@@ -315,7 +315,7 @@ class GovernanceProposalOutcomeIT extends BaseE2ETest {
                     proposal.storeGovActionId(),
                     outcomeRow.getEpoch(),
                     scenario.votePlan().statsAssertions());
-            governanceRuleAssertionHelper.assertLedgerSnapshotMatchesDb(proposal.storeGovActionId(), scenario.expectedStatus());
+            governanceRuleAssertionHelper.assertDbStatusMatchesLedgerSnapshot(proposal.storeGovActionId(), scenario.expectedStatus());
             recordRatifiedCommitteePreviousAction(scenario, proposal);
         } catch (AssertionError | RuntimeException e) {
             throw new AssertionError("Governance proposal outcome scenario failed: " + scenario.name() + ".\n" + diagnostics(scenario.name(), proposal), e);

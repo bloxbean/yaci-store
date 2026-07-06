@@ -96,7 +96,7 @@ public class GovernanceRuleAssertionHelper {
         return votingStatsRef.get();
     }
 
-    public ProposalLedgerSnapshot assertLedgerSnapshotMatchesDb(GovActionId govActionId, GovActionStatus dbStatus) {
+    public ProposalLedgerSnapshot assertDbStatusMatchesLedgerSnapshot(GovActionId govActionId, GovActionStatus dbStatus) {
         AtomicReference<ProposalLedgerSnapshot> snapshotRef = new AtomicReference<>();
 
         await().atMost(Duration.ofSeconds(120))
@@ -113,7 +113,7 @@ public class GovernanceRuleAssertionHelper {
 
     public GovActionProposalStatusEntity assertMatchesLedger(GovActionId govActionId, GovActionStatus expectedStatus) {
         GovActionProposalStatusEntity status = assertLatestDbStatus(govActionId, expectedStatus);
-        assertLedgerSnapshotMatchesDb(govActionId, expectedStatus);
+        assertDbStatusMatchesLedgerSnapshot(govActionId, expectedStatus);
         return status;
     }
 
