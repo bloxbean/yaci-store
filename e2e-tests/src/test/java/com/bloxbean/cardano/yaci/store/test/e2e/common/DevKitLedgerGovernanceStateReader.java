@@ -2,15 +2,23 @@ package com.bloxbean.cardano.yaci.store.test.e2e.common;
 
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionId;
 import com.bloxbean.cardano.yaci.core.protocol.localstate.api.Era;
+import com.bloxbean.cardano.yaci.core.protocol.localstate.api.EraQuery;
+import com.bloxbean.cardano.yaci.core.protocol.localstate.api.QueryResult;
+import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.DRepStakeDistributionQuery;
+import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.DRepStakeDistributionQueryResult;
 import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.GovStateQuery;
 import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.GovStateQueryResult;
+import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.SPOStakeDistributionQuery;
+import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.SPOStakeDistributionQueryResult;
 import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.model.Proposal;
 import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.model.RatifyState;
 import com.bloxbean.cardano.yaci.helper.LocalClientProvider;
 
+import java.math.BigInteger;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -42,7 +50,7 @@ public class DevKitLedgerGovernanceStateReader implements LedgerGovernanceStateR
 
     @Override
     public ProposalLedgerSnapshot fetchProposalState(GovActionId govActionId) {
-        GovStateQueryResult govState = fetchGovState();
+        GovStateQueryResult govState = executeLocalStateQuery(new GovStateQuery(Era.Conway));
         RatifyState nextRatifyState = govState.getNextRatifyState();
 
         Proposal activeProposal = findProposal(safeProposals(govState.getProposals()), govActionId);
@@ -74,7 +82,21 @@ public class DevKitLedgerGovernanceStateReader implements LedgerGovernanceStateR
                 sourceProposal == null ? null : sourceProposal.getExpiredAfter());
     }
 
-    private GovStateQueryResult fetchGovState() {
+    @Override
+    public Map<com.bloxbean.cardano.yaci.core.model.governance.Drep, BigInteger> fetchDRepStakeDistribution(
+            List<com.bloxbean.cardano.client.transaction.spec.governance.DRep> dReps) {
+        DRepStakeDistributionQueryResult result = executeLocalStateQuery(new DRepStakeDistributionQuery(dReps));
+        return result.getDRepStakeMap();
+    }
+
+    @Override
+    public Map<com.bloxbean.cardano.yaci.core.model.certs.StakePoolId, BigInteger> fetchSPOStakeDistribution(List<String> poolKeyHashes) {
+        SPOStakeDistributionQueryResult result = executeLocalStateQuery(new SPOStakeDistributionQuery(poolKeyHashes));
+        return result.getSpoStakeMap();
+    }
+
+    @SuppressWarnings("unchecked")
+    private <T extends QueryResult> T executeLocalStateQuery(EraQuery<T> query) {
         LocalClientProvider provider = createProvider();
         try {
             provider.suppressConnectionInfoLog(true);
@@ -93,11 +115,11 @@ public class DevKitLedgerGovernanceStateReader implements LedgerGovernanceStateR
                 // The query path below will fail with context if acquire was actually required.
             }
 
-            GovStateQueryResult result = (GovStateQueryResult) queryClient
-                    .executeQuery(new GovStateQuery(Era.Conway))
+            T result = (T) queryClient
+                    .executeQuery(query)
                     .block(queryTimeout);
             if (result == null) {
-                throw new IllegalStateException("DevKit ledger state reader returned no governance state within "
+                throw new IllegalStateException("DevKit ledger state reader returned no local-state result within "
                         + queryTimeout.toSeconds() + "s");
             }
             return result;

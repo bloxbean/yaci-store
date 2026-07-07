@@ -1,10 +1,14 @@
 package com.bloxbean.cardano.yaci.store.test.e2e.common;
 
 import com.bloxbean.cardano.client.account.Account;
+import com.bloxbean.cardano.client.address.Address;
 import com.bloxbean.cardano.client.address.Credential;
 import com.bloxbean.cardano.client.api.model.Result;
 import com.bloxbean.cardano.client.backend.api.BackendService;
 import com.bloxbean.cardano.client.exception.CborSerializationException;
+import com.bloxbean.cardano.client.crypto.Blake2bUtil;
+import com.bloxbean.cardano.client.crypto.KeyGenUtil;
+import com.bloxbean.cardano.client.crypto.Keys;
 import com.bloxbean.cardano.client.crypto.SecretKey;
 import com.bloxbean.cardano.client.function.TxSigner;
 import com.bloxbean.cardano.client.function.helper.SignerProviders;
@@ -53,6 +57,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static com.bloxbean.cardano.client.common.ADAConversionUtil.adaToLovelace;
@@ -141,11 +146,12 @@ public class GovernanceTxHelper extends TransactionHelper {
     }
 
     public static ParameterChangeAction parameterChangeAction(ProtocolParamUpdate protocolParamUpdate, boolean securityGroup) {
+        // DevKit Conway genesis uses this always-true guardrail script as the initial constitution script.
         return parameterChangeAction(protocolParamUpdate, alwaysTrueScriptHash());
     }
 
     public static TreasuryWithdrawalsAction treasuryWithdrawalsAction(String rewardAddress, BigInteger lovelace) {
-        return treasuryWithdrawalsAction(rewardAddress, lovelace, alwaysTrueScriptHash());
+        return treasuryWithdrawalsAction(rewardAddress, lovelace, null);
     }
 
     public static TreasuryWithdrawalsAction treasuryWithdrawalsAction(String rewardAddress,
@@ -357,6 +363,33 @@ public class GovernanceTxHelper extends TransactionHelper {
         return testStakePool;
     }
 
+    public TestStakePool registerGeneratedStakePool(Account feePayer, Account poolOwner) {
+        Keys coldKeys = generateKeys("stake pool cold key");
+        Keys vrfKeys = generateKeys("stake pool VRF key");
+        String rewardStakeAddress = poolOwner.stakeAddress();
+        PoolRegistration poolRegistration = generatedPoolRegistration(poolOwner, coldKeys, vrfKeys);
+        TestStakePool testStakePool = new TestStakePool(
+                poolRegistration.getBech32PoolId(),
+                rewardStakeAddress,
+                coldKeys.getSkey(),
+                null);
+
+        var tx = new Tx()
+                .registerStakeAddress(rewardStakeAddress)
+                .registerPool(poolRegistration)
+                .from(feePayer.baseAddress());
+
+        var result = new QuickTxBuilder(backendService).compose(tx)
+                .withSigner(SignerProviders.signerFrom(coldKeys.getSkey()))
+                .withSigner(SignerProviders.stakeKeySignerFrom(poolOwner))
+                .withSigner(SignerProviders.signerFrom(feePayer))
+                .completeAndWait(System.out::println);
+
+        assertSuccessful(result);
+        checkIfUtxoAvailable(result.getValue(), feePayer.baseAddress());
+        return testStakePool;
+    }
+
     public Result<String> delegateStakeToTestPool(Account feePayer,
                                                   Account delegator,
                                                   TestStakePool testStakePool) {
@@ -527,6 +560,28 @@ public class GovernanceTxHelper extends TransactionHelper {
             return PoolRegistration.deserialize(cborHex);
         } catch (Exception e) {
             throw new IllegalStateException("Unable to load governance test pool registration certificate", e);
+        }
+    }
+
+    private static PoolRegistration generatedPoolRegistration(Account poolOwner, Keys coldKeys, Keys vrfKeys) {
+        Address rewardAddress = new Address(poolOwner.stakeAddress());
+        return PoolRegistration.builder()
+                .operator(HexUtil.decodeHexString(KeyGenUtil.getKeyHash(coldKeys.getVkey())))
+                .vrfKeyHash(Blake2bUtil.blake2bHash256(vrfKeys.getVkey().getBytes()))
+                .pledge(BigInteger.ZERO)
+                .cost(adaToLovelace(500))
+                .margin(new UnitInterval(BigInteger.ZERO, BigInteger.ONE))
+                .rewardAccount(HexUtil.encodeHexString(rewardAddress.getBytes()))
+                .poolOwners(Set.of(HexUtil.encodeHexString(poolOwner.stakeHdKeyPair().getPublicKey().getKeyHash())))
+                .relays(List.of())
+                .build();
+    }
+
+    private static Keys generateKeys(String purpose) {
+        try {
+            return KeyGenUtil.generateKey();
+        } catch (CborSerializationException e) {
+            throw new IllegalStateException("Unable to generate " + purpose, e);
         }
     }
 
