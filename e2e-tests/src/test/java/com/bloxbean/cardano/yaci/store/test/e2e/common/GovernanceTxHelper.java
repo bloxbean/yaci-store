@@ -25,6 +25,7 @@ import com.bloxbean.cardano.client.transaction.spec.ProtocolParamUpdate;
 import com.bloxbean.cardano.client.transaction.spec.ProtocolVersion;
 import com.bloxbean.cardano.client.transaction.spec.Withdrawal;
 import com.bloxbean.cardano.client.transaction.spec.cert.PoolRegistration;
+import com.bloxbean.cardano.client.transaction.spec.cert.ResignCommitteeColdCert;
 import com.bloxbean.cardano.client.transaction.spec.cert.StakePoolId;
 import com.bloxbean.cardano.client.transaction.spec.governance.Anchor;
 import com.bloxbean.cardano.client.transaction.spec.governance.Constitution;
@@ -482,6 +483,32 @@ public class GovernanceTxHelper extends TransactionHelper {
         var cert = new AuthCommitteeHotCert(
                 committeeColdAccount.committeeColdCredential(),
                 committeeHotAccount.committeeHotCredential());
+
+        var tx = new Tx()
+                .from(feePayer.baseAddress());
+
+        var result = new QuickTxBuilder(backendService).compose(tx)
+                .preBalanceTx((context, transaction) -> {
+                    if (transaction.getBody().getCerts() == null) {
+                        transaction.getBody().setCerts(new ArrayList<Certificate>());
+                    }
+                    transaction.getBody().getCerts().add(cert);
+                })
+                .withSigner(SignerProviders.signerFrom(feePayer))
+                .withSigner(SignerProviders.committeeColdKeySignerFrom(committeeColdAccount))
+                .completeAndWait(System.out::println);
+
+        assertSuccessful(result);
+        checkIfUtxoAvailable(result.getValue(), feePayer.baseAddress());
+        return result;
+    }
+
+    public Result<String> resignCommitteeHotKey(Account feePayer,
+                                                Account committeeColdAccount,
+                                                Anchor anchor) {
+        var cert = new ResignCommitteeColdCert(
+                committeeColdAccount.committeeColdCredential(),
+                anchor);
 
         var tx = new Tx()
                 .from(feePayer.baseAddress());
