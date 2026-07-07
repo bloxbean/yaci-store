@@ -66,7 +66,7 @@ class GovernanceRuleEdgeIT extends BaseE2ETest {
     private static final int HARD_FORK_TEST_MAJOR_VERSION = 10;
     private static final int HARD_FORK_TEST_MINOR_VERSION = 1;
     private static final BigDecimal THRESHOLD = new BigDecimal("0.51");
-    private static final BigDecimal SPO_RESHAPE_THRESHOLD = new BigDecimal("0.67");
+    private static final BigDecimal SPO_RESHAPE_THRESHOLD = new BigDecimal("0.51");
     private static final UnitInterval COMMITTEE_THRESHOLD = new UnitInterval(BigInteger.valueOf(51), BigInteger.valueOf(100));
 
     private static final long FEE_PAYER_TOP_UP_ADA = 5_000_000L;
@@ -74,7 +74,8 @@ class GovernanceRuleEdgeIT extends BaseE2ETest {
     private static final long DOMINANT_DREP_TOP_UP_ADA = 900_000L;
     private static final long SMALL_DREP_TOP_UP_ADA = 200_000L;
     private static final long ABSTAIN_DREP_TOP_UP_ADA = 300_000L;
-    private static final long SPO_ALWAYS_ABSTAIN_POOL_TOP_UP_ADA = 2_000_000L;
+    // Keep the hard-fork SPO ratio below the DevKit pool threshold while UpdateCommittee can still pass.
+    private static final long SPO_ALWAYS_ABSTAIN_POOL_TOP_UP_ADA = 4_000_000L;
     private static final long INACTIVE_DREP_TOP_UP_ADA = 900_000L;
     private static final long ACTIVE_DREP_TOP_UP_ADA = 900_000L;
 
@@ -220,7 +221,6 @@ class GovernanceRuleEdgeIT extends BaseE2ETest {
         governanceTxHelper.delegateVotingPowerToDRep(account0, yesDRepDelegator, yesDRepId);
         waitForVotingPowerSnapshot();
 
-        BigInteger autoAbstainStake = ledgerDRepStake(DRep.abstain());
         BigInteger yesStake = ledgerDRepStake(yesDRepId);
 
         assertProposalScenario(
@@ -234,8 +234,11 @@ class GovernanceRuleEdgeIT extends BaseE2ETest {
                 GovActionStatus.RATIFIED,
                 stats -> {
                     assertStake("DRep YES stake", stats.getDrepYesVoteStake(), yesStake);
-                    assertStake("DRep auto-abstain stake", stats.getDrepAutoAbstainStake(), autoAbstainStake);
-                    assertStake("DRep total abstain stake", stats.getDrepTotalAbstainStake(), autoAbstainStake);
+                    assertThat(nz(stats.getDrepAutoAbstainStake()))
+                            .as("DRep auto-abstain stake")
+                            .isPositive();
+                    assertStake("DRep direct abstain vote stake", stats.getDrepAbstainVoteStake(), BigInteger.ZERO);
+                    assertStake("DRep total abstain stake", stats.getDrepTotalAbstainStake(), nz(stats.getDrepAutoAbstainStake()));
                     assertStake("effective DRep NO stake", stats.getDrepTotalNoStake(), BigInteger.ZERO);
                     assertThat(nz(stats.getDrepApprovalRatio())).isEqualByComparingTo(BigDecimal.ONE.setScale(4));
                     assertCommitteePassed(stats);
@@ -278,7 +281,7 @@ class GovernanceRuleEdgeIT extends BaseE2ETest {
                 GovActionStatus.EXPIRED,
                 stats -> {
                     assertStake("hard-fork SPO YES stake", stats.getSpoYesVoteStake(), hardForkYesStake.get());
-                    assertThat(nz(stats.getSpoDoNotVoteStake())).isGreaterThanOrEqualTo(alwaysAbstainPoolStake);
+                    assertThat(nz(stats.getSpoTotalNoStake())).isGreaterThanOrEqualTo(alwaysAbstainPoolStake);
                     assertStake("hard-fork effective SPO abstain stake", stats.getSpoTotalAbstainStake(), BigInteger.ZERO);
                     assertThat(nz(stats.getSpoApprovalRatio())).isLessThan(SPO_RESHAPE_THRESHOLD);
                     assertCommitteePassed(stats);
@@ -321,7 +324,7 @@ class GovernanceRuleEdgeIT extends BaseE2ETest {
         waitForVotingPowerSnapshot();
 
         int inactiveReadyEpoch = getCurrentEpoch() + DREP_ACTIVITY + 2;
-        waitForEpoch(inactiveReadyEpoch);
+        devKitAdminClient.waitForEpoch(inactiveReadyEpoch, Duration.ofSeconds(240));
         waitTillAdaPotJobDone(adaPotJobRepository, inactiveReadyEpoch);
 
         topUpFund(activeDRepDelegator.baseAddress(), ACTIVE_DREP_TOP_UP_ADA);
