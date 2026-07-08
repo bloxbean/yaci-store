@@ -119,4 +119,9 @@ project(':extensions:blockfrost:blockfrost-scripts').projectDir = new File('exte
 include ':extensions:blockfrost:blockfrost-util'
 project(':extensions:blockfrost:blockfrost-util').projectDir = new File('extensions/blockfrost/util')
 
+include ':extensions:assets-ext'
+project(':extensions:assets-ext').projectDir = new File('extensions/assets-ext')
+
+include ':starters:assets-ext-spring-boot-starter'
+
 include 'e2e-tests'
