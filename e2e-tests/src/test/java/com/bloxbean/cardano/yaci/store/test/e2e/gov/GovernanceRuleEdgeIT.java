@@ -151,6 +151,7 @@ class GovernanceRuleEdgeIT extends BaseE2ETest {
 
         prepareAlwaysNoConfidenceDRepFixture(noConfidenceDelegator, normalDRepDelegator, normalDRep);
 
+        // Compare against ledger stake snapshots instead of hard-coded lovelace amounts.
         BigInteger autoYesStake = ledgerDRepStake(DRep.noConfidence());
         BigInteger normalNoStake = ledgerDRepStake(normalDRepId);
 
@@ -181,6 +182,7 @@ class GovernanceRuleEdgeIT extends BaseE2ETest {
 
         prepareAlwaysNoConfidenceDRepFixture(noConfidenceDelegator, normalDRepDelegator, normalDRep);
 
+        // The predefined DRep has no explicit vote row; ledger reshapes its stake into effective NO.
         BigInteger autoNoStake = ledgerDRepStake(DRep.noConfidence());
         BigInteger normalYesStake = ledgerDRepStake(normalDRepId);
 
@@ -221,6 +223,7 @@ class GovernanceRuleEdgeIT extends BaseE2ETest {
         governanceTxHelper.delegateVotingPowerToDRep(account0, yesDRepDelegator, yesDRepId);
         waitForVotingPowerSnapshot();
 
+        // AlwaysAbstain must stay outside the yes/(yes + no) denominator.
         BigInteger yesStake = ledgerDRepStake(yesDRepId);
 
         assertProposalScenario(
@@ -268,6 +271,7 @@ class GovernanceRuleEdgeIT extends BaseE2ETest {
         AtomicReference<BigInteger> hardForkYesStake = new AtomicReference<>();
         BigInteger alwaysAbstainPoolStake = ledgerSPOStake(spoAlwaysAbstainPool);
 
+        // Reuse the same SPO setup for both proposals; only the action type changes the default vote.
         assertProposalScenario(
                 "HardForkInitiation counts non-voting AlwaysAbstain SPO stake as NO",
                 GovActionType.HARD_FORK_INITIATION_ACTION,
@@ -323,9 +327,8 @@ class GovernanceRuleEdgeIT extends BaseE2ETest {
         governanceTxHelper.delegateVotingPowerToDRep(account0, inactiveDRepDelegator, com.bloxbean.cardano.client.governance.GovId.toDrep(inactiveDRep.drepId()));
         waitForVotingPowerSnapshot();
 
-        int inactiveReadyEpoch = getCurrentEpoch() + DREP_ACTIVITY + 2;
-        devKitAdminClient.waitForEpoch(inactiveReadyEpoch, Duration.ofSeconds(240));
-        waitTillAdaPotJobDone(adaPotJobRepository, inactiveReadyEpoch);
+        // A plain epoch wait can remain dormant and would not expire DRep activity.
+        keepGovernanceNonDormantUntilDRepCanExpire();
 
         topUpFund(activeDRepDelegator.baseAddress(), ACTIVE_DREP_TOP_UP_ADA);
         registerStakeAddresses(activeDRepDelegator);
@@ -376,9 +379,14 @@ class GovernanceRuleEdgeIT extends BaseE2ETest {
                 },
                 GovActionStatus.EXPIRED,
                 stats -> {
+                    // Ledger semantics: the resigned member is excluded from the committee ratio denominator.
+                    // The two remaining non-voters still count in the denominator as NO.
+                    int committeeDenominator = nz(stats.getCcYes()) + nz(stats.getCcNo()) + nz(stats.getCcDoNotVote());
                     assertThat(nz(stats.getDrepYesVoteStake())).isPositive();
                     assertThat(nz(stats.getCcYes())).isZero();
-                    assertThat(nz(stats.getCcAbstain())).isGreaterThanOrEqualTo(1);
+                    assertThat(committeeDenominator)
+                            .as("committee denominator after excluding the resigned member")
+                            .isEqualTo(2);
                     assertThat(nz(stats.getCcApprovalRatio())).isZero();
                 });
     }
@@ -566,6 +574,17 @@ class GovernanceRuleEdgeIT extends BaseE2ETest {
         int votingPowerReadyEpoch = getCurrentEpoch() + 2;
         waitForEpoch(votingPowerReadyEpoch);
         waitTillAdaPotJobDone(adaPotJobRepository, votingPowerReadyEpoch);
+    }
+
+    private void keepGovernanceNonDormantUntilDRepCanExpire() {
+        // Dormant epochs do not age DRep activity. Submit one InfoAction per epoch so the inactive
+        // DRep observes more non-dormant epochs than dRepActivity before the target proposal.
+        for (int i = 0; i < DREP_ACTIVITY + 2; i++) {
+            int nextStatusEpoch = getCurrentEpoch() + 1;
+            governanceTxHelper.createInfoProposalAndWait(account0, account0.stakeAddress());
+            waitForEpoch(nextStatusEpoch);
+            waitTillAdaPotJobDone(adaPotJobRepository, nextStatusEpoch);
+        }
     }
 
     private BigInteger ledgerDRepStake(DRep dRep) {
