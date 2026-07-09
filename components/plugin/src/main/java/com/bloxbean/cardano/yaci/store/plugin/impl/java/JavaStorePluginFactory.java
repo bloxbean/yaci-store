@@ -74,31 +74,37 @@ public class JavaStorePluginFactory implements PluginFactory {
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public <T> InitPlugin<T> createInitPlugin(PluginDef def) {
         return instantiate(def, PluginType.INIT, InitPlugin.class);
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public <T> FilterPlugin<T> createFilterPlugin(PluginDef def) {
         return instantiate(def, PluginType.FILTER, FilterPlugin.class);
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public <T> PreActionPlugin<T> createPreActionPlugin(PluginDef def) {
         return instantiate(def, PluginType.PRE_ACTION, PreActionPlugin.class);
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public <T> PostActionPlugin<T> createPostActionPlugin(PluginDef def) {
         return instantiate(def, PluginType.POST_ACTION, PostActionPlugin.class);
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public <T> EventHandlerPlugin<T> createEventHandlerPlugin(PluginDef def) {
         return instantiate(def, PluginType.EVENT_HANDLER, EventHandlerPlugin.class);
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public <T> SchedulerPlugin<T> createSchedulerPlugin(PluginDef def) {
         return instantiate(def, PluginType.SCHEDULER, SchedulerPlugin.class);
     }
