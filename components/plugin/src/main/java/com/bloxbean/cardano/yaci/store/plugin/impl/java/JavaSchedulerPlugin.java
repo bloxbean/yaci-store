@@ -12,8 +12,4 @@ public abstract class JavaSchedulerPlugin<T> extends AbstractJavaPlugin<T> imple
     protected JavaSchedulerPlugin(PluginDef pluginDef, PluginType pluginType, PluginContext context) {
         super(pluginDef, pluginType, context);
     }
-
-    /** Invoked on the configured schedule. */
-    @Override
-    public abstract void execute();
 }

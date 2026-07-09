@@ -25,11 +25,4 @@ public abstract class JavaFilterPlugin<T> extends AbstractJavaPlugin<T> implemen
     protected JavaFilterPlugin(PluginDef pluginDef, PluginType pluginType, PluginContext context) {
         super(pluginDef, pluginType, context);
     }
-
-    /**
-     * Filter the supplied items. Return the items that should continue downstream.
-     * Use {@link #state()} / {@link #context()} for persistence, HTTP, DB access, etc.
-     */
-    @Override
-    public abstract Collection<T> filter(Collection<T> items);
 }

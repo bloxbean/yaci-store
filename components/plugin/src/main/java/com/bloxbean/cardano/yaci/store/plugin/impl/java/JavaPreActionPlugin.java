@@ -15,8 +15,4 @@ public abstract class JavaPreActionPlugin<T> extends AbstractJavaPlugin<T> imple
     protected JavaPreActionPlugin(PluginDef pluginDef, PluginType pluginType, PluginContext context) {
         super(pluginDef, pluginType, context);
     }
-
-    /** Run before the target method invocation (and after filter plugins); return the (possibly modified) items. */
-    @Override
-    public abstract Collection<T> preAction(Collection<T> items);
 }

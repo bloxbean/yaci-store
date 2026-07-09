@@ -13,8 +13,4 @@ public abstract class JavaInitPlugin<T> extends AbstractJavaPlugin<T> implements
     protected JavaInitPlugin(PluginDef pluginDef, PluginType pluginType, PluginContext context) {
         super(pluginDef, pluginType, context);
     }
-
-    /** Runs once during plugin registry initialization. */
-    @Override
-    public abstract void initPlugin();
 }

@@ -15,8 +15,4 @@ public abstract class JavaPostActionPlugin<T> extends AbstractJavaPlugin<T> impl
     protected JavaPostActionPlugin(PluginDef pluginDef, PluginType pluginType, PluginContext context) {
         super(pluginDef, pluginType, context);
     }
-
-    /** Run after the target method invocation completes. */
-    @Override
-    public abstract void postAction(Collection<T> items);
 }

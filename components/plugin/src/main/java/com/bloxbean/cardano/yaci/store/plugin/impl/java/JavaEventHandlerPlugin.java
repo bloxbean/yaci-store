@@ -13,8 +13,4 @@ public abstract class JavaEventHandlerPlugin<T> extends AbstractJavaPlugin<T> im
     protected JavaEventHandlerPlugin(PluginDef pluginDef, PluginType pluginType, PluginContext context) {
         super(pluginDef, pluginType, context);
     }
-
-    /** Handle a published blockchain event. */
-    @Override
-    public abstract void handleEvent(Object event);
 }
