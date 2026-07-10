@@ -39,13 +39,13 @@ import java.util.List;
  * com.bloxbean.cardano.yaci.store.plugin.api.IPlugin} bookkeeping and expose a constructor
  * {@code (PluginDef, PluginType, PluginContext)}.</p>
  *
- * <p>Constructor selection (first match wins):
+ * <p>Constructor selection (first match wins):</p>
  * <ol>
  *   <li>{@code (PluginDef, PluginType, PluginContext)} — preferred, used by the base classes</li>
  *   <li>{@code (PluginContext)}</li>
  *   <li>no-arg</li>
  * </ol>
- * For (2) and (3) the class is responsible for implementing the {@link
+ * <p>For (2) and (3) the class is responsible for implementing the {@link
  * com.bloxbean.cardano.yaci.store.plugin.api.IPlugin} bookkeeping itself.</p>
  */
 @Component
