@@ -122,7 +122,7 @@ class GovernanceInterProposalIT extends BaseE2ETest {
      * A higher-priority delaying action ratifies first and leaves the lower-priority action active.
      */
     @Test
-    void actionPriorityOrdering() {
+    void higherPriorityDelayingAction_shouldHoldLowerPriorityProposal() {
         // Both proposals are created in the same epoch so the ledger must order them in one
         // RATIFY pass.
         List<CreatedProposal> proposals = createProposalsInSameEpoch(
@@ -152,7 +152,7 @@ class GovernanceInterProposalIT extends BaseE2ETest {
      * A child proposal can ratify only after its current enacted parent is in place.
      */
     @Test
-    void parentChildChain() {
+    void childProposal_shouldRatifyAfterReferencedParentIsEnacted() {
         // First enact a root constitution so the child can reference the current Constitution purpose root.
         CreatedProposal parent = createSingleProposalInFreshEpoch(
                 "parent constitution",
@@ -178,7 +178,7 @@ class GovernanceInterProposalIT extends BaseE2ETest {
      * When one root proposal ratifies, competing siblings in the same purpose group are removed.
      */
     @Test
-    void siblingDropSamePurpose() {
+    void ratifiedProposal_shouldDropCompetingSiblingInSamePurpose() {
         // Two root Constitution proposals compete in the same purpose group.
         List<CreatedProposal> proposals = createProposalsInSameEpoch(
                 proposalSpec("winning constitution sibling", GovActionType.NEW_CONSTITUTION, GovernanceTxHelper::newConstitutionAction),
@@ -204,7 +204,7 @@ class GovernanceInterProposalIT extends BaseE2ETest {
      * A delaying HardForkInitiation holds a lower-priority non-delaying proposal until the next boundary.
      */
     @Test
-    void delayingActionPropagation() {
+    void delayingHardFork_shouldDeferParameterChangeUntilNextBoundary() {
         // HardForkInitiation and ParameterChange are different purposes; any hold on
         // ParameterChange must come from rsDelayed.
         List<CreatedProposal> proposals = createProposalsInSameEpoch(
@@ -241,7 +241,7 @@ class GovernanceInterProposalIT extends BaseE2ETest {
      * A later withdrawal uses the treasury left after an earlier enacted withdrawal.
      */
     @Test
-    void treasuryContextAfterPriorWithdrawal() {
+    void laterTreasuryWithdrawal_shouldUseTreasuryAfterPriorWithdrawal() {
         BigInteger treasuryBeforeFirstWithdrawal = seedTreasuryForContextTest("treasury effect context");
         BigInteger firstWithdrawalAmount = treasuryBeforeFirstWithdrawal
                 .multiply(BigInteger.valueOf(2))

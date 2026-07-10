@@ -156,7 +156,7 @@ class GovernanceVoteTallyIT extends BaseE2ETest {
      */
     @Test
     @Order(1)
-    void dRepAbstainDenominator() {
+    void dRepAbstainStake_shouldStayOutOfAcceptedRatioDenominator() {
         ensureDRepAbstainFixture();
 
         BigInteger yesStake = ledgerDRepStake(com.bloxbean.cardano.client.governance.GovId.toDrep(drepYesAccount.drepId()));
@@ -197,7 +197,7 @@ class GovernanceVoteTallyIT extends BaseE2ETest {
      */
     @Test
     @Order(2)
-    void latestVoteWins() {
+    void latestDRepVote_shouldReplaceEarlierVote() {
         ensureDRepAbstainFixture();
 
         BigInteger drepStake = ledgerDRepStake(com.bloxbean.cardano.client.governance.GovId.toDrep(drepYesAccount.drepId()));
@@ -227,7 +227,7 @@ class GovernanceVoteTallyIT extends BaseE2ETest {
      */
     @Test
     @Order(3)
-    void spoMultiPoolStake() {
+    void spoVotes_shouldUseStakeFromAllKnownPools() {
         ensureDRepAbstainFixture();
         ensureSPOMultiPoolFixture();
 
@@ -262,7 +262,7 @@ class GovernanceVoteTallyIT extends BaseE2ETest {
      */
     @Test
     @Order(4)
-    void mixedProtocolParameterGroups() {
+    void mixedSecurityAndNetworkParameterChange_shouldRequireAllVotingGroups() {
         ensureDRepAbstainFixture();
         ensureSPOMultiPoolFixture();
 
@@ -319,7 +319,7 @@ class GovernanceVoteTallyIT extends BaseE2ETest {
      */
     @Test
     @Order(5)
-    void committeeQuorumMinSize() {
+    void committeeBelowMinimumSize_shouldBlockNewConstitutionRatification() {
         ensureDRepAbstainFixture();
         ratifyCommitteeReductionBelowMinimum();
 
