@@ -135,7 +135,7 @@ class GovernanceProposalOutcomeIT extends BaseE2ETest {
      */
     @Test
     @Order(2)
-    void actionTypeDispatch_postBootstrap() {
+    void postBootstrapActionTypes_shouldMatchLedgerOutcomes() {
         preparePostBootstrapGovernanceActors();
 
         List<ProposalOutcomeScenario> scenarios = List.of(
@@ -186,7 +186,7 @@ class GovernanceProposalOutcomeIT extends BaseE2ETest {
      */
     @Test
     @Order(1)
-    void ratifyQualifiers_postBootstrap() {
+    void postBootstrapRatificationGates_shouldBlockOtherwiseAcceptedProposals() {
         preparePostBootstrapGovernanceActors();
 
         List<ProposalOutcomeScenario> scenarios = List.of(
