@@ -174,10 +174,14 @@ class GovernanceVoteTallyIT extends BaseE2ETest {
                     governanceTxHelper.castDRepVote(account0, drepYesAccount, proposal.storeGovActionId(), Vote.YES);
                     governanceTxHelper.castDRepVote(account0, drepNoAccount, proposal.storeGovActionId(), Vote.NO);
                     castCommitteeYesVotes(proposal, COMMITTEE_MIN_SIZE);
-                    autoAbstainStake.set(ledgerDRepStake(com.bloxbean.cardano.client.transaction.spec.governance.DRep.abstain()));
                 },
                 GovActionStatus.RATIFIED,
                 stats -> {
+                    // account0 is delegated to AlwaysAbstain and pays the scenario tx fees. Read this after the
+                    // status epoch so the expected value uses the same ratification stake snapshot as yaci-store.
+                    if (autoAbstainStake.get() == null) {
+                        autoAbstainStake.set(ledgerDRepStake(com.bloxbean.cardano.client.transaction.spec.governance.DRep.abstain()));
+                    }
                     assertStake("DRep YES stake", stats.getDrepYesVoteStake(), yesStake);
                     assertStake("DRep NO stake", stats.getDrepNoVoteStake(), noStake);
                     assertStake("DRep auto-abstain stake", stats.getDrepAutoAbstainStake(), autoAbstainStake.get());
