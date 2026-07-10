@@ -152,7 +152,8 @@ public class GovernanceTxHelper extends TransactionHelper {
     }
 
     public static TreasuryWithdrawalsAction treasuryWithdrawalsAction(String rewardAddress, BigInteger lovelace) {
-        return treasuryWithdrawalsAction(rewardAddress, lovelace, null);
+        // DevKit Conway genesis uses this always-true guardrail script as the initial constitution script.
+        return treasuryWithdrawalsAction(rewardAddress, lovelace, alwaysTrueScriptHash());
     }
 
     public static TreasuryWithdrawalsAction treasuryWithdrawalsAction(String rewardAddress,
@@ -401,6 +402,22 @@ public class GovernanceTxHelper extends TransactionHelper {
         var result = new QuickTxBuilder(backendService).compose(tx)
                 .withSigner(SignerProviders.signerFrom(feePayer))
                 .withSigner(SignerProviders.stakeKeySignerFrom(delegator))
+                .completeAndWait(System.out::println);
+
+        assertSuccessful(result);
+        checkIfUtxoAvailable(result.getValue(), feePayer.baseAddress());
+        return result;
+    }
+
+    public Result<String> donateToTreasury(Account feePayer,
+                                           BigInteger currentTreasuryValue,
+                                           BigInteger donationAmount) {
+        var tx = new Tx()
+                .donateToTreasury(currentTreasuryValue, donationAmount)
+                .from(feePayer.baseAddress());
+
+        var result = new QuickTxBuilder(backendService).compose(tx)
+                .withSigner(SignerProviders.signerFrom(feePayer))
                 .completeAndWait(System.out::println);
 
         assertSuccessful(result);

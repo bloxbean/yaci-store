@@ -11,6 +11,8 @@ import java.util.Map;
 public interface LedgerGovernanceStateReader {
     ProposalLedgerSnapshot fetchProposalState(GovActionId govActionId);
 
+    BigInteger fetchTreasury();
+
     Map<Drep, BigInteger> fetchDRepStakeDistribution(List<com.bloxbean.cardano.client.transaction.spec.governance.DRep> dReps);
 
     Map<StakePoolId, BigInteger> fetchSPOStakeDistribution(List<String> poolKeyHashes);

@@ -4,6 +4,8 @@ import com.bloxbean.cardano.yaci.core.model.governance.GovActionId;
 import com.bloxbean.cardano.yaci.core.protocol.localstate.api.Era;
 import com.bloxbean.cardano.yaci.core.protocol.localstate.api.EraQuery;
 import com.bloxbean.cardano.yaci.core.protocol.localstate.api.QueryResult;
+import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.AccountStateQuery;
+import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.AccountStateQueryResult;
 import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.DRepStakeDistributionQuery;
 import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.DRepStakeDistributionQueryResult;
 import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.GovStateQuery;
@@ -80,6 +82,12 @@ public class DevKitLedgerGovernanceStateReader implements LedgerGovernanceStateR
                 nextRatifyState != null && Boolean.TRUE.equals(nextRatifyState.getRatificationDelayed()),
                 sourceProposal == null ? null : sourceProposal.getProposedIn(),
                 sourceProposal == null ? null : sourceProposal.getExpiredAfter());
+    }
+
+    @Override
+    public BigInteger fetchTreasury() {
+        AccountStateQueryResult result = executeLocalStateQuery(new AccountStateQuery(Era.Conway));
+        return result.getTreasury();
     }
 
     @Override

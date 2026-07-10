@@ -6,11 +6,9 @@ import com.bloxbean.cardano.client.crypto.cip1852.DerivationPath;
 import com.bloxbean.cardano.client.plutus.spec.ExUnits;
 import com.bloxbean.cardano.client.spec.UnitInterval;
 import com.bloxbean.cardano.client.transaction.spec.ProtocolParamUpdate;
-import com.bloxbean.cardano.client.transaction.spec.cert.StakePoolId;
 import com.bloxbean.cardano.client.transaction.spec.governance.Vote;
 import com.bloxbean.cardano.client.transaction.spec.governance.actions.GovAction;
 import com.bloxbean.cardano.client.transaction.spec.governance.actions.UpdateCommittee;
-import com.bloxbean.cardano.client.util.HexUtil;
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionId;
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
 import com.bloxbean.cardano.yaci.store.adapot.job.storage.AdaPotJobStorage;
@@ -49,7 +47,6 @@ import java.util.Map;
 import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 
 /**
@@ -64,6 +61,8 @@ class GovernanceInterProposalIT extends BaseE2ETest {
     private static final int HARD_FORK_TEST_MAJOR_VERSION = 10;
     private static final int HARD_FORK_TEST_MINOR_VERSION = 1;
     private static final long CONTROLLED_STAKE_TOP_UP_ADA = 2_000_000L;
+    private static final BigInteger TREASURY_CONTEXT_SEED_LOVELACE = BigInteger.valueOf(100_000_000_000L);
+    private static final BigInteger UNWITHDRAWABLE_TREASURY_AMOUNT_LOVELACE = BigInteger.valueOf(Long.MAX_VALUE);
     private static final BigDecimal THRESHOLD = new BigDecimal("0.51");
     private static final UnitInterval COMMITTEE_THRESHOLD = new UnitInterval(BigInteger.valueOf(51), BigInteger.valueOf(100));
 
@@ -239,39 +238,42 @@ class GovernanceInterProposalIT extends BaseE2ETest {
     }
 
     /**
-     * Ledger rejects a stale previous action id during proposal submission, before yaci-store can index it.
+     * A later withdrawal uses the treasury left after an earlier enacted withdrawal.
      */
     @Test
-    void stalePreviousActionId() {
-        // Build a valid Constitution chain A -> B so A becomes a known but no longer current
-        // previous action.
-        CreatedProposal parent = createSingleProposalInFreshEpoch(
-                "original constitution parent",
-                GovActionType.NEW_CONSTITUTION,
-                GovernanceTxHelper::newConstitutionAction);
-        castPassingVotes(GovActionType.NEW_CONSTITUTION, parent);
-        waitForRatification("original constitution parent", parent);
+    void treasuryContextAfterPriorWithdrawal() {
+        BigInteger treasuryBeforeFirstWithdrawal = seedTreasuryForContextTest("treasury effect context");
+        BigInteger firstWithdrawalAmount = treasuryBeforeFirstWithdrawal
+                .multiply(BigInteger.valueOf(2))
+                .divide(BigInteger.valueOf(3));
 
-        CreatedProposal current = createSingleProposalInFreshEpoch(
-                "current constitution child",
-                GovActionType.NEW_CONSTITUTION,
-                () -> GovernanceTxHelper.newConstitutionAction(parent.txGovActionId()));
-        castPassingVotes(GovActionType.NEW_CONSTITUTION, current);
-        waitForRatification("current constitution child", current);
+        // Withdraw a large portion first so the second proposal is evaluated after A has
+        // updated the ledger's treasury context.
+        CreatedProposal firstWithdrawal = createSingleProposalInFreshEpoch(
+                "treasury withdrawal that updates treasury context",
+                GovActionType.TREASURY_WITHDRAWALS_ACTION,
+                () -> GovernanceTxHelper.treasuryWithdrawalsAction(account0.stakeAddress(), firstWithdrawalAmount));
+        castTreasuryWithdrawalPassingVotes(firstWithdrawal);
+        waitForRatification("treasury withdrawal that updates treasury context", firstWithdrawal);
 
-        // A proposal that still points to A is rejected by ledger submit validation before
-        // yaci-store can index it.
-        assertThatThrownBy(() -> createSingleProposalInFreshEpoch(
-                "stale constitution child",
-                GovActionType.NEW_CONSTITUTION,
-                () -> GovernanceTxHelper.newConstitutionAction(parent.txGovActionId())))
-                .as("stale previous action id must be rejected by ledger submit validation\n%s",
-                        diagnostics("stale previous action id", List.of(parent, current)))
-                .isInstanceOf(AssertionError.class)
-                .hasMessageContaining("InvalidPrevGovActionId");
+        BigInteger treasuryAfterFirstWithdrawal = ledgerTreasury("treasury effect context after first withdrawal");
+        BigInteger secondWithdrawalAmount = UNWITHDRAWABLE_TREASURY_AMOUNT_LOVELACE;
+        assertThat(secondWithdrawalAmount)
+                .as("second withdrawal should stay above treasury even if the treasury grows before ratification")
+                .isGreaterThan(treasuryAfterFirstWithdrawal);
 
-        assertProposalStatus("stale previous action id", parent, GovActionStatus.RATIFIED);
-        assertProposalStatus("stale previous action id", current, GovActionStatus.RATIFIED);
+        CreatedProposal secondWithdrawal = createSingleProposalInFreshEpoch(
+                "treasury withdrawal above remaining treasury",
+                GovActionType.TREASURY_WITHDRAWALS_ACTION,
+                () -> GovernanceTxHelper.treasuryWithdrawalsAction(account0.stakeAddress(), secondWithdrawalAmount));
+        castTreasuryWithdrawalPassingVotes(secondWithdrawal);
+
+        int expiryEpoch = secondWithdrawal.expiryStatusEpoch();
+        waitForEpoch(expiryEpoch);
+        waitTillAdaPotJobDone(adaPotJobRepository, expiryEpoch,
+                () -> diagnostics("treasury withdrawal above remaining treasury", List.of(firstWithdrawal, secondWithdrawal)));
+
+        assertProposalStatus("treasury withdrawal above remaining treasury", secondWithdrawal, GovActionStatus.EXPIRED);
     }
 
     private void preparePostBootstrapGovernanceActors() {
@@ -357,6 +359,11 @@ class GovernanceInterProposalIT extends BaseE2ETest {
                 || actionType == GovActionType.HARD_FORK_INITIATION_ACTION) {
             castCommitteeYesVotes(proposal, 2);
         }
+    }
+
+    private void castTreasuryWithdrawalPassingVotes(CreatedProposal proposal) {
+        governanceTxHelper.castDRepVote(account0, drepAccount, proposal.storeGovActionId(), Vote.YES);
+        castCommitteeYesVotes(proposal, 2);
     }
 
     private void waitForRatification(String scenarioName, CreatedProposal proposal) {
@@ -445,6 +452,34 @@ class GovernanceInterProposalIT extends BaseE2ETest {
                     assertThat(snapshot.presentInEnactedGovActions()).isFalse();
                     assertThat(snapshot.presentInExpiredGovActions()).isFalse();
                 });
+    }
+
+    private BigInteger seedTreasuryForContextTest(String scenarioName) {
+        waitForEpoch(getCurrentEpoch() + 1);
+        BigInteger treasuryBeforeDonation = ledgerTreasury(scenarioName + " before treasury seed");
+        int donationEpoch = getCurrentEpoch();
+
+        governanceTxHelper.donateToTreasury(account0, treasuryBeforeDonation, TREASURY_CONTEXT_SEED_LOVELACE);
+
+        int treasuryReadyEpoch = donationEpoch + 1;
+        waitForEpoch(treasuryReadyEpoch);
+        waitTillAdaPotJobDone(adaPotJobRepository, treasuryReadyEpoch,
+                () -> diagnostics(scenarioName + " treasury seed", List.of()));
+
+        BigInteger treasuryAfterDonation = ledgerTreasury(scenarioName + " after treasury seed");
+        assertThat(treasuryAfterDonation)
+                .as("%s treasury after seed donation", scenarioName)
+                .isGreaterThan(treasuryBeforeDonation);
+        return treasuryAfterDonation;
+    }
+
+    private BigInteger ledgerTreasury(String scenarioName) {
+        try {
+            return ledgerStateReader.fetchTreasury();
+        } catch (RuntimeException e) {
+            throw new AssertionError("Ledger treasury is not available.\n"
+                    + diagnostics(scenarioName, List.of()), e);
+        }
     }
 
     private GovAction initialCommitteeAction() {
