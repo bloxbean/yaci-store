@@ -20,6 +20,7 @@ API status translation is intentionally separate from rule parity tests.
 | `GovernanceVoteTallyIT` | 5 | Vote aggregation, replacement, and acceptance-ratio parity |
 | `GovernanceRuleEdgeIT` | 5 active, 1 disabled | Default-vote reshaping and voter eligibility edges |
 | `GovernanceInterProposalIT` | 5 | Multi-proposal ordering, drop, delay, and effect-context behavior |
+| `GovernanceEffectContextIT` | 3 active, 1 disabled | Post-audit enacted-state effect contexts |
 
 ## Assertion Boundaries
 
@@ -218,12 +219,41 @@ Covers action-specific SPO default-vote reshaping:
 - A later treasury withdrawal asks for more than the remaining treasury.
 - The second withdrawal expires even with passing votes.
 
+## `GovernanceEffectContextIT`
+
+### `enactedDRepTreasuryThreshold_shouldControlLaterTreasuryWithdrawal`
+
+- A parameter-change proposal ratifies and raises `dvtTreasuryWithdrawal`.
+- The indexed epoch protocol params are asserted before the follow-up proposal.
+- A later treasury-withdrawal proposal uses the same DRep YES/NO split that would pass the old threshold.
+- The later proposal expires because yaci-store evaluates it with the enacted DRep threshold.
+
+### `enactedCommitteeThreshold_shouldControlLaterNewConstitution`
+
+- A committee-update proposal ratifies and raises the committee threshold from `1/3` to `2/3`.
+- Indexed committee threshold and member state are asserted before the follow-up proposal.
+- A later `NewConstitution` proposal has DRep support and one committee YES vote.
+- The later proposal expires because one-of-three committee support no longer satisfies the enacted threshold.
+
+### `ratifiedSibling_shouldPruneDescendantProposals`
+
+- Two root `NewConstitution` siblings and one child of the second root are created in the same epoch.
+- All three proposals receive otherwise passing votes.
+- The first root ratifies.
+- The competing root and its child are not ratified and are removed from ledger current proposals.
+
+### Disabled/deferred method
+
+#### `noConfidence_shouldRemoveCommitteeUntilUpdateCommitteeRestoresIt`
+
+- Intended coverage: no-confidence enactment removes the committee and a later update committee restores it.
+- Deferred until yaci-core `GovStateQuery` can decode absent committee state after no-confidence.
+
 ## Deferred Follow-Up
 
 - Re-enable the positive no-confidence rows after the yaci-core `GovStateQuery`
   decoding issue is fixed.
-- Re-audit `cardano-ledger` governance rules and add missing yaci-store-relevant
-  output/effect contexts without duplicating unit-test-only arithmetic cases.
+- Runtime-verify `GovernanceEffectContextIT` against a reachable DevKit runtime.
 - Add opt-in CI/runbook coverage for DevKit-backed E2E once the suite and runtime
   environment are stable enough (if needed)
 
