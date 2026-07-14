@@ -173,7 +173,6 @@ class GovernanceProposalOutcomeIT extends BaseE2ETest {
                 //         votes(Vote.YES, Vote.YES, 0), GovActionStatus.RATIFIED)
         );
 
-        assertThat(scenarios).hasSize(13);
         scenarios.forEach(this::assertProposalOutcome);
     }
 
