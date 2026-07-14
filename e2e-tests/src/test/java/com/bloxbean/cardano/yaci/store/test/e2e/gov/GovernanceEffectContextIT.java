@@ -1,17 +1,10 @@
 package com.bloxbean.cardano.yaci.store.test.e2e.gov;
 
-import co.nstant.in.cbor.CborException;
-import co.nstant.in.cbor.model.Array;
-import co.nstant.in.cbor.model.DataItem;
-import co.nstant.in.cbor.model.RationalNumber;
-import co.nstant.in.cbor.model.UnsignedInteger;
 import com.bloxbean.cardano.client.account.Account;
 import com.bloxbean.cardano.client.common.model.Networks;
 import com.bloxbean.cardano.client.crypto.cip1852.DerivationPath;
-import com.bloxbean.cardano.client.exception.CborSerializationException;
 import com.bloxbean.cardano.client.governance.GovId;
 import com.bloxbean.cardano.client.spec.UnitInterval;
-import com.bloxbean.cardano.client.transaction.spec.ProtocolParamUpdate;
 import com.bloxbean.cardano.client.transaction.spec.governance.Vote;
 import com.bloxbean.cardano.client.transaction.spec.governance.actions.GovAction;
 import com.bloxbean.cardano.client.transaction.spec.governance.actions.UpdateCommittee;
@@ -21,11 +14,9 @@ import com.bloxbean.cardano.yaci.store.adapot.job.storage.AdaPotJobStorage;
 import com.bloxbean.cardano.yaci.store.adapot.job.storage.impl.AdaPotJobRepository;
 import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
-import com.bloxbean.cardano.yaci.store.epoch.storage.EpochParamStorage;
 import com.bloxbean.cardano.yaci.store.governance.storage.CommitteeMemberStorageReader;
 import com.bloxbean.cardano.yaci.store.governance.storage.CommitteeStorageReader;
 import com.bloxbean.cardano.yaci.store.governance.storage.GovActionProposalStorage;
-import com.bloxbean.cardano.yaci.store.governanceaggr.domain.ProposalVotingStats;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.impl.repository.GovActionProposalStatusRepository;
 import com.bloxbean.cardano.yaci.store.test.e2e.common.BaseE2ETest;
 import com.bloxbean.cardano.yaci.store.test.e2e.common.DevKitLedgerGovernanceStateReader;
@@ -49,13 +40,11 @@ import org.springframework.test.context.ContextConfiguration;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.time.Duration;
-import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
 
-import static com.bloxbean.cardano.client.common.ADAConversionUtil.adaToLovelace;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
 import static org.awaitility.Awaitility.await;
@@ -70,18 +59,13 @@ class GovernanceEffectContextIT extends BaseE2ETest {
     private static final int EPOCH_LENGTH_SECONDS = 20;
     private static final int GOV_ACTION_LIFETIME = 3;
     private static final BigDecimal DEFAULT_THRESHOLD = new BigDecimal("0.51");
-    private static final BigDecimal RAISED_TREASURY_WITHDRAWAL_THRESHOLD = new BigDecimal("0.75");
     private static final UnitInterval LOW_COMMITTEE_THRESHOLD = new UnitInterval(BigInteger.ONE, BigInteger.valueOf(3));
     private static final UnitInterval RAISED_COMMITTEE_THRESHOLD = new UnitInterval(BigInteger.valueOf(2), BigInteger.valueOf(3));
-    private static final UnitInterval DEFAULT_DREP_THRESHOLD_INTERVAL = new UnitInterval(BigInteger.valueOf(51), BigInteger.valueOf(100));
-    private static final UnitInterval RAISED_TREASURY_WITHDRAWAL_INTERVAL = new UnitInterval(BigInteger.valueOf(3), BigInteger.valueOf(4));
 
     private static final long FEE_PAYER_TOP_UP_ADA = 3_000_000L;
     private static final long SETUP_POOL_TOP_UP_ADA = 2_000_000L;
     private static final long DREP_YES_TOP_UP_ADA = 700_000L;
     private static final long DREP_NO_TOP_UP_ADA = 300_000L;
-    private static final BigInteger TREASURY_SEED_LOVELACE = adaToLovelace(100);
-    private static final BigInteger TREASURY_WITHDRAWAL_LOVELACE = adaToLovelace(1);
 
     private GovernanceTxHelper governanceTxHelper;
     private GovernanceRuleAssertionHelper governanceRuleAssertionHelper;
@@ -114,9 +98,6 @@ class GovernanceEffectContextIT extends BaseE2ETest {
     private AdaPotJobStorage adaPotJobStorage;
 
     @Autowired
-    private EpochParamStorage epochParamStorage;
-
-    @Autowired
     private CommitteeStorageReader committeeStorageReader;
 
     @Autowired
@@ -146,52 +127,6 @@ class GovernanceEffectContextIT extends BaseE2ETest {
             assertDevKitAdminAvailable();
             createDevNet(standardGovernanceConfig(EPOCH_LENGTH_SECONDS, GOV_ACTION_LIFETIME, DEFAULT_THRESHOLD));
         }
-    }
-
-    /**
-     * An enacted DRep threshold change must be visible to a later treasury-withdrawal proposal.
-     */
-    // TODO: Re-enable when the transaction builder path can submit Conway governance
-    // protocol parameter updates such as dRepVotingThresholds. It seems the current
-    // cardano-client-lib ProtocolParamUpdate path may not preserve these Conway fields
-    // in the final submitted proposal, so keep this row deferred instead of adding
-    // raw CBOR fixture code here.
-    @Disabled("Deferred until Conway DRep voting-threshold parameter update submission is available without raw CBOR fixtures")
-    @Test
-    void enactedDRepTreasuryThreshold_shouldControlLaterTreasuryWithdrawal() {
-        prepareControlledDRepSplit();
-
-        CreatedProposal thresholdUpdate = createSingleProposalInFreshEpoch(
-                "DRep treasury threshold parameter change",
-                GovActionType.PARAMETER_CHANGE_ACTION,
-                this::treasuryWithdrawalThresholdUpdateAction);
-        // YES ~= 710k ADA and NO ~= 310k ADA, so the update clears the current 0.51 threshold.
-        castControlledDRepSplitVotes(thresholdUpdate);
-        castCommitteeYesVotes(thresholdUpdate, 1);
-        waitForRatification("DRep treasury threshold parameter change", thresholdUpdate);
-
-        int thresholdReadyEpoch = waitForEnactmentContext("DRep treasury threshold parameter change enactment", thresholdUpdate);
-        assertLocalTreasuryWithdrawalThreshold(thresholdReadyEpoch, RAISED_TREASURY_WITHDRAWAL_THRESHOLD);
-        seedTreasury("DRep treasury threshold context");
-
-        CreatedProposal treasuryWithdrawal = createSingleProposalInFreshEpoch(
-                "treasury withdrawal evaluated with raised DRep threshold",
-                GovActionType.TREASURY_WITHDRAWALS_ACTION,
-                () -> GovernanceTxHelper.treasuryWithdrawalsAction(account0.stakeAddress(), TREASURY_WITHDRAWAL_LOVELACE));
-        // The same DRep split still has enough support for 0.51, but not for the enacted 0.75 threshold.
-        castControlledDRepSplitVotes(treasuryWithdrawal);
-        castCommitteeYesVotes(treasuryWithdrawal, 1);
-
-        int expiryEpoch = treasuryWithdrawal.expiryStatusEpoch();
-        waitForEpoch(expiryEpoch);
-        waitTillAdaPotJobDone(adaPotJobRepository, expiryEpoch,
-                () -> diagnostics("treasury withdrawal evaluated with raised DRep threshold", List.of(thresholdUpdate, treasuryWithdrawal)));
-
-        var outcome = assertProposalStatus("treasury withdrawal evaluated with raised DRep threshold", treasuryWithdrawal, GovActionStatus.EXPIRED);
-        governanceRuleAssertionHelper.assertVotingStats(treasuryWithdrawal.storeGovActionId(), outcome.getEpoch(), stats -> {
-            assertDRepRatioBetweenDefaultAndRaisedThreshold(stats);
-            assertCommitteePassedWithOneYes(stats);
-        });
     }
 
     /**
@@ -453,21 +388,6 @@ class GovernanceEffectContextIT extends BaseE2ETest {
                 });
     }
 
-    private void assertLocalTreasuryWithdrawalThreshold(int epoch, BigDecimal expectedThreshold) {
-        await().atMost(Duration.ofSeconds(120))
-                .pollInterval(Duration.ofSeconds(2))
-                .untilAsserted(() -> {
-                    var epochParam = epochParamStorage.getProtocolParams(epoch).orElseThrow();
-                    var threshold = epochParam.getParams()
-                            .getDrepVotingThresholds()
-                            .getDvtTreasuryWithdrawal()
-                            .safeRatio();
-                    assertThat(threshold)
-                            .as("local epoch %s dvtTreasuryWithdrawal", epoch)
-                            .isEqualByComparingTo(expectedThreshold);
-                });
-    }
-
     private void assertLatestCommitteeThreshold(double expectedThreshold) {
         await().atMost(Duration.ofSeconds(120))
                 .pollInterval(Duration.ofSeconds(2))
@@ -490,21 +410,6 @@ class GovernanceEffectContextIT extends BaseE2ETest {
                         .hasSize(expectedCount));
     }
 
-    private void assertDRepRatioBetweenDefaultAndRaisedThreshold(ProposalVotingStats stats) {
-        assertThat(nz(stats.getDrepYesVoteStake())).isPositive();
-        assertThat(nz(stats.getDrepNoVoteStake())).isPositive();
-        assertThat(nz(stats.getDrepApprovalRatio()))
-                .isGreaterThan(DEFAULT_THRESHOLD)
-                .isLessThan(RAISED_TREASURY_WITHDRAWAL_THRESHOLD);
-    }
-
-    private void assertCommitteePassedWithOneYes(ProposalVotingStats stats) {
-        assertThat(nz(stats.getCcYes())).isEqualTo(1);
-        assertThat(nz(stats.getCcNo())).isZero();
-        assertThat(nz(stats.getCcAbstain())).isZero();
-        assertThat(nz(stats.getCcApprovalRatio())).isGreaterThanOrEqualTo(BigDecimal.ONE.divide(BigDecimal.valueOf(3), java.math.MathContext.DECIMAL64));
-    }
-
     private void castControlledDRepSplitVotes(CreatedProposal proposal) {
         governanceTxHelper.castDRepVote(account0, drepYesAccount, proposal.storeGovActionId(), Vote.YES);
         governanceTxHelper.castDRepVote(account0, drepNoAccount, proposal.storeGovActionId(), Vote.NO);
@@ -514,39 +419,6 @@ class GovernanceEffectContextIT extends BaseE2ETest {
         for (int i = 0; i < count; i++) {
             governanceTxHelper.castCommitteeHotVote(account0, committeeAccounts.get(i), proposal.storeGovActionId(), Vote.YES);
         }
-    }
-
-    private void seedTreasury(String scenarioName) {
-        waitForEpoch(getCurrentEpoch() + 1);
-        BigInteger treasuryBeforeDonation = ledgerTreasury(scenarioName + " before treasury seed");
-        int donationEpoch = getCurrentEpoch();
-
-        governanceTxHelper.donateToTreasury(account0, treasuryBeforeDonation, TREASURY_SEED_LOVELACE);
-
-        int treasuryReadyEpoch = donationEpoch + 1;
-        waitForEpoch(treasuryReadyEpoch);
-        waitTillAdaPotJobDone(adaPotJobRepository, treasuryReadyEpoch,
-                () -> diagnostics(scenarioName + " treasury seed", List.of()));
-
-        BigInteger treasuryAfterDonation = ledgerTreasury(scenarioName + " after treasury seed");
-        assertThat(treasuryAfterDonation)
-                .as("%s treasury after seed donation", scenarioName)
-                .isGreaterThan(TREASURY_WITHDRAWAL_LOVELACE);
-    }
-
-    private BigInteger ledgerTreasury(String scenarioName) {
-        try {
-            return ledgerStateReader.fetchTreasury();
-        } catch (RuntimeException e) {
-            throw new AssertionError("Ledger treasury is not available.\n"
-                    + diagnostics(scenarioName, List.of()), e);
-        }
-    }
-
-    private GovAction treasuryWithdrawalThresholdUpdateAction() {
-        return GovernanceTxHelper.parameterChangeAction(
-                new DRepTreasuryWithdrawalThresholdUpdate(RAISED_TREASURY_WITHDRAWAL_INTERVAL),
-                true);
     }
 
     private GovAction committeeThresholdUpdateAction() {
@@ -599,7 +471,6 @@ class GovernanceEffectContextIT extends BaseE2ETest {
         message.append("\ncurrentEpoch=").append(safeCurrentEpoch());
         message.append("\nlastCompletedAdaPotEpoch=").append(lastCompletedAdaPotEpoch());
         message.append("\nprofile=").append(profileSummary());
-        message.append("\nlatestLocalTreasuryThreshold=").append(safeLatestTreasuryThreshold());
         message.append("\nlatestLocalCommittee=").append(safeLatestCommittee());
 
         for (CreatedProposal proposal : proposals) {
@@ -620,7 +491,6 @@ class GovernanceEffectContextIT extends BaseE2ETest {
                 + ", threshold=" + DEFAULT_THRESHOLD
                 + ", initialCommitteeThreshold=1/3"
                 + ", raisedCommitteeThreshold=2/3"
-                + ", raisedDvtTreasuryWithdrawal=" + RAISED_TREASURY_WITHDRAWAL_THRESHOLD
                 + ", setupStakePool=" + (setupStakePool == null ? "not-registered" : setupStakePool.poolId())
                 + ", currentCommitteePrevGovActionId=" + currentCommitteePrevGovActionId;
     }
@@ -645,16 +515,6 @@ class GovernanceEffectContextIT extends BaseE2ETest {
     private String safeLedgerSnapshot(GovActionId govActionId) {
         try {
             return String.valueOf(ledgerStateReader.fetchProposalState(govActionId));
-        } catch (RuntimeException e) {
-            return "unavailable (" + e.getMessage() + ")";
-        }
-    }
-
-    private String safeLatestTreasuryThreshold() {
-        try {
-            return epochParamStorage.getLatestEpochParam()
-                    .map(epochParam -> String.valueOf(epochParam.getParams().getDrepVotingThresholds().getDvtTreasuryWithdrawal().safeRatio()))
-                    .orElse("none");
         } catch (RuntimeException e) {
             return "unavailable (" + e.getMessage() + ")";
         }
@@ -697,43 +557,4 @@ class GovernanceEffectContextIT extends BaseE2ETest {
         return value == null ? BigDecimal.ZERO : value;
     }
 
-    private static class DRepTreasuryWithdrawalThresholdUpdate extends ProtocolParamUpdate {
-        private final UnitInterval dvtTreasuryWithdrawal;
-
-        private DRepTreasuryWithdrawalThresholdUpdate(UnitInterval dvtTreasuryWithdrawal) {
-            this.dvtTreasuryWithdrawal = dvtTreasuryWithdrawal;
-        }
-
-        @Override
-        public DataItem serialize() throws CborSerializationException {
-            co.nstant.in.cbor.model.Map map = (co.nstant.in.cbor.model.Map) super.serialize();
-            Array thresholds = new Array();
-            List<UnitInterval> values = Arrays.asList(
-                    DEFAULT_DREP_THRESHOLD_INTERVAL,
-                    DEFAULT_DREP_THRESHOLD_INTERVAL,
-                    DEFAULT_DREP_THRESHOLD_INTERVAL,
-                    DEFAULT_DREP_THRESHOLD_INTERVAL,
-                    DEFAULT_DREP_THRESHOLD_INTERVAL,
-                    DEFAULT_DREP_THRESHOLD_INTERVAL,
-                    DEFAULT_DREP_THRESHOLD_INTERVAL,
-                    DEFAULT_DREP_THRESHOLD_INTERVAL,
-                    DEFAULT_DREP_THRESHOLD_INTERVAL,
-                    dvtTreasuryWithdrawal);
-            for (UnitInterval value : values) {
-                thresholds.add(rational(value));
-            }
-            map.put(new UnsignedInteger(26), thresholds);
-            return map;
-        }
-
-        private static RationalNumber rational(UnitInterval value) throws CborSerializationException {
-            try {
-                return new RationalNumber(
-                        new UnsignedInteger(value.getNumerator()),
-                        new UnsignedInteger(value.getDenominator()));
-            } catch (CborException e) {
-                throw new CborSerializationException("Unable to serialize unit interval", e);
-            }
-        }
-    }
 }
