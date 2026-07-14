@@ -78,6 +78,8 @@ class GovernanceVoteTallyIT extends BaseE2ETest {
     private static final long DREP_YES_TOP_UP_ADA = 900_000L;
     private static final long DREP_AUTO_ABSTAIN_TOP_UP_ADA = 300_000L;
     private static final long DREP_NO_TOP_UP_ADA = 200_000L;
+    private static final long DREP_UNREGISTERED_YES_TOP_UP_ADA = 900_000L;
+    private static final long DREP_UNREGISTER_CONTROL_NO_TOP_UP_ADA = 100_000L;
     private static final long SPO_NO_POOL_TOP_UP_ADA = 833_333L;
     private static final long SPO_DO_NOT_VOTE_POOL_TOP_UP_ADA = 500_000L;
 
@@ -102,6 +104,7 @@ class GovernanceVoteTallyIT extends BaseE2ETest {
     private boolean commonGovernanceActorsReady;
     private boolean drepAbstainFixtureReady;
     private boolean spoMultiPoolFixtureReady;
+    private boolean drepUnregisterFixtureReady;
 
     @Autowired
     private Environment environment;
@@ -315,10 +318,45 @@ class GovernanceVoteTallyIT extends BaseE2ETest {
     }
 
     /**
-     * Outside bootstrap, a committee smaller than committeeMinSize is treated as if there is no committee.
+     * A DRep deregistration removes that DRep's effective votes from active proposals.
      */
     @Test
     @Order(5)
+    void dRepDeregistration_shouldClearEffectiveVoteForProposal() {
+        ensureDRepUnregisterFixture();
+
+        Account removedYesDRep = accountAt(5);
+        Account remainingNoDRep = accountAt(6);
+        BigInteger removedYesStake = ledgerDRepStake(com.bloxbean.cardano.client.governance.GovId.toDrep(removedYesDRep.drepId()));
+        BigInteger remainingNoStake = ledgerDRepStake(com.bloxbean.cardano.client.governance.GovId.toDrep(remainingNoDRep.drepId()));
+
+        assertProposalScenario(
+                "DRep deregistration clears an earlier YES vote before ratification",
+                GovActionType.NEW_CONSTITUTION,
+                GovernanceTxHelper::newConstitutionAction,
+                proposal -> {
+                    // If the YES DRep stayed registered, YES/(YES+NO) would be roughly
+                    // 910,000 / 1,020,000 ~= 0.89 and clear the NewConstitution DRep threshold.
+                    // The unregister transaction must remove that YES vote from effective ledger state.
+                    governanceTxHelper.castDRepVote(account0, removedYesDRep, proposal.storeGovActionId(), Vote.YES);
+                    governanceTxHelper.castDRepVote(account0, remainingNoDRep, proposal.storeGovActionId(), Vote.NO);
+                    governanceTxHelper.unregisterDRep(account0, removedYesDRep);
+                    castCommitteeYesVotes(proposal, committeeAccounts.size());
+                },
+                GovActionStatus.EXPIRED,
+                stats -> {
+                    assertThat(removedYesStake).as("removed DRep fixture stake").isPositive();
+                    assertStake("deregistered DRep YES stake", stats.getDrepYesVoteStake(), BigInteger.ZERO);
+                    assertStake("remaining DRep NO stake", stats.getDrepNoVoteStake(), remainingNoStake);
+                    assertThat(nz(stats.getDrepApprovalRatio())).isZero();
+                });
+    }
+
+    /**
+     * Outside bootstrap, a committee smaller than committeeMinSize is treated as if there is no committee.
+     */
+    @Test
+    @Order(6)
     void committeeBelowMinimumSize_shouldBlockNewConstitutionRatification() {
         ensureDRepAbstainFixture();
         ratifyCommitteeReductionBelowMinimum();
@@ -463,6 +501,36 @@ class GovernanceVoteTallyIT extends BaseE2ETest {
         } catch (AssertionError | RuntimeException e) {
             throw new AssertionError("SPO multi-pool fixture setup failed.\n"
                     + diagnostics("SPO multi-pool fixture", null), e);
+        }
+    }
+
+    private void ensureDRepUnregisterFixture() {
+        if (drepUnregisterFixtureReady) {
+            return;
+        }
+
+        try {
+            Account removedYesDRep = accountAt(5);
+            Account remainingNoDRep = accountAt(6);
+
+            topUpFund(removedYesDRep.baseAddress(), DREP_UNREGISTERED_YES_TOP_UP_ADA);
+            topUpFund(remainingNoDRep.baseAddress(), DREP_UNREGISTER_CONTROL_NO_TOP_UP_ADA);
+
+            assertTransactionSucceeded(governanceTxHelper.registerStakeAddress(account0, removedYesDRep.stakeAddress()));
+            assertTransactionSucceeded(governanceTxHelper.registerStakeAddress(account0, remainingNoDRep.stakeAddress()));
+
+            governanceTxHelper.registerDRep(account0, removedYesDRep, GovernanceTxHelper.defaultAnchor());
+            governanceTxHelper.registerDRep(account0, remainingNoDRep, GovernanceTxHelper.defaultAnchor());
+            governanceTxHelper.delegateVotingPowerToDRep(account0, removedYesDRep, com.bloxbean.cardano.client.governance.GovId.toDrep(removedYesDRep.drepId()));
+            governanceTxHelper.delegateVotingPowerToDRep(account0, remainingNoDRep, com.bloxbean.cardano.client.governance.GovId.toDrep(remainingNoDRep.drepId()));
+
+            int votingPowerReadyEpoch = getCurrentEpoch() + 2;
+            waitForEpoch(votingPowerReadyEpoch);
+            waitTillAdaPotJobDone(adaPotJobRepository, votingPowerReadyEpoch);
+            drepUnregisterFixtureReady = true;
+        } catch (AssertionError | RuntimeException e) {
+            throw new AssertionError("DRep unregister fixture setup failed.\n"
+                    + diagnostics("DRep unregister fixture", null), e);
         }
     }
 
@@ -703,6 +771,7 @@ class GovernanceVoteTallyIT extends BaseE2ETest {
                 + ", setupFlags={commonActors=" + commonGovernanceActorsReady
                 + ", drepAbstainFixture=" + drepAbstainFixtureReady
                 + ", spoMultiPoolFixture=" + spoMultiPoolFixtureReady
+                + ", drepUnregisterFixture=" + drepUnregisterFixtureReady
                 + ", authorizedCommitteeHotKeys=" + authorizedCommitteeHotKeyIndexes
                 + "}";
     }

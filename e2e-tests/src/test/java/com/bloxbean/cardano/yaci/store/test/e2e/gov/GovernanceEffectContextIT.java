@@ -8,12 +8,14 @@ import com.bloxbean.cardano.client.spec.UnitInterval;
 import com.bloxbean.cardano.client.transaction.spec.governance.Vote;
 import com.bloxbean.cardano.client.transaction.spec.governance.actions.GovAction;
 import com.bloxbean.cardano.client.transaction.spec.governance.actions.UpdateCommittee;
+import com.bloxbean.cardano.yaci.store.adapot.storage.impl.repository.RewardRestRepository;
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionId;
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
 import com.bloxbean.cardano.yaci.store.adapot.job.storage.AdaPotJobStorage;
 import com.bloxbean.cardano.yaci.store.adapot.job.storage.impl.AdaPotJobRepository;
 import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
+import com.bloxbean.cardano.yaci.store.events.domain.RewardRestType;
 import com.bloxbean.cardano.yaci.store.governance.storage.CommitteeMemberStorageReader;
 import com.bloxbean.cardano.yaci.store.governance.storage.CommitteeStorageReader;
 import com.bloxbean.cardano.yaci.store.governance.storage.GovActionProposalStorage;
@@ -98,6 +100,9 @@ class GovernanceEffectContextIT extends BaseE2ETest {
     private AdaPotJobStorage adaPotJobStorage;
 
     @Autowired
+    private RewardRestRepository rewardRestRepository;
+
+    @Autowired
     private CommitteeStorageReader committeeStorageReader;
 
     @Autowired
@@ -171,47 +176,53 @@ class GovernanceEffectContextIT extends BaseE2ETest {
     }
 
     /**
-     * Removing a winning sibling must also prune that sibling's descendants from the ledger proposal tree.
+     * Removing a winning sibling must prune the full descendant subtree and refund every removed proposal deposit.
      */
     @Test
     void ratifiedSibling_shouldPruneDescendantProposals() {
         prepareControlledDRepSplit();
 
         waitForEpoch(getCurrentEpoch() + 1);
-        int proposalEpoch = getCurrentEpoch();
-        CreatedProposal rootA = createProposalInEpoch(
+        CreatedProposal rootA = createActiveProposal(
                 "winning root constitution",
                 GovActionType.NEW_CONSTITUTION,
-                GovernanceTxHelper::newConstitutionAction,
-                proposalEpoch);
-        CreatedProposal rootB = createProposalInEpoch(
+                GovernanceTxHelper::newConstitutionAction);
+        CreatedProposal rootB = createActiveProposal(
                 "dropped root constitution",
                 GovActionType.NEW_CONSTITUTION,
-                GovernanceTxHelper::newConstitutionAction,
-                proposalEpoch);
-        CreatedProposal childOfB = createProposalInEpoch(
+                GovernanceTxHelper::newConstitutionAction);
+        CreatedProposal childOfB = createActiveProposal(
                 "dropped child constitution",
                 GovActionType.NEW_CONSTITUTION,
-                () -> GovernanceTxHelper.newConstitutionAction(rootB.txGovActionId()),
-                proposalEpoch);
+                () -> GovernanceTxHelper.newConstitutionAction(rootB.txGovActionId()));
+        CreatedProposal grandchildOfB = createActiveProposal(
+                "dropped grandchild constitution",
+                GovActionType.NEW_CONSTITUTION,
+                () -> GovernanceTxHelper.newConstitutionAction(childOfB.txGovActionId()));
 
-        // All three have passing votes; only the first root should survive the same-purpose tree pruning.
-        List.of(rootA, rootB, childOfB).forEach(proposal -> {
-            governanceTxHelper.castDRepVote(account0, drepYesAccount, proposal.storeGovActionId(), Vote.YES);
-            governanceTxHelper.castDRepVote(account0, drepNoAccount, proposal.storeGovActionId(), Vote.YES);
-            castCommitteeYesVotes(proposal, 2);
-        });
+        // Only the winning root needs votes. The competing root and its descendants
+        // only need to be active so ledger pruning can remove and refund the subtree.
+        governanceTxHelper.castDRepVote(account0, drepYesAccount, rootA.storeGovActionId(), Vote.YES);
+        governanceTxHelper.castDRepVote(account0, drepNoAccount, rootA.storeGovActionId(), Vote.YES);
+        castCommitteeYesVotes(rootA, 2);
 
-        int ratifyEpoch = rootA.createdEpoch() + 1;
+        int ratifyEpoch = getCurrentEpoch() + 1;
         waitForEpoch(ratifyEpoch);
         waitTillAdaPotJobDone(adaPotJobRepository, ratifyEpoch,
-                () -> diagnostics("sibling descendant pruning", List.of(rootA, rootB, childOfB)));
+                () -> diagnostics("deep sibling descendant pruning", List.of(rootA, rootB, childOfB, grandchildOfB)));
 
-        assertProposalStatus("sibling descendant pruning", rootA, GovActionStatus.RATIFIED);
+        assertProposalStatus("deep sibling descendant pruning", rootA, GovActionStatus.RATIFIED);
         assertNotRatified("dropped sibling root", rootB);
         assertNotRatified("dropped sibling child", childOfB);
+        assertNotRatified("dropped sibling grandchild", grandchildOfB);
         assertLedgerRemoved("dropped sibling root", rootB);
         assertLedgerRemoved("dropped sibling child", childOfB);
+        assertLedgerRemoved("dropped sibling grandchild", grandchildOfB);
+        assertProposalRefund(
+                "deep sibling descendant pruning refund",
+                ratifyEpoch,
+                account0.stakeAddress(),
+                List.of(rootA, rootB, childOfB, grandchildOfB));
     }
 
     @Disabled("Deferred until yaci-core GovStateQuery decodes absent committee after NoConfidence")
@@ -303,6 +314,15 @@ class GovernanceEffectContextIT extends BaseE2ETest {
         return createProposalInEpoch(name, expectedType, actionSupplier, proposalEpoch);
     }
 
+    private CreatedProposal createActiveProposal(String name,
+                                                 GovActionType expectedType,
+                                                 Supplier<GovAction> actionSupplier) {
+        CreatedProposal proposal = governanceTxHelper.createProposalAndWait(account0, account0.stakeAddress(), actionSupplier.get());
+        assertIndexedProposal(proposal, expectedType);
+        assertLedgerActive(proposal);
+        return proposal;
+    }
+
     private CreatedProposal createProposalInEpoch(String name,
                                                   GovActionType expectedType,
                                                   Supplier<GovAction> actionSupplier,
@@ -386,6 +406,30 @@ class GovernanceEffectContextIT extends BaseE2ETest {
                     assertThat(snapshot.presentInCurrentProposals()).isFalse();
                     assertThat(snapshot.presentInEnactedGovActions()).isFalse();
                 });
+    }
+
+    private void assertProposalRefund(String scenarioName,
+                                      int earnedEpoch,
+                                      String stakeAddress,
+                                      List<CreatedProposal> proposals) {
+        int spendableEpoch = earnedEpoch + 1;
+        waitForEpoch(spendableEpoch);
+        waitTillAdaPotJobDone(adaPotJobRepository, spendableEpoch,
+                () -> diagnostics(scenarioName, proposals));
+
+        BigInteger expectedRefund = proposals.stream()
+                .map(proposal -> proposal.proposal().getDeposit())
+                .reduce(BigInteger.ZERO, BigInteger::add);
+
+        BigInteger actualRefund = rewardRestRepository.findBySpendableEpochAndType(spendableEpoch, RewardRestType.proposal_refund)
+                .stream()
+                .filter(reward -> stakeAddress.equals(reward.getAddress()))
+                .map(reward -> reward.getAmount() == null ? BigInteger.ZERO : reward.getAmount())
+                .reduce(BigInteger.ZERO, BigInteger::add);
+
+        assertThat(actualRefund)
+                .as("%s proposal refund at spendable epoch %s", scenarioName, spendableEpoch)
+                .isEqualTo(expectedRefund);
     }
 
     private void assertLatestCommitteeThreshold(double expectedThreshold) {

@@ -318,6 +318,21 @@ public class GovernanceTxHelper extends TransactionHelper {
         return result;
     }
 
+    public Result<String> unregisterDRep(Account feePayer, Account drepAccount) {
+        var tx = new Tx()
+                .unregisterDRep(drepAccount.drepCredential())
+                .from(feePayer.baseAddress());
+
+        var result = new QuickTxBuilder(backendService).compose(tx)
+                .withSigner(SignerProviders.signerFrom(feePayer))
+                .withSigner(SignerProviders.drepKeySignerFrom(drepAccount))
+                .completeAndWait(System.out::println);
+
+        assertSuccessful(result);
+        checkIfUtxoAvailable(result.getValue(), feePayer.baseAddress());
+        return result;
+    }
+
     public Result<String> delegateVotingPowerToDRep(Account delegator, Account drepAccount) {
         return delegateVotingPowerToDRep(delegator, delegator, GovId.toDrep(drepAccount.drepId()));
     }

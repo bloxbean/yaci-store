@@ -17,10 +17,10 @@ API status translation is intentionally separate from rule parity tests.
 | `GovernanceProposalLifecycleIT` | 1 | Proposal lifecycle/indexer stability across epochs |
 | `GovernanceProposalApiStatusIT` | 2 | Public API status mapping from stored proposal status rows |
 | `GovernanceProposalOutcomeIT` | 2 | Post-bootstrap action outcome and ratification-gate parity |
-| `GovernanceVoteTallyIT` | 5 | Vote aggregation, replacement, and acceptance-ratio parity |
+| `GovernanceVoteTallyIT` | 6 | Vote aggregation, replacement, and acceptance-ratio parity |
 | `GovernanceRuleEdgeIT` | 5 active, 1 disabled | Default-vote reshaping and voter eligibility edges |
 | `GovernanceInterProposalIT` | 5 | Multi-proposal ordering, drop, delay, and effect-context behavior |
-| `GovernanceEffectContextIT` | 3 active, 1 disabled | Post-audit enacted-state effect contexts |
+| `GovernanceEffectContextIT` | 2 active, 1 disabled | Post-audit enacted-state effect contexts |
 
 ## Assertion Boundaries
 
@@ -139,6 +139,13 @@ Covers mixed protocol parameter groups:
 - The test asserts the ledger semantic that an undersized committee blocks
   ratification outside bootstrap.
 
+### `dRepDeregistration_shouldClearEffectiveVoteForProposal`
+
+- A DRep with dominant stake votes `YES` for a proposal, then deregisters before ratification.
+- A smaller DRep votes `NO`.
+- If the deregistered DRep remained effective, the DRep ratio would pass; after ledger cleanup, the proposal expires.
+- The test asserts effective voting stats and DB-vs-ledger outcome, not deletion of raw historical vote rows.
+
 ## `GovernanceRuleEdgeIT`
 
 ### Active methods
@@ -221,13 +228,6 @@ Covers action-specific SPO default-vote reshaping:
 
 ## `GovernanceEffectContextIT`
 
-### `enactedDRepTreasuryThreshold_shouldControlLaterTreasuryWithdrawal`
-
-- A parameter-change proposal ratifies and raises `dvtTreasuryWithdrawal`.
-- The indexed epoch protocol params are asserted before the follow-up proposal.
-- A later treasury-withdrawal proposal uses the same DRep YES/NO split that would pass the old threshold.
-- The later proposal expires because yaci-store evaluates it with the enacted DRep threshold.
-
 ### `enactedCommitteeThreshold_shouldControlLaterNewConstitution`
 
 - A committee-update proposal ratifies and raises the committee threshold from `1/3` to `2/3`.
@@ -237,10 +237,11 @@ Covers action-specific SPO default-vote reshaping:
 
 ### `ratifiedSibling_shouldPruneDescendantProposals`
 
-- Two root `NewConstitution` siblings and one child of the second root are created in the same epoch.
-- All three proposals receive otherwise passing votes.
+- Two root `NewConstitution` siblings, one child of the second root, and one grandchild of that child are active at ratification time.
+- Only the first root receives passing votes.
 - The first root ratifies.
-- The competing root and its child are not ratified and are removed from ledger current proposals.
+- The competing root, child, and grandchild are not ratified and are removed from ledger current proposals.
+- Proposal refund rewards include deposits for the enacted root and the full pruned subtree.
 
 ### Disabled/deferred method
 
@@ -253,7 +254,7 @@ Covers action-specific SPO default-vote reshaping:
 
 - Re-enable the positive no-confidence rows after the yaci-core `GovStateQuery`
   decoding issue is fixed.
-- Runtime-verify `GovernanceEffectContextIT` against a reachable DevKit runtime.
+- Runtime-verify the expanded deep-pruning/refund row in `GovernanceEffectContextIT` against a reachable DevKit runtime.
 - Add opt-in CI/runbook coverage for DevKit-backed E2E once the suite and runtime
   environment are stable enough (if needed)
 
