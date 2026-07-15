@@ -28,17 +28,14 @@ import com.bloxbean.cardano.yaci.store.test.e2e.common.GovernanceTxHelper.Create
 import com.bloxbean.cardano.yaci.store.test.e2e.common.GovernanceTxHelper.TestStakePool;
 import com.bloxbean.cardano.yaci.store.test.e2e.common.LedgerGovernanceStateReader;
 import com.bloxbean.cardano.yaci.store.test.e2e.common.ProposalLedgerSnapshot;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.MethodOrderer;
-import org.junit.jupiter.api.Order;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestInstance;
-import org.junit.jupiter.api.TestMethodOrder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationContextInitializer;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.core.env.Environment;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ContextConfiguration;
 
 import java.math.BigDecimal;
@@ -62,8 +59,7 @@ import static org.awaitility.Awaitility.await;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ContextConfiguration(initializers = GovernanceVoteTallyIT.DevKitInitializer.class)
-@TestInstance(TestInstance.Lifecycle.PER_CLASS)
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
 class GovernanceVoteTallyIT extends BaseE2ETest {
     private static final int EPOCH_LENGTH_SECONDS = 20;
     private static final int GOV_ACTION_LIFETIME = 3;
@@ -124,7 +120,7 @@ class GovernanceVoteTallyIT extends BaseE2ETest {
     @Autowired
     private AdaPotJobStorage adaPotJobStorage;
 
-    @BeforeAll
+    @BeforeEach
     void setup() {
         governanceTxHelper = new GovernanceTxHelper(backendService, govActionProposalStorage, GOV_ACTION_LIFETIME);
         ledgerStateReader = createLedgerStateReader();
@@ -158,7 +154,6 @@ class GovernanceVoteTallyIT extends BaseE2ETest {
      * The yes/no split intentionally clears the node's default NewConstitution DRep threshold.
      */
     @Test
-    @Order(1)
     void dRepAbstainStake_shouldStayOutOfAcceptedRatioDenominator() {
         ensureDRepAbstainFixture();
 
@@ -199,7 +194,6 @@ class GovernanceVoteTallyIT extends BaseE2ETest {
      * A later vote by the same voter/proposal pair must replace the earlier vote.
      */
     @Test
-    @Order(2)
     void latestDRepVote_shouldReplaceEarlierVote() {
         ensureDRepAbstainFixture();
 
@@ -229,7 +223,6 @@ class GovernanceVoteTallyIT extends BaseE2ETest {
      * SPO tallies must use real pool stake snapshots, including non-voting pool stake.
      */
     @Test
-    @Order(3)
     void spoVotes_shouldUseStakeFromAllKnownPools() {
         ensureDRepAbstainFixture();
         ensureSPOMultiPoolFixture();
@@ -264,7 +257,6 @@ class GovernanceVoteTallyIT extends BaseE2ETest {
      * A parameter change that touches SECURITY plus another group must require SPO, DRep, and committee support.
      */
     @Test
-    @Order(4)
     void mixedSecurityAndNetworkParameterChange_shouldRequireAllVotingGroups() {
         ensureDRepAbstainFixture();
         ensureSPOMultiPoolFixture();
@@ -321,7 +313,6 @@ class GovernanceVoteTallyIT extends BaseE2ETest {
      * A DRep deregistration removes that DRep's effective votes from active proposals.
      */
     @Test
-    @Order(5)
     void dRepDeregistration_shouldClearEffectiveVoteForProposal() {
         ensureDRepUnregisterFixture();
 
@@ -356,7 +347,6 @@ class GovernanceVoteTallyIT extends BaseE2ETest {
      * Outside bootstrap, a committee smaller than committeeMinSize is treated as if there is no committee.
      */
     @Test
-    @Order(6)
     void committeeBelowMinimumSize_shouldBlockNewConstitutionRatification() {
         ensureDRepAbstainFixture();
         ratifyCommitteeReductionBelowMinimum();
