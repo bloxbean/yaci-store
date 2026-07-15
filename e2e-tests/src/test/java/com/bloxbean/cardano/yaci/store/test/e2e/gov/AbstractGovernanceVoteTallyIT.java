@@ -28,15 +28,11 @@ import com.bloxbean.cardano.yaci.store.test.e2e.common.GovernanceTxHelper.Create
 import com.bloxbean.cardano.yaci.store.test.e2e.common.GovernanceTxHelper.TestStakePool;
 import com.bloxbean.cardano.yaci.store.test.e2e.common.LedgerGovernanceStateReader;
 import com.bloxbean.cardano.yaci.store.test.e2e.common.ProposalLedgerSnapshot;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeAll;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationContextInitializer;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.core.env.Environment;
-import org.springframework.test.annotation.DirtiesContext;
-import org.springframework.test.context.ContextConfiguration;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -47,7 +43,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -55,72 +50,70 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 /**
- * Verifies vote aggregation semantics that need real DevKit stake snapshots.
+ * Shared fixture for vote aggregation semantics that need real DevKit stake snapshots.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ContextConfiguration(initializers = GovernanceVoteTallyIT.DevKitInitializer.class)
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
-class GovernanceVoteTallyIT extends BaseE2ETest {
-    private static final int EPOCH_LENGTH_SECONDS = 20;
-    private static final int GOV_ACTION_LIFETIME = 3;
-    private static final BigDecimal THRESHOLD = new BigDecimal("0.51");
-    private static final BigDecimal DREP_UPDATE_TO_CONSTITUTION_THRESHOLD = new BigDecimal("0.75");
-    private static final UnitInterval COMMITTEE_THRESHOLD = new UnitInterval(BigInteger.valueOf(51), BigInteger.valueOf(100));
-    private static final int COMMITTEE_MIN_SIZE = 2;
+abstract class AbstractGovernanceVoteTallyIT extends BaseE2ETest {
+    protected static final int EPOCH_LENGTH_SECONDS = 20;
+    protected static final int GOV_ACTION_LIFETIME = 3;
+    protected static final BigDecimal THRESHOLD = new BigDecimal("0.51");
+    protected static final BigDecimal DREP_UPDATE_TO_CONSTITUTION_THRESHOLD = new BigDecimal("0.75");
+    protected static final UnitInterval COMMITTEE_THRESHOLD = new UnitInterval(BigInteger.valueOf(51), BigInteger.valueOf(100));
+    protected static final int COMMITTEE_MIN_SIZE = 2;
 
     // DevKit default wallets start with 10,000 ADA; the comments in each test include that base stake.
-    private static final long FEE_PAYER_TOP_UP_ADA = 3_000_000L;
-    private static final long SETUP_POOL_TOP_UP_ADA = 3_000_000L;
-    private static final long DREP_YES_TOP_UP_ADA = 900_000L;
-    private static final long DREP_AUTO_ABSTAIN_TOP_UP_ADA = 300_000L;
-    private static final long DREP_NO_TOP_UP_ADA = 200_000L;
-    private static final long DREP_UNREGISTERED_YES_TOP_UP_ADA = 900_000L;
-    private static final long DREP_UNREGISTER_CONTROL_NO_TOP_UP_ADA = 100_000L;
-    private static final long SPO_NO_POOL_TOP_UP_ADA = 833_333L;
-    private static final long SPO_DO_NOT_VOTE_POOL_TOP_UP_ADA = 500_000L;
+    protected static final long FEE_PAYER_TOP_UP_ADA = 3_000_000L;
+    protected static final long SETUP_POOL_TOP_UP_ADA = 3_000_000L;
+    protected static final long DREP_YES_TOP_UP_ADA = 900_000L;
+    protected static final long DREP_AUTO_ABSTAIN_TOP_UP_ADA = 300_000L;
+    protected static final long DREP_NO_TOP_UP_ADA = 200_000L;
+    protected static final long DREP_UNREGISTERED_YES_TOP_UP_ADA = 900_000L;
+    protected static final long DREP_UNREGISTER_CONTROL_NO_TOP_UP_ADA = 100_000L;
+    protected static final long SPO_NO_POOL_TOP_UP_ADA = 833_333L;
+    protected static final long SPO_DO_NOT_VOTE_POOL_TOP_UP_ADA = 500_000L;
 
-    private GovernanceTxHelper governanceTxHelper;
-    private GovernanceRuleAssertionHelper governanceRuleAssertionHelper;
-    private LedgerGovernanceStateReader ledgerStateReader;
+    protected GovernanceTxHelper governanceTxHelper;
+    protected GovernanceRuleAssertionHelper governanceRuleAssertionHelper;
+    protected LedgerGovernanceStateReader ledgerStateReader;
 
-    private Account setupDRepAccount;
-    private Account drepYesAccount;
-    private Account drepNoAccount;
-    private Account drepAlwaysAbstainDelegator;
-    private List<Account> committeeAccounts;
+    protected Account setupDRepAccount;
+    protected Account drepYesAccount;
+    protected Account drepNoAccount;
+    protected Account drepAlwaysAbstainDelegator;
+    protected List<Account> committeeAccounts;
 
-    private TestStakePool setupStakePool;
-    private TestStakePool spoNoPool;
-    private TestStakePool spoDoNotVotePool;
-    private final List<TestStakePool> knownStakePools = new ArrayList<>();
-    private final Set<Integer> authorizedCommitteeHotKeyIndexes = new HashSet<>();
+    protected TestStakePool setupStakePool;
+    protected TestStakePool spoNoPool;
+    protected TestStakePool spoDoNotVotePool;
+    protected final List<TestStakePool> knownStakePools = new ArrayList<>();
+    protected final Set<Integer> authorizedCommitteeHotKeyIndexes = new HashSet<>();
 
-    private CreatedProposal initialCommitteeProposal;
-    private com.bloxbean.cardano.client.transaction.spec.governance.actions.GovActionId currentCommitteePrevGovActionId;
-    private boolean commonGovernanceActorsReady;
-    private boolean drepAbstainFixtureReady;
-    private boolean spoMultiPoolFixtureReady;
-    private boolean drepUnregisterFixtureReady;
-
-    @Autowired
-    private Environment environment;
+    protected CreatedProposal initialCommitteeProposal;
+    protected com.bloxbean.cardano.client.transaction.spec.governance.actions.GovActionId currentCommitteePrevGovActionId;
+    protected com.bloxbean.cardano.client.transaction.spec.governance.actions.GovActionId currentConstitutionPrevGovActionId;
+    protected boolean commonGovernanceActorsReady;
+    protected boolean drepAbstainFixtureReady;
+    protected boolean spoMultiPoolFixtureReady;
+    protected boolean drepUnregisterFixtureReady;
 
     @Autowired
-    private ProposalStateClient proposalStateClient;
+    protected Environment environment;
 
     @Autowired
-    private GovActionProposalStorage govActionProposalStorage;
+    protected ProposalStateClient proposalStateClient;
 
     @Autowired
-    private GovActionProposalStatusRepository proposalStatusRepository;
+    protected GovActionProposalStorage govActionProposalStorage;
 
     @Autowired
-    private AdaPotJobRepository adaPotJobRepository;
+    protected GovActionProposalStatusRepository proposalStatusRepository;
 
     @Autowired
-    private AdaPotJobStorage adaPotJobStorage;
+    protected AdaPotJobRepository adaPotJobRepository;
 
-    @BeforeEach
+    @Autowired
+    protected AdaPotJobStorage adaPotJobStorage;
+
+    @BeforeAll
     void setup() {
         governanceTxHelper = new GovernanceTxHelper(backendService, govActionProposalStorage, GOV_ACTION_LIFETIME);
         ledgerStateReader = createLedgerStateReader();
@@ -147,229 +140,6 @@ class GovernanceVoteTallyIT extends BaseE2ETest {
             config.put("committeeMinSize", String.valueOf(COMMITTEE_MIN_SIZE));
             createDevNet(config);
         }
-    }
-
-    /**
-     * DRep abstain stake must be excluded from the yes/(yes+no) denominator.
-     * The yes/no split intentionally clears the node's default NewConstitution DRep threshold.
-     */
-    @Test
-    void dRepAbstainStake_shouldStayOutOfAcceptedRatioDenominator() {
-        ensureDRepAbstainFixture();
-
-        BigInteger yesStake = ledgerDRepStake(com.bloxbean.cardano.client.governance.GovId.toDrep(drepYesAccount.drepId()));
-        BigInteger noStake = ledgerDRepStake(com.bloxbean.cardano.client.governance.GovId.toDrep(drepNoAccount.drepId()));
-        AtomicReference<BigInteger> autoAbstainStake = new AtomicReference<>();
-
-        assertProposalScenario(
-                "DRep abstain stake is excluded from accepted-ratio denominator",
-                GovActionType.NEW_CONSTITUTION,
-                GovernanceTxHelper::newConstitutionAction,
-                proposal -> {
-                    // Fixture math: YES = 900,000 + 10,000, NO = 200,000 + 10,000.
-                    // yes/(yes+no) = 910,000 / 1,120,000 = 0.8125, above the ledger's 0.75 threshold.
-                    // AlwaysAbstain has 300,000 + 10,000 ADA and must stay outside that denominator.
-                    governanceTxHelper.castDRepVote(account0, drepYesAccount, proposal.storeGovActionId(), Vote.YES);
-                    governanceTxHelper.castDRepVote(account0, drepNoAccount, proposal.storeGovActionId(), Vote.NO);
-                    castCommitteeYesVotes(proposal, COMMITTEE_MIN_SIZE);
-                },
-                GovActionStatus.RATIFIED,
-                stats -> {
-                    // account0 is delegated to AlwaysAbstain and pays the scenario tx fees. Read this after the
-                    // status epoch so the expected value uses the same ratification stake snapshot as yaci-store.
-                    if (autoAbstainStake.get() == null) {
-                        autoAbstainStake.set(ledgerDRepStake(com.bloxbean.cardano.client.transaction.spec.governance.DRep.abstain()));
-                    }
-                    assertStake("DRep YES stake", stats.getDrepYesVoteStake(), yesStake);
-                    assertStake("DRep NO stake", stats.getDrepNoVoteStake(), noStake);
-                    assertStake("DRep auto-abstain stake", stats.getDrepAutoAbstainStake(), autoAbstainStake.get());
-                    assertStake("DRep total abstain stake", stats.getDrepTotalAbstainStake(), autoAbstainStake.get());
-                    assertThat(nz(stats.getDrepAbstainVoteStake())).isZero();
-                    assertThat(nz(stats.getDrepApprovalRatio())).isGreaterThan(DREP_UPDATE_TO_CONSTITUTION_THRESHOLD);
-                    assertCommitteePassed(stats);
-                });
-    }
-
-    /**
-     * A later vote by the same voter/proposal pair must replace the earlier vote.
-     */
-    @Test
-    void latestDRepVote_shouldReplaceEarlierVote() {
-        ensureDRepAbstainFixture();
-
-        BigInteger drepStake = ledgerDRepStake(com.bloxbean.cardano.client.governance.GovId.toDrep(drepYesAccount.drepId()));
-
-        assertProposalScenario(
-                "latest DRep vote replaces the earlier vote",
-                GovActionType.NEW_CONSTITUTION,
-                GovernanceTxHelper::newConstitutionAction,
-                proposal -> {
-                    // The same 910,000 ADA DRep bucket votes YES then NO.
-                    // Replacement leaves YES = 0 and NO = 910,000, so yes/(yes+no) = 0.
-                    governanceTxHelper.castDRepVote(account0, drepYesAccount, proposal.storeGovActionId(), Vote.YES);
-                    governanceTxHelper.castDRepVote(account0, drepYesAccount, proposal.storeGovActionId(), Vote.NO);
-                    castCommitteeYesVotes(proposal, COMMITTEE_MIN_SIZE);
-                },
-                GovActionStatus.EXPIRED,
-                stats -> {
-                    assertStake("replaced DRep YES stake", stats.getDrepYesVoteStake(), BigInteger.ZERO);
-                    assertStake("latest DRep NO stake", stats.getDrepNoVoteStake(), drepStake);
-                    assertThat(nz(stats.getDrepApprovalRatio())).isZero();
-                    assertCommitteePassed(stats);
-                });
-    }
-
-    /**
-     * SPO tallies must use real pool stake snapshots, including non-voting pool stake.
-     */
-    @Test
-    void spoVotes_shouldUseStakeFromAllKnownPools() {
-        ensureDRepAbstainFixture();
-        ensureSPOMultiPoolFixture();
-
-        AtomicReference<BigInteger> yesPoolStake = new AtomicReference<>();
-        BigInteger noPoolStake = ledgerSPOStake(spoNoPool);
-        BigInteger doNotVotePoolStake = ledgerSPOStake(spoDoNotVotePool);
-
-        assertProposalScenario(
-                "SPO multi-pool stake distribution drives accepted ratio",
-                GovActionType.UPDATE_COMMITTEE,
-                this::committeeUpdateAction,
-                proposal -> {
-                    // Controlled SPO buckets are roughly:
-                    // YES = 3,000,000 + 10,000, NO = 833,333 + 10,000, do-not-vote = 500,000 + 10,000.
-                    // 3,010,000 / (3,010,000 + 843,333 + 510,000) ~= 0.69, above the 0.51 threshold.
-                    governanceTxHelper.castDRepVote(account0, drepYesAccount, proposal.storeGovActionId(), Vote.YES);
-                    governanceTxHelper.castTestStakePoolVote(account0, setupStakePool, proposal.storeGovActionId(), Vote.YES);
-                    governanceTxHelper.castTestStakePoolVote(account0, spoNoPool, proposal.storeGovActionId(), Vote.NO);
-                    yesPoolStake.set(ledgerSPOStake(setupStakePool));
-                },
-                GovActionStatus.RATIFIED,
-                stats -> {
-                    assertStake("SPO YES stake", stats.getSpoYesVoteStake(), yesPoolStake.get());
-                    assertStake("SPO NO stake", stats.getSpoNoVoteStake(), noPoolStake);
-                    assertThat(nz(stats.getSpoDoNotVoteStake())).isGreaterThanOrEqualTo(doNotVotePoolStake);
-                    assertThat(nz(stats.getSpoApprovalRatio())).isGreaterThan(THRESHOLD);
-                });
-    }
-
-    /**
-     * A parameter change that touches SECURITY plus another group must require SPO, DRep, and committee support.
-     */
-    @Test
-    void mixedSecurityAndNetworkParameterChange_shouldRequireAllVotingGroups() {
-        ensureDRepAbstainFixture();
-        ensureSPOMultiPoolFixture();
-
-        BigInteger drepStake = ledgerDRepStake(com.bloxbean.cardano.client.governance.GovId.toDrep(drepYesAccount.drepId()));
-        BigInteger spoYesStake = knownStakePools.stream()
-                .map(this::ledgerSPOStake)
-                .reduce(BigInteger.ZERO, BigInteger::add);
-
-        assertProposalScenario(
-                "mixed security and network parameter change fails when DRep rejects",
-                GovActionType.PARAMETER_CHANGE_ACTION,
-                () -> mixedSecurityAndNetworkParameterChangeAction(100_000),
-                proposal -> {
-                    // DRep rejection uses the 910,000 ADA DRep bucket as NO, so the DRep ratio is 0.
-                    // This keeps the proposal expired even though all known pools and two committee members vote YES.
-                    governanceTxHelper.castDRepVote(account0, drepYesAccount, proposal.storeGovActionId(), Vote.NO);
-                    castAllKnownStakePoolVotes(proposal, Vote.YES);
-                    castCommitteeYesVotes(proposal, COMMITTEE_MIN_SIZE);
-                },
-                GovActionStatus.EXPIRED,
-                stats -> {
-                    assertStake("DRep rejecting stake", stats.getDrepNoVoteStake(), drepStake);
-                    assertStake("DRep YES stake", stats.getDrepYesVoteStake(), BigInteger.ZERO);
-                    assertStake("SPO YES stake", stats.getSpoYesVoteStake(), spoYesStake);
-                    assertThat(nz(stats.getDrepApprovalRatio())).isZero();
-                    assertThat(nz(stats.getSpoApprovalRatio())).isGreaterThanOrEqualTo(THRESHOLD);
-                    assertCommitteePassed(stats);
-                });
-
-        assertProposalScenario(
-                "mixed security and network parameter change ratifies when all groups pass",
-                GovActionType.PARAMETER_CHANGE_ACTION,
-                () -> mixedSecurityAndNetworkParameterChangeAction(100_001),
-                proposal -> {
-                    // DRep YES uses the 910,000 ADA bucket with no explicit DRep NO vote, so the DRep ratio passes.
-                    // All generated pools vote YES, and committee approval is 2 / 3 = 0.666..., above 0.51.
-                    governanceTxHelper.castDRepVote(account0, drepYesAccount, proposal.storeGovActionId(), Vote.YES);
-                    castAllKnownStakePoolVotes(proposal, Vote.YES);
-                    castCommitteeYesVotes(proposal, COMMITTEE_MIN_SIZE);
-                },
-                GovActionStatus.RATIFIED,
-                stats -> {
-                    assertStake("DRep YES stake", stats.getDrepYesVoteStake(), drepStake);
-                    assertStake("DRep NO stake", stats.getDrepNoVoteStake(), BigInteger.ZERO);
-                    assertStake("SPO YES stake", stats.getSpoYesVoteStake(), spoYesStake);
-                    assertThat(nz(stats.getDrepApprovalRatio())).isGreaterThanOrEqualTo(THRESHOLD);
-                    assertThat(nz(stats.getSpoApprovalRatio())).isGreaterThanOrEqualTo(THRESHOLD);
-                    assertCommitteePassed(stats);
-                });
-    }
-
-    /**
-     * A DRep deregistration removes that DRep's effective votes from active proposals.
-     */
-    @Test
-    void dRepDeregistration_shouldClearEffectiveVoteForProposal() {
-        ensureDRepUnregisterFixture();
-
-        Account removedYesDRep = accountAt(5);
-        Account remainingNoDRep = accountAt(6);
-        BigInteger removedYesStake = ledgerDRepStake(com.bloxbean.cardano.client.governance.GovId.toDrep(removedYesDRep.drepId()));
-        BigInteger remainingNoStake = ledgerDRepStake(com.bloxbean.cardano.client.governance.GovId.toDrep(remainingNoDRep.drepId()));
-
-        assertProposalScenario(
-                "DRep deregistration clears an earlier YES vote before ratification",
-                GovActionType.NEW_CONSTITUTION,
-                GovernanceTxHelper::newConstitutionAction,
-                proposal -> {
-                    // If the YES DRep stayed registered, YES/(YES+NO) would be roughly
-                    // 910,000 / 1,020,000 ~= 0.89 and clear the NewConstitution DRep threshold.
-                    // The unregister transaction must remove that YES vote from effective ledger state.
-                    governanceTxHelper.castDRepVote(account0, removedYesDRep, proposal.storeGovActionId(), Vote.YES);
-                    governanceTxHelper.castDRepVote(account0, remainingNoDRep, proposal.storeGovActionId(), Vote.NO);
-                    governanceTxHelper.unregisterDRep(account0, removedYesDRep);
-                    castCommitteeYesVotes(proposal, committeeAccounts.size());
-                },
-                GovActionStatus.EXPIRED,
-                stats -> {
-                    assertThat(removedYesStake).as("removed DRep fixture stake").isPositive();
-                    assertStake("deregistered DRep YES stake", stats.getDrepYesVoteStake(), BigInteger.ZERO);
-                    assertStake("remaining DRep NO stake", stats.getDrepNoVoteStake(), remainingNoStake);
-                    assertThat(nz(stats.getDrepApprovalRatio())).isZero();
-                });
-    }
-
-    /**
-     * Outside bootstrap, a committee smaller than committeeMinSize is treated as if there is no committee.
-     */
-    @Test
-    void committeeBelowMinimumSize_shouldBlockNewConstitutionRatification() {
-        ensureDRepAbstainFixture();
-        ratifyCommitteeReductionBelowMinimum();
-
-        assertProposalScenario(
-                "new constitution expires when active committee size is below committeeMinSize",
-                GovActionType.NEW_CONSTITUTION,
-                GovernanceTxHelper::newConstitutionAction,
-                proposal -> {
-                    // The prior committee update leaves 1 active committee member while committeeMinSize = 2.
-                    // The ledger treats that as no committee, so the committee ratio is 0 despite DRep YES stake.
-                    governanceTxHelper.castDRepVote(account0, drepYesAccount, proposal.storeGovActionId(), Vote.YES);
-                },
-                GovActionStatus.EXPIRED,
-                stats -> {
-                    assertThat(nz(stats.getDrepYesVoteStake())).isPositive();
-                    assertThat(nz(stats.getDrepNoVoteStake())).isZero();
-                    assertThat(nz(stats.getCcYes())).isZero();
-                    assertThat(nz(stats.getCcNo())).isZero();
-                    assertThat(nz(stats.getCcAbstain())).isZero();
-                    assertThat(nz(stats.getCcDoNotVote())).isLessThan(COMMITTEE_MIN_SIZE);
-                    assertThat(nz(stats.getCcApprovalRatio())).isZero();
-                });
     }
 
     private void preparePostBootstrapGovernanceActors() {
@@ -435,7 +205,7 @@ class GovernanceVoteTallyIT extends BaseE2ETest {
         }
     }
 
-    private void ensureDRepAbstainFixture() {
+    protected void ensureDRepAbstainFixture() {
         if (drepAbstainFixtureReady) {
             return;
         }
@@ -465,7 +235,7 @@ class GovernanceVoteTallyIT extends BaseE2ETest {
         }
     }
 
-    private void ensureSPOMultiPoolFixture() {
+    protected void ensureSPOMultiPoolFixture() {
         if (spoMultiPoolFixtureReady) {
             return;
         }
@@ -494,7 +264,7 @@ class GovernanceVoteTallyIT extends BaseE2ETest {
         }
     }
 
-    private void ensureDRepUnregisterFixture() {
+    protected void ensureDRepUnregisterFixture() {
         if (drepUnregisterFixtureReady) {
             return;
         }
@@ -524,12 +294,12 @@ class GovernanceVoteTallyIT extends BaseE2ETest {
         }
     }
 
-    private GovActionProposalStatusEntity assertProposalScenario(String scenarioName,
-                                                                 GovActionType expectedType,
-                                                                 Supplier<GovAction> actionSupplier,
-                                                                 Consumer<CreatedProposal> voteCaster,
-                                                                 GovActionStatus expectedStatus,
-                                                                 Consumer<ProposalVotingStats> statsAssertions) {
+    protected GovActionProposalStatusEntity assertProposalScenario(String scenarioName,
+                                                                   GovActionType expectedType,
+                                                                   Supplier<GovAction> actionSupplier,
+                                                                   Consumer<CreatedProposal> voteCaster,
+                                                                   GovActionStatus expectedStatus,
+                                                                   Consumer<ProposalVotingStats> statsAssertions) {
         CreatedProposal proposal = null;
         try {
             waitForEpoch(getCurrentEpoch() + 1);
@@ -552,7 +322,7 @@ class GovernanceVoteTallyIT extends BaseE2ETest {
                     outcomeRow.getEpoch(),
                     statsAssertions);
             governanceRuleAssertionHelper.assertDbStatusMatchesLedgerSnapshot(proposal.storeGovActionId(), expectedStatus);
-            recordRatifiedCommitteePreviousAction(expectedType, expectedStatus, proposal);
+            recordRatifiedPreviousAction(expectedType, expectedStatus, proposal);
             return outcomeRow;
         } catch (AssertionError | RuntimeException e) {
             throw new AssertionError("Governance vote tally scenario failed: " + scenarioName + ".\n"
@@ -602,10 +372,18 @@ class GovernanceVoteTallyIT extends BaseE2ETest {
         return GovernanceTxHelper.updateCommitteeAction(members, COMMITTEE_THRESHOLD);
     }
 
-    private GovAction committeeUpdateAction() {
+    protected GovAction committeeUpdateAction() {
         UpdateCommittee updateCommittee = GovernanceTxHelper.updateCommitteeAction(COMMITTEE_THRESHOLD);
         updateCommittee.setPrevGovActionId(currentCommitteePrevGovActionId);
         return updateCommittee;
+    }
+
+    protected GovAction newConstitutionAction() {
+        if (currentConstitutionPrevGovActionId == null) {
+            return GovernanceTxHelper.newConstitutionAction();
+        }
+
+        return GovernanceTxHelper.newConstitutionAction(currentConstitutionPrevGovActionId);
     }
 
     private GovAction committeeBelowMinimumAction() {
@@ -617,7 +395,7 @@ class GovernanceVoteTallyIT extends BaseE2ETest {
         return updateCommittee;
     }
 
-    private void ratifyCommitteeReductionBelowMinimum() {
+    protected void ratifyCommitteeReductionBelowMinimum() {
         CreatedProposal proposal = null;
         try {
             waitForEpoch(getCurrentEpoch() + 1);
@@ -646,7 +424,7 @@ class GovernanceVoteTallyIT extends BaseE2ETest {
         }
     }
 
-    private GovAction mixedSecurityAndNetworkParameterChangeAction(int maxBlockSize) {
+    protected GovAction mixedSecurityAndNetworkParameterChangeAction(int maxBlockSize) {
         return GovernanceTxHelper.parameterChangeAction(
                 ProtocolParamUpdate.builder()
                         .maxBlockSize(maxBlockSize)
@@ -654,34 +432,36 @@ class GovernanceVoteTallyIT extends BaseE2ETest {
                 true);
     }
 
-    private void recordRatifiedCommitteePreviousAction(GovActionType type,
-                                                       GovActionStatus status,
-                                                       CreatedProposal proposal) {
+    private void recordRatifiedPreviousAction(GovActionType type,
+                                              GovActionStatus status,
+                                              CreatedProposal proposal) {
         if (status == GovActionStatus.RATIFIED && type == GovActionType.UPDATE_COMMITTEE) {
             currentCommitteePrevGovActionId = proposal.txGovActionId();
+        } else if (status == GovActionStatus.RATIFIED && type == GovActionType.NEW_CONSTITUTION) {
+            currentConstitutionPrevGovActionId = proposal.txGovActionId();
         }
     }
 
-    private void castCommitteeYesVotes(CreatedProposal proposal, int count) {
+    protected void castCommitteeYesVotes(CreatedProposal proposal, int count) {
         for (int i = 0; i < count; i++) {
             governanceTxHelper.castCommitteeHotVote(account0, committeeAccounts.get(i), proposal.storeGovActionId(), Vote.YES);
         }
     }
 
-    private void castAllKnownStakePoolVotes(CreatedProposal proposal, Vote vote) {
+    protected void castAllKnownStakePoolVotes(CreatedProposal proposal, Vote vote) {
         for (TestStakePool stakePool : knownStakePools) {
             governanceTxHelper.castTestStakePoolVote(account0, stakePool, proposal.storeGovActionId(), vote);
         }
     }
 
-    private BigInteger ledgerDRepStake(com.bloxbean.cardano.client.transaction.spec.governance.DRep dRep) {
+    protected BigInteger ledgerDRepStake(com.bloxbean.cardano.client.transaction.spec.governance.DRep dRep) {
         return ledgerStateReader.fetchDRepStakeDistribution(List.of(dRep))
                 .values()
                 .stream()
                 .reduce(BigInteger.ZERO, BigInteger::add);
     }
 
-    private BigInteger ledgerSPOStake(TestStakePool stakePool) {
+    protected BigInteger ledgerSPOStake(TestStakePool stakePool) {
         return ledgerStateReader.fetchSPOStakeDistribution(List.of(poolKeyHashHex(stakePool)))
                 .values()
                 .stream()
@@ -692,13 +472,13 @@ class GovernanceVoteTallyIT extends BaseE2ETest {
         return HexUtil.encodeHexString(StakePoolId.fromBech32PoolId(stakePool.poolId()).getPoolKeyHash());
     }
 
-    private void assertStake(String label, BigInteger actual, BigInteger expected) {
+    protected void assertStake(String label, BigInteger actual, BigInteger expected) {
         assertThat(nz(actual))
                 .as(label)
                 .isEqualTo(expected);
     }
 
-    private void assertCommitteePassed(ProposalVotingStats stats) {
+    protected void assertCommitteePassed(ProposalVotingStats stats) {
         assertThat(nz(stats.getCcYes())).isGreaterThanOrEqualTo(COMMITTEE_MIN_SIZE);
         assertThat(nz(stats.getCcNo())).isZero();
         assertThat(nz(stats.getCcAbstain())).isZero();
@@ -712,7 +492,7 @@ class GovernanceVoteTallyIT extends BaseE2ETest {
         checkIfUtxoAvailable(result.getValue(), account0.baseAddress());
     }
 
-    private Account accountAt(int index) {
+    protected Account accountAt(int index) {
         return new Account(Networks.testnet(), DEFAULT_MNEMONICS, DerivationPath.createExternalAddressDerivationPathForAccount(index));
     }
 
@@ -806,15 +586,15 @@ class GovernanceVoteTallyIT extends BaseE2ETest {
         return value == null || value.isBlank() ? fallback : Long.parseLong(value);
     }
 
-    private BigInteger nz(BigInteger value) {
+    protected BigInteger nz(BigInteger value) {
         return value == null ? BigInteger.ZERO : value;
     }
 
-    private int nz(Integer value) {
+    protected int nz(Integer value) {
         return value == null ? 0 : value;
     }
 
-    private BigDecimal nz(BigDecimal value) {
+    protected BigDecimal nz(BigDecimal value) {
         return value == null ? BigDecimal.ZERO : value;
     }
 }

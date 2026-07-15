@@ -17,7 +17,10 @@ API status translation is intentionally separate from rule parity tests.
 | `GovernanceProposalLifecycleIT` | 1 | Proposal lifecycle/indexer stability across epochs |
 | `GovernanceProposalApiStatusIT` | 2 | Public API status mapping from stored proposal status rows |
 | `GovernanceProposalOutcomeIT` | 2 | Post-bootstrap action outcome and ratification-gate parity |
-| `GovernanceVoteTallyIT` | 6 | Vote aggregation, replacement, and acceptance-ratio parity |
+| `GovernanceDRepVoteTallyIT` | 2 | DRep vote aggregation, replacement, and accepted-ratio parity |
+| `GovernanceDRepLifecycleVoteTallyIT` | 1 | DRep registration lifecycle effect on active proposal tallies |
+| `GovernanceSPOVoteTallyIT` | 2 | SPO stake distribution and mixed voting-group parity |
+| `GovernanceCommitteeVoteTallyIT` | 1 | Committee size and quorum parity |
 | `GovernanceRuleEdgeIT` | 5 active, 1 disabled | Default-vote reshaping and voter eligibility edges |
 | `GovernanceInterProposalIT` | 5 | Multi-proposal ordering, drop, delay, and effect-context behavior |
 | `GovernanceEffectContextIT` | 2 active, 1 disabled | Post-audit enacted-state effect contexts |
@@ -100,7 +103,7 @@ Covers post-bootstrap qualifier gates where votes would otherwise be sufficient:
 - Treasury withdrawal above available treasury expires.
 - Committee update with invalid member term expires.
 
-## `GovernanceVoteTallyIT`
+## `GovernanceDRepVoteTallyIT`
 
 ### `dRepAbstainStake_shouldStayOutOfAcceptedRatioDenominator`
 
@@ -117,6 +120,17 @@ Covers post-bootstrap qualifier gates where votes would otherwise be sufficient:
 - Effective DRep NO stake equals that DRep's ledger stake.
 - The proposal expires because the DRep accepted ratio is zero.
 
+## `GovernanceDRepLifecycleVoteTallyIT`
+
+### `dRepDeregistration_shouldClearEffectiveVoteForProposal`
+
+- A DRep with dominant stake votes `YES` for a proposal, then deregisters before ratification.
+- A smaller DRep votes `NO`.
+- If the deregistered DRep remained effective, the DRep ratio would pass; after ledger cleanup, the proposal expires.
+- The test asserts effective voting stats and DB-vs-ledger outcome, not deletion of raw historical vote rows.
+
+## `GovernanceSPOVoteTallyIT`
+
 ### `spoVotes_shouldUseStakeFromAllKnownPools`
 
 - SPO YES, NO, and non-voting pool buckets use real pool stake snapshots.
@@ -132,19 +146,14 @@ Covers mixed protocol parameter groups:
 - Mixed security + network parameter change ratifies when DRep, SPO, and committee
   groups all pass.
 
+## `GovernanceCommitteeVoteTallyIT`
+
 ### `committeeBelowMinimumSize_shouldBlockNewConstitutionRatification`
 
 - A prior committee update reduces the active committee below `committeeMinSize`.
 - A later `NewConstitution` proposal expires even with DRep YES support.
 - The test asserts the ledger semantic that an undersized committee blocks
   ratification outside bootstrap.
-
-### `dRepDeregistration_shouldClearEffectiveVoteForProposal`
-
-- A DRep with dominant stake votes `YES` for a proposal, then deregisters before ratification.
-- A smaller DRep votes `NO`.
-- If the deregistered DRep remained effective, the DRep ratio would pass; after ledger cleanup, the proposal expires.
-- The test asserts effective voting stats and DB-vs-ledger outcome, not deletion of raw historical vote rows.
 
 ## `GovernanceRuleEdgeIT`
 
@@ -269,7 +278,7 @@ Compile E2E test sources:
 Run one class:
 
 ```bash
-./gradlew :e2e-tests:test -PrunE2ETests --tests "*GovernanceVoteTallyIT" --console=plain --quiet
+./gradlew :e2e-tests:test -PrunE2ETests --tests "*GovernanceDRepVoteTallyIT" --console=plain --quiet
 ```
 
 Run the governance E2E classes:
