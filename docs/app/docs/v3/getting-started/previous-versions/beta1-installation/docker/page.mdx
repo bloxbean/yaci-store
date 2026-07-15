@@ -1,0 +1,157 @@
+# Yaci Store Docker Distribution (Beta1 Method)
+
+> **Note**: This is the **legacy Docker distribution method** for beta1. For the latest simplified Docker distribution, see beta5.
+
+This ZIP includes Docker Compose files for:
+- PostgreSQL
+- Yaci Store app
+- Ledger State app
+
+You can choose between:
+- **Monolith setups** (run both Postgres and indexer app)
+- **App-specific setups** (connect to an external DB)
+
+## Usage
+
+1. Edit `application.properties` to configure network settings.
+
+- Check the following properties and update them accordingly
+```
+store.cardano.host=preview-node.world.dev.cardano.org
+store.cardano.port=30002
+store.cardano.protocol-magic=2
+```
+
+2. Start containers:
+
+- **Yaci Store with Postgres**:
+```bash
+docker compose -f yaci-store-monolith.yml up
+  ```
+
+- **Yaci Store with Postgres with ledger-state calculation**:
+
+- Edit `env` file and uncomment the following property
+
+```
+SPRING_PROFILES_ACTIVE=ledger-state
+  ```
+
+- Run Yaci Store with ledger state profile
+
+```bash
+docker compose -f yaci-store-monolith.yml up
+  ```
+
+- **Ledger State with Postgres**:
+```bash
+docker compose -f yaci-store-ledger-state-monolith.yml up
+  ```
+
+- **Access PostgreSQL DB**:
+```bash
+./psql.sh postgres-compose.yml
+  ```
+
+**If ledger state is enabled, verify the log message to ensure that ledger-state calculation is active**
+
+While running Yaci Store with ledger-state calculation enabled, you may see logs similar to the example below, indicating
+that address balance calculation is active — which is required for ledger-state calculation.
+
+```
+ # of blocks written: 100, Time taken: 25 ms
+Block No: 4746  , Era: Shelley
+### Starting account balance calculation upto block: 4846 ###
+ 	Total Stake Address Balance records 0, Time taken to save: 0
+ 	Time taken to delete stake address balance history: 0
+### Total balance processing and saving time 1 ###
+
+ # of blocks written: 100, Time taken: 28 ms
+ Block No: 4846  , Era: Shelley
+### Starting account balance calculation upto block: 4946 ###
+ 	Total Stake Address Balance records 0, Time taken to save: 0
+ 	Time taken to delete stake address balance history: 0
+### Total balance processing and saving time 1 ###
+```
+
+## Connects to an external PostgreSQL DB
+
+Use docker compose file like `yaci-store.yml` or `yaci-store-ledger-state.yml` instead of `*-monolith.yml` if you want to connect to an external PostgreSQL DB.
+
+- Edit `yaci-store.yml` or `yaci-store-ledger-state.yml` to comment the database configuration in docker compose yml.
+
+```
+#    environment:
+#      - SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL:-jdbc:postgresql://yaci-store-postgres:5432/yaci_store?currentSchema=yaci_store}
+#      - SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME:-yaci}
+#      - SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD:-dbpass}
+```
+
+- Edit `application.properties` to set the database connection settings.
+Make sure to use the **database host or IP address** instead of `localhost`, as the Docker container will not be able to connect to the host using `localhost`.
+Also, ensure that only the **PostgreSQL** configuration section is uncommented.
+
+```
+spring.datasource.url=jdbc:postgresql://192.168.0.2:5432/yaci_indexer?currentSchema=preview
+spring.datasource.username=user
+spring.datasource.password=password
+```
+
+### Usage with External DB
+
+- **Yaci Store**:
+```bash
+docker compose -f yaci-store.yml up
+  ```
+
+- **Yaci Store with ledger-state calculation**:
+
+- Edit `env` file and uncomment the following property
+
+```
+SPRING_PROFILES_ACTIVE=ledger-state
+  ```
+
+- Run Yaci Store with ledger state profile
+
+```bash
+docker compose -f yaci-store.yml up
+  ```
+
+- **Ledger State with Postgres**:
+```bash
+docker compose -f yaci-store-ledger-state.yml up
+  ```
+
+## Apply Indexes After Sync
+
+- Open `admin-cli.sh` and replace `${tag}` with the actual version number and correct image name.
+_(This is a known bug and will be fixed in the next release.)_
+
+Example:
+
+```
+docker run -it --volume ./application.properties:/app/config/application.properties bloxbean/yaci-store-admin-cli:2.0.0-beta1
+```
+
+- Edit `application.properties` to set the database connection settings.
+Make sure to use the **database host or IP address** instead of `localhost`, as the `admin-cli` Docker container will not be able to connect to the host using `localhost`.
+Also, ensure that only the **PostgreSQL** configuration section is uncommented.
+
+```
+spring.datasource.url=jdbc:postgresql://192.168.0.142:54333/yaci_store?currentSchema=yaci_store
+spring.datasource.username=yaci
+spring.datasource.password=dbpass
+```
+
+Once sync is complete:
+
+```bash
+./admin-cli.sh
+```
+
+This runs the Admin CLI in a container. Then, at the prompt:
+
+```bash
+yaci-store> apply-indexes
+```
