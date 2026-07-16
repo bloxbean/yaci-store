@@ -261,9 +261,11 @@ Covers action-specific SPO default-vote reshaping:
 
 ## Deferred Follow-Up
 
+- Runtime status: the split vote-tally classes and active
+  `GovernanceEffectContextIT` rows have been manually re-run successfully
+  against DevKit after the fixture split.
 - Re-enable the positive no-confidence rows after the yaci-core `GovStateQuery`
   decoding issue is fixed.
-- Runtime-verify the expanded deep-pruning/refund row in `GovernanceEffectContextIT` against a reachable DevKit runtime.
 - Add opt-in CI/runbook coverage for DevKit-backed E2E once the suite and runtime
   environment are stable enough (if needed)
 
@@ -279,6 +281,12 @@ Run one class:
 
 ```bash
 ./gradlew :e2e-tests:test -PrunE2ETests --tests "*GovernanceDRepVoteTallyIT" --console=plain --quiet
+```
+
+Run the split vote-tally classes:
+
+```bash
+./gradlew :e2e-tests:test -PrunE2ETests --tests "*GovernanceDRepVoteTallyIT" --tests "*GovernanceDRepLifecycleVoteTallyIT" --tests "*GovernanceSPOVoteTallyIT" --tests "*GovernanceCommitteeVoteTallyIT" --console=plain --quiet
 ```
 
 Run the governance E2E classes:
