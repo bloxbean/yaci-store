@@ -6,6 +6,8 @@
   "store_user": "yaci",
   "store_password": "dbpass",
   "store_schema": "yaci_store",
+  "reports_dir": "./reports",
+  "logs_dir": "./logs",
   "quiet": false,
   "max_mismatches": 0,
   "delay": 0

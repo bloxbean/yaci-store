@@ -48,7 +48,9 @@ public class ByronUtxoProcessor {
                 .collect(Collectors.toList());
 
         List<TxInputOutput> txInputOutputList = new ArrayList<>();
+        int txIndex = 0;
         for (ByronTx byronTx : byronTxList) {
+            final int currentTxIndex = txIndex++;
             //set spent for input
             List<TxInput> spentOutputs = byronTx.getInputs().stream()
                     .map(txIn -> new UtxoKey(txIn.getTxId(), txIn.getIndex()))
@@ -67,7 +69,7 @@ public class ByronUtxoProcessor {
 
             List<Utxo> utxos = getUtxosFromByronOutput(byronTx);
             List<AddressUtxo> outputAddressUtxos = utxos.stream()
-                    .map(utxo -> getAddressUtxo(metadata, utxo))
+                    .map(utxo -> getAddressUtxo(metadata, utxo, currentTxIndex))
                     .collect(Collectors.toList());
 
             if (outputAddressUtxos.size() > 0) //unspent utxos
@@ -105,7 +107,7 @@ public class ByronUtxoProcessor {
         return utxos;
     }
 
-    private AddressUtxo getAddressUtxo(@NonNull EventMetadata eventMetadata, @NonNull Utxo utxo) {
+    private AddressUtxo getAddressUtxo(@NonNull EventMetadata eventMetadata, @NonNull Utxo utxo, int txIndex) {
         //Fix -- some asset name contains \u0000 -- postgres can't convert this to text. so replace
         List<Amt> amounts = utxo.getAmounts().stream().map(amount ->
                         Amt.builder()
@@ -133,6 +135,7 @@ public class ByronUtxoProcessor {
                 .epoch(eventMetadata.getEpochNumber())
                 .txHash(utxo.getTxHash())
                 .outputIndex(utxo.getIndex())
+                .txIndex(txIndex)
                 .ownerAddr(utxo.getAddress())
                 .ownerStakeAddr(stakeAddress)
                 .ownerPaymentCredential(paymentKeyHash)
