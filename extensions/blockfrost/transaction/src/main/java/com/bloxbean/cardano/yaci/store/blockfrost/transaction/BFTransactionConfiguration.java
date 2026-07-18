@@ -8,7 +8,7 @@ import org.springframework.context.annotation.Configuration;
 @ConditionalOnProperty(
         name = {"store.extensions.blockfrost.transaction.enabled"},
         havingValue = "true",
-        matchIfMissing = false
+        matchIfMissing = true
 )
 @ComponentScan(basePackages = {
         "com.bloxbean.cardano.yaci.store.blockfrost.transaction",

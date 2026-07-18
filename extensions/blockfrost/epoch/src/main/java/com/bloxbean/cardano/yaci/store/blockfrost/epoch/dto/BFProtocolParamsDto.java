@@ -89,8 +89,8 @@ public class BFProtocolParamsDto {
     private String committeeMinSize;
     private String committeeMaxTermLength;
     private String govActionLifetime;
-    private BigInteger govActionDeposit;
-    private BigInteger drepDeposit;
+    private String govActionDeposit;
+    private String drepDeposit;
     private String drepActivity;
     private BigDecimal minFeeRefScriptCostPerByte;
 

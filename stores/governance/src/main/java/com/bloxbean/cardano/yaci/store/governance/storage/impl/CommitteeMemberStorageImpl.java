@@ -111,6 +111,23 @@ public class CommitteeMemberStorageImpl implements CommitteeMemberStorage {
     // todo: add integration test
     @Override
     public List<CommitteeMemberDetails> getActiveCommitteeMembersDetailsByEpoch(int epoch) {
+        return getActiveCommitteeMembersDetails(epoch, true);
+    }
+
+    @Override
+    public List<CommitteeMemberDetails> getActiveCommitteeMembersDetailsForRatificationByEpoch(int epoch) {
+        return getActiveCommitteeMembersDetails(epoch, false);
+    }
+
+    private List<CommitteeMemberDetails> getActiveCommitteeMembersDetails(int epoch,
+                                                                          boolean includeCurrentEpochRegistration) {
+        var registrationEpochCondition = includeCurrentEpochRegistration
+                ? COMMITTEE_REGISTRATION.EPOCH.le(epoch)
+                : COMMITTEE_REGISTRATION.EPOCH.lt(epoch);
+        var deregistrationEpochCondition = includeCurrentEpochRegistration
+                ? COMMITTEE_DEREGISTRATION.EPOCH.le(epoch)
+                : COMMITTEE_DEREGISTRATION.EPOCH.lt(epoch);
+
         // Latest committee_registration per cold_key using ROW_NUMBER()
         var orderedRegistration = dsl
                 .select(
@@ -130,7 +147,7 @@ public class CommitteeMemberStorageImpl implements CommitteeMemberStorage {
                                 ).as("rn")
                 )
                 .from(COMMITTEE_REGISTRATION)
-                .where(COMMITTEE_REGISTRATION.EPOCH.le(epoch))
+                .where(registrationEpochCondition)
                 .asTable("ordered_registration");
 
         var latestRegistration = dsl
@@ -172,7 +189,7 @@ public class CommitteeMemberStorageImpl implements CommitteeMemberStorage {
                                 .from(COMMITTEE_DEREGISTRATION)
                                 .where(COMMITTEE_DEREGISTRATION.COLD_KEY
                                         .eq(latestRegistration.field(COMMITTEE_REGISTRATION.COLD_KEY)))
-                                .and(COMMITTEE_DEREGISTRATION.EPOCH.le(epoch))
+                                .and(deregistrationEpochCondition)
                                 .and(
                                         COMMITTEE_DEREGISTRATION.SLOT.gt(latestRegistration.field(COMMITTEE_REGISTRATION.SLOT))
                                                 .or(

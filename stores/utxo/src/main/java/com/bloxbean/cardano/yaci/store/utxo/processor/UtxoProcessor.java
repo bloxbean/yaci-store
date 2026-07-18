@@ -40,7 +40,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static com.bloxbean.cardano.yaci.core.util.Constants.LOVELACE;
 import static com.bloxbean.cardano.yaci.store.utxo.UtxoStoreConfiguration.STORE_UTXO_ENABLED;
@@ -70,20 +69,20 @@ public class UtxoProcessor {
             if (transactions == null)
                 return;
 
-            Stream<Transaction> transactionStream = transactions.stream(); //dependencyFound? transactions.stream(): transactions.parallelStream();
-            List<TxInputOutput> txInputOutputs = transactionStream.map(
-                    transaction -> {
-                        Optional<TxInputOutput> txInputOutputOptional;
-                        if (transaction.isInvalid()) {
-                            txInputOutputOptional = handleInvalidTransaction(event.getMetadata(), transaction);
-                        } else {
-                            txInputOutputOptional = handleValidTransaction(event.getMetadata(), transaction);
-                        }
-
-                        return txInputOutputOptional;
-                    }).filter(Optional::isPresent)
-                    .map(Optional::get)
-                    .collect(Collectors.toList());
+            // Iterate by position so each output can be stamped with its producing transaction's
+            // index within the block (tx_index). The index counts every transaction, including any
+            // that yield no TxInputOutput, so it stays aligned with the canonical block tx order.
+            List<TxInputOutput> txInputOutputs = new ArrayList<>();
+            for (int txIndex = 0; txIndex < transactions.size(); txIndex++) {
+                Transaction transaction = transactions.get(txIndex);
+                Optional<TxInputOutput> txInputOutputOptional;
+                if (transaction.isInvalid()) {
+                    txInputOutputOptional = handleInvalidTransaction(event.getMetadata(), transaction, txIndex);
+                } else {
+                    txInputOutputOptional = handleValidTransaction(event.getMetadata(), transaction, txIndex);
+                }
+                txInputOutputOptional.ifPresent(txInputOutputs::add);
+            }
 
             utxoStorage.saveSpent(txInputOutputs.stream()
                     .flatMap(txInputOutput -> txInputOutput.getInputs().stream()).collect(Collectors.toList()));
@@ -99,7 +98,7 @@ public class UtxoProcessor {
         }
     }
 
-    private Optional<TxInputOutput> handleValidTransaction(EventMetadata metadata, Transaction transaction) {
+    private Optional<TxInputOutput> handleValidTransaction(EventMetadata metadata, Transaction transaction, int txIndex) {
         if (transaction.isInvalid())
             return Optional.empty();
 
@@ -124,7 +123,7 @@ public class UtxoProcessor {
         //                    utxoStorage.findById(addressUtxo.getTxHash(), addressUtxo.getOutputIndex())
         //                            .ifPresent(existingAddressUtxo -> addressUtxo.setSpent(existingAddressUtxo.getSpent()));
         List<AddressUtxo> outputAddressUtxos = transaction.getUtxos().stream()
-                .map(utxo -> getAddressUtxo(metadata, utxo))
+                .map(utxo -> getAddressUtxo(metadata, utxo, txIndex))
                 .collect(Collectors.toList());
 
         //publish event
@@ -136,13 +135,13 @@ public class UtxoProcessor {
         }
     }
 
-    private Optional<TxInputOutput> handleInvalidTransaction(EventMetadata metadata, Transaction transaction) {
+    private Optional<TxInputOutput> handleInvalidTransaction(EventMetadata metadata, Transaction transaction, int txIndex) {
         if (!transaction.isInvalid())
             return Optional.empty();
 
         //collateral output
         AddressUtxo collateralOutputUtxo = Optional.ofNullable(transaction.getCollateralReturnUtxo())
-                .map(utxo -> getCollateralReturnAddressUtxo(metadata, utxo))
+                .map(utxo -> getCollateralReturnAddressUtxo(metadata, utxo, txIndex))
                 .orElse(null);
 
         //Also, change in Yaci to return collateral output index as size of tx outputs
@@ -178,7 +177,7 @@ public class UtxoProcessor {
         return Optional.of(new TxInputOutput(transaction.getTxHash(), collateralInputUtxos, outputs));
     }
 
-    private AddressUtxo getAddressUtxo(@NonNull EventMetadata eventMetadata, @NonNull Utxo utxo) {
+    private AddressUtxo getAddressUtxo(@NonNull EventMetadata eventMetadata, @NonNull Utxo utxo, int txIndex) {
         //Fix -- some asset name contains \u0000 -- postgres can't convert this to text. so replace
         List<Amt> amounts = utxo.getAmounts().stream().map(amount ->
                         Amt.builder()
@@ -232,6 +231,7 @@ public class UtxoProcessor {
                 .epoch(eventMetadata.getEpochNumber())
                 .txHash(utxo.getTxHash())
                 .outputIndex(utxo.getIndex())
+                .txIndex(txIndex)
                 .ownerAddr(utxo.getAddress())
                 .ownerStakeAddr(stakeAddress)
                 .ownerPaymentCredential(paymentKeyHash)
@@ -245,8 +245,8 @@ public class UtxoProcessor {
                 .build();
     }
 
-    private AddressUtxo getCollateralReturnAddressUtxo(EventMetadata metadata, Utxo utxo) {
-        AddressUtxo addressUtxo = getAddressUtxo(metadata, utxo);
+    private AddressUtxo getCollateralReturnAddressUtxo(EventMetadata metadata, Utxo utxo, int txIndex) {
+        AddressUtxo addressUtxo = getAddressUtxo(metadata, utxo, txIndex);
         addressUtxo.setIsCollateralReturn(Boolean.TRUE);
         return addressUtxo;
     }
