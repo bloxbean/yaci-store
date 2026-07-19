@@ -14,6 +14,7 @@ Python scripts that compare **Yaci Store** API responses against live **Blockfro
 | `compare_transaction.py` | `/txs/*` |
 | `compare_metadata.py` | `/metadata/*` |
 | `compare_scripts.py` | `/scripts/*` |
+| `compare_pools.py` | `/pools`, `/pools/extended`, `/pools/retired`, `/pools/retiring`, `/pools/{pool_id}/*` |
 | `bf_compare.py` | Shared core — not run directly |
 
 ## Requirements
