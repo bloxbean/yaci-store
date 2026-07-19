@@ -57,3 +57,17 @@
       excludes:
         - mysql
         - h2
+
+- table: epoch_stake
+  indexes:
+    - name: idx_epoch_stake_pool_id_epoch
+      columns:
+        - pool_id
+        - epoch
+
+- table: reward
+  indexes:
+    - name: idx_reward_pool_id_earned_epoch
+      columns:
+        - pool_id
+        - earned_epoch
