@@ -1,0 +1,21 @@
+dependencies {
+    api project(':components:common')
+    api project(':components:core')
+
+    //Provided by the consuming web application; keeps the base starter usable in non-web apps
+    compileOnly 'org.springframework.boot:spring-boot-starter-web'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-web'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store Core API'
+                description = 'Yaci Store Core API Module'
+            }
+        }
+    }
+}
