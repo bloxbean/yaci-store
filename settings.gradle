@@ -15,6 +15,7 @@ include 'applications:admin'
 include 'applications:admin-cli'
 
 include 'components:core'
+include 'components:core-api'
 include 'components:events'
 include 'components:common'
 include 'components:client'

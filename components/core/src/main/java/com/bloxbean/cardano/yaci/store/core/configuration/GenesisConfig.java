@@ -48,6 +48,9 @@ public class GenesisConfig {
 
     private double activeSlotsCoeff;
     private int securityParam;
+    private int updateQuorum;
+    private long slotsPerKesPeriod;
+    private int maxKesEvolutions;
     private BigInteger maxLovelaceSupply = BigInteger.valueOf(45000000000000000L);
 
     public GenesisConfig(StoreProperties storeProperties, ObjectMapper objectMapper, ResourceLoader resourceLoader) {
@@ -186,6 +189,9 @@ public class GenesisConfig {
         shelleySlotLength = shelleyGenesis.getSlotLength();
         activeSlotsCoeff = shelleyGenesis.getActiveSlotsCoeff();
         securityParam = shelleyGenesis.getSecurityParam();
+        updateQuorum = shelleyGenesis.getUpdateQuorum();
+        slotsPerKesPeriod = shelleyGenesis.getSlotsPerKesPeriod();
+        maxKesEvolutions = shelleyGenesis.getMaxKesEvolutions();
         maxLovelaceSupply = shelleyGenesis.getMaxLovelaceSupply();
         epochLength = shelleyGenesis.getEpochLength();
 
