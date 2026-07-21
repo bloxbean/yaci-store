@@ -40,13 +40,21 @@ public class ParameterChangeRatificationEvaluator implements RatificationEvaluat
         final boolean isPreviousActionAsExpected = GovernanceActionUtil.isPrevActionAsExpected(parameterChangeAction.getType(), parameterChangeAction.getGovActionId(), lastEnactedGovActionId);
         boolean isAccepted;
 
+        List<ProtocolParamGroup> ppGroupChangeList = ProtocolParamUtil.getGroupsWithNonNullField(parameterChangeAction.getProtocolParamUpdate());
+        boolean spoVotingRequired = ppGroupChangeList.contains(ProtocolParamGroup.SECURITY);
+
         if (context.isBootstrapPhase()) {
             isAccepted = committeeVotingResult.equals(VotingStatus.PASS_THRESHOLD);
+            // during bootstrap, DRep thresholds are zeroed, but the SPO SECURITY-group threshold
+            // is unaffected, so SPO approval is still required for SECURITY-group changes.
+            if (spoVotingRequired) {
+                VotingStatus spoVotingResult = new SPOVotingEvaluator().evaluate(context.getVotingData(), votingEvaluationContext);
+                isAccepted = isAccepted && spoVotingResult.equals(VotingStatus.PASS_THRESHOLD);
+            }
         } else {
-            List<ProtocolParamGroup> ppGroupChangeList = ProtocolParamUtil.getGroupsWithNonNullField(parameterChangeAction.getProtocolParamUpdate());
             VotingStatus dRepVotingResult = new DRepVotingEvaluator().evaluate(context.getVotingData(), votingEvaluationContext);
 
-            if (ppGroupChangeList.contains(ProtocolParamGroup.SECURITY)) {
+            if (spoVotingRequired) {
                 VotingStatus spoVotingResult = new SPOVotingEvaluator().evaluate(context.getVotingData(), votingEvaluationContext);
                 if (ppGroupChangeList.size() == 1) {
                     isAccepted = committeeVotingResult.equals(VotingStatus.PASS_THRESHOLD) && spoVotingResult.equals(VotingStatus.PASS_THRESHOLD);
