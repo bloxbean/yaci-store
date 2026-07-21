@@ -30,11 +30,6 @@ public class BFNetworkService {
 
     private static final String BF_API_VERSION = "0.1.30";
 
-    // Standard Cardano protocol constants (identical across mainnet, preprod, preview)
-    private static final long SLOTS_PER_KES_PERIOD = 129600L;
-    private static final int MAX_KES_EVOLUTIONS = 62;
-    private static final int UPDATE_QUORUM = 5;
-
     private final ObjectProvider<NetworkInfoApiService> networkInfoApiServiceProvider;
     private final ObjectProvider<BFNetworkStorageReader> bfNetworkStorageReaderProvider;
     private final EraService eraService;
@@ -183,14 +178,14 @@ public class BFNetworkService {
 
         return BFGenesisDto.builder()
                 .activeSlotsCoefficient(genesisConfig.getActiveSlotsCoeff())
-                .updateQuorum(UPDATE_QUORUM)
+                .updateQuorum(genesisConfig.getUpdateQuorum())
                 .maxLovelaceSupply(genesisConfig.getMaxLovelaceSupply().toString())
                 .networkMagic(protocolMagic)
                 .epochLength(genesisConfig.getEpochLength())
                 .systemStart(genesisConfig.getStartTime(protocolMagic))
-                .slotsPerKesPeriod(SLOTS_PER_KES_PERIOD)
+                .slotsPerKesPeriod(genesisConfig.getSlotsPerKesPeriod())
                 .slotLength((int) genesisConfig.slotDuration(Era.Shelley))
-                .maxKesEvolutions(MAX_KES_EVOLUTIONS)
+                .maxKesEvolutions(genesisConfig.getMaxKesEvolutions())
                 .securityParam(genesisConfig.getSecurityParam())
                 .build();
     }

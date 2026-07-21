@@ -38,6 +38,9 @@ public class ShelleyGenesis extends GenesisFile {
     public static final String ATTR_MAX_LOVELACE_SUPPLY = "maxLovelaceSupply";
     public static final String ATTR_EPOCH_LENGTH = "epochLength";
     public static final String ATTR_NETWORK_MAGIC = "networkMagic";
+    public static final String ATTR_SLOTS_PER_KES_PERIOD = "slotsPerKESPeriod";
+    public static final String ATTR_MAX_KES_EVOLUTIONS = "maxKESEvolutions";
+    public static final String ATTR_UPDATE_QUORUM = "updateQuorum";
     public static final String SECURITY_PARAM = "securityParam";
     public static final String MIN_FEE_A = "minFeeA";
     public static final String MIN_FEE_B = "minFeeB";
@@ -60,6 +63,12 @@ public class ShelleyGenesis extends GenesisFile {
     public static final String MIN_U_TX_O_VALUE = "minUTxOValue";
     public static final String MIN_POOL_COST = "minPoolCost";
 
+    // Last-resort defaults for genesis files that omit these standard keys (e.g. minimal devnet files);
+    // the mainnet family values keep behavior unchanged when a key is absent.
+    private static final long DEFAULT_SLOTS_PER_KES_PERIOD = 129600L;
+    private static final int DEFAULT_MAX_KES_EVOLUTIONS = 62;
+    private static final int DEFAULT_UPDATE_QUORUM = 5;
+
     private static ObjectMapper objectMapper = new ObjectMapper();
 
     private String systemStart;
@@ -69,6 +78,9 @@ public class ShelleyGenesis extends GenesisFile {
     private long epochLength;
     private long networkMagic;
     private int securityParam;
+    private long slotsPerKesPeriod;
+    private int maxKesEvolutions;
+    private int updateQuorum;
 
     private List<GenesisBalance> initialFunds;
     private ProtocolParams protocolParams;
@@ -95,6 +107,9 @@ public class ShelleyGenesis extends GenesisFile {
         epochLength = genesisJson.get(ATTR_EPOCH_LENGTH).asLong();
         networkMagic = genesisJson.get(ATTR_NETWORK_MAGIC).asLong();
         securityParam = genesisJson.get(SECURITY_PARAM).asInt();
+        slotsPerKesPeriod = genesisJson.has(ATTR_SLOTS_PER_KES_PERIOD) ? genesisJson.get(ATTR_SLOTS_PER_KES_PERIOD).asLong() : DEFAULT_SLOTS_PER_KES_PERIOD;
+        maxKesEvolutions = genesisJson.has(ATTR_MAX_KES_EVOLUTIONS) ? genesisJson.get(ATTR_MAX_KES_EVOLUTIONS).asInt() : DEFAULT_MAX_KES_EVOLUTIONS;
+        updateQuorum = genesisJson.has(ATTR_UPDATE_QUORUM) ? genesisJson.get(ATTR_UPDATE_QUORUM).asInt() : DEFAULT_UPDATE_QUORUM;
 
         JsonNode initialFundJson = genesisJson.get("initialFunds");
         initialFunds = new ArrayList<>();

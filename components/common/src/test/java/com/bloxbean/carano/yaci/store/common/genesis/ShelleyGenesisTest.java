@@ -32,6 +32,9 @@ class ShelleyGenesisTest {
         assertThat(shelleyGenesis.getMaxLovelaceSupply()).isEqualTo(new BigInteger("45000000000000000"));
         assertThat(shelleyGenesis.getEpochLength()).isEqualTo(432000);
         assertThat(shelleyGenesis.getNetworkMagic()).isEqualTo(764824073L);
+        assertThat(shelleyGenesis.getSlotsPerKesPeriod()).isEqualTo(129600L);
+        assertThat(shelleyGenesis.getMaxKesEvolutions()).isEqualTo(62);
+        assertThat(shelleyGenesis.getUpdateQuorum()).isEqualTo(5);
     }
 
     @Test
@@ -50,6 +53,10 @@ class ShelleyGenesisTest {
         assertThat(shelleyGenesis.getMaxLovelaceSupply()).isEqualTo(new BigInteger("20000000000000000"));
         assertThat(shelleyGenesis.getEpochLength()).isEqualTo(500);
         assertThat(shelleyGenesis.getNetworkMagic()).isEqualTo(42);
+        // Non-mainnet values differ from the mainnet family, proving these keys are read per-network
+        assertThat(shelleyGenesis.getSlotsPerKesPeriod()).isEqualTo(129600L);
+        assertThat(shelleyGenesis.getMaxKesEvolutions()).isEqualTo(60);
+        assertThat(shelleyGenesis.getUpdateQuorum()).isEqualTo(2);
 
         assertThat(shelleyGenesis.getInitialFunds()).containsAll(expectedInitialUtxos);
 
@@ -86,6 +93,9 @@ class ShelleyGenesisTest {
         assertThat(shelleyGenesis.getMaxLovelaceSupply()).isEqualTo(new BigInteger("45000000000000000"));
         assertThat(shelleyGenesis.getEpochLength()).isEqualTo(432000);
         assertThat(shelleyGenesis.getNetworkMagic()).isEqualTo(764824073L);
+        assertThat(shelleyGenesis.getSlotsPerKesPeriod()).isEqualTo(129600L);
+        assertThat(shelleyGenesis.getMaxKesEvolutions()).isEqualTo(62);
+        assertThat(shelleyGenesis.getUpdateQuorum()).isEqualTo(5);
 
         //protocol params
         assertThat(protocolParams.getProtocolMajorVer()).isEqualTo(2);
@@ -118,6 +128,10 @@ class ShelleyGenesisTest {
         assertThat(shelleyGenesis.getMaxLovelaceSupply()).isEqualTo(new BigInteger("45000000000000000"));
         assertThat(shelleyGenesis.getEpochLength()).isEqualTo(86400L);
         assertThat(shelleyGenesis.getNetworkMagic()).isEqualTo(4);
+        assertThat(shelleyGenesis.getSlotsPerKesPeriod()).isEqualTo(129600L);
+        assertThat(shelleyGenesis.getMaxKesEvolutions()).isEqualTo(62);
+        // sanchonet uses updateQuorum=3, unlike the mainnet family's 5
+        assertThat(shelleyGenesis.getUpdateQuorum()).isEqualTo(3);
 
         //protocol params
         assertThat(protocolParams.getProtocolMajorVer()).isEqualTo(6);
