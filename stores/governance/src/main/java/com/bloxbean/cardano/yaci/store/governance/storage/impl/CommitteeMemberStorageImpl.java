@@ -108,7 +108,6 @@ public class CommitteeMemberStorageImpl implements CommitteeMemberStorage {
 //                ));
 //    }
 
-    // todo: add integration test
     @Override
     public List<CommitteeMemberDetails> getActiveCommitteeMembersDetailsByEpoch(int epoch) {
         return getActiveCommitteeMembersDetails(epoch, true);
@@ -155,7 +154,7 @@ public class CommitteeMemberStorageImpl implements CommitteeMemberStorage {
                 .where(orderedRegistration.field("rn", Integer.class).eq(1))
                 .asTable("latest_registration");
 
-        // Latest committee_member epoch that’s <= epoch and not expired
+        // Latest committee_member epoch that's <= epoch and not expired
         var latestCommitteeMembers = dsl
                 .select(
                         COMMITTEE_MEMBER.HASH,
@@ -169,7 +168,8 @@ public class CommitteeMemberStorageImpl implements CommitteeMemberStorage {
                                 .from(COMMITTEE_MEMBER)
                                 .where(COMMITTEE_MEMBER.EPOCH.le(epoch))
                 ))
-                .and(COMMITTEE_MEMBER.EXPIRED_EPOCH.gt(epoch)) // todo: verify 'greater than' or 'greater or equals'
+                // Committee terms are valid through the expiry epoch.
+                .and(COMMITTEE_MEMBER.EXPIRED_EPOCH.ge(epoch))
                 .asTable("latest_committee_member");
 
         // Main query joining the above, and filtering out deregistered members
