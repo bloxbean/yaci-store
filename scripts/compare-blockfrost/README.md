@@ -14,6 +14,7 @@ Python scripts that compare **Yaci Store** API responses against live **Blockfro
 | `compare_transaction.py` | `/txs/*` |
 | `compare_metadata.py` | `/metadata/*` |
 | `compare_scripts.py` | `/scripts/*` |
+| `compare_network.py` | `/network`, `/network/eras`, `/genesis` (root `/` excluded; instance-specific url/version) |
 | `bf_compare.py` | Shared core — not run directly |
 
 ## Requirements
