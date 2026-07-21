@@ -36,6 +36,7 @@ public class BFNetworkService {
     private final GenesisConfig genesisConfig;
     private final StoreProperties storeProperties;
     private final BFNetworkMapper bfNetworkMapper;
+    private final org.springframework.core.env.Environment environment;
 
     // ── /network ─────────────────────────────────────────────────────────────
 
@@ -193,8 +194,10 @@ public class BFNetworkService {
     // ── / (root) ─────────────────────────────────────────────────────────────
 
     public BFRootDto getRoot() {
+        String hostname = environment.getProperty("blockfrost.hostname", "");
+        String apiPrefix = environment.getProperty("blockfrost.apiPrefix", "");
         return BFRootDto.builder()
-                .url("https://cardano-mainnet.blockfrost.io/api")
+                .url(hostname + apiPrefix)
                 .version(BF_API_VERSION)
                 .build();
     }
