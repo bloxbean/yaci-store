@@ -215,7 +215,7 @@ public class GovernanceStatsService {
 
         for (var m : members) {
             Integer expiredEpoch = m.get(c.EXPIRED_EPOCH);
-            if (expiredEpoch != null && expiredEpoch <= epoch) {
+            if (expiredEpoch != null && expiredEpoch < epoch) {
                 expiredCount++;
             } else {
                 activeCount++;
