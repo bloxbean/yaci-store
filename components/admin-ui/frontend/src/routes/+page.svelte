@@ -54,13 +54,13 @@
         <StatCard
             title="Current Block"
             value={syncStatus.block.toLocaleString()}
-            subtitle="Network: {syncStatus.networkBlock.toLocaleString()}"
+            subtitle={syncStatus.networkTipAvailable ? `Network: ${syncStatus.networkBlock.toLocaleString()}` : 'Network tip unavailable'}
             icon="block"
         />
         <StatCard
             title="Current Slot"
             value={syncStatus.slot.toLocaleString()}
-            subtitle="Network: {syncStatus.networkSlot.toLocaleString()}"
+            subtitle={syncStatus.networkTipAvailable ? `Network: ${syncStatus.networkSlot.toLocaleString()}` : 'Network tip unavailable'}
             icon="slot"
         />
         <StatCard
@@ -81,6 +81,7 @@
             isSynced={syncStatus.synced}
             currentBlock={syncStatus.block}
             networkBlock={syncStatus.networkBlock}
+            networkTipAvailable={syncStatus.networkTipAvailable}
         />
         <HealthBadge {health} />
     </div>

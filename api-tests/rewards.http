@@ -241,6 +241,21 @@ GET {{base_url}}/api/v1/accounts/stake_test1uzzd5vuumkaq2c3a95gyt7rf28pdna4zpza9
 ### GET {{base_url}}/api/v1/account/stake_test1uzzd5vuumkaq2c3a95gyt7rf28pdna4zpza9vjxmp7w00yc2rp5he/rewards_rest
 
 ###
+### Account Withdrawable Rewards
+GET {{base_url}}/api/v1/accounts/stake_test1uzzd5vuumkaq2c3a95gyt7rf28pdna4zpza9vjxmp7w00yc2rp5he/rewards/withdrawable
+
+> {%
+    client.test("Get account withdrawable rewards", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+
+        const reward = response.body;
+
+        client.assert(reward.address == 'stake_test1uzzd5vuumkaq2c3a95gyt7rf28pdna4zpza9vjxmp7w00yc2rp5he', "Address should match");
+        client.assert(reward.withdrawable_amount >= 0, "Withdrawable amount should be non-negative");
+    });
+%}
+
+###
 ### Account Rewards by Epoch
 GET {{base_url}}/api/v1/accounts/stake_test1ur5uc537jdf953she62atqeh44yrt2vrlx4yrrlsmggutqs896rz7/epochs/35/rewards
 

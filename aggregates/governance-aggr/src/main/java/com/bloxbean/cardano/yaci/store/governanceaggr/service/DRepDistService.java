@@ -12,6 +12,7 @@ import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
+import com.bloxbean.cardano.yaci.store.common.domain.NetworkType;
 import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.dbutils.index.util.DatabaseUtils;
@@ -20,7 +21,6 @@ import com.bloxbean.cardano.yaci.store.epoch.processor.EraGenesisProtocolParamsU
 import com.bloxbean.cardano.yaci.store.epoch.storage.EpochParamStorage;
 import com.bloxbean.cardano.yaci.store.governance.storage.GovActionProposalStorage;
 import com.bloxbean.cardano.yaci.store.governanceaggr.GovernanceAggrProperties;
-import com.bloxbean.cardano.yaci.store.governanceaggr.domain.DRepDelegationExclusion;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.GovActionProposalStatus;
 
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.GovActionProposalStatusStorage;
@@ -36,7 +36,6 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.sql.Types;
 import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -59,7 +58,7 @@ public class DRepDistService {
     private final AdaPotJobStorage adaPotJobStorage;
     private final GovernanceAggrProperties governanceAggrProperties;
     private final PartitionManager partitionManager;
-    private final DRepDelegationExclusionProvider dRepDelegationExclusionProvider;
+    private final DRepPv9ClearEventCacheService dRepPv9ClearEventCacheService;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW, isolation = Isolation.READ_COMMITTED)
     public void takeStakeSnapshot(int currentEpoch) {
@@ -71,11 +70,7 @@ public class DRepDistService {
             return;
         }
 
-        // Ensure partition exists for this epoch before taking snapshot
         partitionManager.ensureDRepDistPartition(currentEpoch);
-
-        List<DRepDelegationExclusion> delegationExclusions = dRepDelegationExclusionProvider
-                .getExclusionsForNetwork(storeProperties.getProtocolMagic());
 
         boolean isInBootstrapPhase = true;
         int maxBootstrapPhaseEpoch = 0;
@@ -105,6 +100,11 @@ public class DRepDistService {
                 isInBootstrapPhase = false;
             }
         }
+
+        // The stale reverse-entry bug exists only during bootstrap/PV9. Once PV10 starts,
+        // we still need the bootstrap end epoch as an upper bound, but we must not apply
+        // this compensation to delegations created after bootstrap.
+        int pv9MaxEpoch = isInBootstrapPhase ? epoch : maxBootstrapPhaseEpoch;
 
         log.info("Taking dRep stake snapshot for epoch : " + currentEpoch);
 
@@ -140,7 +140,8 @@ public class DRepDistService {
             "DROP TABLE IF EXISTS ss_gov_active_proposal_deposits",
             "DROP TABLE IF EXISTS ss_gov_scheduled_to_drop_proposal_deposits",
             "DROP TABLE IF EXISTS ss_gov_spendable_reward_rest",
-            "DROP TABLE IF EXISTS ss_gov_pool_refund_rewards"
+            "DROP TABLE IF EXISTS ss_gov_pool_refund_rewards",
+            "DROP TABLE IF EXISTS ss_pv9_cleared_addresses"
         );
 
         for (String query : dropQueries) {
@@ -206,7 +207,7 @@ public class DRepDistService {
                             tx_index,
                             cert_index,
                             ROW_NUMBER() OVER (
-                                PARTITION BY drep_hash
+                                PARTITION BY drep_hash, cred_type
                                 ORDER BY slot DESC, tx_index DESC, cert_index DESC
                             ) AS rn
                         FROM drep_registration
@@ -219,6 +220,7 @@ public class DRepDistService {
                     SELECT
                         du.drep_id,
                         du.drep_hash,
+                        du.cred_type,
                         du.epoch AS unregistration_epoch,
                         du.slot  AS unregistration_slot,
                         du.tx_index  AS unregistration_tx_index,
@@ -227,12 +229,13 @@ public class DRepDistService {
                         SELECT
                             drep_id,
                             drep_hash,
+                            cred_type,
                             epoch,
                             slot,
                             tx_index,
                             cert_index,
                             ROW_NUMBER() OVER (
-                                PARTITION BY drep_hash
+                                PARTITION BY drep_hash, cred_type
                                 ORDER BY slot DESC, tx_index DESC, cert_index DESC
                             ) AS rn
                         FROM drep_registration
@@ -248,25 +251,28 @@ public class DRepDistService {
                     d.cert_index,
                     d.type,
                     d.slot,
-                    lr.cred_type,
+                    COALESCE(lr.cred_type, d.cred_type) AS cred_type,
                     lr.registration_epoch,
                     lr.registration_slot,
                     lr.registration_tx_index,
                     lr.registration_cert_index,
                     
+                    lu.unregistration_epoch,
                     lu.unregistration_slot,
                     lu.unregistration_tx_index,
                     lu.unregistration_cert_index,
                 
                     ROW_NUMBER() OVER (
-                        PARTITION BY d.drep_hash
+                        PARTITION BY d.drep_hash, d.cred_type
                         ORDER BY d.slot DESC, d.tx_index DESC, d.cert_index DESC
                     ) AS rn
                 FROM drep_registration d
                 LEFT JOIN last_reg lr
                        ON d.drep_hash = lr.drep_hash
+                      AND d.cred_type = lr.cred_type
                 LEFT JOIN last_unreg lu 
-                        ON d.drep_hash = lu.drep_hash
+                       ON d.drep_hash = lu.drep_hash
+                      AND d.cred_type = lu.cred_type
                 WHERE d.epoch <= :epoch
                 """, tableType);
 
@@ -353,6 +359,223 @@ public class DRepDistService {
                 GROUP BY r.address
                 """, tableType);
 
+        // Bootstrap/PV9 had a bug in the DRep reverse index:
+        // 1) stake address delegates to old_drep
+        // 2) stake address later re-delegates to new_drep
+        // 3) old_drep keeps a stale reverse entry for that address
+        // 4) when old_drep unregisters, ledger clears the address's forward delegation
+        // This temp table finds those addresses so the snapshot does not keep counting the
+        // "latest delegation wins" row after ledger has already cleared it. We stop at
+        // pv9MaxEpoch because the bug is only relevant during bootstrap/PV9.
+        String pv9ClearedAddressesQuery = String.format("""
+                CREATE %s TABLE ss_pv9_cleared_addresses AS
+                SELECT DISTINCT stale_del.address
+                FROM delegation_vote stale_del
+                INNER JOIN drep_registration unreg
+                    -- Match the exact DRep lifecycle that created the stale reverse entry.
+                    ON  unreg.drep_hash   = stale_del.drep_hash
+                    AND unreg.cred_type   = stale_del.drep_type
+                    AND unreg.type        = 'UNREG_DREP_CERT'
+                    AND unreg.epoch      <= :epoch
+                    AND unreg.epoch      <= :pv9_max_epoch
+                    AND (   unreg.slot > stale_del.slot
+                         OR (unreg.slot = stale_del.slot AND unreg.tx_index > stale_del.tx_index)
+                         OR (unreg.slot = stale_del.slot AND unreg.tx_index = stale_del.tx_index
+                             AND unreg.cert_index > stale_del.cert_index))
+                WHERE stale_del.address IS NOT NULL
+                AND   stale_del.drep_type NOT IN ('ABSTAIN', 'NO_CONFIDENCE')
+                AND   stale_del.epoch <= :pv9_max_epoch
+                AND   stale_del.epoch <= :epoch
+                -- old_drep must have been registered when stale_del happened; otherwise ledger
+                -- would never have inserted this address into old_drep's reverse set.
+                AND EXISTS (
+                    SELECT 1 FROM drep_registration reg_before_stale
+                    WHERE reg_before_stale.drep_hash = stale_del.drep_hash
+                    AND   reg_before_stale.cred_type = stale_del.drep_type
+                    AND   reg_before_stale.type      = 'REG_DREP_CERT'
+                    AND   reg_before_stale.epoch    <= :epoch
+                    AND (   reg_before_stale.slot < stale_del.slot
+                         OR (reg_before_stale.slot = stale_del.slot
+                             AND reg_before_stale.tx_index < stale_del.tx_index)
+                         OR (reg_before_stale.slot = stale_del.slot
+                             AND reg_before_stale.tx_index = stale_del.tx_index
+                             AND reg_before_stale.cert_index < stale_del.cert_index))
+                    AND NOT EXISTS (
+                        SELECT 1 FROM drep_registration unreg_before_stale
+                        WHERE unreg_before_stale.drep_hash = stale_del.drep_hash
+                        AND   unreg_before_stale.cred_type = stale_del.drep_type
+                        AND   unreg_before_stale.type      = 'UNREG_DREP_CERT'
+                        AND   unreg_before_stale.epoch    <= :epoch
+                        AND (   unreg_before_stale.slot > reg_before_stale.slot
+                             OR (unreg_before_stale.slot = reg_before_stale.slot
+                                 AND unreg_before_stale.tx_index > reg_before_stale.tx_index)
+                             OR (unreg_before_stale.slot = reg_before_stale.slot
+                                 AND unreg_before_stale.tx_index = reg_before_stale.tx_index
+                                 AND unreg_before_stale.cert_index > reg_before_stale.cert_index))
+                        AND (   unreg_before_stale.slot < stale_del.slot
+                             OR (unreg_before_stale.slot = stale_del.slot
+                                 AND unreg_before_stale.tx_index < stale_del.tx_index)
+                             OR (unreg_before_stale.slot = stale_del.slot
+                                 AND unreg_before_stale.tx_index = stale_del.tx_index
+                                 AND unreg_before_stale.cert_index < stale_del.cert_index))
+                    )
+                )
+                -- If old_drep was already unregistered once before this UNREG, any later REG
+                -- starts a new clean lifecycle. Do not carry a stale entry across lifecycles.
+                AND NOT EXISTS (
+                    SELECT 1 FROM drep_registration earlier_unreg
+                    WHERE earlier_unreg.drep_hash = stale_del.drep_hash
+                    AND   earlier_unreg.cred_type = stale_del.drep_type
+                    AND   earlier_unreg.type      = 'UNREG_DREP_CERT'
+                    AND (   earlier_unreg.slot > stale_del.slot
+                         OR (earlier_unreg.slot = stale_del.slot AND earlier_unreg.tx_index > stale_del.tx_index)
+                         OR (earlier_unreg.slot = stale_del.slot AND earlier_unreg.tx_index = stale_del.tx_index
+                             AND earlier_unreg.cert_index > stale_del.cert_index))
+                    AND (   earlier_unreg.slot < unreg.slot
+                         OR (earlier_unreg.slot = unreg.slot AND earlier_unreg.tx_index < unreg.tx_index)
+                         OR (earlier_unreg.slot = unreg.slot AND earlier_unreg.tx_index = unreg.tx_index
+                             AND earlier_unreg.cert_index < unreg.cert_index))
+                )
+                -- A stake deregistration in the middle only matters if old_drep was still the
+                -- latest delegation right before that deregistration. In that case stake_dereg
+                -- already removed old_drep normally, so the later old_drep UNREG is not the
+                -- PV9 stale-clear event we are trying to reproduce here.
+                AND NOT EXISTS (
+                    SELECT 1 FROM stake_registration stake_dereg
+                    -- Consider only stake deregistrations that happened after stale_del but
+                    -- before old_drep was unregistered.
+                    WHERE stake_dereg.address = stale_del.address
+                    AND   stake_dereg.type    = 'STAKE_DEREGISTRATION'
+                    AND   stake_dereg.epoch  <= :epoch
+                    AND (   stake_dereg.slot > stale_del.slot
+                         OR (stake_dereg.slot = stale_del.slot AND stake_dereg.tx_index > stale_del.tx_index)
+                         OR (stake_dereg.slot = stale_del.slot AND stake_dereg.tx_index = stale_del.tx_index
+                             AND stake_dereg.cert_index > stale_del.cert_index))
+                    AND (   stake_dereg.slot < unreg.slot
+                         OR (stake_dereg.slot = unreg.slot AND stake_dereg.tx_index < unreg.tx_index)
+                         OR (stake_dereg.slot = unreg.slot AND stake_dereg.tx_index = unreg.tx_index
+                             AND stake_dereg.cert_index < unreg.cert_index))
+                    AND EXISTS (
+                        SELECT 1 FROM delegation_vote current_before_dereg
+                        -- Find the delegation that was current immediately before stake_dereg.
+                        -- If that current delegation still points to old_drep, then stake_dereg
+                        -- already removed old_drep in the normal way.
+                        WHERE current_before_dereg.address   = stale_del.address
+                        AND   current_before_dereg.drep_hash = stale_del.drep_hash
+                        AND   current_before_dereg.drep_type = stale_del.drep_type
+                        AND   current_before_dereg.epoch    <= :epoch
+                        AND (   current_before_dereg.slot > stale_del.slot
+                             OR (current_before_dereg.slot = stale_del.slot
+                                 AND current_before_dereg.tx_index > stale_del.tx_index)
+                             OR (current_before_dereg.slot = stale_del.slot
+                                 AND current_before_dereg.tx_index = stale_del.tx_index
+                                 AND current_before_dereg.cert_index >= stale_del.cert_index))
+                        AND (   current_before_dereg.slot < stake_dereg.slot
+                             OR (current_before_dereg.slot = stake_dereg.slot
+                                 AND current_before_dereg.tx_index < stake_dereg.tx_index)
+                             OR (current_before_dereg.slot = stake_dereg.slot
+                                 AND current_before_dereg.tx_index = stake_dereg.tx_index
+                                 AND current_before_dereg.cert_index < stake_dereg.cert_index))
+                        AND NOT EXISTS (
+                            SELECT 1 FROM delegation_vote later_del
+                            -- No later delegation may exist between current_before_dereg and
+                            -- stake_dereg; otherwise old_drep was not the current delegation
+                            -- at the moment of stake_dereg.
+                            WHERE later_del.address = stale_del.address
+                            AND   later_del.epoch  <= :epoch
+                            AND (   later_del.slot > current_before_dereg.slot
+                                 OR (later_del.slot = current_before_dereg.slot
+                                     AND later_del.tx_index > current_before_dereg.tx_index)
+                                 OR (later_del.slot = current_before_dereg.slot
+                                     AND later_del.tx_index = current_before_dereg.tx_index
+                                     AND later_del.cert_index > current_before_dereg.cert_index))
+                            AND (   later_del.slot < stake_dereg.slot
+                                 OR (later_del.slot = stake_dereg.slot
+                                     AND later_del.tx_index < stake_dereg.tx_index)
+                                 OR (later_del.slot = stake_dereg.slot
+                                     AND later_del.tx_index = stake_dereg.tx_index
+                                     AND later_del.cert_index < stake_dereg.cert_index))
+                        )
+                    )
+                )
+                -- An ABSTAIN / NO_CONFIDENCE step only matters if old_drep was the latest
+                -- delegation immediately before it, and old_drep was not added again before
+                -- UNREG. In that case the virtual delegation had already removed old_drep, so
+                -- old_drep UNREG later is not what cleared this address.
+                AND NOT EXISTS (
+                    SELECT 1 FROM delegation_vote virt_del
+                    -- Consider only virtual delegations that happened after stale_del but
+                    -- before old_drep was unregistered.
+                    WHERE virt_del.address   = stale_del.address
+                    AND   virt_del.drep_type IN ('ABSTAIN', 'NO_CONFIDENCE')
+                    AND   virt_del.epoch    <= :epoch
+                    AND (   virt_del.slot > stale_del.slot
+                         OR (virt_del.slot = stale_del.slot AND virt_del.tx_index > stale_del.tx_index)
+                         OR (virt_del.slot = stale_del.slot AND virt_del.tx_index = stale_del.tx_index
+                             AND virt_del.cert_index > stale_del.cert_index))
+                    AND (   virt_del.slot < unreg.slot
+                         OR (virt_del.slot = unreg.slot AND virt_del.tx_index < unreg.tx_index)
+                         OR (virt_del.slot = unreg.slot AND virt_del.tx_index = unreg.tx_index
+                             AND virt_del.cert_index < unreg.cert_index))
+                    AND EXISTS (
+                        SELECT 1 FROM delegation_vote prev_del
+                        -- prev_del must be the latest delegation before virt_del, and it must
+                        -- still point to old_drep. That means virt_del actually displaced
+                        -- old_drep from the current forward delegation.
+                        WHERE prev_del.address   = stale_del.address
+                        AND   prev_del.drep_hash = stale_del.drep_hash
+                        AND   prev_del.drep_type = stale_del.drep_type
+                        AND   prev_del.epoch    <= :epoch
+                        AND (   prev_del.slot < virt_del.slot
+                             OR (prev_del.slot = virt_del.slot AND prev_del.tx_index < virt_del.tx_index)
+                             OR (prev_del.slot = virt_del.slot AND prev_del.tx_index = virt_del.tx_index
+                                 AND prev_del.cert_index < virt_del.cert_index))
+                        AND NOT EXISTS (
+                            SELECT 1 FROM delegation_vote between_del
+                            -- If any delegation exists between prev_del and virt_del, then
+                            -- prev_del was not the current delegation right before virt_del.
+                            WHERE between_del.address = stale_del.address
+                            AND (   between_del.slot > prev_del.slot
+                                 OR (between_del.slot = prev_del.slot AND between_del.tx_index > prev_del.tx_index)
+                                 OR (between_del.slot = prev_del.slot AND between_del.tx_index = prev_del.tx_index
+                                     AND between_del.cert_index > prev_del.cert_index))
+                            AND (   between_del.slot < virt_del.slot
+                                 OR (between_del.slot = virt_del.slot AND between_del.tx_index < virt_del.tx_index)
+                                 OR (between_del.slot = virt_del.slot AND between_del.tx_index = virt_del.tx_index
+                                     AND between_del.cert_index < virt_del.cert_index))
+                        )
+                    )
+                    AND NOT EXISTS (
+                        SELECT 1 FROM delegation_vote readd_del
+                        -- If old_drep was added again after the virtual step and before UNREG,
+                        -- then the virtual step did not permanently clear old_drep.
+                        WHERE readd_del.address   = stale_del.address
+                        AND   readd_del.drep_hash = stale_del.drep_hash
+                        AND   readd_del.drep_type = stale_del.drep_type
+                        AND   readd_del.epoch    <= :epoch
+                        AND (   readd_del.slot > virt_del.slot
+                             OR (readd_del.slot = virt_del.slot AND readd_del.tx_index > virt_del.tx_index)
+                             OR (readd_del.slot = virt_del.slot AND readd_del.tx_index = virt_del.tx_index
+                                 AND readd_del.cert_index > virt_del.cert_index))
+                        AND (   readd_del.slot < unreg.slot
+                             OR (readd_del.slot = unreg.slot AND readd_del.tx_index < unreg.tx_index)
+                             OR (readd_del.slot = unreg.slot AND readd_del.tx_index = unreg.tx_index
+                                 AND readd_del.cert_index < unreg.cert_index))
+                    )
+                )
+                -- Any delegation after old_drep UNREG is a brand-new forward pointer and must
+                -- stay counted in the snapshot.
+                AND NOT EXISTS (
+                    SELECT 1 FROM delegation_vote after_del
+                    WHERE after_del.address  = stale_del.address
+                    AND   after_del.epoch   <= :epoch
+                    AND (   after_del.slot > unreg.slot
+                         OR (after_del.slot = unreg.slot AND after_del.tx_index > unreg.tx_index)
+                         OR (after_del.slot = unreg.slot AND after_del.tx_index = unreg.tx_index
+                             AND after_del.cert_index > unreg.cert_index))
+                )
+                """, tableType);
+
         List<String> createTableQueries = List.of(
                 rankedDelegationsQuery,
                 drepStatusQuery,
@@ -366,6 +589,7 @@ public class DRepDistService {
         var epochParam = new MapSqlParameterSource();
         epochParam.addValue("epoch", epoch);
         epochParam.addValue("snapshot_epoch", currentEpoch);
+        epochParam.addValue("pv9_max_epoch", pv9MaxEpoch);
 
         for (String query : createTableQueries) {
             log.info("Executing query : " + query);
@@ -379,7 +603,6 @@ public class DRepDistService {
         List<String> createIndexQueries = List.of(
                 "CREATE INDEX idx_ss_drep_ranked_delegations_address ON ss_drep_ranked_delegations(address)",
                 "CREATE INDEX idx_ss_drep_ranked_delegations_drep_hash ON ss_drep_ranked_delegations(drep_hash)",
-                "CREATE INDEX idx_ss_drep_ranked_delegations_rn ON ss_ranked_delegations(rn)",
                 "CREATE INDEX idx_ss_gov_spendable_reward_rest_address ON ss_gov_spendable_reward_rest(address)",
                 "CREATE INDEX idx_ss_gov_pool_refund_rewards_address ON ss_gov_pool_refund_rewards(address)",
                 "CREATE INDEX idx_ss_drep_status_drep_hash ON ss_drep_status(drep_hash)",
@@ -395,6 +618,21 @@ public class DRepDistService {
         end = System.currentTimeMillis();
         log.info(">> Indexes created for DRep dist temp tables <<" + (end - start) + " ms");
 
+        // Build the snapshot-specific list of addresses whose visible latest delegation was
+        // already cleared by ledger during bootstrap/PV9. While still in bootstrap, use the
+        // bounded source query because pv9MaxEpoch is still moving. After bootstrap, reuse the
+        // persistent PV9 clear-event cache and only apply the snapshot-dependent after_del check.
+        start = System.currentTimeMillis();
+        if (isInBootstrapPhase) {
+            jdbcTemplate.update(pv9ClearedAddressesQuery, epochParam);
+        } else {
+            dRepPv9ClearEventCacheService.ensureCacheReady(pv9MaxEpoch);
+            dRepPv9ClearEventCacheService.createSnapshotClearedAddressesTable(tableType, epoch, pv9MaxEpoch);
+        }
+        jdbcTemplate.update("CREATE INDEX idx_ss_pv9_cleared_addresses ON ss_pv9_cleared_addresses(address)", Map.of());
+        end = System.currentTimeMillis();
+        log.info(">> ss_pv9_cleared_addresses created ({} ms)", end - start);
+
         String excludeDelegationCondition;
 
         if (!isInBootstrapPhase) {
@@ -406,23 +644,25 @@ public class DRepDistService {
                     and ds.cred_type = rd.drep_type
                     and ds.rn = 1
                     and (ds.type = 'REG_DREP_CERT' or ds.type = 'UPDATE_DREP_CERT')
-                    and ( 
-                        rd.slot > ds.registration_slot
+                    and (
+                        -- During the PV9 -> PV10 transition, ledger keeps only bootstrap-era
+                        -- forward delegations that point to DReps also registered in bootstrap.
+                        (rd.epoch <= :max_bootstrap_phase_epoch
+                            and ds.registration_epoch <= :max_bootstrap_phase_epoch)
+                        or rd.slot > ds.registration_slot
                         or (rd.slot = ds.registration_slot and rd.tx_index > ds.registration_tx_index)
-                        or (rd.slot = ds.registration_slot and rd.tx_index <= ds.registration_tx_index and rd.epoch <= :max_bootstrap_phase_epoch)
-                        or (
-                            rd.slot < ds.registration_slot 
-                            and (
-                                ds.unregistration_slot is null
-                                or
-                                ( rd.slot > ds.unregistration_slot 
-                                    or (rd.slot = ds.unregistration_slot and rd.tx_index > ds.unregistration_tx_index)
-                                    or (rd.slot = ds.unregistration_slot and rd.tx_index = ds.unregistration_tx_index and rd.cert_index > ds.unregistration_cert_index)
-                                )
-                            )
-                            and rd.epoch <= :max_bootstrap_phase_epoch and ds.registration_epoch <= :max_bootstrap_phase_epoch
+                        or (rd.slot = ds.registration_slot and rd.tx_index = ds.registration_tx_index
+                            and rd.cert_index > ds.registration_cert_index)
+                    )
+                    and (
+                        ds.unregistration_slot is null
+                        or
+                        (rd.slot > ds.unregistration_slot
+                            or (rd.slot = ds.unregistration_slot and rd.tx_index > ds.unregistration_tx_index)
+                            or (rd.slot = ds.unregistration_slot and rd.tx_index = ds.unregistration_tx_index and rd.cert_index > ds.unregistration_cert_index)
                         )
-                        or (rd.slot = ds.registration_slot and rd.tx_index = ds.registration_tx_index and rd.epoch > :max_bootstrap_phase_epoch and rd.cert_index > ds.registration_cert_index)
+                        -- Bootstrap-era clears are already modeled by ss_pv9_cleared_addresses.
+                        or ds.unregistration_epoch <= :max_bootstrap_phase_epoch
                     )
                 )
             """;
@@ -435,22 +675,12 @@ public class DRepDistService {
                     and ds.cred_type = rd.drep_type
                     and ds.rn = 1 
                     and (ds.type = 'REG_DREP_CERT' or ds.type = 'UPDATE_DREP_CERT')
-                    and (
-                        ds.unregistration_slot is null
-                        or
-                        (rd.slot > ds.unregistration_slot 
-                            or (rd.slot = ds.unregistration_slot and rd.tx_index > ds.unregistration_tx_index)
-                            or (rd.slot = ds.unregistration_slot and rd.tx_index = ds.unregistration_tx_index and rd.cert_index > ds.unregistration_cert_index)
-                        )
-                    )
                 )
             """;
         }
 
-        String hardcodedDelegationExclusionCondition = buildDelegationExclusionCondition(delegationExclusions, isInBootstrapPhase);
-
         String query1 = """
-                  INSERT INTO drep_dist               
+                  INSERT INTO drep_dist
                   select
                     rd.drep_hash,
                     rd.drep_type,
@@ -489,7 +719,12 @@ public class DRepDistService {
                                                  )
                   where
                     sd.address IS NULL
-                    """ + excludeDelegationCondition + hardcodedDelegationExclusionCondition + """
+                    """ + excludeDelegationCondition + """
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM ss_pv9_cleared_addresses ca
+                        WHERE ca.address = rd.address
+                    )
                   group by
                     rd.drep_hash,
                     rd.drep_type,
@@ -536,7 +771,12 @@ public class DRepDistService {
                                                  )
                   where
                     (rd.drep_type = 'ABSTAIN' OR rd.drep_type = 'NO_CONFIDENCE') 
-                    AND sd.address IS NULL              
+                    AND sd.address IS NULL
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM ss_pv9_cleared_addresses ca
+                        WHERE ca.address = rd.address
+                    )
                   group by
                     rd.drep_type
                 """;
@@ -547,8 +787,6 @@ public class DRepDistService {
         if (!isInBootstrapPhase) {
             params.addValue("max_bootstrap_phase_epoch", maxBootstrapPhaseEpoch);
         }
-
-        addDelegationExclusionParams(params, delegationExclusions, isInBootstrapPhase);
 
         long t1 = System.currentTimeMillis();
         jdbcTemplate.update(query1, params);
@@ -583,67 +821,11 @@ public class DRepDistService {
         log.info("Time taken to take DRep Stake Distribution snapshot for epoch : {} is : {} ms", currentEpoch, (t2 - t1));
     }
 
-    private String buildDelegationExclusionCondition(List<DRepDelegationExclusion> exclusions, boolean isInBootstrapPhase) {
-        if (exclusions == null || exclusions.isEmpty() || isInBootstrapPhase) {
-            return "";
-        }
-
-        StringBuilder condition = new StringBuilder();
-        condition.append("\n                    and not exists (\n");
-        condition.append("                        select 1\n");
-        condition.append("                        from (\n");
-
-        for (int i = 0; i < exclusions.size(); i++) {
-            if (i == 0) {
-                condition.append("                            select\n");
-                condition.append("                                :excl_address_").append(i).append(" as address,\n");
-                condition.append("                                :excl_drep_hash_").append(i).append(" as drep_hash,\n");
-                condition.append("                                :excl_drep_type_").append(i).append(" as drep_type,\n");
-                condition.append("                                :excl_slot_").append(i).append(" as slot,\n");
-                condition.append("                                :excl_tx_index_").append(i).append(" as tx_index,\n");
-                condition.append("                                :excl_cert_index_").append(i).append(" as cert_index\n");
-            } else {
-                condition.append("                            union all select\n");
-                condition.append("                                :excl_address_").append(i).append(",\n");
-                condition.append("                                :excl_drep_hash_").append(i).append(",\n");
-                condition.append("                                :excl_drep_type_").append(i).append(",\n");
-                condition.append("                                :excl_slot_").append(i).append(",\n");
-                condition.append("                                :excl_tx_index_").append(i).append(",\n");
-                condition.append("                                :excl_cert_index_").append(i).append("\n");
-            }
-        }
-
-        condition.append("                        ) excl\n");
-        condition.append("                        where excl.address = rd.address\n");
-        condition.append("                          and excl.drep_hash = rd.drep_hash\n");
-        condition.append("                          and excl.drep_type = rd.drep_type\n");
-        condition.append("                          and (excl.slot is null or excl.slot = rd.slot)\n");
-        condition.append("                          and (excl.tx_index is null or excl.tx_index = rd.tx_index)\n");
-        condition.append("                          and (excl.cert_index is null or excl.cert_index = rd.cert_index)\n");
-        condition.append("                    )\n");
-        return condition.toString();
-    }
-
-    private void addDelegationExclusionParams(MapSqlParameterSource params, List<DRepDelegationExclusion> exclusions, boolean isInBootstrapPhase) {
-        if (exclusions == null || exclusions.isEmpty() || isInBootstrapPhase) {
-            return;
-        }
-
-        for (int i = 0; i < exclusions.size(); i++) {
-            DRepDelegationExclusion exclusion = exclusions.get(i);
-            params.addValue("excl_address_" + i, exclusion.getAddress(), Types.VARCHAR);
-            params.addValue("excl_drep_hash_" + i, exclusion.getDrepHash(), Types.VARCHAR);
-            params.addValue("excl_drep_type_" + i, exclusion.getDrepType() == null ? null : exclusion.getDrepType().name(), Types.VARCHAR);
-            params.addValue("excl_slot_" + i, exclusion.getSlot(), Types.BIGINT);
-            params.addValue("excl_tx_index_" + i, exclusion.getTxIndex(), Types.INTEGER);
-            params.addValue("excl_cert_index_" + i, exclusion.getCertIndex(), Types.INTEGER);
-        }
-    }
-
     private boolean isPublicNetwork() {
         return storeProperties.getProtocolMagic() == Networks.mainnet().getProtocolMagic()
                 || storeProperties.getProtocolMagic() == Networks.preprod().getProtocolMagic()
-                || storeProperties.getProtocolMagic() == Networks.preview().getProtocolMagic();
+                || storeProperties.getProtocolMagic() == Networks.preview().getProtocolMagic()
+                || storeProperties.getProtocolMagic() == NetworkType.SANCHONET.getProtocolMagic();
     }
 
     private Set<GovActionId> getActiveProposalsScheduledToDrop(int currentEpoch) {

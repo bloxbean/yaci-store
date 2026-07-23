@@ -1,0 +1,23 @@
+package com.bloxbean.cardano.yaci.store.blockfrost.transaction.dto;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.databind.PropertyNamingStrategies;
+import com.fasterxml.jackson.databind.annotation.JsonNaming;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@JsonIgnoreProperties(ignoreUnknown = true)
+@JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+public class BFTxPoolRelayDto {
+    private String ipv4;
+    private String ipv6;
+    private String dns;
+    private String dnsSrv;
+    private Integer port;
+}

@@ -60,6 +60,12 @@ A simple crawler app that stores relevant scoop transaction info and serves aggr
 ### [CBI Backend Service](https://github.com/Cardano-Fans/cbi-backend)
 **Cardano Fans (CRFA)**
 
+---
+
+### [Nexus](https://market.gerowallet.io)
+**[A.D. Labs](https://adlabs.dev)**
+Multi-chain blockchain data API. Nexus uses Yaci Store as its primary Cardano data provider - powering address, transaction, asset, pool, and DRep endpoints - behind a connection-pooled REST client with batched fan-out for high-concurrency queries. API available at https://nexus.gerowallet.io.
+
 ## Technical Integration Patterns
 
 These projects demonstrate various integration patterns with Yaci Store:
@@ -70,6 +76,7 @@ These projects demonstrate various integration patterns with Yaci Store:
 - **Microservices**: AdaHandle Resolver runs as a lightweight service with minimal stores enabled
 - **Governance Infrastructure**: Ballot and Reeve platforms utilize governance stores for on-chain voting
 - **Automation Workflows**: AdaMatic integrates multiple stores for complex blockchain interactions
+- **High-Concurrency Data API**: Nexus fronts Yaci Store as a multi-provider Cardano data API, batching per-tx/per-utxo fan-out behind a tuned HTTP pool
 
 ## Join the Community
 

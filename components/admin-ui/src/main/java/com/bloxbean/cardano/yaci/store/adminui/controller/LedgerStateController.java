@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.adminui.controller;
 
 import com.bloxbean.cardano.yaci.store.adminui.dto.LedgerStateStatusDto;
 import com.bloxbean.cardano.yaci.store.adminui.service.LedgerStateStatusService;
+import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import io.swagger.v3.oas.annotations.Hidden;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -12,6 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/admin-ui")
 @RequiredArgsConstructor
+@ReadOnly(false)
 @Hidden
 public class LedgerStateController {
     private final LedgerStateStatusService ledgerStateStatusService;

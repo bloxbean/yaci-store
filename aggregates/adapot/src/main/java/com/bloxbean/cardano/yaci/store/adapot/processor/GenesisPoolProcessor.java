@@ -6,6 +6,7 @@ import com.bloxbean.cardano.client.address.Credential;
 import com.bloxbean.cardano.client.common.model.Networks;
 import com.bloxbean.cardano.yaci.core.model.CredentialType;
 import com.bloxbean.cardano.yaci.core.model.Era;
+import com.bloxbean.cardano.yaci.core.model.certs.CertificateType;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.adapot.domain.EpochStake;
 import com.bloxbean.cardano.yaci.store.adapot.service.AdaPotService;
@@ -18,6 +19,8 @@ import com.bloxbean.cardano.yaci.store.staking.domain.Delegation;
 import com.bloxbean.cardano.yaci.store.staking.domain.Pool;
 import com.bloxbean.cardano.yaci.store.staking.domain.PoolRegistration;
 import com.bloxbean.cardano.yaci.store.staking.domain.PoolStatusType;
+import com.bloxbean.cardano.yaci.store.staking.domain.StakeRegistrationDetail;
+import com.bloxbean.cardano.yaci.store.staking.service.DepositParamService;
 import com.bloxbean.cardano.yaci.store.staking.storage.PoolCertificateStorage;
 import com.bloxbean.cardano.yaci.store.staking.storage.PoolStorage;
 import com.bloxbean.cardano.yaci.store.staking.storage.StakingCertificateStorage;
@@ -31,6 +34,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.util.ArrayList;
 import java.util.List;
 
 import static com.bloxbean.cardano.yaci.store.adapot.AdaPotConfiguration.STORE_ADAPOT_ENABLED;
@@ -47,6 +51,10 @@ import static com.bloxbean.cardano.yaci.store.common.util.UnitIntervalUtil.safeR
 @EnableIf(value = STORE_ADAPOT_ENABLED, defaultValue = false)
 @Slf4j
 public class GenesisPoolProcessor {
+    // Synthetic rows created from shelley-genesis use this tx hash. Deposit snapshots
+    // exclude it because genesis deposits are seeded into the epoch-0 AdaPot directly.
+    private static final String GENESIS_TX_HASH = "Genesis";
+
     private final StoreProperties storeProperties;
     private final PoolStorage poolStorage;
     private final PoolCertificateStorage poolCertificateStorage;
@@ -54,6 +62,7 @@ public class GenesisPoolProcessor {
     private final GenesisConfig genesisConfig;
     private final AdaPotService adaPotService;
     private final DSLContext dslContext;
+    private final DepositParamService depositParamService;
 
     @EventListener
     @Transactional
@@ -70,94 +79,130 @@ public class GenesisPoolProcessor {
         if (poolParamsList == null)
             return;
 
-        String genesisTxHash = "Genesis";
+        String genesisTxHash = GENESIS_TX_HASH;
 
         //Handle Pool registration
-        var poolRegistrations = poolParamsList.stream()
-                .map(poolParams -> {
-                    Address rewardAddress = new Address(HexUtil.decodeHexString(poolParams.getRewardAccount()));
-                    String rewardAddressBech32 = rewardAddress.toBech32();
+        List<PoolRegistration> poolRegistrations = new ArrayList<>();
+        for (int i = 0; i < poolParamsList.size(); i++) {
+            var poolParams = poolParamsList.get(i);
+            Address rewardAddress = new Address(HexUtil.decodeHexString(poolParams.getRewardAccount()));
+            String rewardAddressBech32 = rewardAddress.toBech32();
 
-                    BigDecimal marginDecimal = safeRatio(poolParams.getMargin());
+            BigDecimal marginDecimal = safeRatio(poolParams.getMargin());
 
-                    PoolRegistration poolRegistration = PoolRegistration.builder()
-                            .txHash(genesisTxHash)
-                            .certIndex(0)
-                            .txIndex(0)
-                            .poolId(poolParams.getOperator())
-                            .vrfKeyHash(poolParams.getVrfKeyHash())
-                            .pledge(poolParams.getPledge())
-                            .cost(poolParams.getCost())
-                            .margin(marginDecimal != null? marginDecimal.doubleValue(): 0.0)
-                            .marginNumerator(poolParams.getMargin().getNumerator())
-                            .marginDenominator(poolParams.getMargin().getDenominator())
-                            .rewardAccount(rewardAddressBech32)
-                            .poolOwners(poolParams.getPoolOwners())
-                            .relays(poolParams.getRelays())
-                            .metadataUrl(poolParams.getPoolMetadataUrl())
-                            .metadataHash(poolParams.getPoolMetadataHash())
-                            .epoch(genesisBlockEvent.getEpoch())
-                            .slot(genesisBlockEvent.getSlot())
-                            .blockNumber(genesisBlockEvent.getBlock())
-                            .blockHash(genesisBlockEvent.getBlockHash())
-                            .blockTime(genesisBlockEvent.getBlockTime())
-                            .build();
-                    return poolRegistration;
-                }).toList();
+            PoolRegistration poolRegistration = PoolRegistration.builder()
+                    .txHash(genesisTxHash)
+                    .certIndex(i)
+                    .txIndex(0)
+                    .poolId(poolParams.getOperator())
+                    .vrfKeyHash(poolParams.getVrfKeyHash())
+                    .pledge(poolParams.getPledge())
+                    .cost(poolParams.getCost())
+                    .margin(marginDecimal != null? marginDecimal.doubleValue(): 0.0)
+                    .marginNumerator(poolParams.getMargin().getNumerator())
+                    .marginDenominator(poolParams.getMargin().getDenominator())
+                    .rewardAccount(rewardAddressBech32)
+                    .poolOwners(poolParams.getPoolOwners())
+                    .relays(poolParams.getRelays())
+                    .metadataUrl(poolParams.getPoolMetadataUrl())
+                    .metadataHash(poolParams.getPoolMetadataHash())
+                    .epoch(genesisBlockEvent.getEpoch())
+                    .slot(genesisBlockEvent.getSlot())
+                    .blockNumber(genesisBlockEvent.getBlock())
+                    .blockHash(genesisBlockEvent.getBlockHash())
+                    .blockTime(genesisBlockEvent.getBlockTime())
+                    .build();
+            poolRegistrations.add(poolRegistration);
+        }
 
         if (poolRegistrations != null && !poolRegistrations.isEmpty())
             poolCertificateStorage.savePoolRegistrations(poolRegistrations);
 
-        //Pools table
-        List<Pool> pools = poolParamsList.stream()
-                .map(poolParams -> {
-                    Pool pool = Pool.builder()
-                            .poolId(poolParams.getOperator())
-                            .txHash(genesisTxHash)
-                            .certIndex(0)
-                            .txIndex(0)
-                            .status(PoolStatusType.REGISTRATION)
-                            .amount(BigInteger.ZERO)
-                            .epoch(genesisBlockEvent.getEpoch())
-                            .activeEpoch(0)
-                            .registrationSlot(genesisBlockEvent.getSlot()) //This is the registration slot
-                            .slot(genesisBlockEvent.getSlot())
-                            .blockNumber(genesisBlockEvent.getBlock())
-                            .blockHash(genesisBlockEvent.getBlockHash())
-                            .blockTime(genesisBlockEvent.getBlockTime())
-                            .build();
-                    return pool;
-                }).toList();
+        // Pools table
+        // Devnet genesis pools are not created by on-chain pool registration certificates,
+        // but the ledger still tracks their pool deposits. Store the deposit here so later
+        // pool retirement and reward paths see the same deposit amount as the Haskell ledger.
+        BigInteger poolDeposit = poolParamsList.isEmpty()
+                ? BigInteger.ZERO
+                : depositParamService.getPoolDeposit(genesisBlockEvent.getEpoch());
+        List<Pool> pools = new ArrayList<>();
+        for (int i = 0; i < poolParamsList.size(); i++) {
+            var poolParams = poolParamsList.get(i);
+            Pool pool = Pool.builder()
+                    .poolId(poolParams.getOperator())
+                    .txHash(genesisTxHash)
+                    .certIndex(i)
+                    .txIndex(0)
+                    .status(PoolStatusType.REGISTRATION)
+                    .amount(poolDeposit)
+                    .epoch(genesisBlockEvent.getEpoch())
+                    .activeEpoch(0)
+                    .registrationSlot(genesisBlockEvent.getSlot()) //This is the registration slot
+                    .slot(genesisBlockEvent.getSlot())
+                    .blockNumber(genesisBlockEvent.getBlock())
+                    .blockHash(genesisBlockEvent.getBlockHash())
+                    .blockTime(genesisBlockEvent.getBlockTime())
+                    .build();
+            pools.add(pool);
+        }
 
         if (pools != null && !pools.isEmpty())
             poolStorage.save(pools);
 
-        //Update delegations
+        // Update delegations
         List<GenesisStaking.Stake> stakes = genesisStaking.getStakes();
-        List<Delegation> delegations = stakes.stream()
-                .map(stake -> {
-                    Address address = AddressProvider.getRewardAddress(Credential.fromKey(stake.getStakeKeyHash()),
-                            storeProperties.isMainnet() ? Networks.mainnet() : Networks.testnet());
-                    Delegation delegation = Delegation.builder()
-                            .credential(stake.getStakeKeyHash())
-                            .credentialType(CredentialType.ADDR_KEYHASH)
-                            .address(address.toBech32())
-                            .slot(genesisBlockEvent.getSlot())
-                            .txHash(genesisTxHash)
-                            .certIndex(0)
-                            .txIndex(0)
-                            .poolId(stake.getPoolHash())
-                            .epoch(genesisBlockEvent.getEpoch())
-                            .slot(genesisBlockEvent.getSlot())
-                            .blockNumber(genesisBlockEvent.getBlock())
-                            .blockHash(genesisBlockEvent.getBlockHash())
-                            .blockTime(genesisBlockEvent.getBlockTime())
-                            .build();
-                    return delegation;
-                }).toList();
+        if (stakes == null)
+            stakes = List.of();
+
+        // Genesis delegates need synthetic stake registration rows as well as delegation rows.
+        // Reward filtering checks the registration table, so without these rows devnet genesis
+        // stake would look delegated but unregistered.
+        List<Delegation> delegations = new ArrayList<>();
+        List<StakeRegistrationDetail> stakeRegistrations = new ArrayList<>();
+        for (int i = 0; i < stakes.size(); i++) {
+            var stake = stakes.get(i);
+            Address address = AddressProvider.getRewardAddress(Credential.fromKey(stake.getStakeKeyHash()),
+                    storeProperties.isMainnet() ? Networks.mainnet() : Networks.testnet());
+            Delegation delegation = Delegation.builder()
+                    .credential(stake.getStakeKeyHash())
+                    .credentialType(CredentialType.ADDR_KEYHASH)
+                    .address(address.toBech32())
+                    .slot(genesisBlockEvent.getSlot())
+                    .txHash(genesisTxHash)
+                    .certIndex(i)
+                    .txIndex(0)
+                    .poolId(stake.getPoolHash())
+                    .epoch(genesisBlockEvent.getEpoch())
+                    .slot(genesisBlockEvent.getSlot())
+                    .blockNumber(genesisBlockEvent.getBlock())
+                    .blockHash(genesisBlockEvent.getBlockHash())
+                    .blockTime(genesisBlockEvent.getBlockTime())
+                    .build();
+            delegations.add(delegation);
+
+            StakeRegistrationDetail stakeRegistrationDetail = StakeRegistrationDetail.builder()
+                    .credential(stake.getStakeKeyHash())
+                    .credentialType(CredentialType.ADDR_KEYHASH)
+                    .address(address.toBech32())
+                    .slot(genesisBlockEvent.getSlot())
+                    .txHash(genesisTxHash)
+                    .certIndex(i)
+                    .txIndex(0)
+                    .type(CertificateType.STAKE_REGISTRATION)
+                    .epoch(genesisBlockEvent.getEpoch())
+                    .blockNumber(genesisBlockEvent.getBlock())
+                    .blockHash(genesisBlockEvent.getBlockHash())
+                    .blockTime(genesisBlockEvent.getBlockTime())
+                    .build();
+            stakeRegistrations.add(stakeRegistrationDetail);
+        }
 
         if (delegations != null && !delegations.isEmpty()) {
             stakingCertificateStorage.saveDelegations(delegations);
+        }
+
+        if (!stakeRegistrations.isEmpty()) {
+            stakingCertificateStorage.saveRegistrations(stakeRegistrations);
         }
     }
 
@@ -177,6 +222,9 @@ public class GenesisPoolProcessor {
             return;
 
         List<GenesisStaking.Stake> stakes = genesisStaking.getStakes();
+        if (stakes == null)
+            stakes = List.of();
+
         List<EpochStake> epochStakes = stakes.stream()
                 .map(stake -> {
                     String poolHash = stake.getPoolHash();
@@ -237,7 +285,20 @@ public class GenesisPoolProcessor {
                     .map(genesisBalance -> genesisBalance.getBalance())
                     .reduce(BigInteger::add).orElse(BigInteger.ZERO);
 
-            var reserves = genesisConfig.getMaxLovelaceSupply().subtract(totalInitialBalance);
+            var poolCount = BigInteger.valueOf(poolParamsList.size());
+            var stakeCount = BigInteger.valueOf(stakes.size());
+            var genesisDeposits = BigInteger.ZERO;
+            if (poolCount.signum() > 0 || stakeCount.signum() > 0) {
+                var poolDeposit = depositParamService.getPoolDeposit(0);
+                var keyDeposit = depositParamService.getKeyDeposit(0);
+                genesisDeposits = poolDeposit.multiply(poolCount).add(keyDeposit.multiply(stakeCount));
+            }
+
+            // Match the ledger initialization used by Haskell: epoch-0 reserves are based on
+            // max supply minus initial UTxO balances. Genesis staking deposits are tracked in
+            // the AdaPot deposit field separately, not subtracted from reserves here.
+            var reserves = genesisConfig.getMaxLovelaceSupply()
+                    .subtract(totalInitialBalance);
 
             EpochCalculationResult result = EpochCalculationResult.builder()
                     .treasury(BigInteger.ZERO)
@@ -246,6 +307,7 @@ public class GenesisPoolProcessor {
                     .totalPoolRewardsPot(BigInteger.ZERO)
                     .totalUndistributedRewards(BigInteger.ZERO)
                     .build();
+            adaPotService.updateAdaPotDeposit(0, genesisDeposits);
             adaPotService.updateAdaPot(0, result);
         }
     }

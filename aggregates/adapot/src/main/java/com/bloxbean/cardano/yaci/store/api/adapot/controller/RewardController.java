@@ -96,6 +96,12 @@ public class RewardController {
         return ResponseEntity.ok(accountRewardApiService.getUnwithdrawnRewardsByAddresses(List.of(address), p, count));
     }
 
+    @Operation(summary = "Get withdrawable rewards for an address", description = "Retrieve currently withdrawable rewards for a specific address.")
+    @GetMapping("/accounts/{address}/rewards/withdrawable")
+    public ResponseEntity<WithdrawableRewardDto> getWithdrawableRewardsByAddress(@PathVariable String address) {
+        return ResponseEntity.ok(accountRewardApiService.getWithdrawableRewardByAddress(address));
+    }
+
     @Operation(summary = "Get available rewards for addresses", description = "Retrieve unwithdrawn rewards for a list of addresses with pagination.")
     @PostMapping("/rewards/available")
     public ResponseEntity<List<RewardInfoDto>> getUnwithdrawnRewards(@RequestBody List<String> addresses, @RequestParam(required = false, defaultValue = "10") @Min(1) @Max(100) int count,

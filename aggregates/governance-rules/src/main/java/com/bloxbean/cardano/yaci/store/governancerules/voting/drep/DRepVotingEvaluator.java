@@ -32,15 +32,22 @@ public class DRepVotingEvaluator implements VotingEvaluator<VotingData> {
         BigInteger totalYes = dRepVoteTallies.getTotalYesStake();
         BigInteger totalNo = dRepVoteTallies.getTotalNoStake();
         BigInteger totalYesAndNo = totalYes.add(totalNo);
-        
-        if (totalYesAndNo.equals(BigInteger.ZERO)) {
+
+        BigDecimal requiredThreshold = getRequiredThreshold(context);
+
+        // Auto-pass only when threshold is zero (matches Haskell: r == minBound)
+        if (requiredThreshold.compareTo(BigDecimal.ZERO) == 0) {
             return VotingStatus.PASS_THRESHOLD;
         }
+
+        if (totalYesAndNo.equals(BigInteger.ZERO)) {
+            // Zero participating stake with non-zero threshold: ratio = 0, vote fails
+            return VotingStatus.NOT_PASS_THRESHOLD;
+        }
+
         // the ratio = yes/(yes + no)
         BigDecimal acceptedRatio = BigNumberUtils.divide(totalYes, totalYesAndNo);
 
-        BigDecimal requiredThreshold = getRequiredThreshold(context);
-        
         return BigNumberUtils.isHigherOrEquals(acceptedRatio, requiredThreshold) ?
             VotingStatus.PASS_THRESHOLD : VotingStatus.NOT_PASS_THRESHOLD;
     }

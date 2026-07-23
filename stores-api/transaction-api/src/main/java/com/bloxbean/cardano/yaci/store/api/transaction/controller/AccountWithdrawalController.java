@@ -16,7 +16,7 @@ import java.util.List;
 
 @Slf4j
 @RestController
-@Tag(name = "Account Service")
+@Tag(name = "Account API")
 @RequestMapping("${apiPrefix}/accounts")
 @ConditionalOnExpression("${store.transaction.endpoints.transaction.enabled:true}")
 @RequiredArgsConstructor
