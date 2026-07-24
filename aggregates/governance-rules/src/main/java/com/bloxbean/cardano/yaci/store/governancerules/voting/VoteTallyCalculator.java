@@ -77,6 +77,10 @@ public final class VoteTallyCalculator {
         BigInteger totalYesStake = yesVote;
         BigInteger totalAbstainStake = abstainVote;
 
+        /*
+            Match spoAcceptedRatio in cardano-ledger's Ratify.hs: handle HardForkInitiation
+            before the bootstrap rule, then apply default delegation only post-bootstrap.
+         */
         if (type != GovActionType.HARD_FORK_INITIATION_ACTION) {
             if (isInBootstrapPhase) {
                 totalAbstainStake = totalAbstainStake
