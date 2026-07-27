@@ -59,8 +59,25 @@ class VoteTallyCalculatorTest {
     }
 
     @Test
-    // Ensures a NO_CONFIDENCE action folds no-confidence stake into the total yes stake
-    void computeSPOTalliesWhenActionIsNoConfidence() {
+    void computeSPOTallies_bootstrapPhase_nonHardForkAction_countsNoConfidenceDelegationAsAbstain() {
+        VotingData.SPOVotes votes = VotingData.SPOVotes.builder()
+                .yesVoteStake(BigInteger.valueOf(100))
+                .delegateToAutoAbstainDRepStake(BigInteger.valueOf(15))
+                .delegateToNoConfidenceDRepStake(BigInteger.valueOf(40))
+                .abstainVoteStake(BigInteger.valueOf(10))
+                .doNotVoteStake(BigInteger.valueOf(20))
+                .totalStake(BigInteger.valueOf(200))
+                .build();
+
+        VoteTallies.SPOTallies tallies = VoteTallyCalculator.computeSPOTallies(votes, GovActionType.UPDATE_COMMITTEE, true);
+
+        assertEquals(BigInteger.valueOf(100), tallies.getTotalYesStake());
+        assertEquals(BigInteger.valueOf(85), tallies.getTotalAbstainStake());
+        assertEquals(BigInteger.valueOf(15), tallies.getTotalNoStake());
+    }
+
+    @Test
+    void computeSPOTallies_bootstrapPhase_noConfidence_countsNoConfidenceDelegationAsAbstain() {
         VotingData.SPOVotes votes = VotingData.SPOVotes.builder()
                 .yesVoteStake(BigInteger.valueOf(100))
                 .delegateToAutoAbstainDRepStake(BigInteger.valueOf(15))
@@ -72,47 +89,63 @@ class VoteTallyCalculatorTest {
 
         VoteTallies.SPOTallies tallies = VoteTallyCalculator.computeSPOTallies(votes, GovActionType.NO_CONFIDENCE, true);
 
-        assertEquals(BigInteger.valueOf(140), tallies.getTotalYesStake());
-        assertEquals(BigInteger.valueOf(45), tallies.getTotalAbstainStake());
+        assertEquals(BigInteger.valueOf(100), tallies.getTotalYesStake());
+        assertEquals(BigInteger.valueOf(85), tallies.getTotalAbstainStake());
         assertEquals(BigInteger.valueOf(15), tallies.getTotalNoStake());
     }
 
     @Test
-    /* Verify: After the bootstrap period if an SPO didn't vote, it will be considered as a `No` vote by default.
-    -- The only exceptions are when a pool delegated to an `AlwaysNoConfidence` or an `AlwaysAbstain` DRep . */
-    void computeSPOTalliesPostBootstrapPhaseWhenActionIsNotHardForkInit() {
+    void computeSPOTallies_bootstrapPhase_hardForkInitiation_doesNotAddNonVotingDefaultStakeToAbstain() {
+        VotingData.SPOVotes votes = VotingData.SPOVotes.builder()
+                .yesVoteStake(BigInteger.valueOf(100))
+                .delegateToAutoAbstainDRepStake(BigInteger.valueOf(30))
+                .delegateToNoConfidenceDRepStake(BigInteger.valueOf(40))
+                .abstainVoteStake(BigInteger.valueOf(10))
+                .doNotVoteStake(BigInteger.valueOf(20))
+                .totalStake(BigInteger.valueOf(200))
+                .build();
+
+        VoteTallies.SPOTallies tallies = VoteTallyCalculator.computeSPOTallies(votes, GovActionType.HARD_FORK_INITIATION_ACTION, true);
+
+        assertEquals(BigInteger.valueOf(100), tallies.getTotalYesStake());
+        assertEquals(BigInteger.valueOf(10), tallies.getTotalAbstainStake());
+        assertEquals(BigInteger.valueOf(90), tallies.getTotalNoStake());
+    }
+
+    @Test
+    void computeSPOTallies_postBootstrapPhase_noConfidence_addsNoConfidenceDelegationToYes() {
+        VotingData.SPOVotes votes = VotingData.SPOVotes.builder()
+                .yesVoteStake(BigInteger.valueOf(100))
+                .delegateToAutoAbstainDRepStake(BigInteger.valueOf(15))
+                .delegateToNoConfidenceDRepStake(BigInteger.valueOf(40))
+                .abstainVoteStake(BigInteger.valueOf(10))
+                .doNotVoteStake(BigInteger.valueOf(20))
+                .totalStake(BigInteger.valueOf(200))
+                .build();
+
+        VoteTallies.SPOTallies tallies = VoteTallyCalculator.computeSPOTallies(votes, GovActionType.NO_CONFIDENCE, false);
+
+        assertEquals(BigInteger.valueOf(140), tallies.getTotalYesStake());
+        assertEquals(BigInteger.valueOf(25), tallies.getTotalAbstainStake());
+        assertEquals(BigInteger.valueOf(35), tallies.getTotalNoStake());
+    }
+
+    @Test
+    void computeSPOTallies_postBootstrapPhase_nonHardForkAction_countsNoConfidenceDelegationAsNoStake() {
         VotingData.SPOVotes votes = VotingData.SPOVotes.builder()
                 .yesVoteStake(BigInteger.valueOf(120))
                 .delegateToAutoAbstainDRepStake(BigInteger.valueOf(15))
-                .delegateToNoConfidenceDRepStake(BigInteger.ZERO)
+                .delegateToNoConfidenceDRepStake(BigInteger.valueOf(25))
                 .abstainVoteStake(BigInteger.valueOf(50))
                 .doNotVoteStake(BigInteger.valueOf(10))
-                .totalStake(BigInteger.valueOf(200))
+                .totalStake(BigInteger.valueOf(220))
                 .build();
 
         VoteTallies.SPOTallies tallies = VoteTallyCalculator.computeSPOTallies(votes, GovActionType.UPDATE_COMMITTEE, false);
 
         assertEquals(BigInteger.valueOf(120), tallies.getTotalYesStake());
         assertEquals(BigInteger.valueOf(65), tallies.getTotalAbstainStake());
-        assertEquals(BigInteger.valueOf(15), tallies.getTotalNoStake());
-    }
-
-    @Test
-    void computeSPOTalliesHardForkInitTreatsNonVotingSPOsAsNoEvenWhenDelegatedToAlwaysAbstain() {
-        VotingData.SPOVotes votes = VotingData.SPOVotes.builder()
-                .yesVoteStake(BigInteger.valueOf(100))
-                .delegateToAutoAbstainDRepStake(BigInteger.valueOf(30))
-                .delegateToNoConfidenceDRepStake(BigInteger.ZERO)
-                .abstainVoteStake(BigInteger.valueOf(10))
-                .doNotVoteStake(BigInteger.valueOf(20))
-                .totalStake(BigInteger.valueOf(200))
-                .build();
-
-        VoteTallies.SPOTallies tallies = VoteTallyCalculator.computeSPOTallies(votes, GovActionType.HARD_FORK_INITIATION_ACTION, false);
-
-        assertEquals(BigInteger.valueOf(100), tallies.getTotalYesStake());
-        assertEquals(BigInteger.valueOf(10), tallies.getTotalAbstainStake());
-        assertEquals(BigInteger.valueOf(90), tallies.getTotalNoStake());
+        assertEquals(BigInteger.valueOf(35), tallies.getTotalNoStake());
     }
 
     @Test
