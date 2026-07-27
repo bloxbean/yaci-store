@@ -1,0 +1,36 @@
+{
+  "code": 200,
+  "tip": {
+    "epoch_no": 645,
+    "slot_no": 139412321
+  },
+  "data": {
+    "tx_hash": "b3d452bff7769d7f557ec6b8974760ee6c5e496c276652b654032966621e0ccf",
+    "index": "10",
+    "type": "treasurywithdrawals",
+    "bootstrap_period": false,
+    "submission_epoch": 638,
+    "expiry_epoch": 645,
+    "ratified_epoch": 644,
+    "enacted_epoch": 645,
+    "expired_epoch": null,
+    "dropped_epoch": null,
+    "drep_total_stake": "14886930419791641",
+    "drep_yes_stake": "3510128463736441",
+    "drep_no_stake": "51830286923364",
+    "drep_abstain_stake": "442369422635749",
+    "drep_always_abstain_stake": "9344546530944641",
+    "drep_always_no_confidence_stake": "176064735556319",
+    "drep_inactive_stake": "262587259568067",
+    "pool_total_stake": null,
+    "pool_yes_stake": null,
+    "pool_no_stake": null,
+    "pool_abstain_stake": null,
+    "pool_always_abstain_stake": null,
+    "pool_always_no_confidence_stake": null,
+    "cc_total": 7,
+    "cc_yes": 6,
+    "cc_no": 0,
+    "cc_abstain": 0
+  }
+}

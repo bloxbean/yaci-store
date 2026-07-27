@@ -1,0 +1,36 @@
+{
+  "code": 200,
+  "tip": {
+    "epoch_no": 1371,
+    "slot_no": 118484368
+  },
+  "data": {
+    "tx_hash": "06dcb60f4b6ee78024bd4c7978e8e093437903198cf06c3c5d34bf825129bc73",
+    "index": "0",
+    "type": "newcommittee",
+    "bootstrap_period": false,
+    "submission_epoch": 1368,
+    "expiry_epoch": 1399,
+    "ratified_epoch": 1369,
+    "enacted_epoch": null,
+    "expired_epoch": null,
+    "dropped_epoch": null,
+    "drep_total_stake": "539470988360469",
+    "drep_yes_stake": "118420753549838",
+    "drep_no_stake": "0",
+    "drep_abstain_stake": "0",
+    "drep_always_abstain_stake": "123247113528781",
+    "drep_always_no_confidence_stake": "3530608857133",
+    "drep_inactive_stake": "290425125843386",
+    "pool_total_stake": "3252205085620872",
+    "pool_yes_stake": "1816626528145935",
+    "pool_no_stake": "0",
+    "pool_abstain_stake": "0",
+    "pool_always_abstain_stake": "0",
+    "pool_always_no_confidence_stake": "0",
+    "cc_total": null,
+    "cc_yes": null,
+    "cc_no": null,
+    "cc_abstain": null
+  }
+}
