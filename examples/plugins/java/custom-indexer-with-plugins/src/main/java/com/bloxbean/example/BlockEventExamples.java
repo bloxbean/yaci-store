@@ -1,13 +1,8 @@
 package com.bloxbean.example;
 
-import java.util.List;
-
 import com.bloxbean.cardano.yaci.store.events.BlockEvent;
 import com.bloxbean.cardano.yaci.store.plugin.api.PluginType;
 import com.bloxbean.cardano.yaci.store.plugin.api.config.PluginDef;
-import com.bloxbean.cardano.yaci.store.plugin.file.DirectoryListing;
-import com.bloxbean.cardano.yaci.store.plugin.file.FileInfo;
-import com.bloxbean.cardano.yaci.store.plugin.file.FileOperationResult;
 import com.bloxbean.cardano.yaci.store.plugin.file.PluginFileClient;
 import com.bloxbean.cardano.yaci.store.plugin.impl.java.JavaEventHandlerPlugin;
 import com.bloxbean.cardano.yaci.store.plugin.impl.java.PluginContext;
@@ -30,21 +25,6 @@ public class BlockEventExamples extends JavaEventHandlerPlugin<BlockEvent> {
         files.writeJson(dateDir + "/block_" + event.getBlock().getHeader().getHeaderBody().getBlockNumber() + ".json",
                 event.getBlock().getTransactionBodies());
 
-        // List and process files
-        DirectoryListing listing = files.listFiles("imports/");
-        if (listing.isSuccess()) {
-            List<FileInfo> fileList = listing.getFiles();
-            log.info("Found {} files to process", fileList.size());
-
-            for (FileInfo fileInfo : fileList) {
-                if (fileInfo.getName().endsWith(".json")) {
-                    // Process JSON file
-                    FileOperationResult data = files.readJson("imports/" + fileInfo.getName());
-                    // ...
-                }
-            }
-        }
-
     }
 
     public void saveDirPath(BlockEvent event) {
@@ -66,23 +46,11 @@ public class BlockEventExamples extends JavaEventHandlerPlugin<BlockEvent> {
 
     }
 
-    public void checkFileResult() {
-        FileOperationResult result = context().files().read("important.json");
-        if (!result.isSuccess()) {
-            log.error("Failed to read file: {}", result.getErrorMessage());
-            return; // Handle error appropriately
-        }
-        String data = result.getAsString();
-        log.info(data);
-
-    }
-
     @Override
     public void handleEvent(Object event) {
         if (event instanceof BlockEvent blockEvent) {
             // filesDir(blockEvent);
-            // saveDirPath(blockEvent);
-            checkFileResult();
+            saveDirPath(blockEvent);
         } else {
             log.warn("Not a transaction event");
         }

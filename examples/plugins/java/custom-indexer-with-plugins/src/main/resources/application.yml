@@ -41,10 +41,9 @@ store:
         - name: "metadata-body-filter"
           lang: java
           class-name: com.bloxbean.example.CollectionFilterPlugin
-
         # - name: "db-test"
         #   lang: java
-        #   class-name: com.bloxbean.example.Example
+        #   class-name: com.bloxbean.example.FilePluginExample
 
     # Optional event-handler examples are included in src/main/java but disabled by default.
     # event-handlers:
