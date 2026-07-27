@@ -33,18 +33,9 @@ store:
           lang: java
           class-name: com.bloxbean.example.AddressFilterPlugin
       metadata.save:
-        # Java equivalent of the SpEL filter: label == '721' or label == '1967'
         - name: "metadata-label-filter"
           lang: java
           class-name: com.bloxbean.example.ExpressionFilterPlugin
-        # Java equivalent of the SpEL filter: body.contains('image') and body.length() > 100
-        - name: "metadata-body-filter"
-          lang: java
-          class-name: com.bloxbean.example.CollectionFilterPlugin
-        # - name: "db-test"
-        #   lang: java
-        #   class-name: com.bloxbean.example.FilePluginExample
-
     # Optional event-handler examples are included in src/main/java but disabled by default.
     # event-handlers:
     #   TransactionEvent:
