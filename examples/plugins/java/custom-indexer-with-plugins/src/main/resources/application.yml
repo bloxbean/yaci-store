@@ -1,0 +1,70 @@
+spring:
+  application:
+    name: yaci-custom-indexer
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    # In-memory H2 (yaci-store's default DB). Ephemeral — data is lost on shutdown.
+    # H2 is on the classpath transitively via yaci-store-common (api 'com.h2database:h2').
+    url: jdbc:h2:mem:mydb;DB_CLOSE_DELAY=-1
+    username: sa
+    password: password
+  h2:
+    console:
+      enabled: true      # http://localhost:8080/h2-console  (JDBC URL: jdbc:h2:mem:mydb)
+  flyway:
+    locations: classpath:db/store/{vendor}   # resolves to classpath:db/store/h2 for H2
+    out-of-order: true
+
+store:
+  # Preprod network (switch host/protocol-magic for preview/mainnet)
+  cardano:
+    host: preprod-node.play.dev.cardano.org
+    port: 3001
+    protocol-magic: 1
+    syncStartBlockhash: "7d111dd5e9841ff35667c694a0b8353a0e5e8ddf90523f85266f7ea2f4d9ed5f"
+    syncStartSlot: "124979178"
+  plugins:
+    enabled: true
+    filters:
+      utxo.unspent.save:
+        - name: "address-filter"
+          lang: java
+          class-name: com.bloxbean.example.AddressFilterPlugin
+      metadata.save:
+        # Java equivalent of the SpEL filter: label == '721' or label == '1967'
+        - name: "metadata-label-filter"
+          lang: java
+          class-name: com.bloxbean.example.ExpressionFilterPlugin
+        # Java equivalent of the SpEL filter: body.contains('image') and body.length() > 100
+        - name: "metadata-body-filter"
+          lang: java
+          class-name: com.bloxbean.example.CollectionFilterPlugin
+
+        # - name: "db-test"
+        #   lang: java
+        #   class-name: com.bloxbean.example.Example
+
+    # Optional event-handler examples are included in src/main/java but disabled by default.
+    # event-handlers:
+    #   TransactionEvent:
+    #     - name: "csv-file"
+    #       lang: java
+    #       class-name: com.bloxbean.example.TransactionEventExample
+    #   BlockEvent:
+    #     - name: "block-example"
+    #       lang: java
+    #       class-name: com.bloxbean.example.BlockEventExamples
+
+apiPrefix: /api/v1
+
+# Addresses to keep (comma- or whitespace-separated). Empty => keep everything.
+plugin:
+  address-filter:
+    addresses: "addr_test1qz3qyn8mp7vlap3whfe92r0uwdp2pkpz4a5c73myanjy3g9mrgkh4ykmxfmyzpvqwsh5jkfnjfp6t75nksdd0syksu6sg4sns8"
+
+logging:
+  level:
+    com.bloxbean.cardano.yaci.store.plugin: INFO
+    com.bloxbean.example: INFO

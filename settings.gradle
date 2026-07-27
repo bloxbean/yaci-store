@@ -126,3 +126,6 @@ project(':extensions:assets-ext').projectDir = new File('extensions/assets-ext')
 include ':starters:assets-ext-spring-boot-starter'
 
 include 'e2e-tests'
+
+// Example apps that embed yaci-store as a library.
+include 'examples:plugins:java:custom-indexer-with-plugins'

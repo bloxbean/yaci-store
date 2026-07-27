@@ -236,11 +236,12 @@ store:
 #### Filter Configuration Options
 
 - **`name`**: Human-readable plugin name
-- **`lang`**: Plugin language (`mvel`, `spel`, `js`, `python`)
+- **`lang`**: Plugin language (`mvel`, `spel`, `java`, `js`, `python`)
 - **`expression`**: Simple boolean expression (MVEL/SpEL only)
 - **`inline-script`**: Script code embedded in configuration
 - **`script`**: External script file reference
 - **`exit-on-error`**: Plugin-specific error handling override
+- **`class-name`**: Fully qualified Java class name for loading Java plugins
 
 ### Pre-Action Plugins
 
@@ -421,15 +422,17 @@ Using MVEL for metrics aggregation every 5 minutes:
 | Option | Type | Required | Description |
 |--------|------|----------|-------------|
 | `name` | String | Yes | Human-readable scheduler name |
-| `lang` | String | Yes | Script language: `js` (JavaScript) or `mvel` or `python` |
-| `inline-script` | String | Yes* | Inline script code to execute |
-| `script` | String | Yes* | Path to external script file (alternative to `inline-script`) |
+| `lang` | String | Yes | Plugin language: `js` (JavaScript), `mvel`, `python`, or `java` |
+| `inline-script` | String | Yes* | Inline script code to execute (script languages only) |
+| `script` | String | Yes* | Path to external script file (alternative to `inline-script`, script languages only) |
+| `class-name` | String | Yes** | Fully qualified Java class name (`lang: java` only) |
 | `schedule` | Object | Yes | Schedule configuration (see below) |
 | `schedule.type` | String | Yes | Schedule type: `INTERVAL` or `CRON` |
 | `schedule.value` | String | Yes | Interval in seconds (for `INTERVAL`) or cron expression (for `CRON`) |
 | `exit-on-error` | Boolean | No | Whether to stop scheduler on errors (default: `false`) |
 
-*Either `inline-script` or `script` must be provided.
+- For script-based schedulers, either `inline-script` or `script` must be provided.
+- For Java schedulers, `class-name` must be provided.
 
 ### Available Context Variables
 
@@ -723,6 +726,94 @@ store:
 - Expression-only (no script files)
 - Limited to filter plugins
 - Spring ecosystem integration
+
+### Java Configuration
+An example for plugins using yaci-store as a library can be found
+[here](https://github.com/bloxbean/yaci-store/blob/main/examples/plugins/java/custom-indexer-with-plugins/src/main/java/com/bloxbean/example/ExpressionFilterPlugin.java).
+```yaml
+store:
+  plugins:
+    filters:
+      metadata.save:
+        - name: "Java Expression Filter"
+          lang: java
+          class-name: com.bloxbean.example.ExpressionFilterPlugin
+
+        - name: "Java Collection Filter"
+          lang: java
+          class-name: com.bloxbean.example.CollectionFilterPlugin
+```
+
+
+```java
+// ExpressionFilterPlugin
+package com.bloxbean.example;
+
+import com.bloxbean.cardano.yaci.store.metadata.domain.TxMetadataLabel;
+import com.bloxbean.cardano.yaci.store.plugin.api.PluginType;
+import com.bloxbean.cardano.yaci.store.plugin.api.config.PluginDef;
+import com.bloxbean.cardano.yaci.store.plugin.impl.java.JavaFilterPlugin;
+import com.bloxbean.cardano.yaci.store.plugin.impl.java.PluginContext;
+
+import java.util.Collection;
+
+/**
+ * Hooks the {@code metadata.save} extension point and keeps only metadata labels
+ * {@code 721} (NFT metadata) and {@code 1967} (pool metadata).
+ */
+public class ExpressionFilterPlugin extends JavaFilterPlugin<TxMetadataLabel> {
+
+    public ExpressionFilterPlugin(PluginDef pluginDef, PluginType pluginType, PluginContext context) {
+        super(pluginDef, pluginType, context);
+    }
+
+    @Override
+    public Collection<TxMetadataLabel> filter(Collection<TxMetadataLabel> items) {
+        return items.stream()
+                .filter(item -> "721".equals(item.getLabel()) || "1967".equals(item.getLabel()))
+                .toList();
+    }
+}
+```
+
+```java
+// CollectionFilterPlugin
+package com.bloxbean.example;
+
+import com.bloxbean.cardano.yaci.store.metadata.domain.TxMetadataLabel;
+import com.bloxbean.cardano.yaci.store.plugin.api.PluginType;
+import com.bloxbean.cardano.yaci.store.plugin.api.config.PluginDef;
+import com.bloxbean.cardano.yaci.store.plugin.impl.java.JavaFilterPlugin;
+import com.bloxbean.cardano.yaci.store.plugin.impl.java.PluginContext;
+
+import java.util.Collection;
+
+/**
+ * Hooks the {@code metadata.save} extension point and keeps only metadata entries whose
+ * body mentions {@code "image"} and is longer than 100 characters.
+ */
+public class CollectionFilterPlugin extends JavaFilterPlugin<TxMetadataLabel> {
+
+    public CollectionFilterPlugin(PluginDef pluginDef, PluginType pluginType, PluginContext context) {
+        super(pluginDef, pluginType, context);
+    }
+
+    @Override
+    public Collection<TxMetadataLabel> filter(Collection<TxMetadataLabel> items) {
+        return items.stream()
+                .filter(item -> {
+                    String body = item.getBody();
+                    // SpEL throws on null property access; guard explicitly in Java.
+                    return body != null && body.contains("image") && body.length() > 100;
+                })
+                .toList();
+    }
+}
+```
+
+#### Java Features
+- Ideal for projects integrating yaci-store as a library
+- Typed access to plugin context using class `PluginContext`
 
 ### JavaScript Configuration
 
