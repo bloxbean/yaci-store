@@ -14,7 +14,9 @@ import { Callout } from 'nextra/components'
 
 ## Overview
 
-This reference guide provides comprehensive documentation for all extension points, domain classes, and variables available to plugin developers in the yaci-store system. The primary focus is on MVEL plugins with additional examples in JavaScript and Python.
+This reference guide provides comprehensive documentation for all extension points, domain classes, and variables
+available to plugin developers in the yaci-store system. The primary focus is on MVEL plugins with additional examples
+in JavaScript, Python, and Java.
 
 ### Key Concepts
 - **Extension Points**: Predefined hooks where plugins can intercept and process data
@@ -25,7 +27,8 @@ This reference guide provides comprehensive documentation for all extension poin
 - **Parameter Signatures**:
   - Storage plugins (filter, pre-action, post-action): `function(items)`
   - Event handlers: `function(event)`
-  - Variables are directly available by name (no context parameter)
+  - Variables are directly available by name in script plugins (no context parameter)
+  - Java plugins receive a typed `PluginContext` in their constructor and implement the relevant plugin interface/base class
 
 ### Important: Field Access Patterns by Language
 
@@ -71,10 +74,24 @@ amount = utxo.getLovelaceAmount()
 if item.label == "721": ...  # ❌ Throws AttributeError
 ```
 
+#### Java
+- **Strongly typed access**: Java plugins operate on typed domain objects such as `TxMetadataLabel` or `AddressUtxo`
+- **Use normal Java methods**: Access fields with getters/setters, e.g. `item.getLabel()` or `utxo.getLovelaceAmount()`
+- **Use `PluginContext` for utilities**: Access built-ins with `context().namedJdbc()`, `context().http()`, `context().files()`, `context().environment()`, `state()`, and `globalState()`
+
+```java
+// Java - Typed domain access
+if ("721".equals(item.getLabel())) {
+    // process metadata
+}
+var amount = utxo.getLovelaceAmount();
+```
+
 <Callout type="info">
 **Quick Reference**:
 - MVEL/SPEL: `object.field` or `object.getField()`
 - JavaScript/Python: `object.getField()` only
+- Java: strongly typed objects with normal getters/setters, plus utilities through `PluginContext`
 </Callout>
 
 ---

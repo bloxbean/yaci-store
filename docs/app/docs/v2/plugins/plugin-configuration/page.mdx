@@ -207,6 +207,11 @@ Global scripts are defined once and can be referenced through ID in plugin confi
 
 ## Plugin Type Configurations
 
+Java plugins can be used for any plugin type by setting `lang: java` and `class-name` to a fully qualified class name. 
+The class should implement the matching plugin interface or extend one of the Java base classes (`JavaFilterPlugin`, 
+`JavaPreActionPlugin`, `JavaPostActionPlugin`, `JavaEventHandlerPlugin`, `JavaInitPlugin`, or `JavaSchedulerPlugin`) 
+and expose a `(PluginDef, PluginType, PluginContext)` constructor.
+
 ### Filter Plugins
 
 Filter plugins control which data gets stored in the database.
@@ -812,8 +817,10 @@ public class CollectionFilterPlugin extends JavaFilterPlugin<TxMetadataLabel> {
 ```
 
 #### Java Features
+- Works for filters, pre-actions, post-actions, event handlers, initializers, and schedulers
 - Ideal for projects integrating yaci-store as a library
 - Typed access to plugin context using class `PluginContext`
+- Can be bundled in a custom Spring Boot app or loaded from an external JAR on the application classpath
 
 ### JavaScript Configuration
 

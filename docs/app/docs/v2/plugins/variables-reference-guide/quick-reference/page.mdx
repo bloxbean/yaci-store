@@ -15,6 +15,19 @@ import { Callout } from 'nextra/components'
 | **`global_state`** | State | Global storage shared across plugins | `global_state.get("networkTip")` |
 | **`env`** | Environment | Access configuration properties | `env.getProperty("api.key")` |
 
+## Java Plugin Access
+
+Java plugins receive the same services through the typed `PluginContext` (or base-class convenience methods):
+
+| Script variable | Java access |
+|-----------------|-------------|
+| `named_jdbc` | `context().namedJdbc()` |
+| `http` | `context().http()` |
+| `files` | `context().files()` |
+| `env` | `context().environment()` |
+| `state` | `state()` or `context().state()` |
+| `global_state` | `globalState()` or `context().globalState()` |
+
 ## Which Variable Should I Use?
 
 ### For Database Operations
@@ -81,4 +94,13 @@ if (config.isSuccess()) {
     // Process with settings...
     files.writeJson("output.json", results);
 }
+```
+
+### Java Typed Access
+```java
+// Java - Access built-ins through PluginContext
+var env = context().environment();
+String apiKey = env.getProperty("api.key");
+long count = state().increment("items_processed");
+var response = context().http().get("https://api.example.com/data");
 ```
