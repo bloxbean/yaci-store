@@ -269,13 +269,19 @@ def run_verification(
     logger: Any,
     max_mismatches: int = 0,
 ) -> Dict[str, Any]:
-    """Run all selected epochs and return the structured comparator result."""
+    """Verify one globally latest status row per proposal in the epoch scope."""
 
+    epoch_values = list(epochs)
+    if not epoch_values:
+        raise ValueError("at least one epoch must be selected")
+    start_epoch = epoch_values[0]
+    end_epoch = epoch_values[-1]
     result = new_result("gov_action_voting_stats_adastat")
     result_started = time.time()
-    result["epochs_compared"] = len(epochs)
+    result["epochs_compared"] = len(epoch_values)
     result.update(
         {
+            "selection_mode": "LATEST_PER_PROPOSAL",
             "selected_proposals": 0,
             "eligible_proposals": 0,
             "compared_proposals": 0,
@@ -307,19 +313,40 @@ def run_verification(
     coverage_writer.ensure_open()
     reasons: Counter[str] = Counter()
 
-    for epoch in epochs:
-        logger.log(f"############ Epoch {epoch} - governance voting stats ############")
-        try:
-            proposals = load_yaci_proposals(connection, epoch, proposal_filter)
-        except Exception as exc:
-            result["errors"] += 1
-            reasons["STORE_ERROR"] += 1
-            logger.error(f"Yaci Store query/data error for epoch {epoch}", exc)
-            logger.log()
-            continue
+    logger.log(
+        f"############ Latest proposal statuses with latest epoch "
+        f"{start_epoch} -> {end_epoch} ############"
+    )
+    try:
+        proposals = load_yaci_proposals(
+            connection,
+            start_epoch,
+            end_epoch,
+            proposal_filter,
+        )
+    except Exception as exc:
+        result["errors"] += 1
+        reasons["STORE_ERROR"] += 1
+        logger.error(
+            f"Yaci Store latest-status query/data error for epochs "
+            f"{start_epoch}..{end_epoch}",
+            exc,
+        )
+        proposals = []
 
-        result["selected_proposals"] += len(proposals)
-        result["selected_fields"] += len(proposals) * len(ALL_FIELDS)
+    result["selected_proposals"] = len(proposals)
+    result["selected_fields"] = len(proposals) * len(ALL_FIELDS)
+    proposals_by_epoch: Dict[int, list[YaciProposal]] = {}
+    for proposal in proposals:
+        proposals_by_epoch.setdefault(proposal.epoch, []).append(proposal)
+
+    if not proposals and not result["errors"]:
+        logger.log("  No latest Store rows selected.")
+        logger.log()
+
+    for epoch in sorted(proposals_by_epoch):
+        epoch_proposals = proposals_by_epoch[epoch]
+        logger.log(f"  Latest row epoch {epoch}: {len(epoch_proposals)} proposal(s)")
         writer = MismatchCsvWriter(
             mismatch_dir,
             f"gov_action_voting_stats_epoch_{epoch}",
@@ -329,10 +356,7 @@ def run_verification(
         recorder = MismatchRecorder(logger, writer, max_mismatches)
         epoch_mismatched = False
 
-        if not proposals:
-            logger.log("  No Store rows selected.")
-
-        for proposal in proposals:
+        for proposal in epoch_proposals:
             comparison = compare_one_proposal(proposal, client, report_dir)
             _accumulate_comparison(result, comparison, reasons)
             _write_coverage_rows(coverage_writer, client.network, comparison)
@@ -562,9 +586,21 @@ Examples:
         """,
     )
     selection = parser.add_mutually_exclusive_group(required=True)
-    selection.add_argument("--epoch", type=int, help="Single Store epoch to verify")
-    selection.add_argument("--start-epoch", type=int, help="First Store epoch (inclusive)")
-    parser.add_argument("--end-epoch", type=int, help="Last Store epoch (inclusive)")
+    selection.add_argument(
+        "--epoch",
+        type=int,
+        help="Select proposals whose latest Store row is at this epoch",
+    )
+    selection.add_argument(
+        "--start-epoch",
+        type=int,
+        help="First latest-row epoch to select (inclusive)",
+    )
+    parser.add_argument(
+        "--end-epoch",
+        type=int,
+        help="Last latest-row epoch to select (inclusive)",
+    )
     parser.add_argument("--proposal", help="Restrict selection to TX_HASH#INDEX")
 
     parser.add_argument("--config", metavar="FILE", help="JSON configuration file")

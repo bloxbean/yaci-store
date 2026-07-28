@@ -87,7 +87,7 @@ class FakeCursor:
     def __init__(self, rows_by_epoch, error_epochs):
         self.rows_by_epoch = rows_by_epoch
         self.error_epochs = error_epochs
-        self.epoch = None
+        self.rows = []
 
     def __enter__(self):
         return self
@@ -96,12 +96,35 @@ class FakeCursor:
         return False
 
     def execute(self, _query, params):
-        self.epoch = params[0]
-        if self.epoch in self.error_epochs:
+        if len(params) == 2:
+            proposal_filter = None
+            start_epoch, end_epoch = params
+        else:
+            proposal_filter = (params[0], params[1])
+            start_epoch, end_epoch = params[2], params[3]
+        if any(start_epoch <= epoch <= end_epoch for epoch in self.error_epochs):
             raise RuntimeError("Store unavailable")
 
+        latest_by_proposal = {}
+        for epoch_rows in self.rows_by_epoch.values():
+            for row in epoch_rows:
+                key = (row[0], row[1])
+                if proposal_filter is not None and key != proposal_filter:
+                    continue
+                current = latest_by_proposal.get(key)
+                if current is None or row[5] > current[5]:
+                    latest_by_proposal[key] = row
+        self.rows = sorted(
+            (
+                row
+                for row in latest_by_proposal.values()
+                if start_epoch <= row[5] <= end_epoch
+            ),
+            key=lambda row: (row[5], row[0], row[1]),
+        )
+
     def fetchall(self):
-        return self.rows_by_epoch.get(self.epoch, [])
+        return self.rows
 
 
 class FakeConnection:
@@ -339,7 +362,7 @@ class RunClassificationTest(unittest.TestCase):
         )
         self.assertEqual("ADASTAT_SCHEMA_ERROR", comparison.reason)
 
-    def test_store_error_and_malformed_json_are_store_errors(self):
+    def test_malformed_latest_row_is_store_error(self):
         payload = load_payload()
         reference = parse_adastat_response(payload)
         malformed = list(store_row(payload))
@@ -353,11 +376,10 @@ class RunClassificationTest(unittest.TestCase):
             rows,
             {},
             [reference.ratified_epoch, reference.ratified_epoch + 1],
-            error_epochs=(reference.ratified_epoch + 1,),
         )
-        self.assertEqual(2, result["errors"])
-        self.assertEqual({"STORE_ERROR": 2}, result["reason_counts"])
-        self.assertEqual(2, len(logger.errors))
+        self.assertEqual(1, result["errors"])
+        self.assertEqual({"STORE_ERROR": 1}, result["reason_counts"])
+        self.assertEqual(1, len(logger.errors))
         self.assertEqual(2, determine_exit_code(result, False))
 
     def test_zero_rows_is_an_error_exit_because_no_field_was_compared(self):
@@ -366,7 +388,7 @@ class RunClassificationTest(unittest.TestCase):
         self.assertEqual(0, result["errors"])
         self.assertEqual(2, determine_exit_code(result, False))
 
-    def test_mixed_range_passes_by_default_but_strict_mode_fails(self):
+    def test_range_processes_only_latest_snapshot_per_proposal(self):
         payload = parameter_change_payload()
         reference = parse_adastat_response(payload)
         active_epoch = reference.ratified_epoch - 1
@@ -381,9 +403,10 @@ class RunClassificationTest(unittest.TestCase):
             [active_epoch, reference.ratified_epoch],
         )
         self.assertEqual(1, result["matched_proposals"])
-        self.assertEqual(1, result["inconclusive_proposals"])
+        self.assertEqual(1, result["selected_proposals"])
+        self.assertEqual(0, result["inconclusive_proposals"])
         self.assertEqual(0, determine_exit_code(result, False))
-        self.assertEqual(2, determine_exit_code(result, True))
+        self.assertEqual(0, determine_exit_code(result, True))
 
     def test_field_mismatch_returns_one_without_operational_error(self):
         payload = parameter_change_payload()

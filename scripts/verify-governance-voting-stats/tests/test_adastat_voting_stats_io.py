@@ -259,15 +259,19 @@ class YaciStoreLoaderTest(unittest.TestCase):
             1369,
         )
 
-    def test_loads_epoch_in_one_parameterized_query(self):
+    def test_loads_latest_rows_in_one_parameterized_query(self):
         cursor = FakeCursor([self.row])
         proposals = load_yaci_proposals(FakeConnection(cursor), 1369)
 
         self.assertEqual(1, len(proposals))
         self.assertEqual("NEW_COMMITTEE", proposals[0].action_type)
         self.assertEqual("0.5060", str(proposals[0].voting_stats["drep_approval_ratio"]))
-        self.assertEqual((1369,), cursor.params)
-        self.assertIn("WHERE epoch = %s", cursor.query)
+        self.assertEqual((1369, 1369), cursor.params)
+        self.assertIn(
+            "DISTINCT ON (gov_action_tx_hash, gov_action_index)",
+            cursor.query,
+        )
+        self.assertIn("WHERE epoch BETWEEN %s AND %s", cursor.query)
         self.assertNotIn(self.tx_hash, cursor.query)
 
     def test_applies_proposal_filter_with_parameters(self):
@@ -275,10 +279,11 @@ class YaciStoreLoaderTest(unittest.TestCase):
         load_yaci_proposals(
             FakeConnection(cursor),
             1369,
+            1370,
             (self.tx_hash.upper(), 0),
         )
-        self.assertEqual((1369, self.tx_hash, 0), cursor.params)
-        self.assertIn("gov_action_tx_hash = %s", cursor.query)
+        self.assertEqual((self.tx_hash, 0, 1369, 1370), cursor.params)
+        self.assertIn("WHERE gov_action_tx_hash = %s", cursor.query)
         self.assertIn("gov_action_index = %s", cursor.query)
 
     def test_preserves_empty_epoch_and_active_rows(self):
@@ -299,7 +304,7 @@ class YaciStoreLoaderTest(unittest.TestCase):
 
     def test_wraps_database_failure(self):
         cursor = FakeCursor(error=RuntimeError("database unavailable"))
-        with self.assertRaisesRegex(StoreDataError, "failed to load Store rows"):
+        with self.assertRaisesRegex(StoreDataError, "failed to load latest Store rows"):
             load_yaci_proposals(FakeConnection(cursor), 1369)
 
 

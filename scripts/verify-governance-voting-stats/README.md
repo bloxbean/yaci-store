@@ -61,6 +61,27 @@ index as two lowercase hexadecimal characters. For example, proposal index
 `#10` has suffix `0a`. The CLI filter remains
 `TX_HASH#DECIMAL_INDEX`; indexes above 255 are reported as unsupported.
 
+## Latest-status selection
+
+`gov_action_proposal_status` contains one snapshot per proposal and epoch. The
+verifier first selects the row with the greatest `epoch` for each
+`(gov_action_tx_hash, gov_action_index)` across the whole table. It then
+applies `--epoch` or `--start-epoch`/`--end-epoch` to the epoch of that latest
+row.
+
+For example:
+
+```text
+Proposal A
+  epoch 100: ACTIVE
+  epoch 101: ACTIVE
+  epoch 102: RATIFIED  <- selected
+```
+
+Proposal A is processed once as `RATIFIED`. Its historical ACTIVE snapshots
+are not logged or sent to AdaStat. An epoch range therefore scopes proposals
+by their latest-row epoch; it does not replay every snapshot in the range.
+
 ## Temporal contract
 
 AdaStat exposes live data for an active proposal, not arbitrary historical

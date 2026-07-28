@@ -544,40 +544,70 @@ def resolve_verifier_settings(args: Any) -> VerifierSettings:
 
 def load_yaci_proposals(
     connection: Any,
-    epoch: int,
+    start_epoch: int,
+    end_epoch: Optional[int] = None,
     proposal_filter: Optional[Tuple[str, int]] = None,
 ) -> Sequence[YaciProposal]:
-    """Load every Store proposal status row for one epoch in one query."""
+    """Load each proposal's globally latest status when its epoch is in scope."""
 
-    if isinstance(epoch, bool) or not isinstance(epoch, int) or epoch < 0:
-        raise ValueError("epoch must be a non-negative integer")
+    if (
+        isinstance(start_epoch, bool)
+        or not isinstance(start_epoch, int)
+        or start_epoch < 0
+    ):
+        raise ValueError("start epoch must be a non-negative integer")
+    if end_epoch is None:
+        end_epoch = start_epoch
+    if (
+        isinstance(end_epoch, bool)
+        or not isinstance(end_epoch, int)
+        or end_epoch < start_epoch
+    ):
+        raise ValueError("end epoch must be an integer >= start epoch")
 
     query = """
-        SELECT gov_action_tx_hash,
-               gov_action_index,
-               type,
-               status,
-               voting_stats::text,
-               epoch
-        FROM gov_action_proposal_status
-        WHERE epoch = %s
+        WITH latest_status AS (
+            SELECT DISTINCT ON (gov_action_tx_hash, gov_action_index)
+                   gov_action_tx_hash,
+                   gov_action_index,
+                   type,
+                   status,
+                   voting_stats::text AS voting_stats,
+                   epoch
+            FROM gov_action_proposal_status
     """
-    params: list[Any] = [epoch]
+    params: list[Any] = []
     if proposal_filter is not None:
         tx_hash, index = proposal_filter
         tx_hash = normalize_hash(tx_hash, "proposal tx hash")
         if isinstance(index, bool) or not isinstance(index, int) or index < 0:
             raise ValueError("proposal index must be a non-negative integer")
-        query += " AND gov_action_tx_hash = %s AND gov_action_index = %s"
+        query += " WHERE gov_action_tx_hash = %s AND gov_action_index = %s"
         params.extend((tx_hash, index))
-    query += " ORDER BY gov_action_tx_hash, gov_action_index"
+    query += """
+            ORDER BY gov_action_tx_hash, gov_action_index, epoch DESC
+        )
+        SELECT gov_action_tx_hash,
+               gov_action_index,
+               type,
+               status,
+               voting_stats,
+               epoch
+        FROM latest_status
+        WHERE epoch BETWEEN %s AND %s
+        ORDER BY epoch, gov_action_tx_hash, gov_action_index
+    """
+    params.extend((start_epoch, end_epoch))
 
     try:
         with connection.cursor() as cursor:
             cursor.execute(query, tuple(params))
             rows = cursor.fetchall()
     except Exception as exc:
-        raise StoreDataError(f"failed to load Store rows for epoch {epoch}: {exc}") from exc
+        raise StoreDataError(
+            f"failed to load latest Store rows for epochs "
+            f"{start_epoch}..{end_epoch}: {exc}"
+        ) from exc
 
     proposals = []
     seen = set()
@@ -595,16 +625,19 @@ def load_yaci_proposals(
                 raise StoreDataError(f"unsupported Store status: {raw_status!r}")
             voting_stats = parse_yaci_voting_stats(raw_stats)
         except ReferenceContractError as exc:
-            raise StoreDataError(f"invalid Store row at epoch {epoch}: {exc}") from exc
+            raise StoreDataError(
+                f"invalid latest Store row in epochs {start_epoch}..{end_epoch}: {exc}"
+            ) from exc
 
-        key = (tx_hash, index, row_epoch)
+        key = (tx_hash, index)
         if key in seen:
             raise StoreDataError(
-                f"duplicate Store proposal row: {tx_hash}#{index} at epoch {row_epoch}"
+                f"duplicate latest Store proposal row: {tx_hash}#{index}"
             )
-        if row_epoch != epoch:
+        if row_epoch < start_epoch or row_epoch > end_epoch:
             raise StoreDataError(
-                f"Store returned epoch {row_epoch} while selecting epoch {epoch}"
+                f"Store returned latest epoch {row_epoch} outside "
+                f"{start_epoch}..{end_epoch}"
             )
         seen.add(key)
         proposals.append(
