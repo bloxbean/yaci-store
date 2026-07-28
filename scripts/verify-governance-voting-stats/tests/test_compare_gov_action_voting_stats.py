@@ -220,16 +220,18 @@ class ProposalComparisonTest(unittest.TestCase):
         self.assertEqual(23, comparison.compared_fields)
         self.assertFalse(comparison.mismatches)
 
-    def test_partial_match_reports_unavailable_body(self):
+    def test_covered_match_reports_unavailable_body(self):
         payload = load_payload()
         reference = parse_adastat_response(payload)
-        result, _, report_dir = run_case(
+        result, logger, report_dir = run_case(
             self,
             {reference.ratified_epoch: [store_row(payload)]},
             {(reference.tx_hash, reference.index): payload},
             [reference.ratified_epoch],
         )
-        self.assertEqual(1, result["partial_proposals"])
+        self.assertEqual(1, result["covered_match_proposals"])
+        self.assertEqual("COVERED_MATCH", result["proposals"][0]["result"])
+        self.assertTrue(any(": COVERED_MATCH " in line for line in logger.lines))
         self.assertEqual(18, result["compared_fields"])
         self.assertEqual(0, determine_exit_code(result, False))
         self.assertTrue(os.path.exists(result["coverage_file"]))
@@ -284,7 +286,7 @@ class ProposalComparisonTest(unittest.TestCase):
             [reference.ratified_epoch],
         )
         self.assertEqual(10, result["compared_fields"])
-        self.assertEqual(1, result["partial_proposals"])
+        self.assertEqual(1, result["covered_match_proposals"])
         self.assertEqual(0, determine_exit_code(result, False))
 
 

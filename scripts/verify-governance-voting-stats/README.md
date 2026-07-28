@@ -153,7 +153,7 @@ SPO:   8 fields compared
 CC:    5 fields unavailable from AdaStat
 ```
 
-If all 18 comparable fields match, the current result is `PARTIAL_MATCH`.
+If all 18 comparable fields match, the result is `COVERED_MATCH`.
 This means **maximum AdaStat reference coverage was reached and every
 comparable field matched**. It does not mean that five fields mismatched.
 
@@ -209,7 +209,7 @@ The client is sequential and:
 Proposal results are:
 
 - `MATCH`: all 23 fields are available and match.
-- `PARTIAL_MATCH`: every field available from AdaStat matches, but AdaStat
+- `COVERED_MATCH`: every field available from AdaStat matches, but AdaStat
   cannot cover all 23 canonical fields. For 15/23 and 18/23 action types this
   can represent the maximum expected reference coverage.
 - `MISMATCH`: a comparable Yaci field differs, is missing, null, or invalid.

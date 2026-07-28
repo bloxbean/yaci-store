@@ -248,7 +248,7 @@ def compare_one_proposal(
     elif normalized.compared_fields == len(ALL_FIELDS):
         result = "MATCH"
     else:
-        result = "PARTIAL_MATCH"
+        result = "COVERED_MATCH"
     return ProposalComparison(
         proposal=proposal,
         result=result,
@@ -285,7 +285,7 @@ def run_verification(
             "eligible_proposals": 0,
             "compared_proposals": 0,
             "matched_proposals": 0,
-            "partial_proposals": 0,
+            "covered_match_proposals": 0,
             "mismatched_proposals": 0,
             "inconclusive_proposals": 0,
             "error_proposals": 0,
@@ -414,15 +414,15 @@ def _accumulate_comparison(
     comparison: ProposalComparison,
     reasons: Counter[str],
 ) -> None:
-    if comparison.result in ("MATCH", "PARTIAL_MATCH", "MISMATCH"):
+    if comparison.result in ("MATCH", "COVERED_MATCH", "MISMATCH"):
         result["eligible_proposals"] += 1
     if comparison.compared_fields:
         result["compared_proposals"] += 1
         result["compared_fields"] += comparison.compared_fields
     if comparison.result == "MATCH":
         result["matched_proposals"] += 1
-    elif comparison.result == "PARTIAL_MATCH":
-        result["partial_proposals"] += 1
+    elif comparison.result == "COVERED_MATCH":
+        result["covered_match_proposals"] += 1
     elif comparison.result == "MISMATCH":
         result["mismatched_proposals"] += 1
     elif comparison.result == "INCONCLUSIVE":
@@ -718,7 +718,7 @@ def render_detail(result: Mapping[str, Any]) -> str:
             f"eligible={result['eligible_proposals']}, "
             f"compared={result['compared_proposals']}, "
             f"matched={result['matched_proposals']}, "
-            f"partial={result['partial_proposals']}, "
+            f"covered_match={result['covered_match_proposals']}, "
             f"mismatched={result['mismatched_proposals']}, "
             f"inconclusive={result['inconclusive_proposals']}, "
             f"error={result['error_proposals']}",
@@ -796,7 +796,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 "eligible_proposals": 0,
                 "compared_proposals": 0,
                 "matched_proposals": 0,
-                "partial_proposals": 0,
+                "covered_match_proposals": 0,
                 "mismatched_proposals": 0,
                 "inconclusive_proposals": 0,
                 "error_proposals": 0,
