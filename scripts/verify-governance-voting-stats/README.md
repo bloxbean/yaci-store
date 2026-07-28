@@ -1,8 +1,9 @@
 # Governance Voting-Stats Verifier
 
 Standalone Python verifier for
-`gov_action_proposal_status.voting_stats`. It compares Yaci Store epoch rows
-with AdaStat governance-action data and does not access Cardano DB Sync.
+`gov_action_proposal_status.voting_stats`. It compares each proposal's latest
+Yaci Store status with AdaStat governance-action data and does not access
+Cardano DB Sync.
 
 AdaStat is treated as an independent reference, not an authoritative ledger
 oracle. Missing bodies, live proposals, and temporal incompatibility remain
@@ -23,14 +24,18 @@ cp config.example.json config.json
 Run commands from this directory:
 
 ```bash
-# One terminal preview proposal
+# All latest proposal statuses
 python3 compare_gov_action_voting_stats.py \
   --network preview \
-  --epoch 1369 \
+  --config config.json
+
+# One proposal
+python3 compare_gov_action_voting_stats.py \
+  --network preview \
   --proposal '06dcb60f4b6ee78024bd4c7978e8e093437903198cf06c3c5d34bf825129bc73#0' \
   --config config.json
 
-# Inclusive mainnet range
+# Optional batching filter on the latest Store row's epoch
 python3 compare_gov_action_voting_stats.py \
   --network mainnet \
   --start-epoch 640 \
@@ -40,10 +45,20 @@ python3 compare_gov_action_voting_stats.py \
 # Fail when any selected proposal is inconclusive
 python3 compare_gov_action_voting_stats.py \
   --network preprod \
-  --epoch 302 \
   --fail-on-inconclusive \
   --config config.json
 ```
+
+Epoch options are not required. Without them, the verifier selects the latest
+Store row for every proposal. The optional filters are:
+
+- `--epoch E`: latest row is at exactly `E`;
+- `--start-epoch E`: latest row is at or after `E`;
+- `--end-epoch E`: latest row is at or before `E`;
+- `--start-epoch A --end-epoch B`: latest row is in the inclusive range.
+
+These options limit the number of proposals in one run. They do not request
+historical AdaStat data.
 
 The required `--network` value selects one fixed endpoint:
 
@@ -65,9 +80,8 @@ index as two lowercase hexadecimal characters. For example, proposal index
 
 `gov_action_proposal_status` contains one snapshot per proposal and epoch. The
 verifier first selects the row with the greatest `epoch` for each
-`(gov_action_tx_hash, gov_action_index)` across the whole table. It then
-applies `--epoch` or `--start-epoch`/`--end-epoch` to the epoch of that latest
-row.
+`(gov_action_tx_hash, gov_action_index)` across the whole table. If an epoch
+filter is provided, it is then applied to the epoch of that latest row.
 
 For example:
 
@@ -79,8 +93,8 @@ Proposal A
 ```
 
 Proposal A is processed once as `RATIFIED`. Its historical ACTIVE snapshots
-are not logged or sent to AdaStat. An epoch range therefore scopes proposals
-by their latest-row epoch; it does not replay every snapshot in the range.
+are not logged or sent to AdaStat. An epoch filter therefore scopes proposals
+by their latest-row epoch; it does not replay snapshots from those epochs.
 
 ## Temporal contract
 
@@ -94,8 +108,9 @@ epoch snapshots. Comparison is therefore limited to:
 | `ACTIVE` | No historical snapshot | `INCONCLUSIVE_LIVE` |
 | Terminal row with another outcome epoch | Snapshot does not align | `INCONCLUSIVE_EPOCH_MISMATCH` |
 
-An ACTIVE-only run makes no AdaStat request and exits `2` because zero fields
-were compared.
+ACTIVE proposals are counted in the summary and JSON report, but are not
+logged individually or sent to AdaStat. An ACTIVE-only run exits `2` because
+zero fields were compared.
 
 ## AdaStat reference coverage
 

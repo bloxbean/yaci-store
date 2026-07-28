@@ -544,26 +544,30 @@ def resolve_verifier_settings(args: Any) -> VerifierSettings:
 
 def load_yaci_proposals(
     connection: Any,
-    start_epoch: int,
+    start_epoch: Optional[int] = None,
     end_epoch: Optional[int] = None,
     proposal_filter: Optional[Tuple[str, int]] = None,
 ) -> Sequence[YaciProposal]:
     """Load each proposal's globally latest status when its epoch is in scope."""
 
-    if (
+    if start_epoch is not None and (
         isinstance(start_epoch, bool)
         or not isinstance(start_epoch, int)
         or start_epoch < 0
     ):
         raise ValueError("start epoch must be a non-negative integer")
-    if end_epoch is None:
-        end_epoch = start_epoch
-    if (
+    if end_epoch is not None and (
         isinstance(end_epoch, bool)
         or not isinstance(end_epoch, int)
-        or end_epoch < start_epoch
+        or end_epoch < 0
     ):
-        raise ValueError("end epoch must be an integer >= start epoch")
+        raise ValueError("end epoch must be a non-negative integer")
+    if (
+        start_epoch is not None
+        and end_epoch is not None
+        and end_epoch < start_epoch
+    ):
+        raise ValueError("end epoch must be >= start epoch")
 
     query = """
         WITH latest_status AS (
@@ -594,20 +598,24 @@ def load_yaci_proposals(
                voting_stats,
                epoch
         FROM latest_status
-        WHERE epoch BETWEEN %s AND %s
-        ORDER BY epoch, gov_action_tx_hash, gov_action_index
     """
-    params.extend((start_epoch, end_epoch))
+    if start_epoch is not None and end_epoch is not None:
+        query += " WHERE epoch BETWEEN %s AND %s"
+        params.extend((start_epoch, end_epoch))
+    elif start_epoch is not None:
+        query += " WHERE epoch >= %s"
+        params.append(start_epoch)
+    elif end_epoch is not None:
+        query += " WHERE epoch <= %s"
+        params.append(end_epoch)
+    query += " ORDER BY epoch, gov_action_tx_hash, gov_action_index"
 
     try:
         with connection.cursor() as cursor:
             cursor.execute(query, tuple(params))
             rows = cursor.fetchall()
     except Exception as exc:
-        raise StoreDataError(
-            f"failed to load latest Store rows for epochs "
-            f"{start_epoch}..{end_epoch}: {exc}"
-        ) from exc
+        raise StoreDataError(f"failed to load latest Store rows: {exc}") from exc
 
     proposals = []
     seen = set()
@@ -625,19 +633,20 @@ def load_yaci_proposals(
                 raise StoreDataError(f"unsupported Store status: {raw_status!r}")
             voting_stats = parse_yaci_voting_stats(raw_stats)
         except ReferenceContractError as exc:
-            raise StoreDataError(
-                f"invalid latest Store row in epochs {start_epoch}..{end_epoch}: {exc}"
-            ) from exc
+            raise StoreDataError(f"invalid latest Store row: {exc}") from exc
 
         key = (tx_hash, index)
         if key in seen:
             raise StoreDataError(
                 f"duplicate latest Store proposal row: {tx_hash}#{index}"
             )
-        if row_epoch < start_epoch or row_epoch > end_epoch:
+        if start_epoch is not None and row_epoch < start_epoch:
             raise StoreDataError(
-                f"Store returned latest epoch {row_epoch} outside "
-                f"{start_epoch}..{end_epoch}"
+                f"Store returned latest epoch {row_epoch} below {start_epoch}"
+            )
+        if end_epoch is not None and row_epoch > end_epoch:
+            raise StoreDataError(
+                f"Store returned latest epoch {row_epoch} above {end_epoch}"
             )
         seen.add(key)
         proposals.append(

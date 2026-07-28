@@ -263,25 +263,24 @@ def compare_one_proposal(
 def run_verification(
     connection: Any,
     client: AdaStatClient,
-    epochs: Sequence[int],
+    start_epoch: Optional[int],
+    end_epoch: Optional[int],
     proposal_filter: Optional[Tuple[str, int]],
     report_dir: str,
     logger: Any,
     max_mismatches: int = 0,
 ) -> Dict[str, Any]:
-    """Verify one globally latest status row per proposal in the epoch scope."""
+    """Verify one globally latest status row per proposal."""
 
-    epoch_values = list(epochs)
-    if not epoch_values:
-        raise ValueError("at least one epoch must be selected")
-    start_epoch = epoch_values[0]
-    end_epoch = epoch_values[-1]
     result = new_result("gov_action_voting_stats_adastat")
     result_started = time.time()
-    result["epochs_compared"] = len(epoch_values)
     result.update(
         {
             "selection_mode": "LATEST_PER_PROPOSAL",
+            "latest_status_epoch_filter": {
+                "start_epoch": start_epoch,
+                "end_epoch": end_epoch,
+            },
             "selected_proposals": 0,
             "eligible_proposals": 0,
             "compared_proposals": 0,
@@ -314,8 +313,8 @@ def run_verification(
     reasons: Counter[str] = Counter()
 
     logger.log(
-        f"############ Latest proposal statuses with latest epoch "
-        f"{start_epoch} -> {end_epoch} ############"
+        f"############ Latest proposal statuses "
+        f"({_latest_status_epoch_scope(start_epoch, end_epoch)}) ############"
     )
     try:
         proposals = load_yaci_proposals(
@@ -328,8 +327,7 @@ def run_verification(
         result["errors"] += 1
         reasons["STORE_ERROR"] += 1
         logger.error(
-            f"Yaci Store latest-status query/data error for epochs "
-            f"{start_epoch}..{end_epoch}",
+            "Yaci Store latest-status query/data error",
             exc,
         )
         proposals = []
@@ -339,10 +337,18 @@ def run_verification(
     proposals_by_epoch: Dict[int, list[YaciProposal]] = {}
     for proposal in proposals:
         proposals_by_epoch.setdefault(proposal.epoch, []).append(proposal)
+    result["epochs_compared"] = len(proposals_by_epoch)
 
     if not proposals and not result["errors"]:
         logger.log("  No latest Store rows selected.")
         logger.log()
+
+    active_count = sum(proposal.status == "ACTIVE" for proposal in proposals)
+    if active_count:
+        logger.log(
+            f"  Skipped {active_count} ACTIVE proposal(s): "
+            "AdaStat has no historical voting snapshot."
+        )
 
     for epoch in sorted(proposals_by_epoch):
         epoch_proposals = proposals_by_epoch[epoch]
@@ -362,11 +368,12 @@ def run_verification(
             _write_coverage_rows(coverage_writer, client.network, comparison)
             result["proposals"].append(_proposal_payload(comparison))
 
-            logger.log(
-                f"  {proposal.tx_hash}#{proposal.index}: {comparison.result} "
-                f"({comparison.compared_fields}/{len(ALL_FIELDS)} fields)"
-                + (f" [{comparison.reason}]" if comparison.reason else "")
-            )
+            if proposal.status != "ACTIVE":
+                logger.log(
+                    f"  {proposal.tx_hash}#{proposal.index}: {comparison.result} "
+                    f"({comparison.compared_fields}/{len(ALL_FIELDS)} fields)"
+                    + (f" [{comparison.reason}]" if comparison.reason else "")
+                )
 
             for mismatch in comparison.mismatches:
                 epoch_mismatched = True
@@ -580,12 +587,12 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  %(prog)s --network preview --epoch 1369 --config config.json
+  %(prog)s --network preview --config config.json
   %(prog)s --network mainnet --start-epoch 640 --end-epoch 650 --config config.json
-  %(prog)s --network preview --epoch 1369 --proposal TX_HASH#0 --config config.json
+  %(prog)s --network preview --proposal TX_HASH#0 --config config.json
         """,
     )
-    selection = parser.add_mutually_exclusive_group(required=True)
+    selection = parser.add_mutually_exclusive_group()
     selection.add_argument(
         "--epoch",
         type=int,
@@ -594,12 +601,12 @@ Examples:
     selection.add_argument(
         "--start-epoch",
         type=int,
-        help="First latest-row epoch to select (inclusive)",
+        help="Select latest Store rows at or after this epoch",
     )
     parser.add_argument(
         "--end-epoch",
         type=int,
-        help="Last latest-row epoch to select (inclusive)",
+        help="Select latest Store rows at or before this epoch",
     )
     parser.add_argument("--proposal", help="Restrict selection to TX_HASH#INDEX")
 
@@ -631,7 +638,7 @@ Examples:
 def validate_selection(
     parser: argparse.ArgumentParser,
     args: argparse.Namespace,
-) -> Tuple[Sequence[int], Optional[Tuple[str, int]]]:
+) -> Tuple[Optional[int], Optional[int], Optional[Tuple[str, int]]]:
     if args.epoch is not None:
         if args.end_epoch is not None:
             parser.error("--end-epoch cannot be used with --epoch")
@@ -639,9 +646,15 @@ def validate_selection(
     else:
         start_epoch = args.start_epoch
         end_epoch = args.end_epoch
-        if end_epoch is None:
-            parser.error("--end-epoch is required with --start-epoch")
-    if start_epoch is None or start_epoch < 0 or end_epoch < start_epoch:
+    if (
+        (start_epoch is not None and start_epoch < 0)
+        or (end_epoch is not None and end_epoch < 0)
+        or (
+            start_epoch is not None
+            and end_epoch is not None
+            and end_epoch < start_epoch
+        )
+    ):
         parser.error("epoch values must be non-negative and end epoch must be >= start epoch")
 
     proposal_filter = None
@@ -650,7 +663,22 @@ def validate_selection(
             proposal_filter = parse_legacy_proposal_id(args.proposal)
         except ReferenceContractError as exc:
             parser.error(str(exc))
-    return range(start_epoch, end_epoch + 1), proposal_filter
+    return start_epoch, end_epoch, proposal_filter
+
+
+def _latest_status_epoch_scope(
+    start_epoch: Optional[int],
+    end_epoch: Optional[int],
+) -> str:
+    if start_epoch is None and end_epoch is None:
+        return "all latest-row epochs"
+    if start_epoch == end_epoch:
+        return f"latest-row epoch {start_epoch}"
+    if start_epoch is None:
+        return f"latest-row epoch <= {end_epoch}"
+    if end_epoch is None:
+        return f"latest-row epoch >= {start_epoch}"
+    return f"latest-row epochs {start_epoch} -> {end_epoch}"
 
 
 def redact_command(argv: Sequence[str]) -> str:
@@ -708,7 +736,7 @@ def render_detail(result: Mapping[str, Any]) -> str:
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    epochs, proposal_filter = validate_selection(parser, args)
+    start_epoch, end_epoch, proposal_filter = validate_selection(parser, args)
     try:
         settings = resolve_verifier_settings(args)
     except (OSError, ValueError, json.JSONDecodeError) as exc:
@@ -750,7 +778,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         result = run_verification(
             connection,
             client,
-            epochs,
+            start_epoch,
+            end_epoch,
             proposal_filter,
             report_dir,
             logger,
@@ -797,13 +826,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         result["status"] = "OK"
 
     finished_at = datetime.now()
-    start_epoch = epochs.start if isinstance(epochs, range) else epochs[0]
-    end_epoch = epochs.stop - 1 if isinstance(epochs, range) else epochs[-1]
-    epoch_label = (
-        f"epoch {start_epoch}"
-        if start_epoch == end_epoch
-        else f"epochs {start_epoch} -> {end_epoch}"
-    )
+    epoch_label = _latest_status_epoch_scope(start_epoch, end_epoch)
     summary_text = render_summary(
         [result],
         "compare_gov_action_voting_stats",

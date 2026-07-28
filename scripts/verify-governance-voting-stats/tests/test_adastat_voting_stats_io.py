@@ -259,20 +259,37 @@ class YaciStoreLoaderTest(unittest.TestCase):
             1369,
         )
 
-    def test_loads_latest_rows_in_one_parameterized_query(self):
+    def test_loads_all_latest_rows_without_epoch_filter(self):
         cursor = FakeCursor([self.row])
-        proposals = load_yaci_proposals(FakeConnection(cursor), 1369)
+        proposals = load_yaci_proposals(FakeConnection(cursor))
 
         self.assertEqual(1, len(proposals))
         self.assertEqual("NEW_COMMITTEE", proposals[0].action_type)
         self.assertEqual("0.5060", str(proposals[0].voting_stats["drep_approval_ratio"]))
-        self.assertEqual((1369, 1369), cursor.params)
+        self.assertEqual((), cursor.params)
         self.assertIn(
             "DISTINCT ON (gov_action_tx_hash, gov_action_index)",
             cursor.query,
         )
-        self.assertIn("WHERE epoch BETWEEN %s AND %s", cursor.query)
+        self.assertNotIn("WHERE epoch", cursor.query)
         self.assertNotIn(self.tx_hash, cursor.query)
+
+    def test_applies_optional_epoch_bounds(self):
+        cases = (
+            (1369, None, (1369,), "WHERE epoch >= %s"),
+            (None, 1370, (1370,), "WHERE epoch <= %s"),
+            (1369, 1370, (1369, 1370), "WHERE epoch BETWEEN %s AND %s"),
+        )
+        for start_epoch, end_epoch, expected_params, predicate in cases:
+            with self.subTest(start_epoch=start_epoch, end_epoch=end_epoch):
+                cursor = FakeCursor([self.row])
+                load_yaci_proposals(
+                    FakeConnection(cursor),
+                    start_epoch,
+                    end_epoch,
+                )
+                self.assertEqual(expected_params, cursor.params)
+                self.assertIn(predicate, cursor.query)
 
     def test_applies_proposal_filter_with_parameters(self):
         cursor = FakeCursor([self.row])
@@ -287,25 +304,25 @@ class YaciStoreLoaderTest(unittest.TestCase):
         self.assertIn("gov_action_index = %s", cursor.query)
 
     def test_preserves_empty_epoch_and_active_rows(self):
-        self.assertEqual([], load_yaci_proposals(FakeConnection(FakeCursor()), 1369))
+        self.assertEqual([], load_yaci_proposals(FakeConnection(FakeCursor())))
         active = list(self.row)
         active[3] = "ACTIVE"
-        proposals = load_yaci_proposals(FakeConnection(FakeCursor([tuple(active)])), 1369)
+        proposals = load_yaci_proposals(FakeConnection(FakeCursor([tuple(active)])))
         self.assertEqual("ACTIVE", proposals[0].status)
 
     def test_rejects_duplicate_and_malformed_rows(self):
         with self.assertRaises(StoreDataError):
-            load_yaci_proposals(FakeConnection(FakeCursor([self.row, self.row])), 1369)
+            load_yaci_proposals(FakeConnection(FakeCursor([self.row, self.row])))
 
         malformed = list(self.row)
         malformed[4] = None
         with self.assertRaises(StoreDataError):
-            load_yaci_proposals(FakeConnection(FakeCursor([tuple(malformed)])), 1369)
+            load_yaci_proposals(FakeConnection(FakeCursor([tuple(malformed)])))
 
     def test_wraps_database_failure(self):
         cursor = FakeCursor(error=RuntimeError("database unavailable"))
         with self.assertRaisesRegex(StoreDataError, "failed to load latest Store rows"):
-            load_yaci_proposals(FakeConnection(cursor), 1369)
+            load_yaci_proposals(FakeConnection(cursor))
 
 
 class SettingsAndReferenceReportTest(unittest.TestCase):

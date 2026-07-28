@@ -95,14 +95,30 @@ class FakeCursor:
     def __exit__(self, *_):
         return False
 
-    def execute(self, _query, params):
-        if len(params) == 2:
-            proposal_filter = None
-            start_epoch, end_epoch = params
-        else:
+    def execute(self, query, params):
+        param_index = 0
+        if "WHERE gov_action_tx_hash = %s" in query:
             proposal_filter = (params[0], params[1])
-            start_epoch, end_epoch = params[2], params[3]
-        if any(start_epoch <= epoch <= end_epoch for epoch in self.error_epochs):
+            param_index = 2
+        else:
+            proposal_filter = None
+
+        start_epoch = None
+        end_epoch = None
+        if "WHERE epoch BETWEEN %s AND %s" in query:
+            start_epoch, end_epoch = params[param_index : param_index + 2]
+        elif "WHERE epoch >= %s" in query:
+            start_epoch = params[param_index]
+        elif "WHERE epoch <= %s" in query:
+            end_epoch = params[param_index]
+
+        def epoch_in_scope(epoch):
+            return (
+                (start_epoch is None or epoch >= start_epoch)
+                and (end_epoch is None or epoch <= end_epoch)
+            )
+
+        if any(epoch_in_scope(epoch) for epoch in self.error_epochs):
             raise RuntimeError("Store unavailable")
 
         latest_by_proposal = {}
@@ -118,7 +134,7 @@ class FakeCursor:
             (
                 row
                 for row in latest_by_proposal.values()
-                if start_epoch <= row[5] <= end_epoch
+                if epoch_in_scope(row[5])
             ),
             key=lambda row: (row[5], row[0], row[1]),
         )
@@ -173,10 +189,13 @@ def run_case(test_case, rows_by_epoch, responses, epochs, error_epochs=()):
     temp_dir = tempfile.TemporaryDirectory()
     test_case.addCleanup(temp_dir.cleanup)
     logger = FakeLogger()
+    start_epoch = epochs[0] if epochs else None
+    end_epoch = epochs[-1] if epochs else None
     result = run_verification(
         FakeConnection(rows_by_epoch, error_epochs),
         FakeClient(responses),
-        epochs,
+        start_epoch,
+        end_epoch,
         None,
         temp_dir.name,
         logger,
@@ -274,13 +293,34 @@ class RunClassificationTest(unittest.TestCase):
         payload = load_payload()
         reference = parse_adastat_response(payload)
         row = store_row(payload, epoch=1370, status="ACTIVE")
-        result, _, _ = run_case(self, {1370: [row]}, {}, [1370])
+        result, logger, _ = run_case(self, {1370: [row]}, {}, [1370])
 
         self.assertEqual(1, result["inconclusive_proposals"])
         self.assertEqual({"INCONCLUSIVE_LIVE": 1}, result["reason_counts"])
         self.assertEqual(0, result["http"]["requests"])
         self.assertEqual(2, determine_exit_code(result, False))
         self.assertEqual(reference.tx_hash, row[0])
+        self.assertFalse(any(reference.tx_hash in line for line in logger.lines))
+        self.assertTrue(
+            any("Skipped 1 ACTIVE proposal(s)" in line for line in logger.lines)
+        )
+
+    def test_no_epoch_filter_processes_all_latest_terminal_rows(self):
+        payload = parameter_change_payload()
+        reference = parse_adastat_response(payload)
+        result, _, _ = run_case(
+            self,
+            {reference.ratified_epoch: [store_row(payload)]},
+            {(reference.tx_hash, reference.index): payload},
+            None,
+        )
+
+        self.assertEqual(1, result["selected_proposals"])
+        self.assertEqual(1, result["matched_proposals"])
+        self.assertEqual(
+            {"start_epoch": None, "end_epoch": None},
+            result["latest_status_epoch_filter"],
+        )
 
     def test_terminal_outcome_epoch_mismatch_is_inconclusive(self):
         payload = load_payload()
@@ -459,6 +499,23 @@ class CliSafetyTest(unittest.TestCase):
         with redirect_stderr(io.StringIO()):
             with self.assertRaises(SystemExit):
                 validate_selection(parser, args)
+
+    def test_epoch_filters_are_optional_and_support_open_bounds(self):
+        parser = build_parser()
+
+        args = parser.parse_args(["--network", "preview"])
+        self.assertEqual((None, None, None), validate_selection(parser, args))
+
+        args = parser.parse_args(
+            ["--network", "preview", "--start-epoch", "10"]
+        )
+        self.assertEqual((10, None, None), validate_selection(parser, args))
+
+        args = parser.parse_args(["--network", "preview", "--end-epoch", "20"])
+        self.assertEqual((None, 20, None), validate_selection(parser, args))
+
+        args = parser.parse_args(["--network", "preview", "--epoch", "15"])
+        self.assertEqual((15, 15, None), validate_selection(parser, args))
 
 
 if __name__ == "__main__":
