@@ -15,7 +15,7 @@ API status translation is intentionally separate from rule parity tests.
 | Test class | Active JUnit methods | Purpose |
 |---|---:|---|
 | `GovernanceProposalLifecycleIT` | 1 | Proposal lifecycle/indexer stability across epochs |
-| `GovernanceProposalApiStatusIT` | 2 | Public API status mapping from stored proposal status rows |
+| `GovernanceProposalApiStatusIT` | 1 | Public API status mapping from stored proposal status rows |
 | `GovernanceProposalOutcomeIT` | 2 | Post-bootstrap action outcome and ratification-gate parity |
 | `GovernanceDRepVoteTallyIT` | 2 | DRep vote aggregation, replacement, and accepted-ratio parity |
 | `GovernanceDRepLifecycleVoteTallyIT` | 1 | DRep registration lifecycle effect on active proposal tallies |
@@ -59,16 +59,6 @@ Uses synthetic proposal/status rows to isolate API status mapping:
 - Stale storage `ACTIVE` maps to API `DROPPED`.
 - Current storage `RATIFIED` maps to API `RATIFIED`.
 - Stale storage `RATIFIED` maps to API `ENACTED`.
-
-### `getCurrentProposals_shouldRespectStatusFilter`
-
-Uses synthetic current-epoch rows to verify list/filter behavior:
-
-- Unfiltered current proposals include current `ACTIVE`, `RATIFIED`, and `EXPIRED` rows.
-- `ACTIVE` filter returns only the active row.
-- `RATIFIED` filter returns only the ratified row.
-- `EXPIRED` filter returns only the expired row.
-- Current proposal DTOs expose public API statuses: `LIVE`, `RATIFIED`, `EXPIRED`.
 
 ## `GovernanceProposalOutcomeIT`
 

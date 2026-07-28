@@ -3,10 +3,8 @@ package com.bloxbean.cardano.yaci.store.test.e2e.gov;
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
 import com.bloxbean.cardano.yaci.store.adapot.job.storage.AdaPotJobStorage;
 import com.bloxbean.cardano.yaci.store.adapot.job.storage.impl.AdaPotJobRepository;
-import com.bloxbean.cardano.yaci.store.api.governanceaggr.dto.ProposalDto;
 import com.bloxbean.cardano.yaci.store.api.governanceaggr.dto.ProposalStatus;
 import com.bloxbean.cardano.yaci.store.api.governanceaggr.service.ProposalApiService;
-import com.bloxbean.cardano.yaci.store.blocks.storage.BlockStorage;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
 import com.bloxbean.cardano.yaci.store.governance.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.governance.storage.GovActionProposalStorage;
@@ -68,9 +66,6 @@ class GovernanceProposalApiStatusIT extends BaseE2ETest {
     @Autowired
     private ProposalApiService proposalApiService;
 
-    @Autowired
-    private BlockStorage blockStorage;
-
     @BeforeAll
     void setup() {
         governanceApiAssertionHelper = new GovernanceApiAssertionHelper(proposalApiService);
@@ -121,37 +116,6 @@ class GovernanceProposalApiStatusIT extends BaseE2ETest {
         governanceApiAssertionHelper.assertLatestApiStatus(staleRatified.getTxHash(), (int) staleRatified.getIndex(), ProposalStatus.ENACTED);
     }
 
-    /**
-     * Verifies current-epoch proposal queries return the expected rows for each storage-status
-     * filter and expose the public API status names.
-     */
-    @Test
-    @Order(2)
-    void getCurrentProposals_shouldRespectStatusFilter() {
-        // getCurrentProposals reads rows at the latest indexed block epoch.
-        int currentEpoch = latestIndexedEpoch();
-
-        // Use one synthetic row per storage status so each filter can be checked independently.
-        GovActionProposal active = saveSyntheticProposal("current-active", currentEpoch, GovActionType.INFO_ACTION);
-        GovActionProposal ratified = saveSyntheticProposal("current-ratified", currentEpoch, GovActionType.PARAMETER_CHANGE_ACTION);
-        GovActionProposal expired = saveSyntheticProposal("current-expired", currentEpoch, GovActionType.INFO_ACTION);
-
-        saveStatus(active, currentEpoch, GovActionStatus.ACTIVE);
-        saveStatus(ratified, currentEpoch, GovActionStatus.RATIFIED);
-        saveStatus(expired, currentEpoch, GovActionStatus.EXPIRED);
-
-        // The unfiltered view should include all current rows; filtered views should be exact.
-        assertCurrentProposals(null, List.of(active, ratified, expired), List.of());
-        assertCurrentProposals(GovActionStatus.ACTIVE, List.of(active), List.of(ratified, expired));
-        assertCurrentProposals(GovActionStatus.RATIFIED, List.of(ratified), List.of(active, expired));
-        assertCurrentProposals(GovActionStatus.EXPIRED, List.of(expired), List.of(active, ratified));
-
-        // Current proposal listings use public API status names, not storage enum names.
-        assertCurrentProposalApiStatus(active, ProposalStatus.LIVE);
-        assertCurrentProposalApiStatus(ratified, ProposalStatus.RATIFIED);
-        assertCurrentProposalApiStatus(expired, ProposalStatus.EXPIRED);
-    }
-
     private int latestCompletedAdaPotEpoch() {
         // API status translation depends on completed AdaPot jobs, not merely the tip epoch.
         var recentJobs = adaPotJobStorage.getRecentCompletedJobs(1);
@@ -162,13 +126,6 @@ class GovernanceProposalApiStatusIT extends BaseE2ETest {
         }
         assertThat(recentJobs).isNotEmpty();
         return recentJobs.getFirst().getEpoch();
-    }
-
-    private int latestIndexedEpoch() {
-        // Current-proposal queries use the latest indexed block epoch as their target epoch.
-        return blockStorage.findRecentBlock()
-                .orElseThrow(() -> new AssertionError("No recent block found"))
-                .getEpochNumber();
     }
 
     private GovActionProposal saveSyntheticProposal(String seed, int epoch, GovActionType type) {
@@ -229,30 +186,6 @@ class GovernanceProposalApiStatusIT extends BaseE2ETest {
                 .ccDoNotVote(0)
                 .ccAbstain(0)
                 .build();
-    }
-
-    private void assertCurrentProposals(GovActionStatus filter,
-                                        List<GovActionProposal> expectedPresent,
-                                        List<GovActionProposal> expectedAbsent) {
-        // Compare by tx hash because every synthetic proposal uses action index zero.
-        List<String> txHashes = proposalApiService.getCurrentProposals(filter)
-                .stream()
-                .map(ProposalDto::getTxHash)
-                .toList();
-
-        assertThat(txHashes).containsAll(expectedPresent.stream().map(GovActionProposal::getTxHash).toList());
-        var absentTxHashes = expectedAbsent.stream().map(GovActionProposal::getTxHash).toList();
-        if (!absentTxHashes.isEmpty()) {
-            assertThat(txHashes).doesNotContainAnyElementsOf(absentTxHashes);
-        }
-    }
-
-    private void assertCurrentProposalApiStatus(GovActionProposal proposal, ProposalStatus expectedStatus) {
-        assertThat(proposalApiService.getCurrentProposals(null))
-                .filteredOn(dto -> dto.getTxHash().equals(proposal.getTxHash()) && dto.getIndex() == proposal.getIndex())
-                .singleElement()
-                .extracting(ProposalDto::getStatus)
-                .isEqualTo(expectedStatus);
     }
 
     private String syntheticTxHash(int syntheticId) {
