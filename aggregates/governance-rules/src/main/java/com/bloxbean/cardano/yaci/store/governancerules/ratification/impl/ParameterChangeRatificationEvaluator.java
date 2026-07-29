@@ -53,15 +53,13 @@ public class ParameterChangeRatificationEvaluator implements RatificationEvaluat
             }
         } else {
             VotingStatus dRepVotingResult = new DRepVotingEvaluator().evaluate(context.getVotingData(), votingEvaluationContext);
+            isAccepted = committeeVotingResult.equals(VotingStatus.PASS_THRESHOLD)
+                    && dRepVotingResult.equals(VotingStatus.PASS_THRESHOLD);
 
             if (spoVotingRequired) {
                 VotingStatus spoVotingResult = new SPOVotingEvaluator().evaluate(context.getVotingData(), votingEvaluationContext);
-                if (ppGroupChangeList.size() == 1) {
-                    isAccepted = committeeVotingResult.equals(VotingStatus.PASS_THRESHOLD) && spoVotingResult.equals(VotingStatus.PASS_THRESHOLD);
-                } else
-                    isAccepted = committeeVotingResult.equals(VotingStatus.PASS_THRESHOLD) && spoVotingResult.equals(VotingStatus.PASS_THRESHOLD) && dRepVotingResult.equals(VotingStatus.PASS_THRESHOLD);
-            } else
-                isAccepted = committeeVotingResult.equals(VotingStatus.PASS_THRESHOLD) && dRepVotingResult.equals(VotingStatus.PASS_THRESHOLD);
+                isAccepted = isAccepted && spoVotingResult.equals(VotingStatus.PASS_THRESHOLD);
+            }
         }
 
         if (context.isLastRatificationOpportunity()) {
@@ -79,16 +77,15 @@ public class ParameterChangeRatificationEvaluator implements RatificationEvaluat
             throw new IllegalArgumentException("Committee votes are required for Parameter Change actions");
         }
 
-        if (context.isBootstrapPhase()) {
-            if (context.getVotingData().getDrepVotes() == null) {
-                throw new IllegalArgumentException("DRep votes are required for Parameter Change actions");
-            }
-            ParameterChangeAction parameterChangeAction = (ParameterChangeAction) context.getGovAction();
-            List<ProtocolParamGroup> ppGroupChangeList = ProtocolParamUtil.getGroupsWithNonNullField(parameterChangeAction.getProtocolParamUpdate());
+        if (!context.isBootstrapPhase() && context.getVotingData().getDrepVotes() == null) {
+            throw new IllegalArgumentException("DRep votes are required for Parameter Change actions");
+        }
 
-            if (ppGroupChangeList.contains(ProtocolParamGroup.SECURITY) && context.getVotingData().getSpoVotes() == null) {
-                throw new IllegalArgumentException("SPO votes are required for Parameter Change actions changing SECURITY parameters");
-            }
+        ParameterChangeAction parameterChangeAction = (ParameterChangeAction) context.getGovAction();
+        List<ProtocolParamGroup> ppGroupChangeList = ProtocolParamUtil.getGroupsWithNonNullField(parameterChangeAction.getProtocolParamUpdate());
+
+        if (ppGroupChangeList.contains(ProtocolParamGroup.SECURITY) && context.getVotingData().getSpoVotes() == null) {
+            throw new IllegalArgumentException("SPO votes are required for Parameter Change actions changing SECURITY parameters");
         }
     }
 

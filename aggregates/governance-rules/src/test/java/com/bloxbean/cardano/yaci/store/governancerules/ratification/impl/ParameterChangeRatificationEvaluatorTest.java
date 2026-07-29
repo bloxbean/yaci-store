@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -114,12 +115,6 @@ class ParameterChangeRatificationEvaluatorTest {
                                 "hot1", com.bloxbean.cardano.yaci.core.model.governance.Vote.YES,
                                 "hot2", com.bloxbean.cardano.yaci.core.model.governance.Vote.YES))
                         .build())
-                .drepVotes(VotingData.DRepVotes.builder()
-                        .yesVoteStake(BigInteger.ZERO)
-                        .noVoteStake(BigInteger.ZERO)
-                        .noConfidenceStake(BigInteger.ZERO)
-                        .doNotVoteStake(BigInteger.ZERO)
-                        .build())
                 .spoVotes(VotingData.SPOVotes.builder()
                         .yesVoteStake(BigInteger.ZERO)
                         .delegateToAutoAbstainDRepStake(BigInteger.ZERO)
@@ -156,27 +151,7 @@ class ParameterChangeRatificationEvaluatorTest {
 
     @Test
     void evaluate_returnsAccept_whenBootstrap_securityParam_committeeAndSpoPass() {
-        VotingData votingData = VotingData.builder()
-                .committeeVotes(VotingData.CommitteeVotes.builder()
-                        .votes(Map.of(
-                                "hot1", com.bloxbean.cardano.yaci.core.model.governance.Vote.YES,
-                                "hot2", com.bloxbean.cardano.yaci.core.model.governance.Vote.YES))
-                        .build())
-                .drepVotes(VotingData.DRepVotes.builder()
-                        .yesVoteStake(BigInteger.ZERO)
-                        .noVoteStake(BigInteger.ZERO)
-                        .noConfidenceStake(BigInteger.ZERO)
-                        .doNotVoteStake(BigInteger.ZERO)
-                        .build())
-                .spoVotes(VotingData.SPOVotes.builder()
-                        .yesVoteStake(BigInteger.valueOf(1000))
-                        .delegateToAutoAbstainDRepStake(BigInteger.ZERO)
-                        .delegateToNoConfidenceDRepStake(BigInteger.ZERO)
-                        .abstainVoteStake(BigInteger.ZERO)
-                        .doNotVoteStake(BigInteger.ZERO)
-                        .totalStake(BigInteger.valueOf(1000))
-                        .build())
-                .build();
+        VotingData votingData = buildPassingVotesWithCommitteeYes(false, true);
 
         ParameterChangeAction paramChange = mock(ParameterChangeAction.class);
         when(paramChange.getType()).thenReturn(GovActionType.PARAMETER_CHANGE_ACTION);
@@ -200,19 +175,7 @@ class ParameterChangeRatificationEvaluatorTest {
 
     @Test
     void evaluate_returnsAccept_whenBootstrap_nonSecurityParam_committeePassesAlone() {
-        VotingData votingData = VotingData.builder()
-                .committeeVotes(VotingData.CommitteeVotes.builder()
-                        .votes(Map.of(
-                                "hot1", com.bloxbean.cardano.yaci.core.model.governance.Vote.YES,
-                                "hot2", com.bloxbean.cardano.yaci.core.model.governance.Vote.YES))
-                        .build())
-                .drepVotes(VotingData.DRepVotes.builder()
-                        .yesVoteStake(BigInteger.ZERO)
-                        .noVoteStake(BigInteger.ZERO)
-                        .noConfidenceStake(BigInteger.ZERO)
-                        .doNotVoteStake(BigInteger.ZERO)
-                        .build())
-                .build();
+        VotingData votingData = buildPassingVotesWithCommitteeYes(false, false);
 
         ParameterChangeAction paramChange = mock(ParameterChangeAction.class);
         when(paramChange.getType()).thenReturn(GovActionType.PARAMETER_CHANGE_ACTION);
@@ -236,6 +199,64 @@ class ParameterChangeRatificationEvaluatorTest {
     }
 
     @Test
+    void evaluate_throwsWhenBootstrapSecurityParamIsMissingSpoVotes() {
+        RatificationContext context = buildRatificationContext(
+                ProtocolParamUpdate.builder().minFeeA(10).build(),
+                buildPassingVotesWithCommitteeYes(false, false),
+                true);
+
+        assertThatThrownBy(() -> evaluator.evaluate(context))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("SPO votes are required for Parameter Change actions changing SECURITY parameters");
+    }
+
+    @Test
+    void evaluate_throwsWhenPostBootstrapNonSecurityParamIsMissingDrepVotes() {
+        RatificationContext context = buildRatificationContext(
+                ProtocolParamUpdate.builder().nOpt(50).build(),
+                buildPassingVotesWithCommitteeYes(false, false),
+                false);
+
+        assertThatThrownBy(() -> evaluator.evaluate(context))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("DRep votes are required for Parameter Change actions");
+    }
+
+    @Test
+    void evaluate_returnsAccept_whenPostBootstrapNonSecurityParamHasNoSpoVotes() {
+        RatificationContext context = buildRatificationContext(
+                ProtocolParamUpdate.builder().nOpt(50).build(),
+                buildPassingVotesWithCommitteeYes(true, false),
+                false);
+
+        assertThat(evaluator.evaluate(context)).isEqualTo(RatificationResult.ACCEPT);
+    }
+
+    @Test
+    void evaluate_throwsWhenPostBootstrapSecurityParamIsMissingDrepVotes() {
+        RatificationContext context = buildRatificationContext(
+                ProtocolParamUpdate.builder().minFeeA(10).build(),
+                buildPassingVotesWithCommitteeYes(false, true),
+                false);
+
+        assertThatThrownBy(() -> evaluator.evaluate(context))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("DRep votes are required for Parameter Change actions");
+    }
+
+    @Test
+    void evaluate_throwsWhenPostBootstrapSecurityParamIsMissingSpoVotes() {
+        RatificationContext context = buildRatificationContext(
+                ProtocolParamUpdate.builder().minFeeA(10).build(),
+                buildPassingVotesWithCommitteeYes(true, false),
+                false);
+
+        assertThatThrownBy(() -> evaluator.evaluate(context))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("SPO votes are required for Parameter Change actions changing SECURITY parameters");
+    }
+
+    @Test
     void evaluate_returnsReject_whenOutOfLifecycle() {
         ParameterChangeAction paramChange = mock(ParameterChangeAction.class);
         when(paramChange.getType()).thenReturn(GovActionType.PARAMETER_CHANGE_ACTION);
@@ -256,26 +277,57 @@ class ParameterChangeRatificationEvaluatorTest {
     }
 
     private VotingData buildFullPassingVotesWithCommitteeYes() {
-        return VotingData.builder()
+        return buildPassingVotesWithCommitteeYes(true, true);
+    }
+
+    private VotingData buildPassingVotesWithCommitteeYes(boolean includeDrepVotes, boolean includeSpoVotes) {
+        var votingDataBuilder = VotingData.builder()
                 .committeeVotes(VotingData.CommitteeVotes.builder()
                         .votes(Map.of(
                                 "hot1", com.bloxbean.cardano.yaci.core.model.governance.Vote.YES,
                                 "hot2", com.bloxbean.cardano.yaci.core.model.governance.Vote.YES))
-                        .build())
-                .drepVotes(VotingData.DRepVotes.builder()
+                        .build());
+
+        if (includeDrepVotes) {
+            votingDataBuilder.drepVotes(VotingData.DRepVotes.builder()
                         .yesVoteStake(BigInteger.valueOf(1000))
                         .noVoteStake(BigInteger.ZERO)
                         .noConfidenceStake(BigInteger.ZERO)
                         .doNotVoteStake(BigInteger.ZERO)
-                        .build())
-                .spoVotes(VotingData.SPOVotes.builder()
+                        .build());
+        }
+
+        if (includeSpoVotes) {
+            votingDataBuilder.spoVotes(VotingData.SPOVotes.builder()
                         .yesVoteStake(BigInteger.valueOf(1000))
                         .delegateToAutoAbstainDRepStake(BigInteger.ZERO)
                         .delegateToNoConfidenceDRepStake(BigInteger.ZERO)
                         .abstainVoteStake(BigInteger.ZERO)
                         .doNotVoteStake(BigInteger.ZERO)
                         .totalStake(BigInteger.valueOf(1000))
-                        .build())
+                        .build());
+        }
+
+        return votingDataBuilder.build();
+    }
+
+    private RatificationContext buildRatificationContext(ProtocolParamUpdate protocolParamUpdate,
+                                                          VotingData votingData,
+                                                          boolean isBootstrapPhase) {
+        ParameterChangeAction paramChange = mock(ParameterChangeAction.class);
+        when(paramChange.getType()).thenReturn(GovActionType.PARAMETER_CHANGE_ACTION);
+        when(paramChange.getGovActionId()).thenReturn(null);
+        when(paramChange.getProtocolParamUpdate()).thenReturn(protocolParamUpdate);
+
+        GovernanceContext governanceContext = isBootstrapPhase
+                ? buildBootstrapGovernanceContext(ConstitutionCommitteeState.NORMAL, false, 5)
+                : buildGovernanceContext(ConstitutionCommitteeState.NORMAL, false, 5);
+
+        return RatificationContext.builder()
+                .govAction(paramChange)
+                .votingData(votingData)
+                .governanceContext(governanceContext)
+                .maxAllowedVotingEpoch(8)
                 .build();
     }
 
