@@ -21,7 +21,7 @@ API status translation is intentionally separate from rule parity tests.
 | `GovernanceDRepLifecycleVoteTallyIT` | 1 | DRep registration lifecycle effect on active proposal tallies |
 | `GovernanceSPOVoteTallyIT` | 2 | SPO stake distribution and mixed voting-group parity |
 | `GovernanceCommitteeVoteTallyIT` | 1 | Committee size and quorum parity |
-| `GovernanceRuleEdgeIT` | 5 active, 1 disabled | Default-vote reshaping and voter eligibility edges |
+| `GovernanceRuleEdgeIT` | 6 active, 1 disabled | Proposal-scoped/default-vote reshaping and voter eligibility edges |
 | `GovernanceInterProposalIT` | 5 | Multi-proposal ordering, drop, delay, and effect-context behavior |
 | `GovernanceEffectContextIT` | 2 active, 1 disabled | Post-audit enacted-state effect contexts |
 
@@ -148,6 +148,19 @@ Covers mixed protocol parameter groups:
 ## `GovernanceRuleEdgeIT`
 
 ### Active methods
+
+#### `spoAlwaysAbstainDefault_shouldBeAppliedPerProposal`
+
+- Proposals A and B are created in the same epoch and evaluated from the same
+  SPO stake snapshot; B is a security protocol-parameter change.
+- Pool P delegates its reward account to `AlwaysAbstain` and votes Yes only on
+  A. Pool Q uses the ordinary default No and votes Yes only on B.
+- B includes P in effective Abstain rather than do-not-vote/effective No, while
+  Q supplies B's explicit Yes stake.
+- DRep and committee votes deliberately pass their thresholds, leaving SPO
+  classification as the only deciding rule for B.
+- B is ratified when P's default is classified independently for B. Classifying
+  P as No would put its stake in the denominator and fail the SPO threshold.
 
 #### `predefinedDRepAlwaysNoConfidence_votesNoForOtherActions`
 
