@@ -39,9 +39,9 @@ class GovernanceDRepLifecycleVoteTallyIT extends AbstractGovernanceVoteTallyIT {
                 GovActionType.NEW_CONSTITUTION,
                 this::newConstitutionAction,
                 proposal -> {
-                    // If the YES DRep stayed registered, YES/(YES+NO) would be roughly
-                    // 910,000 / 1,020,000 ~= 0.89 and clear the NewConstitution DRep threshold.
-                    // The unregister transaction must remove that YES vote from effective ledger state.
+                    // Re-registering the same credential restores its voting power, but must not restore
+                    // the cleared YES vote. Otherwise, YES/(YES+NO) would be roughly
+                    // 910,000 / 1,020,000 ~= 0.89 and incorrectly clear the NewConstitution threshold.
                     governanceTxHelper.castDRepVote(account0, removedYesDRep, proposal.storeGovActionId(), Vote.YES);
                     governanceTxHelper.castDRepVote(account0, remainingNoDRep, proposal.storeGovActionId(), Vote.NO);
                     governanceTxHelper.unregisterDRep(account0, removedYesDRep);
