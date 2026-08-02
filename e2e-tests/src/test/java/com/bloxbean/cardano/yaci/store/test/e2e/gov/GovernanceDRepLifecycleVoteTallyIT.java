@@ -4,6 +4,7 @@ import com.bloxbean.cardano.client.account.Account;
 import com.bloxbean.cardano.client.transaction.spec.governance.Vote;
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
+import com.bloxbean.cardano.yaci.store.test.e2e.common.GovernanceTxHelper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -22,10 +23,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 class GovernanceDRepLifecycleVoteTallyIT extends AbstractGovernanceVoteTallyIT {
 
     /**
-     * A DRep deregistration removes that DRep's effective votes from active proposals.
+     * Re-registering a DRep does not restore votes cleared by its earlier deregistration.
      */
     @Test
-    void dRepDeregistration_shouldClearEffectiveVoteForProposal() {
+    void dRepReregistration_shouldNotReviveStaleVoteAndShouldAcceptNewVote() {
         ensureDRepUnregisterFixture();
 
         Account removedYesDRep = accountAt(5);
@@ -34,7 +35,7 @@ class GovernanceDRepLifecycleVoteTallyIT extends AbstractGovernanceVoteTallyIT {
         BigInteger remainingNoStake = ledgerDRepStake(com.bloxbean.cardano.client.governance.GovId.toDrep(remainingNoDRep.drepId()));
 
         assertProposalScenario(
-                "DRep deregistration clears an earlier YES vote before ratification",
+                "DRep re-registration does not revive an earlier YES vote",
                 GovActionType.NEW_CONSTITUTION,
                 this::newConstitutionAction,
                 proposal -> {
@@ -44,6 +45,7 @@ class GovernanceDRepLifecycleVoteTallyIT extends AbstractGovernanceVoteTallyIT {
                     governanceTxHelper.castDRepVote(account0, removedYesDRep, proposal.storeGovActionId(), Vote.YES);
                     governanceTxHelper.castDRepVote(account0, remainingNoDRep, proposal.storeGovActionId(), Vote.NO);
                     governanceTxHelper.unregisterDRep(account0, removedYesDRep);
+                    governanceTxHelper.registerDRep(account0, removedYesDRep, GovernanceTxHelper.defaultAnchor());
                     castCommitteeYesVotes(proposal, committeeAccounts.size());
                 },
                 GovActionStatus.EXPIRED,
@@ -51,6 +53,24 @@ class GovernanceDRepLifecycleVoteTallyIT extends AbstractGovernanceVoteTallyIT {
                     assertThat(removedYesStake).as("removed DRep fixture stake").isPositive();
                     assertStake("deregistered DRep YES stake", stats.getDrepYesVoteStake(), BigInteger.ZERO);
                     assertStake("remaining DRep NO stake", stats.getDrepNoVoteStake(), remainingNoStake);
+                    assertThat(nz(stats.getDrepApprovalRatio())).isZero();
+                });
+
+        assertProposalScenario(
+                "DRep vote after re-registration replaces the cleared vote",
+                GovActionType.NEW_CONSTITUTION,
+                this::newConstitutionAction,
+                proposal -> {
+                    governanceTxHelper.castDRepVote(account0, removedYesDRep, proposal.storeGovActionId(), Vote.YES);
+                    governanceTxHelper.unregisterDRep(account0, removedYesDRep);
+                    governanceTxHelper.registerDRep(account0, removedYesDRep, GovernanceTxHelper.defaultAnchor());
+                    governanceTxHelper.castDRepVote(account0, removedYesDRep, proposal.storeGovActionId(), Vote.NO);
+                    castCommitteeYesVotes(proposal, committeeAccounts.size());
+                },
+                GovActionStatus.EXPIRED,
+                stats -> {
+                    assertStake("cleared DRep YES stake", stats.getDrepYesVoteStake(), BigInteger.ZERO);
+                    assertStake("post-registration DRep NO stake", stats.getDrepNoVoteStake(), removedYesStake);
                     assertThat(nz(stats.getDrepApprovalRatio())).isZero();
                 });
     }
