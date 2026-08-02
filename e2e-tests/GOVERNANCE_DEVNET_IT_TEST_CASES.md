@@ -114,11 +114,11 @@ Covers post-bootstrap qualifier gates where votes would otherwise be sufficient:
 
 ### `dRepReregistration_shouldNotReviveStaleVoteAndShouldAcceptNewVote`
 
-- A DRep with dominant stake votes `YES`, unregisters, and re-registers the
-  same credential without casting a new vote for the proposal.
+- A DRep with dominant stake votes `YES`, unregisters, re-registers the same
+  credential, and restores its delegation without casting a new vote for the proposal.
 - A smaller DRep votes `NO`.
-- Re-registration restores the DRep's voting power but does not restore the
-  cleared `YES` vote, so the proposal expires.
+- Re-registration plus a new delegation restores the DRep's voting power but
+  does not restore the cleared `YES` vote, so the proposal expires.
 - A control proposal verifies that a new `NO` vote cast after re-registration
   is counted while the earlier `YES` vote remains cleared.
 - The test asserts effective voting stats and DB-vs-ledger outcome, not deletion of raw historical vote rows.

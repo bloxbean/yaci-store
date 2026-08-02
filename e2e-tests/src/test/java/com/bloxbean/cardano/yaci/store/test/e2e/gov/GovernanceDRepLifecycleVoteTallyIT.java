@@ -39,13 +39,13 @@ class GovernanceDRepLifecycleVoteTallyIT extends AbstractGovernanceVoteTallyIT {
                 GovActionType.NEW_CONSTITUTION,
                 this::newConstitutionAction,
                 proposal -> {
-                    // Re-registering the same credential restores its voting power, but must not restore
-                    // the cleared YES vote. Otherwise, YES/(YES+NO) would be roughly
+                    // Re-registering the same credential and restoring its delegation returns its voting
+                    // power, but must not restore the cleared YES vote. Otherwise, YES/(YES+NO) would be roughly
                     // 910,000 / 1,020,000 ~= 0.89 and incorrectly clear the NewConstitution threshold.
                     governanceTxHelper.castDRepVote(account0, removedYesDRep, proposal.storeGovActionId(), Vote.YES);
                     governanceTxHelper.castDRepVote(account0, remainingNoDRep, proposal.storeGovActionId(), Vote.NO);
                     governanceTxHelper.unregisterDRep(account0, removedYesDRep);
-                    governanceTxHelper.registerDRep(account0, removedYesDRep, GovernanceTxHelper.defaultAnchor());
+                    registerDRepAndRestoreDelegation(removedYesDRep);
                     castCommitteeYesVotes(proposal, committeeAccounts.size());
                 },
                 GovActionStatus.EXPIRED,
@@ -63,7 +63,7 @@ class GovernanceDRepLifecycleVoteTallyIT extends AbstractGovernanceVoteTallyIT {
                 proposal -> {
                     governanceTxHelper.castDRepVote(account0, removedYesDRep, proposal.storeGovActionId(), Vote.YES);
                     governanceTxHelper.unregisterDRep(account0, removedYesDRep);
-                    governanceTxHelper.registerDRep(account0, removedYesDRep, GovernanceTxHelper.defaultAnchor());
+                    registerDRepAndRestoreDelegation(removedYesDRep);
                     governanceTxHelper.castDRepVote(account0, removedYesDRep, proposal.storeGovActionId(), Vote.NO);
                     castCommitteeYesVotes(proposal, committeeAccounts.size());
                 },
@@ -73,5 +73,13 @@ class GovernanceDRepLifecycleVoteTallyIT extends AbstractGovernanceVoteTallyIT {
                     assertStake("post-registration DRep NO stake", stats.getDrepNoVoteStake(), removedYesStake);
                     assertThat(nz(stats.getDrepApprovalRatio())).isZero();
                 });
+    }
+
+    private void registerDRepAndRestoreDelegation(Account drepAccount) {
+        governanceTxHelper.registerDRep(account0, drepAccount, GovernanceTxHelper.defaultAnchor());
+        governanceTxHelper.delegateVotingPowerToDRep(
+                account0,
+                drepAccount,
+                com.bloxbean.cardano.client.governance.GovId.toDrep(drepAccount.drepId()));
     }
 }
