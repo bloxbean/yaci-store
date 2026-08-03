@@ -116,7 +116,8 @@ public class BFBlockService {
         BFBlockRow block = requireBlock(hashOrNumber);
         long blockNumber = requireBlockNumber(block);
 
-        List<BFBlockAddressTxRow> rows = bfBlocksStorageReader.findBlockAddressTransactions(blockNumber, page, count);
+        List<BFBlockAddressTxRow> rows =
+                bfBlocksStorageReader.findBlockAddressTransactions(blockNumber, block.hash(), page, count);
 
         Map<String, LinkedHashMap<String, BFBlockAddressTxDTO>> addresses = new LinkedHashMap<>();
         for (BFBlockAddressTxRow row : rows) {
