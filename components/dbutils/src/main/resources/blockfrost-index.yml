@@ -3,9 +3,9 @@
     - name: idx_address_utxo_owner_addr_full
       columns:
         - owner_addr_full
-    - name: idx_address_utxo_block
+    - name: idx_address_utxo_block_number
       columns:
-        - block_hash
+        - block
 
 - table: assets
   indexes:

@@ -189,7 +189,7 @@ public class BFBlocksStorageReaderImpl implements BFBlocksStorageReader {
     }
 
     @Override
-    public List<BFBlockAddressTxRow> findBlockAddressTransactions(long blockNumber, String blockHash, int page, int count) {
+    public List<BFBlockAddressTxRow> findBlockAddressTransactions(long blockNumber, int page, int count) {
         int offset = Math.max(page, 0) * count;
 
         var outputUtxo = ADDRESS_UTXO.as("output_utxo");
@@ -198,7 +198,7 @@ public class BFBlocksStorageReaderImpl implements BFBlocksStorageReader {
 
         var outputsSelect = dsl.select(outputAddressField, outputUtxo.TX_HASH.as("tx_hash"))
                 .from(outputUtxo)
-                .where(outputUtxo.BLOCK_HASH.eq(blockHash))
+                .where(outputUtxo.BLOCK.eq(blockNumber))
                 .and(outputAddressExpr.isNotNull());
 
         var spentInput = TX_INPUT.as("spent_input");

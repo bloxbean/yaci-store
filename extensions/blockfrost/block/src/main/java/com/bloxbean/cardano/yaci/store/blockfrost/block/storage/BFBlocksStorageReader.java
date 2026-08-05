@@ -27,5 +27,5 @@ public interface BFBlocksStorageReader {
 
     List<BFBlockTxCborRow> findBlockTxCbor(long blockNumber, int page, int count, Order order);
 
-    List<BFBlockAddressTxRow> findBlockAddressTransactions(long blockNumber, String blockHash, int page, int count);
+    List<BFBlockAddressTxRow> findBlockAddressTransactions(long blockNumber, int page, int count);
 }
