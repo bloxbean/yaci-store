@@ -98,6 +98,9 @@ public class SPOVotingDataCollector {
 
     /**
      * Build an epoch snapshot without using the batch-global voter list.
+     * The aggregate default-delegation accessors contain stake from all matching
+     * pools and are not reduced by {@code spoVotes}; non-voters are classified
+     * later for each proposal by {@link #collectSPOVotes(List, SPOEpochAggregates)}.
      *
      * @param spoVotes ignored because SPO voters are proposal-scoped
      * @param epoch epoch for which to compute aggregates
@@ -174,6 +177,8 @@ public class SPOVotingDataCollector {
     private BigInteger defaultStakeForNonVoters(Map<String, BigInteger> stakeByPool,
                                                 BigInteger aggregateStake,
                                                 Set<String> poolsThatVotedForProposal) {
+        // Compatibility fallback for aggregate-only snapshots created with the
+        // four-argument constructor. Normal snapshots return zero when this map is empty.
         if (stakeByPool.isEmpty()) {
             return aggregateStake;
         }
