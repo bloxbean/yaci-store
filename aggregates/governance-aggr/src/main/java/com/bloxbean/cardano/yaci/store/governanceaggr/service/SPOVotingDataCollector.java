@@ -35,13 +35,13 @@ public class SPOVotingDataCollector {
     private final DelegationVoteDataService delegationVoteDataService;
 
     /**
-     * Build SPO-level stake aggregates for the supplied epoch.
+     * Build the pool-level SPO stake snapshot for the supplied epoch.
      *
-     * @param spoVotes votes cast by SPOs across all proposals in scope
-     * @param epoch    epoch for which to compute aggregates
-     * @return aggregated SPO stake metrics shared across proposals
+     * @param epoch epoch for which to compute aggregates
+     * @return pool-level stake metrics shared across proposals
      */
-    public SPOEpochAggregates buildEpochAggregates(List<VotingProcedure> spoVotes, int epoch) {
+    public SPOEpochAggregates buildEpochAggregates(int epoch) {
+        // The epoch-stake table stores the snapshot used here under activeEpoch = epoch + 2.
         BigInteger totalActiveStake = epochStakeStorage.getTotalActiveStakeByEpoch(epoch + 2)
                 .orElse(BigInteger.ZERO);
 
@@ -49,47 +49,67 @@ public class SPOVotingDataCollector {
                 .map(com.bloxbean.cardano.yaci.store.staking.domain.Pool::getPoolId)
                 .toList();
 
-        Set<String> poolsThatVoted = spoVotes.stream()
-                .map(VotingProcedure::getVoterHash)
-                .collect(Collectors.toSet());
+        var activePoolBatches = ListUtil.partition(activePools, QUERY_BATCH_SIZE);
 
-        List<String> poolsWithNonVotingSPOs = activePools.stream()
-                .filter(poolId -> !poolsThatVoted.contains(poolId))
-                .toList();
-
-        var nonVotingSPOPoolBatches = ListUtil.partition(poolsWithNonVotingSPOs, QUERY_BATCH_SIZE);
-
-        Map<String, List<String>> rewardAccountToNonVotingPoolsMap = nonVotingSPOPoolBatches.parallelStream()
+        // A pool delegates to a default DRep through its reward account, so retain
+        // the pool identities while resolving reward-account delegations.
+        Map<String, List<String>> rewardAccountToActivePoolsMap = activePoolBatches.parallelStream()
                 .flatMap(batch -> poolStorageReader.getPoolDetails(batch, epoch).stream())
                 .collect(Collectors.groupingBy(
                         PoolDetails::getRewardAccount,
                         Collectors.mapping(PoolDetails::getPoolId, Collectors.toList())));
 
-        var nonVotingSPORewardAccountBatches = ListUtil.partition(new ArrayList<>(rewardAccountToNonVotingPoolsMap.keySet()), QUERY_BATCH_SIZE);
+        var activeRewardAccountBatches = ListUtil.partition(new ArrayList<>(rewardAccountToActivePoolsMap.keySet()), QUERY_BATCH_SIZE);
 
-        List<String> poolsDelegatedToAlwaysAbstainDRep = nonVotingSPORewardAccountBatches.parallelStream()
+        List<String> poolsDelegatedToAlwaysAbstainDRep = activeRewardAccountBatches.parallelStream()
                 .flatMap(batch -> delegationVoteDataService
                         .getDelegationVotesByDRepTypeAndAddressList(batch, DrepType.ABSTAIN, epoch)
                         .parallelStream()
-                        .flatMap(delegationVote -> rewardAccountToNonVotingPoolsMap
+                        .flatMap(delegationVote -> rewardAccountToActivePoolsMap
                                 .getOrDefault(delegationVote.getAddress(), List.of())
                                 .stream()))
-                .collect(Collectors.toList());
+                .distinct()
+                .toList();
 
-        BigInteger totalStakeSPODelegatedToAbstainDRep = getActiveStakesByEpochAndPoolsBatch(epoch + 2, poolsDelegatedToAlwaysAbstainDRep, QUERY_BATCH_SIZE);
+        Map<String, BigInteger> alwaysAbstainStakeByPool = getActiveStakeByPoolBatch(
+                epoch + 2, poolsDelegatedToAlwaysAbstainDRep, QUERY_BATCH_SIZE);
 
-        List<String> poolsDelegatedToNoConfidenceDRep = nonVotingSPORewardAccountBatches.parallelStream()
+        List<String> poolsDelegatedToNoConfidenceDRep = activeRewardAccountBatches.parallelStream()
                 .flatMap(batch -> delegationVoteDataService
                         .getDelegationVotesByDRepTypeAndAddressList(batch, DrepType.NO_CONFIDENCE, epoch)
                         .parallelStream()
-                        .flatMap(delegationVote -> rewardAccountToNonVotingPoolsMap
+                        .flatMap(delegationVote -> rewardAccountToActivePoolsMap
                                 .getOrDefault(delegationVote.getAddress(), List.of())
                                 .stream()))
-                .collect(Collectors.toList());
+                .distinct()
+                .toList();
 
-        BigInteger totalStakeSPODelegatedToNoConfidenceDRep = getActiveStakesByEpochAndPoolsBatch(epoch + 2, poolsDelegatedToNoConfidenceDRep, QUERY_BATCH_SIZE);
+        Map<String, BigInteger> alwaysNoConfidenceStakeByPool = getActiveStakeByPoolBatch(
+                epoch + 2, poolsDelegatedToNoConfidenceDRep, QUERY_BATCH_SIZE);
 
-        return new SPOEpochAggregates(epoch, totalActiveStake, totalStakeSPODelegatedToAbstainDRep, totalStakeSPODelegatedToNoConfidenceDRep);
+        return new SPOEpochAggregates(
+                epoch,
+                totalActiveStake,
+                sumStake(alwaysAbstainStakeByPool),
+                sumStake(alwaysNoConfidenceStakeByPool),
+                Map.copyOf(alwaysAbstainStakeByPool),
+                Map.copyOf(alwaysNoConfidenceStakeByPool));
+    }
+
+    /**
+     * Build an epoch snapshot without using the batch-global voter list.
+     * The aggregate default-delegation accessors contain stake from all matching
+     * pools and are not reduced by {@code spoVotes}; non-voters are classified
+     * later for each proposal by {@link #collectSPOVotes(List, SPOEpochAggregates)}.
+     *
+     * @param spoVotes ignored because SPO voters are proposal-scoped
+     * @param epoch epoch for which to compute aggregates
+     * @return pool-level stake metrics shared across proposals
+     * @deprecated use {@link #buildEpochAggregates(int)}
+     */
+    @Deprecated(forRemoval = false)
+    public SPOEpochAggregates buildEpochAggregates(List<VotingProcedure> spoVotes, int epoch) {
+        return buildEpochAggregates(epoch);
     }
 
     /**
@@ -104,20 +124,36 @@ public class SPOVotingDataCollector {
         var abstainVoteStake = calculateSPOStakeByVote(spoVotesForProposal, Vote.ABSTAIN, spoEpochAggregates.epoch());
         var noVoteStake = calculateSPOStakeByVote(spoVotesForProposal, Vote.NO, spoEpochAggregates.epoch());
 
+        Set<String> poolsThatVotedForProposal = spoVotesForProposal.stream()
+                .map(VotingProcedure::getVoterHash)
+                .collect(Collectors.toSet());
+
+        // Explicit votes are action-specific: voting on proposal A must not suppress
+        // the pool's default on proposal B. cardano-ledger's spoAcceptedRatio applies
+        // defaults only after checking the current action's gasStakePoolVotes map.
+        BigInteger delegateToAutoAbstainDRepStake = defaultStakeForNonVoters(
+                spoEpochAggregates.alwaysAbstainStakeByPool(),
+                spoEpochAggregates.delegateToAutoAbstainDRepStake(),
+                poolsThatVotedForProposal);
+        BigInteger delegateToNoConfidenceDRepStake = defaultStakeForNonVoters(
+                spoEpochAggregates.alwaysNoConfidenceStakeByPool(),
+                spoEpochAggregates.delegateToNoConfidenceDRepStake(),
+                poolsThatVotedForProposal);
+
         BigInteger totalDoNotVoteStake = spoEpochAggregates.totalStake()
                 .subtract(yesVoteStake)
                 .subtract(noVoteStake)
                 .subtract(abstainVoteStake)
-                .subtract(spoEpochAggregates.delegateToAutoAbstainDRepStake())
-                .subtract(spoEpochAggregates.delegateToNoConfidenceDRepStake());
+                .subtract(delegateToAutoAbstainDRepStake)
+                .subtract(delegateToNoConfidenceDRepStake);
 
         return AggregatedVotingData.SPOVotes.builder()
                 .yesVoteStake(yesVoteStake)
                 .abstainVoteStake(abstainVoteStake)
                 .noVoteStake(noVoteStake)
                 .totalStake(spoEpochAggregates.totalStake())
-                .delegateToAutoAbstainDRepStake(spoEpochAggregates.delegateToAutoAbstainDRepStake())
-                .delegateToNoConfidenceDRepStake(spoEpochAggregates.delegateToNoConfidenceDRepStake())
+                .delegateToAutoAbstainDRepStake(delegateToAutoAbstainDRepStake)
+                .delegateToNoConfidenceDRepStake(delegateToNoConfidenceDRepStake)
                 .doNotVoteStake(totalDoNotVoteStake)
                 .build();
     }
@@ -138,21 +174,60 @@ public class SPOVotingDataCollector {
                 .reduce(BigInteger.ZERO, BigInteger::add);
     }
 
-    private BigInteger getActiveStakesByEpochAndPoolsBatch(int activeEpoch, List<String> poolIds, int batchSize) {
+    private BigInteger defaultStakeForNonVoters(Map<String, BigInteger> stakeByPool,
+                                                BigInteger aggregateStake,
+                                                Set<String> poolsThatVotedForProposal) {
+        // Compatibility fallback for aggregate-only snapshots created with the
+        // four-argument constructor. Normal snapshots return zero when this map is empty.
+        if (stakeByPool.isEmpty()) {
+            return aggregateStake;
+        }
+
+        return stakeByPool.entrySet().stream()
+                .filter(entry -> !poolsThatVotedForProposal.contains(entry.getKey()))
+                .map(Map.Entry::getValue)
+                .reduce(BigInteger.ZERO, BigInteger::add);
+    }
+
+    private BigInteger sumStake(Map<String, BigInteger> stakeByPool) {
+        return stakeByPool.values().stream()
+                .reduce(BigInteger.ZERO, BigInteger::add);
+    }
+
+    private Map<String, BigInteger> getActiveStakeByPoolBatch(int activeEpoch, List<String> poolIds, int batchSize) {
         if (poolIds.isEmpty()) {
-            return BigInteger.ZERO;
+            return Map.of();
         }
 
         return ListUtil.partition(poolIds, batchSize)
                 .parallelStream()
                 .flatMap(batch -> epochStakeStorage.getAllActiveStakesByEpochAndPools(activeEpoch, batch).stream())
-                .map(EpochStake::getAmount)
-                .reduce(BigInteger.ZERO, BigInteger::add);
+                .collect(Collectors.toMap(
+                        EpochStake::getPoolId,
+                        EpochStake::getAmount,
+                        BigInteger::add));
     }
 
+    // Aggregate fields retain the original accessors; per-pool maps allow each
+    // proposal to exclude only the pools that cast an explicit vote on it.
     public record SPOEpochAggregates(int epoch,
                                      BigInteger totalStake,
                                      BigInteger delegateToAutoAbstainDRepStake,
-                                     BigInteger delegateToNoConfidenceDRepStake) {
+                                     BigInteger delegateToNoConfidenceDRepStake,
+                                     Map<String, BigInteger> alwaysAbstainStakeByPool,
+                                     Map<String, BigInteger> alwaysNoConfidenceStakeByPool) {
+
+        public SPOEpochAggregates(int epoch,
+                                  BigInteger totalStake,
+                                  BigInteger delegateToAutoAbstainDRepStake,
+                                  BigInteger delegateToNoConfidenceDRepStake) {
+            this(
+                    epoch,
+                    totalStake,
+                    delegateToAutoAbstainDRepStake,
+                    delegateToNoConfidenceDRepStake,
+                    Map.of(),
+                    Map.of());
+        }
     }
 }

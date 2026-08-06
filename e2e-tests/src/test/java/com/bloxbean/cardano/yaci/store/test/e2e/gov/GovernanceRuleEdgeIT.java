@@ -42,6 +42,7 @@ import org.springframework.test.context.ContextConfiguration;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.math.RoundingMode;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -246,6 +247,175 @@ class GovernanceRuleEdgeIT extends BaseE2ETest {
                     assertThat(nz(stats.getDrepApprovalRatio())).isEqualByComparingTo(BigDecimal.ONE.setScale(4));
                     assertCommitteePassed(stats);
                 });
+    }
+
+    /**
+     * An SPO vote on proposal A must not suppress that pool's default vote on
+     * proposal B when both proposals are evaluated from the same epoch snapshot.
+     * With every other voting group passing, B must therefore be ratified.
+     *
+     * @see <a href="https://github.com/bloxbean/yaci-store/issues/1030">Issue #1030: compute non-voting SPO defaults per proposal</a>
+     */
+    @Test
+    void spoAlwaysAbstainDefault_shouldBeAppliedPerProposal() {
+        Account poolPOwner = accountAt(21);
+        TestStakePool poolQ = setupStakePool;
+        DRep supportingDRep = com.bloxbean.cardano.client.governance.GovId.toDrep(setupDRepAccount.drepId());
+
+        topUpFund(poolPOwner.baseAddress(), SPO_ALWAYS_ABSTAIN_POOL_TOP_UP_ADA);
+
+        // Pool P delegates its reward account to AlwaysAbstain. Pool Q is the
+        // common fixture pool and has no predefined DRep delegation, so its
+        // post-bootstrap default remains No.
+        TestStakePool poolP = governanceTxHelper.registerGeneratedStakePool(account0, poolPOwner);
+        governanceTxHelper.delegateStakeToTestPool(account0, poolPOwner, poolP);
+        governanceTxHelper.delegateVotingPowerToAlwaysAbstain(account0, poolPOwner);
+
+        // B must pass every non-SPO voting group so its ratification outcome is
+        // decided only by whether P is classified as Abstain or No. Reuse the
+        // registered setup DRep and restore account0's delegation to it.
+        governanceTxHelper.delegateVotingPowerToDRep(account0, account0, supportingDRep);
+        waitForVotingPowerSnapshot();
+
+        // Use the DevKit ledger snapshot as the source of truth. Wallet top-ups
+        // are not exact stake values because each generated wallet already owns
+        // a small amount of ADA.
+        BigInteger poolPStake = ledgerSPOStake(poolP);
+        BigInteger poolQStake = ledgerSPOStake(poolQ);
+        BigInteger supportingDRepStake = ledgerDRepStake(supportingDRep);
+        assertThat(poolPStake).isPositive();
+        assertThat(poolQStake).isPositive();
+        assertThat(supportingDRepStake).isPositive();
+        assertThat(poolPStake)
+                .as("P must outweigh Q so the Abstain and No classifications fall on opposite sides of the SPO threshold")
+                .isGreaterThan(poolQStake);
+
+        // A and B must be proposed in one epoch so VotingDataCollector evaluates
+        // them in the same batch. B changes a security parameter and therefore
+        // exercises the SPO acceptance threshold; A is informational so it does
+        // not introduce another ratification dependency.
+        waitForEpoch(getCurrentEpoch() + 1);
+        int proposalEpoch = getCurrentEpoch();
+        CreatedProposal proposalA = governanceTxHelper.createInfoProposalAndWait(
+                account0,
+                account0.stakeAddress());
+        CreatedProposal proposalB = governanceTxHelper.createProposalAndWait(
+                account0,
+                account0.stakeAddress(),
+                securityParameterChangeAction());
+
+        assertIndexedProposal(proposalA, GovActionType.INFO_ACTION);
+        assertIndexedProposal(proposalB, GovActionType.PARAMETER_CHANGE_ACTION);
+        assertThat(List.of(proposalA, proposalB))
+                .extracting(CreatedProposal::createdEpoch)
+                .containsOnly(proposalEpoch);
+        assertLedgerActive(proposalA);
+        assertLedgerActive(proposalB);
+
+        // This is the proposal-local vote map used by cardano-ledger:
+        //   A: { P -> Yes }
+        //   B: { Q -> Yes }
+        // P is absent from B and must therefore contribute its default Abstain
+        // there even though P appears in A's explicit voter set.
+        governanceTxHelper.castTestStakePoolVote(
+                account0,
+                poolP,
+                proposalA.storeGovActionId(),
+                Vote.YES);
+        governanceTxHelper.castTestStakePoolVote(
+                account0,
+                poolQ,
+                proposalB.storeGovActionId(),
+                Vote.YES);
+        governanceTxHelper.castDRepVote(
+                account0,
+                setupDRepAccount,
+                proposalB.storeGovActionId(),
+                Vote.YES);
+        castCommitteeYesVotes(proposalB, 2);
+
+        // Evaluate after every vote is on-chain. A remains active because an
+        // InfoAction cannot ratify. B can ratify because P contributes to
+        // Abstain rather than to the SPO yes/(yes + no) denominator.
+        int evaluationEpoch = getCurrentEpoch() + 1;
+        assertThat(evaluationEpoch)
+                .as("evaluation epoch must remain inside both proposals' voting window")
+                .isLessThanOrEqualTo(Math.min(proposalA.maxVotingEpoch(), proposalB.maxVotingEpoch()));
+        waitForEpoch(evaluationEpoch);
+        waitTillAdaPotJobDone(adaPotJobRepository, evaluationEpoch,
+                () -> diagnostics("proposal-scoped AlwaysAbstain SPO default", proposalB));
+
+        governanceRuleAssertionHelper.assertDbStatusAtEpoch(
+                proposalA.storeGovActionId(),
+                evaluationEpoch,
+                GovActionStatus.ACTIVE);
+        governanceRuleAssertionHelper.assertDbStatusAtEpoch(
+                proposalB.storeGovActionId(),
+                evaluationEpoch,
+                GovActionStatus.RATIFIED);
+
+        ProposalVotingStats proposalAStats = governanceRuleAssertionHelper.assertVotingStats(
+                proposalA.storeGovActionId(),
+                evaluationEpoch,
+                stats -> {
+                });
+        ProposalVotingStats proposalBStats = governanceRuleAssertionHelper.assertVotingStats(
+                proposalB.storeGovActionId(),
+                evaluationEpoch,
+                stats -> {
+                });
+
+        // Explicit votes use the ledger-reported active stake of the pool that
+        // voted on each proposal.
+        assertStake("proposal A SPO YES stake", proposalAStats.getSpoYesVoteStake(), poolPStake);
+        assertStake("proposal B SPO YES stake", proposalBStats.getSpoYesVoteStake(), poolQStake);
+
+        // P is the only AlwaysAbstain pool in this fixture. Its explicit YES on
+        // A overrides the default, while its missing vote on B activates it.
+        assertStake(
+                "proposal A has no effective SPO Abstain stake",
+                proposalAStats.getSpoTotalAbstainStake(),
+                BigInteger.ZERO);
+        assertStake(
+                "proposal B applies P's default Abstain stake",
+                proposalBStats.getSpoTotalAbstainStake(),
+                poolPStake);
+
+        // The stake distribution places the two possible classifications of P
+        // on opposite sides of the threshold. If P contributed to No instead of
+        // Abstain, its stake would enter the denominator and the ratio would fail.
+        BigInteger proposalBYesStake = nz(proposalBStats.getSpoTotalYesStake());
+        BigInteger noStakeIfPoolPContributedToNo = nz(proposalBStats.getSpoTotalNoStake()).add(poolPStake);
+        BigDecimal spoRatioIfPoolPContributedToNo = new BigDecimal(proposalBYesStake).divide(
+                new BigDecimal(proposalBYesStake.add(noStakeIfPoolPContributedToNo)),
+                4,
+                RoundingMode.HALF_UP);
+        assertThat(spoRatioIfPoolPContributedToNo)
+                .as("SPO ratio if P contributed to No")
+                .isLessThan(SPO_RESHAPE_THRESHOLD);
+        assertThat(nz(proposalBStats.getSpoApprovalRatio()))
+                .as("SPO ratio when P contributes to Abstain")
+                .isGreaterThanOrEqualTo(SPO_RESHAPE_THRESHOLD);
+
+        // account0 pays proposal and vote transaction fees after the initial
+        // ledger query, so its delegated lovelace can decrease before the
+        // evaluation snapshot. Positivity and the approval ratio provide stable
+        // evidence that DRep support passes independently of the SPO rule.
+        assertThat(nz(proposalBStats.getDrepYesVoteStake()))
+                .as("proposal B DRep YES stake")
+                .isPositive()
+                .isLessThanOrEqualTo(supportingDRepStake);
+        assertThat(nz(proposalBStats.getDrepApprovalRatio())).isGreaterThanOrEqualTo(THRESHOLD);
+        assertCommitteePassed(proposalBStats);
+
+        // Re-query the live DevKit ledger after aggregation so the persisted
+        // statuses are also checked against the node's proposal state.
+        governanceRuleAssertionHelper.assertDbStatusMatchesLedgerSnapshot(
+                proposalA.storeGovActionId(),
+                GovActionStatus.ACTIVE);
+        governanceRuleAssertionHelper.assertDbStatusMatchesLedgerSnapshot(
+                proposalB.storeGovActionId(),
+                GovActionStatus.RATIFIED);
     }
 
     /**
@@ -475,6 +645,14 @@ class GovernanceRuleEdgeIT extends BaseE2ETest {
                         .maxBlockSize(100_000)
                         .build(),
                 false);
+    }
+
+    private GovAction securityParameterChangeAction() {
+        return GovernanceTxHelper.parameterChangeAction(
+                ProtocolParamUpdate.builder()
+                        .minFeeA(BigInteger.valueOf(45))
+                        .build(),
+                true);
     }
 
     private GovAction hardForkInitiationAction() {
