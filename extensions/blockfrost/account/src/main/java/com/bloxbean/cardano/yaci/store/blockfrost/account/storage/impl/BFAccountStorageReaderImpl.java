@@ -832,6 +832,7 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
                         .and(TX_INPUT.OUTPUT_INDEX.eq(ADDRESS_UTXO.OUTPUT_INDEX)))
                 .join(TRANSACTION).on(TRANSACTION.TX_HASH.eq(TX_INPUT.SPENT_TX_HASH))
                 .where(ADDRESS_UTXO.OWNER_STAKE_ADDR.eq(stakeAddress))
+                .and(TX_INPUT.SPENT_AT_BLOCK.eq(TRANSACTION.BLOCK))
                 .and(TX_INPUT.SPENT_TX_HASH.in(txHashes))
                 .fetch(rec -> new AccountTransactionCandidate(
                         rec.get(ADDRESS_UTXO.OWNER_ADDR),
