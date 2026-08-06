@@ -40,7 +40,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
@@ -104,6 +106,12 @@ public class TransactionProcessor {
 
             BigInteger fee = feeResolver.resolveFee(transaction);
 
+            Set<String> requiredSigners = null;
+            if (transaction.getBody().getRequiredSigners() != null
+                    && !transaction.getBody().getRequiredSigners().isEmpty()) {
+                requiredSigners = new HashSet<>(transaction.getBody().getRequiredSigners());
+            }
+
             Txn txn = Txn.builder()
                     .txHash(transaction.getTxHash())
                     .blockHash(event.getMetadata().getBlockHash())
@@ -120,6 +128,7 @@ public class TransactionProcessor {
                     .validityIntervalStart(transaction.getBody().getValidityIntervalStart())
                     .scriptDataHash(transaction.getBody().getScriptDataHash())
                     .collateralInputs(collateralInputs)
+                    .requiredSigners(requiredSigners)
                     .collateralReturnJson(convertOutput(transaction.getBody().getCollateralReturn()))
                     .netowrkId(transaction.getBody().getNetowrkId())
                     .totalCollateral(transaction.getBody().getTotalCollateral())
