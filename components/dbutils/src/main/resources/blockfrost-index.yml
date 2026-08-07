@@ -39,6 +39,12 @@
     - name: idx_tx_input_tx_hash
       columns:
         - tx_hash
+    # /txs/{hash} computes count(*) where spent_tx_hash = ?; without a
+    # leading spent_tx_hash index that is a ~10s range walk on mainnet
+    # (see issue #1075). 14m21s to build, 13 GB, endpoint drops to ~0.2s.
+    - name: idx_tx_input_spent_tx_hash
+      columns:
+        - spent_tx_hash
 
 - table: block
   indexes:
