@@ -19,6 +19,7 @@ import org.cardanofoundation.rewards.calculation.domain.PoolBlock;
 import org.cardanofoundation.rewards.calculation.domain.PoolState;
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -117,7 +118,9 @@ public class PoolStateService {
                 poolState.setRewardAddress(rewardAccount);
 
                 poolState.setFixedCost(latestUpdate.getCost());
-                poolState.setMargin(latestUpdate.getMargin() != null? latestUpdate.getMargin().doubleValue() : 0);
+                // Keep the exact BigDecimal ratio for the rewards library instead of
+                // converting through double, which can drift from Haskell ledger math.
+                poolState.setMargin(latestUpdate.getMargin() != null ? latestUpdate.getMargin() : BigDecimal.ZERO);
                 poolState.setPledge(latestUpdate.getPledge());
                 poolState.setEpoch(epoch);
                 poolState.setPoolId(PoolUtil.getBech32PoolId(poolId)); //bech32

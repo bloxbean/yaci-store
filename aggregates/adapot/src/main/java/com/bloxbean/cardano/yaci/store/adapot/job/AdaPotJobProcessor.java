@@ -162,7 +162,9 @@ public class AdaPotJobProcessor {
             if (adaPotProperties.isVerifyAdapotCalcValues() &&
                     (storeProperties.isMainnet()
                             || storeProperties.getProtocolMagic() == 1
-                            || storeProperties.getProtocolMagic() == 2)
+                            || storeProperties.getProtocolMagic() == 2
+                            || storeProperties.getProtocolMagic() == 4
+                    )
             ) { //mainnet or preprod or preview
                 //TODO -- Verify treasury and rewards value
                 try {
@@ -236,6 +238,8 @@ public class AdaPotJobProcessor {
             file = "dbsync_ada_pots_preprod.json";
         } else if (protocolMagic == 2) { //preview
             file = "dbsync_ada_pots_preview.json";
+        } else if (protocolMagic == 4) { //sanchonet
+            file = "dbsync_ada_pots_sanchonet.json";
         }
 
         ObjectMapper objectMapper = new ObjectMapper();

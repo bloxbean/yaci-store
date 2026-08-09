@@ -48,6 +48,9 @@ public class GenesisConfig {
 
     private double activeSlotsCoeff;
     private int securityParam;
+    private int updateQuorum;
+    private long slotsPerKesPeriod;
+    private int maxKesEvolutions;
     private BigInteger maxLovelaceSupply = BigInteger.valueOf(45000000000000000L);
 
     public GenesisConfig(StoreProperties storeProperties, ObjectMapper objectMapper, ResourceLoader resourceLoader) {
@@ -186,6 +189,9 @@ public class GenesisConfig {
         shelleySlotLength = shelleyGenesis.getSlotLength();
         activeSlotsCoeff = shelleyGenesis.getActiveSlotsCoeff();
         securityParam = shelleyGenesis.getSecurityParam();
+        updateQuorum = shelleyGenesis.getUpdateQuorum();
+        slotsPerKesPeriod = shelleyGenesis.getSlotsPerKesPeriod();
+        maxKesEvolutions = shelleyGenesis.getMaxKesEvolutions();
         maxLovelaceSupply = shelleyGenesis.getMaxLovelaceSupply();
         epochLength = shelleyGenesis.getEpochLength();
 
@@ -238,8 +244,20 @@ public class GenesisConfig {
         return shelleyGenesis.getGenesisStaking();
     }
 
+    /**
+     * Returns the randomness stabilisation window: {@code ceiling(4k / f)}.
+     * <p>
+     * Used by the adapot module and by the epoch-nonce module for Conway+ eras.
+     * <p>
+     * Pre-Conway, the consensus layer used {@code computeStabilityWindow} (3k/f) for
+     * {@code praosRandomnessStabilisationWindow}. Starting with Conway (ouroboros-consensus v0.15.0.0),
+     * the value was changed to {@code computeRandomnessStabilisationWindow} (ceiling(4k/f)).
+     * The epoch-nonce module's {@code EpochNonceConfig} handles both regimes via era-aware selection.
+     *
+     * @see <a href="https://github.com/IntersectMBO/cardano-ledger/blob/master/eras/shelley/impl/src/Cardano/Ledger/Shelley/StabilityWindow.hs">StabilityWindow.hs</a>
+     */
     public long getRandomnessStabilisationWindow() {
-        return Math.round((4 * securityParam) / activeSlotsCoeff);
+        return (long) Math.ceil((4 * securityParam) / activeSlotsCoeff);
     }
 
     @SneakyThrows

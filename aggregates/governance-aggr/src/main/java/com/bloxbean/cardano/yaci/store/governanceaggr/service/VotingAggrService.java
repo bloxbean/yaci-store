@@ -1,5 +1,7 @@
 package com.bloxbean.cardano.yaci.store.governanceaggr.service;
 
+import com.bloxbean.cardano.yaci.core.model.certs.CertificateType;
+import com.bloxbean.cardano.yaci.core.model.certs.StakeCredType;
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionId;
 import com.bloxbean.cardano.yaci.core.model.governance.Vote;
 import com.bloxbean.cardano.yaci.core.model.governance.VoterType;
@@ -20,6 +22,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static com.bloxbean.cardano.yaci.store.adapot.jooq.Tables.EPOCH_STAKE;
+import static com.bloxbean.cardano.yaci.store.governance.jooq.Tables.DREP_REGISTRATION;
 import static com.bloxbean.cardano.yaci.store.governance.jooq.Tables.VOTING_PROCEDURE;
 import static com.bloxbean.cardano.yaci.store.governance_aggr.jooq.Tables.DREP_DIST;
 import static org.jooq.impl.DSL.*;
@@ -180,43 +183,77 @@ public class VotingAggrService {
                 .map(id -> row(id.getTransactionId(), id.getGov_action_index()))
                 .collect(Collectors.toList());
 
-        var cteQuery = select(
+        var dRepUnregistration = DREP_REGISTRATION.as("drep_unregistration");
+        var dRepCredentialType = decode()
+                .value(VOTING_PROCEDURE.VOTER_TYPE)
+                .when(VoterType.DREP_KEY_HASH.name(), StakeCredType.ADDR_KEYHASH.name())
+                .when(VoterType.DREP_SCRIPT_HASH.name(), StakeCredType.SCRIPTHASH.name());
+
+        // Unregistration clears every earlier vote; re-registration does not restore them.
+        var unregistrationAtOrAfterVote = dRepUnregistration.SLOT.gt(VOTING_PROCEDURE.SLOT)
+                .or(dRepUnregistration.SLOT.eq(VOTING_PROCEDURE.SLOT)
+                        .and(dRepUnregistration.TX_INDEX.gt(VOTING_PROCEDURE.TX_INDEX)))
+                .or(dRepUnregistration.SLOT.eq(VOTING_PROCEDURE.SLOT)
+                        .and(dRepUnregistration.TX_INDEX.eq(VOTING_PROCEDURE.TX_INDEX))
+                        .and(dRepUnregistration.CERT_INDEX.ge(VOTING_PROCEDURE.IDX)));
+
+        var rankedEffectiveVoteQuery = select(
+                VOTING_PROCEDURE.TX_HASH.as("tx_hash"),
                 VOTING_PROCEDURE.VOTER_HASH.as("voter_hash"),
                 VOTING_PROCEDURE.VOTER_TYPE.as("voter_type"),
                 VOTING_PROCEDURE.GOV_ACTION_TX_HASH.as("gov_action_tx_hash"),
                 VOTING_PROCEDURE.GOV_ACTION_INDEX.as("gov_action_index"),
-                max(VOTING_PROCEDURE.SLOT).as("max_slot")
+                rowNumber()
+                        .over(partitionBy(
+                                VOTING_PROCEDURE.VOTER_HASH,
+                                VOTING_PROCEDURE.VOTER_TYPE,
+                                VOTING_PROCEDURE.GOV_ACTION_TX_HASH,
+                                VOTING_PROCEDURE.GOV_ACTION_INDEX
+                        ).orderBy(
+                                VOTING_PROCEDURE.SLOT.desc(),
+                                VOTING_PROCEDURE.TX_INDEX.desc(),
+                                VOTING_PROCEDURE.IDX.desc()
+                        ))
+                        .as("vote_rank")
         )
                 .from(VOTING_PROCEDURE)
                 .where(VOTING_PROCEDURE.EPOCH.le(epoch))
                 .and(row(VOTING_PROCEDURE.GOV_ACTION_TX_HASH, VOTING_PROCEDURE.GOV_ACTION_INDEX).in(govActionPairs))
                 .and(VOTING_PROCEDURE.VOTER_TYPE.in("DREP_KEY_HASH", "DREP_SCRIPT_HASH"))
-                .groupBy(
-                        VOTING_PROCEDURE.VOTER_HASH,
-                        VOTING_PROCEDURE.VOTER_TYPE,
-                        VOTING_PROCEDURE.GOV_ACTION_TX_HASH,
-                        VOTING_PROCEDURE.GOV_ACTION_INDEX
+                .andNotExists(
+                        selectOne()
+                                .from(dRepUnregistration)
+                                .where(dRepUnregistration.DREP_HASH.eq(VOTING_PROCEDURE.VOTER_HASH))
+                                .and(dRepUnregistration.CRED_TYPE.eq(dRepCredentialType))
+                                .and(dRepUnregistration.TYPE.eq(CertificateType.UNREG_DREP_CERT.name()))
+                                .and(dRepUnregistration.EPOCH.le(epoch))
+                                .and(unregistrationAtOrAfterVote)
                 );
 
-        var voteWithMaxSlot = table(name("vote_with_max_slot"));
+        var rankedEffectiveVote = table(name("ranked_effective_vote"));
 
-        var vVoterHash = field(name("vote_with_max_slot", "voter_hash"), String.class);
-        var vGovActionTxHash = field(name("vote_with_max_slot", "gov_action_tx_hash"), String.class);
-        var vGovActionIndex = field(name("vote_with_max_slot", "gov_action_index"), Integer.class);
-        var vMaxSlot = field(name("vote_with_max_slot", "max_slot"), Long.class);
+        var vTxHash = field(name("ranked_effective_vote", "tx_hash"), String.class);
+        var vVoterHash = field(name("ranked_effective_vote", "voter_hash"), String.class);
+        var vVoterType = field(name("ranked_effective_vote", "voter_type"), String.class);
+        var vGovActionTxHash = field(name("ranked_effective_vote", "gov_action_tx_hash"), String.class);
+        var vGovActionIndex = field(name("ranked_effective_vote", "gov_action_index"), Integer.class);
+        var vVoteRank = field(name("ranked_effective_vote", "vote_rank"), Integer.class);
 
-        Result<Record> result = dsl.with("vote_with_max_slot").as(cteQuery)
+        Result<Record> result = dsl.with("ranked_effective_vote").as(rankedEffectiveVoteQuery)
                 .select(VOTING_PROCEDURE.fields())
                 .from(VOTING_PROCEDURE)
-                .join(voteWithMaxSlot)
-                .on(VOTING_PROCEDURE.VOTER_HASH.eq(vVoterHash)
+                .join(rankedEffectiveVote)
+                .on(VOTING_PROCEDURE.TX_HASH.eq(vTxHash)
+                        .and(VOTING_PROCEDURE.VOTER_HASH.eq(vVoterHash))
+                        .and(VOTING_PROCEDURE.VOTER_TYPE.eq(vVoterType))
                         .and(VOTING_PROCEDURE.GOV_ACTION_TX_HASH.eq(vGovActionTxHash))
                         .and(VOTING_PROCEDURE.GOV_ACTION_INDEX.eq(vGovActionIndex))
-                        .and(VOTING_PROCEDURE.SLOT.eq(vMaxSlot)))
+                        .and(vVoteRank.eq(1)))
                 .andExists(
                         selectOne()
                                 .from(DREP_DIST)
                                 .where(DREP_DIST.DREP_HASH.eq(VOTING_PROCEDURE.VOTER_HASH))
+                                .and(DREP_DIST.DREP_TYPE.eq(dRepCredentialType))
                                 .and(DREP_DIST.EPOCH.eq(epoch + 1))
                 )
                 .fetch();

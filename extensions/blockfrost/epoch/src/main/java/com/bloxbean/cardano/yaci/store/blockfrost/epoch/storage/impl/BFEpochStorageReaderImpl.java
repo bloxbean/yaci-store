@@ -13,6 +13,7 @@ import java.math.BigInteger;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static com.bloxbean.cardano.yaci.store.blocks.jooq.Tables.BLOCK;
 import static com.bloxbean.cardano.yaci.store.epoch_aggr.jooq.Tables.EPOCH;
@@ -42,13 +43,19 @@ public class BFEpochStorageReaderImpl implements BFEpochStorageReader {
     public List<Epoch> findPreviousEpochs(int epoch, int page, int count) {
         int offset = Math.max(page, 0) * count;
 
-        return dsl.select(EPOCH.NUMBER, EPOCH.BLOCK_COUNT, EPOCH.TRANSACTION_COUNT, EPOCH.TOTAL_OUTPUT,
-                        EPOCH.TOTAL_FEES, EPOCH.START_TIME, EPOCH.END_TIME, EPOCH.MAX_SLOT)
+        // Select N nearest predecessors (DESC), then return in ascending order to match Blockfrost spec
+        var subSelect = dsl.select(EPOCH.NUMBER)
                 .from(EPOCH)
                 .where(EPOCH.NUMBER.lt((long) epoch))
                 .orderBy(EPOCH.NUMBER.desc())
                 .limit(count)
-                .offset(offset)
+                .offset(offset);
+
+        return dsl.select(EPOCH.NUMBER, EPOCH.BLOCK_COUNT, EPOCH.TRANSACTION_COUNT, EPOCH.TOTAL_OUTPUT,
+                        EPOCH.TOTAL_FEES, EPOCH.START_TIME, EPOCH.END_TIME, EPOCH.MAX_SLOT)
+                .from(EPOCH)
+                .where(EPOCH.NUMBER.in(subSelect))
+                .orderBy(EPOCH.NUMBER.asc())
                 .fetch(this::toEpoch);
     }
 
@@ -82,17 +89,30 @@ public class BFEpochStorageReaderImpl implements BFEpochStorageReader {
     }
 
     @Override
-    public Map<Integer, BigInteger> getActiveStakesByEpochs(List<Integer> epochs) {
-        if (epochs == null || epochs.isEmpty()) {
+    public Map<Integer, BigInteger> getActiveStakesByEpochs(List<Integer> activeEpochs) {
+        if (activeEpochs == null || activeEpochs.isEmpty()) {
             return Collections.emptyMap();
         }
 
+        // active_epoch = epoch + 2 (invariant; set by StakeSnapshotService).
+        // epoch_stake is partitioned by `epoch`, so filter on the partition key
+        // instead of active_epoch — this enables partition pruning and reuse of
+        // the PK (epoch, address), avoiding a full scan across all partitions.
+        List<Integer> snapshotEpochs = activeEpochs.stream()
+                .map(e -> e - 2)
+                .toList();
+
         var totalStake = sum(EPOCH_STAKE.AMOUNT).cast(BigInteger.class).as("total_stake");
-        return dsl.select(EPOCH_STAKE.ACTIVE_EPOCH, totalStake)
+        return dsl.select(EPOCH_STAKE.EPOCH, totalStake)
                 .from(EPOCH_STAKE)
-                .where(EPOCH_STAKE.ACTIVE_EPOCH.in(epochs))
-                .groupBy(EPOCH_STAKE.ACTIVE_EPOCH)
-                .fetchMap(EPOCH_STAKE.ACTIVE_EPOCH, totalStake);
+                .where(EPOCH_STAKE.EPOCH.in(snapshotEpochs))
+                .groupBy(EPOCH_STAKE.EPOCH)
+                .fetch()
+                .stream()
+                .collect(Collectors.toMap(
+                        r -> r.get(EPOCH_STAKE.EPOCH) + 2,   // remap partition epoch -> active_epoch
+                        r -> r.get(totalStake)
+                ));
     }
 
     private Epoch toEpoch(Record record) {

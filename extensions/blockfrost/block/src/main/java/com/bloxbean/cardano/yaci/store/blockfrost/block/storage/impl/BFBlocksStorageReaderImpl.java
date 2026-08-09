@@ -41,8 +41,8 @@ public class BFBlocksStorageReaderImpl implements BFBlocksStorageReader {
         var nextBlockField = nextBlockField(block);
         var confirmationsField = confirmationsField(block);
 
-        return blockBaseSelect(block, nextBlockField, confirmationsField, DSL.trueCondition())
-                .orderBy(block.NUMBER.desc().nullsLast())
+        return blockBaseSelect(block, nextBlockField, confirmationsField, block.NUMBER.isNotNull())
+                .orderBy(block.NUMBER.desc())
                 .limit(1)
                 .fetchOptional(record -> toBlockRow(record, block, nextBlockField, confirmationsField));
     }

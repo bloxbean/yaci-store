@@ -12,6 +12,8 @@ public interface StakingCertificateStorageReader {
 
     List<Delegation> findDelegations(int page, int count);
 
+    Optional<Delegation> getLatestDelegationByAddress(String stakeAddress);
+
     List<String> getRegisteredStakeAddresses(Integer epoch, int page, int count);
 
     Optional<StakeRegistrationDetail> getRegistrationByStakeAddress(String stakeAddress, Long slot);

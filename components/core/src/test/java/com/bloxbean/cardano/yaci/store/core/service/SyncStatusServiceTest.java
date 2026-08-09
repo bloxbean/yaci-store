@@ -14,6 +14,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Optional;
 
@@ -95,6 +96,7 @@ class SyncStatusServiceTest {
             SyncStatus status = syncStatusService.getSyncStatus();
 
             assertThat(status.syncPercentage()).isCloseTo(50.0, withinPercentage(1));
+            assertThat(status.networkTipAvailable()).isTrue();
             assertThat(status.synced()).isFalse();
         }
 
@@ -110,16 +112,17 @@ class SyncStatusServiceTest {
         }
 
         @Test
-        void fallsBackToCurrentBlockWhenTipUnavailable() {
+        void reportsUnknownNetworkTipWhenTipUnavailable() {
             withCursorAt(5000L, 100000L, Era.Babbage);
             when(chainTipService.getTipAndCurrentEpoch()).thenReturn(Optional.empty());
 
             SyncStatus status = syncStatusService.getSyncStatus();
 
-            assertThat(status.networkBlock()).isEqualTo(5000L);
-            assertThat(status.networkSlot()).isEqualTo(100000L);
-            assertThat(status.syncPercentage()).isCloseTo(100.0, withinPercentage(1));
-            assertThat(status.synced()).isTrue();
+            assertThat(status.networkTipAvailable()).isFalse();
+            assertThat(status.networkBlock()).isEqualTo(SyncStatus.UNKNOWN_NETWORK_TIP);
+            assertThat(status.networkSlot()).isEqualTo(SyncStatus.UNKNOWN_NETWORK_TIP);
+            assertThat(status.syncPercentage()).isZero();
+            assertThat(status.synced()).isFalse();
         }
 
         private org.assertj.core.data.Percentage withinPercentage(double pct) {
@@ -211,6 +214,46 @@ class SyncStatusServiceTest {
 
             verify(chainTipService, times(1)).getTipAndCurrentEpoch();
         }
+
+        @Test
+        void refreshesStaleTipEvenWhenCursorCaughtUp() {
+            withCursorAt(5000L, 100000L, Era.Babbage);
+            when(eraService.getEpochNo(any(), anyLong())).thenReturn(350);
+            withNetworkTipAt(10000L, 200000L);
+
+            syncStatusService.getSyncStatus();
+
+            // Cursor caught up past the cached tip, and the cache has gone stale
+            Cursor cursor2 = Cursor.builder()
+                    .block(10001L).slot(200001L).blockHash("def").era(Era.Babbage).build();
+            when(cursorService.getCursor()).thenReturn(Optional.of(cursor2));
+            makeCachedTipStale();
+
+            syncStatusService.getSyncStatus();
+
+            verify(chainTipService, times(2)).getTipAndCurrentEpoch();
+        }
+
+        @Test
+        void reportsTipUnavailableAndBacksOffAfterFailedRefresh() {
+            withCursorAt(5000L, 100000L, Era.Babbage);
+            when(eraService.getEpochNo(any(), anyLong())).thenReturn(350);
+            withNetworkTipAt(10000L, 200000L);
+
+            syncStatusService.getSyncStatus();
+
+            makeCachedTipStale();
+            when(chainTipService.getTipAndCurrentEpoch()).thenReturn(Optional.empty());
+
+            SyncStatus failedRefreshStatus = syncStatusService.getSyncStatus();
+            SyncStatus backedOffStatus = syncStatusService.getSyncStatus();
+
+            assertThat(failedRefreshStatus.networkTipAvailable()).isFalse();
+            assertThat(failedRefreshStatus.synced()).isFalse();
+            assertThat(backedOffStatus.networkTipAvailable()).isFalse();
+            assertThat(backedOffStatus.synced()).isFalse();
+            verify(chainTipService, times(2)).getTipAndCurrentEpoch();
+        }
     }
 
     // -- helpers --
@@ -225,5 +268,11 @@ class SyncStatusServiceTest {
     private void withNetworkTipAt(long block, long slot) {
         Tip tip = new Tip(new Point(slot, "tip_hash"), block);
         when(chainTipService.getTipAndCurrentEpoch()).thenReturn(Optional.of(new Tuple<>(tip, 400)));
+    }
+
+    private void makeCachedTipStale() {
+        long staleTimestamp = System.currentTimeMillis() - 20L * 60 * 1000;
+        ReflectionTestUtils.setField(syncStatusService, "lastTipFetchTime", staleTimestamp);
+        ReflectionTestUtils.setField(syncStatusService, "lastTipFetchAttemptTime", staleTimestamp);
     }
 }
