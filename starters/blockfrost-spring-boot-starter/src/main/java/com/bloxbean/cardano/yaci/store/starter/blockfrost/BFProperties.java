@@ -31,6 +31,7 @@ public class BFProperties {
             private Scripts scripts = new Scripts();
             private Metadata metadata = new Metadata();
             private Util util = new Util();
+            private Network network = new Network();
 
             @Getter
             @Setter
@@ -86,6 +87,11 @@ public class BFProperties {
                 private boolean enabled = true;
             }
 
+            @Getter
+            @Setter
+            public static final class Network {
+                private boolean enabled = true;
+            }
         }
 
     }
