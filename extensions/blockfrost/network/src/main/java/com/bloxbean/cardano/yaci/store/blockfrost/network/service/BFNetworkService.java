@@ -8,6 +8,8 @@ import com.bloxbean.cardano.yaci.store.blockfrost.network.dto.BFNetworkDto;
 import com.bloxbean.cardano.yaci.store.blockfrost.network.dto.BFRootDto;
 import com.bloxbean.cardano.yaci.store.blockfrost.network.mapper.BFNetworkMapper;
 import com.bloxbean.cardano.yaci.store.blockfrost.network.storage.BFNetworkStorageReader;
+import com.bloxbean.cardano.yaci.store.blocks.domain.Block;
+import com.bloxbean.cardano.yaci.store.blocks.storage.BlockStorageReader;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig;
 import com.bloxbean.cardano.yaci.store.core.domain.CardanoEra;
@@ -22,6 +24,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @Slf4j
@@ -37,6 +40,7 @@ public class BFNetworkService {
 
     private final ObjectProvider<NetworkInfoApiService> networkInfoApiServiceProvider;
     private final ObjectProvider<BFNetworkStorageReader> bfNetworkStorageReaderProvider;
+    private final ObjectProvider<BlockStorageReader> blockStorageReaderProvider;
     private final EraService eraService;
     private final GenesisConfig genesisConfig;
     private final StoreProperties storeProperties;
@@ -158,6 +162,11 @@ public class BFNetworkService {
                         .slot(endSlot)
                         .epoch(endEpoch)
                         .build();
+            } else {
+                end = projectCurrentEraEnd(
+                        shelleyEpochLength,
+                        shelleySafeZone,
+                        genesisStartTime);
             }
 
             BFEraDto.EraParameters parameters = BFEraDto.EraParameters.builder()
@@ -174,6 +183,28 @@ public class BFNetworkService {
         }
 
         return result;
+    }
+
+    private BFEraDto.EraBoundary projectCurrentEraEnd(long epochLength,
+                                                       long safeZone,
+                                                       long genesisStartTime) {
+        Block latestBlock = Optional.ofNullable(blockStorageReaderProvider.getIfAvailable())
+                .flatMap(BlockStorageReader::findRecentBlock)
+                .filter(block -> block.getEpochNumber() != null && block.getEpochSlot() != null)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.SERVICE_UNAVAILABLE,
+                        "Latest block information is not available."));
+
+        int endEpoch = latestBlock.getEpochNumber()
+                + (latestBlock.getEpochSlot() >= epochLength - safeZone ? 2 : 1);
+        long endSlot = eraService.getShelleyAbsoluteSlot(endEpoch, 0);
+        long endTimeRel = eraService.blockTime(Era.Shelley, endSlot) - genesisStartTime;
+
+        return BFEraDto.EraBoundary.builder()
+                .time(endTimeRel)
+                .slot(endSlot)
+                .epoch(endEpoch)
+                .build();
     }
 
     // ── /genesis ─────────────────────────────────────────────────────────────
