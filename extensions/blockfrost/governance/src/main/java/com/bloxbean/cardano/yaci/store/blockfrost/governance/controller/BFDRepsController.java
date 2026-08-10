@@ -21,7 +21,7 @@ import java.util.List;
 @Validated
 @Tag(name = "Blockfrost Governance - DReps")
 @RequestMapping("${blockfrost.apiPrefix}/governance/dreps")
-@ConditionalOnExpression("${store.extensions.blockfrost.governance.enabled:false}")
+@ConditionalOnExpression("${store.extensions.blockfrost.governance.enabled:true}")
 public class BFDRepsController {
 
     private final BFGovernanceService governanceService;
