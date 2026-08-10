@@ -21,5 +21,6 @@ public class IndexDefinition {
         private List<String> columns;
         private String type;
         private List<String> excludes;
+        private String where;
     }
 }

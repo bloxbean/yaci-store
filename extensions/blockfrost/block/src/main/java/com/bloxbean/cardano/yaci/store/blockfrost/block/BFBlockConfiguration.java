@@ -7,7 +7,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 @ConditionalOnProperty(name = {"store.extensions.blockfrost.blocks.enabled"},
         havingValue = "true",
-        matchIfMissing = false
+        matchIfMissing = true
 )
 @ComponentScan(basePackages = {"com.bloxbean.cardano.yaci.store.blockfrost.block"})
 public class BFBlockConfiguration {

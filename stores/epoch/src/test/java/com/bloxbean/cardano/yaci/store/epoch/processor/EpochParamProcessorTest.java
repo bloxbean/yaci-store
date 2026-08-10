@@ -13,6 +13,7 @@ import com.bloxbean.cardano.yaci.store.epoch.domain.EpochParam;
 import com.bloxbean.cardano.yaci.store.epoch.storage.EpochParamStorage;
 import com.bloxbean.cardano.yaci.store.epoch.storage.ProtocolParamsProposalStorage;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
+import com.bloxbean.cardano.yaci.store.events.GenesisBlockEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreAdaPotJobProcessingEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreEpochTransitionEvent;
 import org.junit.jupiter.api.Test;
@@ -20,6 +21,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.math.BigInteger;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -199,5 +201,83 @@ class EpochParamProcessorTest {
         assertThat(epochParam.getParams().getDrepActivity()).isEqualTo(20);
         assertThat(epochParam.getParams().getMaxTxSize()).isEqualTo(1000);
     }
+    @Test
+    void givenGenesisBlockEvent_directConwayStart_shouldNormalizeProtocolParams() {
+        //Direct Conway start (custom/devnet): merged genesis params carry raw pre-Babbage values
+        ProtocolParams genesisParams = ProtocolParams.builder()
+                .minUtxo(BigInteger.valueOf(1000000))      //Shelley minUTxOValue
+                .adaPerUtxoByte(BigInteger.valueOf(34482))  //Alonzo lovelacePerUTxOWord
+                .build();
+
+        GenesisBlockEvent genesisBlockEvent = GenesisBlockEvent.builder()
+                .era(Era.Conway)
+                .epoch(0)
+                .slot(-1)
+                .block(-1)
+                .blockTime(1666342887)
+                .protocolMagic(42)
+                .build();
+
+        Mockito.when(eraGenesisProtocolParamsUtil.getGenesisProtocolParameters(Era.Conway, null, 42))
+                .thenReturn(Optional.of(genesisParams));
+
+        epochParamProcessor.handleGenesisBlockEvent(genesisBlockEvent);
+
+        Mockito.verify(epochParamStorage, Mockito.times(1)).save(argCaptor.capture());
+        EpochParam epochParam = argCaptor.getValue();
+
+        //Both Alonzo and Babbage rules applied for a direct Conway start
+        assertThat(epochParam.getParams().getMinUtxo()).isNull();
+        assertThat(epochParam.getParams().getAdaPerUtxoByte()).isEqualTo(BigInteger.valueOf(4310)); //34482 / 8
+        assertThat(epochParam.getEpoch()).isEqualTo(0);
+        assertThat(epochParam.getBlockTime()).isEqualTo(1666342887);
+    }
+
+    @Test
+    void givenGenesisBlockEvent_directAlonzoStart_shouldClearMinUtxoOnly() {
+        //Direct Alonzo start (e.g. preview): only the Alonzo rule applies; the word-based
+        //adaPerUtxoByte (34482) is correct for Alonzo and must NOT be divided by 8 here.
+        ProtocolParams genesisParams = ProtocolParams.builder()
+                .minUtxo(BigInteger.valueOf(1000000))
+                .adaPerUtxoByte(BigInteger.valueOf(34482))
+                .build();
+
+        GenesisBlockEvent genesisBlockEvent = GenesisBlockEvent.builder()
+                .era(Era.Alonzo)
+                .epoch(0)
+                .slot(-1)
+                .block(-1)
+                .blockTime(1666342887)
+                .protocolMagic(2)
+                .build();
+
+        Mockito.when(eraGenesisProtocolParamsUtil.getGenesisProtocolParameters(Era.Alonzo, null, 2))
+                .thenReturn(Optional.of(genesisParams));
+
+        epochParamProcessor.handleGenesisBlockEvent(genesisBlockEvent);
+
+        Mockito.verify(epochParamStorage, Mockito.times(1)).save(argCaptor.capture());
+        EpochParam epochParam = argCaptor.getValue();
+
+        assertThat(epochParam.getParams().getMinUtxo()).isNull();
+        assertThat(epochParam.getParams().getAdaPerUtxoByte()).isEqualTo(BigInteger.valueOf(34482)); //unchanged
+    }
+
+    @Test
+    void givenGenesisBlockEvent_whenNoGenesisProtocolParams_shouldNotSave() {
+        GenesisBlockEvent genesisBlockEvent = GenesisBlockEvent.builder()
+                .era(Era.Byron)
+                .epoch(0)
+                .protocolMagic(1)
+                .build();
+
+        Mockito.when(eraGenesisProtocolParamsUtil.getGenesisProtocolParameters(Era.Byron, null, 1))
+                .thenReturn(Optional.empty());
+
+        epochParamProcessor.handleGenesisBlockEvent(genesisBlockEvent);
+
+        Mockito.verify(epochParamStorage, Mockito.never()).save(Mockito.any());
+    }
+
     //TODO -- Add more test cases without mock
 }

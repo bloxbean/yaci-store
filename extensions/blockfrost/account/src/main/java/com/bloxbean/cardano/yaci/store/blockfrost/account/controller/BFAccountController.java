@@ -20,7 +20,7 @@ import java.util.List;
 @RequiredArgsConstructor
 @Tag(name = "Blockfrost Accounts")
 @RequestMapping("${blockfrost.apiPrefix}/accounts")
-@ConditionalOnExpression("${store.extensions.blockfrost.account.enabled:false}")
+@ConditionalOnExpression("${store.extensions.blockfrost.account.enabled:true}")
 public class BFAccountController {
 
     private final BFAccountService bfAccountService;

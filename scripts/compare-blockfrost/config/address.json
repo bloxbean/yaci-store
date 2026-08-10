@@ -1,0 +1,22 @@
+{
+  "preprod": {
+    "asset": "bb7f4364a3777f9cf178c545418725894dedc17f67f18de9bc8d8032466c756964202d2033303020",
+    "policy_id": "bb7f4364a3777f9cf178c545418725894dedc17f67f18de9bc8d8032",
+    "addresses": []
+  },
+  "preview": {
+    "asset": "16acc0b7b02e6795f5fe7350a36c6ca33bb6d54d1a1415cebd2fb5ca6e3465528c3b4e6a8f10ac4709d15a3b025242d4119e5120e045931c8e36bc81",
+    "policy_id": "16acc0b7b02e6795f5fe7350a36c6ca33bb6d54d1a1415cebd2fb5ca",
+    "addresses": []
+  },
+  "mainnet": {
+    "_comment": "addresses below are the most frequent owner_addr values (whales) from planner stats; empty arrays fall back to auto-discovery",
+    "asset": "3a9241cd79895e3a8d65261b40077d4437ce71e9d7c8c6c00e3f658e4669727374636f696e",
+    "policy_id": "3a9241cd79895e3a8d65261b40077d4437ce71e9d7c8c6c00e3f658e",
+    "addresses": [
+      "addr1zxgx3far7qygq0k6epa0zcvcvrevmn0ypsnfsue94nsn3tvpw288a4x0xf8pxgcntelxmyclq83s0ykeehchz2wtspks905plm",
+      "addr1zxn9efv2f6w82hagxqtn62ju4m293tqvw0uhmdl64ch8uw6j2c79gy9l76sdg0xwhd7r0c0kna0tycz4y5s6mlenh8pq6s3z70",
+      "addr1vy740r73x2w3du2xxt76cs4hdml4zw2c5h7tddcyf3jauys9tyns4"
+    ]
+  }
+}

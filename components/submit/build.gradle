@@ -1,7 +1,11 @@
 dependencies {
     api project(":components:common")
     api project(":components:core")
+    api project(":components:client")
     implementation libs.cardano.client.backend.ogmios
+    implementation(libs.scalus.bloxbean.cardano.client.lib) {
+        exclude group: "com.bloxbean.cardano"
+    }
 
     implementation(libs.vavr)
 }

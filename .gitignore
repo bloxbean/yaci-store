@@ -50,3 +50,14 @@ _rocksdb
 /docs/.playwright-mcp/
 /docs/.playwright-mcp/
 /docs/.claude/
+
+### Scripts ###
+/scripts/**/__pycache__/
+/scripts/**/*.pyc
+/scripts/**/config.json
+/scripts/**/logs/
+/scripts/**/reports/
+/scripts/export-dbsync/output/
+/scripts/export-dbsync/**/*.parquet
+/scripts/export-dbsync/**/*.tmp
+/scripts/export-dbsync/.*_epochs/

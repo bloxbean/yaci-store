@@ -1,6 +1,7 @@
 {
   "resources":{
   "includes":[
+    {"pattern": "blockfrost-index.yml$"},
     {"pattern": "extra-index.yml$"},
     {"pattern":  "index.yml$"},
     {"pattern":  "rollback.yml$"},
