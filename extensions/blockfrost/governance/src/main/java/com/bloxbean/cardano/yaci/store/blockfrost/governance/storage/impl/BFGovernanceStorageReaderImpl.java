@@ -237,6 +237,8 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
                 .drepId(r.get(DREP_REGISTRATION.DREP_ID))
                 .anchorUrl(r.get(DREP_REGISTRATION.ANCHOR_URL))
                 .anchorHash(r.get(DREP_REGISTRATION.ANCHOR_HASH))
+                .deposit(r.get(DREP_REGISTRATION.DEPOSIT) != null
+                        ? java.math.BigInteger.valueOf(r.get(DREP_REGISTRATION.DEPOSIT)) : null)
                 .slot(r.get(DREP_REGISTRATION.SLOT))
                 .epoch(r.get(DREP_REGISTRATION.EPOCH))
                 .build();

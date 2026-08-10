@@ -51,6 +51,7 @@ public interface BFDRepMapper {
     @Mapping(target = "txHash", source = "txHash")
     @Mapping(target = "certIndex", expression = "java((int) registration.getCertIndex())")
     @Mapping(target = "action", expression = "java(certTypeStringToAction(registration.getType() != null ? registration.getType().name() : null))")
+    @Mapping(target = "deposit", expression = "java(registrationDeposit(registration))")
     BFDRepUpdateDto toUpdateDto(DRepRegistration registration);
 
     // ── DRep vote ─────────────────────────────────────────────────────────
@@ -89,6 +90,17 @@ public interface BFDRepMapper {
             case "UPDATE_DREP_CERT" -> "updated";
             default -> typeName.toLowerCase();
         };
+    }
+
+    /**
+     * Deposit is only meaningful on a registration. The store persists the refund amount on
+     * UNREG_DREP_CERT rows, but Blockfrost reports deposit as null for deregistered and
+     * updated actions, so only REG_DREP_CERT surfaces a value.
+     */
+    default String registrationDeposit(DRepRegistration registration) {
+        if (registration == null || registration.getDeposit() == null) return null;
+        return registration.getType() == com.bloxbean.cardano.yaci.core.model.certs.CertificateType.REG_DREP_CERT
+                ? registration.getDeposit().toString() : null;
     }
 
     @Named("voteToLowerCase")
