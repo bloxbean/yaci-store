@@ -29,7 +29,7 @@ import java.util.List;
 @RequiredArgsConstructor
 @Tag(name = "Blockfrost Assets")
 @RequestMapping("${blockfrost.apiPrefix}/assets")
-@ConditionalOnExpression("${store.extensions.blockfrost.asset.enabled:false}")
+@ConditionalOnExpression("${store.extensions.blockfrost.asset.enabled:true}")
 public class BFAssetController {
 
     private final BFAssetService bfAssetService;

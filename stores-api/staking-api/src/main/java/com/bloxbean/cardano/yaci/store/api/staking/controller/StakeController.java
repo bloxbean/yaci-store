@@ -17,7 +17,7 @@ import java.util.List;
 @Slf4j
 @RestController
 @RequiredArgsConstructor
-@Tag(name = "Account Service")
+@Tag(name = "Staking Service")
 @RequestMapping("${apiPrefix}/stake")
 @ConditionalOnExpression("${store.staking.endpoints.account.enabled:true}")
 public class StakeController {

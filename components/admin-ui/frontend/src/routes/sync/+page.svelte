@@ -65,6 +65,7 @@
             isSynced={syncStatus.synced}
             currentBlock={syncStatus.block}
             networkBlock={syncStatus.networkBlock}
+            networkTipAvailable={syncStatus.networkTipAvailable}
         />
 
         <SyncControls
@@ -84,7 +85,7 @@
             </div>
             <div>
                 <p class="text-xs text-gray-500 dark:text-gray-400">Network Block</p>
-                <p class="text-lg font-semibold text-gray-900 dark:text-white">{syncStatus.networkBlock.toLocaleString()}</p>
+                <p class="text-lg font-semibold text-gray-900 dark:text-white">{syncStatus.networkTipAvailable ? syncStatus.networkBlock.toLocaleString() : 'Unavailable'}</p>
             </div>
             <div>
                 <p class="text-xs text-gray-500 dark:text-gray-400">Current Slot</p>
@@ -92,7 +93,7 @@
             </div>
             <div>
                 <p class="text-xs text-gray-500 dark:text-gray-400">Network Slot</p>
-                <p class="text-lg font-semibold text-gray-900 dark:text-white">{syncStatus.networkSlot.toLocaleString()}</p>
+                <p class="text-lg font-semibold text-gray-900 dark:text-white">{syncStatus.networkTipAvailable ? syncStatus.networkSlot.toLocaleString() : 'Unavailable'}</p>
             </div>
             <div>
                 <p class="text-xs text-gray-500 dark:text-gray-400">Epoch</p>
@@ -104,7 +105,7 @@
             </div>
             <div>
                 <p class="text-xs text-gray-500 dark:text-gray-400">Sync Percentage</p>
-                <p class="text-lg font-semibold text-gray-900 dark:text-white">{syncStatus.syncPercentage.toFixed(4)}%</p>
+                <p class="text-lg font-semibold text-gray-900 dark:text-white">{syncStatus.networkTipAvailable ? `${syncStatus.syncPercentage.toFixed(4)}%` : 'Unknown'}</p>
             </div>
             <div>
                 <p class="text-xs text-gray-500 dark:text-gray-400">Block Hash</p>

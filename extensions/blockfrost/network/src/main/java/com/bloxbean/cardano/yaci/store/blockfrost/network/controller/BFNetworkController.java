@@ -22,7 +22,7 @@ import java.util.List;
 @RequiredArgsConstructor
 @Tag(name = "Blockfrost Network")
 @RequestMapping("${blockfrost.apiPrefix}")
-@ConditionalOnExpression("${store.extensions.blockfrost.network.enabled:false}")
+@ConditionalOnExpression("${store.extensions.blockfrost.network.enabled:true}")
 public class BFNetworkController {
 
     private final BFNetworkService bfNetworkService;

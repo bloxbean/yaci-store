@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.api.metadata.service;
 
+import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.metadata.domain.TxMetadataLabel;
 import com.bloxbean.cardano.yaci.store.metadata.storage.TxMetadataStorageReader;
 import lombok.RequiredArgsConstructor;
@@ -20,5 +21,9 @@ public class MetadataService {
 
     public List<TxMetadataLabel> getMetadataByLabel(String label, int page, int count) {
         return metadataReader.findByLabel(label, page, count);
+    }
+
+    public List<TxMetadataLabel> getMetadataByLabel(String label, int page, int count, Order order) {
+        return metadataReader.findByLabel(label, page, count, order);
     }
 }

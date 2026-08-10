@@ -1,0 +1,28 @@
+{
+  "store_url": "postgresql://localhost:5432/yaci_store",
+  "store_user": "yaci",
+  "store_password": "dbpass",
+  "store_schema": "yaci_store",
+  "dbsync_parquet_dir": "../export-dbsync/output",
+  "start_epoch": 504,
+  "end_epoch": 624,
+  "models": [
+    "adapot",
+    "epoch_stake",
+    "reward_rest",
+    "drep_amount",
+    "drep_active_until",
+    "gov_action_proposal_status"
+  ],
+  "reward_types": [
+    "treasury",
+    "reserves",
+    "proposal_refund"
+  ],
+  "include_zero_amount": false,
+  "max_mismatches": 50,
+  "duckdb_memory_limit": "2GB",
+  "reports_dir": "./reports",
+  "logs_dir": "./logs",
+  "quiet": false
+}

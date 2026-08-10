@@ -789,6 +789,12 @@ export default function LandingPage() {
           opacity: 0.9;
         }
 
+        .project-icon img {
+          width: 3rem;
+          height: 3rem;
+          display: block;
+        }
+
         .project-info {
           flex: 1;
         }
@@ -1974,15 +1980,17 @@ export default function LandingPage() {
               </div>
 
               <div className="project-card">
-                <div className="project-icon">⚙️</div>
+                <div className="project-icon">
+                  <img src="/images/nexus.svg" alt="Nexus" />
+                </div>
                 <div className="project-info">
-                  <h3 className="project-name">CBI Backend Service</h3>
+                  <h3 className="project-name">Nexus</h3>
                   <p className="project-description">
-                    Backend infrastructure service by Cardano Fans (CRFA) for community-driven blockchain applications and tools.
+                    Multi-chain blockchain data API by A.D. Labs, using Yaci Store as its primary Cardano data provider for address, transaction, asset, pool, and DRep endpoints.
                   </p>
                   <div className="project-links">
-                    <a href="https://github.com/Cardano-Fans/cbi-backend" target="_blank" className="project-link">
-                      GitHub
+                    <a href="https://market.gerowallet.io" target="_blank" className="project-link">
+                      Visit Site
                     </a>
                   </div>
                 </div>

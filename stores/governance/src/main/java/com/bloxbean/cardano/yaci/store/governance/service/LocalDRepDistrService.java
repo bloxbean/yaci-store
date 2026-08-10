@@ -95,7 +95,8 @@ public class LocalDRepDistrService {
 
         Integer epoch = epochAndTip.get()._2;
         long slot = epochAndTip.get()._1.getPoint().getSlot();
-        Optional<LocalClientProvider> localClientProvider = localClientProviderManager.getLocalClientProvider();
+        Optional<LocalClientProvider> localClientProvider
+                = localClientProviderManager != null? localClientProviderManager.getLocalClientProvider() : Optional.empty();
 
         try {
             var localStateQueryClient = localClientProvider.map(LocalClientProvider::getLocalStateQueryClient).orElse(null);

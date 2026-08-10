@@ -31,7 +31,7 @@ import java.util.List;
 @RequiredArgsConstructor
 @Tag(name = "Blockfrost Epochs")
 @RequestMapping("${blockfrost.apiPrefix}/epochs")
-@ConditionalOnExpression("${store.extensions.blockfrost.epoch.enabled:false}")
+@ConditionalOnExpression("${store.extensions.blockfrost.epoch.enabled:true}")
 public class BFEpochController {
 
     private final BFProtocolParamMapper bfProtocolParamMapper = BFProtocolParamMapper.INSTANCE;

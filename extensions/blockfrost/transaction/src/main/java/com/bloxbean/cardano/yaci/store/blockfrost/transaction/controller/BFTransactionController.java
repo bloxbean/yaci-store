@@ -20,7 +20,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 @Tag(name = "Blockfrost Transactions")
 @RequestMapping("${blockfrost.apiPrefix}/txs")
-@ConditionalOnExpression("${store.extensions.blockfrost.transaction.enabled:false}")
+@ConditionalOnExpression("${store.extensions.blockfrost.transaction.enabled:true}")
 public class BFTransactionController {
 
     private final BFTransactionService bfTransactionService;
