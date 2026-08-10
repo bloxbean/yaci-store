@@ -23,6 +23,8 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigInteger;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 
@@ -91,6 +93,7 @@ public class BFNetworkService {
 
     public List<BFEraDto> getNetworkEras() {
         List<CardanoEra> cardanoEras = eraService.getEras();
+        List<EraStart> eraTimeline = buildEraTimeline(cardanoEras);
         List<BFEraDto> result = new ArrayList<>();
 
         long protocolMagic = storeProperties.getProtocolMagic();
@@ -108,12 +111,12 @@ public class BFNetworkService {
 
         // Compute Byron→Shelley boundary (byronEndSlot is the actual first Shelley slot,
         // which on all known networks coincides with the theoretical epoch boundary)
-        long byronEndSlot = cardanoEras.isEmpty() ? 0L : cardanoEras.get(0).getStartSlot();
+        long byronEndSlot = eraTimeline.isEmpty() ? 0L : eraTimeline.get(0).startSlot();
         long byronEndTimeAbs = genesisStartTime + byronEndSlot * byronSlotLength;
         int byronEndEpoch = (int) (byronEndSlot / byronEpochLength);
 
         // ── Byron era (always epoch 0, slot 0) ───────────────────────────────
-        if (!cardanoEras.isEmpty()) {
+        if (!eraTimeline.isEmpty()) {
             BFEraDto byronEra = BFEraDto.builder()
                     .start(BFEraDto.EraBoundary.builder()
                             .time(0L)
@@ -135,12 +138,12 @@ public class BFNetworkService {
         }
 
         // ── Post-Byron eras ──────────────────────────────────────────────────
-        for (int i = 0; i < cardanoEras.size(); i++) {
-            CardanoEra era = cardanoEras.get(i);
-            CardanoEra nextEra = (i + 1 < cardanoEras.size()) ? cardanoEras.get(i + 1) : null;
+        for (int i = 0; i < eraTimeline.size(); i++) {
+            EraStart era = eraTimeline.get(i);
+            EraStart nextEra = (i + 1 < eraTimeline.size()) ? eraTimeline.get(i + 1) : null;
 
-            // epoch number derived from the actual first-block slot is reliable
-            int startEpoch = eraService.getEpochNo(era.getEra(), era.getStartSlot());
+            // Missing eras reuse the next actual era's boundary and therefore become zero-length summaries.
+            int startEpoch = eraService.getEpochNo(era.era(), era.startSlot());
             // getShelleyAbsoluteSlot(epoch, 0) gives the theoretical epoch-boundary slot,
             // matching Blockfrost which uses protocol-parameter values, not actual first-block slots
             long startSlot = eraService.getShelleyAbsoluteSlot(startEpoch, 0);
@@ -154,7 +157,7 @@ public class BFNetworkService {
 
             BFEraDto.EraBoundary end = null;
             if (nextEra != null) {
-                int endEpoch = eraService.getEpochNo(era.getEra(), nextEra.getStartSlot());
+                int endEpoch = eraService.getEpochNo(era.era(), nextEra.startSlot());
                 long endSlot = eraService.getShelleyAbsoluteSlot(endEpoch, 0);
                 long endTimeRel = eraService.blockTime(Era.Shelley, endSlot) - genesisStartTime;
                 end = BFEraDto.EraBoundary.builder()
@@ -185,6 +188,54 @@ public class BFNetworkService {
         return result;
     }
 
+    /**
+     * Expands observed post-Byron transitions into the canonical era order expected by HFC history.
+     * <pre> Example:
+     * Preview input:  Alonzo@0, Babbage@259200, Conway@55814400
+     * Preview output: Shelley@0, Allegra@0, Mary@0, Alonzo@0,
+     *                 Babbage@259200, Conway@55814400
+     * </pre>
+     * An era absent from storage reuses the next observed era's start slot, which makes it a
+     * zero-length summary once adjacent boundaries are linked. The projection is in-memory only
+     * and stops at the latest observed era, so it neither changes storage nor exposes future eras.
+     */
+    private List<EraStart> buildEraTimeline(List<CardanoEra> cardanoEras) {
+        List<CardanoEra> actualEras = cardanoEras.stream()
+                .filter(era -> era.getEra() != null && era.getEra() != Era.Byron)
+                .sorted(Comparator.comparingInt(era -> era.getEra().getValue()))
+                .toList();
+        if (actualEras.isEmpty()) {
+            return List.of();
+        }
+
+        int currentEraValue = actualEras.getLast().getEra().getValue();
+        int actualEraIndex = 0;
+        List<EraStart> timeline = new ArrayList<>();
+
+        for (Era era : Arrays.stream(Era.values())
+                .filter(candidate -> candidate != Era.Byron && candidate.getValue() <= currentEraValue)
+                .sorted(Comparator.comparingInt(Era::getValue))
+                .toList()) {
+            // Keep the pointer at the first observed era at or after the canonical candidate.
+            while (actualEraIndex < actualEras.size()
+                    && actualEras.get(actualEraIndex).getEra().getValue() < era.getValue()) {
+                actualEraIndex++;
+            }
+            if (actualEraIndex >= actualEras.size()) {
+                break;
+            }
+
+            CardanoEra nextActualEra = actualEras.get(actualEraIndex);
+            // For a skipped era, this is the next observed boundary and can be reused by later gaps.
+            timeline.add(new EraStart(era, nextActualEra.getStartSlot()));
+            if (nextActualEra.getEra() == era) {
+                actualEraIndex++;
+            }
+        }
+
+        return timeline;
+    }
+
     private BFEraDto.EraBoundary projectCurrentEraEnd(long epochLength,
                                                        long safeZone,
                                                        long genesisStartTime) {
@@ -205,6 +256,9 @@ public class BFNetworkService {
                 .slot(endSlot)
                 .epoch(endEpoch)
                 .build();
+    }
+
+    private record EraStart(Era era, long startSlot) {
     }
 
     // ── /genesis ─────────────────────────────────────────────────────────────
