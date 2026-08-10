@@ -120,6 +120,7 @@ public class TransactionProcessor {
                     .validityIntervalStart(transaction.getBody().getValidityIntervalStart())
                     .scriptDataHash(transaction.getBody().getScriptDataHash())
                     .collateralInputs(collateralInputs)
+                    .requiredSigners(transaction.getBody().getRequiredSigners())
                     .collateralReturnJson(convertOutput(transaction.getBody().getCollateralReturn()))
                     .netowrkId(transaction.getBody().getNetowrkId())
                     .totalCollateral(transaction.getBody().getTotalCollateral())
