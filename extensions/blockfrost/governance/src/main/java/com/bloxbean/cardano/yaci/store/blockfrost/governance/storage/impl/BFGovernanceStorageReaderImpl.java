@@ -30,10 +30,17 @@ import java.util.Map;
 import java.util.Optional;
 
 import static com.bloxbean.cardano.yaci.store.account.jooq.Tables.STAKE_ADDRESS_BALANCE;
+import static com.bloxbean.cardano.yaci.store.adapot.jooq.Tables.ADAPOT_JOBS;
+import static com.bloxbean.cardano.yaci.store.adapot.jooq.Tables.EPOCH_STAKE;
+import static com.bloxbean.cardano.yaci.store.adapot.jooq.Tables.INSTANT_REWARD;
+import static com.bloxbean.cardano.yaci.store.adapot.jooq.Tables.REWARD;
+import static com.bloxbean.cardano.yaci.store.adapot.jooq.Tables.REWARD_REST;
 import static com.bloxbean.cardano.yaci.store.epoch.jooq.Tables.EPOCH_PARAM;
 import static com.bloxbean.cardano.yaci.store.governance.jooq.Tables.*;
 import static com.bloxbean.cardano.yaci.store.governance_aggr.jooq.Tables.DREP_DIST;
 import static com.bloxbean.cardano.yaci.store.governance_aggr.jooq.Tables.GOV_ACTION_PROPOSAL_STATUS;
+import static com.bloxbean.cardano.yaci.store.staking.jooq.Tables.STAKE_REGISTRATION;
+import static com.bloxbean.cardano.yaci.store.transaction.jooq.Tables.WITHDRAWAL;
 
 @Slf4j
 @Component
@@ -394,49 +401,240 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
 
     @Override
     public List<BFDRepDelegator> findDRepDelegators(String drepHex, int page, int count, Order order) {
-        return buildDRepDelegatorsQuery(drepHex, page, count, order)
-                .fetch()
-                .map(r -> BFDRepDelegator.builder()
-                        .address(r.get("address", String.class))
-                        .amount(r.get("amount", Long.class))
-                        .build());
+        Integer snapshotEpoch = findLatestStakeSnapshotEpoch();
+        var delegators = buildDRepDelegatorsQuery(drepHex, page, count, order, snapshotEpoch).fetch();
+        if (delegators.isEmpty()) {
+            return List.of();
+        }
+
+        List<String> checkpointAddresses = delegators.stream()
+                .filter(r -> r.get("checkpoint_amount", Long.class) != null)
+                .map(r -> r.get("address", String.class))
+                .toList();
+        List<String> addressesWithoutCheckpoint = delegators.stream()
+                .filter(r -> r.get("checkpoint_amount", Long.class) == null)
+                .map(r -> r.get("address", String.class))
+                .toList();
+
+        Map<String, Long> rewardChanges = new HashMap<>();
+        fetchRewardChanges(rewardChanges, checkpointAddresses, snapshotEpoch);
+        fetchRewardChanges(rewardChanges, addressesWithoutCheckpoint, null);
+
+        return delegators
+                .map(r -> {
+                    String address = r.get("address", String.class);
+                    long currentBalance = r.get("amount", Long.class);
+                    Long checkpointAmount = r.get("checkpoint_amount", Long.class);
+                    long snapshotBalance = Optional.ofNullable(r.get("snapshot_balance", Long.class)).orElse(0L);
+                    // epoch_stake stores controlled amount. Subtract its UTxO component to recover
+                    // the reward balance at the checkpoint, then apply only later reward changes.
+                    long checkpointReward = checkpointAmount == null ? 0L : checkpointAmount - snapshotBalance;
+                    long withdrawableReward = Math.max(
+                            checkpointReward + rewardChanges.getOrDefault(address, 0L),
+                            0L
+                    );
+                    return BFDRepDelegator.builder()
+                            .address(address)
+                            .amount(currentBalance + withdrawableReward)
+                            .build();
+                });
     }
 
-    Select<?> buildDRepDelegatorsQuery(String drepHex, int page, int count, Order order) {
+    private Integer findLatestStakeSnapshotEpoch() {
+        Integer completedJobEpoch = dsl.select(ADAPOT_JOBS.EPOCH)
+                .from(ADAPOT_JOBS)
+                .where(ADAPOT_JOBS.TYPE.eq("REWARD_CALC"))
+                .and(ADAPOT_JOBS.STATUS.eq("COMPLETED"))
+                .orderBy(ADAPOT_JOBS.EPOCH.desc())
+                .limit(1)
+                .fetchOne(ADAPOT_JOBS.EPOCH);
+        // Reward calculation for job epoch N materializes the epoch_stake snapshot for N - 1.
+        return completedJobEpoch == null ? null : completedJobEpoch - 1;
+    }
+
+    private void fetchRewardChanges(Map<String, Long> rewardChanges,
+                                    List<String> addresses,
+                                    Integer snapshotEpoch) {
+        if (addresses.isEmpty()) {
+            return;
+        }
+
+        buildRewardBalanceQuery(addresses, snapshotEpoch).fetch().forEach(r -> rewardChanges.put(
+                r.get("address", String.class),
+                r.get("amount", Long.class)
+        ));
+    }
+
+    Select<?> buildDRepDelegatorsQuery(String drepHex, int page, int count, Order order, Integer snapshotEpoch) {
         SortOrder sortOrder = order == Order.desc ? SortOrder.DESC : SortOrder.ASC;
         var newerDelegation = DELEGATION_VOTE.as("newer");
+        var newerStakeRegistration = STAKE_REGISTRATION.as("newer_stake_reg");
+
+        // Chain order includes transaction and certificate positions because multiple delegation
+        // certificates can share a slot. Resolve current delegators before pagination so balance
+        // lookups stay bounded to the requested page.
+        var newerInChainOrder = newerDelegation.SLOT.gt(DELEGATION_VOTE.SLOT)
+                .or(newerDelegation.SLOT.eq(DELEGATION_VOTE.SLOT)
+                        .and(newerDelegation.TX_INDEX.gt(DELEGATION_VOTE.TX_INDEX)))
+                .or(newerDelegation.SLOT.eq(DELEGATION_VOTE.SLOT)
+                        .and(newerDelegation.TX_INDEX.eq(DELEGATION_VOTE.TX_INDEX))
+                        .and(newerDelegation.CERT_INDEX.gt(DELEGATION_VOTE.CERT_INDEX)));
+        var newerStakeRegistrationInChainOrder = newerStakeRegistration.SLOT.gt(STAKE_REGISTRATION.SLOT)
+                .or(newerStakeRegistration.SLOT.eq(STAKE_REGISTRATION.SLOT)
+                        .and(newerStakeRegistration.TX_INDEX.gt(STAKE_REGISTRATION.TX_INDEX)))
+                .or(newerStakeRegistration.SLOT.eq(STAKE_REGISTRATION.SLOT)
+                        .and(newerStakeRegistration.TX_INDEX.eq(STAKE_REGISTRATION.TX_INDEX))
+                        .and(newerStakeRegistration.CERT_INDEX.gt(STAKE_REGISTRATION.CERT_INDEX)));
+        var delegationAtOrAfterCurrentRegistration = DELEGATION_VOTE.SLOT.gt(STAKE_REGISTRATION.SLOT)
+                .or(DELEGATION_VOTE.SLOT.eq(STAKE_REGISTRATION.SLOT)
+                        .and(DELEGATION_VOTE.TX_INDEX.gt(STAKE_REGISTRATION.TX_INDEX)))
+                .or(DELEGATION_VOTE.SLOT.eq(STAKE_REGISTRATION.SLOT)
+                        .and(DELEGATION_VOTE.TX_INDEX.eq(STAKE_REGISTRATION.TX_INDEX))
+                        .and(DELEGATION_VOTE.CERT_INDEX.ge(STAKE_REGISTRATION.CERT_INDEX)));
+
+        // Deregistration clears vote delegation. Require the latest stake-registration event to
+        // be a registration, and ignore a delegation left over from an earlier registration cycle.
+        var hasActiveRegistrationForDelegation = DSL.exists(
+                dsl.selectOne()
+                        .from(STAKE_REGISTRATION)
+                        .where(STAKE_REGISTRATION.ADDRESS.eq(DELEGATION_VOTE.ADDRESS))
+                        .and(STAKE_REGISTRATION.TYPE.eq("STAKE_REGISTRATION"))
+                        .and(delegationAtOrAfterCurrentRegistration)
+                        .andNotExists(
+                                dsl.selectOne()
+                                        .from(newerStakeRegistration)
+                                        .where(newerStakeRegistration.ADDRESS.eq(STAKE_REGISTRATION.ADDRESS))
+                                        .and(newerStakeRegistrationInChainOrder)
+                        )
+        );
         var pagedDelegators = dsl.select(
                         DELEGATION_VOTE.ADDRESS.as("address"),
-                        DELEGATION_VOTE.SLOT.as("max_slot")
+                        DELEGATION_VOTE.SLOT.as("max_slot"),
+                        DELEGATION_VOTE.TX_INDEX.as("max_tx_index"),
+                        DELEGATION_VOTE.CERT_INDEX.as("max_cert_index")
                 )
                 .from(DELEGATION_VOTE)
                 .where(DELEGATION_VOTE.DREP_HASH.eq(drepHex))
+                .and(hasActiveRegistrationForDelegation)
                 .and(DSL.notExists(
                         dsl.selectOne()
                                 .from(newerDelegation)
                                 .where(newerDelegation.ADDRESS.eq(DELEGATION_VOTE.ADDRESS))
-                                .and(newerDelegation.SLOT.gt(DELEGATION_VOTE.SLOT))
+                                .and(newerInChainOrder)
                 ))
-                .orderBy(DELEGATION_VOTE.SLOT.sort(sortOrder))
+                .orderBy(
+                        DELEGATION_VOTE.SLOT.sort(sortOrder),
+                        DELEGATION_VOTE.TX_INDEX.sort(sortOrder),
+                        DELEGATION_VOTE.CERT_INDEX.sort(sortOrder)
+                )
                 .limit(count)
                 .offset(offset(page, count))
                 .asTable("paged_del");
 
         var address = pagedDelegators.field("address", String.class);
         var maxSlot = pagedDelegators.field("max_slot", Long.class);
+        var maxTxIndex = pagedDelegators.field("max_tx_index", Integer.class);
+        var maxCertIndex = pagedDelegators.field("max_cert_index", Integer.class);
+
+        // Balance snapshots are keyed by address and slot, so this lookup can fetch the latest
+        // balance for each paged delegator without rebuilding it from historical UTxOs.
         var latestBalance = dsl.select(STAKE_ADDRESS_BALANCE.QUANTITY.cast(Long.class))
                 .from(STAKE_ADDRESS_BALANCE)
                 .where(STAKE_ADDRESS_BALANCE.ADDRESS.eq(address))
                 .orderBy(STAKE_ADDRESS_BALANCE.SLOT.desc())
                 .limit(1)
                 .asField();
+        var checkpointAmount = snapshotEpoch == null
+                ? DSL.val((Long) null)
+                : dsl.select(EPOCH_STAKE.AMOUNT.cast(Long.class))
+                .from(EPOCH_STAKE)
+                .where(EPOCH_STAKE.EPOCH.eq(snapshotEpoch))
+                .and(EPOCH_STAKE.ADDRESS.eq(address))
+                .asField();
+        var balanceAtSnapshot = snapshotEpoch == null
+                ? DSL.val((Long) null)
+                : dsl.select(STAKE_ADDRESS_BALANCE.QUANTITY.cast(Long.class))
+                .from(STAKE_ADDRESS_BALANCE)
+                .where(STAKE_ADDRESS_BALANCE.ADDRESS.eq(address))
+                .and(STAKE_ADDRESS_BALANCE.EPOCH.le(snapshotEpoch))
+                .orderBy(STAKE_ADDRESS_BALANCE.SLOT.desc())
+                .limit(1)
+                .asField();
 
         return dsl.select(
                         address.as("address"),
-                        DSL.coalesce(latestBalance, DSL.inline(0L)).as("amount")
+                        DSL.coalesce(latestBalance, DSL.inline(0L)).as("amount"),
+                        checkpointAmount.as("checkpoint_amount"),
+                        balanceAtSnapshot.as("snapshot_balance")
                 )
                 .from(pagedDelegators)
-                .orderBy(maxSlot.sort(sortOrder));
+                .orderBy(
+                        maxSlot.sort(sortOrder),
+                        maxTxIndex.sort(sortOrder),
+                        maxCertIndex.sort(sortOrder)
+                );
+    }
+
+    Select<?> buildRewardBalanceQuery(List<String> addresses, Integer snapshotEpoch) {
+        var rewardCondition = REWARD.ADDRESS.in(addresses);
+        var rewardRestCondition = REWARD_REST.ADDRESS.in(addresses);
+        var instantRewardCondition = INSTANT_REWARD.ADDRESS.in(addresses);
+        var withdrawalCondition = WITHDRAWAL.ADDRESS.in(addresses);
+
+        if (snapshotEpoch != null) {
+            // The static partition-key lower bound is essential: PostgreSQL can prune all reward
+            // partitions already represented by the epoch stake checkpoint.
+            // Regular pool rewards earned through snapshot epoch E are already in epoch_stake(E),
+            // including rewards that first become spendable in E + 1. Refunds are included only
+            // when spendable, so their cutoff remains E. Instant rewards use the same E + 1
+            // spendable boundary as the snapshot calculation.
+            rewardCondition = rewardCondition
+                    .and(REWARD.SPENDABLE_EPOCH.gt(snapshotEpoch))
+                    .and(REWARD.TYPE.eq("refund")
+                            .or(REWARD.TYPE.in("member", "leader")
+                                    .and(REWARD.EARNED_EPOCH.gt(snapshotEpoch)
+                                            .or(REWARD.SPENDABLE_EPOCH.gt(snapshotEpoch + 1)))));
+            rewardRestCondition = rewardRestCondition
+                    .and(REWARD_REST.SPENDABLE_EPOCH.gt(snapshotEpoch));
+            instantRewardCondition = instantRewardCondition
+                    .and(INSTANT_REWARD.SPENDABLE_EPOCH.gt(snapshotEpoch + 1));
+            withdrawalCondition = withdrawalCondition
+                    .and(WITHDRAWAL.EPOCH.gt(snapshotEpoch));
+        }
+
+        // Blockfrost's controlled amount includes unclaimed rewards. Aggregate changes for the
+        // whole page in one query; addresses without a checkpoint fall back to their full history.
+        var rewardChanges = dsl.select(
+                        REWARD.ADDRESS.as("address"),
+                        REWARD.AMOUNT.cast(Long.class).as("amount")
+                )
+                .from(REWARD)
+                .where(rewardCondition)
+                .unionAll(dsl.select(
+                                REWARD_REST.ADDRESS.as("address"),
+                                REWARD_REST.AMOUNT.cast(Long.class).as("amount")
+                        )
+                        .from(REWARD_REST)
+                        .where(rewardRestCondition))
+                .unionAll(dsl.select(
+                                INSTANT_REWARD.ADDRESS.as("address"),
+                                INSTANT_REWARD.AMOUNT.cast(Long.class).as("amount")
+                        )
+                        .from(INSTANT_REWARD)
+                        .where(instantRewardCondition))
+                .unionAll(dsl.select(
+                                WITHDRAWAL.ADDRESS.as("address"),
+                                WITHDRAWAL.AMOUNT.neg().cast(Long.class).as("amount")
+                        )
+                        .from(WITHDRAWAL)
+                        .where(withdrawalCondition))
+                .asTable("reward_changes");
+
+        var address = rewardChanges.field("address", String.class);
+        var amount = rewardChanges.field("amount", Long.class);
+        return dsl.select(address.as("address"), DSL.sum(amount).cast(Long.class).as("amount"))
+                .from(rewardChanges)
+                .groupBy(address);
     }
 
     @Override
