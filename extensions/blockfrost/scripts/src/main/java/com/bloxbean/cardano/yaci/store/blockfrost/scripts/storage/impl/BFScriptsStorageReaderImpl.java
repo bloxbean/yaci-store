@@ -36,7 +36,7 @@ public class BFScriptsStorageReaderImpl implements BFScriptsStorageReader {
     public List<BFScriptListItem> getScripts(int page, int count, Order order) {
         int offset = page * count;
         SortField<?> sortField = order == Order.desc
-                ? SCRIPT.SLOT.desc().nullsLast()
+                ? SCRIPT.SLOT.desc()
                 : SCRIPT.SLOT.asc().nullsFirst();
 
         return dsl.select(SCRIPT.SCRIPT_HASH)
@@ -63,7 +63,7 @@ public class BFScriptsStorageReaderImpl implements BFScriptsStorageReader {
     public List<BFScriptRedeemer> getScriptRedeemers(String scriptHash, int page, int count, Order order) {
         int offset = page * count;
         SortField<?> sortField = order == Order.desc
-                ? TRANSACTION_SCRIPTS.SLOT.desc().nullsLast()
+                ? TRANSACTION_SCRIPTS.SLOT.desc()
                 : TRANSACTION_SCRIPTS.SLOT.asc().nullsLast();
 
         // Fetch execution unit prices once for the entire page — more efficient than per-row
