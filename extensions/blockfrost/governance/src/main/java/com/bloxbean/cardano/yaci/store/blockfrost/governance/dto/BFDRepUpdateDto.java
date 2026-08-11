@@ -19,4 +19,6 @@ public class BFDRepUpdateDto {
     private Integer certIndex;
     /** Values: "registered", "deregistered", "updated" */
     private String action;
+    /** Lovelace deposit paid at registration. Null on "deregistered" and "updated". */
+    private String deposit;
 }
