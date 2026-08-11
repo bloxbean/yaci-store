@@ -482,6 +482,7 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
         SortOrder sortOrder = order == Order.desc ? SortOrder.DESC : SortOrder.ASC;
         var newerDelegation = DELEGATION_VOTE.as("newer");
         var newerStakeRegistration = STAKE_REGISTRATION.as("newer_stake_reg");
+        var newerDRepLifecycleEvent = DREP_REGISTRATION.as("newer_drep_lifecycle");
 
         // Chain order includes transaction and certificate positions because multiple delegation
         // certificates can share a slot. Resolve current delegators before pagination so balance
@@ -504,6 +505,18 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
                 .or(DELEGATION_VOTE.SLOT.eq(STAKE_REGISTRATION.SLOT)
                         .and(DELEGATION_VOTE.TX_INDEX.eq(STAKE_REGISTRATION.TX_INDEX))
                         .and(DELEGATION_VOTE.CERT_INDEX.ge(STAKE_REGISTRATION.CERT_INDEX)));
+        var newerDRepLifecycleEventInChainOrder = newerDRepLifecycleEvent.SLOT.gt(DREP_REGISTRATION.SLOT)
+                .or(newerDRepLifecycleEvent.SLOT.eq(DREP_REGISTRATION.SLOT)
+                        .and(newerDRepLifecycleEvent.TX_INDEX.gt(DREP_REGISTRATION.TX_INDEX)))
+                .or(newerDRepLifecycleEvent.SLOT.eq(DREP_REGISTRATION.SLOT)
+                        .and(newerDRepLifecycleEvent.TX_INDEX.eq(DREP_REGISTRATION.TX_INDEX))
+                        .and(newerDRepLifecycleEvent.CERT_INDEX.gt(DREP_REGISTRATION.CERT_INDEX)));
+        var delegationAtOrAfterCurrentDRepRegistration = DELEGATION_VOTE.SLOT.gt(DREP_REGISTRATION.SLOT)
+                .or(DELEGATION_VOTE.SLOT.eq(DREP_REGISTRATION.SLOT)
+                        .and(DELEGATION_VOTE.TX_INDEX.gt(DREP_REGISTRATION.TX_INDEX)))
+                .or(DELEGATION_VOTE.SLOT.eq(DREP_REGISTRATION.SLOT)
+                        .and(DELEGATION_VOTE.TX_INDEX.eq(DREP_REGISTRATION.TX_INDEX))
+                        .and(DELEGATION_VOTE.CERT_INDEX.ge(DREP_REGISTRATION.CERT_INDEX)));
 
         // Deregistration clears vote delegation. Require the latest stake-registration event to
         // be a registration, and ignore a delegation left over from an earlier registration cycle.
@@ -520,6 +533,23 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
                                         .and(newerStakeRegistrationInChainOrder)
                         )
         );
+        // Unregistering a DRep clears all delegations in ledger state. Updates do not start a new
+        // lifecycle, so only registration and unregistration certificates delimit the cycle.
+        // A later registration starts empty and requires stake accounts to delegate again.
+        var hasActiveDRepRegistrationForDelegation = DSL.exists(
+                dsl.selectOne()
+                        .from(DREP_REGISTRATION)
+                        .where(DREP_REGISTRATION.DREP_HASH.eq(drepHex))
+                        .and(DREP_REGISTRATION.TYPE.eq("REG_DREP_CERT"))
+                        .and(delegationAtOrAfterCurrentDRepRegistration)
+                        .andNotExists(
+                                dsl.selectOne()
+                                        .from(newerDRepLifecycleEvent)
+                                        .where(newerDRepLifecycleEvent.DREP_HASH.eq(DREP_REGISTRATION.DREP_HASH))
+                                        .and(newerDRepLifecycleEvent.TYPE.in("REG_DREP_CERT", "UNREG_DREP_CERT"))
+                                        .and(newerDRepLifecycleEventInChainOrder)
+                        )
+        );
         var pagedDelegators = dsl.select(
                         DELEGATION_VOTE.ADDRESS.as("address"),
                         DELEGATION_VOTE.SLOT.as("max_slot"),
@@ -529,6 +559,7 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
                 .from(DELEGATION_VOTE)
                 .where(DELEGATION_VOTE.DREP_HASH.eq(drepHex))
                 .and(hasActiveRegistrationForDelegation)
+                .and(hasActiveDRepRegistrationForDelegation)
                 .and(DSL.notExists(
                         dsl.selectOne()
                                 .from(newerDelegation)
