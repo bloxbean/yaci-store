@@ -2,7 +2,6 @@ package com.bloxbean.cardano.yaci.store.blockfrost.governance.storage.impl;
 
 import com.bloxbean.cardano.client.crypto.Bech32;
 import com.bloxbean.cardano.client.util.HexUtil;
-import com.bloxbean.cardano.yaci.store.blockfrost.common.util.BlockfrostDialectUtil;
 import com.bloxbean.cardano.yaci.store.blockfrost.governance.storage.BFGovernanceStorageReader;
 import com.bloxbean.cardano.yaci.store.blockfrost.governance.storage.impl.model.BFDRepDelegator;
 import com.bloxbean.cardano.yaci.store.blockfrost.governance.storage.impl.model.BFDRep;
@@ -18,6 +17,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jooq.DSLContext;
 import org.jooq.JSON;
+import org.jooq.Select;
 import org.jooq.SortField;
 import org.jooq.SortOrder;
 import org.jooq.impl.DSL;
@@ -30,12 +30,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import static com.bloxbean.cardano.yaci.store.account.jooq.Tables.STAKE_ADDRESS_BALANCE;
 import static com.bloxbean.cardano.yaci.store.epoch.jooq.Tables.EPOCH_PARAM;
 import static com.bloxbean.cardano.yaci.store.governance.jooq.Tables.*;
 import static com.bloxbean.cardano.yaci.store.governance_aggr.jooq.Tables.DREP_DIST;
 import static com.bloxbean.cardano.yaci.store.governance_aggr.jooq.Tables.GOV_ACTION_PROPOSAL_STATUS;
-import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.ADDRESS_UTXO;
-import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.TX_INPUT;
 
 @Slf4j
 @Component
@@ -397,83 +396,49 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
 
     @Override
     public List<BFDRepDelegator> findDRepDelegators(String drepHex, int page, int count, Order order) {
-        if (BlockfrostDialectUtil.isPostgres(dsl)) {
-            // Subquery: latest delegation row per address using window function
-            var latestDelegation = dsl.select(
-                            DELEGATION_VOTE.ADDRESS,
-                            DELEGATION_VOTE.DREP_HASH,
-                            DSL.rowNumber()
-                                    .over(DSL.partitionBy(DELEGATION_VOTE.ADDRESS).orderBy(DELEGATION_VOTE.SLOT.desc()))
-                                    .as("rn"),
-                            DELEGATION_VOTE.SLOT.as("max_slot")
-                    )
-                    .from(DELEGATION_VOTE)
-                    .asTable("latest_del");
-
-            return dsl.select(
-                            latestDelegation.field("address", String.class).as("address"),
-                            DSL.coalesce(
-                                    DSL.sum(ADDRESS_UTXO.LOVELACE_AMOUNT).cast(Long.class),
-                                    DSL.inline(0L)
-                            ).as("amount")
-                    )
-                    .from(latestDelegation)
-                    .leftJoin(ADDRESS_UTXO)
-                    .on(ADDRESS_UTXO.OWNER_STAKE_ADDR.eq(latestDelegation.field("address", String.class)))
-                    .and(DSL.notExists(
-                            dsl.selectOne()
-                                    .from(TX_INPUT)
-                                    .where(TX_INPUT.TX_HASH.eq(ADDRESS_UTXO.TX_HASH))
-                                    .and(TX_INPUT.OUTPUT_INDEX.eq(ADDRESS_UTXO.OUTPUT_INDEX))
-                    ))
-                    .where(latestDelegation.field("rn", Integer.class).eq(1))
-                    .and(latestDelegation.field("drep_hash", String.class).eq(drepHex))
-                    .groupBy(latestDelegation.field("address", String.class), latestDelegation.field("max_slot", Long.class))
-                    .orderBy(latestDelegation.field("max_slot", Long.class).sort(order == Order.desc ? SortOrder.DESC : SortOrder.ASC))
-                    .limit(count)
-                    .offset(offset(page, count))
-                    .fetch()
-                    .map(r -> BFDRepDelegator.builder()
-                            .address(r.get("address", String.class))
-                            .amount(r.get("amount", Long.class))
-                            .build());
-        } else {
-            // SQLite/H2 fallback: fetch addresses whose latest delegation is to this DRep
-            List<String> addresses = dsl.select(DELEGATION_VOTE.ADDRESS)
-                    .from(DELEGATION_VOTE)
-                    .where(DELEGATION_VOTE.DREP_HASH.eq(drepHex))
-                    .and(DSL.notExists(
-                            dsl.selectOne()
-                                    .from(DELEGATION_VOTE.as("newer"))
-                                    .where(DELEGATION_VOTE.as("newer").field(DELEGATION_VOTE.ADDRESS).eq(DELEGATION_VOTE.ADDRESS))
-                                    .and(DELEGATION_VOTE.as("newer").field(DELEGATION_VOTE.SLOT).gt(DELEGATION_VOTE.SLOT))
-                    ))
-                    .orderBy(order == Order.desc ? DELEGATION_VOTE.SLOT.desc() : DELEGATION_VOTE.SLOT.asc())
-                    .limit(count)
-                    .offset(offset(page, count))
-                    .fetch(DELEGATION_VOTE.ADDRESS);
-            List<BFDRepDelegator> result = new ArrayList<>();
-            for (String address : addresses) {
-                Long sum = dsl.select(DSL.coalesce(
-                                DSL.sum(ADDRESS_UTXO.LOVELACE_AMOUNT).cast(Long.class),
-                                DSL.inline(0L)
-                        ).as("total"))
-                        .from(ADDRESS_UTXO)
-                        .where(ADDRESS_UTXO.OWNER_STAKE_ADDR.eq(address))
-                        .and(DSL.notExists(
-                                dsl.selectOne()
-                                        .from(TX_INPUT)
-                                        .where(TX_INPUT.TX_HASH.eq(ADDRESS_UTXO.TX_HASH))
-                                        .and(TX_INPUT.OUTPUT_INDEX.eq(ADDRESS_UTXO.OUTPUT_INDEX))
-                        ))
-                        .fetchOne(0, Long.class);
-                result.add(BFDRepDelegator.builder()
-                        .address(address)
-                        .amount(sum != null ? sum : 0L)
+        return buildDRepDelegatorsQuery(drepHex, page, count, order)
+                .fetch()
+                .map(r -> BFDRepDelegator.builder()
+                        .address(r.get("address", String.class))
+                        .amount(r.get("amount", Long.class))
                         .build());
-            }
-            return result;
-        }
+    }
+
+    Select<?> buildDRepDelegatorsQuery(String drepHex, int page, int count, Order order) {
+        SortOrder sortOrder = order == Order.desc ? SortOrder.DESC : SortOrder.ASC;
+        var newerDelegation = DELEGATION_VOTE.as("newer");
+        var pagedDelegators = dsl.select(
+                        DELEGATION_VOTE.ADDRESS.as("address"),
+                        DELEGATION_VOTE.SLOT.as("max_slot")
+                )
+                .from(DELEGATION_VOTE)
+                .where(DELEGATION_VOTE.DREP_HASH.eq(drepHex))
+                .and(DSL.notExists(
+                        dsl.selectOne()
+                                .from(newerDelegation)
+                                .where(newerDelegation.ADDRESS.eq(DELEGATION_VOTE.ADDRESS))
+                                .and(newerDelegation.SLOT.gt(DELEGATION_VOTE.SLOT))
+                ))
+                .orderBy(DELEGATION_VOTE.SLOT.sort(sortOrder))
+                .limit(count)
+                .offset(offset(page, count))
+                .asTable("paged_del");
+
+        var address = pagedDelegators.field("address", String.class);
+        var maxSlot = pagedDelegators.field("max_slot", Long.class);
+        var latestBalance = dsl.select(STAKE_ADDRESS_BALANCE.QUANTITY.cast(Long.class))
+                .from(STAKE_ADDRESS_BALANCE)
+                .where(STAKE_ADDRESS_BALANCE.ADDRESS.eq(address))
+                .orderBy(STAKE_ADDRESS_BALANCE.SLOT.desc())
+                .limit(1)
+                .asField();
+
+        return dsl.select(
+                        address.as("address"),
+                        DSL.coalesce(latestBalance, DSL.inline(0L)).as("amount")
+                )
+                .from(pagedDelegators)
+                .orderBy(maxSlot.sort(sortOrder));
     }
 
     @Override
