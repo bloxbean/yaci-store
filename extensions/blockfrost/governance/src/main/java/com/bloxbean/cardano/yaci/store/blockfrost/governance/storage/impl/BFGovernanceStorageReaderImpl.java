@@ -7,7 +7,6 @@ import com.bloxbean.cardano.yaci.store.blockfrost.governance.storage.impl.model.
 import com.bloxbean.cardano.yaci.store.blockfrost.governance.storage.impl.model.BFDRep;
 import com.bloxbean.cardano.yaci.store.blockfrost.governance.storage.impl.model.BFProposal;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
-import com.bloxbean.cardano.yaci.store.epoch.service.LocalEpochParamServiceReader;
 import com.bloxbean.cardano.yaci.store.governance.domain.DRepRegistration;
 import com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure;
 import com.bloxbean.cardano.yaci.store.governance.storage.impl.model.DRepEntity;
@@ -43,7 +42,6 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
 
     private final DSLContext dsl;
     private final ObjectMapper objectMapper;
-    private final LocalEpochParamServiceReader epochParamServiceReader;
 
     // ────────────────────────────────────────────────────────────────────────
     // Helpers
