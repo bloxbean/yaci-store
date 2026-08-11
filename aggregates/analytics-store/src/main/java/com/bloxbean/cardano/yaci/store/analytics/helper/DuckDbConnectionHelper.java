@@ -102,13 +102,36 @@ public class DuckDbConnectionHelper {
     }
 
     /**
-     * Attach source PostgreSQL database with specified alias.
-     * Checks if already attached (connection pooling aware).
+     * Attach source PostgreSQL database with specified alias (no statement timeout).
      *
-     * @param conn DuckDB connection
-     * @param aliasName Database alias (e.g., "postgres_db" for Parquet, "source_db" for DuckLake)
+     * <p>Used by the export pipeline where queries are long-running and timeout
+     * is not desired. For the analytics query layer, use
+     * {@link #attachSourceDatabase(Connection, String, int)} instead.</p>
+     *
+     * @param conn      DuckDB connection
+     * @param aliasName database alias (e.g., "postgres_db" for Parquet, "source_db" for DuckLake)
+     * @throws SQLException if the ATTACH command fails
      */
     public void attachSourceDatabase(Connection conn, String aliasName) throws SQLException {
+        attachSourceDatabase(conn, aliasName, 0);
+    }
+
+    /**
+     * Attach source PostgreSQL database with specified alias and optional statement timeout.
+     *
+     * <p>The attachment is always {@code READ_ONLY}, preventing any writes to PostgreSQL
+     * through DuckDB queries. If a {@code statementTimeoutSeconds} greater than 0 is provided,
+     * it is set as a PostgreSQL connection parameter via {@code -cstatement_timeout=<ms>},
+     * ensuring that heavy analytical queries are cancelled by PostgreSQL after the timeout.</p>
+     *
+     * <p>Checks if the database is already attached (connection pooling aware).</p>
+     *
+     * @param conn                     DuckDB connection
+     * @param aliasName                database alias (e.g., "pg_live" for analytics queries)
+     * @param statementTimeoutSeconds  PostgreSQL statement timeout in seconds (0 = no timeout)
+     * @throws SQLException if the ATTACH command fails
+     */
+    public void attachSourceDatabase(Connection conn, String aliasName, int statementTimeoutSeconds) throws SQLException {
         DatabaseCredentials creds = sourceCredentials;
 
         StringBuilder cmd = new StringBuilder();
@@ -118,15 +141,32 @@ public class DuckDbConnectionHelper {
         cmd.append(" host=").append(creds.host);
         cmd.append(" port=").append(creds.port);
 
+        // search_path via libpq options parameter
         if (creds.schema != null && !creds.schema.isEmpty()) {
             cmd.append(" options=-csearch_path=").append(creds.schema);
         }
 
         cmd.append("' AS ").append(aliasName).append(" (TYPE POSTGRES, READ_ONLY);");
 
+        // If statement_timeout is requested, set it after ATTACH via postgres_execute.
+        // PostgreSQL's statement_timeout is a session-level GUC (Grand Unified Configuration)
+        // that can be set via SET on the attached connection.
+        boolean needsTimeout = statementTimeoutSeconds > 0;
+
         try {
             executeSql(conn, cmd.toString());
             log.debug("Attached source PostgreSQL database as '{}'", aliasName);
+
+            // Set statement_timeout on the attached PostgreSQL connection.
+            // Uses postgres_execute() to run a non-returning statement on the PostgreSQL
+            // session, ensuring all subsequent queries through this attachment are time-limited.
+            if (needsTimeout) {
+                long timeoutMs = statementTimeoutSeconds * 1000L;
+                executeSql(conn, String.format(
+                        "CALL postgres_execute('%s', 'SET statement_timeout TO %d')",
+                        aliasName, timeoutMs));
+                log.debug("Set statement_timeout={}ms on '{}'", timeoutMs, aliasName);
+            }
         } catch (SQLException e) {
             if (e.getMessage().contains("already attached") || e.getMessage().contains("already exists")) {
                 log.debug("Source database '{}' already attached, skipping", aliasName);
