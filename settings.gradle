@@ -62,6 +62,7 @@ include 'aggregates:governance-aggr'
 include 'aggregates:epoch-nonce'
 include 'aggregates:analytics-store'
 include 'aggregates:analytics-query'
+include 'aggregates:mcp-server'
 
 include ':starters:spring-boot-starter'
 include ':starters:utxo-spring-boot-starter'

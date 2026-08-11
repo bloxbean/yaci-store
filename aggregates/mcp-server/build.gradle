@@ -1,0 +1,31 @@
+ext {
+    springAiVersion = '1.1.2'
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.ai:spring-ai-bom:${springAiVersion}"
+    }
+}
+
+dependencies {
+    api project(":aggregates:analytics-query")
+    api project(":components:common")
+    api project(":components:core")
+
+    implementation "org.springframework.ai:spring-ai-starter-mcp-server-webmvc:${springAiVersion}"
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store MCP Server'
+                description = 'MCP tools for Cardano blockchain analytics and utilities'
+            }
+        }
+    }
+}
