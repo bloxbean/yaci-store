@@ -76,7 +76,7 @@ public class BFBlocksStorageReaderImpl implements BFBlocksStorageReader {
         var confirmationsField = confirmationsField(block);
 
         return blockBaseSelect(block, nextBlockField, confirmationsField, block.SLOT.eq(slot))
-                .orderBy(block.NUMBER.desc().nullsLast())
+                .orderBy(block.NUMBER.desc())
                 .limit(1)
                 .fetchOptional(record -> toBlockRow(record, block, nextBlockField, confirmationsField));
     }
@@ -93,7 +93,7 @@ public class BFBlocksStorageReaderImpl implements BFBlocksStorageReader {
                 confirmationsField,
                 block.EPOCH.eq(epoch).and(block.EPOCH_SLOT.eq(epochSlot))
         )
-                .orderBy(block.NUMBER.desc().nullsLast())
+                .orderBy(block.NUMBER.desc())
                 .limit(1)
                 .fetchOptional(record -> toBlockRow(record, block, nextBlockField, confirmationsField));
     }
@@ -125,7 +125,7 @@ public class BFBlocksStorageReaderImpl implements BFBlocksStorageReader {
         // then reverse to return in ascending order matching Blockfrost convention.
         List<BFBlockRow> results = new ArrayList<>(
                 blockBaseSelect(block, nextBlockField, confirmationsField, block.NUMBER.lt(blockNumber))
-                        .orderBy(block.NUMBER.desc().nullsLast())
+                        .orderBy(block.NUMBER.desc())
                         .limit(count)
                         .offset(offset)
                         .fetch(record -> toBlockRow(record, block, nextBlockField, confirmationsField))
