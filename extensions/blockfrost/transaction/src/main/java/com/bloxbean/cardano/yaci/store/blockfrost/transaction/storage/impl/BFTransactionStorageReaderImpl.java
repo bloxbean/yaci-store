@@ -86,7 +86,9 @@ public class BFTransactionStorageReaderImpl implements BFTransactionStorageReade
                 .asField("asset_mint_count");
 
         Field<Integer> inputCount = DSL.selectCount()
-                .from(TX_INPUT).where(TX_INPUT.SPENT_TX_HASH.eq(txHash))
+                .from(TX_INPUT)
+                .where(TX_INPUT.SPENT_AT_BLOCK.eq(TRANSACTION.BLOCK))
+                .and(TX_INPUT.SPENT_TX_HASH.eq(txHash))
                 .asField("input_count");
 
         Field<Integer> outputCount = DSL.selectCount()
@@ -178,7 +180,8 @@ public class BFTransactionStorageReaderImpl implements BFTransactionStorageReade
                 .join(TX_INPUT)
                 .on(TX_INPUT.TX_HASH.eq(ADDRESS_UTXO.TX_HASH))
                 .and(TX_INPUT.OUTPUT_INDEX.eq(ADDRESS_UTXO.OUTPUT_INDEX))
-                .where(TX_INPUT.SPENT_TX_HASH.eq(txHash))
+                .where(TX_INPUT.SPENT_AT_BLOCK.eq(txn.getBlockNumber()))
+                .and(TX_INPUT.SPENT_TX_HASH.eq(txHash))
                 .fetch(record -> TxInputRaw.builder()
                         .txHash(record.get(ADDRESS_UTXO.TX_HASH))
                         .outputIndex(record.get(ADDRESS_UTXO.OUTPUT_INDEX))

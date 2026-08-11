@@ -172,7 +172,7 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
     public List<BFAssetHistory> findAssetHistory(String unit, int page, int count, Order order) {
         int offset = Math.max(page, 0) * count;
         Condition assetCondition = buildAssetCondition(unit);
-        SortField<?> slotOrder = order == Order.desc ? ASSETS.SLOT.desc().nullsLast() : ASSETS.SLOT.asc().nullsLast();
+        SortField<?> slotOrder = order == Order.desc ? ASSETS.SLOT.desc() : ASSETS.SLOT.asc().nullsLast();
         SortField<?> txOrder = order == Order.desc ? ASSETS.TX_HASH.desc() : ASSETS.TX_HASH.asc();
 
         var query = dsl.select(ASSETS.TX_HASH, ASSETS.MINT_TYPE, ASSETS.QUANTITY)
@@ -205,7 +205,7 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
         Field<String> txHashField = TRANSACTION.TX_HASH;
         Field<Integer> txIndexSortField = TRANSACTION.TX_INDEX;
         SortField<?> blockOrder = order == Order.desc
-                ? TRANSACTION.BLOCK.desc().nullsLast()
+                ? TRANSACTION.BLOCK.desc()
                 : TRANSACTION.BLOCK.asc().nullsLast();
         SortField<?> txIndexOrder = order == Order.desc
                 ? txIndexSortField.desc().nullsLast()
@@ -240,7 +240,7 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
         Field<Long> txIndexField = DSL.coalesce(txIndexSortField, 0).cast(Long.class).as("tx_index");
 
         SortField<?> blockOrder = order == Order.desc
-                ? TRANSACTION.BLOCK.desc().nullsLast()
+                ? TRANSACTION.BLOCK.desc()
                 : TRANSACTION.BLOCK.asc().nullsLast();
         SortField<?> txIndexOrder = order == Order.desc
                 ? txIndexSortField.desc().nullsLast()

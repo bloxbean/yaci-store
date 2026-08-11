@@ -69,7 +69,7 @@ public class VotingDataCollector {
         var committeeVotesByProposal = groupVotesByGovAction(committeeVotes);
 
         var dRepEpochAggregates = isInConwayBootstrapPhase ? null : buildDRepEpochAggregates(epoch + 1);
-        var spoEpochAggregates = spoVotingDataCollector.buildEpochAggregates(spoVotes, epoch);
+        var spoEpochAggregates = spoVotingDataCollector.buildEpochAggregates(epoch);
 
         return proposals.stream()
             .collect(Collectors.toMap(
