@@ -5,6 +5,7 @@ dependencies {
     api project(":extensions:blockfrost:blockfrost-common")
     api project(":aggregates:adapot")
     api project(":components:core")
+    implementation project(":stores:blocks")
 
     implementation 'org.jooq:jooq'
     implementation 'org.springframework.boot:spring-boot-starter-web'
