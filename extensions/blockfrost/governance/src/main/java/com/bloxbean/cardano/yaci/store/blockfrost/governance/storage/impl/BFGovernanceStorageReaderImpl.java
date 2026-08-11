@@ -2,6 +2,9 @@ package com.bloxbean.cardano.yaci.store.blockfrost.governance.storage.impl;
 
 import com.bloxbean.cardano.client.crypto.Bech32;
 import com.bloxbean.cardano.client.util.HexUtil;
+import com.bloxbean.cardano.yaci.core.model.certs.CertificateType;
+import com.bloxbean.cardano.yaci.core.model.governance.Vote;
+import com.bloxbean.cardano.yaci.core.model.governance.VoterType;
 import com.bloxbean.cardano.yaci.store.blockfrost.common.util.BlockfrostDialectUtil;
 import com.bloxbean.cardano.yaci.store.blockfrost.governance.storage.BFGovernanceStorageReader;
 import com.bloxbean.cardano.yaci.store.blockfrost.governance.storage.impl.model.BFDRepDelegator;
@@ -18,11 +21,13 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jooq.DSLContext;
 import org.jooq.JSON;
+import org.jooq.Record;
 import org.jooq.SortField;
 import org.jooq.SortOrder;
 import org.jooq.impl.DSL;
 import org.springframework.stereotype.Component;
 
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -195,7 +200,7 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
         }
     }
 
-    private BFProposal toProposalRow(org.jooq.Record r, int govActionLifetime) {
+    private BFProposal toProposalRow(Record r, int govActionLifetime) {
         String txHash = r.get(GOV_ACTION_PROPOSAL.TX_HASH);
         int idx = r.get(GOV_ACTION_PROPOSAL.IDX);
         Integer proposalEpoch = r.get(GOV_ACTION_PROPOSAL.EPOCH);
@@ -217,13 +222,13 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
                 .build();
     }
 
-    private DRepRegistration toDRepRegistrationDomain(org.jooq.Record r) {
+    private DRepRegistration toDRepRegistrationDomain(Record r) {
         // Map the String type from DB to CertificateType enum
         String typeStr = r.get(DREP_REGISTRATION.TYPE);
-        com.bloxbean.cardano.yaci.core.model.certs.CertificateType certType = null;
+        CertificateType certType = null;
         if (typeStr != null) {
             try {
-                certType = com.bloxbean.cardano.yaci.core.model.certs.CertificateType.valueOf(typeStr);
+                certType = CertificateType.valueOf(typeStr);
             } catch (IllegalArgumentException e) {
                 log.debug("Unknown DRep registration type: {}", typeStr);
             }
@@ -238,23 +243,23 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
                 .anchorUrl(r.get(DREP_REGISTRATION.ANCHOR_URL))
                 .anchorHash(r.get(DREP_REGISTRATION.ANCHOR_HASH))
                 .deposit(r.get(DREP_REGISTRATION.DEPOSIT) != null
-                        ? java.math.BigInteger.valueOf(r.get(DREP_REGISTRATION.DEPOSIT)) : null)
+                        ? BigInteger.valueOf(r.get(DREP_REGISTRATION.DEPOSIT)) : null)
                 .slot(r.get(DREP_REGISTRATION.SLOT))
                 .epoch(r.get(DREP_REGISTRATION.EPOCH))
                 .build();
     }
 
-    private VotingProcedure toVotingProcedureDomain(org.jooq.Record r) {
+    private VotingProcedure toVotingProcedureDomain(Record r) {
         String voterTypeStr = r.get(VOTING_PROCEDURE.VOTER_TYPE);
-        com.bloxbean.cardano.yaci.core.model.governance.VoterType voterType = null;
+        VoterType voterType = null;
         if (voterTypeStr != null) {
-            try { voterType = com.bloxbean.cardano.yaci.core.model.governance.VoterType.valueOf(voterTypeStr); }
+            try { voterType = VoterType.valueOf(voterTypeStr); }
             catch (IllegalArgumentException ignored) {}
         }
         String voteStr = r.get(VOTING_PROCEDURE.VOTE);
-        com.bloxbean.cardano.yaci.core.model.governance.Vote vote = null;
+        Vote vote = null;
         if (voteStr != null) {
-            try { vote = com.bloxbean.cardano.yaci.core.model.governance.Vote.valueOf(voteStr); }
+            try { vote = Vote.valueOf(voteStr); }
             catch (IllegalArgumentException ignored) {}
         }
         return VotingProcedure.builder()

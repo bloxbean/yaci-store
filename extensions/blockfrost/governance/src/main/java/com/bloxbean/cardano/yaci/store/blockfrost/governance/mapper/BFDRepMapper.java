@@ -1,5 +1,8 @@
 package com.bloxbean.cardano.yaci.store.blockfrost.governance.mapper;
 
+import com.bloxbean.cardano.client.crypto.Bech32;
+import com.bloxbean.cardano.yaci.core.model.certs.CertificateType;
+import com.bloxbean.cardano.yaci.core.model.governance.Vote;
 import com.bloxbean.cardano.yaci.store.blockfrost.governance.dto.BFDRepDelegatorDto;
 import com.bloxbean.cardano.yaci.store.blockfrost.governance.dto.BFDRepDto;
 import com.bloxbean.cardano.yaci.store.blockfrost.governance.dto.BFDRepListItemDto;
@@ -99,12 +102,12 @@ public interface BFDRepMapper {
      */
     default String registrationDeposit(DRepRegistration registration) {
         if (registration == null || registration.getDeposit() == null) return null;
-        return registration.getType() == com.bloxbean.cardano.yaci.core.model.certs.CertificateType.REG_DREP_CERT
+        return registration.getType() == CertificateType.REG_DREP_CERT
                 ? registration.getDeposit().toString() : null;
     }
 
     @Named("voteToLowerCase")
-    default String voteToLowerCase(com.bloxbean.cardano.yaci.core.model.governance.Vote vote) {
+    default String voteToLowerCase(Vote vote) {
         return vote != null ? vote.name().toLowerCase() : null;
     }
 
@@ -135,8 +138,7 @@ public interface BFDRepMapper {
         if (rawHash == null) return null;
         if (drepId == null) return "22" + rawHash;
         try {
-            com.bloxbean.cardano.client.crypto.Bech32.Bech32Data decoded =
-                    com.bloxbean.cardano.client.crypto.Bech32.decode(drepId);
+            Bech32.Bech32Data decoded = Bech32.decode(drepId);
             byte[] data = decoded.data;
             if (data.length == 29) {
                 // First byte is the CIP-129 header (0x22 or 0x23)
