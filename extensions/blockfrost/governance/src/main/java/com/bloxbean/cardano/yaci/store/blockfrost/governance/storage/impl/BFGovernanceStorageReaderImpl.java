@@ -401,12 +401,18 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
 
     @Override
     public List<BFDRepDelegator> findDRepDelegators(String drepHex, int page, int count, Order order) {
+        // The latest completed AdaPot reward calculation provides a stable epoch_stake baseline.
+        // This lets the endpoint read only reward changes after that epoch instead of full history.
         Integer snapshotEpoch = findLatestStakeSnapshotEpoch();
+
+        // Resolve active delegators and pagination first, then load balance data only for this page.
         var delegators = buildDRepDelegatorsQuery(drepHex, page, count, order, snapshotEpoch).fetch();
         if (delegators.isEmpty()) {
             return List.of();
         }
 
+        // Addresses with an epoch_stake row can start from the checkpoint. Missing rows fall back
+        // to full reward history so an incomplete snapshot does not omit their reward balance.
         List<String> checkpointAddresses = delegators.stream()
                 .filter(r -> r.get("checkpoint_amount", Long.class) != null)
                 .map(r -> r.get("address", String.class))
@@ -416,6 +422,8 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
                 .map(r -> r.get("address", String.class))
                 .toList();
 
+        // Both calls are batched by address group and populate the same map: post-checkpoint
+        // changes for checkpointed addresses, and lifetime changes for fallback addresses.
         Map<String, Long> rewardChanges = new HashMap<>();
         fetchRewardChanges(rewardChanges, checkpointAddresses, snapshotEpoch);
         fetchRewardChanges(rewardChanges, addressesWithoutCheckpoint, null);
@@ -423,16 +431,21 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
         return delegators
                 .map(r -> {
                     String address = r.get("address", String.class);
+                    // stake_address_balance supplies the current UTxO component.
                     long currentBalance = r.get("amount", Long.class);
                     Long checkpointAmount = r.get("checkpoint_amount", Long.class);
                     long snapshotBalance = Optional.ofNullable(r.get("snapshot_balance", Long.class)).orElse(0L);
                     // epoch_stake stores controlled amount. Subtract its UTxO component to recover
                     // the reward balance at the checkpoint, then apply only later reward changes.
+                    // For fallback addresses checkpointReward is zero and rewardChanges contains
+                    // their complete reward and withdrawal history.
                     long checkpointReward = checkpointAmount == null ? 0L : checkpointAmount - snapshotBalance;
+                    // Unclaimed rewards cannot be negative; withdrawals can reduce them only to zero.
                     long withdrawableReward = Math.max(
                             checkpointReward + rewardChanges.getOrDefault(address, 0L),
                             0L
                     );
+                    // Blockfrost amount is controlled stake: current UTxO plus unclaimed rewards.
                     return BFDRepDelegator.builder()
                             .address(address)
                             .amount(currentBalance + withdrawableReward)
