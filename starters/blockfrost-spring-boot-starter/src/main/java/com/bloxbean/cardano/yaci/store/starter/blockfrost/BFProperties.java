@@ -28,10 +28,10 @@ public class BFProperties {
             private Account account = new Account();
             private Transaction transaction = new Transaction();
             private Blocks blocks = new Blocks();
+            private Network network = new Network();
             private Scripts scripts = new Scripts();
             private Metadata metadata = new Metadata();
             private Util util = new Util();
-            private Network network = new Network();
 
             @Getter
             @Setter
@@ -90,7 +90,7 @@ public class BFProperties {
             @Getter
             @Setter
             public static final class Network {
-                private boolean enabled = true;
+                private boolean enabled = false;
             }
 
         }

@@ -7,9 +7,9 @@ import com.bloxbean.cardano.yaci.store.blockfrost.address.BFAddressConfiguration
 import com.bloxbean.cardano.yaci.store.blockfrost.transaction.BFTransactionConfiguration;
 import com.bloxbean.cardano.yaci.store.blockfrost.block.BFBlockConfiguration;
 import com.bloxbean.cardano.yaci.store.blockfrost.metadata.BFMetadataConfiguration;
-import com.bloxbean.cardano.yaci.store.blockfrost.network.BFNetworkConfiguration;
 import com.bloxbean.cardano.yaci.store.blockfrost.scripts.BFScriptsConfiguration;
 import com.bloxbean.cardano.yaci.store.blockfrost.util.BFUtilConfiguration;
+import com.bloxbean.cardano.yaci.store.blockfrost.network.BFNetworkConfiguration;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
