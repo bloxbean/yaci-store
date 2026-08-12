@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.blockfrost.governance.controller;
 
 import com.bloxbean.cardano.yaci.store.blockfrost.governance.dto.*;
 import com.bloxbean.cardano.yaci.store.blockfrost.governance.service.BFGovernanceService;
+import com.bloxbean.cardano.yaci.store.common.model.Order;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Max;
@@ -32,7 +33,7 @@ public class BFDRepsController {
     public List<BFDRepListItemDto> getDReps(
             @RequestParam(required = false, defaultValue = "1") @Min(1) int page,
             @RequestParam(required = false, defaultValue = "100") @Min(1) @Max(100) int count,
-            @RequestParam(required = false, defaultValue = "asc") String order) {
+            @RequestParam(required = false, defaultValue = "asc") Order order) {
         int p = page - 1;
         return governanceService.getDReps(p, count, order);
     }
@@ -49,7 +50,7 @@ public class BFDRepsController {
             @PathVariable("drep_id") String drepId,
             @RequestParam(required = false, defaultValue = "1") @Min(1) int page,
             @RequestParam(required = false, defaultValue = "100") @Min(1) @Max(100) int count,
-            @RequestParam(required = false, defaultValue = "asc") String order) {
+            @RequestParam(required = false, defaultValue = "asc") Order order) {
         int p = page - 1;
         return governanceService.getDRepDelegators(drepId, p, count, order);
     }
@@ -66,7 +67,7 @@ public class BFDRepsController {
             @PathVariable("drep_id") String drepId,
             @RequestParam(required = false, defaultValue = "1") @Min(1) int page,
             @RequestParam(required = false, defaultValue = "100") @Min(1) @Max(100) int count,
-            @RequestParam(required = false, defaultValue = "asc") String order) {
+            @RequestParam(required = false, defaultValue = "asc") Order order) {
         int p = page - 1;
         return governanceService.getDRepUpdates(drepId, p, count, order);
     }
@@ -77,7 +78,7 @@ public class BFDRepsController {
             @PathVariable("drep_id") String drepId,
             @RequestParam(required = false, defaultValue = "1") @Min(1) int page,
             @RequestParam(required = false, defaultValue = "100") @Min(1) @Max(100) int count,
-            @RequestParam(required = false, defaultValue = "asc") String order) {
+            @RequestParam(required = false, defaultValue = "asc") Order order) {
         int p = page - 1;
         return governanceService.getDRepVotes(drepId, p, count, order);
     }
