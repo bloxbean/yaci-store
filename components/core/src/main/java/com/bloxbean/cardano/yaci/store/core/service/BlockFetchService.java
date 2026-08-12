@@ -305,6 +305,7 @@ public class BlockFetchService implements BlockChainDataListener {
         }
 
         cursorService.rollback(point.getSlot());
+        restoreEpochStateFromCursor();
 
         //Publish Pre-rollback event
         PreRollbackEvent preRollbackEvent = PreRollbackEvent
@@ -325,6 +326,23 @@ public class BlockFetchService implements BlockChainDataListener {
                 .build();
         log.info("Publishing rollback event : " + rollbackEvent);
         publisher.publishEvent(rollbackEvent);
+    }
+
+    private void restoreEpochStateFromCursor() {
+        cursorService.getCursor().ifPresentOrElse(cursor -> {
+            previousEra = cursor.getEra();
+            // Byron blocks carry their epoch, but the cursor does not. AdaPot starts after Byron,
+            // so leave it unset and let the next Byron block provide the epoch if this ever occurs.
+            previousEpoch = cursor.getEra() == null || cursor.getEra() == Era.Byron
+                    ? null
+                    : eraService.getEpochNo(cursor.getEra(), cursor.getSlot());
+        }, () -> {
+            previousEpoch = null;
+            previousEra = null;
+        });
+
+        log.info("Restored epoch state after rollback. previousEpoch: {}, previousEra: {}",
+                previousEpoch, previousEra);
     }
 
     @Override
