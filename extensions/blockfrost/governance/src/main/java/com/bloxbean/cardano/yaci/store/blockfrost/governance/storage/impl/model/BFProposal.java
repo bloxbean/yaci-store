@@ -16,7 +16,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class BFProposal {
     private String txHash;
-    private Integer certIndex;
+    private Integer index;
     private String type;
     private JsonNode details;
     private Long deposit;

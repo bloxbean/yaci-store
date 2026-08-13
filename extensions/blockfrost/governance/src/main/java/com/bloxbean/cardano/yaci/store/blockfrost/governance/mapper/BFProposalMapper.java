@@ -23,17 +23,17 @@ public interface BFProposalMapper {
 
     // ── Proposal list item (summary only) ─────────────────────────────────
 
-    @Mapping(target = "id", expression = "java(com.bloxbean.cardano.yaci.store.common.util.GovUtil.toGovActionIdBech32(row.getTxHash(), row.getCertIndex()))")
+    @Mapping(target = "id", expression = "java(com.bloxbean.cardano.yaci.store.common.util.GovUtil.toGovActionIdBech32(row.getTxHash(), row.getIndex()))")
     @Mapping(target = "txHash", source = "txHash")
-    @Mapping(target = "certIndex", source = "certIndex")
+    @Mapping(target = "certIndex", source = "index")
     @Mapping(target = "governanceType", source = "type", qualifiedByName = "govActionTypeToString")
     BFProposalListItemDto toListItemDto(BFProposal row);
 
     // ── Proposal ──────────────────────────────────────────────────────────
 
-    @Mapping(target = "id", expression = "java(com.bloxbean.cardano.yaci.store.common.util.GovUtil.toGovActionIdBech32(row.getTxHash(), row.getCertIndex()))")
+    @Mapping(target = "id", expression = "java(com.bloxbean.cardano.yaci.store.common.util.GovUtil.toGovActionIdBech32(row.getTxHash(), row.getIndex()))")
     @Mapping(target = "txHash", source = "txHash")
-    @Mapping(target = "certIndex", source = "certIndex")
+    @Mapping(target = "certIndex", source = "index")
     @Mapping(target = "governanceType", source = "type", qualifiedByName = "govActionTypeToString")
     @Mapping(target = "governanceDescription", source = "details")
     @Mapping(target = "deposit", source = "deposit", qualifiedByName = "longToString")
@@ -49,9 +49,9 @@ public interface BFProposalMapper {
 
     // ── Proposal parameters ───────────────────────────────────────────────
 
-    @Mapping(target = "id", expression = "java(com.bloxbean.cardano.yaci.store.common.util.GovUtil.toGovActionIdBech32(row.getTxHash(), row.getCertIndex()))")
+    @Mapping(target = "id", expression = "java(com.bloxbean.cardano.yaci.store.common.util.GovUtil.toGovActionIdBech32(row.getTxHash(), row.getIndex()))")
     @Mapping(target = "txHash", source = "txHash")
-    @Mapping(target = "certIndex", source = "certIndex")
+    @Mapping(target = "certIndex", source = "index")
     @Mapping(target = "parameters", source = "details")
     BFProposalParametersDto toParametersDto(BFProposal row);
 
@@ -69,9 +69,9 @@ public interface BFProposalMapper {
 
     // ── Proposal metadata ─────────────────────────────────────────────────
 
-    @Mapping(target = "id", expression = "java(com.bloxbean.cardano.yaci.store.common.util.GovUtil.toGovActionIdBech32(row.getTxHash(), row.getCertIndex()))")
+    @Mapping(target = "id", expression = "java(com.bloxbean.cardano.yaci.store.common.util.GovUtil.toGovActionIdBech32(row.getTxHash(), row.getIndex()))")
     @Mapping(target = "txHash", source = "txHash")
-    @Mapping(target = "certIndex", source = "certIndex")
+    @Mapping(target = "certIndex", source = "index")
     @Mapping(target = "url", source = "anchorUrl")
     @Mapping(target = "hash", source = "anchorHash")
     @Mapping(target = "jsonMetadata", ignore = true)

@@ -43,44 +43,44 @@ public class BFProposalsController {
     @Operation(summary = "Specific proposal", description = "Proposal information.")
     public BFProposalDto getProposal(
             @PathVariable("tx_hash") String txHash,
-            @PathVariable("cert_index") int certIndex) {
-        return governanceService.getProposal(txHash, certIndex);
+            @PathVariable("cert_index") int index) {
+        return governanceService.getProposal(txHash, index);
     }
 
     @GetMapping(value = "/{tx_hash}/{cert_index}/parameters", produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(summary = "Specific parameters proposal", description = "Parameters proposal details.")
     public BFProposalParametersDto getProposalParameters(
             @PathVariable("tx_hash") String txHash,
-            @PathVariable("cert_index") int certIndex) {
-        return governanceService.getProposalParameters(txHash, certIndex);
+            @PathVariable("cert_index") int index) {
+        return governanceService.getProposalParameters(txHash, index);
     }
 
     @GetMapping(value = "/{tx_hash}/{cert_index}/withdrawals", produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(summary = "Specific withdrawals proposal", description = "Withdrawal proposal details.")
     public List<BFProposalWithdrawalDto> getProposalWithdrawals(
             @PathVariable("tx_hash") String txHash,
-            @PathVariable("cert_index") int certIndex) {
-        return governanceService.getProposalWithdrawals(txHash, certIndex);
+            @PathVariable("cert_index") int index) {
+        return governanceService.getProposalWithdrawals(txHash, index);
     }
 
     @GetMapping(value = "/{tx_hash}/{cert_index}/votes", produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(summary = "Proposal votes", description = "History of Proposal votes.")
     public List<BFProposalVoteDto> getProposalVotes(
             @PathVariable("tx_hash") String txHash,
-            @PathVariable("cert_index") int certIndex,
+            @PathVariable("cert_index") int index,
             @RequestParam(required = false, defaultValue = "1") @Min(1) int page,
             @RequestParam(required = false, defaultValue = "100") @Min(1) @Max(100) int count,
             @RequestParam(required = false, defaultValue = "asc") Order order) {
         int p = page - 1;
-        return governanceService.getProposalVotes(txHash, certIndex, p, count, order);
+        return governanceService.getProposalVotes(txHash, index, p, count, order);
     }
 
     @GetMapping(value = "/{tx_hash}/{cert_index}/metadata", produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(summary = "Specific proposal metadata", description = "Proposal metadata information.")
     public BFProposalMetadataDto getProposalMetadata(
             @PathVariable("tx_hash") String txHash,
-            @PathVariable("cert_index") int certIndex) {
-        return governanceService.getProposalMetadata(txHash, certIndex);
+            @PathVariable("cert_index") int index) {
+        return governanceService.getProposalMetadata(txHash, index);
     }
 
     // ── By gov_action_id (CIP-0129 bech32) ────────────────────────────────

@@ -96,11 +96,11 @@ public class BFGovernanceService {
                 .collect(Collectors.toList());
     }
 
-    public BFProposalDto getProposal(String txHash, int certIndex) {
-        return storageReader.findProposalByTxHashAndIndex(txHash, certIndex)
+    public BFProposalDto getProposal(String txHash, int index) {
+        return storageReader.findProposalByTxHashAndIndex(txHash, index)
                 .map(proposalMapper::toDto)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "Proposal not found: " + txHash + "#" + certIndex));
+                        "Proposal not found: " + txHash + "#" + index));
     }
 
     public BFProposalDto getProposalByGovActionId(String govActionId) {
@@ -108,15 +108,15 @@ public class BFGovernanceService {
         return getProposal(id.getTransactionId(), id.getGovActionIndex());
     }
 
-    public BFProposalParametersDto getProposalParameters(String txHash, int certIndex) {
-        return storageReader.findParameterChangeProposal(txHash, certIndex)
+    public BFProposalParametersDto getProposalParameters(String txHash, int index) {
+        return storageReader.findParameterChangeProposal(txHash, index)
                 .map(row -> {
                     BFProposalParametersDto dto = proposalMapper.toParametersDto(row);
                     dto.setParameters(transformProtocolParams(row.getDetails()));
                     return dto;
                 })
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "Protocol parameter proposal not found: " + txHash + "#" + certIndex));
+                        "Protocol parameter proposal not found: " + txHash + "#" + index));
     }
 
     public BFProposalParametersDto getProposalParametersByGovActionId(String govActionId) {
@@ -124,12 +124,12 @@ public class BFGovernanceService {
         return getProposalParameters(id.getTransactionId(), id.getGovActionIndex());
     }
 
-    public List<BFProposalWithdrawalDto> getProposalWithdrawals(String txHash, int certIndex) {
-        if (!storageReader.isWithdrawalProposal(txHash, certIndex)) {
+    public List<BFProposalWithdrawalDto> getProposalWithdrawals(String txHash, int index) {
+        if (!storageReader.isWithdrawalProposal(txHash, index)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND,
-                    "Treasury withdrawal proposal not found: " + txHash + "#" + certIndex);
+                    "Treasury withdrawal proposal not found: " + txHash + "#" + index);
         }
-        return storageReader.findProposalWithdrawals(txHash, certIndex)
+        return storageReader.findProposalWithdrawals(txHash, index)
                 .stream()
                 .map(d -> BFProposalWithdrawalDto.builder()
                         .stakeAddress(hexToStakeAddress(d.getAddress()))
@@ -143,8 +143,8 @@ public class BFGovernanceService {
         return getProposalWithdrawals(id.getTransactionId(), id.getGovActionIndex());
     }
 
-    public List<BFProposalVoteDto> getProposalVotes(String txHash, int certIndex, int page, int count, Order order) {
-        return storageReader.findProposalVotes(txHash, certIndex, page, count, order)
+    public List<BFProposalVoteDto> getProposalVotes(String txHash, int index, int page, int count, Order order) {
+        return storageReader.findProposalVotes(txHash, index, page, count, order)
                 .stream()
                 .map(proposalMapper::toVoteDto)
                 .collect(Collectors.toList());
@@ -155,11 +155,11 @@ public class BFGovernanceService {
         return getProposalVotes(id.getTransactionId(), id.getGovActionIndex(), page, count, order);
     }
 
-    public BFProposalMetadataDto getProposalMetadata(String txHash, int certIndex) {
-        return storageReader.findProposalMetadata(txHash, certIndex)
+    public BFProposalMetadataDto getProposalMetadata(String txHash, int index) {
+        return storageReader.findProposalMetadata(txHash, index)
                 .map(proposalMapper::toMetadataDto)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "Proposal metadata not found: " + txHash + "#" + certIndex));
+                        "Proposal metadata not found: " + txHash + "#" + index));
     }
 
     public BFProposalMetadataDto getProposalMetadataByGovActionId(String govActionId) {
