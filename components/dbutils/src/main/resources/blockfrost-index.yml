@@ -8,9 +8,9 @@
       columns:
         - owner_addr_full
       type: hash
-    - name: idx_address_utxo_block
+    - name: idx_address_utxo_block_number
       columns:
-        - block_hash
+        - block
 
 - table: assets
   indexes:
