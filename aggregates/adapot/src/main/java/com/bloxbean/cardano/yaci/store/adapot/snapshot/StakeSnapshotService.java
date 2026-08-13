@@ -172,7 +172,6 @@ public class StakeSnapshotService {
                                  SELECT
                                      pool_id,
                                      status,
-                                     retire_epoch,
                                      registration_slot,
                                      slot,
                                      ROW_NUMBER() OVER (
@@ -265,10 +264,7 @@ public class StakeSnapshotService {
                             d.rn = 1
                     and not exists(
                                     select 1 from ss_pool_status p
-                                    where d.pool_id = p.pool_id and p.rn = 1
-                                      and (p.status = 'RETIRED'
-                                           or (p.status = 'RETIRING' and p.retire_epoch <= :epoch)
-                                           or d.slot < p.registration_slot)
+                                    where d.pool_id = p.pool_id and p.rn = 1 and (p.status = 'RETIRED' or d.slot < p.registration_slot)
                             )
                             AND sd.address IS NULL;
                 """;
