@@ -44,6 +44,7 @@ public interface BFAccountMapper {
     BFAccountDelegationDto toDelegationDto(AccountDelegation source);
 
     @Mapping(target = "action", source = "type", qualifiedByName = "registrationTypeToAction")
+    @Mapping(target = "deposit", expression = "java(registrationDeposit(source))")
     BFAccountRegistrationDto toRegistrationDto(AccountRegistration source);
 
     @Mapping(target = "amount", source = "amount", qualifiedByName = "stringOrZero")
@@ -90,6 +91,12 @@ public interface BFAccountMapper {
             return "deregistered";
         }
         return "registered";
+    }
+
+    default String registrationDeposit(AccountRegistration source) {
+        if (source == null || source.deposit() == null) return null;
+        return "registered".equals(registrationTypeToAction(source.type()))
+                ? String.valueOf(source.deposit()) : null;
     }
 
     @Named("normalizeRewardType")

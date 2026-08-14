@@ -395,8 +395,8 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
         List<SortField<?>> orderBy = order == Order.desc
                 ? List.of(STAKE_REGISTRATION.SLOT.desc(), STAKE_REGISTRATION.TX_INDEX.desc(), STAKE_REGISTRATION.CERT_INDEX.desc())
                 : List.of(STAKE_REGISTRATION.SLOT.asc(), STAKE_REGISTRATION.TX_INDEX.asc(), STAKE_REGISTRATION.CERT_INDEX.asc());
-        return dsl.select(STAKE_REGISTRATION.TX_HASH, STAKE_REGISTRATION.TYPE, STAKE_REGISTRATION.SLOT,
-                        TRANSACTION.BLOCK_TIME, TRANSACTION.BLOCK)
+        return dsl.select(STAKE_REGISTRATION.TX_HASH, STAKE_REGISTRATION.TYPE, STAKE_REGISTRATION.DEPOSIT,
+                        STAKE_REGISTRATION.SLOT, TRANSACTION.BLOCK_TIME, TRANSACTION.BLOCK)
                 .from(STAKE_REGISTRATION)
                 .leftJoin(TRANSACTION).on(TRANSACTION.TX_HASH.eq(STAKE_REGISTRATION.TX_HASH))
                 .where(STAKE_REGISTRATION.ADDRESS.eq(stakeAddress))
@@ -406,6 +406,7 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
                 .fetch(rec -> new AccountRegistration(
                         rec.get(STAKE_REGISTRATION.TX_HASH),
                         rec.get(STAKE_REGISTRATION.TYPE),
+                        rec.get(STAKE_REGISTRATION.DEPOSIT),
                         rec.get(STAKE_REGISTRATION.SLOT),
                         rec.get(TRANSACTION.BLOCK_TIME),
                         rec.get(TRANSACTION.BLOCK)));

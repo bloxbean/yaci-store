@@ -8,6 +8,7 @@ import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.domain.TxCertificates;
 import com.bloxbean.cardano.yaci.store.staking.domain.Delegation;
 import com.bloxbean.cardano.yaci.store.staking.domain.StakeRegistrationDetail;
+import com.bloxbean.cardano.yaci.store.staking.service.DepositParamService;
 import com.bloxbean.cardano.yaci.store.staking.storage.StakingCertificateStorage;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -18,6 +19,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 
+import java.math.BigInteger;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -28,6 +30,9 @@ class StakeRegProcessorTest {
 
     @Mock
     private StakingCertificateStorage stakingStorage;
+
+    @Mock
+    private DepositParamService depositParamService;
 
     @Mock
     private ApplicationEventPublisher publisher;
@@ -59,6 +64,9 @@ class StakeRegProcessorTest {
                                         List.of(stakeRegistrationCert))
                                 .build()));
 
+        when(depositParamService.getKeyDeposit(eventMetadata().getEpochNumber()))
+                .thenReturn(BigInteger.valueOf(2000000));
+
         stakeRegProcessor.processStakeRegistration(certificateEvent);
 
         verify(stakingStorage, times(1)).saveRegistrations(stakeRegDetailCaptor.capture());
@@ -76,6 +84,7 @@ class StakeRegProcessorTest {
         assertThat(stakeRegDeSaved.getType()).isEqualTo(CertificateType.STAKE_REGISTRATION);
         assertThat(stakeRegDeSaved.getTxHash()).isEqualTo("08a5678d15d1a9196524a35e580b98b4e8b8dc2d57d544a6c8f9520f885d1fdb");
         assertThat(stakeRegDeSaved.getCredential()).isEqualTo(stakeRegistrationCert.getStakeCredential().getHash());
+        assertThat(stakeRegDeSaved.getDeposit()).isEqualTo(BigInteger.valueOf(2000000));
     }
 
     @Test
@@ -114,6 +123,95 @@ class StakeRegProcessorTest {
         assertThat(stakeRegDeSaved.getCertIndex()).isEqualTo(0);
         assertThat(stakeRegDeSaved.getTxHash()).isEqualTo("08a5678d15d1a9196524a35e580b98b4e8b8dc2d57d544a6c8f9520f885d1fdb");
         assertThat(stakeRegDeSaved.getCredential()).isEqualTo(stakeDeregistrationCert.getStakeCredential().getHash());
+        assertThat(stakeRegDeSaved.getDeposit()).isNull();
+        verify(depositParamService, never()).getKeyDeposit(anyInt());
+    }
+
+    @Test
+    void processStakeRegistration_WhenCertTypeIsRegCert_UsesCertificateCoin() {
+        RegCert regCert = RegCert.builder()
+                .stakeCredential(StakeCredential.builder()
+                        .type(StakeCredType.ADDR_KEYHASH)
+                        .hash("42343525e6ff07e4de2a1328936c96406e432ff0aaeb7a5c5a5a6cc9")
+                        .build())
+                .coin(BigInteger.valueOf(3000000))
+                .build();
+
+        CertificateEvent certificateEvent =
+                new CertificateEvent(eventMetadata(),
+                        List.of(TxCertificates.builder()
+                                .txHash("08a5678d15d1a9196524a35e580b98b4e8b8dc2d57d544a6c8f9520f885d1fdb")
+                                .certificates(List.of(regCert))
+                                .build()));
+
+        stakeRegProcessor.processStakeRegistration(certificateEvent);
+
+        verify(stakingStorage, times(1)).saveRegistrations(stakeRegDetailCaptor.capture());
+        assertThat(stakeRegDetailCaptor.getValue()).hasSize(1);
+
+        StakeRegistrationDetail saved = stakeRegDetailCaptor.getValue().get(0);
+        assertThat(saved.getType()).isEqualTo(CertificateType.STAKE_REGISTRATION);
+        assertThat(saved.getDeposit()).isEqualTo(BigInteger.valueOf(3000000));
+        verify(depositParamService, never()).getKeyDeposit(anyInt());
+    }
+
+    @Test
+    void processStakeRegistration_WhenCertTypeIsUnregCert_UsesCertificateRefund() {
+        UnregCert unregCert = UnregCert.builder()
+                .stakeCredential(StakeCredential.builder()
+                        .type(StakeCredType.ADDR_KEYHASH)
+                        .hash("42343525e6ff07e4de2a1328936c96406e432ff0aaeb7a5c5a5a6cc9")
+                        .build())
+                .coin(BigInteger.valueOf(3000000))
+                .build();
+
+        CertificateEvent certificateEvent =
+                new CertificateEvent(eventMetadata(),
+                        List.of(TxCertificates.builder()
+                                .txHash("08a5678d15d1a9196524a35e580b98b4e8b8dc2d57d544a6c8f9520f885d1fdb")
+                                .certificates(List.of(unregCert))
+                                .build()));
+
+        stakeRegProcessor.processStakeRegistration(certificateEvent);
+
+        verify(stakingStorage, times(1)).saveRegistrations(stakeRegDetailCaptor.capture());
+        assertThat(stakeRegDetailCaptor.getValue()).hasSize(1);
+
+        StakeRegistrationDetail saved = stakeRegDetailCaptor.getValue().get(0);
+        assertThat(saved.getType()).isEqualTo(CertificateType.STAKE_DEREGISTRATION);
+        assertThat(saved.getDeposit()).isEqualTo(BigInteger.valueOf(3000000));
+        verify(depositParamService, never()).getKeyDeposit(anyInt());
+    }
+
+    @Test
+    void processStakeRegistration_WhenCertTypeIsStakeRegDelegCert_SavesDepositAndDelegation() {
+        StakeRegDelegCert stakeRegDelegCert = StakeRegDelegCert.builder()
+                .stakeCredential(StakeCredential.builder()
+                        .type(StakeCredType.ADDR_KEYHASH)
+                        .hash("42343525e6ff07e4de2a1328936c96406e432ff0aaeb7a5c5a5a6cc9")
+                        .build())
+                .poolKeyHash("62d3773887d1c644d4b28a5743f111597e0ad5654b71d613f40f5d03")
+                .coin(BigInteger.valueOf(3000000))
+                .build();
+
+        CertificateEvent certificateEvent =
+                new CertificateEvent(eventMetadata(),
+                        List.of(TxCertificates.builder()
+                                .txHash("08a5678d15d1a9196524a35e580b98b4e8b8dc2d57d544a6c8f9520f885d1fdb")
+                                .certificates(List.of(stakeRegDelegCert))
+                                .build()));
+
+        stakeRegProcessor.processStakeRegistration(certificateEvent);
+
+        verify(stakingStorage, times(1)).saveRegistrations(stakeRegDetailCaptor.capture());
+        verify(stakingStorage, times(1)).saveDelegations(delegationCaptor.capture());
+
+        assertThat(stakeRegDetailCaptor.getValue()).hasSize(1);
+        assertThat(stakeRegDetailCaptor.getValue().get(0).getDeposit()).isEqualTo(BigInteger.valueOf(3000000));
+
+        assertThat(delegationCaptor.getValue()).hasSize(1);
+        assertThat(delegationCaptor.getValue().get(0).getPoolId())
+                .isEqualTo("62d3773887d1c644d4b28a5743f111597e0ad5654b71d613f40f5d03");
     }
 
     @Test

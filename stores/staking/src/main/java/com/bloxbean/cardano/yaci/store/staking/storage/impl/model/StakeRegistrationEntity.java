@@ -9,6 +9,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 
+import java.math.BigInteger;
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -41,6 +43,9 @@ public class StakeRegistrationEntity extends BlockAwareEntity {
 
     @Column(name = "address")
     private String address;
+
+    @Column(name = "deposit")
+    private BigInteger deposit;
 
     @Column(name = "epoch")
     private Integer epoch;
