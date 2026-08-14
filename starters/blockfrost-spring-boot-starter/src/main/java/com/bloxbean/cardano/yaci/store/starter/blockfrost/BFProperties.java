@@ -90,7 +90,7 @@ public class BFProperties {
             @Getter
             @Setter
             public static final class Governance {
-                private boolean enabled = false;
+                private boolean enabled = true;
             }
 
         }

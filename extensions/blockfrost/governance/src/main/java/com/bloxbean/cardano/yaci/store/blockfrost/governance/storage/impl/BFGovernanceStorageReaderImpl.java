@@ -2,10 +2,15 @@ package com.bloxbean.cardano.yaci.store.blockfrost.governance.storage.impl;
 
 import com.bloxbean.cardano.client.crypto.Bech32;
 import com.bloxbean.cardano.client.util.HexUtil;
+import com.bloxbean.cardano.yaci.core.model.certs.CertificateType;
+import com.bloxbean.cardano.yaci.core.model.governance.Vote;
+import com.bloxbean.cardano.yaci.core.model.governance.VoterType;
+import com.bloxbean.cardano.yaci.store.blockfrost.common.util.BlockfrostDialectUtil;
 import com.bloxbean.cardano.yaci.store.blockfrost.governance.storage.BFGovernanceStorageReader;
 import com.bloxbean.cardano.yaci.store.blockfrost.governance.storage.impl.model.BFDRepDelegator;
 import com.bloxbean.cardano.yaci.store.blockfrost.governance.storage.impl.model.BFDRep;
 import com.bloxbean.cardano.yaci.store.blockfrost.governance.storage.impl.model.BFProposal;
+import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.governance.domain.DRepRegistration;
 import com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure;
@@ -16,6 +21,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jooq.DSLContext;
 import org.jooq.JSON;
+import org.jooq.Record;
 import org.jooq.Select;
 import org.jooq.SortField;
 import org.jooq.SortOrder;
@@ -24,7 +30,7 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigInteger;
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -36,6 +42,7 @@ import static com.bloxbean.cardano.yaci.store.adapot.jooq.Tables.EPOCH_STAKE;
 import static com.bloxbean.cardano.yaci.store.adapot.jooq.Tables.INSTANT_REWARD;
 import static com.bloxbean.cardano.yaci.store.adapot.jooq.Tables.REWARD;
 import static com.bloxbean.cardano.yaci.store.adapot.jooq.Tables.REWARD_REST;
+import static com.bloxbean.cardano.yaci.store.blocks.jooq.Tables.BLOCK;
 import static com.bloxbean.cardano.yaci.store.epoch.jooq.Tables.EPOCH_PARAM;
 import static com.bloxbean.cardano.yaci.store.governance.jooq.Tables.*;
 import static com.bloxbean.cardano.yaci.store.governance_aggr.jooq.Tables.DREP_DIST;
@@ -54,40 +61,6 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
     // ────────────────────────────────────────────────────────────────────────
     // Helpers
     // ────────────────────────────────────────────────────────────────────────
-
-    /**
-     * Normalise a DRep ID to the raw 28-byte hex stored in the drep_hash column.
-     * Accepts:
-     *  - 56-char hex (raw hash, stored in DB as-is)
-     *  - 66-char hex (CIP-129 with 1-byte credential header, strip first byte)
-     *  - bech32 drep1... (decoded bytes may be 29 bytes with header, strip first byte)
-     */
-    String normalizeDRepId(String drepIdOrHex) {
-        if (drepIdOrHex == null) return null;
-        // Already a raw 56-char hex hash (no header byte)
-        if (drepIdOrHex.matches("[0-9a-fA-F]{56}")) {
-            return drepIdOrHex.toLowerCase();
-        }
-        // 66-char hex: CIP-129 format with 1-byte credential type prefix (e.g. "22" + 64 chars)
-        if (drepIdOrHex.matches("[0-9a-fA-F]{66}")) {
-            return drepIdOrHex.substring(2).toLowerCase();
-        }
-        // bech32: drep1... - decoded bytes are 29 bytes (1 header + 28 hash)
-        try {
-            Bech32.Bech32Data decoded = Bech32.decode(drepIdOrHex);
-            byte[] data = decoded.data;
-            // If 29 bytes, first byte is credential type header - strip it
-            if (data.length == 29) {
-                byte[] hash = java.util.Arrays.copyOfRange(data, 1, 29);
-                return HexUtil.encodeHexString(hash);
-            }
-            // If 28 bytes, use directly
-            return HexUtil.encodeHexString(data);
-        } catch (Exception e) {
-            log.debug("Could not bech32-decode DRep ID '{}', returning as-is", drepIdOrHex);
-            return drepIdOrHex;
-        }
-    }
 
     private int offset(int page, int count) {
         return page * count;
@@ -155,36 +128,53 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
         }
     }
 
-    /** Returns map of status→epoch for a given proposal using governance-aggr table. */
-    private Map<String, Integer> fetchProposalStatusEpochs(String txHash, int idx) {
-        Map<String, Integer> result = new HashMap<>();
+    private record ProposalKey(String txHash, int index) {
+    }
+
+    private Map<ProposalKey, EnumMap<GovActionStatus, Integer>> fetchProposalStatusEpochs(List<ProposalKey> proposalKeys) {
+        Map<ProposalKey, EnumMap<GovActionStatus, Integer>> result = new HashMap<>();
+        if (proposalKeys.isEmpty()) {
+            return result;
+        }
+
         try {
-            // Use gov_action_proposal_status from governance-aggr (has RATIFIED/EXPIRED rows)
-            dsl.select(GOV_ACTION_PROPOSAL_STATUS.STATUS, GOV_ACTION_PROPOSAL_STATUS.EPOCH)
+            var statusEpoch = DSL.min(GOV_ACTION_PROPOSAL_STATUS.EPOCH).as("status_epoch");
+            var keyRows = proposalKeys.stream()
+                    .map(key -> DSL.row(key.txHash(), key.index()))
+                    .toList();
+
+            dsl.select(
+                            GOV_ACTION_PROPOSAL_STATUS.GOV_ACTION_TX_HASH,
+                            GOV_ACTION_PROPOSAL_STATUS.GOV_ACTION_INDEX,
+                            GOV_ACTION_PROPOSAL_STATUS.STATUS,
+                            statusEpoch
+                    )
                     .from(GOV_ACTION_PROPOSAL_STATUS)
-                    .where(GOV_ACTION_PROPOSAL_STATUS.GOV_ACTION_TX_HASH.eq(txHash))
-                    .and(GOV_ACTION_PROPOSAL_STATUS.GOV_ACTION_INDEX.eq(idx))
-                    .and(GOV_ACTION_PROPOSAL_STATUS.STATUS.in("RATIFIED", "EXPIRED"))
+                    .where(DSL.row(
+                                    GOV_ACTION_PROPOSAL_STATUS.GOV_ACTION_TX_HASH,
+                                    GOV_ACTION_PROPOSAL_STATUS.GOV_ACTION_INDEX
+                            ).in(keyRows))
+                    .and(GOV_ACTION_PROPOSAL_STATUS.STATUS.in(
+                            GovActionStatus.RATIFIED.name(),
+                            GovActionStatus.EXPIRED.name()
+                    ))
+                    .groupBy(
+                            GOV_ACTION_PROPOSAL_STATUS.GOV_ACTION_TX_HASH,
+                            GOV_ACTION_PROPOSAL_STATUS.GOV_ACTION_INDEX,
+                            GOV_ACTION_PROPOSAL_STATUS.STATUS
+                    )
                     .fetch()
                     .forEach(r -> {
-                        String status = r.get(GOV_ACTION_PROPOSAL_STATUS.STATUS);
-                        Integer epoch = r.get(GOV_ACTION_PROPOSAL_STATUS.EPOCH);
-                        // Keep the first (earliest) epoch for each status
-                        result.putIfAbsent(status, epoch);
+                        ProposalKey key = new ProposalKey(
+                                r.get(GOV_ACTION_PROPOSAL_STATUS.GOV_ACTION_TX_HASH),
+                                r.get(GOV_ACTION_PROPOSAL_STATUS.GOV_ACTION_INDEX)
+                        );
+                        GovActionStatus status = GovActionStatus.valueOf(r.get(GOV_ACTION_PROPOSAL_STATUS.STATUS));
+                        result.computeIfAbsent(key, ignored -> new EnumMap<>(GovActionStatus.class))
+                                .put(status, r.get(statusEpoch));
                     });
-
-            // Compute enacted_epoch: if RATIFIED at epoch X and current epoch > X+1, proposal is enacted
-            // Treasury withdrawals are distributed in the epoch after ratification (X+1)
-            Integer ratifiedEpoch = result.get("RATIFIED");
-            if (ratifiedEpoch != null) {
-                // Get current epoch from max(block.epoch)
-                Integer currentEpoch = getCurrentEpochFromBlock();
-                if (currentEpoch != null && currentEpoch > ratifiedEpoch) {
-                    result.put("ENACTED", ratifiedEpoch + 1);
-                }
-            }
         } catch (Exception e) {
-            log.warn("Could not fetch proposal status epochs for {}/{}: {}", txHash, idx, e.getMessage());
+            log.warn("Could not fetch proposal status epochs: {}", e.getMessage());
         }
         return result;
     }
@@ -192,22 +182,61 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
     /** Get current epoch from the block table. */
     private Integer getCurrentEpochFromBlock() {
         try {
-            var result = dsl.resultQuery("SELECT MAX(epoch) FROM yaci_store.block").fetchOne();
-            return result != null ? result.get(0, Integer.class) : null;
+            return buildCurrentEpochQuery().fetchOne(0, Integer.class);
         } catch (Exception e) {
             log.warn("Could not get current epoch: {}", e.getMessage());
             return null;
         }
     }
 
-    private BFProposal toProposalRow(Record r, int govActionLifetime) {
+    org.jooq.Select<org.jooq.Record1<Integer>> buildCurrentEpochQuery() {
+        return dsl.select(DSL.max(BLOCK.EPOCH)).from(BLOCK);
+    }
+
+    private List<BFProposal> enrichProposalRows(List<? extends Record> records, int govActionLifetime) {
+        if (records.isEmpty()) {
+            return List.of();
+        }
+
+        List<ProposalKey> proposalKeys = records.stream()
+                .map(this::toProposalKey)
+                .toList();
+        Integer currentEpoch = getCurrentEpochFromBlock();
+        Map<ProposalKey, EnumMap<GovActionStatus, Integer>> statusEpochs = fetchProposalStatusEpochs(proposalKeys);
+
+        return records.stream()
+                .map(record -> {
+                    ProposalKey key = toProposalKey(record);
+                    Map<GovActionStatus, Integer> proposalStatusEpochs = statusEpochs.getOrDefault(
+                            key,
+                            new EnumMap<>(GovActionStatus.class)
+                    );
+                    return toProposalRow(record, govActionLifetime, proposalStatusEpochs, currentEpoch);
+                })
+                .toList();
+    }
+
+    private ProposalKey toProposalKey(Record record) {
+        return new ProposalKey(
+                record.get(GOV_ACTION_PROPOSAL.TX_HASH),
+                record.get(GOV_ACTION_PROPOSAL.IDX)
+        );
+    }
+
+    private BFProposal toProposalRow(Record r,
+                                     int govActionLifetime,
+                                     Map<GovActionStatus, Integer> statusEpochs,
+                                     Integer currentEpoch) {
         String txHash = r.get(GOV_ACTION_PROPOSAL.TX_HASH);
-        int idx = r.get(GOV_ACTION_PROPOSAL.IDX);
+        int index = r.get(GOV_ACTION_PROPOSAL.IDX);
         Integer proposalEpoch = r.get(GOV_ACTION_PROPOSAL.EPOCH);
-        Map<String, Integer> statusEpochs = fetchProposalStatusEpochs(txHash, idx);
+        Integer ratifiedEpoch = statusEpochs.get(GovActionStatus.RATIFIED);
+        Integer enactedEpoch = ratifiedEpoch != null && currentEpoch != null && currentEpoch > ratifiedEpoch
+                ? ratifiedEpoch + 1
+                : null;
         return BFProposal.builder()
                 .txHash(txHash)
-                .certIndex(idx)
+                .index(index)
                 .type(r.get(GOV_ACTION_PROPOSAL.TYPE))
                 .details(jsonNodeFromJSON(r.get(GOV_ACTION_PROPOSAL.DETAILS)))
                 .deposit(r.get(GOV_ACTION_PROPOSAL.DEPOSIT))
@@ -215,9 +244,9 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
                 .anchorUrl(r.get(GOV_ACTION_PROPOSAL.ANCHOR_URL))
                 .anchorHash(r.get(GOV_ACTION_PROPOSAL.ANCHOR_HASH))
                 .epoch(proposalEpoch)
-                .ratifiedEpoch(statusEpochs.get("RATIFIED"))
-                .enactedEpoch(statusEpochs.get("ENACTED"))
-                .expiredEpoch(statusEpochs.get("EXPIRED"))
+                .ratifiedEpoch(ratifiedEpoch)
+                .enactedEpoch(enactedEpoch)
+                .expiredEpoch(statusEpochs.get(GovActionStatus.EXPIRED))
                 .govActionLifetime(govActionLifetime)
                 .build();
     }
@@ -343,7 +372,7 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
         Integer firstRegistrationEpoch = dsl.select(DREP_REGISTRATION.EPOCH)
                 .from(DREP_REGISTRATION)
                 .where(DREP_REGISTRATION.DREP_HASH.eq(drepHex))
-                .and(DREP_REGISTRATION.TYPE.eq("REG_DREP_CERT"))
+                .and(DREP_REGISTRATION.TYPE.eq(CertificateType.REG_DREP_CERT.name()))
                 .orderBy(DREP_REGISTRATION.SLOT.asc())
                 .limit(1)
                 .fetchOptional(DREP_REGISTRATION.EPOCH)
@@ -737,56 +766,56 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
                 ? GOV_ACTION_PROPOSAL.SLOT.desc()
                 : GOV_ACTION_PROPOSAL.SLOT.asc();
         int govActionLifetime = fetchGovActionLifetime();
-        return dsl.select()
+        var proposals = dsl.select()
                 .from(GOV_ACTION_PROPOSAL)
                 .orderBy(sortField)
                 .limit(count)
                 .offset(offset(page, count))
-                .fetch()
-                .map(r -> toProposalRow(r, govActionLifetime));
+                .fetch();
+        return enrichProposalRows(proposals, govActionLifetime);
     }
 
     @Override
-    public Optional<BFProposal> findProposalByTxHashAndIndex(String txHash, int certIndex) {
+    public Optional<BFProposal> findProposalByTxHashAndIndex(String txHash, int index) {
         int govActionLifetime = fetchGovActionLifetime();
-        return dsl.select()
+        var proposal = dsl.select()
                 .from(GOV_ACTION_PROPOSAL)
                 .where(GOV_ACTION_PROPOSAL.TX_HASH.eq(txHash))
-                .and(GOV_ACTION_PROPOSAL.IDX.eq(certIndex))
-                .fetchOptional()
-                .map(r -> toProposalRow(r, govActionLifetime));
+                .and(GOV_ACTION_PROPOSAL.IDX.eq(index))
+                .fetchOptional();
+        return proposal.map(record -> enrichProposalRows(List.of(record), govActionLifetime).getFirst());
     }
 
     @Override
-    public Optional<BFProposal> findParameterChangeProposal(String txHash, int certIndex) {
+    public Optional<BFProposal> findParameterChangeProposal(String txHash, int index) {
         int govActionLifetime = fetchGovActionLifetime();
-        return dsl.select()
+        var proposal = dsl.select()
                 .from(GOV_ACTION_PROPOSAL)
                 .where(GOV_ACTION_PROPOSAL.TX_HASH.eq(txHash))
-                .and(GOV_ACTION_PROPOSAL.IDX.eq(certIndex))
+                .and(GOV_ACTION_PROPOSAL.IDX.eq(index))
                 .and(GOV_ACTION_PROPOSAL.TYPE.eq("PARAMETER_CHANGE_ACTION"))
-                .fetchOptional()
-                .map(r -> toProposalRow(r, govActionLifetime));
+                .fetchOptional();
+        return proposal.map(record -> enrichProposalRows(List.of(record), govActionLifetime).getFirst());
     }
 
     @Override
-    public boolean isWithdrawalProposal(String txHash, int certIndex) {
+    public boolean isWithdrawalProposal(String txHash, int index) {
         return dsl.fetchExists(
                 dsl.selectOne()
                         .from(GOV_ACTION_PROPOSAL)
                         .where(GOV_ACTION_PROPOSAL.TX_HASH.eq(txHash))
-                        .and(GOV_ACTION_PROPOSAL.IDX.eq(certIndex))
+                        .and(GOV_ACTION_PROPOSAL.IDX.eq(index))
                         .and(GOV_ACTION_PROPOSAL.TYPE.eq("TREASURY_WITHDRAWALS_ACTION"))
         );
     }
 
     @Override
-    public List<BFDRepDelegator> findProposalWithdrawals(String txHash, int certIndex) {
+    public List<BFDRepDelegator> findProposalWithdrawals(String txHash, int index) {
         // Read withdrawals from gov_action_proposal.details JSON — no adapot dependency
         return dsl.select(GOV_ACTION_PROPOSAL.DETAILS)
                 .from(GOV_ACTION_PROPOSAL)
                 .where(GOV_ACTION_PROPOSAL.TX_HASH.eq(txHash))
-                .and(GOV_ACTION_PROPOSAL.IDX.eq(certIndex))
+                .and(GOV_ACTION_PROPOSAL.IDX.eq(index))
                 .and(GOV_ACTION_PROPOSAL.TYPE.eq("TREASURY_WITHDRAWALS_ACTION"))
                 .fetchOptional(GOV_ACTION_PROPOSAL.DETAILS)
                 .map(json -> {
@@ -803,7 +832,7 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
                             ));
                         }
                     } catch (Exception e) {
-                        log.warn("Could not parse withdrawals from proposal details for {}/{}: {}", txHash, certIndex, e.getMessage());
+                        log.warn("Could not parse withdrawals from proposal details for {}/{}: {}", txHash, index, e.getMessage());
                     }
                     return result;
                 })
@@ -811,14 +840,14 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
     }
 
     @Override
-    public List<VotingProcedure> findProposalVotes(String txHash, int certIndex, int page, int count, Order order) {
+    public List<VotingProcedure> findProposalVotes(String txHash, int index, int page, int count, Order order) {
         SortField<?> sortField = order == Order.desc
                 ? VOTING_PROCEDURE.SLOT.desc()
                 : VOTING_PROCEDURE.SLOT.asc();
         return dsl.select()
                 .from(VOTING_PROCEDURE)
                 .where(VOTING_PROCEDURE.GOV_ACTION_TX_HASH.eq(txHash))
-                .and(VOTING_PROCEDURE.GOV_ACTION_INDEX.eq(certIndex))
+                .and(VOTING_PROCEDURE.GOV_ACTION_INDEX.eq(index))
                 .orderBy(sortField, VOTING_PROCEDURE.IDX.asc())
                 .limit(count)
                 .offset(offset(page, count))
@@ -827,26 +856,14 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
     }
 
     @Override
-    public Optional<BFProposal> findProposalMetadata(String txHash, int certIndex) {
+    public Optional<BFProposal> findProposalMetadata(String txHash, int index) {
         int govActionLifetime = fetchGovActionLifetime();
-        // First check if anchor_url exists - if not, return empty (404)
-        var hasAnchor = dsl.selectCount()
+        var proposal = dsl.select()
                 .from(GOV_ACTION_PROPOSAL)
                 .where(GOV_ACTION_PROPOSAL.TX_HASH.eq(txHash))
-                .and(GOV_ACTION_PROPOSAL.IDX.eq(certIndex))
+                .and(GOV_ACTION_PROPOSAL.IDX.eq(index))
                 .and(GOV_ACTION_PROPOSAL.ANCHOR_URL.isNotNull())
-                .fetchOne(0, int.class) > 0;
-
-        if (!hasAnchor) {
-            return Optional.empty();
-        }
-
-        return dsl.select()
-                .from(GOV_ACTION_PROPOSAL)
-                .where(GOV_ACTION_PROPOSAL.TX_HASH.eq(txHash))
-                .and(GOV_ACTION_PROPOSAL.IDX.eq(certIndex))
-                .and(GOV_ACTION_PROPOSAL.ANCHOR_URL.isNotNull())
-                .fetchOptional()
-                .map(r -> toProposalRow(r, govActionLifetime));
+                .fetchOptional();
+        return proposal.map(record -> enrichProposalRows(List.of(record), govActionLifetime).getFirst());
     }
 }

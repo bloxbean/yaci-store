@@ -1,6 +1,8 @@
 package com.bloxbean.cardano.yaci.store.blockfrost.governance.service;
 
-import com.bloxbean.cardano.client.crypto.Bech32;
+import com.bloxbean.cardano.client.address.Address;
+import com.bloxbean.cardano.client.governance.GovId;
+import com.bloxbean.cardano.client.transaction.spec.governance.actions.GovActionId;
 import com.bloxbean.cardano.client.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.blockfrost.governance.dto.*;
 import com.bloxbean.cardano.yaci.store.blockfrost.governance.mapper.BFDRepMapper;
@@ -8,7 +10,6 @@ import com.bloxbean.cardano.yaci.store.blockfrost.governance.mapper.BFProposalMa
 import com.bloxbean.cardano.yaci.store.blockfrost.governance.storage.BFGovernanceStorageReader;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.common.util.GovUtil;
-import com.bloxbean.cardano.client.transaction.spec.governance.actions.GovActionId;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -18,8 +19,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -37,8 +38,8 @@ public class BFGovernanceService {
     // DRep endpoints
     // ────────────────────────────────────────────────────────────────────────
 
-    public List<BFDRepListItemDto> getDReps(int page, int count, String order) {
-        return storageReader.findAllDReps(page, count, toOrder(order))
+    public List<BFDRepListItemDto> getDReps(int page, int count, Order order) {
+        return storageReader.findAllDReps(page, count, order)
                 .stream()
                 .map(dRepMapper::toListItemDto)
                 .collect(Collectors.toList());
@@ -52,25 +53,25 @@ public class BFGovernanceService {
                         "DRep not found: " + drepId));
     }
 
-    public List<BFDRepDelegatorDto> getDRepDelegators(String drepId, int page, int count, String order) {
+    public List<BFDRepDelegatorDto> getDRepDelegators(String drepId, int page, int count, Order order) {
         String drepHex = resolveDRepHex(drepId);
-        return storageReader.findDRepDelegators(drepHex, page, count, toOrder(order))
+        return storageReader.findDRepDelegators(drepHex, page, count, order)
                 .stream()
                 .map(dRepMapper::toDelegatorDto)
                 .collect(Collectors.toList());
     }
 
-    public List<BFDRepUpdateDto> getDRepUpdates(String drepId, int page, int count, String order) {
+    public List<BFDRepUpdateDto> getDRepUpdates(String drepId, int page, int count, Order order) {
         String drepHex = resolveDRepHex(drepId);
-        return storageReader.findDRepUpdates(drepHex, page, count, toOrder(order))
+        return storageReader.findDRepUpdates(drepHex, page, count, order)
                 .stream()
                 .map(dRepMapper::toUpdateDto)
                 .collect(Collectors.toList());
     }
 
-    public List<BFDRepVoteDto> getDRepVotes(String drepId, int page, int count, String order) {
+    public List<BFDRepVoteDto> getDRepVotes(String drepId, int page, int count, Order order) {
         String drepHex = resolveDRepHex(drepId);
-        return storageReader.findDRepVotes(drepHex, page, count, toOrder(order))
+        return storageReader.findDRepVotes(drepHex, page, count, order)
                 .stream()
                 .map(dRepMapper::toVoteDto)
                 .collect(Collectors.toList());
@@ -88,18 +89,18 @@ public class BFGovernanceService {
     // Proposal endpoints
     // ────────────────────────────────────────────────────────────────────────
 
-    public List<BFProposalListItemDto> getProposals(int page, int count, String order) {
-        return storageReader.findAllProposals(page, count, toOrder(order))
+    public List<BFProposalListItemDto> getProposals(int page, int count, Order order) {
+        return storageReader.findAllProposals(page, count, order)
                 .stream()
                 .map(proposalMapper::toListItemDto)
                 .collect(Collectors.toList());
     }
 
-    public BFProposalDto getProposal(String txHash, int certIndex) {
-        return storageReader.findProposalByTxHashAndIndex(txHash, certIndex)
+    public BFProposalDto getProposal(String txHash, int index) {
+        return storageReader.findProposalByTxHashAndIndex(txHash, index)
                 .map(proposalMapper::toDto)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "Proposal not found: " + txHash + "#" + certIndex));
+                        "Proposal not found: " + txHash + "#" + index));
     }
 
     public BFProposalDto getProposalByGovActionId(String govActionId) {
@@ -107,15 +108,15 @@ public class BFGovernanceService {
         return getProposal(id.getTransactionId(), id.getGovActionIndex());
     }
 
-    public BFProposalParametersDto getProposalParameters(String txHash, int certIndex) {
-        return storageReader.findParameterChangeProposal(txHash, certIndex)
+    public BFProposalParametersDto getProposalParameters(String txHash, int index) {
+        return storageReader.findParameterChangeProposal(txHash, index)
                 .map(row -> {
                     BFProposalParametersDto dto = proposalMapper.toParametersDto(row);
                     dto.setParameters(transformProtocolParams(row.getDetails()));
                     return dto;
                 })
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "Protocol parameter proposal not found: " + txHash + "#" + certIndex));
+                        "Protocol parameter proposal not found: " + txHash + "#" + index));
     }
 
     public BFProposalParametersDto getProposalParametersByGovActionId(String govActionId) {
@@ -123,12 +124,12 @@ public class BFGovernanceService {
         return getProposalParameters(id.getTransactionId(), id.getGovActionIndex());
     }
 
-    public List<BFProposalWithdrawalDto> getProposalWithdrawals(String txHash, int certIndex) {
-        if (!storageReader.isWithdrawalProposal(txHash, certIndex)) {
+    public List<BFProposalWithdrawalDto> getProposalWithdrawals(String txHash, int index) {
+        if (!storageReader.isWithdrawalProposal(txHash, index)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND,
-                    "Treasury withdrawal proposal not found: " + txHash + "#" + certIndex);
+                    "Treasury withdrawal proposal not found: " + txHash + "#" + index);
         }
-        return storageReader.findProposalWithdrawals(txHash, certIndex)
+        return storageReader.findProposalWithdrawals(txHash, index)
                 .stream()
                 .map(d -> BFProposalWithdrawalDto.builder()
                         .stakeAddress(hexToStakeAddress(d.getAddress()))
@@ -142,23 +143,23 @@ public class BFGovernanceService {
         return getProposalWithdrawals(id.getTransactionId(), id.getGovActionIndex());
     }
 
-    public List<BFProposalVoteDto> getProposalVotes(String txHash, int certIndex, int page, int count, String order) {
-        return storageReader.findProposalVotes(txHash, certIndex, page, count, toOrder(order))
+    public List<BFProposalVoteDto> getProposalVotes(String txHash, int index, int page, int count, Order order) {
+        return storageReader.findProposalVotes(txHash, index, page, count, order)
                 .stream()
                 .map(proposalMapper::toVoteDto)
                 .collect(Collectors.toList());
     }
 
-    public List<BFProposalVoteDto> getProposalVotesByGovActionId(String govActionId, int page, int count, String order) {
+    public List<BFProposalVoteDto> getProposalVotesByGovActionId(String govActionId, int page, int count, Order order) {
         GovActionId id = decodeGovActionId(govActionId);
         return getProposalVotes(id.getTransactionId(), id.getGovActionIndex(), page, count, order);
     }
 
-    public BFProposalMetadataDto getProposalMetadata(String txHash, int certIndex) {
-        return storageReader.findProposalMetadata(txHash, certIndex)
+    public BFProposalMetadataDto getProposalMetadata(String txHash, int index) {
+        return storageReader.findProposalMetadata(txHash, index)
                 .map(proposalMapper::toMetadataDto)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "Proposal metadata not found: " + txHash + "#" + certIndex));
+                        "Proposal metadata not found: " + txHash + "#" + index));
     }
 
     public BFProposalMetadataDto getProposalMetadataByGovActionId(String govActionId) {
@@ -170,48 +171,23 @@ public class BFGovernanceService {
     // Helpers
     // ────────────────────────────────────────────────────────────────────────
 
-    private Order toOrder(String order) {
-        try {
-            return Order.valueOf(order.toLowerCase());
-        } catch (Exception e) {
-            return Order.asc;
-        }
-    }
-
     /**
      * Resolves a DRep ID (bech32 or hex) to the raw 56-char hex used in the DB.
-     * Handles:
-     *  - 56-char hex: raw hash, return as-is
-     *  - 66-char hex: CIP-129 with 1-byte credential header, strip first byte
-     *  - bech32 drep1...: decoded bytes are 29 bytes (1 header + 28 hash), strip first byte
+     * Accepts a 56-character raw hash or a CIP-129 bech32 DRep ID.
      */
     private String resolveDRepHex(String drepId) {
-        if (drepId == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "DRep ID cannot be null");
-        // 56-char hex: raw 28-byte hash stored in DB
+        if (drepId == null || drepId.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "DRep ID cannot be null or blank");
+        }
+
         if (drepId.matches("[0-9a-fA-F]{56}")) {
-            return drepId.toLowerCase();
+            return drepId.toLowerCase(Locale.ROOT);
         }
-        // 58-char hex: CIP-129 "hex" field (1 header byte + 28 hash bytes), strip first byte
-        if (drepId.matches("[0-9a-fA-F]{58}")) {
-            return drepId.substring(2).toLowerCase();
-        }
-        // 66-char hex: older CIP-129 with 1-byte credential header, strip first byte
-        if (drepId.matches("[0-9a-fA-F]{66}")) {
-            return drepId.substring(2).toLowerCase();
-        }
-        // bech32 drep1... — decode and strip the 1-byte credential header
+
         try {
-            Bech32.Bech32Data decoded = Bech32.decode(drepId);
-            byte[] data = decoded.data;
-            // 29 bytes = 1 header byte + 28 raw hash bytes
-            if (data.length == 29) {
-                return HexUtil.encodeHexString(Arrays.copyOfRange(data, 1, 29));
-            }
-            return HexUtil.encodeHexString(data);
+            return GovId.toDrep(drepId).getHash();
         } catch (Exception e) {
-            // Invalid bech32 — will yield a DB miss which the caller turns into 404
-            log.debug("Could not bech32-decode DRep ID '{}': {}", drepId, e.getMessage());
-            return drepId;
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid DRep ID: " + drepId, e);
         }
     }
 
@@ -319,14 +295,10 @@ public class BFGovernanceService {
     }
 
     /**
-     * Converts a hex-encoded Cardano stake address to bech32 (stake_test1... or stake1...).
-     * The first byte is the address header — bit 0 = 0 means testnet, 1 means mainnet.
+     * Converts a hex-encoded Cardano stake address to bech32.
      */
     private String hexToStakeAddress(String hex) {
         if (hex == null) return null;
-        byte[] bytes = HexUtil.decodeHexString(hex);
-        boolean isMainnet = bytes.length > 0 && (bytes[0] & 0x01) == 1;
-        String hrp = isMainnet ? "stake" : "stake_test";
-        return Bech32.encode(bytes, hrp);
+        return new Address(HexUtil.decodeHexString(hex)).toBech32();
     }
 }

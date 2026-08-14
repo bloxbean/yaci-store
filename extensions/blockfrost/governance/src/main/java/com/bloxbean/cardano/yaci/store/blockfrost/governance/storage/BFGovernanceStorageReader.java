@@ -38,32 +38,32 @@ public interface BFGovernanceStorageReader {
     /** Paginated list of all governance proposals. */
     List<BFProposal> findAllProposals(int page, int count, Order order);
 
-    /** Single proposal identified by tx_hash + index (cert_index). */
-    Optional<BFProposal> findProposalByTxHashAndIndex(String txHash, int certIndex);
+    /** Single proposal identified by transaction hash and proposal index. */
+    Optional<BFProposal> findProposalByTxHashAndIndex(String txHash, int index);
 
     /**
      * Returns the proposal only if it is a PARAMETER_CHANGE_ACTION type.
      * Returns empty if not found or wrong type.
      */
-    Optional<BFProposal> findParameterChangeProposal(String txHash, int certIndex);
+    Optional<BFProposal> findParameterChangeProposal(String txHash, int index);
 
     /**
-     * Returns true if the proposal at (txHash, certIndex) is TREASURY_WITHDRAWALS_ACTION.
+     * Returns true if the proposal at (txHash, index) is TREASURY_WITHDRAWALS_ACTION.
      */
-    boolean isWithdrawalProposal(String txHash, int certIndex);
+    boolean isWithdrawalProposal(String txHash, int index);
 
     /**
      * Treasury withdrawal entries for the given proposal (tx_hash + gov_action_index).
      * Returns address + lovelace amount pairs.
      */
-    List<BFDRepDelegator> findProposalWithdrawals(String txHash, int certIndex);
+    List<BFDRepDelegator> findProposalWithdrawals(String txHash, int index);
 
     /** Voting procedure rows for the given proposal. */
-    List<VotingProcedure> findProposalVotes(String txHash, int certIndex, int page, int count, Order order);
+    List<VotingProcedure> findProposalVotes(String txHash, int index, int page, int count, Order order);
 
     /**
      * Returns the proposal only if it has an anchor URL (for metadata endpoint).
      * Returns empty if not found or no metadata.
      */
-    Optional<BFProposal> findProposalMetadata(String txHash, int certIndex);
+    Optional<BFProposal> findProposalMetadata(String txHash, int index);
 }

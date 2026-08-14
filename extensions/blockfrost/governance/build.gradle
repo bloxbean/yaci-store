@@ -3,6 +3,7 @@ import org.gradle.api.publish.maven.MavenPublication
 dependencies {
 
     api project(":extensions:blockfrost:blockfrost-common")
+    api project(":stores:blocks")
     api project(":stores:governance")
     api project(":stores-api:governance-api")
     api project(":aggregates:governance-aggr")

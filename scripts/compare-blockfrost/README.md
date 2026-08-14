@@ -14,6 +14,7 @@ Python scripts that compare **Yaci Store** API responses against live **Blockfro
 | `compare_transaction.py` | `/txs/*` |
 | `compare_metadata.py` | `/metadata/*` |
 | `compare_scripts.py` | `/scripts/*` |
+| `compare_governance.py` | `/governance/dreps/*`, `/governance/proposals/*` |
 | `bf_compare.py` | Shared core — not run directly |
 
 ## Requirements
@@ -173,6 +174,23 @@ python3 compare_epoch.py --network preprod --orders desc --pages 1 --count 20
 
 Non-list endpoints (e.g. `/epochs/latest`) are compared once; `order`/`page` do
 not apply to them.
+
+### Governance samples
+
+`compare_governance.py` reads the Blockfrost project ID for the selected network
+from `.env`. It loads governance identifiers from `config/governance.json` and
+auto-discovers any missing DRep/proposal samples from the local Yaci governance
+list endpoints. The proposal scan selects generic, parameter-change, and treasury
+withdrawal samples so type-specific endpoints are exercised with compatible data.
+
+```bash
+python3 compare_governance.py --network mainnet
+python3 compare_governance.py --network preprod --strict --pages 1 --count 20
+```
+
+For a pinned proposal, each proposal object in `config/governance.json` accepts
+`tx_hash`, `cert_index`, and `gov_action_id`. CLI flags `--drep-id`, `--tx-hash`,
+`--cert-index`, and `--gov-action-id` override the generic auto-discovered sample.
 
 ## Output
 
