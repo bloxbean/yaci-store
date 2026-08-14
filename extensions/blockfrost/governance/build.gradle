@@ -7,10 +7,15 @@ dependencies {
     api project(":stores:governance")
     api project(":stores-api:governance-api")
     api project(":aggregates:governance-aggr")
+    api project(":aggregates:account")
+    api project(":aggregates:adapot")
+    api project(":stores:staking")
+    api project(":stores:transaction")
     api project(":stores:utxo")
 
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.jooq:jooq'
+
 }
 
 publishing {
