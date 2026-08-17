@@ -44,6 +44,7 @@ public interface BFAccountMapper {
     BFAccountDelegationDto toDelegationDto(AccountDelegation source);
 
     @Mapping(target = "action", source = "type", qualifiedByName = "registrationTypeToAction")
+    @Mapping(target = "deposit", ignore = true)
     BFAccountRegistrationDto toRegistrationDto(AccountRegistration source);
 
     @Mapping(target = "amount", source = "amount", qualifiedByName = "stringOrZero")
