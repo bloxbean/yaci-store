@@ -29,8 +29,4 @@ public class BFProposalDto {
     private Integer droppedEpoch;
     private Integer expiredEpoch;
     private Integer expiration;
-    /** Proposal anchor URL (for metadata endpoint) */
-    private String anchorUrl;
-    /** Proposal anchor hash (for metadata endpoint) */
-    private String anchorHash;
 }

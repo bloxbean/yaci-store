@@ -35,7 +35,7 @@ public interface BFProposalMapper {
     @Mapping(target = "txHash", source = "txHash")
     @Mapping(target = "certIndex", source = "index")
     @Mapping(target = "governanceType", source = "type", qualifiedByName = "govActionTypeToString")
-    @Mapping(target = "governanceDescription", source = "details")
+    @Mapping(target = "governanceDescription", ignore = true)
     @Mapping(target = "deposit", source = "deposit", qualifiedByName = "longToString")
     @Mapping(target = "returnAddress", source = "returnAddress")
     @Mapping(target = "ratifiedEpoch", source = "ratifiedEpoch")
@@ -43,8 +43,6 @@ public interface BFProposalMapper {
     @Mapping(target = "droppedEpoch", expression = "java(row.getExpiredEpoch() != null ? row.getExpiredEpoch() + 1 : null)")
     @Mapping(target = "expiredEpoch", source = "expiredEpoch")
     @Mapping(target = "expiration", expression = "java(row.getEpoch() != null && row.getGovActionLifetime() != null && row.getGovActionLifetime() > 0 ? row.getEpoch() + row.getGovActionLifetime() + 1 : null)")
-    @Mapping(target = "anchorUrl", source = "anchorUrl")
-    @Mapping(target = "anchorHash", source = "anchorHash")
     BFProposalDto toDto(BFProposal row);
 
     // ── Proposal parameters ───────────────────────────────────────────────
