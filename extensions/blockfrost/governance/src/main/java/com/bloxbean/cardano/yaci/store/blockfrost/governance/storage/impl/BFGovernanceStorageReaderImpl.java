@@ -1047,13 +1047,16 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
 
     @Override
     public List<BFProposal> findAllProposals(int page, int count, Order order) {
-        SortField<?> sortField = order == Order.desc
-                ? GOV_ACTION_PROPOSAL.SLOT.desc()
-                : GOV_ACTION_PROPOSAL.SLOT.asc();
+        SortOrder sortOrder = order == Order.desc ? SortOrder.DESC : SortOrder.ASC;
         int govActionLifetime = fetchGovActionLifetime();
+
         var proposals = dsl.select()
                 .from(GOV_ACTION_PROPOSAL)
-                .orderBy(sortField)
+                .orderBy(
+                        GOV_ACTION_PROPOSAL.SLOT.sort(sortOrder),
+                        GOV_ACTION_PROPOSAL.TX_INDEX.sort(sortOrder),
+                        GOV_ACTION_PROPOSAL.IDX.sort(sortOrder)
+                )
                 .limit(count)
                 .offset(offset(page, count))
                 .fetch();
