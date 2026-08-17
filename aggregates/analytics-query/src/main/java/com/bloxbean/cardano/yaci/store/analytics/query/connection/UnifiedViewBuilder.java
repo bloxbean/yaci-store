@@ -52,6 +52,7 @@ public class UnifiedViewBuilder {
      * @param pgDatabaseAlias the attached PostgreSQL database alias (e.g., "pg_live")
      * @param pgSchema        the PostgreSQL schema (e.g., "preprod")
      * @param cutoffSlot      the boundary slot (data &lt;= cutoff from Parquet, &gt; cutoff from PG)
+     * @param partitionColumn source column used to derive DuckLake's synthetic date partition
      * @param parentConn      the DuckDB parent connection (for schema introspection)
      * @return the CREATE VIEW SQL, or null if the table cannot be federated
      */
@@ -60,6 +61,7 @@ public class UnifiedViewBuilder {
             String pgDatabaseAlias,
             String pgSchema,
             long cutoffSlot,
+            String partitionColumn,
             Connection parentConn) {
 
         if (NEVER_FEDERATE.contains(tableName)) {
@@ -107,6 +109,14 @@ public class UnifiedViewBuilder {
             for (ColumnInfo parquetCol : parquetColumns) {
                 String pgType = pgColumnTypes.get(parquetCol.name);
                 if (pgType == null) {
+                    if ("date".equals(parquetCol.name)) {
+                        String dateExpression = buildDateExpression(
+                                partitionColumn, parquetCol.type, pgColumnTypes);
+                        if (dateExpression != null) {
+                            pgSelectColumns.add(dateExpression);
+                            continue;
+                        }
+                    }
                     log.debug("Column '{}' not found in PG source '{}' for table '{}'",
                             parquetCol.name, pgFullName, tableName);
                     allColumnsFound = false;
@@ -138,9 +148,29 @@ public class UnifiedViewBuilder {
             );
 
         } catch (SQLException e) {
-            log.warn("Failed to build unified view for '{}': {}", tableName, e.getMessage());
+            log.warn("Failed to build unified view for '{}' (SQLState={}, errorCode={})",
+                    tableName, e.getSQLState(), e.getErrorCode());
             return null;
         }
+    }
+
+    private static String buildDateExpression(
+            String partitionColumn, String parquetType, Map<String, String> pgColumnTypes) {
+        if (partitionColumn == null || partitionColumn.isBlank()) return null;
+        String pgType = pgColumnTypes.get(partitionColumn);
+        if (pgType == null) return null;
+
+        String normalizedPg = normalizeType(pgType);
+        String source = quoteId(partitionColumn);
+        String dateValue;
+        if (isIntegerType(normalizedPg)) {
+            dateValue = "CAST(to_timestamp(" + source + ") AT TIME ZONE 'UTC' AS DATE)";
+        } else if (normalizedPg.startsWith("TIMESTAMP") || normalizedPg.equals("DATE")) {
+            dateValue = "CAST(" + source + " AS DATE)";
+        } else {
+            return null;
+        }
+        return "CAST(" + dateValue + " AS " + parquetType + ") AS " + quoteId("date");
     }
 
     /**

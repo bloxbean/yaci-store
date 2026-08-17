@@ -46,7 +46,8 @@ public class AnalyticsSchemaService {
             try {
                 getColumns(table);
             } catch (Exception e) {
-                log.warn("Failed to cache schema for table '{}': {}", table, e.getMessage());
+                log.warn("Failed to cache schema for table '{}' ({})",
+                        table, e.getClass().getSimpleName());
             }
         }
         log.info("Schema cache warmed for {} tables", columnCache.size());
@@ -134,34 +135,50 @@ public class AnalyticsSchemaService {
     }
 
     private List<ColumnSchema> getColumns(String tableName) {
-        return columnCache.computeIfAbsent(tableName, t -> {
-            List<ColumnSchema> cols = new ArrayList<>();
-            try (Connection conn = connectionProvider.getReadConnection();
-                 Statement stmt = conn.createStatement();
-                 ResultSet rs = stmt.executeQuery("DESCRIBE \"" + t.replace("\"", "\"\"") + "\"")) {
-                while (rs.next()) {
-                    cols.add(new ColumnSchema(rs.getString("column_name"), rs.getString("column_type")));
-                }
-            } catch (Exception e) {
-                log.error("Failed to describe table '{}': {}", t, e.getMessage());
+        List<ColumnSchema> cached = columnCache.get(tableName);
+        if (cached != null) {
+            return cached;
+        }
+
+        List<ColumnSchema> columns = new ArrayList<>();
+        try (Connection conn = connectionProvider.getReadConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("DESCRIBE \"" + tableName.replace("\"", "\"\"") + "\"")) {
+            while (rs.next()) {
+                columns.add(new ColumnSchema(rs.getString("column_name"), rs.getString("column_type")));
             }
-            return cols;
-        });
+            List<ColumnSchema> immutableColumns = List.copyOf(columns);
+            List<ColumnSchema> existing = columnCache.putIfAbsent(tableName, immutableColumns);
+            return existing != null ? existing : immutableColumns;
+        } catch (Exception e) {
+            log.error("Failed to describe table '{}' ({})",
+                    tableName, e.getClass().getSimpleName());
+            // Do not cache a transient failure; a later request should retry.
+            return List.of();
+        }
     }
 
     private long getRowCount(String tableName) {
-        return rowCountCache.computeIfAbsent(tableName, t -> {
-            try (Connection conn = connectionProvider.getReadConnection();
-                 Statement stmt = conn.createStatement()) {
-                stmt.setQueryTimeout(connectionProvider.getQueryTimeoutSeconds());
-                try (ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM \"" + t.replace("\"", "\"\"") + "\"")) {
-                    return rs.next() ? rs.getLong(1) : 0L;
-                }
-            } catch (Exception e) {
-                log.warn("Failed to count rows for '{}': {}", t, e.getMessage());
-                return -1L;
+        Long cached = rowCountCache.get(tableName);
+        if (cached != null) {
+            return cached;
+        }
+
+        try (Connection conn = connectionProvider.getReadConnection();
+             Statement stmt = conn.createStatement()) {
+            stmt.setQueryTimeout(connectionProvider.getQueryTimeoutSeconds());
+            try (ResultSet rs = stmt.executeQuery(
+                    "SELECT COUNT(*) FROM \"" + tableName.replace("\"", "\"\"") + "\"")) {
+                long rowCount = rs.next() ? rs.getLong(1) : 0L;
+                Long existing = rowCountCache.putIfAbsent(tableName, rowCount);
+                return existing != null ? existing : rowCount;
             }
-        });
+        } catch (Exception e) {
+            log.warn("Failed to count rows for '{}' ({})",
+                    tableName, e.getClass().getSimpleName());
+            // -1 represents this response only; do not poison the cache on a transient failure.
+            return -1L;
+        }
     }
 
     private TableInfo.DateRange getDateRange(String tableName, String partitionColumn) {
@@ -181,7 +198,8 @@ public class AnalyticsSchemaService {
                     }
                 }
             } catch (Exception e) {
-                log.warn("Failed to get date range for '{}': {}", t, e.getMessage());
+                log.warn("Failed to get date range for '{}' ({})",
+                        t, e.getClass().getSimpleName());
             }
             return null;
         });

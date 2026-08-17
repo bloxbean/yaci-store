@@ -103,7 +103,10 @@ public class DuckLakeWriterService implements StorageWriter {
 
             return new ExportResult(outputPath, rowCount, fileSize, duration);
 
-        } catch (SQLException e) {
+        } catch (SQLException rawError) {
+            // postgres_scanner / PostgreSQL-catalog errors echo the connection string
+            // (including the password); log and propagate a redacted copy only.
+            SQLException e = DuckDbConnectionHelper.sanitize(rawError);
             log.error("Failed to export to DuckLake: {}", e.getMessage(), e);
             throw new RuntimeException("DuckLake export failed: " + e.getMessage(), e);
         }

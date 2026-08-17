@@ -223,9 +223,9 @@ public class AnalyticsStoreProperties {
          * Useful for production deployments where analytics should only be accessible
          * through the MCP interface (gated by the LLM agent), not via direct HTTP calls.
          *
-         * Default: true (REST endpoints enabled for backward compatibility).
+         * Default: false. Ad-hoc SQL must be explicitly exposed by the operator.
          */
-        private boolean restApiEnabled = true;
+        private boolean restApiEnabled = false;
     }
 
     private Query query = new Query();

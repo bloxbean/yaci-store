@@ -27,8 +27,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 @ConditionalOnProperty(
         name = {"yaci.store.analytics.query.enabled", "yaci.store.analytics.query.rest-api-enabled"},
-        havingValue = "true",
-        matchIfMissing = true
+        havingValue = "true"
 )
 public class ParquetAnalyticsController {
 
@@ -91,19 +90,17 @@ public class ParquetAnalyticsController {
     /**
      * Ad-hoc SQL query endpoint (read-only, against analytics data).
      *
-     * <p>Security is enforced by {@link SqlValidator} which strips SQL comments,
-     * enforces SELECT/WITH-only statements, and blocks dangerous functions via
-     * a keyword blocklist. This is the primary defense — DuckDB's
-     * {@code enable_external_access} cannot be disabled because Parquet views
-     * resolve {@code read_parquet()} lazily at query time.</p>
+     * <p>Security is enforced primarily by DuckDB's engine-level external-access sandbox.
+     * {@link SqlValidator} additionally enforces SELECT/WITH-only statements and blocks
+     * dangerous functions as defense in depth.</p>
      *
      * <p>Results are capped at {@link AnalyticsQueryExecutor#MAX_RESULT_ROWS} rows.</p>
      */
     @PostMapping("/sql")
     public List<Map<String, Object>> executeSql(@RequestBody SqlQueryRequest request) {
-        String sql = request.sql().trim();
+        String sql = request == null ? null : request.sql();
         SqlValidator.validate(sql);
-        return queryExecutor.queryForList(sql);
+        return queryExecutor.queryForList(sql.trim());
     }
 
     public record SqlQueryRequest(String sql) {}

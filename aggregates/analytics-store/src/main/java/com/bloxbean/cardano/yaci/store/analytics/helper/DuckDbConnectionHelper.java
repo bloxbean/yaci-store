@@ -15,6 +15,7 @@ import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.regex.Pattern;
 
 /**
  * Helper component for DuckDB connection setup and management.
@@ -134,46 +135,115 @@ public class DuckDbConnectionHelper {
     public void attachSourceDatabase(Connection conn, String aliasName, int statementTimeoutSeconds) throws SQLException {
         DatabaseCredentials creds = sourceCredentials;
 
-        StringBuilder cmd = new StringBuilder();
-        cmd.append("ATTACH 'dbname=").append(creds.dbName);
-        cmd.append(" user=").append(creds.username);
-        cmd.append(" password=").append(creds.password);
-        cmd.append(" host=").append(creds.host);
-        cmd.append(" port=").append(creds.port);
+        StringBuilder connInfo = new StringBuilder();
+        appendConnInfo(connInfo, "dbname", creds.dbName);
+        appendConnInfo(connInfo, "user", creds.username);
+        appendConnInfo(connInfo, "password", creds.password);
+        appendConnInfo(connInfo, "host", creds.host);
+        appendConnInfo(connInfo, "port", creds.port);
 
-        // search_path via libpq options parameter
+        // Put both settings in libpq's startup options. postgres_scanner can open a pool
+        // of libpq connections, so a SET executed on one connection is not sufficient.
+        StringBuilder options = new StringBuilder();
         if (creds.schema != null && !creds.schema.isEmpty()) {
-            cmd.append(" options=-csearch_path=").append(creds.schema);
+            options.append("-csearch_path=").append(creds.schema);
         }
+        if (statementTimeoutSeconds > 0) {
+            if (!options.isEmpty()) options.append(' ');
+            options.append("-cstatement_timeout=").append(statementTimeoutSeconds * 1000L);
+        }
+        if (!options.isEmpty()) appendConnInfo(connInfo, "options", options.toString());
 
-        cmd.append("' AS ").append(aliasName).append(" (TYPE POSTGRES, READ_ONLY);");
-
-        // If statement_timeout is requested, set it after ATTACH via postgres_execute.
-        // PostgreSQL's statement_timeout is a session-level GUC (Grand Unified Configuration)
-        // that can be set via SET on the attached connection.
-        boolean needsTimeout = statementTimeoutSeconds > 0;
+        String cmd = "ATTACH '" + escapeSqlLiteral(connInfo.toString()) + "' AS "
+                + quoteIdentifier(aliasName) + " (TYPE POSTGRES, READ_ONLY);";
 
         try {
-            executeSql(conn, cmd.toString());
+            executeSql(conn, cmd);
             log.debug("Attached source PostgreSQL database as '{}'", aliasName);
-
-            // Set statement_timeout on the attached PostgreSQL connection.
-            // Uses postgres_execute() to run a non-returning statement on the PostgreSQL
-            // session, ensuring all subsequent queries through this attachment are time-limited.
-            if (needsTimeout) {
-                long timeoutMs = statementTimeoutSeconds * 1000L;
-                executeSql(conn, String.format(
-                        "CALL postgres_execute('%s', 'SET statement_timeout TO %d')",
-                        aliasName, timeoutMs));
-                log.debug("Set statement_timeout={}ms on '{}'", timeoutMs, aliasName);
-            }
         } catch (SQLException e) {
-            if (e.getMessage().contains("already attached") || e.getMessage().contains("already exists")) {
+            if (isAlreadyAttached(e)) {
                 log.debug("Source database '{}' already attached, skipping", aliasName);
                 return;
             }
-            throw e;
+            throw sanitizedAttachFailure(
+                    "Failed to attach source PostgreSQL database as '" + aliasName + "'", e);
         }
+    }
+
+    private static boolean isAlreadyAttached(SQLException e) {
+        String errorMessage = e.getMessage();
+        return errorMessage != null
+                && (errorMessage.contains("already attached") || errorMessage.contains("already exists"));
+    }
+
+    /**
+     * Wrap a DuckDB/postgres_scanner attach failure so that neither the message nor the
+     * cause chain can leak the libpq connection string. DuckDB echoes the full connection
+     * string (including {@code password=...}) in attach errors, and callers log
+     * {@code e.getMessage()} and stack traces. The redacted libpq reason is kept so that
+     * failures remain diagnosable.
+     */
+    private static SQLException sanitizedAttachFailure(String context, SQLException e) {
+        return sanitize(context, e);
+    }
+
+    /**
+     * Return a copy of {@code e} whose message has credentials redacted and whose cause
+     * chain (which may carry the raw libpq connection string) is dropped. The original
+     * stack trace, SQLState and vendor code are preserved so the failure stays diagnosable.
+     *
+     * <p>Use this before logging or re-throwing any DuckDB error that may originate from
+     * {@code postgres_scanner} or a PostgreSQL-backed DuckLake catalog: connection failures
+     * (including reconnects in the middle of a query) echo the full connection string.</p>
+     */
+    public static SQLException sanitize(SQLException e) {
+        return sanitize(null, e);
+    }
+
+    private static SQLException sanitize(String context, SQLException e) {
+        String reason = redactSecrets(e.getMessage());
+        String message;
+        if (context == null) {
+            message = reason;
+        } else if (reason == null || reason.isBlank()) {
+            message = context;
+        } else {
+            message = context + ": " + reason;
+        }
+        SQLException sanitized = new SQLException(message, e.getSQLState(), e.getErrorCode());
+        sanitized.setStackTrace(e.getStackTrace());
+        return sanitized;
+    }
+
+    private static final Pattern PASSWORD_PATTERN = Pattern.compile(
+            "(?i)(password\\s*=\\s*)('(?:\\\\.|[^'\\\\])*'|\\S+)");
+
+    /**
+     * Redact credential values from a DuckDB/libpq error message.
+     *
+     * <p>Replaces every {@code password=<value>} occurrence (quoted or bare, e.g. from an
+     * echoed {@code dbname=... user=... password=... host=...} connection string) with
+     * {@code password=***}. Safe to call with {@code null}.</p>
+     */
+    public static String redactSecrets(String message) {
+        if (message == null || message.isEmpty()) {
+            return message;
+        }
+        return PASSWORD_PATTERN.matcher(message).replaceAll("$1***");
+    }
+
+    private static void appendConnInfo(StringBuilder target, String key, String value) {
+        if (!target.isEmpty()) target.append(' ');
+        target.append(key).append('=').append(quoteConnInfoValue(value));
+    }
+
+    private static String quoteConnInfoValue(String value) {
+        String safe = value == null ? "" : value;
+        return "'" + safe.replace("\\", "\\\\").replace("'", "\\'") + "'";
+    }
+
+    private static String escapeSqlLiteral(String value) {
+        return value.replace("'", "''");
     }
 
     /**
@@ -190,7 +260,8 @@ public class DuckDbConnectionHelper {
                      databaseName))) {
             return rs.next();
         } catch (SQLException e) {
-            log.debug("Error checking if database '{}' is attached (will attempt attach): {}", databaseName, e.getMessage());
+            log.debug("Error checking whether database '{}' is attached (SQLState={}, errorCode={})",
+                    databaseName, e.getSQLState(), e.getErrorCode());
             return false;
         }
     }
@@ -238,7 +309,8 @@ public class DuckDbConnectionHelper {
         try {
             executeSql(conn, "USE ducklake_catalog;");
         } catch (SQLException e) {
-            log.warn("USE ducklake_catalog failed ({}), detaching and re-attaching catalogs", e.getMessage());
+            log.warn("USE ducklake_catalog failed (SQLState={}, errorCode={}); re-attaching catalogs",
+                    e.getSQLState(), e.getErrorCode());
 
             // Detach stale catalogs
             try { executeSql(conn, "DETACH IF EXISTS ducklake_catalog;"); } catch (SQLException ignored) {}
@@ -463,11 +535,13 @@ public class DuckDbConnectionHelper {
                     dataPath, readOnly);
         } catch (SQLException e) {
             // Handle "already attached" error (shouldn't happen after check, but safety net)
-            if (e.getMessage().contains("already attached") || e.getMessage().contains("already exists")) {
+            if (isAlreadyAttached(e)) {
                 log.debug("PostgreSQL catalog already attached, skipping");
                 return;
             }
-            throw e;
+            // The DuckLake/postgres_scanner error echoes the catalog connection string,
+            // including the password. Callers log the message and stack trace.
+            throw sanitizedAttachFailure("Failed to attach PostgreSQL DuckLake catalog", e);
         }
     }
 
@@ -501,7 +575,13 @@ public class DuckDbConnectionHelper {
                     creds.host,
                     creds.port
             );
-            executeSql(conn, tempAttach);
+            try {
+                executeSql(conn, tempAttach);
+            } catch (SQLException e) {
+                // Attach errors echo the connection string including the password.
+                throw sanitizedAttachFailure(
+                        "Failed to attach PostgreSQL DuckLake catalog database as 'catalog_temp'", e);
+            }
             log.debug("Attached temporary PostgreSQL connection as 'catalog_temp'");
         }
 
@@ -546,7 +626,9 @@ public class DuckDbConnectionHelper {
 
                     log.debug("Successfully detached temporary PostgreSQL connection");
                 } catch (SQLException e) {
-                    log.error("CRITICAL: Failed to cleanup catalog_temp attachment: {}", e.getMessage(), e);
+                    log.error("CRITICAL: Failed to cleanup catalog_temp attachment "
+                                    + "(SQLState={}, errorCode={})",
+                            e.getSQLState(), e.getErrorCode());
                     throw new RuntimeException("Failed to cleanup temporary PostgreSQL connection", e);
                 }
             }

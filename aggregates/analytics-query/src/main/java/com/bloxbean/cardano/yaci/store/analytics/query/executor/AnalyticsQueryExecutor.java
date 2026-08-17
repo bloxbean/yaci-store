@@ -7,6 +7,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.sql.*;
+import java.lang.reflect.Array;
+import java.util.Base64;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -93,10 +95,11 @@ public class AnalyticsQueryExecutor {
             }
         } catch (SQLException e) {
             long elapsed = System.currentTimeMillis() - start;
-            log.error("Query failed after {}ms: {} - {}", elapsed, sql, e.getMessage());
+            log.error("Analytics query failed after {}ms (SQLState={}, errorCode={})",
+                    elapsed, e.getSQLState(), e.getErrorCode());
             // Sanitize error message — do not expose internal DuckDB state, file paths,
             // or PostgreSQL connection details to the caller
-            throw new RuntimeException("Query execution failed. Check query syntax and filters.", e);
+            throw new RuntimeException("Query execution failed. Check query syntax and filters.");
         }
     }
 
@@ -116,13 +119,56 @@ public class AnalyticsQueryExecutor {
                 int colCount = meta.getColumnCount();
                 Map<String, Object> row = new LinkedHashMap<>(colCount);
                 for (int i = 1; i <= colCount; i++) {
-                    row.put(meta.getColumnLabel(i), rs.getObject(i));
+                    row.put(meta.getColumnLabel(i), normalizeJdbcValue(rs.getObject(i)));
                 }
                 return row;
             } catch (SQLException e) {
-                throw new RuntimeException("Failed to read result row", e);
+                log.error("Failed to read analytics query result row (SQLState={}, errorCode={})",
+                        e.getSQLState(), e.getErrorCode());
+                throw new RuntimeException("Failed to read query result row");
             }
         });
+    }
+
+    static Object normalizeJdbcValue(Object value) throws SQLException {
+        if (value == null) return null;
+        if (value instanceof java.sql.Array sqlArray) {
+            try {
+                return normalizeArray(sqlArray.getArray());
+            } finally {
+                sqlArray.free();
+            }
+        }
+        if (value instanceof Blob blob) {
+            try {
+                return Base64.getEncoder().encodeToString(blob.getBytes(1, Math.toIntExact(blob.length())));
+            } finally {
+                blob.free();
+            }
+        }
+        if (value instanceof Clob clob) {
+            try {
+                return clob.getSubString(1, Math.toIntExact(clob.length()));
+            } finally {
+                clob.free();
+            }
+        }
+        if (value instanceof byte[] bytes) {
+            return Base64.getEncoder().encodeToString(bytes);
+        }
+        return value;
+    }
+
+    private static List<Object> normalizeArray(Object array) throws SQLException {
+        int length = Array.getLength(array);
+        List<Object> values = new ArrayList<>(length);
+        for (int i = 0; i < length; i++) {
+            Object item = Array.get(array, i);
+            values.add(item != null && item.getClass().isArray()
+                    ? normalizeArray(item)
+                    : normalizeJdbcValue(item));
+        }
+        return values;
     }
 
     /**

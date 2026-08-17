@@ -118,7 +118,8 @@ public class DuckLakeQueryService {
                     );
                 }
             }
-        } catch (SQLException e) {
+        } catch (SQLException rawError) {
+            SQLException e = DuckDbConnectionHelper.sanitize(rawError);
             log.error("Failed to get transaction output stats: {}", e.getMessage(), e);
             throw new RuntimeException("Query failed: " + e.getMessage(), e);
         }
@@ -143,7 +144,8 @@ public class DuckLakeQueryService {
                     return rs.getLong("total");
                 }
             }
-        } catch (SQLException e) {
+        } catch (SQLException rawError) {
+            SQLException e = DuckDbConnectionHelper.sanitize(rawError);
             log.error("Failed to execute query: {} - {}", query, e.getMessage(), e);
             throw new RuntimeException("Query failed: " + e.getMessage(), e);
         }
