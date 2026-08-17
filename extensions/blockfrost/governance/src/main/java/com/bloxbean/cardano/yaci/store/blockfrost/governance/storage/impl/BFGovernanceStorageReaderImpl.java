@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.blockfrost.governance.storage.impl;
 import com.bloxbean.cardano.client.crypto.Bech32;
 import com.bloxbean.cardano.client.util.HexUtil;
 import com.bloxbean.cardano.yaci.core.model.certs.CertificateType;
+import com.bloxbean.cardano.yaci.core.model.governance.DrepType;
 import com.bloxbean.cardano.yaci.core.model.governance.Vote;
 import com.bloxbean.cardano.yaci.core.model.governance.VoterType;
 import com.bloxbean.cardano.yaci.store.blockfrost.common.util.BlockfrostDialectUtil;
@@ -14,7 +15,6 @@ import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.governance.domain.DRepRegistration;
 import com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure;
-import com.bloxbean.cardano.yaci.store.governance.storage.impl.model.DRepEntity;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -54,6 +54,9 @@ import static com.bloxbean.cardano.yaci.store.transaction.jooq.Tables.WITHDRAWAL
 @Component
 @RequiredArgsConstructor
 public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader {
+
+    private static final String ALWAYS_ABSTAIN_DREP_ID = "drep_always_abstain";
+    private static final String ALWAYS_NO_CONFIDENCE_DREP_ID = "drep_always_no_confidence";
 
     private final DSLContext dsl;
     private final ObjectMapper objectMapper;
@@ -129,6 +132,9 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
     }
 
     private record ProposalKey(String txHash, int index) {
+    }
+
+    private record DRepAnchor(String url, String hash) {
     }
 
     private Map<ProposalKey, EnumMap<GovActionStatus, Integer>> fetchProposalStatusEpochs(List<ProposalKey> proposalKeys) {
@@ -310,44 +316,314 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
     // ────────────────────────────────────────────────────────────────────────
 
     @Override
-    public List<DRepEntity> findAllDReps(int page, int count, Order order) {
-        SortField<?> outerSort = order == Order.desc ? DREP.SLOT.desc() : DREP.SLOT.asc();
-
-        // Sub-select: latest row per drep_hash using window function
-        var ranked = dsl.select(
-                        DREP.DREP_HASH,
-                        DREP.DREP_ID,
-                        DREP.SLOT,
-                        DREP.EPOCH,
-                        DSL.rowNumber()
-                                .over(DSL.partitionBy(DREP.DREP_HASH).orderBy(DREP.SLOT.desc()))
+    public List<BFDRep> findAllDReps(int page, int count, Order order) {
+        // A DRep has one row per lifecycle certificate. Select its current state using the
+        // complete chain position so multiple certificates in the same slot remain deterministic.
+        var latestRanked = dsl.select(
+                        DREP.DREP_HASH.as("latest_hash"),
+                        DREP.DREP_ID.as("latest_id"),
+                        DREP.STATUS.as("latest_status"),
+                        DREP.EPOCH.as("latest_epoch"),
+                        DREP.REGISTRATION_SLOT.as("registration_slot"),
+                        DREP.SLOT.as("latest_slot"),
+                        DREP.TX_INDEX.as("latest_tx_index"),
+                        DREP.CERT_INDEX.as("latest_cert_index"),
+                        DSL.rowNumber().over(DSL.partitionBy(DREP.DREP_HASH)
+                                .orderBy(DREP.SLOT.desc(), DREP.TX_INDEX.desc(), DREP.CERT_INDEX.desc()))
                                 .as("rn")
                 )
                 .from(DREP)
                 .where(DREP.DREP_ID.isNotNull())
-                .asTable("ranked");
+                .asTable("latest_ranked");
 
-        return dsl.select(
-                        ranked.field("drep_hash", String.class),
-                        ranked.field("drep_id", String.class),
-                        ranked.field("slot", Long.class),
-                        ranked.field("epoch", Integer.class)
+        var latest = dsl.select(latestRanked.fields())
+                .from(latestRanked)
+                .where(latestRanked.field("rn", Integer.class).eq(1))
+                .asTable("latest_drep");
+
+        // Blockfrost's default order follows the DRep's first appearance rather than its latest
+        // update. The initial registration coordinates are the equivalent ordering key in Yaci.
+        var firstRegistrationRanked = dsl.select(
+                        DREP_REGISTRATION.DREP_HASH.as("first_hash"),
+                        DREP_REGISTRATION.SLOT.as("first_slot"),
+                        DREP_REGISTRATION.TX_INDEX.as("first_tx_index"),
+                        DREP_REGISTRATION.CERT_INDEX.as("first_cert_index"),
+                        DSL.rowNumber().over(DSL.partitionBy(DREP_REGISTRATION.DREP_HASH)
+                                .orderBy(DREP_REGISTRATION.SLOT.asc(),
+                                        DREP_REGISTRATION.TX_INDEX.asc(),
+                                        DREP_REGISTRATION.CERT_INDEX.asc()))
+                                .as("rn")
+                )
+                .from(DREP_REGISTRATION)
+                .where(DREP_REGISTRATION.TYPE.eq(CertificateType.REG_DREP_CERT.name()))
+                .asTable("first_registration_ranked");
+
+        var firstRegistration = dsl.select(firstRegistrationRanked.fields())
+                .from(firstRegistrationRanked)
+                .where(firstRegistrationRanked.field("rn", Integer.class).eq(1))
+                .asTable("first_registration");
+
+        var latestHash = latest.field("latest_hash", String.class);
+        var latestSlot = latest.field("latest_slot", Long.class);
+        var orderSlot = DSL.coalesce(
+                firstRegistration.field("first_slot", Long.class),
+                latest.field("registration_slot", Long.class),
+                latestSlot
+        );
+        var orderTxIndex = DSL.coalesce(
+                firstRegistration.field("first_tx_index", Integer.class),
+                latest.field("latest_tx_index", Integer.class)
+        );
+        var orderCertIndex = DSL.coalesce(
+                firstRegistration.field("first_cert_index", Integer.class),
+                latest.field("latest_cert_index", Integer.class)
+        );
+        var regularDreps = dsl.select(
+                        latestHash.as("drep_hash"),
+                        latest.field("latest_id", String.class).as("drep_id"),
+                        latest.field("latest_status", String.class).as("status"),
+                        latest.field("latest_epoch", Integer.class).as("last_active_epoch"),
+                        orderSlot.as("order_slot"),
+                        orderTxIndex.as("order_tx_index"),
+                        orderCertIndex.as("order_cert_index")
+                )
+                .from(latest)
+                .leftJoin(firstRegistration)
+                .on(firstRegistration.field("first_hash", String.class).eq(latestHash));
+
+        // The two protocol-defined DReps have no registration row. Their first delegation is the
+        // chain event that establishes their relative position among normally registered DReps.
+        var specialRanked = dsl.select(
+                        DELEGATION_VOTE.DREP_TYPE.as("special_type"),
+                        DELEGATION_VOTE.SLOT.as("special_slot"),
+                        DELEGATION_VOTE.TX_INDEX.as("special_tx_index"),
+                        DELEGATION_VOTE.CERT_INDEX.as("special_cert_index"),
+                        DSL.rowNumber().over(DSL.partitionBy(DELEGATION_VOTE.DREP_TYPE)
+                                .orderBy(DELEGATION_VOTE.SLOT.asc(),
+                                        DELEGATION_VOTE.TX_INDEX.asc(),
+                                        DELEGATION_VOTE.CERT_INDEX.asc()))
+                                .as("rn")
+                )
+                .from(DELEGATION_VOTE)
+                .where(DELEGATION_VOTE.DREP_TYPE.in(
+                        DrepType.ABSTAIN.name(),
+                        DrepType.NO_CONFIDENCE.name()
+                ))
+                .asTable("special_ranked");
+
+        var specialType = specialRanked.field("special_type", String.class);
+        var specialDreps = dsl.select(
+                        DSL.inline("").as("drep_hash"),
+                        DSL.when(specialType.eq(DrepType.ABSTAIN.name()), ALWAYS_ABSTAIN_DREP_ID)
+                                .otherwise(ALWAYS_NO_CONFIDENCE_DREP_ID)
+                                .as("drep_id"),
+                        DSL.inline("REGISTERED").as("status"),
+                        DSL.val((Integer) null, Integer.class).as("last_active_epoch"),
+                        specialRanked.field("special_slot", Long.class).as("order_slot"),
+                        specialRanked.field("special_tx_index", Integer.class).as("order_tx_index"),
+                        specialRanked.field("special_cert_index", Integer.class).as("order_cert_index")
+                )
+                .from(specialRanked)
+                .where(specialRanked.field("rn", Integer.class).eq(1));
+
+        var allDreps = regularDreps.unionAll(specialDreps).asTable("all_dreps");
+        var allDrepHash = allDreps.field("drep_hash", String.class);
+        var allDrepId = allDreps.field("drep_id", String.class);
+        SortOrder sortOrder = order == Order.desc ? SortOrder.DESC : SortOrder.ASC;
+
+        // Apply pagination only after regular and protocol-defined DReps share one stable order.
+        // Use the DRep ID as a final deterministic tie-breaker when chain coordinates are identical.
+        List<BFDRep> dReps = dsl.select(
+                        allDrepHash,
+                        allDrepId,
+                        allDreps.field("status", String.class),
+                        allDreps.field("last_active_epoch", Integer.class)
+                )
+                .from(allDreps)
+                .orderBy(
+                        allDreps.field("order_slot", Long.class).sort(sortOrder),
+                        allDreps.field("order_tx_index", Integer.class).sort(sortOrder),
+                        allDreps.field("order_cert_index", Integer.class).sort(sortOrder),
+                        allDrepId.sort(sortOrder)
+                )
+                .limit(count)
+                .offset(offset(page, count))
+                .fetch(r -> BFDRep.builder()
+                        .drepHash(r.get(allDrepHash))
+                        .drepId(r.get(allDrepId))
+                        .status(r.get(allDreps.field("status", String.class)))
+                        .epoch(r.get(allDreps.field("last_active_epoch", Integer.class)))
+                        .build());
+
+        enrichDRepList(dReps);
+        return dReps;
+    }
+
+    private void enrichDRepList(List<BFDRep> dReps) {
+        if (dReps.isEmpty()) return;
+
+        List<String> drepHashes = dReps.stream()
+                .map(BFDRep::getDrepHash)
+                .filter(drepHash -> drepHash != null && !drepHash.isBlank())
+                .toList();
+        Map<String, Long> amounts = drepHashes.isEmpty() ? Map.of() : fetchLatestDRepAmounts(drepHashes);
+        Map<String, Boolean> scriptFlags = drepHashes.isEmpty() ? Map.of() : fetchLatestDRepScriptFlags(drepHashes);
+        Map<String, DRepAnchor> anchors = drepHashes.isEmpty() ? Map.of() : fetchLatestDRepAnchors(drepHashes);
+        Map<String, Integer> lastVoteEpochs = drepHashes.isEmpty() ? Map.of() : fetchLastDRepVoteEpochs(drepHashes);
+        Map<String, Long> specialAmounts = fetchLatestSpecialDRepAmounts();
+        int currentEpoch = fetchCurrentEpoch();
+        int drepActivity = fetchDRepActivity();
+
+        dReps.forEach(dRep -> {
+            String drepHash = dRep.getDrepHash();
+            dRep.setAmount(isSpecialDRep(dRep)
+                    ? specialAmounts.getOrDefault(dRep.getDrepId(), 0L)
+                    : amounts.getOrDefault(drepHash, 0L));
+            dRep.setHasScript(scriptFlags.getOrDefault(drepHash, false));
+
+            Integer lastVoteEpoch = lastVoteEpochs.get(drepHash);
+            if (lastVoteEpoch != null && (dRep.getEpoch() == null || lastVoteEpoch > dRep.getEpoch())) {
+                dRep.setEpoch(lastVoteEpoch);
+            }
+
+            boolean retired = "RETIRED".equalsIgnoreCase(dRep.getStatus());
+            dRep.setExpired(!retired
+                    && dRep.getEpoch() != null
+                    && drepActivity > 0
+                    && currentEpoch > 0
+                    && currentEpoch - dRep.getEpoch() > drepActivity);
+
+            DRepAnchor anchor = anchors.get(drepHash);
+            if (anchor != null) {
+                dRep.setAnchorUrl(anchor.url());
+                dRep.setAnchorHash(anchor.hash());
+            }
+        });
+    }
+
+    private boolean isSpecialDRep(BFDRep dRep) {
+        return ALWAYS_ABSTAIN_DREP_ID.equals(dRep.getDrepId())
+                || ALWAYS_NO_CONFIDENCE_DREP_ID.equals(dRep.getDrepId());
+    }
+
+    private Map<String, Long> fetchLatestSpecialDRepAmounts() {
+        Integer latestDistEpoch = dsl.select(DSL.max(DREP_DIST.EPOCH))
+                .from(DREP_DIST)
+                .fetchOne(0, Integer.class);
+        if (latestDistEpoch == null) return Map.of();
+
+        Map<String, Long> result = new HashMap<>();
+        dsl.select(DREP_DIST.DREP_TYPE, DREP_DIST.AMOUNT)
+                .from(DREP_DIST)
+                .where(DREP_DIST.EPOCH.eq(latestDistEpoch))
+                .and(DREP_DIST.DREP_TYPE.in(DrepType.ABSTAIN.name(), DrepType.NO_CONFIDENCE.name()))
+                .fetch()
+                .forEach(record -> {
+                    String drepId = DrepType.ABSTAIN.name().equals(record.get(DREP_DIST.DREP_TYPE))
+                            ? ALWAYS_ABSTAIN_DREP_ID
+                            : ALWAYS_NO_CONFIDENCE_DREP_ID;
+                    result.put(drepId, record.get(DREP_DIST.AMOUNT));
+                });
+        return result;
+    }
+
+    private Map<String, Long> fetchLatestDRepAmounts(List<String> drepHashes) {
+        Integer latestLocalEpoch = dsl.select(DSL.max(LOCAL_DREP_DIST.EPOCH))
+                .from(LOCAL_DREP_DIST)
+                .fetchOne(0, Integer.class);
+
+        if (latestLocalEpoch != null) {
+            return dsl.select(LOCAL_DREP_DIST.DREP_HASH, LOCAL_DREP_DIST.AMOUNT)
+                    .from(LOCAL_DREP_DIST)
+                    .where(LOCAL_DREP_DIST.DREP_HASH.in(drepHashes))
+                    .and(LOCAL_DREP_DIST.EPOCH.eq(latestLocalEpoch))
+                    .fetchMap(LOCAL_DREP_DIST.DREP_HASH, LOCAL_DREP_DIST.AMOUNT);
+        }
+
+        Integer latestDistEpoch = dsl.select(DSL.max(DREP_DIST.EPOCH))
+                .from(DREP_DIST)
+                .fetchOne(0, Integer.class);
+        if (latestDistEpoch == null) return Map.of();
+
+        Map<String, Long> amounts = new HashMap<>();
+        dsl.select(DREP_DIST.DREP_HASH, DREP_DIST.AMOUNT)
+                .from(DREP_DIST)
+                .where(DREP_DIST.DREP_HASH.in(drepHashes))
+                .and(DREP_DIST.EPOCH.eq(latestDistEpoch))
+                .fetch()
+                .forEach(record -> amounts.put(record.get(DREP_DIST.DREP_HASH), record.get(DREP_DIST.AMOUNT)));
+        return amounts;
+    }
+
+    private Map<String, Boolean> fetchLatestDRepScriptFlags(List<String> drepHashes) {
+        var ranked = dsl.select(
+                        DREP_REGISTRATION.DREP_HASH,
+                        DREP_REGISTRATION.CRED_TYPE,
+                        DSL.rowNumber().over(DSL.partitionBy(DREP_REGISTRATION.DREP_HASH)
+                                .orderBy(DREP_REGISTRATION.SLOT.desc(),
+                                        DREP_REGISTRATION.TX_INDEX.desc(),
+                                        DREP_REGISTRATION.CERT_INDEX.desc()))
+                                .as("rn")
+                )
+                .from(DREP_REGISTRATION)
+                .where(DREP_REGISTRATION.DREP_HASH.in(drepHashes))
+                .asTable("latest_registration_ranked");
+
+        Map<String, Boolean> result = new HashMap<>();
+        dsl.select(ranked.field(DREP_REGISTRATION.DREP_HASH), ranked.field(DREP_REGISTRATION.CRED_TYPE))
+                .from(ranked)
+                .where(ranked.field("rn", Integer.class).eq(1))
+                .fetch()
+                .forEach(record -> result.put(
+                        record.get(ranked.field(DREP_REGISTRATION.DREP_HASH)),
+                        "SCRIPTHASH".equalsIgnoreCase(record.get(ranked.field(DREP_REGISTRATION.CRED_TYPE)))
+                ));
+        return result;
+    }
+
+    private Map<String, DRepAnchor> fetchLatestDRepAnchors(List<String> drepHashes) {
+        var ranked = dsl.select(
+                        DREP_REGISTRATION.DREP_HASH,
+                        DREP_REGISTRATION.ANCHOR_URL,
+                        DREP_REGISTRATION.ANCHOR_HASH,
+                        DSL.rowNumber().over(DSL.partitionBy(DREP_REGISTRATION.DREP_HASH)
+                                .orderBy(DREP_REGISTRATION.SLOT.desc(),
+                                        DREP_REGISTRATION.TX_INDEX.desc(),
+                                        DREP_REGISTRATION.CERT_INDEX.desc()))
+                                .as("rn")
+                )
+                .from(DREP_REGISTRATION)
+                .where(DREP_REGISTRATION.DREP_HASH.in(drepHashes))
+                .and(DREP_REGISTRATION.ANCHOR_URL.isNotNull())
+                .asTable("latest_anchor_ranked");
+
+        Map<String, DRepAnchor> result = new HashMap<>();
+        dsl.select(
+                        ranked.field(DREP_REGISTRATION.DREP_HASH),
+                        ranked.field(DREP_REGISTRATION.ANCHOR_URL),
+                        ranked.field(DREP_REGISTRATION.ANCHOR_HASH)
                 )
                 .from(ranked)
                 .where(ranked.field("rn", Integer.class).eq(1))
-                .orderBy(ranked.field("slot", Long.class).sort(order == Order.desc
-                        ? org.jooq.SortOrder.DESC : org.jooq.SortOrder.ASC))
-                .limit(count)
-                .offset(offset(page, count))
                 .fetch()
-                .map(r -> {
-                    DRepEntity entity = new DRepEntity();
-                    entity.setDrepHash(r.get("drep_hash", String.class));
-                    entity.setDrepId(r.get("drep_id", String.class));
-                    entity.setSlot(r.get("slot", Long.class));
-                    entity.setEpoch(r.get("epoch", Integer.class));
-                    return entity;
-                });
+                .forEach(record -> result.put(
+                        record.get(ranked.field(DREP_REGISTRATION.DREP_HASH)),
+                        new DRepAnchor(
+                                record.get(ranked.field(DREP_REGISTRATION.ANCHOR_URL)),
+                                record.get(ranked.field(DREP_REGISTRATION.ANCHOR_HASH))
+                        )
+                ));
+        return result;
+    }
+
+    private Map<String, Integer> fetchLastDRepVoteEpochs(List<String> drepHashes) {
+        var lastVoteEpoch = DSL.max(VOTING_PROCEDURE.EPOCH).as("last_vote_epoch");
+        return dsl.select(VOTING_PROCEDURE.VOTER_HASH, lastVoteEpoch)
+                .from(VOTING_PROCEDURE)
+                .where(VOTING_PROCEDURE.VOTER_HASH.in(drepHashes))
+                .and(VOTING_PROCEDURE.VOTER_TYPE.in("DREP_KEY_HASH", "DREP_SCRIPT_HASH"))
+                .groupBy(VOTING_PROCEDURE.VOTER_HASH)
+                .fetchMap(VOTING_PROCEDURE.VOTER_HASH, lastVoteEpoch);
     }
 
     @Override

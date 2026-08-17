@@ -6,8 +6,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * Aggregated model for DRep detail.
- * Combines drep table fields with local_drep_dist voting power and credential type.
+ * Aggregated model for DRep list and detail responses.
+ * Combines DRep state with voting power, credential type, and anchor data.
  */
 @Data
 @Builder
@@ -27,4 +27,8 @@ public class BFDRep {
     private Boolean hasScript;
     /** True if DRep has been inactive for more than drep_activity epochs */
     private boolean expired;
+    /** URL from the most recent registration or update carrying an anchor */
+    private String anchorUrl;
+    /** Hash from the most recent registration or update carrying an anchor */
+    private String anchorHash;
 }

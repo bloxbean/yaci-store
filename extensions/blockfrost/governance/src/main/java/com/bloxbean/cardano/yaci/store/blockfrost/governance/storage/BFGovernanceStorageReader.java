@@ -6,7 +6,6 @@ import com.bloxbean.cardano.yaci.store.blockfrost.governance.storage.impl.model.
 import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.governance.domain.DRepRegistration;
 import com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure;
-import com.bloxbean.cardano.yaci.store.governance.storage.impl.model.DRepEntity;
 
 import java.util.List;
 import java.util.Optional;
@@ -15,8 +14,8 @@ public interface BFGovernanceStorageReader {
 
     // ── DRep ─────────────────────────────────────────────────────────────────
 
-    /** Paginated list of all unique DReps (drep_id + drep_hash). */
-    List<DRepEntity> findAllDReps(int page, int count, Order order);
+    /** Paginated list of all unique DReps enriched with current list response fields. */
+    List<BFDRep> findAllDReps(int page, int count, Order order);
 
     /** Latest drep row for the given hex hash, enriched with voting power and script flag. */
     Optional<BFDRep> findDRepByHash(String drepHex);

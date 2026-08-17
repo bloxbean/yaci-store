@@ -6,6 +6,7 @@ import com.bloxbean.cardano.yaci.core.model.governance.Vote;
 import com.bloxbean.cardano.yaci.store.blockfrost.governance.dto.BFDRepDelegatorDto;
 import com.bloxbean.cardano.yaci.store.blockfrost.governance.dto.BFDRepDto;
 import com.bloxbean.cardano.yaci.store.blockfrost.governance.dto.BFDRepListItemDto;
+import com.bloxbean.cardano.yaci.store.blockfrost.governance.dto.BFDRepListMetadataDto;
 import com.bloxbean.cardano.yaci.store.blockfrost.governance.dto.BFDRepMetadataDto;
 import com.bloxbean.cardano.yaci.store.blockfrost.governance.dto.BFDRepUpdateDto;
 import com.bloxbean.cardano.yaci.store.blockfrost.governance.dto.BFDRepVoteDto;
@@ -13,7 +14,6 @@ import com.bloxbean.cardano.yaci.store.blockfrost.governance.storage.impl.model.
 import com.bloxbean.cardano.yaci.store.blockfrost.governance.storage.impl.model.BFDRep;
 import com.bloxbean.cardano.yaci.store.governance.domain.DRepRegistration;
 import com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure;
-import com.bloxbean.cardano.yaci.store.governance.storage.impl.model.DRepEntity;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.Named;
@@ -27,8 +27,14 @@ public interface BFDRepMapper {
     // ── DRep list item ────────────────────────────────────────────────────
 
     @Mapping(target = "drepId", source = "drepId")
-    @Mapping(target = "hex", expression = "java(hexFromDrepId(entity.getDrepId(), entity.getDrepHash()))")
-    BFDRepListItemDto toListItemDto(DRepEntity entity);
+    @Mapping(target = "hex", expression = "java(listHex(row))")
+    @Mapping(target = "amount", source = "amount", qualifiedByName = "longToString")
+    @Mapping(target = "hasScript", source = "hasScript")
+    @Mapping(target = "retired", expression = "java(\"RETIRED\".equalsIgnoreCase(row.getStatus()))")
+    @Mapping(target = "expired", source = "expired")
+    @Mapping(target = "lastActiveEpoch", source = "epoch")
+    @Mapping(target = "metadata", expression = "java(toListMetadataDto(row))")
+    BFDRepListItemDto toListItemDto(BFDRep row);
 
     // ── DRep detail ───────────────────────────────────────────────────────
 
@@ -82,6 +88,22 @@ public interface BFDRepMapper {
     @Named("longToString")
     default String longToString(Long value) {
         return value != null ? String.valueOf(value) : "0";
+    }
+
+    default BFDRepListMetadataDto toListMetadataDto(BFDRep row) {
+        if (row == null || row.getAnchorUrl() == null) return null;
+        // TODO: Populate jsonMetadata and bytes when off-chain governance metadata is indexed.
+        return BFDRepListMetadataDto.builder()
+                .url(row.getAnchorUrl())
+                .hash(row.getAnchorHash())
+                .build();
+    }
+
+    default String listHex(BFDRep row) {
+        if (row != null && row.getDrepId() != null && row.getDrepId().startsWith("drep_always_")) {
+            return "";
+        }
+        return row != null ? hexFromDrepId(row.getDrepId(), row.getDrepHash()) : null;
     }
 
     @Named("certTypeToAction")

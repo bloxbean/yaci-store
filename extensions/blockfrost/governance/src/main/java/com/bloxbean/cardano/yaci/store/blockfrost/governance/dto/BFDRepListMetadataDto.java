@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.blockfrost.governance.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import lombok.AllArgsConstructor;
@@ -14,13 +15,9 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class BFDRepListItemDto {
-    private String drepId;
-    private String hex;
-    private String amount;
-    private Boolean hasScript;
-    private Boolean retired;
-    private Boolean expired;
-    private Integer lastActiveEpoch;
-    private BFDRepListMetadataDto metadata;
+public class BFDRepListMetadataDto {
+    private String url;
+    private String hash;
+    private JsonNode jsonMetadata;
+    private String bytes;
 }
