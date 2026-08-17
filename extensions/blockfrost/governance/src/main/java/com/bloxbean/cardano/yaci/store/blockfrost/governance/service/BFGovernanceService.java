@@ -219,6 +219,9 @@ public class BFGovernanceService {
     /**
      * Blockfrost exposes the cardano-ledger Aeson encoding of GovAction, while
      * the store persists the Yaci domain model's JSON representation.
+     *
+     * @see <a href="https://hackage.haskell.org/package/aeson/docs/Data-Aeson-Types.html#v:defaultOptions">
+     * Aeson default generic encoding options</a>
      */
     private JsonNode transformGovernanceDescription(String type, JsonNode details) {
         String safeType = type != null ? type : "";
