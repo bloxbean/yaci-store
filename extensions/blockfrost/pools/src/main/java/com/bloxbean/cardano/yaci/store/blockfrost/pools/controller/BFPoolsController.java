@@ -22,7 +22,7 @@ import java.util.List;
 @RequiredArgsConstructor
 @Tag(name = "Blockfrost Pools")
 @RequestMapping("${blockfrost.apiPrefix}/pools")
-@ConditionalOnExpression("${store.extensions.blockfrost.pools.enabled:false}")
+@ConditionalOnExpression("${store.extensions.blockfrost.pools.enabled:true}")
 public class BFPoolsController {
 
     private final BFPoolsService bfPoolsService;
