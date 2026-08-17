@@ -328,7 +328,7 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
                         DREP.SLOT.as("latest_slot"),
                         DREP.TX_INDEX.as("latest_tx_index"),
                         DREP.CERT_INDEX.as("latest_cert_index"),
-                        DSL.rowNumber().over(DSL.partitionBy(DREP.DREP_HASH)
+                        DSL.rowNumber().over(DSL.partitionBy(DREP.DREP_ID)
                                 .orderBy(DREP.SLOT.desc(), DREP.TX_INDEX.desc(), DREP.CERT_INDEX.desc()))
                                 .as("rn")
                 )
@@ -344,11 +344,12 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
         // Blockfrost's default order follows the DRep's first appearance rather than its latest
         // update. The initial registration coordinates are the equivalent ordering key in Yaci.
         var firstRegistrationRanked = dsl.select(
+                        DREP_REGISTRATION.DREP_ID.as("first_id"),
                         DREP_REGISTRATION.DREP_HASH.as("first_hash"),
                         DREP_REGISTRATION.SLOT.as("first_slot"),
                         DREP_REGISTRATION.TX_INDEX.as("first_tx_index"),
                         DREP_REGISTRATION.CERT_INDEX.as("first_cert_index"),
-                        DSL.rowNumber().over(DSL.partitionBy(DREP_REGISTRATION.DREP_HASH)
+                        DSL.rowNumber().over(DSL.partitionBy(DREP_REGISTRATION.DREP_ID)
                                 .orderBy(DREP_REGISTRATION.SLOT.asc(),
                                         DREP_REGISTRATION.TX_INDEX.asc(),
                                         DREP_REGISTRATION.CERT_INDEX.asc()))
@@ -356,6 +357,7 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
                 )
                 .from(DREP_REGISTRATION)
                 .where(DREP_REGISTRATION.TYPE.eq(CertificateType.REG_DREP_CERT.name()))
+                .and(DREP_REGISTRATION.DREP_ID.isNotNull())
                 .asTable("first_registration_ranked");
 
         var firstRegistration = dsl.select(firstRegistrationRanked.fields())
@@ -364,6 +366,7 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
                 .asTable("first_registration");
 
         var latestHash = latest.field("latest_hash", String.class);
+        var latestId = latest.field("latest_id", String.class);
         var latestSlot = latest.field("latest_slot", Long.class);
         var orderSlot = DSL.coalesce(
                 firstRegistration.field("first_slot", Long.class),
@@ -389,7 +392,8 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
                 )
                 .from(latest)
                 .leftJoin(firstRegistration)
-                .on(firstRegistration.field("first_hash", String.class).eq(latestHash));
+                .on(firstRegistration.field("first_hash", String.class).eq(latestHash))
+                .and(firstRegistration.field("first_id", String.class).eq(latestId));
 
         // The two protocol-defined DReps have no registration row. Their first delegation is the
         // chain event that establishes their relative position among normally registered DReps.
@@ -462,26 +466,26 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
     private void enrichDRepList(List<BFDRep> dReps) {
         if (dReps.isEmpty()) return;
 
-        List<String> drepHashes = dReps.stream()
-                .map(BFDRep::getDrepHash)
-                .filter(drepHash -> drepHash != null && !drepHash.isBlank())
+        List<String> drepIds = dReps.stream()
+                .map(BFDRep::getDrepId)
+                .filter(drepId -> drepId != null && !drepId.isBlank())
                 .toList();
-        Map<String, Long> amounts = drepHashes.isEmpty() ? Map.of() : fetchLatestDRepAmounts(drepHashes);
-        Map<String, Boolean> scriptFlags = drepHashes.isEmpty() ? Map.of() : fetchLatestDRepScriptFlags(drepHashes);
-        Map<String, DRepAnchor> anchors = drepHashes.isEmpty() ? Map.of() : fetchLatestDRepAnchors(drepHashes);
-        Map<String, Integer> lastVoteEpochs = drepHashes.isEmpty() ? Map.of() : fetchLastDRepVoteEpochs(drepHashes);
+        Map<String, Long> amounts = drepIds.isEmpty() ? Map.of() : fetchLatestDRepAmounts(drepIds);
+        Map<String, Boolean> scriptFlags = drepIds.isEmpty() ? Map.of() : fetchLatestDRepScriptFlags(drepIds);
+        Map<String, DRepAnchor> anchors = drepIds.isEmpty() ? Map.of() : fetchLatestDRepAnchors(drepIds);
+        Map<String, Integer> lastVoteEpochs = drepIds.isEmpty() ? Map.of() : fetchLastDRepVoteEpochs(drepIds);
         Map<String, Long> specialAmounts = fetchLatestSpecialDRepAmounts();
         int currentEpoch = fetchCurrentEpoch();
         int drepActivity = fetchDRepActivity();
 
         dReps.forEach(dRep -> {
-            String drepHash = dRep.getDrepHash();
+            String drepId = dRep.getDrepId();
             dRep.setAmount(isSpecialDRep(dRep)
-                    ? specialAmounts.getOrDefault(dRep.getDrepId(), 0L)
-                    : amounts.getOrDefault(drepHash, 0L));
-            dRep.setHasScript(scriptFlags.getOrDefault(drepHash, false));
+                    ? specialAmounts.getOrDefault(drepId, 0L)
+                    : amounts.getOrDefault(drepId, 0L));
+            dRep.setHasScript(scriptFlags.getOrDefault(drepId, false));
 
-            Integer lastVoteEpoch = lastVoteEpochs.get(drepHash);
+            Integer lastVoteEpoch = lastVoteEpochs.get(drepId);
             if (lastVoteEpoch != null && (dRep.getEpoch() == null || lastVoteEpoch > dRep.getEpoch())) {
                 dRep.setEpoch(lastVoteEpoch);
             }
@@ -493,7 +497,7 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
                     && currentEpoch > 0
                     && currentEpoch - dRep.getEpoch() > drepActivity);
 
-            DRepAnchor anchor = anchors.get(drepHash);
+            DRepAnchor anchor = anchors.get(drepId);
             if (anchor != null) {
                 dRep.setAnchorUrl(anchor.url());
                 dRep.setAnchorHash(anchor.hash());
@@ -527,17 +531,18 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
         return result;
     }
 
-    private Map<String, Long> fetchLatestDRepAmounts(List<String> drepHashes) {
+    private Map<String, Long> fetchLatestDRepAmounts(List<String> drepIds) {
         Integer latestLocalEpoch = dsl.select(DSL.max(LOCAL_DREP_DIST.EPOCH))
                 .from(LOCAL_DREP_DIST)
                 .fetchOne(0, Integer.class);
 
         if (latestLocalEpoch != null) {
-            return dsl.select(LOCAL_DREP_DIST.DREP_HASH, LOCAL_DREP_DIST.AMOUNT)
-                    .from(LOCAL_DREP_DIST)
-                    .where(LOCAL_DREP_DIST.DREP_HASH.in(drepHashes))
+            return dsl.selectDistinct(DREP.DREP_ID, LOCAL_DREP_DIST.AMOUNT)
+                    .from(DREP)
+                    .join(LOCAL_DREP_DIST).on(LOCAL_DREP_DIST.DREP_HASH.eq(DREP.DREP_HASH))
+                    .where(DREP.DREP_ID.in(drepIds))
                     .and(LOCAL_DREP_DIST.EPOCH.eq(latestLocalEpoch))
-                    .fetchMap(LOCAL_DREP_DIST.DREP_HASH, LOCAL_DREP_DIST.AMOUNT);
+                    .fetchMap(DREP.DREP_ID, LOCAL_DREP_DIST.AMOUNT);
         }
 
         Integer latestDistEpoch = dsl.select(DSL.max(DREP_DIST.EPOCH))
@@ -546,60 +551,60 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
         if (latestDistEpoch == null) return Map.of();
 
         Map<String, Long> amounts = new HashMap<>();
-        dsl.select(DREP_DIST.DREP_HASH, DREP_DIST.AMOUNT)
+        dsl.select(DREP_DIST.DREP_ID, DREP_DIST.AMOUNT)
                 .from(DREP_DIST)
-                .where(DREP_DIST.DREP_HASH.in(drepHashes))
+                .where(DREP_DIST.DREP_ID.in(drepIds))
                 .and(DREP_DIST.EPOCH.eq(latestDistEpoch))
                 .fetch()
-                .forEach(record -> amounts.put(record.get(DREP_DIST.DREP_HASH), record.get(DREP_DIST.AMOUNT)));
+                .forEach(record -> amounts.put(record.get(DREP_DIST.DREP_ID), record.get(DREP_DIST.AMOUNT)));
         return amounts;
     }
 
-    private Map<String, Boolean> fetchLatestDRepScriptFlags(List<String> drepHashes) {
+    private Map<String, Boolean> fetchLatestDRepScriptFlags(List<String> drepIds) {
         var ranked = dsl.select(
-                        DREP_REGISTRATION.DREP_HASH,
+                        DREP_REGISTRATION.DREP_ID,
                         DREP_REGISTRATION.CRED_TYPE,
-                        DSL.rowNumber().over(DSL.partitionBy(DREP_REGISTRATION.DREP_HASH)
+                        DSL.rowNumber().over(DSL.partitionBy(DREP_REGISTRATION.DREP_ID)
                                 .orderBy(DREP_REGISTRATION.SLOT.desc(),
                                         DREP_REGISTRATION.TX_INDEX.desc(),
                                         DREP_REGISTRATION.CERT_INDEX.desc()))
                                 .as("rn")
                 )
                 .from(DREP_REGISTRATION)
-                .where(DREP_REGISTRATION.DREP_HASH.in(drepHashes))
+                .where(DREP_REGISTRATION.DREP_ID.in(drepIds))
                 .asTable("latest_registration_ranked");
 
         Map<String, Boolean> result = new HashMap<>();
-        dsl.select(ranked.field(DREP_REGISTRATION.DREP_HASH), ranked.field(DREP_REGISTRATION.CRED_TYPE))
+        dsl.select(ranked.field(DREP_REGISTRATION.DREP_ID), ranked.field(DREP_REGISTRATION.CRED_TYPE))
                 .from(ranked)
                 .where(ranked.field("rn", Integer.class).eq(1))
                 .fetch()
                 .forEach(record -> result.put(
-                        record.get(ranked.field(DREP_REGISTRATION.DREP_HASH)),
+                        record.get(ranked.field(DREP_REGISTRATION.DREP_ID)),
                         "SCRIPTHASH".equalsIgnoreCase(record.get(ranked.field(DREP_REGISTRATION.CRED_TYPE)))
                 ));
         return result;
     }
 
-    private Map<String, DRepAnchor> fetchLatestDRepAnchors(List<String> drepHashes) {
+    private Map<String, DRepAnchor> fetchLatestDRepAnchors(List<String> drepIds) {
         var ranked = dsl.select(
-                        DREP_REGISTRATION.DREP_HASH,
+                        DREP_REGISTRATION.DREP_ID,
                         DREP_REGISTRATION.ANCHOR_URL,
                         DREP_REGISTRATION.ANCHOR_HASH,
-                        DSL.rowNumber().over(DSL.partitionBy(DREP_REGISTRATION.DREP_HASH)
+                        DSL.rowNumber().over(DSL.partitionBy(DREP_REGISTRATION.DREP_ID)
                                 .orderBy(DREP_REGISTRATION.SLOT.desc(),
                                         DREP_REGISTRATION.TX_INDEX.desc(),
                                         DREP_REGISTRATION.CERT_INDEX.desc()))
                                 .as("rn")
                 )
                 .from(DREP_REGISTRATION)
-                .where(DREP_REGISTRATION.DREP_HASH.in(drepHashes))
+                .where(DREP_REGISTRATION.DREP_ID.in(drepIds))
                 .and(DREP_REGISTRATION.ANCHOR_URL.isNotNull())
                 .asTable("latest_anchor_ranked");
 
         Map<String, DRepAnchor> result = new HashMap<>();
         dsl.select(
-                        ranked.field(DREP_REGISTRATION.DREP_HASH),
+                        ranked.field(DREP_REGISTRATION.DREP_ID),
                         ranked.field(DREP_REGISTRATION.ANCHOR_URL),
                         ranked.field(DREP_REGISTRATION.ANCHOR_HASH)
                 )
@@ -607,7 +612,7 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
                 .where(ranked.field("rn", Integer.class).eq(1))
                 .fetch()
                 .forEach(record -> result.put(
-                        record.get(ranked.field(DREP_REGISTRATION.DREP_HASH)),
+                        record.get(ranked.field(DREP_REGISTRATION.DREP_ID)),
                         new DRepAnchor(
                                 record.get(ranked.field(DREP_REGISTRATION.ANCHOR_URL)),
                                 record.get(ranked.field(DREP_REGISTRATION.ANCHOR_HASH))
@@ -616,14 +621,18 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
         return result;
     }
 
-    private Map<String, Integer> fetchLastDRepVoteEpochs(List<String> drepHashes) {
+    private Map<String, Integer> fetchLastDRepVoteEpochs(List<String> drepIds) {
         var lastVoteEpoch = DSL.max(VOTING_PROCEDURE.EPOCH).as("last_vote_epoch");
-        return dsl.select(VOTING_PROCEDURE.VOTER_HASH, lastVoteEpoch)
+        return dsl.select(DREP_REGISTRATION.DREP_ID, lastVoteEpoch)
                 .from(VOTING_PROCEDURE)
-                .where(VOTING_PROCEDURE.VOTER_HASH.in(drepHashes))
-                .and(VOTING_PROCEDURE.VOTER_TYPE.in("DREP_KEY_HASH", "DREP_SCRIPT_HASH"))
-                .groupBy(VOTING_PROCEDURE.VOTER_HASH)
-                .fetchMap(VOTING_PROCEDURE.VOTER_HASH, lastVoteEpoch);
+                .join(DREP_REGISTRATION).on(DREP_REGISTRATION.DREP_HASH.eq(VOTING_PROCEDURE.VOTER_HASH))
+                .where(DREP_REGISTRATION.DREP_ID.in(drepIds))
+                .and((VOTING_PROCEDURE.VOTER_TYPE.eq("DREP_KEY_HASH")
+                        .and(DREP_REGISTRATION.CRED_TYPE.eq("ADDR_KEYHASH")))
+                        .or(VOTING_PROCEDURE.VOTER_TYPE.eq("DREP_SCRIPT_HASH")
+                                .and(DREP_REGISTRATION.CRED_TYPE.eq("SCRIPTHASH"))))
+                .groupBy(DREP_REGISTRATION.DREP_ID)
+                .fetchMap(DREP_REGISTRATION.DREP_ID, lastVoteEpoch);
     }
 
     @Override
