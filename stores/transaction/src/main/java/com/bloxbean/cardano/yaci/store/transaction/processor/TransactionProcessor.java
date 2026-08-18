@@ -73,6 +73,8 @@ public class TransactionProcessor {
         List<Txn> txList = new ArrayList<>();
         List<TxnCbor> txnCborList = new ArrayList<>();
         boolean saveCborEnabled = transactionStoreProperties.isSaveCbor();
+        //saveFullTxCbor works standalone -- it doesn't require saveCbor to also be enabled.
+        boolean collectCbor = saveCborEnabled || transactionStoreProperties.isSaveFullTxCbor();
 
         var txIndex = new AtomicInteger(0);
         transactions.forEach(transaction -> {
@@ -130,9 +132,7 @@ public class TransactionProcessor {
                     .invalid(transaction.isInvalid())
                     .build();
 
-            if (saveCborEnabled) {
-                collectTransactionCbor(transaction, txnCborList);
-            }
+            collectCborIfEnabled(collectCbor, transaction, txnCborList);
 
             if (fee == null && transaction.isInvalid()) { //will be resolved in pre-commit event as it can't be resolved now due to parallel processing.
                 invalidUnresolvedFeeTxns.add(new Tuple<>(txn, transaction));
@@ -151,10 +151,19 @@ public class TransactionProcessor {
             publisher.publishEvent(new TxnEvent(event.getMetadata(), txList));
         }
 
-        if (saveCborEnabled && !txnCborList.isEmpty()) {
+        saveCollectedCbor(collectCbor, txnCborList);
+    }
+
+    private void collectCborIfEnabled(boolean collectCbor, Transaction transaction, List<TxnCbor> txnCborList) {
+        if (collectCbor) {
+            collectTransactionCbor(transaction, txnCborList);
+        }
+    }
+
+    private void saveCollectedCbor(boolean collectCbor, List<TxnCbor> txnCborList) {
+        if (collectCbor && !txnCborList.isEmpty()) {
             transactionCborStorage.save(txnCborList);
         }
-
     }
 
     //Resolve collateral fee for invalid transactions -- Required during parallel processing
@@ -283,6 +292,14 @@ public class TransactionProcessor {
 
         byte[] cborData = HexUtil.decodeHexString(cborHex);
 
+        if (transactionStoreProperties.isSaveFullTxCbor()) {
+            try {
+                cborData = FullTxCborReassembler.reassemble(transaction);
+            } catch (Exception e) {
+                log.debug("Unable to reassemble full-tx CBOR for transaction {}. Falling back to body-only CBOR.", transaction.getTxHash(), e);
+            }
+        }
+
         txnCborList.add(TxnCbor.builder()
                 .txHash(transaction.getTxHash())
                 .cborData(cborData)
@@ -290,7 +307,6 @@ public class TransactionProcessor {
                 .slot(transaction.getSlot())
                 .build());
     }
-
 
     /**
     private TxResolvedInput resolveInput(String txHash, int outputIndex) {
@@ -311,6 +327,7 @@ public class TransactionProcessor {
     }
 
      **/
+
     private TxOuput convertOutput(TransactionOutput output) {
         if (output == null)
             return null;

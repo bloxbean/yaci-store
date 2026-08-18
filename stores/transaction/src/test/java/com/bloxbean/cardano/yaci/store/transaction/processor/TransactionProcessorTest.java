@@ -236,6 +236,30 @@ class TransactionProcessorTest {
         verify(invalidTransactionStorage, Mockito.times(1)).save(invalidTxCaptor.capture());
     }
 
+    @Test
+    void givenTransactionEvent_whenSaveFullTxCborAloneEnabled_shouldStillCollectAndStoreCbor() {
+        // saveCbor is OFF -- only saveFullTxCbor is on. It must work standalone, without requiring saveCbor.
+        TransactionStoreProperties properties = TransactionStoreProperties.builder()
+                .saveCbor(false)
+                .saveFullTxCbor(true)
+                .build();
+
+        TransactionProcessor processorWithFullTxCborOnly = new TransactionProcessor(
+                transactionStorage, transactionCborStorage, transactionWitnessStorage, invalidTransactionStorage,
+                new ObjectMapper(), feeResolver, publisher, properties);
+
+        TransactionEvent transactionEvent = TransactionEvent.builder()
+                .transactions(transactions())
+                .metadata(eventMetadata())
+                .build();
+
+        processorWithFullTxCborOnly.handleTransactionEvent(transactionEvent);
+
+        verify(transactionCborStorage, Mockito.times(1)).save(txnCborCaptor.capture());
+        assertThat(txnCborCaptor.getValue()).singleElement().satisfies(txnCbor ->
+                assertThat(txnCbor.getTxHash()).isEqualTo("f0a6e529be26c2326c447c39159e05bb904ff1f7900b6df3852dd539de0343e8"));
+    }
+
     private EventMetadata eventMetadata() {
         return EventMetadata.builder()
                 .era(Era.Babbage)

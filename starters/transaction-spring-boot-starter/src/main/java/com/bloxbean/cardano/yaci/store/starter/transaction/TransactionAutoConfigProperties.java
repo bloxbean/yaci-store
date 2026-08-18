@@ -46,6 +46,17 @@ public class TransactionAutoConfigProperties {
       private boolean saveCbor = false;
 
       /**
+       * Enable/disable saving of the full signed transaction CBOR (body + witness set + isValid + auxiliary data)
+       * instead of the transaction body-only CBOR.
+       * When enabled, the indexer reassembles the full transaction CBOR (CBOR array, tag 84) from its
+       * constituent parts and stores that instead of the body-only CBOR (CBOR map, tag a4).
+       * This is useful for wallets and clients that need the complete signed transaction, e.g. for re-broadcast
+       * or witness verification.
+       * Note: Has no effect unless {@code saveCbor} is also enabled.
+       */
+      private boolean saveFullTxCbor = false;
+
+      /**
        * Enable/disable pruning of block CBOR data.
        * When enabled, CBOR data older than cborPruningSafeSlots will be automatically deleted.
        */
