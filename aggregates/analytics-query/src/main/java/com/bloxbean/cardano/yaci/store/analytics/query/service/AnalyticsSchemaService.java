@@ -103,7 +103,8 @@ public class AnalyticsSchemaService {
             note = "Live PostgreSQL federation is active: " + liveTables + " of " + tables.size()
                     + " tables (dataScope 'historical+live') union the exported data with live rows and reach the "
                     + "current chain tip; the remaining tables (dataScope 'historical') contain exported data as of "
-                    + dataAsOf + " (" + bufferDays + " day(s) old). "
+                    + dataAsOf + " (" + bufferDays + " day(s) old). For epoch-level tables the current epoch's rows "
+                    + "come live from PostgreSQL and may still change until the epoch closes. "
                     + "For real-time address balance, use 'analytics-address-balance' tool.";
         } else {
             note = "Historical analytics data (" + bufferDays + " day(s) old). " +

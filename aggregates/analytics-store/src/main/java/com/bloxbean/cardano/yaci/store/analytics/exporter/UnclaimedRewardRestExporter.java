@@ -48,6 +48,16 @@ public class UnclaimedRewardRestExporter extends AbstractTableExporter {
         return PartitionStrategy.EPOCH;
     }
 
+    /**
+     * Unified view: never federated. Unclaimed reward rows can be revised in PostgreSQL after
+     * their epoch was exported, so a boundary split would surface stale exported rows;
+     * the table is served from the exported data only.
+     */
+    @Override
+    public String getFederationBoundaryColumn() {
+        return null;
+    }
+
     @Override
     public boolean preExportValidation(PartitionValue partition) {
         // unclaimed_reward_rest[earned_epoch=N] is populated at the start of AdaPot job N+1 via

@@ -75,18 +75,26 @@ DuckDB (in-process, via JDBC)
 ### Module Structure
 
 ```
-analytics/
+analytics-store (write side: exports and catalog ownership)
   admin/           - Admin REST controller and service
   config/          - Spring configuration and properties
-  ducklake/        - DuckLake catalog initialization
+  ducklake/        - DuckLake catalog initialization, catalog snapshot reader
   exporter/        - 47 built-in table exporters (31 daily + 16 epoch)
   gap/             - Gap detection for continuous sync
   helper/          - DuckDB connection helper utilities
-  query/           - DuckLake query controller and service
   scheduler/       - Export schedulers and recovery services
   state/           - Export state management (JPA entities)
   writer/          - Parquet and DuckLake writer services
+
+analytics-query (read side: sandboxed DuckDB engine over the exported data)
+  connection/      - Query engine, view registry, unified (live-federated) views
+  controller/      - REST API under /api/v1/analytics/query/*
+  service/         - Schema discovery, pre-built statistics, SQL validator
+  executor/        - Query execution (timeouts, row cap, JSON-safe results)
 ```
+
+All reads (REST and MCP) go through `analytics-query`; see
+[Query API & Unified Views](/docs/v2/analytics/query-api).
 
 ### Schedulers
 

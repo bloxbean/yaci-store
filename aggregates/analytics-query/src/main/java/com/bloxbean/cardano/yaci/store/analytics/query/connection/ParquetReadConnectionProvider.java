@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.analytics.query.connection;
 
 import com.bloxbean.cardano.yaci.store.analytics.config.AnalyticsStoreProperties;
 import com.bloxbean.cardano.yaci.store.analytics.ducklake.DuckLakeCatalogSnapshotReader;
+import com.bloxbean.cardano.yaci.store.analytics.exporter.TableExporter;
 import com.bloxbean.cardano.yaci.store.analytics.exporter.TableExporterRegistry;
 import com.bloxbean.cardano.yaci.store.analytics.helper.DuckDbConnectionHelper;
 import jakarta.annotation.PostConstruct;
@@ -233,16 +234,16 @@ public class ParquetReadConnectionProvider extends DuckDbReadConnectionProvider 
                     continue;
                 }
 
-                long cutoff = cutoffResolver.getCutoffSlot(table);
+                CutoffSlotResolver.Cutoff cutoff = cutoffResolver.getCutoff(table);
                 String sql = UnifiedViewBuilder.buildUnifiedViewSql(
-                        table, PG_LIVE_ALIAS, pgSchema, cutoff,
+                        table, PG_LIVE_ALIAS, pgSchema, cutoff, federationFor(table),
                         partitionColumnFor(table), getParentConnection());
 
                 if (sql != null) {
                     executeOnParent(sql);
                     unified++;
                     federated.add(table);
-                    log.debug("Created unified view '{}' (cutoff slot: {})", table, cutoff);
+                    log.debug("Created unified view '{}' (cutoff: {})", table, cutoff);
                 } else {
                     // Cannot federate — use Parquet-only alias
                     createAliasView(table, "parquet_" + table);
@@ -289,9 +290,9 @@ public class ParquetReadConnectionProvider extends DuckDbReadConnectionProvider 
             }
 
             try {
-                long cutoff = cutoffResolver.getCutoffSlot(table);
+                CutoffSlotResolver.Cutoff cutoff = cutoffResolver.getCutoff(table);
                 String sql = UnifiedViewBuilder.buildUnifiedViewSql(
-                        table, PG_LIVE_ALIAS, pgSchema, cutoff,
+                        table, PG_LIVE_ALIAS, pgSchema, cutoff, federationFor(table),
                         partitionColumnFor(table), getParentConnection());
                 if (sql != null) {
                     executeOnParent(sql);
@@ -505,6 +506,22 @@ public class ParquetReadConnectionProvider extends DuckDbReadConnectionProvider 
             return registry.getExporter(table).getPartitionColumn();
         }
         return "block_time";
+    }
+
+    /**
+     * Federation metadata declared by the table's exporter (boundary column, partition unit,
+     * renamed source columns). Without an exporter the table cannot be federated safely.
+     */
+    private UnifiedViewBuilder.Federation federationFor(String table) {
+        TableExporterRegistry registry = exporterRegistryProvider.getIfAvailable();
+        if (registry == null || !registry.hasExporter(table)) {
+            return null;
+        }
+        TableExporter exporter = registry.getExporter(table);
+        return new UnifiedViewBuilder.Federation(
+                exporter.getFederationBoundaryColumn(),
+                exporter.getPartitionStrategy(),
+                exporter.getSourceColumnMappings());
     }
 
     private void createFallbackAliasSafely(String table) {

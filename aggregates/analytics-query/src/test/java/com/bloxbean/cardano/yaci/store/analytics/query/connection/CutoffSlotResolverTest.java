@@ -10,7 +10,9 @@ import org.junit.jupiter.api.Test;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -37,5 +39,26 @@ class CutoffSlotResolverTest {
 
         // Epoch 11 ends at the start of epoch 12. Epoch 13 must not move the boundary.
         assertEquals(11_999L, resolver.getCutoffSlot("reward"));
+        // Both units are exposed: EPOCH tables are federated on the epoch column
+        assertEquals(new CutoffSlotResolver.Cutoff(11_999L, 11L), resolver.getCutoff("reward"));
+    }
+
+    @Test
+    void dailyCutoffCarriesNoEpoch() {
+        ExportStateService stateService = mock(ExportStateService.class);
+        when(stateService.getCompletedPartitions("block")).thenReturn(Set.of("date=2024-01-01", "date=2024-01-02"));
+        TableExporter exporter = mock(TableExporter.class);
+        when(exporter.getPartitionStrategy()).thenReturn(PartitionStrategy.DAILY);
+        TableExporterRegistry registry = mock(TableExporterRegistry.class);
+        when(registry.hasExporter("block")).thenReturn(true);
+        when(registry.getExporter("block")).thenReturn(exporter);
+        EraService eraService = mock(EraService.class);
+        when(eraService.slotFromTime(anyLong())).thenAnswer(inv -> inv.<Long>getArgument(0) - 1_700_000_000L);
+
+        CutoffSlotResolver resolver = new CutoffSlotResolver(stateService, eraService, registry);
+        CutoffSlotResolver.Cutoff cutoff = resolver.getCutoff("block");
+        assertEquals(-1L, cutoff.epoch());
+        assertTrue(cutoff.slot() > 0);
+        assertEquals(cutoff.slot(), resolver.getCutoffSlot("block"));
     }
 }
