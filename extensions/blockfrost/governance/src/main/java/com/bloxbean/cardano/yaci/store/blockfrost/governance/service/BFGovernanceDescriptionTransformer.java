@@ -456,6 +456,7 @@ class BFGovernanceDescriptionTransformer {
         }
     }
 
+    // TODO: Re-verify this logic against ledger
     /**
      * Converts a persisted numerator/denominator object using ledger's bounded-ratio JSON rules.
      * A reduced ratio becomes a JSON number only when its decimal expansion terminates within
@@ -491,34 +492,23 @@ class BFGovernanceDescriptionTransformer {
             BigInteger reducedNumerator = numeratorValue.divide(gcd);
             BigInteger reducedDenominator = denominatorValue.divide(gcd);
 
-            BigInteger remainingDenominator = reducedDenominator;
-            int powersOfTwo = 0;
-            while (remainingDenominator.mod(BigInteger.TWO).signum() == 0) {
-                remainingDenominator = remainingDenominator.divide(BigInteger.TWO);
-                powersOfTwo++;
-            }
-
-            BigInteger five = BigInteger.valueOf(5);
-            int powersOfFive = 0;
-            while (remainingDenominator.mod(five).signum() == 0) {
-                remainingDenominator = remainingDenominator.divide(five);
-                powersOfFive++;
-            }
-
-            // A reduced denominator made only of 2s and 5s terminates after max(a, b) places.
-            if (remainingDenominator.equals(BigInteger.ONE)
-                    && Math.max(powersOfTwo, powersOfFive) <= MAX_DECIMALS_WORD64) {
+            try {
+                // Exact division rejects repeating decimals; scale enforces ledger's 19-place limit.
                 BigDecimal ratio = new BigDecimal(reducedNumerator)
                         .divide(new BigDecimal(reducedDenominator))
                         .stripTrailingZeros();
-                return objectMapper.valueToTree(ratio);
+                if (ratio.scale() <= MAX_DECIMALS_WORD64) {
+                    return objectMapper.valueToTree(ratio);
+                }
+            } catch (ArithmeticException ignored) {
+                // A repeating decimal cannot be represented exactly by BigDecimal.
             }
 
             ObjectNode exactRatio = objectMapper.createObjectNode();
             exactRatio.put("numerator", reducedNumerator);
             exactRatio.put("denominator", reducedDenominator);
             return exactRatio;
-        } catch (NumberFormatException | ArithmeticException e) {
+        } catch (NumberFormatException e) {
             // Preserve malformed legacy values rather than changing their response shape.
             return source.deepCopy();
         }
