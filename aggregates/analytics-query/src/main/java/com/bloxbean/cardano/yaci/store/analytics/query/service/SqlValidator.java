@@ -8,7 +8,7 @@ import java.util.Set;
 /**
  * Security-critical SQL validation for ad-hoc DuckDB queries.
  *
- * <p>Used by both the REST controller ({@code ParquetAnalyticsController}) and MCP service
+ * <p>Used by both the REST controller ({@code AnalyticsQueryController}) and MCP service
  * ({@code McpAnalyticsService}) to enforce read-only query constraints and block dangerous
  * functions before queries reach the DuckDB engine.</p>
  *
@@ -37,7 +37,7 @@ import java.util.Set;
  *       ({@code "read_csv"(...)}, {@code "pg_live"."public"."x"}) remain blocked.</li>
  * </ul>
  *
- * @see com.bloxbean.cardano.yaci.store.analytics.query.controller.ParquetAnalyticsController
+ * @see com.bloxbean.cardano.yaci.store.analytics.query.controller.AnalyticsQueryController
  */
 public final class SqlValidator {
 

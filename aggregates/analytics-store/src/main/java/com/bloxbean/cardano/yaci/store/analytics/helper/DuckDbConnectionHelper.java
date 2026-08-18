@@ -157,6 +157,10 @@ public class DuckDbConnectionHelper {
         String cmd = "ATTACH '" + escapeSqlLiteral(connInfo.toString()) + "' AS "
                 + quoteIdentifier(aliasName) + " (TYPE POSTGRES, READ_ONLY);";
 
+        if (isDatabaseAttached(conn, aliasName)) {
+            log.debug("Source database '{}' already attached, skipping", aliasName);
+            return;
+        }
         try {
             executeSql(conn, cmd);
             log.debug("Attached source PostgreSQL database as '{}'", aliasName);
@@ -170,10 +174,30 @@ public class DuckDbConnectionHelper {
         }
     }
 
+    /**
+     * True only for DuckDB's "a database with this alias is already attached on this
+     * connection" error ({@code database with name "x" already exists}).
+     *
+     * <p>Deliberately does NOT match {@code "already attached"}: DuckDB's cross-instance
+     * error {@code Unique file handle conflict: Cannot attach ... - the database file ... is
+     * already attached by database ...} contains that phrase too, but it means the file is
+     * held by <em>another</em> DuckDB instance in this JVM and this connection does NOT have
+     * the catalog. Treating it as "already attached" hides the real failure and the next
+     * {@code USE ducklake_catalog} fails with a misleading "No catalog + schema named
+     * ducklake_catalog found".</p>
+     */
     private static boolean isAlreadyAttached(SQLException e) {
         String errorMessage = e.getMessage();
-        return errorMessage != null
-                && (errorMessage.contains("already attached") || errorMessage.contains("already exists"));
+        return errorMessage != null && errorMessage.contains("already exists");
+    }
+
+    /**
+     * True for DuckDB's in-process single-open violation ({@code Unique file handle conflict}):
+     * the database file is open in another DuckDB instance of this JVM.
+     */
+    public static boolean isFileHandleConflict(SQLException e) {
+        String errorMessage = e.getMessage();
+        return errorMessage != null && errorMessage.contains("Unique file handle conflict");
     }
 
     /**
@@ -260,8 +284,8 @@ public class DuckDbConnectionHelper {
                      databaseName))) {
             return rs.next();
         } catch (SQLException e) {
-            log.debug("Error checking whether database '{}' is attached (SQLState={}, errorCode={})",
-                    databaseName, e.getSQLState(), e.getErrorCode());
+            log.debug("Error checking whether database '{}' is attached: {}",
+                    databaseName, redactSecrets(e.getMessage()));
             return false;
         }
     }
@@ -309,8 +333,7 @@ public class DuckDbConnectionHelper {
         try {
             executeSql(conn, "USE ducklake_catalog;");
         } catch (SQLException e) {
-            log.warn("USE ducklake_catalog failed (SQLState={}, errorCode={}); re-attaching catalogs",
-                    e.getSQLState(), e.getErrorCode());
+            log.warn("USE ducklake_catalog failed ({}); re-attaching catalogs", redactSecrets(e.getMessage()));
 
             // Detach stale catalogs
             try { executeSql(conn, "DETACH IF EXISTS ducklake_catalog;"); } catch (SQLException ignored) {}
@@ -364,13 +387,33 @@ public class DuckDbConnectionHelper {
             }
         }
 
+        // Connection-pool aware: the catalog stays attached on a pooled connection.
+        if (isDatabaseAttached(conn, "ducklake_catalog")) {
+            log.debug("DuckLake catalog already attached on this connection, skipping");
+            return;
+        }
+
         // Attach the appropriate catalog type
-        // Each attach method handles "already attached" detection via error handling
         if ("postgresql".equalsIgnoreCase(catalogType)) {
             attachPostgresCatalog(conn, dataPath, readOnly);
         } else {
             attachDuckDbCatalog(conn, dataPath, readOnly);
         }
+    }
+
+    /**
+     * ATTACH options shared by both catalog types.
+     *
+     * <p>Read-write attaches (the export writer) pass {@code AUTOMATIC_MIGRATION true}: a
+     * newer DuckLake extension refuses to open a catalog written in an older format
+     * ("DuckLake catalog version mismatch ... set AUTOMATIC_MIGRATION to TRUE") unless it may
+     * migrate the metadata in place. Migration is one-way — an older DuckDB/DuckLake can no
+     * longer open the migrated catalog — so back up the catalog before upgrading DuckDB.
+     * Read-only attaches cannot migrate and therefore do not request it.</p>
+     */
+    private static String duckLakeAttachOptions(String dataPath, boolean readOnly) {
+        String data = "DATA_PATH '" + escapeSqlLiteral(dataPath) + "'";
+        return readOnly ? "READ_ONLY, " + data : data + ", AUTOMATIC_MIGRATION true";
     }
 
     // ========== URL Parsing Utilities ==========
@@ -514,20 +557,11 @@ public class DuckDbConnectionHelper {
         );
 
         // Build ATTACH statement with optional READ_ONLY
-        String attachSql;
-        if (readOnly) {
-            attachSql = String.format(
-                    "ATTACH '%s' AS ducklake_catalog (READ_ONLY, DATA_PATH '%s');",
-                    connectionString,
-                    dataPath
-            );
-        } else {
-            attachSql = String.format(
-                    "ATTACH '%s' AS ducklake_catalog (DATA_PATH '%s');",
-                    connectionString,
-                    dataPath
-            );
-        }
+        String attachSql = String.format(
+                "ATTACH '%s' AS ducklake_catalog (%s);",
+                connectionString,
+                duckLakeAttachOptions(dataPath, readOnly)
+        );
 
         try {
             executeSql(conn, attachSql);
@@ -626,9 +660,8 @@ public class DuckDbConnectionHelper {
 
                     log.debug("Successfully detached temporary PostgreSQL connection");
                 } catch (SQLException e) {
-                    log.error("CRITICAL: Failed to cleanup catalog_temp attachment "
-                                    + "(SQLState={}, errorCode={})",
-                            e.getSQLState(), e.getErrorCode());
+                    log.error("CRITICAL: Failed to cleanup catalog_temp attachment: {}",
+                            redactSecrets(e.getMessage()));
                     throw new RuntimeException("Failed to cleanup temporary PostgreSQL connection", e);
                 }
             }
@@ -692,6 +725,38 @@ public class DuckDbConnectionHelper {
 
         log.info("✅ Configured DuckLake catalog compression: codec={}, level={}, rowGroupSize={}",
                 codec, compressionLevel, rowGroupSize > 0 ? rowGroupSize : "default");
+
+        disableDuckLakeDataInlining(conn);
+    }
+
+    /**
+     * Keep every committed row in a Parquet data file.
+     *
+     * <p>DuckLake &ge; 1.0 (DuckDB 1.5.x) inlines small inserts into the catalog database by
+     * default ({@code data_inlining_row_limit}); those rows only reach a Parquet file when
+     * flushed. Many epoch tables export a handful of rows per partition, so they would sit
+     * in the catalog indefinitely. The analytics query layer reads the committed data files
+     * directly (it cannot attach the catalog, see {@code DuckLakeCatalogSnapshotReader}), so
+     * inlined rows would be invisible to it. Persist {@code data_inlining_row_limit = 0} in
+     * the catalog and flush anything a previous run may have inlined. Both calls are best
+     * effort: older DuckLake extensions without inlining simply reject them.</p>
+     */
+    private void disableDuckLakeDataInlining(Connection conn) {
+        try {
+            executeSql(conn, "CALL ducklake_catalog.set_option('data_inlining_row_limit', 0);");
+            log.info("DuckLake data inlining disabled (data_inlining_row_limit=0)");
+        } catch (SQLException e) {
+            log.debug("DuckLake data_inlining_row_limit not supported by this DuckLake version ({}); "
+                    + "nothing to disable", redactSecrets(e.getMessage()));
+            return;
+        }
+        try {
+            executeSql(conn, "CALL ducklake_flush_inlined_data('ducklake_catalog');");
+            log.debug("Flushed previously inlined DuckLake data to Parquet");
+        } catch (SQLException e) {
+            log.warn("Could not flush inlined DuckLake data ({}); rows inlined by an earlier run stay "
+                    + "invisible to the analytics query layer until flushed", redactSecrets(e.getMessage()));
+        }
     }
 
     // ========== Private Helper Methods ==========
@@ -715,32 +780,35 @@ public class DuckDbConnectionHelper {
         }
 
         // Build ATTACH statement with optional READ_ONLY
-        String attachSql;
-        if (readOnly) {
-            attachSql = String.format(
-                    "ATTACH 'ducklake:%s' AS ducklake_catalog (READ_ONLY, DATA_PATH '%s');",
-                    catalogPath,
-                    dataPath
-            );
-        } else {
-            attachSql = String.format(
-                    "ATTACH 'ducklake:%s' AS ducklake_catalog (DATA_PATH '%s');",
-                    catalogPath,
-                    dataPath
-            );
-        }
+        String attachSql = String.format(
+                "ATTACH 'ducklake:%s' AS ducklake_catalog (%s);",
+                catalogPath,
+                duckLakeAttachOptions(dataPath, readOnly)
+        );
 
         try {
             executeSql(conn, attachSql);
             log.debug("Attached DuckDB DuckLake catalog: {} (DATA_PATH: {}, READ_ONLY: {})",
                     catalogPath, dataPath, readOnly);
         } catch (SQLException e) {
-            if (e.getMessage().contains("already attached") || e.getMessage().contains("already exists")) {
+            if (isAlreadyAttached(e)) {
                 log.debug("DuckDB catalog already attached (file: {}), skipping", catalogPath);
                 return;
             }
-            // "Unique file handle conflict" = another DuckDB instance holds the lock.
-            // This connection does NOT have the catalog — do not silently return.
+            if (isFileHandleConflict(e)) {
+                // Another DuckDB instance in this JVM (normally the export writer's pooled
+                // connection) has the catalog file open. DuckDB allows exactly one instance per
+                // file per process, READ_ONLY included. This connection does NOT have the
+                // catalog — do not silently return.
+                SQLException conflict = new SQLException(
+                        "DuckLake catalog file '" + catalogPath + "' is already open in another DuckDB "
+                                + "instance of this JVM (DuckDB allows one instance per file per process, "
+                                + "READ_ONLY included). Read the catalog through the export writer's "
+                                + "connection instead of attaching it here. Cause: " + e.getMessage(),
+                        e.getSQLState(), e.getErrorCode());
+                conflict.setStackTrace(e.getStackTrace());
+                throw conflict;
+            }
             throw e;
         }
     }

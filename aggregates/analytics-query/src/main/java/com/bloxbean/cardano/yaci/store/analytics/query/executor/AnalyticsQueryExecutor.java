@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.analytics.query.executor;
 
 import com.bloxbean.cardano.yaci.store.analytics.query.connection.ParquetReadConnectionProvider;
 import lombok.RequiredArgsConstructor;
+import com.bloxbean.cardano.yaci.store.analytics.helper.DuckDbConnectionHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -95,11 +96,12 @@ public class AnalyticsQueryExecutor {
             }
         } catch (SQLException e) {
             long elapsed = System.currentTimeMillis() - start;
-            log.error("Analytics query failed after {}ms (SQLState={}, errorCode={})",
-                    elapsed, e.getSQLState(), e.getErrorCode());
+            // Log the (redacted) DuckDB reason for operators; callers only get a generic message.
+            log.error("Analytics query failed after {}ms: {}",
+                    elapsed, DuckDbConnectionHelper.redactSecrets(e.getMessage()));
             // Sanitize error message — do not expose internal DuckDB state, file paths,
             // or PostgreSQL connection details to the caller
-            throw new RuntimeException("Query execution failed. Check query syntax and filters.");
+            throw new QueryExecutionException("Query execution failed. Check query syntax and filters.");
         }
     }
 
@@ -123,9 +125,9 @@ public class AnalyticsQueryExecutor {
                 }
                 return row;
             } catch (SQLException e) {
-                log.error("Failed to read analytics query result row (SQLState={}, errorCode={})",
-                        e.getSQLState(), e.getErrorCode());
-                throw new RuntimeException("Failed to read query result row");
+                log.error("Failed to read analytics query result row: {}",
+                        DuckDbConnectionHelper.redactSecrets(e.getMessage()));
+                throw new QueryExecutionException("Failed to read query result row");
             }
         });
     }
@@ -210,5 +212,16 @@ public class AnalyticsQueryExecutor {
             if (type == Double.class || type == double.class) return (T) Double.valueOf(number.doubleValue());
         }
         return (T) value;
+    }
+
+    /**
+     * A query failed inside DuckDB (syntax error, unknown table/column, timeout, ...). The
+     * message is intentionally generic — DuckDB's own message may reveal file paths or
+     * connection details — and callers should treat it as a client-side query problem.
+     */
+    public static class QueryExecutionException extends RuntimeException {
+        public QueryExecutionException(String message) {
+            super(message);
+        }
     }
 }

@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.analytics.query.connection;
 
+import com.bloxbean.cardano.yaci.store.analytics.helper.DuckDbConnectionHelper;
 import lombok.extern.slf4j.Slf4j;
 
 import java.sql.Connection;
@@ -148,8 +149,8 @@ public class UnifiedViewBuilder {
             );
 
         } catch (SQLException e) {
-            log.warn("Failed to build unified view for '{}' (SQLState={}, errorCode={})",
-                    tableName, e.getSQLState(), e.getErrorCode());
+            log.warn("Failed to build unified view for '{}': {}",
+                    tableName, DuckDbConnectionHelper.redactSecrets(e.getMessage()));
             return null;
         }
     }

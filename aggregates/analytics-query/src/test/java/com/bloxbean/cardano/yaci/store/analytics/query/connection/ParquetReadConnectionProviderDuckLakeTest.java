@@ -73,6 +73,12 @@ class ParquetReadConnectionProviderDuckLakeTest {
         writerDataSource.setConnectionTimeout(1000);
 
         helper = new DuckDbConnectionHelper(environment(), properties);
+        // Same catalog initialization as DuckLakeCatalogInitializer at startup (compression,
+        // and data inlining off so every committed row lands in a Parquet data file).
+        try (Connection conn = writerDataSource.getConnection()) {
+            helper.prepareConnectionForDuckLake(conn, false, false);
+            helper.configureDuckLakeCatalogSettings(conn);
+        }
     }
 
     @AfterEach
@@ -130,6 +136,77 @@ class ParquetReadConnectionProviderDuckLakeTest {
         assertEquals(2, count(provider, "SELECT count(DISTINCT date) FROM block"));
         assertEquals(1, count(provider, "SELECT count(*) FROM committee"));
         assertEquals(List.of("adapot", "block", "committee"), registry.getTableNames());
+    }
+
+    @Test
+    void servesTablesThatMixPartitionedAndUnpartitionedDataFiles() throws Exception {
+        // First file written before partitioning was configured (no date= directory), later
+        // files partitioned — DuckDB's hive_partitioning=true would reject this mix.
+        writeTable("block", "SELECT range AS slot, CAST('2024-01-01' AS DATE) AS date FROM range(10)");
+        try (Connection conn = writerDataSource.getConnection()) {
+            helper.prepareConnectionForDuckLake(conn, false, false);
+            try (Statement stmt = conn.createStatement()) {
+                stmt.execute("ALTER TABLE ducklake_catalog.main.block SET PARTITIONED BY (date)");
+            }
+        }
+        appendRows("block", "SELECT range + 100 AS slot, CAST('2024-01-02' AS DATE) AS date FROM range(5)");
+
+        ParquetTableRegistry registry = new ParquetTableRegistry(properties);
+        registry.init();
+        DuckLakeCatalogSnapshotReader snapshotReader =
+                new DuckLakeCatalogSnapshotReader(writerDataSource, helper, properties);
+        ParquetReadConnectionProvider provider = new ParquetReadConnectionProvider(
+                properties, registry,
+                objectProvider(DuckDbConnectionHelper.class, helper),
+                objectProvider(CutoffSlotResolver.class, null),
+                objectProvider(TableExporterRegistry.class, null),
+                objectProvider(DuckLakeCatalogSnapshotReader.class, snapshotReader));
+        provider.createViews();
+
+        assertEquals(2, registry.getDuckLakeFiles("block").size());
+        assertTrue(!ParquetReadConnectionProvider.hasUniformHiveLayout(registry.getDuckLakeFiles("block")));
+        assertEquals(15, count(provider, "SELECT count(*) FROM block"));
+        assertEquals(5, count(provider, "SELECT count(*) FROM block WHERE date = DATE '2024-01-02'"));
+        // No DuckLake bookkeeping columns leak into the view
+        assertEquals(0, count(provider,
+                "SELECT count(*) FROM (DESCRIBE block) WHERE column_name LIKE '\\_ducklake\\_internal%' ESCAPE '\\'"));
+    }
+
+    @Test
+    void epochPartitionedTablesKeepFileColumnTypeAndSupportAggregates() throws Exception {
+        // Exporter pattern: empty CTAS, then partitioning, then INSERTs -> files under epoch=N/.
+        writeTable("epoch_tbl", "SELECT 1::INTEGER AS epoch, 1::BIGINT AS slot LIMIT 0");
+        try (Connection conn = writerDataSource.getConnection()) {
+            helper.prepareConnectionForDuckLake(conn, false, false);
+            try (Statement stmt = conn.createStatement()) {
+                stmt.execute("ALTER TABLE ducklake_catalog.main.epoch_tbl SET PARTITIONED BY (epoch)");
+            }
+        }
+        appendRows("epoch_tbl", "SELECT 450::INTEGER AS epoch, 100::BIGINT AS slot UNION ALL SELECT 451, 200");
+
+        ParquetTableRegistry registry = new ParquetTableRegistry(properties);
+        registry.init();
+        ParquetReadConnectionProvider provider = new ParquetReadConnectionProvider(
+                properties, registry,
+                objectProvider(DuckDbConnectionHelper.class, helper),
+                objectProvider(CutoffSlotResolver.class, null),
+                objectProvider(TableExporterRegistry.class, null),
+                objectProvider(DuckLakeCatalogSnapshotReader.class,
+                        new DuckLakeCatalogSnapshotReader(writerDataSource, helper, properties)));
+        provider.createViews();
+
+        assertTrue(ParquetReadConnectionProvider.hasUniformHiveLayout(registry.getDuckLakeFiles("epoch_tbl")));
+        // DuckDB 1.5.x fails MIN/MAX on a hive key whose auto type (BIGINT) differs from the
+        // file column (INTEGER) unless hive_types pins it; the view must keep the file type.
+        assertEquals(450, count(provider, "SELECT MIN(epoch) FROM epoch_tbl"));
+        assertEquals(451, count(provider, "SELECT MAX(epoch) FROM epoch_tbl"));
+        assertEquals(1, count(provider, "SELECT count(*) FROM epoch_tbl WHERE epoch = 451"));
+        try (Connection conn = provider.getReadConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("SELECT typeof(epoch) FROM epoch_tbl LIMIT 1")) {
+            rs.next();
+            assertEquals("INTEGER", rs.getString(1));
+        }
     }
 
     @Test

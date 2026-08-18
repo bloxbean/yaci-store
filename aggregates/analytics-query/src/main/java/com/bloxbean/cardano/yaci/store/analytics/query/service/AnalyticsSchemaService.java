@@ -71,7 +71,8 @@ public class AnalyticsSchemaService {
                     rowCount,
                     meta.partitionStrategy(),
                     meta.partitionColumn(),
-                    dateRange
+                    dateRange,
+                    dataScope(tableName)
             ));
         }
 
@@ -93,20 +94,36 @@ public class AnalyticsSchemaService {
         queryHints.put("lovelace",
                 "All ADA amounts are in lovelace (1 ADA = 1,000,000 lovelace). Divide by 1000000.0 for ADA.");
 
-        String engine = "DuckDB (in-memory, reading Parquet files with Hive partitioning)";
+        String engine = "DuckDB (in-memory, reading the exported analytics data files)";
 
-        String note = "Historical analytics data (" + bufferDays + " day(s) old). " +
-                "For real-time address balance, use 'analytics-address-balance' tool.";
+        boolean live = connectionProvider.isLiveDataActive();
+        long liveTables = tables.stream().filter(t -> "historical+live".equals(t.dataScope())).count();
+        String note;
+        if (live) {
+            note = "Live PostgreSQL federation is active: " + liveTables + " of " + tables.size()
+                    + " tables (dataScope 'historical+live') union the exported data with live rows and reach the "
+                    + "current chain tip; the remaining tables (dataScope 'historical') contain exported data as of "
+                    + dataAsOf + " (" + bufferDays + " day(s) old). "
+                    + "For real-time address balance, use 'analytics-address-balance' tool.";
+        } else {
+            note = "Historical analytics data (" + bufferDays + " day(s) old). " +
+                    "For real-time address balance, use 'analytics-address-balance' tool.";
+        }
 
         return new SchemaOverview(
                 engine,
                 "DuckDB SQL (PostgreSQL-compatible with extensions)",
                 bufferDays,
                 dataAsOf,
+                live,
                 note,
                 tables,
                 queryHints
         );
+    }
+
+    private String dataScope(String tableName) {
+        return connectionProvider.isFederated(tableName) ? "historical+live" : "historical";
     }
 
     public TableDescription describeTable(String tableName) {
@@ -120,7 +137,7 @@ public class AnalyticsSchemaService {
         List<ColumnSchema> columns = getColumns(tableName);
         long rowCount = getRowCount(tableName);
 
-        String engine = "DuckDB (Parquet)";
+        String engine = "DuckDB";
 
         return new TableDescription(
                 tableName,
@@ -129,6 +146,7 @@ public class AnalyticsSchemaService {
                 rowCount,
                 meta.partitionStrategy(),
                 meta.partitionColumn(),
+                dataScope(tableName),
                 columns,
                 meta.queryHints()
         );

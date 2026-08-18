@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.analytics.helper;
+package com.bloxbean.cardano.yaci.store.analytics.query.connection;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;

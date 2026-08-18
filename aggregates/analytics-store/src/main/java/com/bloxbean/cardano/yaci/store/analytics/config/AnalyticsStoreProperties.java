@@ -152,8 +152,8 @@ public class AnalyticsStoreProperties {
             /**
              * Maximum concurrent DuckDB read queries.
              *
-             * Controls the semaphore size for DuckDBConnection.duplicate() based readers,
-             * or HikariCP pool size for legacy DataSource based readers.
+             * Controls the semaphore size for DuckDBConnection.duplicate() based readers
+             * (the analytics query layer).
              * Defaults to available processor cores.
              */
             private int maximumPoolSize = Runtime.getRuntime().availableProcessors();
@@ -218,7 +218,7 @@ public class AnalyticsStoreProperties {
          * Enable/disable the REST API endpoints for analytics queries.
          *
          * When false, only the MCP tools are available for querying analytics data.
-         * The REST endpoints ({@code /api/v1/analytics/parquet/*}) will not be registered.
+         * The REST endpoints ({@code /api/v1/analytics/query/*}) will not be registered.
          *
          * Useful for production deployments where analytics should only be accessible
          * through the MCP interface (gated by the LLM agent), not via direct HTTP calls.

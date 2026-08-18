@@ -38,4 +38,7 @@ logging:
   file:
     name: ./logs/yaci-store.log
 
-
+# OpenAPI definitions (see OpenApiGroupsConfig): show the core APIs first in Swagger UI
+springdoc:
+  swagger-ui:
+    urls-primary-name: Core APIs

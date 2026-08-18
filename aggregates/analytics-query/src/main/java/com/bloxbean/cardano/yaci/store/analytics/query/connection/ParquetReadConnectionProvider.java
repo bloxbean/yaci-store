@@ -4,7 +4,6 @@ import com.bloxbean.cardano.yaci.store.analytics.config.AnalyticsStoreProperties
 import com.bloxbean.cardano.yaci.store.analytics.ducklake.DuckLakeCatalogSnapshotReader;
 import com.bloxbean.cardano.yaci.store.analytics.exporter.TableExporterRegistry;
 import com.bloxbean.cardano.yaci.store.analytics.helper.DuckDbConnectionHelper;
-import com.bloxbean.cardano.yaci.store.analytics.helper.DuckDbReadConnectionProvider;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
@@ -68,6 +67,8 @@ public class ParquetReadConnectionProvider extends DuckDbReadConnectionProvider 
 
     private volatile boolean liveDataActive = false;
     private volatile String pgSchema;
+    /** Tables currently served by a unified (Parquet UNION ALL live PostgreSQL) view. */
+    private volatile Set<String> federatedTables = Set.of();
 
     public ParquetReadConnectionProvider(
             AnalyticsStoreProperties properties,
@@ -109,8 +110,8 @@ public class ParquetReadConnectionProvider extends DuckDbReadConnectionProvider 
                     created++;
                 }
             } catch (SQLException e) {
-                log.error("Failed to create historical view for table '{}' (SQLState={}, errorCode={})",
-                        table, e.getSQLState(), e.getErrorCode());
+                log.error("Failed to create historical view for table '{}': {}",
+                        table, DuckDbConnectionHelper.redactSecrets(e.getMessage()));
             }
         }
         log.info("Created {} DuckDB Parquet views", created);
@@ -120,9 +121,8 @@ public class ParquetReadConnectionProvider extends DuckDbReadConnectionProvider 
             try {
                 setupLiveDataFederation(tables);
             } catch (SQLException e) {
-                log.error("Failed to attach live PostgreSQL (SQLState={}, errorCode={}); "
-                                + "falling back to historical-only mode",
-                        e.getSQLState(), e.getErrorCode());
+                log.error("Failed to attach live PostgreSQL ({}); falling back to historical-only mode",
+                        DuckDbConnectionHelper.redactSecrets(e.getMessage()));
                 // Fallback: rename parquet_ views back to their original names
                 fallbackToParquetOnly(tables);
             }
@@ -156,8 +156,8 @@ public class ParquetReadConnectionProvider extends DuckDbReadConnectionProvider 
                 String viewName = liveRequested ? "parquet_" + table : table;
                 createHistoricalView(viewName, table);
             } catch (SQLException e) {
-                log.error("Failed to refresh historical view for table '{}' (SQLState={}, errorCode={})",
-                        table, e.getSQLState(), e.getErrorCode());
+                log.error("Failed to refresh historical view for table '{}': {}",
+                        table, DuckDbConnectionHelper.redactSecrets(e.getMessage()));
             }
         }
 
@@ -175,6 +175,14 @@ public class ParquetReadConnectionProvider extends DuckDbReadConnectionProvider 
      */
     public boolean isLiveDataActive() {
         return liveDataActive;
+    }
+
+    /**
+     * True if the table's view currently unions historical data with live PostgreSQL rows
+     * (i.e. reaches the chain tip); false if it serves the exported data only.
+     */
+    public boolean isFederated(String table) {
+        return federatedTables.contains(table);
     }
 
     // ========== Private Implementation ==========
@@ -212,6 +220,7 @@ public class ParquetReadConnectionProvider extends DuckDbReadConnectionProvider 
 
         // Create unified views for each table
         Set<String> excludedTables = properties.getQuery().getLiveDataExcludedTables();
+        Set<String> federated = new java.util.HashSet<>();
         int unified = 0;
         int skipped = 0;
 
@@ -232,6 +241,7 @@ public class ParquetReadConnectionProvider extends DuckDbReadConnectionProvider 
                 if (sql != null) {
                     executeOnParent(sql);
                     unified++;
+                    federated.add(table);
                     log.debug("Created unified view '{}' (cutoff slot: {})", table, cutoff);
                 } else {
                     // Cannot federate — use Parquet-only alias
@@ -245,6 +255,7 @@ public class ParquetReadConnectionProvider extends DuckDbReadConnectionProvider 
             }
         }
 
+        this.federatedTables = Set.copyOf(federated);
         log.info("Live data federation active: {} unified views, {} historical-only", unified, skipped);
     }
 
@@ -270,6 +281,7 @@ public class ParquetReadConnectionProvider extends DuckDbReadConnectionProvider 
 
         // Recreate unified views with updated cutoffs
         Set<String> excludedTables = properties.getQuery().getLiveDataExcludedTables();
+        Set<String> federated = new java.util.HashSet<>();
         for (String table : tableRegistry.getTableNames()) {
             if (excludedTables.contains(table)) {
                 createFallbackAliasSafely(table);
@@ -283,6 +295,7 @@ public class ParquetReadConnectionProvider extends DuckDbReadConnectionProvider 
                         partitionColumnFor(table), getParentConnection());
                 if (sql != null) {
                     executeOnParent(sql);
+                    federated.add(table);
                 } else {
                     createFallbackAliasSafely(table);
                 }
@@ -291,6 +304,7 @@ public class ParquetReadConnectionProvider extends DuckDbReadConnectionProvider 
                 createFallbackAliasSafely(table);
             }
         }
+        this.federatedTables = Set.copyOf(federated);
     }
 
     /**
@@ -302,8 +316,8 @@ public class ParquetReadConnectionProvider extends DuckDbReadConnectionProvider 
                      "SELECT database_name FROM duckdb_databases() WHERE database_name = '" + PG_LIVE_ALIAS + "'")) {
             return rs.next();
         } catch (SQLException e) {
-            log.debug("PostgreSQL attachment health check failed (SQLState={}, errorCode={})",
-                    e.getSQLState(), e.getErrorCode());
+            log.debug("PostgreSQL attachment health check failed: {}",
+                    DuckDbConnectionHelper.redactSecrets(e.getMessage()));
             return false;
         }
     }
@@ -316,11 +330,12 @@ public class ParquetReadConnectionProvider extends DuckDbReadConnectionProvider 
             try {
                 createAliasView(table, "parquet_" + table);
             } catch (SQLException e) {
-                log.error("Failed to create fallback alias for '{}' (SQLState={}, errorCode={})",
-                        table, e.getSQLState(), e.getErrorCode());
+                log.error("Failed to create fallback alias for '{}': {}",
+                        table, DuckDbConnectionHelper.redactSecrets(e.getMessage()));
             }
         }
         this.liveDataActive = false;
+        this.federatedTables = Set.of();
     }
 
     /**
@@ -331,6 +346,7 @@ public class ParquetReadConnectionProvider extends DuckDbReadConnectionProvider 
      */
     private boolean createHistoricalView(String viewName, String tableName) throws SQLException {
         String source;
+        String projection = "*";
         if (tableRegistry.isDuckLake()) {
             List<Path> files = tableRegistry.getDuckLakeFiles(tableName);
             if (files.isEmpty()) {
@@ -339,20 +355,101 @@ public class ParquetReadConnectionProvider extends DuckDbReadConnectionProvider 
             }
             // Explicit list of committed files (absolute paths inside the sandboxed export dir).
             // DuckLake writes partition columns into the files themselves; hive_partitioning
-            // additionally lets DuckDB prune files by the date=/epoch= directory names.
+            // additionally lets DuckDB prune files by the date=/epoch= directory names — but
+            // only when every file shares the same layout (DuckDB rejects a mix of
+            // partitioned and unpartitioned files with "Hive partition mismatch"; DuckLake can
+            // produce such a mix, e.g. when it flushes inlined data or after compaction).
+            boolean hivePartitioning = hasUniformHiveLayout(files);
+            String hiveTypes = "";
+            if (!hivePartitioning) {
+                log.info("DuckLake table '{}' mixes partitioned and unpartitioned data files; "
+                        + "hive partition pruning disabled for its view", tableName);
+            } else {
+                hiveTypes = hiveTypesClause(files.get(0));
+            }
             String fileList = files.stream()
                     .map(path -> "'" + escapePath(path.toString()) + "'")
                     .collect(Collectors.joining(", "));
-            source = "read_parquet([" + fileList + "], hive_partitioning=true)";
+            source = "read_parquet([" + fileList + "], hive_partitioning=" + hivePartitioning + hiveTypes + ")";
+            // Newer DuckLake versions may store internal bookkeeping columns in some data
+            // files (e.g. _ducklake_internal_row_id); they are not part of the table.
+            projection = "COLUMNS(c -> NOT starts_with(c, '_ducklake_internal_'))";
         } else {
             String parquetPath = tableRegistry.getParquetGlobPath(tableName);
             source = "read_parquet('" + escapePath(parquetPath) + "', hive_partitioning=true)";
         }
         String sql = "CREATE OR REPLACE VIEW " + quoteIdentifier(viewName)
-                + " AS SELECT * FROM " + source;
+                + " AS SELECT " + projection + " FROM " + source;
         executeOnParent(sql);
         log.debug("Created historical view '{}'", viewName);
         return true;
+    }
+
+    /**
+     * True when all files carry the same hive partition keys in their directory path
+     * (e.g. every file sits under a {@code date=...} directory, or none does).
+     */
+    static boolean hasUniformHiveLayout(List<Path> files) {
+        Set<List<String>> layouts = new java.util.HashSet<>();
+        for (Path file : files) {
+            layouts.add(hiveKeys(file));
+            if (layouts.size() > 1) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** Hive partition keys ({@code key=value} directory names) on a file's path, in order. */
+    static List<String> hiveKeys(Path file) {
+        List<String> keys = new java.util.ArrayList<>();
+        Path parent = file.getParent();
+        if (parent != null) {
+            for (Path segment : parent) {
+                String name = segment.toString();
+                int eq = name.indexOf('=');
+                if (eq > 0) {
+                    keys.add(name.substring(0, eq));
+                }
+            }
+        }
+        return keys;
+    }
+
+    /**
+     * Build a {@code , hive_types={...}} clause pinning each hive partition key to the type the
+     * column has <em>inside</em> the DuckLake data files.
+     *
+     * <p>DuckLake writes the partition column into the files (e.g. {@code epoch INTEGER}) while
+     * DuckDB auto-types the {@code epoch=...} directory value as BIGINT. With the two types
+     * disagreeing, DuckDB 1.5.x fails aggregate queries on that column with an internal
+     * "inequal types (BIGINT != INTEGER)" error. Declaring the hive type explicitly keeps
+     * partition pruning and makes the view column type match the file. Best effort: on any
+     * problem the clause is omitted and DuckDB's auto-detection is used.</p>
+     */
+    private String hiveTypesClause(Path sampleFile) {
+        List<String> keys = hiveKeys(sampleFile);
+        if (keys.isEmpty()) {
+            return "";
+        }
+        Map<String, String> fileTypes = new java.util.LinkedHashMap<>();
+        String describe = "DESCRIBE SELECT * FROM read_parquet(['" + escapePath(sampleFile.toString())
+                + "'], hive_partitioning=false)";
+        try (Statement stmt = getParentConnection().createStatement();
+             ResultSet rs = stmt.executeQuery(describe)) {
+            while (rs.next()) {
+                fileTypes.put(rs.getString("column_name"), rs.getString("column_type"));
+            }
+        } catch (SQLException e) {
+            log.debug("Could not read Parquet schema for hive_types ({}); using DuckDB's hive type auto-detection",
+                    DuckDbConnectionHelper.redactSecrets(e.getMessage()));
+            return "";
+        }
+        String types = keys.stream()
+                .filter(fileTypes::containsKey)
+                .map(key -> "'" + key.replace("'", "''") + "': " + fileTypes.get(key))
+                .collect(Collectors.joining(", "));
+        return types.isEmpty() ? "" : ", hive_types={" + types + "}";
     }
 
     private void lockDownAnalyticsDirectory() {
@@ -396,9 +493,8 @@ public class ParquetReadConnectionProvider extends DuckDbReadConnectionProvider 
             }
             return Optional.of(after);
         } catch (SQLException e) {
-            SQLException safe = DuckDbConnectionHelper.sanitize(e);
-            log.error("Failed to read DuckLake catalog snapshot (SQLState={}, errorCode={}): {}",
-                    safe.getSQLState(), safe.getErrorCode(), safe.getMessage());
+            log.error("Failed to read DuckLake catalog snapshot: {}",
+                    DuckDbConnectionHelper.redactSecrets(e.getMessage()));
             return Optional.of(tableRegistry.getTableNames());
         }
     }
@@ -415,19 +511,16 @@ public class ParquetReadConnectionProvider extends DuckDbReadConnectionProvider 
         try {
             createAliasView(table, "parquet_" + table);
         } catch (SQLException aliasError) {
-            log.error("Failed to create historical fallback for '{}' (SQLState={}, errorCode={})",
-                    table, aliasError.getSQLState(), aliasError.getErrorCode());
+            log.error("Failed to create historical fallback for '{}': {}",
+                    table, DuckDbConnectionHelper.redactSecrets(aliasError.getMessage()));
         }
     }
 
     private void logTableFailure(String action, String table, Exception error) {
-        if (error instanceof SQLException sqlError) {
-            log.error("{} for '{}' (SQLState={}, errorCode={}); using historical data",
-                    action, table, sqlError.getSQLState(), sqlError.getErrorCode());
-        } else {
-            log.error("{} for '{}' ({}); using historical data",
-                    action, table, error.getClass().getSimpleName());
-        }
+        // Messages may carry postgres_scanner connection strings; log them redacted.
+        log.error("{} for '{}' ({}: {}); using historical data",
+                action, table, error.getClass().getSimpleName(),
+                DuckDbConnectionHelper.redactSecrets(error.getMessage()));
     }
 
     private void createAliasView(String viewName, String sourceView) throws SQLException {

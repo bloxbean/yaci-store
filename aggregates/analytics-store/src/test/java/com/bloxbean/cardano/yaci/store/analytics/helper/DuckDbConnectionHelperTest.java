@@ -20,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -36,8 +37,7 @@ class DuckDbConnectionHelperTest {
     @Test
     void placesStatementTimeoutInEveryPostgresScannerConnectionOption() throws Exception {
         Connection connection = mock(Connection.class);
-        Statement statement = mock(Statement.class);
-        when(connection.createStatement()).thenReturn(statement);
+        Statement statement = statementWithNothingAttached(connection);
 
         DuckDbConnectionHelper helper = new DuckDbConnectionHelper(environment(), new AnalyticsStoreProperties());
         helper.attachSourceDatabase(connection, "pg_live", 30);
@@ -52,8 +52,7 @@ class DuckDbConnectionHelperTest {
     @Test
     void sourceAttachFailureDoesNotLeakPassword() throws Exception {
         Connection connection = mock(Connection.class);
-        Statement statement = mock(Statement.class);
-        when(connection.createStatement()).thenReturn(statement);
+        Statement statement = statementWithNothingAttached(connection);
         when(statement.execute(anyString())).thenThrow(new SQLException(LIBPQ_ERROR, "HY000", 7));
 
         DuckDbConnectionHelper helper = new DuckDbConnectionHelper(environment(), new AnalyticsStoreProperties());
@@ -67,8 +66,7 @@ class DuckDbConnectionHelperTest {
     @Test
     void postgresCatalogAttachFailureDoesNotLeakPassword() throws Exception {
         Connection connection = mock(Connection.class);
-        Statement statement = mock(Statement.class);
-        when(connection.createStatement()).thenReturn(statement);
+        Statement statement = statementWithNothingAttached(connection);
         when(statement.execute(startsWith("ATTACH"))).thenThrow(new SQLException(LIBPQ_ERROR, "HY000", 7));
 
         AnalyticsStoreProperties properties = new AnalyticsStoreProperties();
@@ -86,11 +84,7 @@ class DuckDbConnectionHelperTest {
     @Test
     void catalogSchemaBootstrapAttachFailureDoesNotLeakPassword() throws Exception {
         Connection connection = mock(Connection.class);
-        Statement statement = mock(Statement.class);
-        ResultSet notAttached = mock(ResultSet.class);
-        when(connection.createStatement()).thenReturn(statement);
-        when(statement.executeQuery(anyString())).thenReturn(notAttached);
-        when(notAttached.next()).thenReturn(false);
+        Statement statement = statementWithNothingAttached(connection);
         when(statement.execute(startsWith("ATTACH"))).thenThrow(new SQLException(LIBPQ_ERROR, "HY000", 7));
 
         AnalyticsStoreProperties properties = new AnalyticsStoreProperties();
@@ -101,6 +95,63 @@ class DuckDbConnectionHelperTest {
                 () -> helper.ensureCatalogSchemaExists(connection));
 
         assertRedacted(thrown);
+    }
+
+    @Test
+    void crossInstanceFileHandleConflictIsNotMistakenForAlreadyAttached() throws Exception {
+        Connection connection = mock(Connection.class);
+        Statement statement = statementWithNothingAttached(connection);
+        when(statement.execute(startsWith("ATTACH"))).thenThrow(new SQLException(
+                "Binder Error: Failed to attach DuckLake MetaData \"__ducklake_metadata_ducklake_catalog\" at path + "
+                        + "\"./data/analytics/ducklake.catalog.db\"Unique file handle conflict: Cannot attach "
+                        + "\"__ducklake_metadata_ducklake_catalog\" - the database file \"./data/analytics/ducklake.catalog.db\" "
+                        + "is already attached by database \"__ducklake_metadata_ducklake_catalog\""));
+
+        AnalyticsStoreProperties properties = new AnalyticsStoreProperties();
+        properties.setExportPath(tempDir.resolve("analytics").toString());
+        properties.getDucklake().setCatalogType("duckdb");
+        properties.getDucklake().setCatalogPath(tempDir.resolve("analytics/ducklake.catalog.db").toString());
+        DuckDbConnectionHelper helper = new DuckDbConnectionHelper(environment(), properties);
+
+        SQLException thrown = assertThrows(SQLException.class,
+                () -> helper.attachDuckLakeCatalog(connection, true));
+        assertTrue(thrown.getMessage().contains("another DuckDB instance"), thrown.getMessage());
+        assertTrue(thrown.getMessage().contains("Unique file handle conflict"), thrown.getMessage());
+    }
+
+    @Test
+    void sameAliasAlreadyExistsIsTreatedAsAlreadyAttached() throws Exception {
+        Connection connection = mock(Connection.class);
+        Statement statement = statementWithNothingAttached(connection);
+        when(statement.execute(startsWith("ATTACH"))).thenThrow(new SQLException(
+                "Binder Error: Failed to attach database: database with name \"ducklake_catalog\" already exists"));
+
+        AnalyticsStoreProperties properties = new AnalyticsStoreProperties();
+        properties.setExportPath(tempDir.resolve("analytics").toString());
+        properties.getDucklake().setCatalogType("duckdb");
+        properties.getDucklake().setCatalogPath(tempDir.resolve("analytics/ducklake.catalog.db").toString());
+        DuckDbConnectionHelper helper = new DuckDbConnectionHelper(environment(), properties);
+
+        helper.attachDuckLakeCatalog(connection, true); // must not throw
+    }
+
+    @Test
+    void skipsAttachWhenCatalogIsAlreadyAttachedOnTheConnection() throws Exception {
+        Connection connection = mock(Connection.class);
+        Statement statement = mock(Statement.class);
+        ResultSet attached = mock(ResultSet.class);
+        when(connection.createStatement()).thenReturn(statement);
+        when(statement.executeQuery(anyString())).thenReturn(attached);
+        when(attached.next()).thenReturn(true);
+
+        AnalyticsStoreProperties properties = new AnalyticsStoreProperties();
+        properties.setExportPath(tempDir.resolve("analytics").toString());
+        properties.getDucklake().setCatalogType("duckdb");
+        properties.getDucklake().setCatalogPath(tempDir.resolve("analytics/ducklake.catalog.db").toString());
+        DuckDbConnectionHelper helper = new DuckDbConnectionHelper(environment(), properties);
+
+        helper.attachDuckLakeCatalog(connection, false);
+        verify(statement, never()).execute(startsWith("ATTACH"));
     }
 
     @Test
@@ -133,6 +184,16 @@ class DuckDbConnectionHelperTest {
         assertTrue(e.getMessage().contains("Connection refused"), e.getMessage());
         assertNull(e.getCause());
         assertTrue("HY000".equals(e.getSQLState()) || "08001".equals(e.getSQLState()), e.getSQLState());
+    }
+
+    /** A mocked statement whose duckdb_databases() probe reports nothing attached. */
+    private static Statement statementWithNothingAttached(Connection connection) throws SQLException {
+        Statement statement = mock(Statement.class);
+        ResultSet notAttached = mock(ResultSet.class);
+        when(connection.createStatement()).thenReturn(statement);
+        when(statement.executeQuery(anyString())).thenReturn(notAttached);
+        when(notAttached.next()).thenReturn(false);
+        return statement;
     }
 
     private static Environment environment() {

@@ -63,6 +63,12 @@ class DuckLakeCatalogSnapshotReaderTest {
         writerDataSource.setConnectionTimeout(250);
 
         helper = new DuckDbConnectionHelper(environment(), properties);
+        // Same catalog initialization as DuckLakeCatalogInitializer at startup (compression,
+        // and data inlining off so every committed row lands in a Parquet data file).
+        try (Connection conn = writerDataSource.getConnection()) {
+            helper.prepareConnectionForDuckLake(conn, false, false);
+            helper.configureDuckLakeCatalogSettings(conn);
+        }
     }
 
     @AfterEach

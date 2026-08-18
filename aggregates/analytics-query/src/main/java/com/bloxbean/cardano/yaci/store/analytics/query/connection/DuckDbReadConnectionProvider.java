@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.analytics.helper;
+package com.bloxbean.cardano.yaci.store.analytics.query.connection;
 
 import lombok.extern.slf4j.Slf4j;
 import org.duckdb.DuckDBConnection;
