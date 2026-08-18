@@ -196,38 +196,58 @@ public class AnalyticsQueryController {
      * {@link SqlValidator} additionally enforces SELECT/WITH-only statements and blocks
      * dangerous functions as defense in depth.</p>
      *
-     * <p>Results are capped at {@link AnalyticsQueryExecutor#MAX_RESULT_ROWS} rows.</p>
+     * <p>Rows are limited the way SQL front-ends do it: the statement is wrapped in a
+     * {@code LIMIT} ({@code maxRows}, default {@code yaci.store.analytics.query.default-max-rows},
+     * capped by {@code yaci.store.analytics.query.max-rows}); truncation is reported in the
+     * {@code X-Analytics-Truncated} response header.</p>
      */
     @Operation(summary = "Run a read-only SQL query",
             description = "Executes a single SELECT/WITH statement (DuckDB SQL, PostgreSQL-compatible: CTEs, window "
                     + "functions, QUALIFY, list/struct functions) against the analytics tables listed by GET /schema. "
-                    + "Rows are returned as JSON objects keyed by column label; results are capped at 10,000 rows and "
-                    + "each query is subject to a timeout. Filter on the partition column ('date' or 'epoch') for "
+                    + "Rows are returned as JSON objects keyed by column label. The result is limited to 'maxRows' "
+                    + "(default 100, hard cap 10,000 unless configured lower): the statement runs as "
+                    + "SELECT * FROM (<sql>) LIMIT maxRows+1, so DuckDB stops at the limit and an inner ORDER BY / "
+                    + "LIMIT keeps its meaning. When more rows exist the response carries "
+                    + "'X-Analytics-Truncated: true'; 'X-Analytics-Row-Limit' always states the applied limit. "
+                    + "Each query is subject to a timeout. Filter on the partition column ('date' or 'epoch') for "
                     + "fast responses. Statements other than SELECT/WITH, multiple statements, file/URL access, "
                     + "extension management, catalog/metadata functions and access to the attached PostgreSQL "
                     + "database are rejected with 400.")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Result rows",
+            @ApiResponse(responseCode = "200", description = "Result rows (headers: X-Analytics-Row-Limit, X-Analytics-Truncated)",
                     content = @Content(examples = @ExampleObject(value = "[{\"epoch\":306,\"blocks\":19342},{\"epoch\":307,\"blocks\":15583}]"))),
             @ApiResponse(responseCode = "400", description = "Rejected by the validator or failed in DuckDB (unknown table/column, syntax error, timeout)",
                     content = @Content(examples = @ExampleObject(value = "{\"error\":\"Blocked SQL token 'SHOW' is not allowed in ad-hoc queries\"}")))
     })
     @PostMapping("/sql")
-    public List<Map<String, Object>> executeSql(
-            @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "The SQL statement to run",
+    public ResponseEntity<List<Map<String, Object>>> executeSql(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "The SQL statement to run and, optionally, the row limit",
                     required = true, content = @Content(examples = @ExampleObject(
-                            value = "{\"sql\":\"SELECT epoch, count(*) AS blocks FROM block WHERE epoch >= 306 GROUP BY epoch ORDER BY epoch\"}")))
+                            value = "{\"sql\":\"SELECT epoch, count(*) AS blocks FROM block WHERE epoch >= 306 GROUP BY epoch ORDER BY epoch\", \"maxRows\": 100}")))
             @RequestBody SqlQueryRequest request) {
         String sql = request == null ? null : request.sql();
         SqlValidator.validate(sql);
-        return queryExecutor.queryForList(sql.trim());
+        AnalyticsQueryExecutor.QueryResult result = queryExecutor.execute(sql.trim(),
+                request == null ? null : request.maxRows());
+        return ResponseEntity.ok()
+                .header(ROW_LIMIT_HEADER, String.valueOf(result.rowLimit()))
+                .header(TRUNCATED_HEADER, String.valueOf(result.truncated()))
+                .body(result.rows());
     }
+
+    /** Response header: the row limit applied to the query. */
+    public static final String ROW_LIMIT_HEADER = "X-Analytics-Row-Limit";
+    /** Response header: {@code true} when more rows existed than were returned. */
+    public static final String TRUNCATED_HEADER = "X-Analytics-Truncated";
 
     @Schema(description = "Ad-hoc SQL request")
     public record SqlQueryRequest(
             @Schema(description = "A single SELECT or WITH statement over the analytics tables",
                     example = "SELECT count(*) AS txs FROM transaction WHERE date = DATE '2025-06-01'")
-            String sql) {}
+            String sql,
+            @Schema(description = "Maximum rows to return (default 100; values above the server's hard cap are reduced to it)",
+                    example = "100", nullable = true)
+            Integer maxRows) {}
 
     /**
      * Rejected SQL (validator) and unknown tables are client errors: report them as

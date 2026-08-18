@@ -43,7 +43,11 @@ public abstract class DuckDbReadConnectionProvider {
         this.semaphore = new Semaphore(maxConcurrent);
 
         try {
-            this.parentConnection = DriverManager.getConnection("jdbc:duckdb:");
+            // Stream result sets instead of materializing them: together with the LIMIT the
+            // executor wraps around every query, DuckDB stops producing rows at the cap.
+            java.util.Properties props = new java.util.Properties();
+            props.setProperty("jdbc_stream_results", "true");
+            this.parentConnection = DriverManager.getConnection("jdbc:duckdb:", props);
 
             try (Statement stmt = parentConnection.createStatement()) {
                 if (memoryLimit != null && !memoryLimit.isBlank()) {

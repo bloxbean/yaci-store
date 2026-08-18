@@ -215,6 +215,26 @@ public class AnalyticsStoreProperties {
         private int postgresStatementTimeoutSeconds = 30;
 
         /**
+         * Rows returned by an ad-hoc SQL request when the caller does not specify
+         * {@code maxRows}. The query is executed as {@code SELECT * FROM (<sql>) LIMIT n+1}
+         * (the way SQL front-ends such as Superset or the DuckDB UI cap results), so DuckDB
+         * stops producing rows at the limit instead of materializing the whole result; the
+         * response signals truncation via the {@code X-Analytics-Truncated} header.
+         *
+         * Default: 100.
+         */
+        private int defaultMaxRows = 100;
+
+        /**
+         * Hard upper bound for rows returned by any single query of the query layer — ad-hoc
+         * SQL (whatever {@code maxRows} the caller asks for), the pre-built endpoints and the
+         * MCP tools. Protects the JVM heap and the HTTP response size.
+         *
+         * Default: 10,000.
+         */
+        private int maxRows = 10_000;
+
+        /**
          * Enable/disable the REST API endpoints for analytics queries.
          *
          * When false, only the MCP tools are available for querying analytics data.

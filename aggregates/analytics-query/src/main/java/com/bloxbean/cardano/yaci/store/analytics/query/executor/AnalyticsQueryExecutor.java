@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.analytics.query.executor;
 
 import com.bloxbean.cardano.yaci.store.analytics.query.connection.ParquetReadConnectionProvider;
-import lombok.RequiredArgsConstructor;
+import com.bloxbean.cardano.yaci.store.analytics.config.AnalyticsStoreProperties;
 import com.bloxbean.cardano.yaci.store.analytics.helper.DuckDbConnectionHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -27,7 +27,8 @@ import java.util.function.Function;
  * <p><b>Security measures:</b></p>
  * <ul>
  *   <li><b>Query timeout</b> — per-statement timeout (default 30s) prevents long-running queries</li>
- *   <li><b>Result row limit</b> — prevents OOM from unbounded result sets (default 10,000 rows)</li>
+ *   <li><b>Result row limit</b> — every statement is wrapped in a {@code LIMIT} (default 100 rows for
+ *       ad-hoc SQL, hard cap 10,000), so DuckDB stops at the cap; results are streamed, not materialized</li>
  *   <li><b>Semaphore concurrency</b> — limits concurrent queries to CPU core count</li>
  *   <li><b>Error sanitization</b> — internal DuckDB error details are not exposed to callers</li>
  * </ul>
@@ -37,62 +38,141 @@ import java.util.function.Function;
  * before passing them to any query method.</p>
  */
 @Component
-@RequiredArgsConstructor
 @Slf4j
 @ConditionalOnProperty(prefix = "yaci.store.analytics.query", name = "enabled", havingValue = "true")
 public class AnalyticsQueryExecutor {
 
     /**
-     * Maximum number of rows returned from any query. Prevents JVM OOM from
+     * Built-in hard upper bound for rows returned by any query (the configured
+     * {@code yaci.store.analytics.query.max-rows} may lower it). Prevents JVM OOM from
      * queries like {@code SELECT * FROM address_utxo} (1.47B rows).
-     * When exceeded, results are truncated and a warning is logged.
      */
     public static final int MAX_RESULT_ROWS = 10_000;
 
     private final ParquetReadConnectionProvider connectionProvider;
+    private final int hardRowLimit;
+    private final int defaultRowLimit;
+
+    public AnalyticsQueryExecutor(ParquetReadConnectionProvider connectionProvider,
+                                  AnalyticsStoreProperties properties) {
+        this.connectionProvider = connectionProvider;
+        int configuredMax = properties.getQuery().getMaxRows();
+        this.hardRowLimit = configuredMax > 0 ? Math.min(configuredMax, MAX_RESULT_ROWS) : MAX_RESULT_ROWS;
+        int configuredDefault = properties.getQuery().getDefaultMaxRows();
+        this.defaultRowLimit = configuredDefault > 0 ? Math.min(configuredDefault, hardRowLimit) : hardRowLimit;
+    }
+
+    /** Result of {@link #execute(String, Integer)}: the rows, the limit that was applied and whether more existed. */
+    public record QueryResult(List<Map<String, Object>> rows, int rowLimit, boolean truncated) {
+    }
+
+    /** Hard upper bound for rows per query (configured {@code max-rows}, at most {@link #MAX_RESULT_ROWS}). */
+    public int getHardRowLimit() {
+        return hardRowLimit;
+    }
+
+    /** Rows returned when a caller does not ask for a specific {@code maxRows}. */
+    public int getDefaultRowLimit() {
+        return defaultRowLimit;
+    }
+
+    /**
+     * Resolve a caller-requested row limit: {@code null}/non-positive → the default limit,
+     * anything larger than the hard limit → the hard limit.
+     */
+    public int resolveRowLimit(Integer requested) {
+        if (requested == null || requested <= 0) {
+            return defaultRowLimit;
+        }
+        return Math.min(requested, hardRowLimit);
+    }
+
+    /**
+     * Execute a read-only query with a row limit, the way SQL front-ends cap results: the
+     * statement is wrapped as {@code SELECT * FROM (<sql>) AS q LIMIT <limit + 1>} so DuckDB
+     * stops producing rows at the cap (an inner {@code ORDER BY}/{@code LIMIT} keeps its
+     * meaning; with streaming result sets nothing beyond the cap is materialized). One extra
+     * row is requested only to detect truncation.
+     *
+     * @param sql       a single SELECT/WITH statement (must be pre-validated via {@code SqlValidator})
+     * @param maxRows   requested row limit; {@code null} → default, capped by the hard limit
+     * @return rows (at most the resolved limit), the limit applied and whether more rows existed
+     */
+    public QueryResult execute(String sql, Integer maxRows) {
+        int limit = resolveRowLimit(maxRows);
+        List<Map<String, Object>> rows = new ArrayList<>();
+        boolean truncated = fetch(sql, limit, this::mapRow, rows);
+        return new QueryResult(rows, limit, truncated);
+    }
 
     /**
      * Execute a query and map each row using the provided mapper function.
      *
-     * <p>Results are capped at {@link #MAX_RESULT_ROWS} to prevent JVM heap exhaustion.
-     * When the limit is reached, iteration stops and remaining rows are discarded.</p>
+     * <p>Results are capped at the hard row limit; the query is wrapped in a
+     * {@code LIMIT} like {@link #execute(String, Integer)}.</p>
      *
      * @param sql       the SQL query to execute (must be pre-validated via {@code SqlValidator})
      * @param rowMapper maps a {@link ResultSet} (positioned at a row) to a result object
      * @param <T>       the result type
-     * @return list of mapped results, truncated to {@link #MAX_RESULT_ROWS}
-     * @throws RuntimeException if the query fails or times out
+     * @return list of mapped results, truncated to the hard row limit
+     * @throws QueryExecutionException if the query fails or times out
      */
     public <T> List<T> query(String sql, Function<ResultSet, T> rowMapper) {
+        List<T> results = new ArrayList<>();
+        fetch(sql, hardRowLimit, rowMapper, results);
+        return results;
+    }
+
+    /**
+     * Execute a query and return results as a list of maps (column name to value), capped at
+     * the hard row limit. Used by the pre-built endpoints and the MCP tools; ad-hoc callers
+     * should prefer {@link #execute(String, Integer)} to learn about truncation.
+     *
+     * @param sql the SQL query to execute (must be pre-validated via {@code SqlValidator})
+     * @return list of row maps, each mapping column label to its value
+     */
+    public List<Map<String, Object>> queryForList(String sql) {
+        return query(sql, this::mapRow);
+    }
+
+    /**
+     * Wrap the statement in a LIMIT. The closing parenthesis goes on its own line so that a
+     * trailing {@code -- comment} in the user's SQL cannot swallow it.
+     */
+    static String withRowLimit(String sql, int limit) {
+        return "SELECT * FROM (\n" + sql + "\n) AS q LIMIT " + (limit + 1);
+    }
+
+    /**
+     * Run the wrapped statement, collect up to {@code limit} mapped rows into {@code sink}
+     * and report whether an extra row (i.e. truncation) was seen.
+     */
+    private <T> boolean fetch(String sql, int limit, Function<ResultSet, T> rowMapper, List<T> sink) {
         long start = System.currentTimeMillis();
+        String limited = withRowLimit(sql, limit);
         try (Connection conn = connectionProvider.getReadConnection();
              Statement stmt = conn.createStatement()) {
 
             stmt.setQueryTimeout(connectionProvider.getQueryTimeoutSeconds());
 
-            try (ResultSet rs = stmt.executeQuery(sql)) {
-                List<T> results = new ArrayList<>();
+            try (ResultSet rs = stmt.executeQuery(limited)) {
                 boolean truncated = false;
-
                 while (rs.next()) {
-                    if (results.size() >= MAX_RESULT_ROWS) {
-                        truncated = true;
+                    if (sink.size() >= limit) {
+                        truncated = true;   // the +1 row: more data exists
                         break;
                     }
-                    results.add(rowMapper.apply(rs));
+                    sink.add(rowMapper.apply(rs));
                 }
 
                 long elapsed = System.currentTimeMillis() - start;
-
+                String preview = sql.length() > 100 ? sql.substring(0, 100) + "..." : sql;
                 if (truncated) {
-                    log.warn("Query result truncated at {} rows ({}ms): {}",
-                            MAX_RESULT_ROWS, elapsed,
-                            sql.length() > 100 ? sql.substring(0, 100) + "..." : sql);
+                    log.info("Query result truncated at {} rows ({}ms): {}", limit, elapsed, preview);
                 } else {
-                    log.debug("Query completed in {}ms, {} rows: {}", elapsed, results.size(),
-                            sql.length() > 100 ? sql.substring(0, 100) + "..." : sql);
+                    log.debug("Query completed in {}ms, {} rows: {}", elapsed, sink.size(), preview);
                 }
-                return results;
+                return truncated;
             }
         } catch (SQLException e) {
             long elapsed = System.currentTimeMillis() - start;
@@ -105,31 +185,20 @@ public class AnalyticsQueryExecutor {
         }
     }
 
-    /**
-     * Execute a query and return results as a list of maps (column name to value).
-     *
-     * <p>Useful for dynamic/generic queries where the schema is not known at compile time.
-     * Results are capped at {@link #MAX_RESULT_ROWS}.</p>
-     *
-     * @param sql the SQL query to execute (must be pre-validated via {@code SqlValidator})
-     * @return list of row maps, each mapping column label to its value
-     */
-    public List<Map<String, Object>> queryForList(String sql) {
-        return query(sql, rs -> {
-            try {
-                ResultSetMetaData meta = rs.getMetaData();
-                int colCount = meta.getColumnCount();
-                Map<String, Object> row = new LinkedHashMap<>(colCount);
-                for (int i = 1; i <= colCount; i++) {
-                    row.put(meta.getColumnLabel(i), normalizeJdbcValue(rs.getObject(i)));
-                }
-                return row;
-            } catch (SQLException e) {
-                log.error("Failed to read analytics query result row: {}",
-                        DuckDbConnectionHelper.redactSecrets(e.getMessage()));
-                throw new QueryExecutionException("Failed to read query result row");
+    private Map<String, Object> mapRow(ResultSet rs) {
+        try {
+            ResultSetMetaData meta = rs.getMetaData();
+            int colCount = meta.getColumnCount();
+            Map<String, Object> row = new LinkedHashMap<>(colCount);
+            for (int i = 1; i <= colCount; i++) {
+                row.put(meta.getColumnLabel(i), normalizeJdbcValue(rs.getObject(i)));
             }
-        });
+            return row;
+        } catch (SQLException e) {
+            log.error("Failed to read analytics query result row: {}",
+                    DuckDbConnectionHelper.redactSecrets(e.getMessage()));
+            throw new QueryExecutionException("Failed to read query result row");
+        }
     }
 
     static Object normalizeJdbcValue(Object value) throws SQLException {
@@ -174,8 +243,10 @@ public class AnalyticsQueryExecutor {
     }
 
     /**
-     * Check whether the last query executed by {@link #query} was truncated.
-     * This is indicated by the result list size equaling {@link #MAX_RESULT_ROWS}.
+     * Check whether a {@link #query}/{@link #queryForList} result was truncated, indicated by
+     * the result list size reaching {@link #MAX_RESULT_ROWS} (the built-in hard limit; if
+     * {@code yaci.store.analytics.query.max-rows} is configured lower, prefer
+     * {@link #execute(String, Integer)}, which reports truncation exactly).
      *
      * @param results the result list from a query method
      * @return {@code true} if the results were likely truncated
