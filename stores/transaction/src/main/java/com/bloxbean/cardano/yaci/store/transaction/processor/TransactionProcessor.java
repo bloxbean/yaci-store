@@ -72,9 +72,8 @@ public class TransactionProcessor {
         List<Transaction> transactions = event.getTransactions();
         List<Txn> txList = new ArrayList<>();
         List<TxnCbor> txnCborList = new ArrayList<>();
-        boolean saveCborEnabled = transactionStoreProperties.isSaveCbor();
         //saveFullTxCbor works standalone -- it doesn't require saveCbor to also be enabled.
-        boolean collectCbor = saveCborEnabled || transactionStoreProperties.isSaveFullTxCbor();
+        boolean collectCbor = transactionStoreProperties.isSaveCbor() || transactionStoreProperties.isSaveFullTxCbor();
 
         var txIndex = new AtomicInteger(0);
         transactions.forEach(transaction -> {
@@ -132,7 +131,9 @@ public class TransactionProcessor {
                     .invalid(transaction.isInvalid())
                     .build();
 
-            collectCborIfEnabled(collectCbor, transaction, txnCborList);
+            if (collectCbor) {
+                collectTransactionCbor(transaction, txnCborList);
+            }
 
             if (fee == null && transaction.isInvalid()) { //will be resolved in pre-commit event as it can't be resolved now due to parallel processing.
                 invalidUnresolvedFeeTxns.add(new Tuple<>(txn, transaction));
@@ -151,17 +152,7 @@ public class TransactionProcessor {
             publisher.publishEvent(new TxnEvent(event.getMetadata(), txList));
         }
 
-        saveCollectedCbor(collectCbor, txnCborList);
-    }
-
-    private void collectCborIfEnabled(boolean collectCbor, Transaction transaction, List<TxnCbor> txnCborList) {
-        if (collectCbor) {
-            collectTransactionCbor(transaction, txnCborList);
-        }
-    }
-
-    private void saveCollectedCbor(boolean collectCbor, List<TxnCbor> txnCborList) {
-        if (collectCbor && !txnCborList.isEmpty()) {
+        if (!txnCborList.isEmpty()) {
             transactionCborStorage.save(txnCborList);
         }
     }
@@ -284,21 +275,18 @@ public class TransactionProcessor {
             return;
         }
 
-        String cborHex = transaction.getBody().getCbor();
+        //Full tx cbor is spliced from the original block bytes by Yaci. It's null when it can't be
+        //derived byte-exact, in which case fall back to body-only cbor.
+        String cborHex = transactionStoreProperties.isSaveFullTxCbor() ? transaction.getTxCbor() : null;
+        if (cborHex == null || cborHex.isEmpty())
+            cborHex = transaction.getBody().getCbor();
+
         if (cborHex == null || cborHex.isEmpty()) {
             log.debug("No CBOR data available for transaction {} (YaciConfig.INSTANCE.setReturnTxBodyCbor(true) may not be set)", transaction.getTxHash());
             return;
         }
 
         byte[] cborData = HexUtil.decodeHexString(cborHex);
-
-        if (transactionStoreProperties.isSaveFullTxCbor()) {
-            try {
-                cborData = FullTxCborReassembler.reassemble(transaction);
-            } catch (Exception e) {
-                log.debug("Unable to reassemble full-tx CBOR for transaction {}. Falling back to body-only CBOR.", transaction.getTxHash(), e);
-            }
-        }
 
         txnCborList.add(TxnCbor.builder()
                 .txHash(transaction.getTxHash())

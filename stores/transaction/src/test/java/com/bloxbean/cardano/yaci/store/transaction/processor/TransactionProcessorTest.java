@@ -65,6 +65,7 @@ class TransactionProcessorTest {
     private ArgumentCaptor<List<TxnCbor>> txnCborCaptor;
 
     private static final String TX_CBOR_HEX = "A1B2C3";
+    private static final String FULL_TX_CBOR_HEX = "84A1B2C3";
 
     @BeforeEach
     public void setup() {
@@ -237,8 +238,31 @@ class TransactionProcessorTest {
     }
 
     @Test
-    void givenTransactionEvent_whenSaveFullTxCborAloneEnabled_shouldStillCollectAndStoreCbor() {
+    void givenTransactionEvent_whenSaveFullTxCborAloneEnabled_shouldStoreFullTxCbor() {
         // saveCbor is OFF -- only saveFullTxCbor is on. It must work standalone, without requiring saveCbor.
+        var transactions = transactions();
+        transactions.get(0).setTxCbor(FULL_TX_CBOR_HEX);
+
+        handleWithFullTxCborEnabled(transactions);
+
+        verify(transactionCborStorage, Mockito.times(1)).save(txnCborCaptor.capture());
+        assertThat(txnCborCaptor.getValue()).singleElement().satisfies(txnCbor -> {
+            assertThat(txnCbor.getTxHash()).isEqualTo("f0a6e529be26c2326c447c39159e05bb904ff1f7900b6df3852dd539de0343e8");
+            assertThat(txnCbor.getCborData()).isEqualTo(HexUtil.decodeHexString(FULL_TX_CBOR_HEX));
+        });
+    }
+
+    @Test
+    void givenTransactionEvent_whenFullTxCborNotAvailable_shouldFallbackToBodyCbor() {
+        //Yaci returns a null tx cbor when it can't splice the exact on-chain bytes
+        handleWithFullTxCborEnabled(transactions());
+
+        verify(transactionCborStorage, Mockito.times(1)).save(txnCborCaptor.capture());
+        assertThat(txnCborCaptor.getValue()).singleElement().satisfies(txnCbor ->
+                assertThat(txnCbor.getCborData()).isEqualTo(HexUtil.decodeHexString(TX_CBOR_HEX)));
+    }
+
+    private void handleWithFullTxCborEnabled(List<Transaction> transactions) {
         TransactionStoreProperties properties = TransactionStoreProperties.builder()
                 .saveCbor(false)
                 .saveFullTxCbor(true)
@@ -248,16 +272,10 @@ class TransactionProcessorTest {
                 transactionStorage, transactionCborStorage, transactionWitnessStorage, invalidTransactionStorage,
                 new ObjectMapper(), feeResolver, publisher, properties);
 
-        TransactionEvent transactionEvent = TransactionEvent.builder()
-                .transactions(transactions())
+        processorWithFullTxCborOnly.handleTransactionEvent(TransactionEvent.builder()
+                .transactions(transactions)
                 .metadata(eventMetadata())
-                .build();
-
-        processorWithFullTxCborOnly.handleTransactionEvent(transactionEvent);
-
-        verify(transactionCborStorage, Mockito.times(1)).save(txnCborCaptor.capture());
-        assertThat(txnCborCaptor.getValue()).singleElement().satisfies(txnCbor ->
-                assertThat(txnCbor.getTxHash()).isEqualTo("f0a6e529be26c2326c447c39159e05bb904ff1f7900b6df3852dd539de0343e8"));
+                .build());
     }
 
     private EventMetadata eventMetadata() {

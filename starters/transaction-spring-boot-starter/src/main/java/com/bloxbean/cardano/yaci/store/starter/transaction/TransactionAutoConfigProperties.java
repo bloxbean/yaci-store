@@ -48,11 +48,12 @@ public class TransactionAutoConfigProperties {
       /**
        * Enable/disable saving of the full signed transaction CBOR (body + witness set + isValid + auxiliary data)
        * instead of the transaction body-only CBOR.
-       * When enabled, the indexer reassembles the full transaction CBOR (CBOR array, tag 84) from its
-       * constituent parts and stores that instead of the body-only CBOR (CBOR map, tag a4).
+       * When enabled, {@code YaciConfig.returnFullTxCbor} is turned on and the full transaction CBOR spliced
+       * from the original block bytes by Yaci is stored instead of the body-only CBOR. Falls back to
+       * body-only CBOR when Yaci can't derive it byte-exact.
        * This is useful for wallets and clients that need the complete signed transaction, e.g. for re-broadcast
        * or witness verification.
-       * Note: Has no effect unless {@code saveCbor} is also enabled.
+       * Note: Works standalone -- does not require {@code saveCbor} to also be enabled.
        */
       private boolean saveFullTxCbor = false;
 
