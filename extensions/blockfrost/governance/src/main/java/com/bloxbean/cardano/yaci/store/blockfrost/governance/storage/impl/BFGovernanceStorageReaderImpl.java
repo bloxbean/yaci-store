@@ -30,6 +30,7 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigInteger;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
@@ -1098,7 +1099,8 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
     }
 
     @Override
-    public List<BFDRepDelegator> findProposalWithdrawals(String txHash, int index) {
+    public List<BFDRepDelegator> findProposalWithdrawals(String txHash, int index,
+                                                          int page, int count, Order order) {
         // Read withdrawals from gov_action_proposal.details JSON — no adapot dependency
         return dsl.select(GOV_ACTION_PROPOSAL.DETAILS)
                 .from(GOV_ACTION_PROPOSAL)
@@ -1119,12 +1121,18 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
                                             .build()
                             ));
                         }
+                        if (order == Order.desc) {
+                            Collections.reverse(result);
+                        }
                     } catch (Exception e) {
                         log.warn("Could not parse withdrawals from proposal details for {}/{}: {}", txHash, index, e.getMessage());
                     }
-                    return result;
+                    return result.stream()
+                            .skip(offset(page, count))
+                            .limit(count)
+                            .toList();
                 })
-                .orElse(new ArrayList<>());
+                .orElseGet(List::of);
     }
 
     @Override

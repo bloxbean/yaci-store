@@ -128,12 +128,13 @@ public class BFGovernanceService {
         return getProposalParameters(id.getTransactionId(), id.getGovActionIndex());
     }
 
-    public List<BFProposalWithdrawalDto> getProposalWithdrawals(String txHash, int index) {
+    public List<BFProposalWithdrawalDto> getProposalWithdrawals(String txHash, int index,
+                                                                 int page, int count, Order order) {
         if (!storageReader.isWithdrawalProposal(txHash, index)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND,
                     "Treasury withdrawal proposal not found: " + txHash + "#" + index);
         }
-        return storageReader.findProposalWithdrawals(txHash, index)
+        return storageReader.findProposalWithdrawals(txHash, index, page, count, order)
                 .stream()
                 .map(d -> BFProposalWithdrawalDto.builder()
                         .stakeAddress(hexToStakeAddress(d.getAddress()))
@@ -142,9 +143,10 @@ public class BFGovernanceService {
                 .collect(Collectors.toList());
     }
 
-    public List<BFProposalWithdrawalDto> getProposalWithdrawalsByGovActionId(String govActionId) {
+    public List<BFProposalWithdrawalDto> getProposalWithdrawalsByGovActionId(String govActionId,
+                                                                              int page, int count, Order order) {
         GovActionId id = decodeGovActionId(govActionId);
-        return getProposalWithdrawals(id.getTransactionId(), id.getGovActionIndex());
+        return getProposalWithdrawals(id.getTransactionId(), id.getGovActionIndex(), page, count, order);
     }
 
     public List<BFProposalVoteDto> getProposalVotes(String txHash, int index, int page, int count, Order order) {

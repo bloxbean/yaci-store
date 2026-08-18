@@ -59,8 +59,12 @@ public class BFProposalsController {
     @Operation(summary = "Specific withdrawals proposal", description = "Withdrawal proposal details.")
     public List<BFProposalWithdrawalDto> getProposalWithdrawals(
             @PathVariable("tx_hash") String txHash,
-            @PathVariable("cert_index") int index) {
-        return governanceService.getProposalWithdrawals(txHash, index);
+            @PathVariable("cert_index") int index,
+            @RequestParam(required = false, defaultValue = "1") @Min(1) int page,
+            @RequestParam(required = false, defaultValue = "100") @Min(1) @Max(100) int count,
+            @RequestParam(required = false, defaultValue = "asc") Order order) {
+        int p = page - 1;
+        return governanceService.getProposalWithdrawals(txHash, index, p, count, order);
     }
 
     @GetMapping(value = "/{tx_hash}/{cert_index}/votes", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -103,8 +107,12 @@ public class BFProposalsController {
     @GetMapping(value = "/{gov_action_id}/withdrawals", produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(summary = "GovActionID Proposal withdrawals", description = "Withdrawal proposal details.")
     public List<BFProposalWithdrawalDto> getProposalWithdrawalsByGovActionId(
-            @PathVariable("gov_action_id") String govActionId) {
-        return governanceService.getProposalWithdrawalsByGovActionId(govActionId);
+            @PathVariable("gov_action_id") String govActionId,
+            @RequestParam(required = false, defaultValue = "1") @Min(1) int page,
+            @RequestParam(required = false, defaultValue = "100") @Min(1) @Max(100) int count,
+            @RequestParam(required = false, defaultValue = "asc") Order order) {
+        int p = page - 1;
+        return governanceService.getProposalWithdrawalsByGovActionId(govActionId, p, count, order);
     }
 
     @GetMapping(value = "/{gov_action_id}/votes", produces = MediaType.APPLICATION_JSON_VALUE)

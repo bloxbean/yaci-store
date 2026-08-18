@@ -55,7 +55,7 @@ public interface BFGovernanceStorageReader {
      * Treasury withdrawal entries for the given proposal (tx_hash + gov_action_index).
      * Returns address + lovelace amount pairs.
      */
-    List<BFDRepDelegator> findProposalWithdrawals(String txHash, int index);
+    List<BFDRepDelegator> findProposalWithdrawals(String txHash, int index, int page, int count, Order order);
 
     /** Voting procedure rows for the given proposal. */
     List<VotingProcedure> findProposalVotes(String txHash, int index, int page, int count, Order order);
