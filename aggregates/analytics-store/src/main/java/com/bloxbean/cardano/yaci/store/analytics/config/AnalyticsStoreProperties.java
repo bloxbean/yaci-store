@@ -18,19 +18,6 @@ public class AnalyticsStoreProperties {
     private String exportPath = "./data/analytics";
 
     /**
-     * Finalization lag in days (default: 2).
-     *
-     * Ensures exported data is immutable by exporting data that is N days old.
-     * This accounts for Cardano's 2160 block security parameter (~12 hours)
-     * plus additional buffer for reorgs.
-     *
-     * Examples:
-     * - finalizationLagDays=2: Export data from 2 days ago
-     * - If today is 2024-01-17, exports data for 2024-01-15
-     */
-    private int finalizationLagDays = 2;
-
-    /**
      * Enabled tables for export (empty = all enabled).
      *
      * If empty, all registered table exporters are enabled.
@@ -73,8 +60,40 @@ public class AnalyticsStoreProperties {
 
     @Data
     public static class ContinuousSync {
-        private int bufferDays = 2;
+        /**
+         * How many UTC days behind the <em>finalized</em> tip the daily exports stay. The
+         * finalized tip is the latest synced block time minus the finality window (see
+         * {@link #finalityMarginHours}); a day partition D is exported once the finalized tip's
+         * UTC date is at least D + bufferDays. With the default 1 on mainnet (12 h window + 1 h
+         * margin) a day is exported at 13:00 UTC of the following day: its newest rows are
+         * 13 h old, its oldest 37 h. Each additional day adds 24 h.
+         *
+         * Minimum 1 — a value of 0 would export the (still incomplete) day the finalized tip
+         * is in and mark it completed, so smaller values are raised to 1 with a warning at
+         * startup. Default: 1.
+         */
+        private int bufferDays = 1;
+
+        /**
+         * Extra hours added on top of the finality window derived from the network's genesis
+         * (security parameter k blocks × expected block interval, i.e.
+         * {@code k × slotLength / activeSlotsCoeff}: 12 h on mainnet and preprod, ~2.4 h on
+         * preview). The window guarantees that every exported row is older than Cardano's
+         * rollback bound (k blocks; the window is their expected production time); the margin
+         * covers the gap-detection interval and clock skew. Negative values are treated as 0.
+         * Default: 1.
+         */
+        private int finalityMarginHours = 1;
+
+        /**
+         * Override for the derived finality window, in hours ({@code 0} = derive from genesis).
+         * Only needed for custom networks whose genesis parameters are not available, or for
+         * tests. The margin is added on top in either case.
+         */
+        private int finalityWindowHours = 0;
+        /** Gap-detection interval when fully synced (minutes). Default: 15. */
         private int syncCheckIntervalMinutes = 15;
+        /** Gap-detection interval while exports are behind (minutes). Default: 1. */
         private int catchUpIntervalMinutes = 1;
 
         /**

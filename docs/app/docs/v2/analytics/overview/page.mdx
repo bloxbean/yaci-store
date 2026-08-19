@@ -44,6 +44,7 @@ Once the sync reaches tip, exports begin automatically via the `ContinuousSyncSc
 - Uses adaptive gap detection to find and export missing daily and epoch partitions
 - **Catching up**: checks every 1 minute by default (`yaci.store.analytics.continuous-sync.catch-up-interval-minutes`)
 - **Fully synced**: checks every 15 minutes by default (`yaci.store.analytics.continuous-sync.sync-check-interval-minutes`)
+- **Finality**: a day partition is exported only once every row in it is older than the network's rollback bound — the finality window derived from genesis (`k × slotLength / activeSlotsCoeff`, 12 h on mainnet) plus `finality-margin-hours` (1 h) — and the day is `buffer-days` (1) behind that finalized tip. On mainnet that means each UTC day is exported ~13 h after it ends. See [Configuration](/docs/v2/analytics/configuration).
 
 Exported files are written to `./data/analytics/` by default.
 

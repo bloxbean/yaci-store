@@ -131,7 +131,7 @@ endpoints and the MCP tools use the hard limit.
 ## Data freshness and unified views
 
 By default every table is **historical**: it contains the exported data as of the last completed
-export (`dataAsOf` in `/schema`; the export pipeline stays `buffer-days` behind the tip).
+export (`dataAsOf` in `/schema`; the export pipeline stays `buffer-days` behind the finalized tip, i.e. a UTC day is exported ~13 h after it ends on mainnet).
 
 With `yaci.store.analytics.query.live-data-enabled=true` the query layer attaches your PostgreSQL
 database read-only (`postgres_scanner`, alias `pg_live`, per-statement
