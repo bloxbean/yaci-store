@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.analytics.query.service;
 import com.bloxbean.cardano.yaci.store.analytics.config.AnalyticsStoreProperties;
 import com.bloxbean.cardano.yaci.store.analytics.query.connection.ParquetReadConnectionProvider;
 import com.bloxbean.cardano.yaci.store.analytics.query.connection.ParquetTableRegistry;
+import com.bloxbean.cardano.yaci.store.analytics.query.executor.AnalyticsQueryExecutor;
 import com.bloxbean.cardano.yaci.store.analytics.query.model.*;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +34,7 @@ public class AnalyticsSchemaService {
     private final ParquetTableRegistry tableRegistry;
     private final ParquetReadConnectionProvider connectionProvider;
     private final AnalyticsStoreProperties properties;
+    private final AnalyticsQueryExecutor queryExecutor;
 
     // Cached per table: row count and date range (expensive to compute on large tables)
     private final Map<String, Long> rowCountCache = new ConcurrentHashMap<>();
@@ -93,6 +95,12 @@ public class AnalyticsSchemaService {
                 "Use DuckDB SQL. Most PostgreSQL syntax works. PERCENTILE_CONT, CTEs, window functions, QUALIFY all supported. Use list_value() instead of ARRAY[].");
         queryHints.put("lovelace",
                 "All ADA amounts are in lovelace (1 ADA = 1,000,000 lovelace). Divide by 1000000.0 for ADA.");
+        queryHints.put("row_limit",
+                "Ad-hoc SQL returns at most " + queryExecutor.getDefaultRowLimit() + " rows unless the request sets "
+                + "'maxRows' (hard limit " + queryExecutor.getHardRowLimit() + "); a bare 'SELECT * FROM t' is "
+                + "cut at that limit. Aggregate or filter instead of paging through raw rows. Over REST, truncation "
+                + "is signalled by the response headers X-Analytics-Row-Limit and X-Analytics-Truncated (true = "
+                + "more rows existed); MCP tool results carry a 'truncated' field.");
 
         String engine = "DuckDB (in-memory, reading the exported analytics data files)";
 

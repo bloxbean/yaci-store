@@ -68,33 +68,42 @@ curl -s http://localhost:8080/api/v1/analytics/query/schema | jq '.tables[].name
 # Columns of one table
 curl -s http://localhost:8080/api/v1/analytics/query/schema/transaction | jq '.columns'
 
-# Ad-hoc SQL
-curl -s -X POST http://localhost:8080/api/v1/analytics/query/sql \
+# Ad-hoc SQL (-D - prints the response headers, see "Row limits")
+curl -s -D - -X POST http://localhost:8080/api/v1/analytics/query/sql \
   -H 'Content-Type: application/json' \
   -d '{"sql": "SELECT epoch, count(*) AS blocks FROM block WHERE epoch >= 500 GROUP BY epoch ORDER BY epoch"}'
 ```
 
-Rejected or failing SQL returns `400` with a reason (`{"error": "Blocked SQL token 'SHOW' is not
-allowed in ad-hoc queries"}`, `{"error": "Query execution failed. Check query syntax and filters."}`).
-Each query has a timeout (`yaci.store.analytics.duckdb.reader.query-timeout-seconds`, default 30 s).
+Malformed requests, rejected SQL and failing SQL all return `400` with a reason in the same shape
+(`{"error": "Blocked SQL token 'SHOW' is not allowed in ad-hoc queries"}`,
+`{"error": "Query execution failed. Check query syntax and filters."}`).
+Each query has a timeout (`yaci.store.analytics.duckdb.reader.query-timeout-seconds`, default 30 s);
+a query that exceeds it is cancelled and reported as `400`.
 
 ### Row limits
 
-`POST /sql` returns at most `maxRows` rows — **100 by default**, at most the server's hard cap
-(**10,000** by default; `yaci.store.analytics.query.max-rows`). The limit is applied the way SQL
-front-ends such as Superset or the DuckDB UI do it — the statement runs as
-`SELECT * FROM (<your sql>) AS q LIMIT maxRows+1` — so DuckDB stops producing rows at the cap
-instead of scanning and materializing everything (`SELECT * FROM transaction` returns in
-milliseconds), and an inner `ORDER BY`/`LIMIT` keeps its meaning (`ORDER BY fee DESC` becomes a
-top-N). Two response headers tell you what happened:
+`POST /sql` returns at most `maxRows` rows — **100 by default**
+(`yaci.store.analytics.query.default-max-rows`), at most the server's hard limit
+(`yaci.store.analytics.query.max-rows`, **10,000** by default and also the built-in ceiling — the
+property can only lower it). The limit is applied the way SQL front-ends such as Superset or the
+DuckDB UI do it — the statement runs as `SELECT * FROM (<your sql>) AS q LIMIT maxRows+1` — so
+DuckDB stops producing rows at the cap instead of materializing everything, and an inner
+`ORDER BY`/`LIMIT` keeps its meaning (`ORDER BY fee DESC` becomes a top-N; an inner `LIMIT 500`
+without `maxRows` is still cut to 100). Two response headers on every successful response tell
+you what happened:
 
 - `X-Analytics-Row-Limit: 100` — the limit that was applied,
 - `X-Analytics-Truncated: true` — more rows existed than were returned; add a filter, aggregate,
   or ask for a larger `maxRows`.
 
-The limit bounds the *output*, not the work: a `GROUP BY` or a join that must read the whole
-table still does — filter on the partition column for that. The pre-built endpoints and the MCP
-tools use the hard cap.
+They are exposed to cross-origin browser clients (`Access-Control-Expose-Headers`), and
+`GET /schema` repeats the effective limits in `queryHints.row_limit`.
+
+The limit bounds the *output*, not the work: a plain scan (`SELECT * FROM transaction`) returns
+in milliseconds, but a `GROUP BY`, `DISTINCT`, an `ORDER BY` without an inner `LIMIT` or a join
+that must read the whole table still does — filter on the partition column for that. Two details
+of the wrapping: duplicate column labels are suffixed (`hash`, `hash_1`), and the pre-built
+endpoints and the MCP tools use the hard limit.
 
 ### Writing good queries
 
@@ -174,7 +183,9 @@ Defense in depth, in this order:
    (`duckdb_*`, `pragma_*`, `SHOW`, `DESCRIBE`, `SUMMARIZE`, `information_schema`) and the attached
    PostgreSQL alias are rejected with `400`. Double-quoted identifiers that merely spell a keyword
    (`"set"`, `"show"`) are allowed.
-3. **Limits** — per-query timeout, 10,000-row cap, concurrent readers bounded by
+3. **Limits** — per-query timeout (enforced for the whole execution — the engine deliberately
+   uses non-streaming JDBC result sets, whose cancel timer would otherwise stop at the execute
+   phase), the row limits above, concurrent readers bounded by
    `yaci.store.analytics.duckdb.reader.maximum-pool-size`, `memory-limit`/`threads` per instance,
    and — with federation — a PostgreSQL `statement_timeout` on every scanner connection.
 4. **No credentials in logs or responses** — connection failures are logged with `password=***`;
@@ -216,8 +227,8 @@ PostgreSQL ──(exporters, writer connection)──▶ DuckLake catalog + Parq
 | `yaci.store.analytics.query.live-data-enabled` | `false` | Build unified views (exported data ∪ live PostgreSQL) |
 | `yaci.store.analytics.query.live-data-excluded-tables` | _(empty)_ | Tables that stay historical even with live data enabled |
 | `yaci.store.analytics.query.postgres-statement-timeout-seconds` | `30` | `statement_timeout` applied to every PostgreSQL scanner connection used by unified views |
-| `yaci.store.analytics.query.default-max-rows` | `100` | Rows returned by `POST /sql` when the request has no `maxRows` |
-| `yaci.store.analytics.query.max-rows` | `10000` | Hard cap for rows per query (ad-hoc SQL, pre-built endpoints, MCP tools) |
+| `yaci.store.analytics.query.default-max-rows` | `100` | Rows returned by `POST /sql` when the request has no `maxRows` (at most `max-rows`) |
+| `yaci.store.analytics.query.max-rows` | `10000` | Hard limit for rows per query (ad-hoc SQL, pre-built endpoints, MCP tools); 10,000 is also the built-in ceiling — the property can only lower it |
 | `yaci.store.analytics.duckdb.reader.maximum-pool-size` | CPU cores | Max concurrent queries on the engine |
 | `yaci.store.analytics.duckdb.reader.query-timeout-seconds` | `30` | Per-query timeout |
 | `yaci.store.analytics.duckdb.memory-limit` | _(DuckDB default)_ | Memory limit per DuckDB instance (writer and query engine each) |

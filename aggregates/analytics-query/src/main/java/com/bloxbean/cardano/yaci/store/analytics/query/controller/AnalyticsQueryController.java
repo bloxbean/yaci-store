@@ -9,6 +9,7 @@ import com.bloxbean.cardano.yaci.store.analytics.query.service.AnalyticsTransact
 import com.bloxbean.cardano.yaci.store.analytics.query.service.SqlValidator;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -19,6 +20,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -134,7 +136,9 @@ public class AnalyticsQueryController {
     @Operation(summary = "Per-block transaction statistics",
             description = "Blocks in the epoch range with their transaction load: block_number, block_hash, epoch, "
                     + "slot, tx_count, total_fees, avg_fee, valid_tx_count, invalid_tx_count. Use minTxCount to "
-                    + "keep only busy blocks. Results are capped at 10,000 rows. " + EPOCH_RANGE_NOTE)
+                    + "keep only busy blocks. Results are capped at the server's hard row limit "
+                    + "(yaci.store.analytics.query.max-rows, 10,000 by default) without further notice; narrow "
+                    + "the epoch range if you hit it. " + EPOCH_RANGE_NOTE)
     @ApiResponse(responseCode = "200", description = "One row per block")
     @GetMapping("/transactions/block-stats")
     public List<Map<String, Object>> getBlockTxStats(
@@ -204,19 +208,30 @@ public class AnalyticsQueryController {
     @Operation(summary = "Run a read-only SQL query",
             description = "Executes a single SELECT/WITH statement (DuckDB SQL, PostgreSQL-compatible: CTEs, window "
                     + "functions, QUALIFY, list/struct functions) against the analytics tables listed by GET /schema. "
-                    + "Rows are returned as JSON objects keyed by column label. The result is limited to 'maxRows' "
-                    + "(default 100, hard cap 10,000 unless configured lower): the statement runs as "
-                    + "SELECT * FROM (<sql>) LIMIT maxRows+1, so DuckDB stops at the limit and an inner ORDER BY / "
-                    + "LIMIT keeps its meaning. When more rows exist the response carries "
-                    + "'X-Analytics-Truncated: true'; 'X-Analytics-Row-Limit' always states the applied limit. "
-                    + "Each query is subject to a timeout. Filter on the partition column ('date' or 'epoch') for "
-                    + "fast responses. Statements other than SELECT/WITH, multiple statements, file/URL access, "
-                    + "extension management, catalog/metadata functions and access to the attached PostgreSQL "
-                    + "database are rejected with 400.")
+                    + "Rows are returned as JSON objects keyed by column label (duplicate labels are suffixed: "
+                    + "hash, hash_1). The result is limited to 'maxRows' — when omitted, the server default applies "
+                    + "(yaci.store.analytics.query.default-max-rows, 100 unless configured); values above the "
+                    + "server's hard limit (yaci.store.analytics.query.max-rows, 10,000 by default) are reduced to "
+                    + "it. The statement runs as SELECT * FROM (<sql>) LIMIT maxRows+1, so DuckDB stops at the "
+                    + "limit and an inner ORDER BY / LIMIT keeps its meaning (an inner LIMIT larger than maxRows "
+                    + "is still cut to maxRows). Successful responses carry 'X-Analytics-Row-Limit' (the limit "
+                    + "that was applied) and 'X-Analytics-Truncated' (true when more rows existed); see GET "
+                    + "/schema 'queryHints.row_limit' for the effective values. Each query is subject to a "
+                    + "timeout. Filter on the partition column ('date' or 'epoch') for fast responses. Statements "
+                    + "other than SELECT/WITH, multiple statements, file/URL access, extension management, "
+                    + "catalog/metadata functions and access to the attached PostgreSQL database are rejected "
+                    + "with 400.")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Result rows (headers: X-Analytics-Row-Limit, X-Analytics-Truncated)",
+            @ApiResponse(responseCode = "200", description = "Result rows",
+                    headers = {
+                            @Header(name = ROW_LIMIT_HEADER, description = "The row limit that was applied",
+                                    schema = @Schema(type = "integer", example = "100")),
+                            @Header(name = TRUNCATED_HEADER, description = "true when more rows existed than were returned",
+                                    schema = @Schema(type = "boolean", example = "false"))
+                    },
                     content = @Content(examples = @ExampleObject(value = "[{\"epoch\":306,\"blocks\":19342},{\"epoch\":307,\"blocks\":15583}]"))),
-            @ApiResponse(responseCode = "400", description = "Rejected by the validator or failed in DuckDB (unknown table/column, syntax error, timeout)",
+            @ApiResponse(responseCode = "400", description = "Malformed request body, rejected by the validator, or failed in DuckDB "
+                    + "(unknown table/column, syntax error, timeout). No X-Analytics-* headers on error responses.",
                     content = @Content(examples = @ExampleObject(value = "{\"error\":\"Blocked SQL token 'SHOW' is not allowed in ad-hoc queries\"}")))
     })
     @PostMapping("/sql")
@@ -225,10 +240,10 @@ public class AnalyticsQueryController {
                     required = true, content = @Content(examples = @ExampleObject(
                             value = "{\"sql\":\"SELECT epoch, count(*) AS blocks FROM block WHERE epoch >= 306 GROUP BY epoch ORDER BY epoch\", \"maxRows\": 100}")))
             @RequestBody SqlQueryRequest request) {
-        String sql = request == null ? null : request.sql();
+        // A missing/unreadable body never reaches this point (Spring raises HttpMessageNotReadableException)
+        String sql = request.sql();
         SqlValidator.validate(sql);
-        AnalyticsQueryExecutor.QueryResult result = queryExecutor.execute(sql.trim(),
-                request == null ? null : request.maxRows());
+        AnalyticsQueryExecutor.QueryResult result = queryExecutor.execute(sql.trim(), request.maxRows());
         return ResponseEntity.ok()
                 .header(ROW_LIMIT_HEADER, String.valueOf(result.rowLimit()))
                 .header(TRUNCATED_HEADER, String.valueOf(result.truncated()))
@@ -245,7 +260,9 @@ public class AnalyticsQueryController {
             @Schema(description = "A single SELECT or WITH statement over the analytics tables",
                     example = "SELECT count(*) AS txs FROM transaction WHERE date = DATE '2025-06-01'")
             String sql,
-            @Schema(description = "Maximum rows to return (default 100; values above the server's hard cap are reduced to it)",
+            @Schema(description = "Maximum rows to return. Omitted, 0 or negative: the server default "
+                    + "(yaci.store.analytics.query.default-max-rows, 100 unless configured); values above the "
+                    + "server's hard limit (yaci.store.analytics.query.max-rows) are reduced to it. Must be an integer.",
                     example = "100", nullable = true)
             Integer maxRows) {}
 
@@ -257,6 +274,18 @@ public class AnalyticsQueryController {
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<Map<String, String>> handleBadRequest(IllegalArgumentException e) {
         return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+    }
+
+    /**
+     * A request body that cannot be read into {@link SqlQueryRequest} (missing body, invalid
+     * JSON, non-integer or out-of-range {@code maxRows}) is reported in the same
+     * {@code {"error": ...}} shape as every other 400 of this API instead of Spring's default
+     * error page.
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<Map<String, String>> handleUnreadableBody(HttpMessageNotReadableException e) {
+        return ResponseEntity.badRequest().body(Map.of("error",
+                "Malformed request body: expected JSON {\"sql\": \"SELECT ...\", \"maxRows\": <optional integer>}"));
     }
 
     /**

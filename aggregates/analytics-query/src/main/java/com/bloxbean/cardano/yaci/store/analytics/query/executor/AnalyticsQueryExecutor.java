@@ -26,9 +26,12 @@ import java.util.function.Function;
  *
  * <p><b>Security measures:</b></p>
  * <ul>
- *   <li><b>Query timeout</b> — per-statement timeout (default 30s) prevents long-running queries</li>
+ *   <li><b>Query timeout</b> — per-statement timeout (default 30s) cancels long-running queries;
+ *       the engine uses plain (non-streaming) JDBC result sets so the timeout covers the whole
+ *       execution</li>
  *   <li><b>Result row limit</b> — every statement is wrapped in a {@code LIMIT} (default 100 rows for
- *       ad-hoc SQL, hard cap 10,000), so DuckDB stops at the cap; results are streamed, not materialized</li>
+ *       ad-hoc SQL, hard cap {@code max-rows}, at most {@value #MAX_RESULT_ROWS}), so DuckDB stops
+ *       producing rows at the cap and the JVM never holds more than {@code limit + 1} rows</li>
  *   <li><b>Semaphore concurrency</b> — limits concurrent queries to CPU core count</li>
  *   <li><b>Error sanitization</b> — internal DuckDB error details are not exposed to callers</li>
  * </ul>
@@ -43,9 +46,10 @@ import java.util.function.Function;
 public class AnalyticsQueryExecutor {
 
     /**
-     * Built-in hard upper bound for rows returned by any query (the configured
-     * {@code yaci.store.analytics.query.max-rows} may lower it). Prevents JVM OOM from
-     * queries like {@code SELECT * FROM address_utxo} (1.47B rows).
+     * Built-in ceiling for rows returned by any query. The configured
+     * {@code yaci.store.analytics.query.max-rows} may lower the effective hard limit but not
+     * raise it above this value. Prevents JVM OOM from queries like
+     * {@code SELECT * FROM address_utxo} (1.47B rows).
      */
     public static final int MAX_RESULT_ROWS = 10_000;
 
@@ -60,13 +64,15 @@ public class AnalyticsQueryExecutor {
         this.hardRowLimit = configuredMax > 0 ? Math.min(configuredMax, MAX_RESULT_ROWS) : MAX_RESULT_ROWS;
         int configuredDefault = properties.getQuery().getDefaultMaxRows();
         this.defaultRowLimit = configuredDefault > 0 ? Math.min(configuredDefault, hardRowLimit) : hardRowLimit;
+        log.info("Analytics query row limits: default={} rows, hard limit={} rows (configured max-rows={}, ceiling={})",
+                defaultRowLimit, hardRowLimit, configuredMax, MAX_RESULT_ROWS);
     }
 
     /** Result of {@link #execute(String, Integer)}: the rows, the limit that was applied and whether more existed. */
     public record QueryResult(List<Map<String, Object>> rows, int rowLimit, boolean truncated) {
     }
 
-    /** Hard upper bound for rows per query (configured {@code max-rows}, at most {@link #MAX_RESULT_ROWS}). */
+    /** Effective hard upper bound for rows per query (configured {@code max-rows}, at most {@link #MAX_RESULT_ROWS}). */
     public int getHardRowLimit() {
         return hardRowLimit;
     }
@@ -80,7 +86,7 @@ public class AnalyticsQueryExecutor {
      * Resolve a caller-requested row limit: {@code null}/non-positive → the default limit,
      * anything larger than the hard limit → the hard limit.
      */
-    public int resolveRowLimit(Integer requested) {
+    private int resolveRowLimit(Integer requested) {
         if (requested == null || requested <= 0) {
             return defaultRowLimit;
         }
@@ -91,11 +97,13 @@ public class AnalyticsQueryExecutor {
      * Execute a read-only query with a row limit, the way SQL front-ends cap results: the
      * statement is wrapped as {@code SELECT * FROM (<sql>) AS q LIMIT <limit + 1>} so DuckDB
      * stops producing rows at the cap (an inner {@code ORDER BY}/{@code LIMIT} keeps its
-     * meaning; with streaming result sets nothing beyond the cap is materialized). One extra
-     * row is requested only to detect truncation.
+     * meaning). One extra row is requested only to detect truncation.
+     *
+     * <p>Note that DuckDB de-duplicates column labels of the wrapped statement: a query that
+     * yields two columns named {@code hash} returns them as {@code hash} and {@code hash_1}.</p>
      *
      * @param sql       a single SELECT/WITH statement (must be pre-validated via {@code SqlValidator})
-     * @param maxRows   requested row limit; {@code null} → default, capped by the hard limit
+     * @param maxRows   requested row limit; {@code null} or non-positive → default, capped by the hard limit
      * @return rows (at most the resolved limit), the limit applied and whether more rows existed
      */
     public QueryResult execute(String sql, Integer maxRows) {
@@ -108,8 +116,10 @@ public class AnalyticsQueryExecutor {
     /**
      * Execute a query and map each row using the provided mapper function.
      *
-     * <p>Results are capped at the hard row limit; the query is wrapped in a
-     * {@code LIMIT} like {@link #execute(String, Integer)}.</p>
+     * <p>Results are capped at the hard row limit ({@link #getHardRowLimit()}); the query is
+     * wrapped in a {@code LIMIT} like {@link #execute(String, Integer)}. Truncation is logged
+     * but not reported to the caller — use {@link #execute(String, Integer)} (with
+     * {@link #getHardRowLimit()} as {@code maxRows}) when the caller needs to know.</p>
      *
      * @param sql       the SQL query to execute (must be pre-validated via {@code SqlValidator})
      * @param rowMapper maps a {@link ResultSet} (positioned at a row) to a result object
@@ -125,8 +135,8 @@ public class AnalyticsQueryExecutor {
 
     /**
      * Execute a query and return results as a list of maps (column name to value), capped at
-     * the hard row limit. Used by the pre-built endpoints and the MCP tools; ad-hoc callers
-     * should prefer {@link #execute(String, Integer)} to learn about truncation.
+     * the hard row limit. Used by the pre-built endpoints; callers that must report truncation
+     * (ad-hoc SQL, MCP tools) should use {@link #execute(String, Integer)} instead.
      *
      * @param sql the SQL query to execute (must be pre-validated via {@code SqlValidator})
      * @return list of row maps, each mapping column label to its value
@@ -144,7 +154,7 @@ public class AnalyticsQueryExecutor {
     }
 
     /**
-     * Run the wrapped statement, collect up to {@code limit} mapped rows into {@code sink}
+     * Run the wrapped statement, append up to {@code limit} mapped rows to {@code sink}
      * and report whether an extra row (i.e. truncation) was seen.
      */
     private <T> boolean fetch(String sql, int limit, Function<ResultSet, T> rowMapper, List<T> sink) {
@@ -156,21 +166,26 @@ public class AnalyticsQueryExecutor {
             stmt.setQueryTimeout(connectionProvider.getQueryTimeoutSeconds());
 
             try (ResultSet rs = stmt.executeQuery(limited)) {
+                int fetched = 0;
                 boolean truncated = false;
                 while (rs.next()) {
-                    if (sink.size() >= limit) {
+                    if (fetched >= limit) {
                         truncated = true;   // the +1 row: more data exists
                         break;
                     }
                     sink.add(rowMapper.apply(rs));
+                    fetched++;
                 }
 
                 long elapsed = System.currentTimeMillis() - start;
-                String preview = sql.length() > 100 ? sql.substring(0, 100) + "..." : sql;
-                if (truncated) {
-                    log.info("Query result truncated at {} rows ({}ms): {}", limit, elapsed, preview);
+                if (truncated && limit >= hardRowLimit) {
+                    // Hitting the hard cap is unusual for the pre-built endpoints and worth noticing
+                    log.warn("Query result truncated at the hard limit of {} rows ({}ms): {}",
+                            limit, elapsed, preview(sql));
+                } else if (truncated) {
+                    log.debug("Query result truncated at {} rows ({}ms): {}", limit, elapsed, preview(sql));
                 } else {
-                    log.debug("Query completed in {}ms, {} rows: {}", elapsed, sink.size(), preview);
+                    log.debug("Query completed in {}ms, {} rows: {}", elapsed, fetched, preview(sql));
                 }
                 return truncated;
             }
@@ -183,6 +198,16 @@ public class AnalyticsQueryExecutor {
             // or PostgreSQL connection details to the caller
             throw new QueryExecutionException("Query execution failed. Check query syntax and filters.");
         }
+    }
+
+    /**
+     * Short single-line rendering of user SQL for log messages: whitespace (including line
+     * breaks, which would otherwise let a caller inject log lines) is collapsed and the text
+     * is cut at 100 characters.
+     */
+    static String preview(String sql) {
+        String flat = sql.replaceAll("\\s+", " ").trim();
+        return flat.length() > 100 ? flat.substring(0, 100) + "..." : flat;
     }
 
     private Map<String, Object> mapRow(ResultSet rs) {
@@ -240,19 +265,6 @@ public class AnalyticsQueryExecutor {
                     : normalizeJdbcValue(item));
         }
         return values;
-    }
-
-    /**
-     * Check whether a {@link #query}/{@link #queryForList} result was truncated, indicated by
-     * the result list size reaching {@link #MAX_RESULT_ROWS} (the built-in hard limit; if
-     * {@code yaci.store.analytics.query.max-rows} is configured lower, prefer
-     * {@link #execute(String, Integer)}, which reports truncation exactly).
-     *
-     * @param results the result list from a query method
-     * @return {@code true} if the results were likely truncated
-     */
-    public static boolean isTruncated(List<?> results) {
-        return results.size() >= MAX_RESULT_ROWS;
     }
 
     /**

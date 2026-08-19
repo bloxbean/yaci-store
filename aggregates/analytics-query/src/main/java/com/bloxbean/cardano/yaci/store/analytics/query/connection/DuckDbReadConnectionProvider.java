@@ -43,11 +43,11 @@ public abstract class DuckDbReadConnectionProvider {
         this.semaphore = new Semaphore(maxConcurrent);
 
         try {
-            // Stream result sets instead of materializing them: together with the LIMIT the
-            // executor wraps around every query, DuckDB stops producing rows at the cap.
-            java.util.Properties props = new java.util.Properties();
-            props.setProperty("jdbc_stream_results", "true");
-            this.parentConnection = DriverManager.getConnection("jdbc:duckdb:", props);
+            // Plain (materializing) result sets on purpose: with DuckDB JDBC's streaming mode
+            // (jdbc_stream_results) Statement.setQueryTimeout() only covers the execute phase,
+            // so a query would keep running unbounded inside ResultSet.next(). Result size is
+            // bounded anyway by the LIMIT the executor wraps around every statement.
+            this.parentConnection = DriverManager.getConnection("jdbc:duckdb:");
 
             try (Statement stmt = parentConnection.createStatement()) {
                 if (memoryLimit != null && !memoryLimit.isBlank()) {
@@ -67,6 +67,10 @@ public abstract class DuckDbReadConnectionProvider {
 
     /**
      * Access the parent connection for subclass initialization (creating views, attaching catalogs).
+     *
+     * <p>The parent is shared by all refresh/introspection code and is not synchronized here:
+     * callers must serialize DDL on it and must not hold a {@link java.sql.ResultSet} open
+     * across another statement on the same connection (drain, close, then continue).</p>
      */
     protected Connection getParentConnection() {
         return parentConnection;

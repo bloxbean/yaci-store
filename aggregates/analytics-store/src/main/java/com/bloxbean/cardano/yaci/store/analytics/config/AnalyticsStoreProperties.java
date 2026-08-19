@@ -221,7 +221,7 @@ public class AnalyticsStoreProperties {
          * stops producing rows at the limit instead of materializing the whole result; the
          * response signals truncation via the {@code X-Analytics-Truncated} header.
          *
-         * Default: 100.
+         * Values above {@code max-rows} are reduced to it. Default: 100.
          */
         private int defaultMaxRows = 100;
 
@@ -230,7 +230,8 @@ public class AnalyticsStoreProperties {
          * SQL (whatever {@code maxRows} the caller asks for), the pre-built endpoints and the
          * MCP tools. Protects the JVM heap and the HTTP response size.
          *
-         * Default: 10,000.
+         * Can only lower the built-in ceiling of 10,000 rows, not raise it (values above
+         * 10,000 or non-positive values are treated as 10,000). Default: 10,000.
          */
         private int maxRows = 10_000;
 
