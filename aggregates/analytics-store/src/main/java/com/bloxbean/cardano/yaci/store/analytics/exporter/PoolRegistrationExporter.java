@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.analytics.exporter;
 
+import java.util.Map;
 import com.bloxbean.cardano.yaci.store.adapot.job.storage.AdaPotJobStorage;
 import com.bloxbean.cardano.yaci.store.analytics.config.AnalyticsStoreProperties;
 import com.bloxbean.cardano.yaci.store.analytics.state.ExportStateService;
@@ -38,6 +39,12 @@ public class PoolRegistrationExporter extends AbstractTableExporter {
     @Override
     public PartitionStrategy getPartitionStrategy() {
         return PartitionStrategy.DAILY;
+    }
+
+    /** Unified view: the export renames PostgreSQL {@code vrf_key} to {@code vrf_key_hash}. */
+    @Override
+    public Map<String, String> getSourceColumnMappings() {
+        return Map.of("vrf_key_hash", "vrf_key");
     }
 
     @Override

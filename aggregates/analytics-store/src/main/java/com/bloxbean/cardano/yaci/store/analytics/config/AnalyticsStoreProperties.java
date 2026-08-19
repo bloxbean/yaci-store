@@ -152,8 +152,8 @@ public class AnalyticsStoreProperties {
             /**
              * Maximum concurrent DuckDB read queries.
              *
-             * Controls the semaphore size for DuckDBConnection.duplicate() based readers,
-             * or HikariCP pool size for legacy DataSource based readers.
+             * Controls the semaphore size for DuckDBConnection.duplicate() based readers
+             * (the analytics query layer).
              * Defaults to available processor cores.
              */
             private int maximumPoolSize = Runtime.getRuntime().availableProcessors();
@@ -215,17 +215,38 @@ public class AnalyticsStoreProperties {
         private int postgresStatementTimeoutSeconds = 30;
 
         /**
+         * Rows returned by an ad-hoc SQL request when the caller does not specify
+         * {@code maxRows}. The query is executed as {@code SELECT * FROM (<sql>) LIMIT n+1}
+         * (the way SQL front-ends such as Superset or the DuckDB UI cap results), so DuckDB
+         * stops producing rows at the limit instead of materializing the whole result; the
+         * response signals truncation via the {@code X-Analytics-Truncated} header.
+         *
+         * Values above {@code max-rows} are reduced to it. Default: 100.
+         */
+        private int defaultMaxRows = 100;
+
+        /**
+         * Hard upper bound for rows returned by any single query of the query layer — ad-hoc
+         * SQL (whatever {@code maxRows} the caller asks for), the pre-built endpoints and the
+         * MCP tools. Protects the JVM heap and the HTTP response size.
+         *
+         * Can only lower the built-in ceiling of 10,000 rows, not raise it (values above
+         * 10,000 or non-positive values are treated as 10,000). Default: 10,000.
+         */
+        private int maxRows = 10_000;
+
+        /**
          * Enable/disable the REST API endpoints for analytics queries.
          *
          * When false, only the MCP tools are available for querying analytics data.
-         * The REST endpoints ({@code /api/v1/analytics/parquet/*}) will not be registered.
+         * The REST endpoints ({@code /api/v1/analytics/query/*}) will not be registered.
          *
          * Useful for production deployments where analytics should only be accessible
          * through the MCP interface (gated by the LLM agent), not via direct HTTP calls.
          *
-         * Default: true (REST endpoints enabled for backward compatibility).
+         * Default: false. Ad-hoc SQL must be explicitly exposed by the operator.
          */
-        private boolean restApiEnabled = true;
+        private boolean restApiEnabled = false;
     }
 
     private Query query = new Query();

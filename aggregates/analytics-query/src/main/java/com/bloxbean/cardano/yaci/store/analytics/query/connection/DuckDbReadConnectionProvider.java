@@ -1,8 +1,9 @@
-package com.bloxbean.cardano.yaci.store.analytics.helper;
+package com.bloxbean.cardano.yaci.store.analytics.query.connection;
 
 import lombok.extern.slf4j.Slf4j;
 import org.duckdb.DuckDBConnection;
 
+import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
@@ -20,11 +21,15 @@ import java.util.concurrent.TimeUnit;
  *
  * <p>Concurrency is controlled via a {@link Semaphore} rather than a connection pool.</p>
  *
- * <p>Subclasses configure the parent connection in their {@code @PostConstruct} method:</p>
- * <ul>
- *   <li>{@code DuckLakeReadConnectionProvider} — attaches DuckLake catalog</li>
- *   <li>{@code ParquetReadConnectionProvider} — creates views for Parquet files</li>
- * </ul>
+ * <p>Subclasses configure the parent connection in their {@code @PostConstruct} method
+ * (e.g. {@code ParquetReadConnectionProvider} creates views over the exported Parquet files)
+ * and then call {@link #lockDown(Path)}.</p>
+ *
+ * <p><b>Do not attach the DuckLake catalog on this instance.</b> DuckDB rejects opening the
+ * same catalog file from two DuckDB instances in one process ({@code Unique file handle
+ * conflict}), and the export writer keeps it attached for the JVM lifetime. Read-only
+ * consumers obtain the committed file list through the writer's connection instead
+ * (see {@code DuckLakeCatalogSnapshotReader}) and read those Parquet files directly.</p>
  */
 @Slf4j
 public abstract class DuckDbReadConnectionProvider {
@@ -38,6 +43,10 @@ public abstract class DuckDbReadConnectionProvider {
         this.semaphore = new Semaphore(maxConcurrent);
 
         try {
+            // Plain (materializing) result sets on purpose: with DuckDB JDBC's streaming mode
+            // (jdbc_stream_results) Statement.setQueryTimeout() only covers the execute phase,
+            // so a query would keep running unbounded inside ResultSet.next(). Result size is
+            // bounded anyway by the LIMIT the executor wraps around every statement.
             this.parentConnection = DriverManager.getConnection("jdbc:duckdb:");
 
             try (Statement stmt = parentConnection.createStatement()) {
@@ -58,6 +67,10 @@ public abstract class DuckDbReadConnectionProvider {
 
     /**
      * Access the parent connection for subclass initialization (creating views, attaching catalogs).
+     *
+     * <p>The parent is shared by all refresh/introspection code and is not synchronized here:
+     * callers must serialize DDL on it and must not hold a {@link java.sql.ResultSet} open
+     * across another statement on the same connection (drain, close, then continue).</p>
      */
     protected Connection getParentConnection() {
         return parentConnection;
@@ -100,37 +113,43 @@ public abstract class DuckDbReadConnectionProvider {
     }
 
     /**
-     * Lock down the parent connection after subclass initialization.
+     * Lock down the shared DuckDB database after subclass initialization.
      *
      * <p>Must be called by subclasses AFTER they finish creating views (which require
      * {@code read_parquet()} and {@code postgres_scanner}) but BEFORE serving any user queries.</p>
      *
      * <p><b>Security measures applied:</b></p>
      * <ul>
+     *   <li>{@code allowed_directories} — limits file access to the analytics export directory.</li>
+     *   <li>{@code enable_external_access = false} — denies all other file and network access.</li>
      *   <li>{@code autoload_known_extensions = false} — prevents loading new extensions
      *       (e.g., {@code httpfs}, {@code spatial}) via user queries.</li>
      *   <li>{@code autoinstall_known_extensions = false} — prevents downloading and installing
      *       extensions from the DuckDB extension repository.</li>
+     *   <li>{@code lock_configuration = true} — prevents user SQL from weakening the sandbox.</li>
      * </ul>
      *
-     * <p><b>Why {@code enable_external_access} is NOT disabled:</b>
-     * DuckDB views resolve {@code read_parquet()} lazily at query time, not at view creation
-     * time. Disabling external access would break all Parquet views. Protection against
-     * file-access injection (e.g., {@code read_csv('/etc/passwd')}) is enforced at the
-     * application layer by {@code SqlValidator}, which strips comments and blocks dangerous
-     * function names before queries reach DuckDB.</p>
+     * <p>DuckDB configuration is shared by the parent and all connections created with
+     * {@link DuckDBConnection#duplicate()}. The allowed directory therefore also permits
+     * trusted refresh DDL on the parent to recreate lazy {@code read_parquet()} views while
+     * blocking reads from every other host path.</p>
      *
+     * @param allowedDirectory the only directory from which DuckDB may read files
      * @throws RuntimeException if any DuckDB SET command fails
      */
-    protected void lockDown() {
+    protected void lockDown(Path allowedDirectory) {
+        String normalizedDirectory = allowedDirectory.toAbsolutePath().normalize().toString();
+        String escapedDirectory = normalizedDirectory.replace("'", "''");
+
         try (Statement stmt = parentConnection.createStatement()) {
-            // NOTE: enable_external_access CANNOT be set to false here because DuckDB views
-            // resolve read_parquet() lazily at query time. Disabling it breaks all Parquet views.
-            // File I/O protection is handled by SqlValidator (comment stripping + keyword blocklist).
+            stmt.execute("SET allowed_directories = ['" + escapedDirectory + "']");
             stmt.execute("SET autoload_known_extensions = false");
             stmt.execute("SET autoinstall_known_extensions = false");
-            log.info("DuckDB locked down: autoload=false, autoinstall=false " +
-                    "(external_access=true required for Parquet view resolution)");
+            stmt.execute("SET allow_community_extensions = false");
+            stmt.execute("SET enable_external_access = false");
+            stmt.execute("SET lock_configuration = true");
+            log.info("DuckDB locked down: external access restricted to analytics directory '{}', " +
+                    "extension loading disabled, configuration locked", normalizedDirectory);
         } catch (SQLException e) {
             throw new RuntimeException("Failed to lock down DuckDB parent connection", e);
         }

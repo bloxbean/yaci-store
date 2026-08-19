@@ -6,11 +6,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
 /**
- * DuckDB-backed transaction analytics queries over Parquet data.
+ * DuckDB-backed transaction analytics queries over the exported analytics data.
  *
  * <p>SQL is identical to PostgreSQL versions. DuckDB natively supports PERCENTILE_CONT,
  * window functions, CTEs, and all standard aggregates. Hive partition pruning on the
@@ -23,6 +24,22 @@ import java.util.Map;
 public class AnalyticsTransactionQueryService {
 
     private final AnalyticsQueryExecutor queryExecutor;
+
+    /**
+     * Transaction count, optionally restricted to an inclusive day range on the export
+     * {@code date} partition column ({@code from}/{@code to} both null = all time).
+     */
+    public long getTransactionCount(LocalDate from, LocalDate to) {
+        String where = "";
+        if (from != null && to != null) {
+            where = String.format(" WHERE date >= DATE '%s' AND date <= DATE '%s'", from, to);
+        }
+        List<Map<String, Object>> rows = queryExecutor.queryForList(
+                "SELECT COUNT(*) AS total FROM \"transaction\"" + where);
+        if (rows.isEmpty()) return 0L;
+        Object total = rows.get(0).get("total");
+        return total instanceof Number n ? n.longValue() : 0L;
+    }
 
     /**
      * Transaction statistics per epoch.

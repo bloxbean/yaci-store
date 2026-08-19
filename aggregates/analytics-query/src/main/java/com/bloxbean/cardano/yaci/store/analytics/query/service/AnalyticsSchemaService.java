@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.analytics.query.service;
 import com.bloxbean.cardano.yaci.store.analytics.config.AnalyticsStoreProperties;
 import com.bloxbean.cardano.yaci.store.analytics.query.connection.ParquetReadConnectionProvider;
 import com.bloxbean.cardano.yaci.store.analytics.query.connection.ParquetTableRegistry;
+import com.bloxbean.cardano.yaci.store.analytics.query.executor.AnalyticsQueryExecutor;
 import com.bloxbean.cardano.yaci.store.analytics.query.model.*;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +34,7 @@ public class AnalyticsSchemaService {
     private final ParquetTableRegistry tableRegistry;
     private final ParquetReadConnectionProvider connectionProvider;
     private final AnalyticsStoreProperties properties;
+    private final AnalyticsQueryExecutor queryExecutor;
 
     // Cached per table: row count and date range (expensive to compute on large tables)
     private final Map<String, Long> rowCountCache = new ConcurrentHashMap<>();
@@ -46,7 +48,8 @@ public class AnalyticsSchemaService {
             try {
                 getColumns(table);
             } catch (Exception e) {
-                log.warn("Failed to cache schema for table '{}': {}", table, e.getMessage());
+                log.warn("Failed to cache schema for table '{}' ({})",
+                        table, e.getClass().getSimpleName());
             }
         }
         log.info("Schema cache warmed for {} tables", columnCache.size());
@@ -70,7 +73,8 @@ public class AnalyticsSchemaService {
                     rowCount,
                     meta.partitionStrategy(),
                     meta.partitionColumn(),
-                    dateRange
+                    dateRange,
+                    dataScope(tableName)
             ));
         }
 
@@ -91,21 +95,44 @@ public class AnalyticsSchemaService {
                 "Use DuckDB SQL. Most PostgreSQL syntax works. PERCENTILE_CONT, CTEs, window functions, QUALIFY all supported. Use list_value() instead of ARRAY[].");
         queryHints.put("lovelace",
                 "All ADA amounts are in lovelace (1 ADA = 1,000,000 lovelace). Divide by 1000000.0 for ADA.");
+        queryHints.put("row_limit",
+                "Ad-hoc SQL returns at most " + queryExecutor.getDefaultRowLimit() + " rows unless the request sets "
+                + "'maxRows' (hard limit " + queryExecutor.getHardRowLimit() + "); a bare 'SELECT * FROM t' is "
+                + "cut at that limit. Aggregate or filter instead of paging through raw rows. Over REST, truncation "
+                + "is signalled by the response headers X-Analytics-Row-Limit and X-Analytics-Truncated (true = "
+                + "more rows existed); MCP tool results carry a 'truncated' field.");
 
-        String engine = "DuckDB (in-memory, reading Parquet files with Hive partitioning)";
+        String engine = "DuckDB (in-memory, reading the exported analytics data files)";
 
-        String note = "Historical analytics data (" + bufferDays + " day(s) old). " +
-                "For real-time address balance, use 'analytics-address-balance' tool.";
+        boolean live = connectionProvider.isLiveDataActive();
+        long liveTables = tables.stream().filter(t -> "historical+live".equals(t.dataScope())).count();
+        String note;
+        if (live) {
+            note = "Live PostgreSQL federation is active: " + liveTables + " of " + tables.size()
+                    + " tables (dataScope 'historical+live') union the exported data with live rows and reach the "
+                    + "current chain tip; the remaining tables (dataScope 'historical') contain exported data as of "
+                    + dataAsOf + " (" + bufferDays + " day(s) old). For epoch-level tables the current epoch's rows "
+                    + "come live from PostgreSQL and may still change until the epoch closes. "
+                    + "For real-time address balance, use 'analytics-address-balance' tool.";
+        } else {
+            note = "Historical analytics data (" + bufferDays + " day(s) old). " +
+                    "For real-time address balance, use 'analytics-address-balance' tool.";
+        }
 
         return new SchemaOverview(
                 engine,
                 "DuckDB SQL (PostgreSQL-compatible with extensions)",
                 bufferDays,
                 dataAsOf,
+                live,
                 note,
                 tables,
                 queryHints
         );
+    }
+
+    private String dataScope(String tableName) {
+        return connectionProvider.isFederated(tableName) ? "historical+live" : "historical";
     }
 
     public TableDescription describeTable(String tableName) {
@@ -119,7 +146,7 @@ public class AnalyticsSchemaService {
         List<ColumnSchema> columns = getColumns(tableName);
         long rowCount = getRowCount(tableName);
 
-        String engine = "DuckDB (Parquet)";
+        String engine = "DuckDB";
 
         return new TableDescription(
                 tableName,
@@ -128,40 +155,57 @@ public class AnalyticsSchemaService {
                 rowCount,
                 meta.partitionStrategy(),
                 meta.partitionColumn(),
+                dataScope(tableName),
                 columns,
                 meta.queryHints()
         );
     }
 
     private List<ColumnSchema> getColumns(String tableName) {
-        return columnCache.computeIfAbsent(tableName, t -> {
-            List<ColumnSchema> cols = new ArrayList<>();
-            try (Connection conn = connectionProvider.getReadConnection();
-                 Statement stmt = conn.createStatement();
-                 ResultSet rs = stmt.executeQuery("DESCRIBE \"" + t.replace("\"", "\"\"") + "\"")) {
-                while (rs.next()) {
-                    cols.add(new ColumnSchema(rs.getString("column_name"), rs.getString("column_type")));
-                }
-            } catch (Exception e) {
-                log.error("Failed to describe table '{}': {}", t, e.getMessage());
+        List<ColumnSchema> cached = columnCache.get(tableName);
+        if (cached != null) {
+            return cached;
+        }
+
+        List<ColumnSchema> columns = new ArrayList<>();
+        try (Connection conn = connectionProvider.getReadConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("DESCRIBE \"" + tableName.replace("\"", "\"\"") + "\"")) {
+            while (rs.next()) {
+                columns.add(new ColumnSchema(rs.getString("column_name"), rs.getString("column_type")));
             }
-            return cols;
-        });
+            List<ColumnSchema> immutableColumns = List.copyOf(columns);
+            List<ColumnSchema> existing = columnCache.putIfAbsent(tableName, immutableColumns);
+            return existing != null ? existing : immutableColumns;
+        } catch (Exception e) {
+            log.error("Failed to describe table '{}' ({})",
+                    tableName, e.getClass().getSimpleName());
+            // Do not cache a transient failure; a later request should retry.
+            return List.of();
+        }
     }
 
     private long getRowCount(String tableName) {
-        return rowCountCache.computeIfAbsent(tableName, t -> {
-            try (Connection conn = connectionProvider.getReadConnection();
-                 Statement stmt = conn.createStatement()) {
-                stmt.setQueryTimeout(connectionProvider.getQueryTimeoutSeconds());
-                try (ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM \"" + t.replace("\"", "\"\"") + "\"")) {
-                    return rs.next() ? rs.getLong(1) : 0L;
-                }
-            } catch (Exception e) {
-                log.warn("Failed to count rows for '{}': {}", t, e.getMessage());
-                return -1L;
+        Long cached = rowCountCache.get(tableName);
+        if (cached != null) {
+            return cached;
+        }
+
+        try (Connection conn = connectionProvider.getReadConnection();
+             Statement stmt = conn.createStatement()) {
+            stmt.setQueryTimeout(connectionProvider.getQueryTimeoutSeconds());
+            try (ResultSet rs = stmt.executeQuery(
+                    "SELECT COUNT(*) FROM \"" + tableName.replace("\"", "\"\"") + "\"")) {
+                long rowCount = rs.next() ? rs.getLong(1) : 0L;
+                Long existing = rowCountCache.putIfAbsent(tableName, rowCount);
+                return existing != null ? existing : rowCount;
             }
-        });
+        } catch (Exception e) {
+            log.warn("Failed to count rows for '{}' ({})",
+                    tableName, e.getClass().getSimpleName());
+            // -1 represents this response only; do not poison the cache on a transient failure.
+            return -1L;
+        }
     }
 
     private TableInfo.DateRange getDateRange(String tableName, String partitionColumn) {
@@ -181,7 +225,8 @@ public class AnalyticsSchemaService {
                     }
                 }
             } catch (Exception e) {
-                log.warn("Failed to get date range for '{}': {}", t, e.getMessage());
+                log.warn("Failed to get date range for '{}' ({})",
+                        t, e.getClass().getSimpleName());
             }
             return null;
         });

@@ -1,33 +1,43 @@
 package com.bloxbean.cardano.yaci.store.analytics.query.service;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+
 /**
  * Security-critical SQL validation for ad-hoc DuckDB queries.
  *
- * <p>Used by both the REST controller ({@code ParquetAnalyticsController}) and MCP service
+ * <p>Used by both the REST controller ({@code AnalyticsQueryController}) and MCP service
  * ({@code McpAnalyticsService}) to enforce read-only query constraints and block dangerous
  * functions before queries reach the DuckDB engine.</p>
  *
  * <p><b>Defense layers (in order of application):</b></p>
  * <ol>
  *   <li><b>Comment stripping</b> — removes {@code /* ... * /} and {@code --} comments
- *       to prevent blocklist bypass via comment injection (e.g., {@code READ_PAR/ ** /QUET})</li>
+ *       before tokens are inspected</li>
  *   <li><b>Statement type check</b> — only {@code SELECT} and {@code WITH} allowed as top-level statements</li>
  *   <li><b>Semicolon ban</b> — prevents multi-statement injection</li>
- *   <li><b>Keyword blocklist</b> — blocks dangerous functions, DDL, DML, metadata access,
- *       and resource-exhaustion patterns via case-insensitive substring matching</li>
+ *   <li><b>Keyword blocklist</b> — blocks dangerous functions, DDL, DML, metadata access
+ *       ({@code SHOW}/{@code DESCRIBE}/{@code SUMMARIZE}, {@code duckdb_*}/{@code pragma_*}
+ *       table functions, {@code information_schema}, {@code pg_*}) and resource-exhaustion
+ *       patterns using SQL tokens rather than substring matching</li>
+ *   <li><b>File path literal check</b> — rejects path/URL-like string literals that would
+ *       trigger DuckDB replacement scans</li>
  * </ol>
  *
  * <p><b>Important security notes:</b></p>
  * <ul>
- *   <li>This validator is the <b>primary</b> defense against SQL injection. DuckDB's
- *       {@code enable_external_access=false} provides engine-level backup after view creation,
- *       but this validator runs first and must be comprehensive.</li>
- *   <li>The blocklist approach is inherently fragile — new DuckDB functions in future versions
- *       may not be covered. Periodic review against DuckDB release notes is recommended.</li>
- *   <li>All callers MUST {@code trim()} the SQL before passing it to {@link #validate(String)}.</li>
+ *   <li>The DuckDB external-access sandbox is the primary file/network security boundary.
+ *       This validator is defense in depth and restricts the exposed SQL surface.</li>
+ *   <li>Token matching avoids false positives such as {@code asset}, {@code offset},
+ *       {@code payload}, and {@code global_data}. Double-quoted identifiers such as
+ *       {@code "set"} or {@code "show"} (e.g. custom-exporter columns) are allowed, since a
+ *       quoted name can never act as a keyword; quoted <em>function</em> and catalog names
+ *       ({@code "read_csv"(...)}, {@code "pg_live"."public"."x"}) remain blocked.</li>
  * </ul>
  *
- * @see com.bloxbean.cardano.yaci.store.analytics.query.controller.ParquetAnalyticsController
+ * @see com.bloxbean.cardano.yaci.store.analytics.query.controller.AnalyticsQueryController
  */
 public final class SqlValidator {
 
@@ -38,56 +48,32 @@ public final class SqlValidator {
     private static final int MAX_QUERY_LENGTH = 10_000;
 
     /**
-     * Blocked keywords and function name prefixes.
+     * Blocked keywords. Besides DDL/DML and extension management this covers DuckDB's
+     * metadata statements ({@code SHOW}, {@code DESCRIBE}, {@code SUMMARIZE}), which DuckDB
+     * accepts in subquery position ({@code SELECT * FROM (SHOW ALL TABLES)}) and which
+     * enumerate every attached database — including all schemas of the federated
+     * PostgreSQL server — rather than only the analytics views.
      *
-     * <p>Matched as case-insensitive substrings against the comment-stripped, uppercased SQL.
-     * Entries ending with {@code _} act as prefix matches (e.g., {@code DUCKDB_} blocks
-     * {@code duckdb_databases}, {@code duckdb_views}, etc.).</p>
+     * <p>{@code RECURSIVE} is deliberately allowed: recursive CTEs are a legitimate
+     * read-only pattern and runaway recursion is bounded by the per-query timeout and
+     * DuckDB's memory limit.</p>
      */
-    private static final String[] BLOCKED_KEYWORDS = {
-            // --- File I/O functions (DuckDB can read arbitrary files) ---
-            "READ_CSV", "READ_JSON", "READ_PARQUET", "READ_TEXT", "READ_BLOB",
-            "READ_NDJSON",
-            "GLOB", "COPY", "EXPORT",
+    private static final Set<String> BLOCKED_WORDS = Set.of(
+            "COPY", "EXPORT", "INSTALL", "LOAD", "ATTACH", "DETACH",
+            "HTTPFS", "SYSTEM", "SHELL", "GETENV",
+            "PRAGMA", "CREATE", "ALTER", "DROP", "INSERT", "UPDATE", "DELETE",
+            "TRUNCATE", "CHECKPOINT", "VACUUM", "SET",
+            "SHOW", "DESCRIBE", "SUMMARIZE", "EXPLAIN", "CALL"
+    );
 
-            // --- Extension management ---
-            "INSTALL", "LOAD", "ATTACH", "DETACH",
-
-            // --- Network access ---
-            "HTTPFS", "HTTP_GET", "HTTP_POST",
-
-            // --- System access ---
-            "SYSTEM", "SHELL", "GETENV",
-
-            // --- PostgreSQL direct access (must use unified views, not pg_live) ---
-            "PG_", "POSTGRES_QUERY",
-
-            // --- DuckDB internal metadata (credential/config leak prevention) ---
-            // Blocks ALL duckdb_ prefixed functions: duckdb_databases(), duckdb_views(),
-            // duckdb_tables(), duckdb_columns(), duckdb_settings(), duckdb_secrets(),
-            // duckdb_extensions(), duckdb_functions(), duckdb_types(), etc.
-            "DUCKDB_",
-
-            // --- SQL information schema (leaks view definitions with file paths/credentials) ---
-            "INFORMATION_SCHEMA",
-
-            // --- DuckDB configuration ---
-            "PRAGMA",
-            "CURRENT_SETTING",
-
-            // --- DDL/DML (defense-in-depth, also blocked by SELECT/WITH prefix check) ---
-            "CREATE ", "ALTER ", "DROP ", "INSERT ", "UPDATE ", "DELETE ", "TRUNCATE ",
-            "CHECKPOINT", "VACUUM",
-
-            // --- Configuration changes ---
-            // Space after SET prevents false positives on OFFSET/RESULTSET etc.
-            // but catches SET variable = value patterns
-            "SET ",
-
-            // --- Resource exhaustion prevention ---
-            "GENERATE_SERIES", "RANGE(",
-            "RECURSIVE",
-    };
+    private static final Set<String> BLOCKED_FUNCTIONS = Set.of(
+            "READ_CSV", "READ_CSV_AUTO", "SNIFF_CSV",
+            "READ_JSON", "READ_JSON_AUTO", "READ_JSON_OBJECTS", "READ_JSON_OBJECTS_AUTO",
+            "READ_NDJSON", "READ_NDJSON_AUTO", "READ_NDJSON_OBJECTS",
+            "READ_PARQUET", "PARQUET_SCAN", "READ_TEXT", "READ_BLOB", "GLOB",
+            "HTTP_GET", "HTTP_POST", "POSTGRES_QUERY", "CURRENT_SETTING",
+            "QUERY", "QUERY_TABLE", "GENERATE_SERIES", "RANGE"
+    );
 
     /**
      * Validate that a SQL query is a safe, read-only {@code SELECT}/{@code WITH} statement.
@@ -108,30 +94,55 @@ public final class SqlValidator {
                     "SQL query exceeds maximum length of " + MAX_QUERY_LENGTH + " characters");
         }
 
-        // Step 1: Strip comments to prevent blocklist bypass
-        // e.g., READ_PAR/**/QUET('/etc/passwd') → READ_PARQUET('/etc/passwd')
-        String stripped = stripComments(sql);
-        String upper = stripped.toUpperCase();
-
-        // Step 2: Statement type — only SELECT or WITH allowed
-        if (!upper.startsWith("SELECT") && !upper.startsWith("WITH")) {
-            throw new IllegalArgumentException("Only SELECT/WITH statements are allowed");
-        }
-
-        // Step 3: No semicolons — prevents multi-statement injection
-        if (stripped.contains(";")) {
+        // Deliberately reject every semicolon, including semicolons inside literals or
+        // quoted identifiers. The executor runs the original SQL text and DuckDB accepts
+        // multiple statements, so a conservative raw-text check cannot be desynchronized
+        // from DuckDB's lexer by an E'...' escape or an unusual quoted identifier.
+        if (sql.indexOf(';') >= 0) {
             throw new IllegalArgumentException("Multiple statements (semicolons) are not allowed");
         }
 
-        // Step 4: Keyword blocklist — checked against comment-stripped SQL
-        for (String blocked : BLOCKED_KEYWORDS) {
-            if (upper.contains(blocked)) {
+        // Step 1: Strip comments before tokenizing.
+        String stripped = stripComments(sql);
+        List<Token> tokens = tokenize(stripped);
+
+        // Step 2: Statement type — only SELECT or WITH allowed
+        if (tokens.isEmpty()
+                || (!tokens.get(0).text().equals("SELECT") && !tokens.get(0).text().equals("WITH"))) {
+            throw new IllegalArgumentException("Only SELECT/WITH statements are allowed");
+        }
+
+        // Step 3: Token-aware blocklist. Exact token/function matching prevents substring
+        // false positives such as ASSET containing SET or GLOBAL containing GLOB.
+        //
+        // Double-quoted names are identifiers, never keywords: "set" or "show" cannot start a
+        // SET/SHOW statement, so the keyword blocklist only applies to bare words. Quoted names
+        // CAN still name a dangerous function ("read_csv"('x'), "getenv"('HOME')) or catalog
+        // object ("pg_live"."public"."x"), so the function, prefix and catalog checks apply to
+        // quoted and bare tokens alike.
+        for (Token token : tokens) {
+            String word = token.text();
+            boolean invoked = isFunctionInvocation(stripped, token.end());
+            boolean blockedKeyword = !token.quoted() && BLOCKED_WORDS.contains(word);
+            // duckdb_*() / pragma_*() table functions and pg_* / postgres_* names expose the
+            // catalog of every attached database (including the federated PostgreSQL server).
+            boolean blockedPrefix = word.startsWith("DUCKDB_") || word.startsWith("PRAGMA_")
+                    || word.startsWith("PG_") || word.startsWith("POSTGRES_");
+            boolean blockedCatalog = word.equals("SQLITE_MASTER") || word.equals("INFORMATION_SCHEMA");
+            boolean blockedFunction = invoked
+                    && (BLOCKED_FUNCTIONS.contains(word) || (token.quoted() && BLOCKED_WORDS.contains(word)));
+            // "DESC" is the DESCRIBE alias when it starts a (sub)statement, e.g.
+            // SELECT * FROM (DESC block); as an ORDER BY modifier it never follows "(".
+            boolean blockedDescribeAlias = !token.quoted() && word.equals("DESC")
+                    && followsOpenParen(stripped, token.start());
+            if (blockedKeyword || blockedPrefix || blockedCatalog
+                    || blockedFunction || blockedDescribeAlias) {
                 throw new IllegalArgumentException(
-                        "Blocked keyword '" + blocked.trim() + "' is not allowed in ad-hoc queries");
+                        "Blocked SQL token '" + word + "' is not allowed in ad-hoc queries");
             }
         }
 
-        // Step 5: Block DuckDB replacement scans — direct file path references in FROM clause.
+        // Step 4: Block DuckDB replacement scans — direct file path references in FROM clause.
         // DuckDB auto-detects file extensions (e.g., SELECT * FROM '/tmp/data.parquet')
         // and internally calls read_parquet/read_csv without any function name in the SQL.
         // The keyword blocklist cannot catch this, so we block path-like patterns in string literals.
@@ -145,7 +156,8 @@ public final class SqlValidator {
      * <p>Blocks strings matching common path patterns:</p>
      * <ul>
      *   <li>Absolute paths: {@code '/etc/...'}, {@code '/tmp/...'}, {@code 'C:\...'}</li>
-     *   <li>Relative paths with extensions: {@code './data.parquet'}, {@code '../secret.csv'}</li>
+     *   <li>Explicit relative paths/traversal: {@code './data.parquet'},
+     *       {@code '../secret.csv'}, {@code 'data/../../secret.csv'}</li>
      *   <li>URL schemes: {@code 'http://...'}, {@code 'https://...'}, {@code 's3://...'}</li>
      * </ul>
      *
@@ -174,14 +186,41 @@ public final class SqlValidator {
                         i++;
                     }
                 }
-                String literal = sql.substring(start, Math.min(i, len)).trim().toLowerCase();
+                String literal = sql.substring(start, Math.min(i, len)).trim().toLowerCase(Locale.ROOT);
 
                 // Check for path-like patterns
-                if (literal.startsWith("/")          // Unix absolute path
+                if (isPathLikeLiteral(literal)) {
+                    throw new IllegalArgumentException(
+                            "File path or URL references are not allowed in queries");
+                }
+            } else if (sql.charAt(i) == '$') {
+                String delimiter = dollarQuoteDelimiterAt(sql, i);
+                if (delimiter != null) {
+                    int start = i + delimiter.length();
+                    int end = sql.indexOf(delimiter, start);
+                    if (end < 0) {
+                        return;
+                    }
+                    String literal = sql.substring(start, end).trim().toLowerCase(Locale.ROOT);
+                    if (isPathLikeLiteral(literal)) {
+                        throw new IllegalArgumentException(
+                                "File path or URL references are not allowed in queries");
+                    }
+                    i = end + delimiter.length() - 1;
+                }
+            }
+            i++;
+        }
+    }
+
+    private static boolean isPathLikeLiteral(String literal) {
+        return literal.startsWith("/")          // Unix absolute path
                         || literal.startsWith("./")  // Relative path
                         || literal.startsWith("../") // Parent directory
                         || literal.startsWith("~")   // Home directory
                         || (literal.length() >= 3 && literal.charAt(1) == ':' && (literal.charAt(2) == '\\' || literal.charAt(2) == '/')) // Windows path C:\
+                        || literal.contains("/../")
+                        || literal.contains("\\..\\")
                         || literal.startsWith("http://")
                         || literal.startsWith("https://")
                         || literal.startsWith("s3://")
@@ -189,13 +228,133 @@ public final class SqlValidator {
                         || literal.startsWith("gs://")
                         || literal.startsWith("az://")
                         || literal.startsWith("abfss://")
-                        || literal.startsWith("file://")) {
-                    throw new IllegalArgumentException(
-                            "File path or URL references are not allowed in queries");
+                        || literal.startsWith("file://");
+    }
+
+    private static List<Token> tokenize(String sql) {
+        List<Token> tokens = new ArrayList<>();
+        int i = 0;
+
+        while (i < sql.length()) {
+            char c = sql.charAt(i);
+            if (c == '\'') {
+                i = skipSingleQuotedString(sql, i);
+                continue;
+            }
+            if (c == '$') {
+                String delimiter = dollarQuoteDelimiterAt(sql, i);
+                if (delimiter != null) {
+                    int end = sql.indexOf(delimiter, i + delimiter.length());
+                    i = end < 0 ? sql.length() : end + delimiter.length();
+                    continue;
                 }
+            }
+            if (c == '"') {
+                StringBuilder identifier = new StringBuilder();
+                int start = i;
+                i++;
+                while (i < sql.length()) {
+                    char quoted = sql.charAt(i);
+                    if (quoted == '"' && i + 1 < sql.length() && sql.charAt(i + 1) == '"') {
+                        identifier.append('"');
+                        i += 2;
+                    } else if (quoted == '"') {
+                        i++;
+                        break;
+                    } else {
+                        identifier.append(quoted);
+                        i++;
+                    }
+                }
+                if (!identifier.isEmpty()) {
+                    tokens.add(new Token(identifier.toString().toUpperCase(Locale.ROOT), start, i, true));
+                }
+                continue;
+            }
+            if (Character.isLetter(c) || c == '_') {
+                int start = i++;
+                while (i < sql.length()) {
+                    char identifierChar = sql.charAt(i);
+                    if (!Character.isLetterOrDigit(identifierChar)
+                            && identifierChar != '_' && identifierChar != '$') {
+                        break;
+                    }
+                    i++;
+                }
+                tokens.add(new Token(sql.substring(start, i).toUpperCase(Locale.ROOT), start, i, false));
+                continue;
             }
             i++;
         }
+
+        return tokens;
+    }
+
+    /** True when the closest non-whitespace character before {@code tokenStart} is {@code (}. */
+    private static boolean followsOpenParen(String sql, int tokenStart) {
+        int i = tokenStart - 1;
+        while (i >= 0 && Character.isWhitespace(sql.charAt(i))) {
+            i--;
+        }
+        return i >= 0 && sql.charAt(i) == '(';
+    }
+
+    private static int skipSingleQuotedString(String sql, int start) {
+        boolean backslashEscapes = isEscapeStringPrefix(sql, start);
+        int i = start + 1;
+        while (i < sql.length()) {
+            if (backslashEscapes && sql.charAt(i) == '\\' && i + 1 < sql.length()) {
+                i += 2;
+            } else if (sql.charAt(i) == '\'') {
+                if (i + 1 < sql.length() && sql.charAt(i + 1) == '\'') {
+                    i += 2;
+                } else {
+                    return i + 1;
+                }
+            } else {
+                i++;
+            }
+        }
+        return i;
+    }
+
+    private static boolean isEscapeStringPrefix(String sql, int quoteIndex) {
+        if (quoteIndex == 0 || (sql.charAt(quoteIndex - 1) != 'E' && sql.charAt(quoteIndex - 1) != 'e')) {
+            return false;
+        }
+        return quoteIndex == 1
+                || (!Character.isLetterOrDigit(sql.charAt(quoteIndex - 2))
+                && sql.charAt(quoteIndex - 2) != '_');
+    }
+
+    private static String dollarQuoteDelimiterAt(String sql, int start) {
+        if (sql.charAt(start) != '$') {
+            return null;
+        }
+        int i = start + 1;
+        while (i < sql.length() && (Character.isLetterOrDigit(sql.charAt(i)) || sql.charAt(i) == '_')) {
+            i++;
+        }
+        return i < sql.length() && sql.charAt(i) == '$' ? sql.substring(start, i + 1) : null;
+    }
+
+    private static boolean isFunctionInvocation(String sql, int tokenEnd) {
+        int i = tokenEnd;
+        while (i < sql.length() && Character.isWhitespace(sql.charAt(i))) {
+            i++;
+        }
+        return i < sql.length() && sql.charAt(i) == '(';
+    }
+
+    /**
+     * A bare word or double-quoted identifier from the comment-stripped SQL.
+     *
+     * @param text   upper-cased token text
+     * @param start  index of the first character (the opening quote for quoted identifiers)
+     * @param end    index just past the last character (past the closing quote)
+     * @param quoted true if the token came from a double-quoted identifier
+     */
+    private record Token(String text, int start, int end, boolean quoted) {
     }
 
     /**
@@ -221,14 +380,38 @@ public final class SqlValidator {
         while (i < len) {
             char c = sql.charAt(i);
 
+            // Quoted identifier — preserve everything, including comment markers.
+            if (c == '"') {
+                result.append(c);
+                i++;
+                while (i < len) {
+                    char qc = sql.charAt(i);
+                    result.append(qc);
+                    if (qc == '"' && i + 1 < len && sql.charAt(i + 1) == '"') {
+                        result.append('"');
+                        i += 2;
+                    } else if (qc == '"') {
+                        i++;
+                        break;
+                    } else {
+                        i++;
+                    }
+                }
+                continue;
+            }
+
             // String literal — preserve everything inside quotes (including comment-like sequences)
             if (c == '\'') {
+                boolean backslashEscapes = isEscapeStringPrefix(sql, i);
                 result.append(c);
                 i++;
                 while (i < len) {
                     char sc = sql.charAt(i);
                     result.append(sc);
-                    if (sc == '\'' && i + 1 < len && sql.charAt(i + 1) == '\'') {
+                    if (backslashEscapes && sc == '\\' && i + 1 < len) {
+                        result.append(sql.charAt(i + 1));
+                        i += 2;
+                    } else if (sc == '\'' && i + 1 < len && sql.charAt(i + 1) == '\'') {
                         // Escaped quote ('') — consume both
                         result.append('\'');
                         i += 2;
@@ -240,6 +423,22 @@ public final class SqlValidator {
                     }
                 }
                 continue;
+            }
+
+            // Dollar-quoted string — preserve its contents, including comment markers.
+            if (c == '$') {
+                String delimiter = dollarQuoteDelimiterAt(sql, i);
+                if (delimiter != null) {
+                    int end = sql.indexOf(delimiter, i + delimiter.length());
+                    if (end < 0) {
+                        result.append(sql, i, len);
+                        break;
+                    }
+                    int after = end + delimiter.length();
+                    result.append(sql, i, after);
+                    i = after;
+                    continue;
+                }
             }
 
             // Block comment /* ... */ — skip entirely (handles nesting)
