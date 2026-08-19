@@ -20,13 +20,19 @@ import java.util.List;
 /**
  * MCP server configuration — registers all tool-providing services.
  *
+ * <p><b>Opt-in.</b> The MCP server is off unless {@code yaci.store.mcp-server.enabled=true}
+ * (the shipped {@code mcp} profile sets it). The same property also drives
+ * {@code spring.ai.mcp.server.enabled} in the application defaults, so neither the tools nor
+ * the {@code /mcp} endpoint exist by default — the analytics tools include unauthenticated ad-hoc
+ * SQL, so exposing them must be a deliberate operator decision, like the analytics REST API.</p>
+ *
  * <p>Each service is injected with {@code @Autowired(required = false)} so tools
  * are only registered when their dependencies are satisfied. For example, analytics
  * tools require {@code yaci.store.analytics.query.enabled=true}.</p>
  */
 @Slf4j
 @Configuration
-@ConditionalOnProperty(prefix = "yaci.store.mcp-server", name = "enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(prefix = "yaci.store.mcp-server", name = "enabled", havingValue = "true")
 @ComponentScan(basePackages = "com.bloxbean.cardano.yaci.store.mcp.server")
 public class McpServerConfig {
 

@@ -11,28 +11,29 @@ import java.util.Map;
 
 /**
  * Configuration properties for the DApp registry.
- * Binds to store.mcp-server.dapp-registry.* in application.yml
+ * Binds to yaci.store.mcp-server.dapp-registry.* in application.yml
  *
  * Example configuration:
  * <pre>
- * store:
- *   mcp-server:
- *     dapp-registry:
- *       enabled: true
- *       dapps:
- *         mainnet:
- *           - name: "minswap"
- *             display-name: "Minswap"
- *             category: "DEX"
- *             description: "Multi-pool AMM DEX"
- *             script-addresses:
- *               - "addr1..."
- *             policy-ids:
- *               - "e16c2dc8..."
+ * yaci:
+ *   store:
+ *     mcp-server:
+ *       dapp-registry:
+ *         enabled: true
+ *         dapps:
+ *           mainnet:
+ *             - name: "minswap"
+ *               display-name: "Minswap"
+ *               category: "DEX"
+ *               description: "Multi-pool AMM DEX"
+ *               script-addresses:
+ *                 - "addr1..."
+ *               policy-ids:
+ *                 - "e16c2dc8..."
  * </pre>
  */
 @Configuration
-@ConfigurationProperties(prefix = "store.mcp-server.dapp-registry")
+@ConfigurationProperties(prefix = "yaci.store.mcp-server.dapp-registry")
 @Data
 public class DAppRegistryProperties {
     /**

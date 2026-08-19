@@ -1,4 +1,30 @@
-# MCP Server Configuration
+####################
+# MCP server
+####################
+# Activating this profile turns the MCP server on: yaci.store.mcp-server.enabled=true registers
+# the yaci-store tools and enables the Spring AI MCP server (the /mcp endpoint). Without it (or
+# with yaci.store.mcp-server.enabled=false, the default) neither the tools nor the endpoint exist.
+# The analytics tools (analytics-list-tables / -describe-table / -execute-sql, balances) include
+# unauthenticated ad-hoc SQL over the exported data and additionally require
+# yaci.store.analytics.query.enabled=true (analytics profile) — expose deliberately.
+yaci:
+  store:
+    mcp-server:
+      enabled: true
+
+      # DApp registry tools (lookup by address / policy / script hash, categories).
+      # External sync from the Cardano Fans CRFA registry performs outbound HTTP when enabled.
+      dapp-registry:
+        enabled: true
+        external-registry:
+          enabled: false
+          # schedule: "0 0 2 * * ?"   # cron for the external sync when enabled (default: daily 02:00)
+
+      # Token registry metadata / IPFS content lookup tools. Perform outbound HTTP.
+      tools:
+        external-metadata:
+          enabled: true
+
 spring:
   ai:
     mcp:

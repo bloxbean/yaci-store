@@ -19,7 +19,7 @@ import java.util.*;
 @RequiredArgsConstructor
 @Slf4j
 @ConditionalOnProperty(
-    name = "store.mcp-server.dapp-registry.enabled",
+    name = "yaci.store.mcp-server.dapp-registry.enabled",
     havingValue = "true",
     matchIfMissing = true
 )

@@ -36,7 +36,7 @@ import java.util.concurrent.TimeUnit;
 @RequiredArgsConstructor
 @Slf4j
 @ConditionalOnProperty(
-    name = "store.mcp-server.tools.external-metadata.enabled",
+    name = "yaci.store.mcp-server.tools.external-metadata.enabled",
     havingValue = "true",
     matchIfMissing = true
 )

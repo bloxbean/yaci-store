@@ -236,6 +236,19 @@ public class AnalyticsStoreProperties {
         private int maxRows = 10_000;
 
         /**
+         * Upper bound for a per-call query timeout. Callers of the query layer (e.g. the MCP
+         * {@code analytics-execute-sql} tool) may ask for a longer timeout than the default
+         * {@code duckdb.reader.query-timeout-seconds} for heavy analytical queries; requests
+         * above this value are reduced to it. The REST endpoints always use the default.
+         *
+         * Note that a long-running query holds one of the {@code duckdb.reader.maximum-pool-size}
+         * reader permits for its whole duration.
+         *
+         * Default: 300 seconds.
+         */
+        private int maxTimeoutSeconds = 300;
+
+        /**
          * Enable/disable the REST API endpoints for analytics queries.
          *
          * When false, only the MCP tools are available for querying analytics data.

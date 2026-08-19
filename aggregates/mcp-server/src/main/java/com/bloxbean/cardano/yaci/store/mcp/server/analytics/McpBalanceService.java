@@ -149,7 +149,8 @@ public class McpBalanceService {
                     "Data is NOT real-time — it reflects balances as of yesterday. " +
                     "For real-time balance of a specific address, use 'analytics-address-balance' instead. " +
                     "Returns addresses ranked by total ADA holdings with UTXO count. " +
-                    "This is a heavy query that scans millions of UTXOs — may take 10-20 seconds. " +
+                    "This is a heavy query that scans the whole UTXO set — may take from seconds (testnets) to " +
+                    "minutes (mainnet); it runs with the server's maximum query timeout. " +
                     "Maximum limit is 100 addresses. ADA balances are in ADA (not lovelace).")
     public Map<String, Object> getTopBalances(
             @ToolParam(description = "Number of top addresses to return (default: 10, max: 100)")
@@ -160,8 +161,12 @@ public class McpBalanceService {
 
         String sql = String.format(PARQUET_TOP_BALANCES_SQL, limit);
 
+        // A full UTXO-set scan legitimately needs longer than the default query timeout on
+        // mainnet: run it with the operator-configured maximum (query.max-timeout-seconds).
         long start = System.currentTimeMillis();
-        List<Map<String, Object>> rows = queryExecutor.queryForList(sql);
+        List<Map<String, Object>> rows = queryExecutor
+                .execute(sql, limit, queryExecutor.getMaxTimeoutSeconds())
+                .rows();
         long elapsed = System.currentTimeMillis() - start;
 
         int bufferDays = properties.getContinuousSync().getBufferDays();

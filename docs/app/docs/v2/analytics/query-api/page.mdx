@@ -112,6 +112,8 @@ endpoints and the MCP tools use the hard limit.
   difference between milliseconds and a full scan of a table with hundreds of millions of rows.
 - DuckDB SQL is PostgreSQL-compatible: CTEs (including `WITH RECURSIVE`), window functions,
   `QUALIFY`, list/struct functions and `PERCENTILE_CONT` all work.
+- `DATE`, `TIME` and `TIMESTAMP` values are returned as ISO-8601 strings (`2026-08-19`,
+  `2026-08-19T00:10:25Z` — timestamps with time zone normalized to UTC); binary values as Base64.
 - `address_utxo` is exported **flattened**: one row per (output, asset unit). Every output has
   exactly one `asset_unit = 'lovelace'` row; other assets are extra rows with `policy_id`,
   `asset_name`, `quantity`.
@@ -230,6 +232,7 @@ PostgreSQL ──(exporters, writer connection)──▶ DuckLake catalog + Parq
 | `yaci.store.analytics.query.default-max-rows` | `100` | Rows returned by `POST /sql` when the request has no `maxRows` (at most `max-rows`) |
 | `yaci.store.analytics.query.max-rows` | `10000` | Hard limit for rows per query (ad-hoc SQL, pre-built endpoints, MCP tools); 10,000 is also the built-in ceiling — the property can only lower it |
 | `yaci.store.analytics.duckdb.reader.maximum-pool-size` | CPU cores | Max concurrent queries on the engine |
-| `yaci.store.analytics.duckdb.reader.query-timeout-seconds` | `30` | Per-query timeout |
+| `yaci.store.analytics.duckdb.reader.query-timeout-seconds` | `30` | Per-query timeout (REST endpoints always use it) |
+| `yaci.store.analytics.query.max-timeout-seconds` | `300` | Longest per-call timeout a trusted caller (the MCP `analytics-execute-sql` tool's `timeoutSeconds`) may request; never below the default |
 | `yaci.store.analytics.duckdb.memory-limit` | _(DuckDB default)_ | Memory limit per DuckDB instance (writer and query engine each) |
 | `yaci.store.analytics.duckdb.threads` | CPU cores | DuckDB threads per instance |

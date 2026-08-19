@@ -28,7 +28,7 @@ import java.util.stream.Collectors;
  * - Browse DApps by category
  * - Discover available DApps in the Cardano ecosystem
  *
- * Data source: Configured in application.yml under store.mcp-server.dapp-registry
+ * Data source: Configured in application.yml under yaci.store.mcp-server.dapp-registry
  * Based on: Cardano Fans CRFA off-chain data registry
  */
 @Service
@@ -36,7 +36,7 @@ import java.util.stream.Collectors;
 @Slf4j
 @EnableScheduling
 @ConditionalOnProperty(
-    name = "store.mcp-server.dapp-registry.enabled",
+    name = "yaci.store.mcp-server.dapp-registry.enabled",
     havingValue = "true",
     matchIfMissing = true
 )
@@ -327,7 +327,7 @@ public class McpDAppRegistryService {
      * Scheduled sync from external GitHub registry.
      * Runs daily at 2 AM by default (configurable via cron expression).
      */
-    @Scheduled(cron = "${store.mcp-server.dapp-registry.external-registry.schedule:0 0 2 * * ?}")
+    @Scheduled(cron = "${yaci.store.mcp-server.dapp-registry.external-registry.schedule:0 0 2 * * ?}")
     public void syncExternalRegistry() {
         if (!registryProperties.getExternalRegistry().isEnabled()) {
             log.debug("External registry sync is disabled");
