@@ -149,6 +149,12 @@ public class McpExternalMetadataService {
                     } else {
                         errors.put(result.assetUnit, result.error != null ? result.error : "Unknown error");
                     }
+                } catch (InterruptedException e) {
+                    // Restore the interrupt flag and stop collecting; whatever was already
+                    // gathered is returned as a partial result.
+                    Thread.currentThread().interrupt();
+                    log.warn("Interrupted while collecting token metadata results; returning partial results");
+                    break;
                 } catch (Exception e) {
                     log.warn("Error collecting result: {}", e.getMessage());
                 }
