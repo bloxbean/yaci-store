@@ -61,3 +61,5 @@ _rocksdb
 /scripts/export-dbsync/**/*.parquet
 /scripts/export-dbsync/**/*.tmp
 /scripts/export-dbsync/.*_epochs/
+
+bin
