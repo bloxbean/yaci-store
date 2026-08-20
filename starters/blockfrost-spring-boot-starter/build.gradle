@@ -9,6 +9,7 @@ dependencies {
     api project(":extensions:blockfrost:blockfrost-scripts")
     api project(":extensions:blockfrost:blockfrost-metadata")
     api project(":extensions:blockfrost:blockfrost-util")
+    api project(":extensions:blockfrost:blockfrost-network")
 
     annotationProcessor "org.springframework.boot:spring-boot-configuration-processor"
 }
