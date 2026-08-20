@@ -296,26 +296,6 @@ public class TransactionProcessor {
                 .build());
     }
 
-    /**
-    private TxResolvedInput resolveInput(String txHash, int outputIndex) {
-        return utxoRepository.findById(new UtxoId(txHash, outputIndex))
-                .map(addressUtxo ->
-                        TxResolvedInput.builder()
-                                .txHash(addressUtxo.getTxHash())
-                                .outputIndex(addressUtxo.getOutputIndex())
-                                .amounts(addressUtxo.getAmounts())
-                                .dataHash(addressUtxo.getDataHash())
-                                .inlineDatum(addressUtxo.getInlineDatum())
-                                .referenceScriptHash(addressUtxo.getReferenceScriptHash())
-                                .build())
-                .orElse(TxResolvedInput.builder()
-                        .txHash(txHash)
-                        .outputIndex(outputIndex)
-                        .build());
-    }
-
-     **/
-
     private TxOuput convertOutput(TransactionOutput output) {
         if (output == null)
             return null;
