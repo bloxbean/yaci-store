@@ -785,31 +785,30 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
                 .build();
     }
 
+    /**
+     * Current-snapshot voting power, matching list enrichment. A DRep absent from
+     * {@code max(drep_dist.epoch)} (and the matching local snapshot) has no amount,
+     * not the last historical row.
+     */
     private Long fetchAmountForIdentity(BFDRepIdentity identity, String drepId, String drepHash) {
         if (drepId != null) {
-            Long distAmount = dsl.select(DREP_DIST.AMOUNT)
-                    .from(DREP_DIST)
-                    .where(DREP_DIST.DREP_ID.eq(drepId))
-                    .orderBy(DREP_DIST.EPOCH.desc())
-                    .limit(1)
-                    .fetchOptional(DREP_DIST.AMOUNT)
-                    .orElse(null);
-            if (distAmount != null) {
-                return distAmount;
-            }
+            return fetchLatestDRepAmounts(List.of(drepId)).get(drepId);
         }
 
+        Integer latestLocalEpoch = dsl.select(DSL.max(LOCAL_DREP_DIST.EPOCH))
+                .from(LOCAL_DREP_DIST)
+                .fetchOne(0, Integer.class);
+        if (latestLocalEpoch == null) {
+            return null;
+        }
         var localQuery = dsl.select(LOCAL_DREP_DIST.AMOUNT)
                 .from(LOCAL_DREP_DIST)
-                .where(LOCAL_DREP_DIST.DREP_HASH.eq(drepHash != null ? drepHash : identity.hash()));
+                .where(LOCAL_DREP_DIST.DREP_HASH.eq(drepHash != null ? drepHash : identity.hash()))
+                .and(LOCAL_DREP_DIST.EPOCH.eq(latestLocalEpoch));
         if (identity.credType() != null) {
             localQuery = localQuery.and(LOCAL_DREP_DIST.DREP_TYPE.eq(identity.credType()));
         }
-        return localQuery
-                .orderBy(LOCAL_DREP_DIST.EPOCH.desc())
-                .limit(1)
-                .fetchOptional(LOCAL_DREP_DIST.AMOUNT)
-                .orElse(null);
+        return localQuery.fetchOptional(LOCAL_DREP_DIST.AMOUNT).orElse(null);
     }
 
     private Condition drepRowMatches(BFDRepIdentity identity) {
