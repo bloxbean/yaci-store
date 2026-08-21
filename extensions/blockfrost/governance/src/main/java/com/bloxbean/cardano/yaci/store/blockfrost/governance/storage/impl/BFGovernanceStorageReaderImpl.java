@@ -11,6 +11,7 @@ import com.bloxbean.cardano.yaci.store.blockfrost.governance.storage.BFGovernanc
 import com.bloxbean.cardano.yaci.store.blockfrost.governance.storage.impl.model.BFDRepDelegator;
 import com.bloxbean.cardano.yaci.store.blockfrost.governance.storage.impl.model.BFDRep;
 import com.bloxbean.cardano.yaci.store.blockfrost.governance.storage.impl.model.BFProposal;
+import com.bloxbean.cardano.yaci.store.blockfrost.governance.util.BFDRepIdentity;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.governance.domain.DRepRegistration;
@@ -19,12 +20,14 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jooq.Condition;
 import org.jooq.DSLContext;
 import org.jooq.JSON;
 import org.jooq.Record;
 import org.jooq.Select;
 import org.jooq.SortField;
 import org.jooq.SortOrder;
+import org.jooq.TableField;
 import org.jooq.impl.DSL;
 import org.springframework.stereotype.Component;
 
@@ -533,31 +536,61 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
     }
 
     private Map<String, Long> fetchLatestDRepAmounts(List<String> drepIds) {
-        Integer latestLocalEpoch = dsl.select(DSL.max(LOCAL_DREP_DIST.EPOCH))
-                .from(LOCAL_DREP_DIST)
-                .fetchOne(0, Integer.class);
-
-        if (latestLocalEpoch != null) {
-            return dsl.selectDistinct(DREP.DREP_ID, LOCAL_DREP_DIST.AMOUNT)
-                    .from(DREP)
-                    .join(LOCAL_DREP_DIST).on(LOCAL_DREP_DIST.DREP_HASH.eq(DREP.DREP_HASH))
-                    .where(DREP.DREP_ID.in(drepIds))
-                    .and(LOCAL_DREP_DIST.EPOCH.eq(latestLocalEpoch))
-                    .fetchMap(DREP.DREP_ID, LOCAL_DREP_DIST.AMOUNT);
-        }
-
+        Map<String, Long> amounts = new HashMap<>();
         Integer latestDistEpoch = dsl.select(DSL.max(DREP_DIST.EPOCH))
                 .from(DREP_DIST)
                 .fetchOne(0, Integer.class);
-        if (latestDistEpoch == null) return Map.of();
+        if (latestDistEpoch != null) {
+            dsl.select(DREP_DIST.DREP_ID, DREP_DIST.AMOUNT)
+                    .from(DREP_DIST)
+                    .where(DREP_DIST.DREP_ID.in(drepIds))
+                    .and(DREP_DIST.EPOCH.eq(latestDistEpoch))
+                    .fetch()
+                    .forEach(record -> amounts.put(record.get(DREP_DIST.DREP_ID), record.get(DREP_DIST.AMOUNT)));
+        }
 
-        Map<String, Long> amounts = new HashMap<>();
-        dsl.select(DREP_DIST.DREP_ID, DREP_DIST.AMOUNT)
-                .from(DREP_DIST)
-                .where(DREP_DIST.DREP_ID.in(drepIds))
-                .and(DREP_DIST.EPOCH.eq(latestDistEpoch))
+        List<String> missing = drepIds.stream()
+                .filter(id -> id != null && !BFDRepIdentity.isSpecialId(id) && !amounts.containsKey(id))
+                .toList();
+        if (missing.isEmpty()) {
+            return amounts;
+        }
+
+        Integer latestLocalEpoch = dsl.select(DSL.max(LOCAL_DREP_DIST.EPOCH))
+                .from(LOCAL_DREP_DIST)
+                .fetchOne(0, Integer.class);
+        if (latestLocalEpoch == null) {
+            return amounts;
+        }
+
+        // Pair local distribution with the DRep's own credential type so a key-hash and
+        // script-hash DRep that share a raw hash do not inherit each other's amount.
+        var latestCredRanked = dsl.select(
+                        DREP_REGISTRATION.DREP_ID,
+                        DREP_REGISTRATION.DREP_HASH,
+                        DREP_REGISTRATION.CRED_TYPE,
+                        DSL.rowNumber().over(DSL.partitionBy(DREP_REGISTRATION.DREP_ID)
+                                        .orderBy(DREP_REGISTRATION.SLOT.desc(),
+                                                DREP_REGISTRATION.TX_INDEX.desc(),
+                                                DREP_REGISTRATION.CERT_INDEX.desc()))
+                                .as("rn")
+                )
+                .from(DREP_REGISTRATION)
+                .where(DREP_REGISTRATION.DREP_ID.in(missing))
+                .asTable("latest_cred_ranked");
+
+        var latestDrepId = latestCredRanked.field(DREP_REGISTRATION.DREP_ID);
+        var latestDrepHash = latestCredRanked.field(DREP_REGISTRATION.DREP_HASH);
+        var latestCredType = latestCredRanked.field(DREP_REGISTRATION.CRED_TYPE);
+        dsl.select(latestDrepId, LOCAL_DREP_DIST.AMOUNT)
+                .from(latestCredRanked)
+                .join(LOCAL_DREP_DIST)
+                .on(LOCAL_DREP_DIST.DREP_HASH.eq(latestDrepHash)
+                        .and(LOCAL_DREP_DIST.DREP_TYPE.eq(latestCredType)))
+                .where(latestCredRanked.field("rn", Integer.class).eq(1))
+                .and(LOCAL_DREP_DIST.EPOCH.eq(latestLocalEpoch))
                 .fetch()
-                .forEach(record -> amounts.put(record.get(DREP_DIST.DREP_ID), record.get(DREP_DIST.AMOUNT)));
+                .forEach(record -> amounts.put(record.get(latestDrepId), record.get(LOCAL_DREP_DIST.AMOUNT)));
         return amounts;
     }
 
@@ -637,19 +670,49 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
     }
 
     @Override
-    public Optional<BFDRep> findDRepByHash(String drepHex) {
-        var record = dsl.select(DREP.DREP_ID, DREP.DREP_HASH, DREP.STATUS, DREP.EPOCH)
+    public List<String> findDRepIdsByHash(String drepHash) {
+        if (drepHash == null || drepHash.isBlank()) {
+            return List.of();
+        }
+        return dsl.selectDistinct(DREP.DREP_ID)
                 .from(DREP)
-                .where(DREP.DREP_HASH.eq(drepHex))
-                .orderBy(DREP.SLOT.desc())
+                .where(DREP.DREP_HASH.eq(drepHash))
+                .and(DREP.DREP_ID.isNotNull())
+                .union(dsl.selectDistinct(DREP_REGISTRATION.DREP_ID)
+                        .from(DREP_REGISTRATION)
+                        .where(DREP_REGISTRATION.DREP_HASH.eq(drepHash))
+                        .and(DREP_REGISTRATION.DREP_ID.isNotNull()))
+                .fetch(0, String.class);
+    }
+
+    @Override
+    public Optional<BFDRep> findDRepById(BFDRepIdentity identity) {
+        if (identity == null) {
+            return Optional.empty();
+        }
+        if (identity.isSpecial()) {
+            return Optional.of(synthesizeSpecialDRep(identity));
+        }
+
+        var query = dsl.select(DREP.DREP_ID, DREP.DREP_HASH, DREP.STATUS, DREP.EPOCH)
+                .from(DREP)
+                .where(drepRowMatches(identity));
+        var record = query
+                .orderBy(DREP.SLOT.desc(), DREP.TX_INDEX.desc(), DREP.CERT_INDEX.desc())
                 .limit(1)
                 .fetchOne();
         if (record == null) return Optional.empty();
 
-        boolean hasScript = dsl.select(DREP_REGISTRATION.CRED_TYPE)
+        String drepId = record.get(DREP.DREP_ID);
+        String drepHash = record.get(DREP.DREP_HASH);
+        boolean hasScript = identity.credType() != null
+                ? identity.hasScript()
+                : dsl.select(DREP_REGISTRATION.CRED_TYPE)
                 .from(DREP_REGISTRATION)
-                .where(DREP_REGISTRATION.DREP_HASH.eq(drepHex))
-                .orderBy(DREP_REGISTRATION.SLOT.desc())
+                .where(drepRegistrationMatches(identity))
+                .orderBy(DREP_REGISTRATION.SLOT.desc(),
+                        DREP_REGISTRATION.TX_INDEX.desc(),
+                        DREP_REGISTRATION.CERT_INDEX.desc())
                 .limit(1)
                 .fetchOptional()
                 .map(r -> "SCRIPTHASH".equalsIgnoreCase(r.get(DREP_REGISTRATION.CRED_TYPE)))
@@ -657,45 +720,35 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
 
         Integer firstRegistrationEpoch = dsl.select(DREP_REGISTRATION.EPOCH)
                 .from(DREP_REGISTRATION)
-                .where(DREP_REGISTRATION.DREP_HASH.eq(drepHex))
+                .where(drepRegistrationMatches(identity))
                 .and(DREP_REGISTRATION.TYPE.eq(CertificateType.REG_DREP_CERT.name()))
-                .orderBy(DREP_REGISTRATION.SLOT.asc())
+                .orderBy(DREP_REGISTRATION.SLOT.asc(),
+                        DREP_REGISTRATION.TX_INDEX.asc(),
+                        DREP_REGISTRATION.CERT_INDEX.asc())
                 .limit(1)
                 .fetchOptional(DREP_REGISTRATION.EPOCH)
                 .orElse(null);
 
-        // Try local_drep_dist first (from local node), fall back to drep_dist (from epoch state)
-        Long amount = dsl.select(LOCAL_DREP_DIST.AMOUNT)
-                .from(LOCAL_DREP_DIST)
-                .where(LOCAL_DREP_DIST.DREP_HASH.eq(drepHex))
-                .orderBy(LOCAL_DREP_DIST.EPOCH.desc())
-                .limit(1)
-                .fetchOptional(LOCAL_DREP_DIST.AMOUNT)
-                .orElseGet(() ->
-                        dsl.select(DREP_DIST.AMOUNT)
-                                .from(DREP_DIST)
-                                .where(DREP_DIST.DREP_HASH.eq(drepHex))
-                                .orderBy(DREP_DIST.EPOCH.desc())
-                                .limit(1)
-                                .fetchOptional(DREP_DIST.AMOUNT)
-                                .orElse(null)
-                );
+        Long amount = fetchAmountForIdentity(identity, drepId, drepHash);
 
         String status = record.get(DREP.STATUS) != null ? record.get(DREP.STATUS).toString() : null;
         Integer lastCertEpoch = record.get(DREP.EPOCH);
 
-        // last_active_epoch = max(last cert epoch, last vote epoch)
-        Integer lastVoteEpoch = dsl.select(DSL.max(VOTING_PROCEDURE.EPOCH))
+        var lastVoteQuery = dsl.select(DSL.max(VOTING_PROCEDURE.EPOCH))
                 .from(VOTING_PROCEDURE)
-                .where(VOTING_PROCEDURE.VOTER_HASH.eq(drepHex))
-                .and(VOTING_PROCEDURE.VOTER_TYPE.in("DREP_KEY_HASH", "DREP_SCRIPT_HASH"))
-                .fetchOne(0, Integer.class);
+                .where(VOTING_PROCEDURE.VOTER_HASH.eq(drepHash));
+        String voterType = identity.voterType();
+        if (voterType != null) {
+            lastVoteQuery = lastVoteQuery.and(VOTING_PROCEDURE.VOTER_TYPE.eq(voterType));
+        } else {
+            lastVoteQuery = lastVoteQuery.and(VOTING_PROCEDURE.VOTER_TYPE.in("DREP_KEY_HASH", "DREP_SCRIPT_HASH"));
+        }
+        Integer lastVoteEpoch = lastVoteQuery.fetchOne(0, Integer.class);
         Integer lastActiveEpoch = (lastVoteEpoch != null && (lastCertEpoch == null || lastVoteEpoch > lastCertEpoch))
                 ? lastVoteEpoch : lastCertEpoch;
 
         boolean retired = "RETIRED".equalsIgnoreCase(status);
 
-        // A DRep is expired if it is not retired and has been inactive for more than drep_activity epochs
         boolean expired = false;
         if (!retired && lastActiveEpoch != null) {
             int currentEpoch = fetchCurrentEpoch();
@@ -706,8 +759,8 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
         }
 
         return Optional.of(BFDRep.builder()
-                .drepId(record.get(DREP.DREP_ID))
-                .drepHash(drepHex)
+                .drepId(drepId)
+                .drepHash(drepHash)
                 .status(status)
                 .epoch(lastActiveEpoch)
                 .activeEpoch(firstRegistrationEpoch)
@@ -717,14 +770,65 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
                 .build());
     }
 
+    /**
+     * Protocol-defined DReps have no {@code drep} row. Identity and voting power
+     * come from {@code drep_dist.drep_type}, matching the list endpoint.
+     */
+    private BFDRep synthesizeSpecialDRep(BFDRepIdentity identity) {
+        return BFDRep.builder()
+                .drepId(identity.drepId())
+                .drepHash("")
+                .status("REGISTERED")
+                .amount(fetchLatestSpecialDRepAmounts().getOrDefault(identity.drepId(), 0L))
+                .hasScript(false)
+                .expired(false)
+                .build();
+    }
+
+    private Long fetchAmountForIdentity(BFDRepIdentity identity, String drepId, String drepHash) {
+        if (drepId != null) {
+            Long distAmount = dsl.select(DREP_DIST.AMOUNT)
+                    .from(DREP_DIST)
+                    .where(DREP_DIST.DREP_ID.eq(drepId))
+                    .orderBy(DREP_DIST.EPOCH.desc())
+                    .limit(1)
+                    .fetchOptional(DREP_DIST.AMOUNT)
+                    .orElse(null);
+            if (distAmount != null) {
+                return distAmount;
+            }
+        }
+
+        var localQuery = dsl.select(LOCAL_DREP_DIST.AMOUNT)
+                .from(LOCAL_DREP_DIST)
+                .where(LOCAL_DREP_DIST.DREP_HASH.eq(drepHash != null ? drepHash : identity.hash()));
+        if (identity.credType() != null) {
+            localQuery = localQuery.and(LOCAL_DREP_DIST.DREP_TYPE.eq(identity.credType()));
+        }
+        return localQuery
+                .orderBy(LOCAL_DREP_DIST.EPOCH.desc())
+                .limit(1)
+                .fetchOptional(LOCAL_DREP_DIST.AMOUNT)
+                .orElse(null);
+    }
+
+    private Condition drepRowMatches(BFDRepIdentity identity) {
+        if (identity.drepId() != null) {
+            return DREP.DREP_ID.eq(identity.drepId());
+        }
+        return DREP.DREP_HASH.eq(identity.hash());
+    }
+
+    private Condition drepRegistrationMatches(BFDRepIdentity identity) {
+        return drepRegistrationMatches(
+                identity, DREP_REGISTRATION.DREP_ID, DREP_REGISTRATION.DREP_HASH, DREP_REGISTRATION.CRED_TYPE);
+    }
+
     @Override
-    public List<BFDRepDelegator> findDRepDelegators(String drepHex, int page, int count, Order order) {
-        // The latest completed AdaPot reward calculation provides a stable epoch_stake baseline.
-        // This lets the endpoint read only reward changes after that epoch instead of full history.
+    public List<BFDRepDelegator> findDRepDelegators(BFDRepIdentity identity, int page, int count, Order order) {
         Integer snapshotEpoch = findLatestStakeSnapshotEpoch();
 
-        // Resolve active delegators and pagination first, then load balance data only for this page.
-        var delegators = buildDRepDelegatorsQuery(drepHex, page, count, order, snapshotEpoch).fetch();
+        var delegators = buildDRepDelegatorsQuery(identity, page, count, order, snapshotEpoch).fetch();
         if (delegators.isEmpty()) {
             return List.of();
         }
@@ -740,8 +844,6 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
                 .map(r -> r.get("address", String.class))
                 .toList();
 
-        // Both calls are batched by address group and populate the same map: post-checkpoint
-        // changes for checkpointed addresses, and lifetime changes for fallback addresses.
         Map<String, Long> rewardChanges = new HashMap<>();
         fetchRewardChanges(rewardChanges, checkpointAddresses, snapshotEpoch);
         fetchRewardChanges(rewardChanges, addressesWithoutCheckpoint, null);
@@ -749,21 +851,16 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
         return delegators
                 .map(r -> {
                     String address = r.get("address", String.class);
-                    // stake_address_balance supplies the current UTxO component.
                     long currentBalance = r.get("amount", Long.class);
                     Long checkpointAmount = r.get("checkpoint_amount", Long.class);
                     long snapshotBalance = Optional.ofNullable(r.get("snapshot_balance", Long.class)).orElse(0L);
                     // epoch_stake stores controlled amount. Subtract its UTxO component to recover
                     // the reward balance at the checkpoint, then apply only later reward changes.
-                    // For fallback addresses checkpointReward is zero and rewardChanges contains
-                    // their complete reward and withdrawal history.
                     long checkpointReward = checkpointAmount == null ? 0L : checkpointAmount - snapshotBalance;
-                    // Unclaimed rewards cannot be negative; withdrawals can reduce them only to zero.
                     long withdrawableReward = Math.max(
                             checkpointReward + rewardChanges.getOrDefault(address, 0L),
                             0L
                     );
-                    // Blockfrost amount is controlled stake: current UTxO plus unclaimed rewards.
                     return BFDRepDelegator.builder()
                             .address(address)
                             .amount(currentBalance + withdrawableReward)
@@ -796,7 +893,7 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
         ));
     }
 
-    Select<?> buildDRepDelegatorsQuery(String drepHex, int page, int count, Order order, Integer snapshotEpoch) {
+    Select<?> buildDRepDelegatorsQuery(BFDRepIdentity identity, int page, int count, Order order, Integer snapshotEpoch) {
         SortOrder sortOrder = order == Order.desc ? SortOrder.DESC : SortOrder.ASC;
         var newerDelegation = DELEGATION_VOTE.as("newer");
         var newerStakeRegistration = STAKE_REGISTRATION.as("newer_stake_reg");
@@ -857,17 +954,22 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
         var hasActiveDRepRegistrationForDelegation = DSL.exists(
                 dsl.selectOne()
                         .from(DREP_REGISTRATION)
-                        .where(DREP_REGISTRATION.DREP_HASH.eq(drepHex))
+                        .where(drepRegistrationMatches(identity, DREP_REGISTRATION.DREP_ID, DREP_REGISTRATION.DREP_HASH, DREP_REGISTRATION.CRED_TYPE))
                         .and(DREP_REGISTRATION.TYPE.eq("REG_DREP_CERT"))
                         .and(delegationAtOrAfterCurrentDRepRegistration)
                         .andNotExists(
                                 dsl.selectOne()
                                         .from(newerDRepLifecycleEvent)
-                                        .where(newerDRepLifecycleEvent.DREP_HASH.eq(DREP_REGISTRATION.DREP_HASH))
+                                        .where(drepRegistrationMatches(identity, newerDRepLifecycleEvent.DREP_ID, newerDRepLifecycleEvent.DREP_HASH, newerDRepLifecycleEvent.CRED_TYPE))
                                         .and(newerDRepLifecycleEvent.TYPE.in("REG_DREP_CERT", "UNREG_DREP_CERT"))
                                         .and(newerDRepLifecycleEventInChainOrder)
                         )
         );
+        // Protocol-defined DReps have no registration cycle, so unregistration cannot
+        // clear their delegators. Regular DReps still require an open REG_DREP_CERT cycle.
+        Condition drepLifecycleActive = identity.isSpecial()
+                ? DSL.noCondition()
+                : hasActiveDRepRegistrationForDelegation;
         var pagedDelegators = dsl.select(
                         DELEGATION_VOTE.ADDRESS.as("address"),
                         DELEGATION_VOTE.SLOT.as("max_slot"),
@@ -875,9 +977,9 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
                         DELEGATION_VOTE.CERT_INDEX.as("max_cert_index")
                 )
                 .from(DELEGATION_VOTE)
-                .where(DELEGATION_VOTE.DREP_HASH.eq(drepHex))
+                .where(delegationVoteMatches(identity))
                 .and(hasActiveRegistrationForDelegation)
-                .and(hasActiveDRepRegistrationForDelegation)
+                .and(drepLifecycleActive)
                 .and(DSL.notExists(
                         dsl.selectOne()
                                 .from(newerDelegation)
@@ -1000,13 +1102,24 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
     }
 
     @Override
-    public List<DRepRegistration> findDRepUpdates(String drepHex, int page, int count, Order order) {
+    public List<DRepRegistration> findDRepUpdates(BFDRepIdentity identity, int page, int count, Order order) {
         SortField<?> sortField = order == Order.desc
                 ? DREP_REGISTRATION.SLOT.desc()
                 : DREP_REGISTRATION.SLOT.asc();
-        return dsl.select()
+        return dsl.select(
+                        DREP_REGISTRATION.TX_HASH,
+                        DREP_REGISTRATION.CERT_INDEX,
+                        DREP_REGISTRATION.TYPE,
+                        DREP_REGISTRATION.DREP_HASH,
+                        DREP_REGISTRATION.DREP_ID,
+                        DREP_REGISTRATION.ANCHOR_URL,
+                        DREP_REGISTRATION.ANCHOR_HASH,
+                        DREP_REGISTRATION.DEPOSIT,
+                        DREP_REGISTRATION.SLOT,
+                        DREP_REGISTRATION.EPOCH
+                )
                 .from(DREP_REGISTRATION)
-                .where(DREP_REGISTRATION.DREP_HASH.eq(drepHex))
+                .where(drepRegistrationMatches(identity))
                 .orderBy(sortField)
                 .limit(count)
                 .offset(offset(page, count))
@@ -1015,14 +1128,31 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
     }
 
     @Override
-    public List<VotingProcedure> findDRepVotes(String drepHex, int page, int count, Order order) {
+    public List<VotingProcedure> findDRepVotes(BFDRepIdentity identity, int page, int count, Order order) {
         SortField<?> sortField = order == Order.desc
                 ? VOTING_PROCEDURE.SLOT.desc()
                 : VOTING_PROCEDURE.SLOT.asc();
-        return dsl.select()
+        var query = dsl.select(
+                        VOTING_PROCEDURE.TX_HASH,
+                        VOTING_PROCEDURE.IDX,
+                        VOTING_PROCEDURE.TX_INDEX,
+                        VOTING_PROCEDURE.SLOT,
+                        VOTING_PROCEDURE.VOTER_HASH,
+                        VOTING_PROCEDURE.VOTER_TYPE,
+                        VOTING_PROCEDURE.VOTE,
+                        VOTING_PROCEDURE.GOV_ACTION_TX_HASH,
+                        VOTING_PROCEDURE.GOV_ACTION_INDEX,
+                        VOTING_PROCEDURE.EPOCH
+                )
                 .from(VOTING_PROCEDURE)
-                .where(VOTING_PROCEDURE.VOTER_HASH.eq(drepHex))
-                .and(VOTING_PROCEDURE.VOTER_TYPE.in("DREP_KEY_HASH", "DREP_SCRIPT_HASH"))
+                .where(VOTING_PROCEDURE.VOTER_HASH.eq(identity.hash()));
+        String voterType = identity.voterType();
+        if (voterType != null) {
+            query = query.and(VOTING_PROCEDURE.VOTER_TYPE.eq(voterType));
+        } else {
+            query = query.and(VOTING_PROCEDURE.VOTER_TYPE.in("DREP_KEY_HASH", "DREP_SCRIPT_HASH"));
+        }
+        return query
                 .orderBy(sortField)
                 .limit(count)
                 .offset(offset(page, count))
@@ -1031,15 +1161,54 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
     }
 
     @Override
-    public Optional<DRepRegistration> findDRepMetadata(String drepHex) {
-        return dsl.select()
+    public Optional<DRepRegistration> findDRepMetadata(BFDRepIdentity identity) {
+        return dsl.select(
+                        DREP_REGISTRATION.TX_HASH,
+                        DREP_REGISTRATION.CERT_INDEX,
+                        DREP_REGISTRATION.TYPE,
+                        DREP_REGISTRATION.DREP_HASH,
+                        DREP_REGISTRATION.DREP_ID,
+                        DREP_REGISTRATION.ANCHOR_URL,
+                        DREP_REGISTRATION.ANCHOR_HASH,
+                        DREP_REGISTRATION.DEPOSIT,
+                        DREP_REGISTRATION.SLOT,
+                        DREP_REGISTRATION.EPOCH
+                )
                 .from(DREP_REGISTRATION)
-                .where(DREP_REGISTRATION.DREP_HASH.eq(drepHex))
+                .where(drepRegistrationMatches(identity))
                 .and(DREP_REGISTRATION.ANCHOR_URL.isNotNull())
                 .orderBy(DREP_REGISTRATION.SLOT.desc())
                 .limit(1)
                 .fetchOptional()
                 .map(this::toDRepRegistrationDomain);
+    }
+
+    private Condition delegationVoteMatches(BFDRepIdentity identity) {
+        if (identity.isSpecial()) {
+            return DELEGATION_VOTE.DREP_TYPE.eq(identity.credType());
+        }
+        if (identity.drepId() != null) {
+            return DELEGATION_VOTE.DREP_ID.eq(identity.drepId());
+        }
+        Condition hashMatch = DELEGATION_VOTE.DREP_HASH.eq(identity.hash());
+        if (identity.credType() != null) {
+            return hashMatch.and(DELEGATION_VOTE.DREP_TYPE.eq(identity.credType()));
+        }
+        return hashMatch;
+    }
+
+    private Condition drepRegistrationMatches(BFDRepIdentity identity,
+                                             TableField<?, String> drepIdField,
+                                             TableField<?, String> drepHashField,
+                                             TableField<?, String> credTypeField) {
+        if (identity.drepId() != null) {
+            return drepIdField.eq(identity.drepId());
+        }
+        Condition hashMatch = drepHashField.eq(identity.hash());
+        if (identity.credType() != null) {
+            return hashMatch.and(credTypeField.eq(identity.credType()));
+        }
+        return hashMatch;
     }
 
     // ────────────────────────────────────────────────────────────────────────

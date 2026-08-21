@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.blockfrost.governance.storage;
 import com.bloxbean.cardano.yaci.store.blockfrost.governance.storage.impl.model.BFDRepDelegator;
 import com.bloxbean.cardano.yaci.store.blockfrost.governance.storage.impl.model.BFDRep;
 import com.bloxbean.cardano.yaci.store.blockfrost.governance.storage.impl.model.BFProposal;
+import com.bloxbean.cardano.yaci.store.blockfrost.governance.util.BFDRepIdentity;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.governance.domain.DRepRegistration;
 import com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure;
@@ -17,20 +18,26 @@ public interface BFGovernanceStorageReader {
     /** Paginated list of all unique DReps enriched with current list response fields. */
     List<BFDRep> findAllDReps(int page, int count, Order order);
 
-    /** Latest drep row for the given hex hash, enriched with voting power and script flag. */
-    Optional<BFDRep> findDRepByHash(String drepHex);
+    /**
+     * Distinct CIP-129 {@code drep_id} values stored for a raw 28-byte hash.
+     * Used to reject ambiguous hex path parameters when key and script twins coexist.
+     */
+    List<String> findDRepIdsByHash(String drepHash);
+
+    /** Latest drep row for the given CIP-129 identity, enriched with voting power and script flag. */
+    Optional<BFDRep> findDRepById(BFDRepIdentity identity);
 
     /** Delegators for a DRep with their total unspent lovelace. */
-    List<BFDRepDelegator> findDRepDelegators(String drepHex, int page, int count, Order order);
+    List<BFDRepDelegator> findDRepDelegators(BFDRepIdentity identity, int page, int count, Order order);
 
-    /** All drep_registration cert rows for the given DRep hash. */
-    List<DRepRegistration> findDRepUpdates(String drepHex, int page, int count, Order order);
+    /** All drep_registration cert rows for the given DRep identity. */
+    List<DRepRegistration> findDRepUpdates(BFDRepIdentity identity, int page, int count, Order order);
 
-    /** Voting procedure rows for the given DRep voter hash. */
-    List<VotingProcedure> findDRepVotes(String drepHex, int page, int count, Order order);
+    /** Voting procedure rows for the given DRep voter identity. */
+    List<VotingProcedure> findDRepVotes(BFDRepIdentity identity, int page, int count, Order order);
 
     /** Most recent drep_registration row that has an anchor URL. */
-    Optional<DRepRegistration> findDRepMetadata(String drepHex);
+    Optional<DRepRegistration> findDRepMetadata(BFDRepIdentity identity);
 
     // ── Proposals ────────────────────────────────────────────────────────────
 

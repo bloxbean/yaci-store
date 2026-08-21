@@ -136,10 +136,13 @@ public interface BFDRepMapper {
     /**
      * Adds the CIP-129 one-byte credential type prefix to the raw 28-byte hash.
      * Key hash dreps get prefix "22", script hash dreps get prefix "23".
+     * Protocol-defined DReps have an empty hash and keep an empty hex value.
      * This matches the Blockfrost API hex format.
      */
     default String addCip129Prefix(String rawHex, Boolean hasScript) {
-        if (rawHex == null) return null;
+        if (rawHex == null || rawHex.isEmpty()) {
+            return rawHex;
+        }
         String prefix = (hasScript != null && hasScript) ? "23" : "22";
         return prefix + rawHex;
     }

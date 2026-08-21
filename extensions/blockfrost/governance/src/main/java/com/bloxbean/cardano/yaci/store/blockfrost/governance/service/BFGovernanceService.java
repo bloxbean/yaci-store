@@ -1,13 +1,13 @@
 package com.bloxbean.cardano.yaci.store.blockfrost.governance.service;
 
 import com.bloxbean.cardano.client.address.Address;
-import com.bloxbean.cardano.client.governance.GovId;
 import com.bloxbean.cardano.client.transaction.spec.governance.actions.GovActionId;
 import com.bloxbean.cardano.client.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.blockfrost.governance.dto.*;
 import com.bloxbean.cardano.yaci.store.blockfrost.governance.mapper.BFDRepMapper;
 import com.bloxbean.cardano.yaci.store.blockfrost.governance.mapper.BFProposalMapper;
 import com.bloxbean.cardano.yaci.store.blockfrost.governance.storage.BFGovernanceStorageReader;
+import com.bloxbean.cardano.yaci.store.blockfrost.governance.util.BFDRepIdentity;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.common.util.GovUtil;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -45,40 +45,40 @@ public class BFGovernanceService {
     }
 
     public BFDRepDto getDRep(String drepId) {
-        String drepHex = resolveDRepHex(drepId);
-        return storageReader.findDRepByHash(drepHex)
+        BFDRepIdentity identity = resolveDRepIdentity(drepId);
+        return storageReader.findDRepById(identity)
                 .map(dRepMapper::toDto)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "DRep not found: " + drepId));
     }
 
     public List<BFDRepDelegatorDto> getDRepDelegators(String drepId, int page, int count, Order order) {
-        String drepHex = resolveDRepHex(drepId);
-        return storageReader.findDRepDelegators(drepHex, page, count, order)
+        BFDRepIdentity identity = resolveDRepIdentity(drepId);
+        return storageReader.findDRepDelegators(identity, page, count, order)
                 .stream()
                 .map(dRepMapper::toDelegatorDto)
                 .collect(Collectors.toList());
     }
 
     public List<BFDRepUpdateDto> getDRepUpdates(String drepId, int page, int count, Order order) {
-        String drepHex = resolveDRepHex(drepId);
-        return storageReader.findDRepUpdates(drepHex, page, count, order)
+        BFDRepIdentity identity = resolveDRepIdentity(drepId);
+        return storageReader.findDRepUpdates(identity, page, count, order)
                 .stream()
                 .map(dRepMapper::toUpdateDto)
                 .collect(Collectors.toList());
     }
 
     public List<BFDRepVoteDto> getDRepVotes(String drepId, int page, int count, Order order) {
-        String drepHex = resolveDRepHex(drepId);
-        return storageReader.findDRepVotes(drepHex, page, count, order)
+        BFDRepIdentity identity = resolveDRepIdentity(drepId);
+        return storageReader.findDRepVotes(identity, page, count, order)
                 .stream()
                 .map(dRepMapper::toVoteDto)
                 .collect(Collectors.toList());
     }
 
     public BFDRepMetadataDto getDRepMetadata(String drepId) {
-        String drepHex = resolveDRepHex(drepId);
-        return storageReader.findDRepMetadata(drepHex)
+        BFDRepIdentity identity = resolveDRepIdentity(drepId);
+        return storageReader.findDRepMetadata(identity)
                 .map(dRepMapper::toMetadataDto)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "DRep metadata not found: " + drepId));
@@ -178,23 +178,41 @@ public class BFGovernanceService {
     // ────────────────────────────────────────────────────────────────────────
 
     /**
-     * Resolves a DRep ID (bech32 or hex) to the raw 56-char hex used in the DB.
-     * Accepts a 56-character raw hash or a CIP-129 bech32 DRep ID.
+     * Resolves a path parameter to a credential-aware DRep identity.
+     * CIP-129 bech32 is canonical. A 56-character raw hash is accepted only when it
+     * maps to a single stored credential type; colliding key/script twins require bech32.
      */
-    private String resolveDRepHex(String drepId) {
+    private BFDRepIdentity resolveDRepIdentity(String drepId) {
         if (drepId == null || drepId.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "DRep ID cannot be null or blank");
         }
 
         if (drepId.matches("[0-9a-fA-F]{56}")) {
-            return drepId.toLowerCase(Locale.ROOT);
+            return resolveRawDRepHash(drepId.toLowerCase(Locale.ROOT));
         }
 
         try {
-            return GovId.toDrep(drepId).getHash();
+            return BFDRepIdentity.parse(drepId);
         } catch (Exception e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid DRep ID: " + drepId, e);
         }
+    }
+
+    private BFDRepIdentity resolveRawDRepHash(String drepHash) {
+        List<String> drepIds = storageReader.findDRepIdsByHash(drepHash);
+        if (drepIds.size() > 1) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Ambiguous DRep hash; use a CIP-129 DRep ID: " + drepHash);
+        }
+        if (drepIds.size() == 1) {
+            try {
+                return BFDRepIdentity.parse(drepIds.getFirst());
+            } catch (Exception e) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Invalid stored DRep ID for hash: " + drepHash, e);
+            }
+        }
+        return BFDRepIdentity.rawHash(drepHash);
     }
 
     /**
