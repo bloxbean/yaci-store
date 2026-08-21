@@ -20,6 +20,11 @@ public interface BFAccountMapper {
 
     BFAccountMapper INSTANCE = Mappers.getMapper(BFAccountMapper.class);
 
+    String ACTION_REGISTERED = "registered";
+    String ACTION_DEREGISTERED = "deregistered";
+    String REWARD_TYPE_REFUND = "refund";
+    String REWARD_TYPE_POOL_DEPOSIT_REFUND = "pool_deposit_refund";
+
     @Mapping(target = "controlledAmount", source = "controlledAmount", qualifiedByName = "stringOrZero")
     @Mapping(target = "rewardsSum", source = "rewardsSum", qualifiedByName = "stringOrZero")
     @Mapping(target = "withdrawalsSum", source = "withdrawalsSum", qualifiedByName = "stringOrZero")
@@ -88,9 +93,9 @@ public interface BFAccountMapper {
     @Named("registrationTypeToAction")
     default String registrationTypeToAction(String type) {
         if (type != null && type.toUpperCase().contains("DEREGISTRATION")) {
-            return "deregistered";
+            return ACTION_DEREGISTERED;
         }
-        return "registered";
+        return ACTION_REGISTERED;
     }
 
     @Named("normalizeRewardType")
@@ -99,8 +104,8 @@ public interface BFAccountMapper {
             return type;
         }
 
-        if ("refund".equalsIgnoreCase(type)) {
-            return "pool_deposit_refund";
+        if (REWARD_TYPE_REFUND.equalsIgnoreCase(type)) {
+            return REWARD_TYPE_POOL_DEPOSIT_REFUND;
         }
 
         return type;

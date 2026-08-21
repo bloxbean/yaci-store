@@ -53,7 +53,7 @@ public class BFAccountService {
                 .stream()
                 .map(registration -> {
                     var dto = mapper.toRegistrationDto(registration);
-                    if ("registered".equals(dto.getAction()))
+                    if (BFAccountMapper.ACTION_REGISTERED.equals(dto.getAction()))
                         dto.setDeposit(keyDeposit);
                     return dto;
                 })
