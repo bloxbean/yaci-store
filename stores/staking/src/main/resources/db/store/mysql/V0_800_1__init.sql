@@ -7,6 +7,7 @@ create table stake_registration
     credential      varchar(56) not null,
     cred_type       varchar(50),
     type            varchar(50),
+    deposit         bigint,
     address         varchar(255), -- bech32 stake address
     epoch           int,
     slot            bigint,

@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.staking.processor;
 
 import com.bloxbean.cardano.yaci.core.model.certs.*;
+import com.bloxbean.cardano.yaci.core.model.governance.Drep;
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
 import com.bloxbean.cardano.yaci.store.events.CertificateEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
@@ -8,6 +9,7 @@ import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.domain.TxCertificates;
 import com.bloxbean.cardano.yaci.store.staking.domain.Delegation;
 import com.bloxbean.cardano.yaci.store.staking.domain.StakeRegistrationDetail;
+import com.bloxbean.cardano.yaci.store.staking.service.DepositParamService;
 import com.bloxbean.cardano.yaci.store.staking.storage.StakingCertificateStorage;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -18,6 +20,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 
+import java.math.BigInteger;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -32,6 +35,9 @@ class StakeRegProcessorTest {
     @Mock
     private ApplicationEventPublisher publisher;
 
+    @Mock
+    private DepositParamService depositParamService;
+
     @InjectMocks
     private StakeRegProcessor stakeRegProcessor;
 
@@ -43,6 +49,7 @@ class StakeRegProcessorTest {
 
     @Test
     void processStakeRegistration_WhenCertTypeIsStakeRegistration() {
+        when(depositParamService.getKeyDeposit(anyInt())).thenReturn(BigInteger.valueOf(2_000_000));
         StakeRegistration stakeRegistrationCert = StakeRegistration
                 .builder()
                 .stakeCredential(StakeCredential.builder()
@@ -76,10 +83,12 @@ class StakeRegProcessorTest {
         assertThat(stakeRegDeSaved.getType()).isEqualTo(CertificateType.STAKE_REGISTRATION);
         assertThat(stakeRegDeSaved.getTxHash()).isEqualTo("08a5678d15d1a9196524a35e580b98b4e8b8dc2d57d544a6c8f9520f885d1fdb");
         assertThat(stakeRegDeSaved.getCredential()).isEqualTo(stakeRegistrationCert.getStakeCredential().getHash());
+        assertThat(stakeRegDeSaved.getDeposit()).isEqualTo(BigInteger.valueOf(2_000_000));
     }
 
     @Test
     void processStakeRegistration_WhenCertTypeIsStakeDeRegistration() {
+        when(depositParamService.getKeyDeposit(anyInt())).thenReturn(BigInteger.valueOf(2_000_000));
         StakeDeregistration stakeDeregistrationCert = StakeDeregistration
                 .builder()
                 .stakeCredential(StakeCredential.builder()
@@ -114,6 +123,7 @@ class StakeRegProcessorTest {
         assertThat(stakeRegDeSaved.getCertIndex()).isEqualTo(0);
         assertThat(stakeRegDeSaved.getTxHash()).isEqualTo("08a5678d15d1a9196524a35e580b98b4e8b8dc2d57d544a6c8f9520f885d1fdb");
         assertThat(stakeRegDeSaved.getCredential()).isEqualTo(stakeDeregistrationCert.getStakeCredential().getHash());
+        assertThat(stakeRegDeSaved.getDeposit()).isEqualTo(BigInteger.valueOf(2_000_000));
     }
 
     @Test
@@ -155,6 +165,70 @@ class StakeRegProcessorTest {
     }
 
     @Test
+    void processStakeRegistration_WhenCertTypeIsRegCert_storesCertificateCoin() {
+        BigInteger coin = BigInteger.valueOf(5_000_000);
+        Certificate certificate = RegCert.builder()
+                .stakeCredential(addrKeyCredential())
+                .coin(coin)
+                .build();
+
+        processAndAssertStoredDeposit(certificate, CertificateType.STAKE_REGISTRATION, coin);
+        verify(depositParamService, never()).getKeyDeposit(anyInt());
+    }
+
+    @Test
+    void processStakeRegistration_WhenCertTypeIsUnregCert_storesCertificateCoin() {
+        BigInteger coin = BigInteger.valueOf(5_000_000);
+        Certificate certificate = UnregCert.builder()
+                .stakeCredential(addrKeyCredential())
+                .coin(coin)
+                .build();
+
+        processAndAssertStoredDeposit(certificate, CertificateType.STAKE_DEREGISTRATION, coin);
+        verify(depositParamService, never()).getKeyDeposit(anyInt());
+    }
+
+    @Test
+    void processStakeRegistration_WhenCertTypeIsStakeRegDelegCert_storesCertificateCoin() {
+        BigInteger coin = BigInteger.valueOf(5_000_000);
+        Certificate certificate = StakeRegDelegCert.builder()
+                .stakeCredential(addrKeyCredential())
+                .poolKeyHash("62d3773887d1c644d4b28a5743f111597e0ad5654b71d613f40f5d03")
+                .coin(coin)
+                .build();
+
+        processAndAssertStoredDeposit(certificate, CertificateType.STAKE_REGISTRATION, coin);
+        verify(depositParamService, never()).getKeyDeposit(anyInt());
+    }
+
+    @Test
+    void processStakeRegistration_WhenCertTypeIsVoteRegDelegCert_storesCertificateCoin() {
+        BigInteger coin = BigInteger.valueOf(5_000_000);
+        Certificate certificate = VoteRegDelegCert.builder()
+                .stakeCredential(addrKeyCredential())
+                .drep(Drep.addrKeyHash("d1e89233461ca210819328b840ec79ec825b93d9b0501749dea1ecb8"))
+                .coin(coin)
+                .build();
+
+        processAndAssertStoredDeposit(certificate, CertificateType.STAKE_REGISTRATION, coin);
+        verify(depositParamService, never()).getKeyDeposit(anyInt());
+    }
+
+    @Test
+    void processStakeRegistration_WhenCertTypeIsStakeVoteRegDelegCert_storesCertificateCoin() {
+        BigInteger coin = BigInteger.valueOf(5_000_000);
+        Certificate certificate = StakeVoteRegDelegCert.builder()
+                .stakeCredential(addrKeyCredential())
+                .poolKeyHash("62d3773887d1c644d4b28a5743f111597e0ad5654b71d613f40f5d03")
+                .drep(Drep.addrKeyHash("d1e89233461ca210819328b840ec79ec825b93d9b0501749dea1ecb8"))
+                .coin(coin)
+                .build();
+
+        processAndAssertStoredDeposit(certificate, CertificateType.STAKE_REGISTRATION, coin);
+        verify(depositParamService, never()).getKeyDeposit(anyInt());
+    }
+
+    @Test
     void handleRollbackEvent() {
         RollbackEvent rollbackEvent = RollbackEvent.builder()
                 .currentPoint(new Point(78650212, "07de1aad598dd499d44be8bd8c28d5cadf4f47fbfb6b2144ccfb376c996ffcec"))
@@ -165,6 +239,29 @@ class StakeRegProcessorTest {
 
         verify(stakingStorage, times(1)).deleteRegistrationsBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
         verify(stakingStorage, times(1)).deleteDelegationsBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
+    }
+
+    private void processAndAssertStoredDeposit(Certificate certificate, CertificateType expectedType, BigInteger expectedDeposit) {
+        CertificateEvent certificateEvent =
+                new CertificateEvent(eventMetadata(),
+                        List.of(TxCertificates.builder()
+                                .txHash("08a5678d15d1a9196524a35e580b98b4e8b8dc2d57d544a6c8f9520f885d1fdb")
+                                .certificates(List.of(certificate))
+                                .build()));
+
+        stakeRegProcessor.processStakeRegistration(certificateEvent);
+
+        verify(stakingStorage, times(1)).saveRegistrations(stakeRegDetailCaptor.capture());
+        StakeRegistrationDetail saved = stakeRegDetailCaptor.getValue().get(0);
+        assertThat(saved.getType()).isEqualTo(expectedType);
+        assertThat(saved.getDeposit()).isEqualTo(expectedDeposit);
+    }
+
+    private StakeCredential addrKeyCredential() {
+        return StakeCredential.builder()
+                .type(StakeCredType.ADDR_KEYHASH)
+                .hash("42343525e6ff07e4de2a1328936c96406e432ff0aaeb7a5c5a5a6cc9")
+                .build();
     }
 
     private EventMetadata eventMetadata() {

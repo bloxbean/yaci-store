@@ -47,14 +47,19 @@ public class BFAccountService {
     }
 
     public List<BFAccountRegistrationDto> findRegistrations(String stakeAddress, int page, int count, Order order) {
-        String keyDeposit = currentKeyDeposit();
+        String fallbackDeposit = currentKeyDeposit();
 
         return storageReader.findRegistrations(stakeAddress, page, count, order)
                 .stream()
                 .map(registration -> {
                     var dto = mapper.toRegistrationDto(registration);
-                    if (BFAccountMapper.ACTION_REGISTERED.equals(dto.getAction()))
-                        dto.setDeposit(keyDeposit);
+                    if (BFAccountMapper.ACTION_DEREGISTERED.equals(dto.getAction())) {
+                        dto.setDeposit(null);
+                    } else if (registration.deposit() != null) {
+                        dto.setDeposit(registration.deposit().toString());
+                    } else {
+                        dto.setDeposit(fallbackDeposit);
+                    }
                     return dto;
                 })
                 .toList();

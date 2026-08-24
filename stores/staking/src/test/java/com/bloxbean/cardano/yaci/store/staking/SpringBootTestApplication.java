@@ -18,9 +18,9 @@ public class SpringBootTestApplication {
     }
 
     @Bean
-    public DepositParamService depositParamService() {
+    public DepositParamService depositParamService(StoreProperties storeProperties) {
         ProtocolParamService protocolParamService = new ProtocolParamService(null);
-        return new DepositParamService(protocolParamService);
+        return new DepositParamService(protocolParamService, storeProperties);
     }
 
     @Bean

@@ -15,6 +15,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
 
+import java.math.BigInteger;
 import java.util.List;
 import java.util.Optional;
 
@@ -44,8 +45,8 @@ class BFAccountServiceTest {
     void setUp() {
         when(storageReader.findRegistrations(anyString(), anyInt(), anyInt(), any()))
                 .thenReturn(List.of(
-                        new AccountRegistration("tx1", "STAKE_REGISTRATION", 100L, 1000L, 10L),
-                        new AccountRegistration("tx2", "STAKE_DEREGISTRATION", 200L, 2000L, 20L)));
+                        new AccountRegistration("tx1", "STAKE_REGISTRATION", 100L, 1000L, 10L, null),
+                        new AccountRegistration("tx2", "STAKE_DEREGISTRATION", 200L, 2000L, 20L, null)));
     }
 
     @Test
@@ -85,5 +86,40 @@ class BFAccountServiceTest {
                 service.findRegistrations(STAKE_ADDRESS, 1, 100, Order.asc);
 
         assertThat(registrations).extracting(BFAccountRegistrationDto::getDeposit).containsOnlyNulls();
+    }
+
+    @Test
+    void findRegistrations_WhenStoredDepositPresent_UsesStoredValueAndNullsDeregistration() {
+        when(storageReader.findRegistrations(anyString(), anyInt(), anyInt(), any()))
+                .thenReturn(List.of(
+                        new AccountRegistration("tx1", "STAKE_REGISTRATION", 100L, 1000L, 10L, BigInteger.valueOf(2_000_000)),
+                        new AccountRegistration("tx2", "STAKE_DEREGISTRATION", 200L, 2000L, 20L, BigInteger.valueOf(2_000_000))));
+
+        List<BFAccountRegistrationDto> registrations =
+                service.findRegistrations(STAKE_ADDRESS, 1, 100, Order.asc);
+
+        assertThat(registrations)
+                .extracting(BFAccountRegistrationDto::getAction, BFAccountRegistrationDto::getDeposit)
+                .containsExactly(
+                        Tuple.tuple("registered", "2000000"),
+                        Tuple.tuple("deregistered", null));
+    }
+
+    @Test
+    void findRegistrations_WhenStoredCustomDeposit_DoesNotUseCurrentEpochParams() {
+        ProtocolParams protocolParams = new ProtocolParams();
+        protocolParams.setKeyDeposit("2000000");
+        when(epochParamClient.getIfAvailable()).thenReturn(epochParamClientBean);
+        when(epochParamClientBean.getLatestProtocolParams()).thenReturn(Optional.of(protocolParams));
+        when(storageReader.findRegistrations(anyString(), anyInt(), anyInt(), any()))
+                .thenReturn(List.of(
+                        new AccountRegistration("tx1", "STAKE_REGISTRATION", 100L, 1000L, 10L, BigInteger.valueOf(5_000_000))));
+
+        List<BFAccountRegistrationDto> registrations =
+                service.findRegistrations(STAKE_ADDRESS, 1, 100, Order.asc);
+
+        assertThat(registrations)
+                .extracting(BFAccountRegistrationDto::getDeposit)
+                .containsExactly("5000000");
     }
 }

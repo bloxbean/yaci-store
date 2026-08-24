@@ -10,6 +10,7 @@ import com.bloxbean.cardano.yaci.store.events.domain.TxCertificates;
 import com.bloxbean.cardano.yaci.store.staking.domain.Delegation;
 import com.bloxbean.cardano.yaci.store.staking.domain.StakeRegistrationDetail;
 import com.bloxbean.cardano.yaci.store.staking.domain.event.StakeRegDeregEvent;
+import com.bloxbean.cardano.yaci.store.staking.service.DepositParamService;
 import com.bloxbean.cardano.yaci.store.staking.storage.StakingCertificateStorage;
 import com.bloxbean.cardano.yaci.store.staking.util.AddressUtil;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +20,7 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -31,6 +33,7 @@ import static com.bloxbean.cardano.yaci.store.staking.StakingStoreConfiguration.
 public class StakeRegProcessor {
     private final StakingCertificateStorage stakingStorage;
     private final ApplicationEventPublisher publisher;
+    private final DepositParamService depositParamService;
 
     @EventListener
     @Transactional
@@ -67,7 +70,8 @@ public class StakeRegProcessor {
                                     .build();
                         }
                         stakeRegistrationDetail = buildStakeRegistrationDetail(
-                                stakeRegistration, txHash, index, txIndex, eventMetadata);
+                                stakeRegistration, txHash, index, txIndex,
+                                resolveDeposit(certificate, eventMetadata.getEpochNumber()), eventMetadata);
 
                         stakeRegDeRegs.add(stakeRegistrationDetail);
                         break;
@@ -81,7 +85,8 @@ public class StakeRegProcessor {
                                     .build();
                         }
                         stakeRegistrationDetail = buildStakeRegistrationDetail(
-                                stakeDeregistration, txHash, index, txIndex, eventMetadata);
+                                stakeDeregistration, txHash, index, txIndex,
+                                resolveDeposit(certificate, eventMetadata.getEpochNumber()), eventMetadata);
 
                         stakeRegDeRegs.add(stakeRegistrationDetail);
                         break;
@@ -125,7 +130,8 @@ public class StakeRegProcessor {
 
                         delegation = buildDelegation(stakeDelegation, txHash, index, txIndex, eventMetadata);
                         stakeRegistrationDetail = buildStakeRegistrationDetail(
-                                stakeRegistration, txHash, index, txIndex, eventMetadata);
+                                stakeRegistration, txHash, index, txIndex,
+                                resolveDeposit(certificate, eventMetadata.getEpochNumber()), eventMetadata);
 
                         stakeRegDeRegs.add(stakeRegistrationDetail);
                         delegations.add(delegation);
@@ -151,10 +157,26 @@ public class StakeRegProcessor {
         }
     }
 
+    private BigInteger resolveDeposit(Certificate certificate, int epoch) {
+        BigInteger coin = switch (certificate.getType()) {
+            case REG_CERT -> ((RegCert) certificate).getCoin();
+            case UNREG_CERT -> ((UnregCert) certificate).getCoin();
+            case STAKE_REG_DELEG_CERT -> ((StakeRegDelegCert) certificate).getCoin();
+            case VOTE_REG_DELEG_CERT -> ((VoteRegDelegCert) certificate).getCoin();
+            case STAKE_VOTE_REG_DELEG_CERT -> ((StakeVoteRegDelegCert) certificate).getCoin();
+            default -> null;
+        };
+        if (coin != null) {
+            return coin;
+        }
+        return depositParamService.getKeyDeposit(epoch);
+    }
+
     private StakeRegistrationDetail buildStakeRegistrationDetail(StakeRegistration stakeRegistration,
                                                                  String txHash,
                                                                  int certIndex,
                                                                  int txIndex,
+                                                                 BigInteger deposit,
                                                                  EventMetadata eventMetadata) {
         Address address =
                 AddressUtil.getRewardAddress(stakeRegistration.getStakeCredential(), eventMetadata.isMainnet());
@@ -168,6 +190,7 @@ public class StakeRegProcessor {
                 .certIndex(certIndex)
                 .txIndex(txIndex)
                 .type(CertificateType.STAKE_REGISTRATION)
+                .deposit(deposit)
                 .epoch(eventMetadata.getEpochNumber())
                 .slot(eventMetadata.getSlot())
                 .blockNumber(eventMetadata.getBlock())
@@ -180,6 +203,7 @@ public class StakeRegProcessor {
                                                                  String txHash,
                                                                  int certIndex,
                                                                  int txIndex,
+                                                                 BigInteger deposit,
                                                                  EventMetadata eventMetadata) {
         Address address =
                 AddressUtil.getRewardAddress(stakeDeregistration.getStakeCredential(), eventMetadata.isMainnet());
@@ -193,6 +217,7 @@ public class StakeRegProcessor {
                 .certIndex(certIndex)
                 .txIndex(txIndex)
                 .type(CertificateType.STAKE_DEREGISTRATION)
+                .deposit(deposit)
                 .epoch(eventMetadata.getEpochNumber())
                 .slot(eventMetadata.getSlot())
                 .blockNumber(eventMetadata.getBlock())
