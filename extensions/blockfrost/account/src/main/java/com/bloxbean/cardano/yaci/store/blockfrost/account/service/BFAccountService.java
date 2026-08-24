@@ -3,9 +3,12 @@ package com.bloxbean.cardano.yaci.store.blockfrost.account.service;
 import com.bloxbean.cardano.yaci.store.blockfrost.account.dto.*;
 import com.bloxbean.cardano.yaci.store.blockfrost.account.mapper.BFAccountMapper;
 import com.bloxbean.cardano.yaci.store.blockfrost.account.storage.BFAccountStorageReader;
+import com.bloxbean.cardano.client.api.model.ProtocolParams;
+import com.bloxbean.cardano.yaci.store.client.epoch.EpochParamClient;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -18,6 +21,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class BFAccountService {
     private final BFAccountStorageReader storageReader;
+    private final ObjectProvider<EpochParamClient> epochParamClient;
     private final BFAccountMapper mapper = BFAccountMapper.INSTANCE;
 
     public BFAccountContentDto getAccountInfo(String stakeAddress) {
@@ -43,8 +47,27 @@ public class BFAccountService {
     }
 
     public List<BFAccountRegistrationDto> findRegistrations(String stakeAddress, int page, int count, Order order) {
+        String keyDeposit = currentKeyDeposit();
+
         return storageReader.findRegistrations(stakeAddress, page, count, order)
-                .stream().map(mapper::toRegistrationDto).toList();
+                .stream()
+                .map(registration -> {
+                    var dto = mapper.toRegistrationDto(registration);
+                    if (BFAccountMapper.ACTION_REGISTERED.equals(dto.getAction()))
+                        dto.setDeposit(keyDeposit);
+                    return dto;
+                })
+                .toList();
+    }
+
+    private String currentKeyDeposit() {
+        var client = epochParamClient.getIfAvailable();
+        if (client == null)
+            return null;
+
+        return client.getLatestProtocolParams()
+                .map(ProtocolParams::getKeyDeposit)
+                .orElse(null);
     }
 
     public List<BFAccountWithdrawalDto> findWithdrawals(String stakeAddress, int page, int count, Order order) {
