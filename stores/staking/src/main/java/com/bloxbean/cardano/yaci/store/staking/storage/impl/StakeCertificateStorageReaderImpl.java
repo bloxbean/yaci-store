@@ -71,6 +71,12 @@ public class StakeCertificateStorageReaderImpl implements StakingCertificateStor
     }
 
     @Override
+    public Optional<StakeRegistrationDetail> getRegistrationBefore(String stakeAddress, long slot, int txIndex, int certIndex) {
+        return registrationRepository.findRegistrationBefore(stakeAddress, slot, txIndex, certIndex)
+                .map(mapper::toStakeRegistrationDetail);
+    }
+
+    @Override
     public Optional<Delegation> getLatestDelegationByAddress(String stakeAddress) {
         return delegationRepository.findLatestDelegationByAddress(stakeAddress)
                 .map(mapper::toDelegation);

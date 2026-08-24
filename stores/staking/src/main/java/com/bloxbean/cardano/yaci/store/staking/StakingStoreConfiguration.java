@@ -1,5 +1,7 @@
 package com.bloxbean.cardano.yaci.store.staking;
 
+import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
+import com.bloxbean.cardano.yaci.store.common.genesis.ShelleyGenesisProtocolParamsProvider;
 import com.bloxbean.cardano.yaci.store.staking.storage.*;
 import com.bloxbean.cardano.yaci.store.staking.storage.impl.*;
 import com.bloxbean.cardano.yaci.store.staking.storage.impl.mapper.PoolMapper;
@@ -28,6 +30,12 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 @EnableTransactionManagement
 public class StakingStoreConfiguration {
     public final static String STORE_STAKING_ENABLED = "store.staking.enabled";
+
+    @Bean
+    @ConditionalOnMissingBean
+    public ShelleyGenesisProtocolParamsProvider shelleyGenesisProtocolParamsProvider(StoreProperties storeProperties) {
+        return new ShelleyGenesisProtocolParamsProvider(storeProperties);
+    }
 
     @Bean
     @ConditionalOnMissingBean

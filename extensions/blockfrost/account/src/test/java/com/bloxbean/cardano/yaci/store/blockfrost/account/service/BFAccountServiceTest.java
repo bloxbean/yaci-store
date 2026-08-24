@@ -5,12 +5,12 @@ import com.bloxbean.cardano.yaci.store.blockfrost.account.dto.BFAccountRegistrat
 import com.bloxbean.cardano.yaci.store.blockfrost.account.storage.BFAccountStorageReader;
 import com.bloxbean.cardano.yaci.store.blockfrost.account.storage.impl.model.AccountRegistration;
 import com.bloxbean.cardano.yaci.store.client.epoch.EpochParamClient;
+import com.bloxbean.cardano.yaci.store.common.genesis.ShelleyGenesisProtocolParamsProvider;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
 import org.assertj.core.groups.Tuple;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
@@ -38,11 +38,17 @@ class BFAccountServiceTest {
     @Mock
     private EpochParamClient epochParamClientBean;
 
-    @InjectMocks
+    @Mock
+    private ObjectProvider<ShelleyGenesisProtocolParamsProvider> shelleyGenesisProtocolParamsProvider;
+
+    @Mock
+    private ShelleyGenesisProtocolParamsProvider shelleyGenesisProtocolParamsProviderBean;
+
     private BFAccountService service;
 
     @BeforeEach
     void setUp() {
+        service = new BFAccountService(storageReader, epochParamClient, shelleyGenesisProtocolParamsProvider);
         when(storageReader.findRegistrations(anyString(), anyInt(), anyInt(), any()))
                 .thenReturn(List.of(
                         new AccountRegistration("tx1", "STAKE_REGISTRATION", 100L, 1000L, 10L, null),
@@ -79,13 +85,33 @@ class BFAccountServiceTest {
     }
 
     @Test
-    void findRegistrations_WhenEpochStoreDisabled_LeavesDepositNull() {
+    void findRegistrations_WhenEpochStoreDisabledAndGenesisMissing_LeavesDepositNull() {
         when(epochParamClient.getIfAvailable()).thenReturn(null);
+        when(shelleyGenesisProtocolParamsProvider.getIfAvailable()).thenReturn(null);
 
         List<BFAccountRegistrationDto> registrations =
                 service.findRegistrations(STAKE_ADDRESS, 1, 100, Order.asc);
 
         assertThat(registrations).extracting(BFAccountRegistrationDto::getDeposit).containsOnlyNulls();
+    }
+
+    @Test
+    void findRegistrations_WhenEpochStoreDisabled_UsesGenesisKeyDeposit() {
+        when(epochParamClient.getIfAvailable()).thenReturn(null);
+        when(shelleyGenesisProtocolParamsProvider.getIfAvailable()).thenReturn(shelleyGenesisProtocolParamsProviderBean);
+        when(shelleyGenesisProtocolParamsProviderBean.getProtocolParams()).thenReturn(Optional.of(
+                com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams.builder()
+                        .keyDeposit(BigInteger.valueOf(5_000_000))
+                        .build()));
+
+        List<BFAccountRegistrationDto> registrations =
+                service.findRegistrations(STAKE_ADDRESS, 1, 100, Order.asc);
+
+        assertThat(registrations)
+                .extracting(BFAccountRegistrationDto::getAction, BFAccountRegistrationDto::getDeposit)
+                .containsExactly(
+                        Tuple.tuple("registered", "5000000"),
+                        Tuple.tuple("deregistered", null));
     }
 
     @Test

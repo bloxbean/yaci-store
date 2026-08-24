@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.staking;
 
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
+import com.bloxbean.cardano.yaci.store.common.genesis.ShelleyGenesisProtocolParamsProvider;
 import com.bloxbean.cardano.yaci.store.epoch.service.ProtocolParamService;
 import com.bloxbean.cardano.yaci.store.plugin.core.PluginRegistry;
 import com.bloxbean.cardano.yaci.store.plugin.metrics.PluginMetricsCollector;
@@ -18,9 +19,9 @@ public class SpringBootTestApplication {
     }
 
     @Bean
-    public DepositParamService depositParamService(StoreProperties storeProperties) {
+    public DepositParamService depositParamService(ShelleyGenesisProtocolParamsProvider protocolParamsProvider) {
         ProtocolParamService protocolParamService = new ProtocolParamService(null);
-        return new DepositParamService(protocolParamService, storeProperties);
+        return new DepositParamService(protocolParamService, protocolParamsProvider);
     }
 
     @Bean

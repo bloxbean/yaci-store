@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.store.blockfrost.account.mapper.BFAccountMapper
 import com.bloxbean.cardano.yaci.store.blockfrost.account.storage.BFAccountStorageReader;
 import com.bloxbean.cardano.client.api.model.ProtocolParams;
 import com.bloxbean.cardano.yaci.store.client.epoch.EpochParamClient;
+import com.bloxbean.cardano.yaci.store.common.genesis.ShelleyGenesisProtocolParamsProvider;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -13,6 +14,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigInteger;
 import java.util.Collections;
 import java.util.List;
 
@@ -22,6 +24,7 @@ import java.util.List;
 public class BFAccountService {
     private final BFAccountStorageReader storageReader;
     private final ObjectProvider<EpochParamClient> epochParamClient;
+    private final ObjectProvider<ShelleyGenesisProtocolParamsProvider> shelleyGenesisProtocolParamsProvider;
     private final BFAccountMapper mapper = BFAccountMapper.INSTANCE;
 
     public BFAccountContentDto getAccountInfo(String stakeAddress) {
@@ -67,11 +70,19 @@ public class BFAccountService {
 
     private String currentKeyDeposit() {
         var client = epochParamClient.getIfAvailable();
-        if (client == null)
+        if (client != null) {
+            return client.getLatestProtocolParams()
+                    .map(ProtocolParams::getKeyDeposit)
+                    .orElse(null);
+        }
+
+        var genesisProvider = shelleyGenesisProtocolParamsProvider.getIfAvailable();
+        if (genesisProvider == null)
             return null;
 
-        return client.getLatestProtocolParams()
-                .map(ProtocolParams::getKeyDeposit)
+        return genesisProvider.getProtocolParams()
+                .map(com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams::getKeyDeposit)
+                .map(BigInteger::toString)
                 .orElse(null);
     }
 

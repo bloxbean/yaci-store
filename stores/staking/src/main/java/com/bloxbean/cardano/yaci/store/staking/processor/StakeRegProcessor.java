@@ -12,6 +12,7 @@ import com.bloxbean.cardano.yaci.store.staking.domain.StakeRegistrationDetail;
 import com.bloxbean.cardano.yaci.store.staking.domain.event.StakeRegDeregEvent;
 import com.bloxbean.cardano.yaci.store.staking.service.DepositParamService;
 import com.bloxbean.cardano.yaci.store.staking.storage.StakingCertificateStorage;
+import com.bloxbean.cardano.yaci.store.staking.storage.StakingCertificateStorageReader;
 import com.bloxbean.cardano.yaci.store.staking.util.AddressUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,7 +23,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigInteger;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 import static com.bloxbean.cardano.yaci.store.staking.StakingStoreConfiguration.STORE_STAKING_ENABLED;
 
@@ -32,6 +36,7 @@ import static com.bloxbean.cardano.yaci.store.staking.StakingStoreConfiguration.
 @Slf4j
 public class StakeRegProcessor {
     private final StakingCertificateStorage stakingStorage;
+    private final StakingCertificateStorageReader stakingStorageReader;
     private final ApplicationEventPublisher publisher;
     private final DepositParamService depositParamService;
 
@@ -42,6 +47,7 @@ public class StakeRegProcessor {
 
         List<StakeRegistrationDetail> stakeRegDeRegs = new ArrayList<>();
         List<Delegation> delegations = new ArrayList<>();
+        Map<String, Optional<BigInteger>> activeDeposits = new HashMap<>();
 
         for (TxCertificates txCertificates : certificateEvent.getTxCertificatesList()) {
             String txHash = txCertificates.getTxHash();
@@ -71,9 +77,11 @@ public class StakeRegProcessor {
                         }
                         stakeRegistrationDetail = buildStakeRegistrationDetail(
                                 stakeRegistration, txHash, index, txIndex,
-                                resolveDeposit(certificate, eventMetadata.getEpochNumber()), eventMetadata);
+                                resolveRegistrationDeposit(certificate, eventMetadata.getEpochNumber()), eventMetadata);
 
                         stakeRegDeRegs.add(stakeRegistrationDetail);
+                        activeDeposits.put(stakeRegistration.getStakeCredential().getHash(),
+                                Optional.ofNullable(stakeRegistrationDetail.getDeposit()));
                         break;
 
                     case STAKE_DEREGISTRATION, UNREG_CERT:
@@ -86,9 +94,11 @@ public class StakeRegProcessor {
                         }
                         stakeRegistrationDetail = buildStakeRegistrationDetail(
                                 stakeDeregistration, txHash, index, txIndex,
-                                resolveDeposit(certificate, eventMetadata.getEpochNumber()), eventMetadata);
+                                resolveDeregistrationDeposit(certificate, stakeDeregistration.getStakeCredential(),
+                                        txIndex, index, eventMetadata, activeDeposits), eventMetadata);
 
                         stakeRegDeRegs.add(stakeRegistrationDetail);
+                        activeDeposits.put(stakeDeregistration.getStakeCredential().getHash(), Optional.empty());
                         break;
 
                     case STAKE_DELEGATION, STAKE_VOTE_DELEG_CERT:
@@ -131,9 +141,11 @@ public class StakeRegProcessor {
                         delegation = buildDelegation(stakeDelegation, txHash, index, txIndex, eventMetadata);
                         stakeRegistrationDetail = buildStakeRegistrationDetail(
                                 stakeRegistration, txHash, index, txIndex,
-                                resolveDeposit(certificate, eventMetadata.getEpochNumber()), eventMetadata);
+                                resolveRegistrationDeposit(certificate, eventMetadata.getEpochNumber()), eventMetadata);
 
                         stakeRegDeRegs.add(stakeRegistrationDetail);
+                        activeDeposits.put(stakeRegistration.getStakeCredential().getHash(),
+                                Optional.ofNullable(stakeRegistrationDetail.getDeposit()));
                         delegations.add(delegation);
                         break;
                     default:
@@ -157,10 +169,9 @@ public class StakeRegProcessor {
         }
     }
 
-    private BigInteger resolveDeposit(Certificate certificate, int epoch) {
+    private BigInteger resolveRegistrationDeposit(Certificate certificate, int epoch) {
         BigInteger coin = switch (certificate.getType()) {
             case REG_CERT -> ((RegCert) certificate).getCoin();
-            case UNREG_CERT -> ((UnregCert) certificate).getCoin();
             case STAKE_REG_DELEG_CERT -> ((StakeRegDelegCert) certificate).getCoin();
             case VOTE_REG_DELEG_CERT -> ((VoteRegDelegCert) certificate).getCoin();
             case STAKE_VOTE_REG_DELEG_CERT -> ((StakeVoteRegDelegCert) certificate).getCoin();
@@ -170,6 +181,35 @@ public class StakeRegProcessor {
             return coin;
         }
         return depositParamService.getKeyDeposit(epoch);
+    }
+
+    /**
+     * Legacy deregistration certificates omit the refund amount. The ledger refunds the deposit
+     * recorded by the active registration, not the current protocol parameter. Registrations in
+     * this event are not persisted until the batch is saved, so resolve them from in-event state
+     * before querying the latest stored lifecycle row.
+     */
+    private BigInteger resolveDeregistrationDeposit(Certificate certificate,
+                                                    StakeCredential stakeCredential,
+                                                    int txIndex,
+                                                    int certIndex,
+                                                    EventMetadata eventMetadata,
+                                                    Map<String, Optional<BigInteger>> activeDeposits) {
+        if (certificate.getType() == CertificateType.UNREG_CERT) {
+            return ((UnregCert) certificate).getCoin();
+        }
+
+        String credential = stakeCredential.getHash();
+        if (!activeDeposits.containsKey(credential)) {
+            String stakeAddress = AddressUtil.getRewardAddress(stakeCredential, eventMetadata.isMainnet()).toBech32();
+            Optional<BigInteger> storedDeposit = stakingStorageReader
+                    .getRegistrationBefore(stakeAddress, eventMetadata.getSlot(), txIndex, certIndex)
+                    .filter(registration -> registration.getType() == CertificateType.STAKE_REGISTRATION)
+                    .map(StakeRegistrationDetail::getDeposit);
+            activeDeposits.put(credential, storedDeposit);
+        }
+
+        return activeDeposits.get(credential).orElse(null);
     }
 
     private StakeRegistrationDetail buildStakeRegistrationDetail(StakeRegistration stakeRegistration,

@@ -1,8 +1,7 @@
 package com.bloxbean.cardano.yaci.store.staking.service;
 
-import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
-import com.bloxbean.cardano.yaci.store.common.domain.NetworkType;
 import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
+import com.bloxbean.cardano.yaci.store.common.genesis.ShelleyGenesisProtocolParamsProvider;
 import com.bloxbean.cardano.yaci.store.epoch.service.ProtocolParamService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -22,37 +21,39 @@ class DepositParamServiceTest {
     @Mock
     private ProtocolParamService protocolParamService;
 
+    @Mock
+    private ShelleyGenesisProtocolParamsProvider shelleyGenesisProtocolParamsProvider;
+
     @Test
     void getKeyDeposit_returnsEpochParamWhenPresent() {
-        StoreProperties storeProperties = new StoreProperties();
-        storeProperties.setProtocolMagic(NetworkType.MAINNET.getProtocolMagic());
         when(protocolParamService.getProtocolParam(100))
                 .thenReturn(Optional.of(ProtocolParams.builder()
                         .keyDeposit(BigInteger.valueOf(3_000_000))
                         .build()));
 
-        DepositParamService service = new DepositParamService(protocolParamService, storeProperties);
+        DepositParamService service = new DepositParamService(protocolParamService, shelleyGenesisProtocolParamsProvider);
 
         assertThat(service.getKeyDeposit(100)).isEqualTo(BigInteger.valueOf(3_000_000));
     }
 
     @Test
     void getKeyDeposit_fallsBackToShelleyGenesisWhenEpochParamsMissing() {
-        StoreProperties storeProperties = new StoreProperties();
-        storeProperties.setProtocolMagic(NetworkType.MAINNET.getProtocolMagic());
         when(protocolParamService.getProtocolParam(100)).thenReturn(Optional.empty());
+        when(shelleyGenesisProtocolParamsProvider.getProtocolParams())
+                .thenReturn(Optional.of(ProtocolParams.builder()
+                        .keyDeposit(BigInteger.valueOf(2_000_000))
+                        .build()));
 
-        DepositParamService service = new DepositParamService(protocolParamService, storeProperties);
+        DepositParamService service = new DepositParamService(protocolParamService, shelleyGenesisProtocolParamsProvider);
 
         assertThat(service.getKeyDeposit(100)).isEqualTo(BigInteger.valueOf(2_000_000));
     }
 
     @Test
     void getKeyDeposit_fallsBackToTwoAdaWhenGenesisMissing() {
-        StoreProperties storeProperties = new StoreProperties();
-        storeProperties.setProtocolMagic(42);
+        when(shelleyGenesisProtocolParamsProvider.getProtocolParams()).thenReturn(Optional.empty());
 
-        DepositParamService service = new DepositParamService(null, storeProperties);
+        DepositParamService service = new DepositParamService(null, shelleyGenesisProtocolParamsProvider);
 
         assertThat(service.getKeyDeposit(0)).isEqualTo(adaToLovelace(2));
     }

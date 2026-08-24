@@ -18,5 +18,7 @@ public interface StakingCertificateStorageReader {
 
     Optional<StakeRegistrationDetail> getRegistrationByStakeAddress(String stakeAddress, Long slot);
 
+    Optional<StakeRegistrationDetail> getRegistrationBefore(String stakeAddress, long slot, int txIndex, int certIndex);
+
     Optional<StakeRegistrationDetail> getRegistrationByPointer(long slot, int txIndex, int certIndex);
 }
