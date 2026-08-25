@@ -4,9 +4,9 @@
 # Activating this profile turns the MCP server on: yaci.store.mcp-server.enabled=true registers
 # the yaci-store tools and enables the Spring AI MCP server (the /mcp endpoint). Without it (or
 # with yaci.store.mcp-server.enabled=false, the default) neither the tools nor the endpoint exist.
-# The analytics tools (analytics-list-tables / -describe-table / -execute-sql, balances) include
-# unauthenticated ad-hoc SQL over the exported data and additionally require
-# yaci.store.analytics.query.enabled=true (analytics profile) — expose deliberately.
+# The MCP profile also enables analytics tools and live-data federation so tools can query both
+# exported history and the current PostgreSQL data. The REST query endpoint remains disabled.
+# The /mcp endpoint exposes ad-hoc SQL, so expose it only to trusted clients.
 yaci:
   store:
     mcp-server:
@@ -24,6 +24,12 @@ yaci:
       tools:
         external-metadata:
           enabled: true
+
+    analytics:
+      query:
+        enabled: true
+        live-data-enabled: true
+        rest-api-enabled: false
 
 spring:
   ai:
