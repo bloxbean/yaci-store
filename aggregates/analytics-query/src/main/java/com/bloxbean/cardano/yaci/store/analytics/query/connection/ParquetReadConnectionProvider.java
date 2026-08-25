@@ -351,8 +351,21 @@ public class ParquetReadConnectionProvider extends DuckDbReadConnectionProvider 
         if (tableRegistry.isDuckLake()) {
             List<Path> files = tableRegistry.getDuckLakeFiles(tableName);
             if (files.isEmpty()) {
-                log.debug("No committed DuckLake data files for '{}'; view not created", tableName);
-                return false;
+                List<ParquetTableRegistry.TableColumn> columns =
+                        tableRegistry.getDuckLakeColumns(tableName);
+                if (columns.isEmpty()) {
+                    log.debug("No DuckLake schema available for '{}'; view not created", tableName);
+                    return false;
+                }
+                String emptyProjection = columns.stream()
+                        .filter(column -> !column.name().startsWith("_ducklake_internal_"))
+                        .map(column -> "CAST(NULL AS " + column.type() + ") AS "
+                                + quoteIdentifier(column.name()))
+                        .collect(Collectors.joining(", "));
+                executeOnParent("CREATE OR REPLACE VIEW " + quoteIdentifier(viewName)
+                        + " AS SELECT " + emptyProjection + " WHERE FALSE");
+                log.debug("Created empty historical view '{}' from the DuckLake catalog schema", viewName);
+                return true;
             }
             // Explicit list of committed files (absolute paths inside the sandboxed export dir).
             // DuckLake writes partition columns into the files themselves; hive_partitioning
@@ -484,8 +497,12 @@ public class ParquetReadConnectionProvider extends DuckDbReadConnectionProvider 
             }
             Map<String, List<Path>> filesByTable = snapshot.get().entrySet().stream()
                     .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().dataFiles()));
+            Map<String, List<ParquetTableRegistry.TableColumn>> columnsByTable = snapshot.get().entrySet().stream()
+                    .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().columns().stream()
+                            .map(column -> new ParquetTableRegistry.TableColumn(column.name(), column.type()))
+                            .toList()));
             List<String> before = tableRegistry.getTableNames();
-            tableRegistry.replaceDuckLakeSnapshot(filesByTable);
+            tableRegistry.replaceDuckLakeSnapshot(filesByTable, columnsByTable);
             List<String> after = tableRegistry.getTableNames();
             if (!before.equals(after)) {
                 log.info("Discovered {} DuckLake tables with committed data: {}", after.size(), after);

@@ -68,6 +68,24 @@ class ParquetTableRegistryTest {
         assertThrows(IllegalStateException.class, () -> registry.getParquetGlobPath("block"));
     }
 
+    @Test
+    void duckLakeSnapshotKeepsEmptyTablesWhenCatalogColumnsAreKnown() {
+        AnalyticsStoreProperties properties = new AnalyticsStoreProperties();
+        properties.setExportPath(exportDirectory.toString());
+        properties.getStorage().setType("ducklake");
+        ParquetTableRegistry registry = new ParquetTableRegistry(properties);
+
+        registry.replaceDuckLakeSnapshot(
+                Map.of("instant_reward", List.of()),
+                Map.of("instant_reward", List.of(
+                        new ParquetTableRegistry.TableColumn("epoch", "INTEGER"),
+                        new ParquetTableRegistry.TableColumn("amount", "DECIMAL(38,0)"))));
+
+        assertEquals(List.of("instant_reward"), registry.getTableNames());
+        assertTrue(registry.getDuckLakeFiles("instant_reward").isEmpty());
+        assertEquals(2, registry.getDuckLakeColumns("instant_reward").size());
+    }
+
     private void writeParquetMarker(String table) throws Exception {
         Path partition = Files.createDirectories(exportDirectory.resolve(table).resolve("date=2026-01-01"));
         Files.write(partition.resolve("data.parquet"), new byte[]{1});

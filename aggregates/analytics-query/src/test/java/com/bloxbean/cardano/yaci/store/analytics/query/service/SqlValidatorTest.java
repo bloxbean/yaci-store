@@ -17,9 +17,49 @@ class SqlValidatorTest {
     }
 
     @Test
-    void rejectsReplacementScanTraversalInRegularAndDollarQuotedStrings() {
+    void rejectsReplacementScansForAbsoluteTraversalAndOrdinaryRelativePaths() {
         assertRejected("SELECT * FROM 'data/../../../../etc/passwd'");
         assertRejected("SELECT * FROM $$data/../../../../etc/passwd$$");
+        assertRejected("SELECT * FROM 'data/analytics/some-file.parquet'");
+        assertRejected("SELECT * FROM 'block/date=2026-01-01/file.parquet'");
+        assertRejected("SELECT * FROM 'some.csv'");
+        assertRejected("SELECT * FROM $$some.csv$$");
+        assertRejected("SELECT * FROM E'some.csv'");
+    }
+
+    @Test
+    void rejectsQuotedBareAndJoinedReplacementScans() {
+        assertRejected("SELECT * FROM \"data.csv\"");
+        assertRejected("SELECT * FROM \"../data.csv\"");
+        assertRejected("SELECT * FROM \"/abs/export/dir/block/x.parquet\"");
+        assertRejected("SELECT * FROM data.csv");
+        assertRejected("SELECT * FROM block.parquet");
+        assertRejected("SELECT * FROM block b JOIN data.csv d ON true");
+        assertRejected("SELECT * FROM \"data\".\"csv\"");
+        assertRejected("SELECT * FROM data.\"csv\"");
+        assertRejected("SELECT * FROM events.jsonl.gz");
+    }
+
+    @Test
+    void deliberatelyRejectsFileShapedValuesToKeepTheRuleAuditable() {
+        assertRejected("SELECT 'some.csv' AS label FROM block");
+        assertRejected("SELECT 'https://example.com/value' AS label FROM block");
+    }
+
+    @Test
+    void allowsOrdinaryFromExpressionsAndValues() {
+        assertDoesNotThrow(() -> SqlValidator.validate(
+                "SELECT extract(year FROM '2024-01-01'::DATE)"));
+        assertDoesNotThrow(() -> SqlValidator.validate(
+                "SELECT trim('x' FROM owner_addr) FROM block"));
+        assertDoesNotThrow(() -> SqlValidator.validate(
+                "SELECT * FROM block WHERE hash IS DISTINCT FROM 'literal'"));
+        assertDoesNotThrow(() -> SqlValidator.validate(
+                "SELECT pivot AS label, 'literal' FROM block"));
+        assertDoesNotThrow(() -> SqlValidator.validate(
+                "SELECT * FROM (FROM block SELECT number, 'lovelace' AS u)"));
+        assertDoesNotThrow(() -> SqlValidator.validate(
+                "WITH p AS (PIVOT block ON type IN ('ebb', 'babbage') USING count(*)) SELECT * FROM p"));
     }
 
     @Test
@@ -37,9 +77,25 @@ class SqlValidatorTest {
         assertDoesNotThrow(() -> SqlValidator.validate(
                 "SELECT 'SET LOAD GLOB -- /* */' AS payload"));
         assertDoesNotThrow(() -> SqlValidator.validate(
-                "SELECT $$SET LOAD GLOB -- /* */$$ AS payload"));
-        assertDoesNotThrow(() -> SqlValidator.validate(
                 "SELECT E'quoted\\' -- not a comment' AS payload"));
+    }
+
+    @Test
+    void rejectsAllDollarSyntaxInsteadOfReimplementingDuckDbTagRules() {
+        assertRejected("SELECT $$value$$");
+        assertRejected("SELECT $tag$value$tag$");
+        assertRejected("SELECT $€$'$€$ FROM read_csv('evil.csv')");
+        assertRejected("SELECT $1$value$1$");
+        assertRejected("SELECT 1 -- $ in a comment");
+    }
+
+    @Test
+    void rejectsSerializedSqlMetadataAndHeapBurstFunctions() {
+        assertRejected("SELECT * FROM json_execute_serialized_sql(json_serialize_sql('SELECT * FROM duckdb_databases()'))");
+        assertRejected("SELECT * FROM parquet_metadata('data.parquet')");
+        assertRejected("SELECT * FROM parquet_schema('data.parquet')");
+        assertRejected("SELECT * FROM parquet_file_metadata(chr(47) || 'tmp/data.parquet')");
+        assertRejected("SELECT repeat('x', 100000000)");
     }
 
     @Test

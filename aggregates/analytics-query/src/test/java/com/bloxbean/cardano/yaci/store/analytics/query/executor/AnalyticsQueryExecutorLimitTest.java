@@ -148,10 +148,20 @@ class AnalyticsQueryExecutorLimitTest {
                 + "WHERE range < 10000 OR hash(range + 1) = 0";
 
         long start = System.currentTimeMillis();
-        assertThrows(AnalyticsQueryExecutor.QueryExecutionException.class,
+        assertThrows(AnalyticsQueryExecutor.QueryTimeoutException.class,
                 () -> executor.execute(cheapRowsThenLongScan, 10_000));
         long elapsed = System.currentTimeMillis() - start;
+        assertTrue(elapsed >= 500, "query failed too quickly to have exercised the timeout: " + elapsed + "ms");
         assertTrue(elapsed < 5_000, "query was not cancelled by the timeout; took " + elapsed + "ms");
+    }
+
+    @Test
+    void binderErrorContainingTimeoutIsNotMisclassifiedAsExecutionTimeout() {
+        AnalyticsQueryExecutor.QueryExecutionException error = assertThrows(
+                AnalyticsQueryExecutor.QueryExecutionException.class,
+                () -> executor(100, 10_000).execute("SELECT timeout FROM t", 10));
+
+        assertEquals(AnalyticsQueryExecutor.QueryExecutionException.class, error.getClass());
     }
 
     @Test

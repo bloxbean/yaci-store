@@ -45,6 +45,11 @@ public class ParquetTableRegistry {
 
     /** DuckLake only: table name → absolute paths of the committed data files. */
     private volatile Map<String, List<Path>> duckLakeFiles = Collections.emptyMap();
+    /** DuckLake only: catalog schema, needed to expose tables that have no data files yet. */
+    private volatile Map<String, List<TableColumn>> duckLakeColumns = Collections.emptyMap();
+
+    public record TableColumn(String name, String type) {
+    }
 
     @PostConstruct
     void init() {
@@ -95,15 +100,26 @@ public class ParquetTableRegistry {
      * committed data file are not registered (there is nothing to build a view over yet).
      */
     public synchronized void replaceDuckLakeSnapshot(Map<String, ? extends Collection<Path>> filesByTable) {
+        replaceDuckLakeSnapshot(filesByTable, Map.of());
+    }
+
+    public synchronized void replaceDuckLakeSnapshot(
+            Map<String, ? extends Collection<Path>> filesByTable,
+            Map<String, ? extends Collection<TableColumn>> columnsByTable) {
         Map<String, List<Path>> snapshot = new TreeMap<>();
+        Map<String, List<TableColumn>> schemas = new TreeMap<>();
         for (Map.Entry<String, ? extends Collection<Path>> entry : filesByTable.entrySet()) {
-            if (entry.getValue() == null || entry.getValue().isEmpty()) {
+            Collection<Path> files = entry.getValue();
+            Collection<TableColumn> columns = columnsByTable.get(entry.getKey());
+            if ((files == null || files.isEmpty()) && (columns == null || columns.isEmpty())) {
                 log.debug("DuckLake table '{}' has no committed data files yet; skipping", entry.getKey());
                 continue;
             }
-            snapshot.put(entry.getKey(), List.copyOf(entry.getValue()));
+            snapshot.put(entry.getKey(), files == null ? List.of() : List.copyOf(files));
+            schemas.put(entry.getKey(), columns == null ? List.of() : List.copyOf(columns));
         }
         this.duckLakeFiles = Collections.unmodifiableMap(snapshot);
+        this.duckLakeColumns = Collections.unmodifiableMap(schemas);
         replaceTableNames(snapshot.keySet());
     }
 
@@ -116,6 +132,13 @@ public class ParquetTableRegistry {
             throw new IllegalStateException("Only DuckLake storage tracks per-table data files");
         }
         return duckLakeFiles.getOrDefault(tableName, List.of());
+    }
+
+    public List<TableColumn> getDuckLakeColumns(String tableName) {
+        if (!isDuckLake()) {
+            throw new IllegalStateException("Only DuckLake storage tracks catalog columns");
+        }
+        return duckLakeColumns.getOrDefault(tableName, List.of());
     }
 
     /**

@@ -4,6 +4,7 @@ import com.bloxbean.cardano.yaci.store.adapot.job.storage.AdaPotJobStorage;
 import com.bloxbean.cardano.yaci.store.analytics.config.AnalyticsStoreProperties;
 import com.bloxbean.cardano.yaci.store.analytics.state.ExportStateService;
 import com.bloxbean.cardano.yaci.store.analytics.writer.StorageWriter;
+import com.bloxbean.cardano.yaci.store.blocks.storage.BlockStorageReader;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import org.junit.jupiter.api.Test;
 
@@ -45,6 +46,21 @@ class TableExporterFederationMetadataTest {
         assertThat(reward.getSourceColumnMappings()).isEqualTo(Map.of("epoch", "earned_epoch"));
         assertThat(reward.buildQuery(PartitionValue.ofEpoch(300), new SlotRange(10, 20)))
                 .contains("earned_epoch AS epoch");
+
+        InstantRewardExporter instantReward = new InstantRewardExporter(
+                writer(), stateService(), eraService(), props(), adaPot(), mock(BlockStorageReader.class));
+        assertThat(instantReward.getSourceColumnMappings()).isEqualTo(Map.of("epoch", "earned_epoch"));
+
+        RewardRestExporter rewardRest = new RewardRestExporter(
+                writer(), stateService(), eraService(), props(), adaPot());
+        assertThat(rewardRest.getSourceColumnMappings()).isEqualTo(Map.of("epoch", "earned_epoch"));
+
+        UnclaimedRewardRestExporter unclaimedRewardRest = new UnclaimedRewardRestExporter(
+                writer(), stateService(), eraService(), props(), adaPot());
+        assertThat(unclaimedRewardRest.getFederationBoundaryColumn()).isEqualTo("epoch");
+        assertThat(unclaimedRewardRest.getSourceColumnMappings()).isEqualTo(Map.of("epoch", "earned_epoch"));
+        assertThat(unclaimedRewardRest.buildQuery(PartitionValue.ofEpoch(300), new SlotRange(10, 20)))
+                .contains("earned_epoch as epoch");
 
         ConstitutionExporter constitution = new ConstitutionExporter(writer(), stateService(), eraService(), props(), adaPot());
         assertThat(constitution.getSourceColumnMappings()).isEqualTo(Map.of("epoch", "active_epoch"));

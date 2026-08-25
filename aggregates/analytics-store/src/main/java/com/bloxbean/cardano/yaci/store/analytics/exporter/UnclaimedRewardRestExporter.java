@@ -9,6 +9,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
+import java.util.Map;
+
 /**
  * Exporter for unclaimed reward rest (rewards not claimed before treasury transfer).
  *
@@ -48,14 +50,10 @@ public class UnclaimedRewardRestExporter extends AbstractTableExporter {
         return PartitionStrategy.EPOCH;
     }
 
-    /**
-     * Unified view: never federated. Unclaimed reward rows can be revised in PostgreSQL after
-     * their epoch was exported, so a boundary split would surface stale exported rows;
-     * the table is served from the exported data only.
-     */
+    /** Unified view: the exported {@code epoch} column is PostgreSQL {@code earned_epoch}. */
     @Override
-    public String getFederationBoundaryColumn() {
-        return null;
+    public Map<String, String> getSourceColumnMappings() {
+        return Map.of("epoch", "earned_epoch");
     }
 
     @Override

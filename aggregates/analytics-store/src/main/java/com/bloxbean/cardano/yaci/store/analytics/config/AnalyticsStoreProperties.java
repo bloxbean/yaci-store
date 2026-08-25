@@ -149,22 +149,7 @@ public class AnalyticsStoreProperties {
          */
         private int threads = Runtime.getRuntime().availableProcessors();
 
-        private DuckDbDataSource datasource = new DuckDbDataSource();
         private ReaderConfig reader = new ReaderConfig();
-
-        @Data
-        public static class DuckDbDataSource {
-            private HikariConfig hikari = new HikariConfig();
-
-            @Data
-            public static class HikariConfig {
-                private int maximumPoolSize = 2;
-                private int minimumIdle = 1;
-                private long connectionTimeout = 30000;
-                private long idleTimeout = 600000;
-                private long maxLifetime = 1800000;
-            }
-        }
 
         @Data
         public static class ReaderConfig {

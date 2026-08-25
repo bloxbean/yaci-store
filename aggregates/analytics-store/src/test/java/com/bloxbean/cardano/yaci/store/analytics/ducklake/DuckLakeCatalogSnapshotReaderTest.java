@@ -16,6 +16,7 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -41,6 +42,7 @@ class DuckLakeCatalogSnapshotReaderTest {
     private HikariDataSource writerDataSource;
     private DuckDbConnectionHelper helper;
     private AnalyticsStoreProperties properties;
+    private DuckLakeWriterLock writerLock;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -63,6 +65,7 @@ class DuckLakeCatalogSnapshotReaderTest {
         writerDataSource.setConnectionTimeout(250);
 
         helper = new DuckDbConnectionHelper(environment(), properties);
+        writerLock = new DuckLakeWriterLock();
         // Same catalog initialization as DuckLakeCatalogInitializer at startup (compression,
         // and data inlining off so every committed row lands in a Parquet data file).
         try (Connection conn = writerDataSource.getConnection()) {
@@ -92,13 +95,16 @@ class DuckLakeCatalogSnapshotReaderTest {
         appendRows("block", "SELECT range + 100 AS slot, CAST('2024-01-02' AS DATE) AS date FROM range(5)");
         writeTable("emptytbl", "SELECT 1::BIGINT AS slot LIMIT 0");
 
-        DuckLakeCatalogSnapshotReader reader = new DuckLakeCatalogSnapshotReader(writerDataSource, helper, properties);
+        DuckLakeCatalogSnapshotReader reader = new DuckLakeCatalogSnapshotReader(
+                writerDataSource, helper, properties, writerLock);
         Optional<Map<String, DuckLakeCatalogSnapshotReader.TableFiles>> snapshot = reader.readSnapshot();
 
         assertTrue(snapshot.isPresent());
         Map<String, DuckLakeCatalogSnapshotReader.TableFiles> tables = snapshot.get();
         assertEquals(2, tables.size());
         assertTrue(tables.get("emptytbl").dataFiles().isEmpty());
+        assertEquals(List.of(new DuckLakeCatalogSnapshotReader.Column("slot", "BIGINT")),
+                tables.get("emptytbl").columns());
 
         DuckLakeCatalogSnapshotReader.TableFiles block = tables.get("block");
         assertEquals(2, block.dataFiles().size());
@@ -129,7 +135,8 @@ class DuckLakeCatalogSnapshotReaderTest {
     @Test
     void defersInsteadOfBlockingWhileAnExportHoldsTheWriterConnection() throws Exception {
         writeTable("block", "SELECT range AS slot FROM range(3)");
-        DuckLakeCatalogSnapshotReader reader = new DuckLakeCatalogSnapshotReader(writerDataSource, helper, properties);
+        DuckLakeCatalogSnapshotReader reader = new DuckLakeCatalogSnapshotReader(
+                writerDataSource, helper, properties, writerLock);
         assertTrue(reader.readSnapshot().isPresent());
 
         try (Connection heldByExport = writerDataSource.getConnection()) {
@@ -141,6 +148,19 @@ class DuckLakeCatalogSnapshotReaderTest {
         }
 
         assertTrue(reader.readSnapshot().isPresent());
+    }
+
+    @Test
+    void sharedWriterLockClosesThePoolCheckRace() throws Exception {
+        DuckLakeCatalogSnapshotReader reader = new DuckLakeCatalogSnapshotReader(
+                writerDataSource, helper, properties, writerLock);
+
+        try (DuckLakeWriterLock.Guard ignored = writerLock.acquire()) {
+            long start = System.nanoTime();
+            assertTrue(reader.readSnapshot().isEmpty());
+            long elapsedMs = (System.nanoTime() - start) / 1_000_000;
+            assertTrue(elapsedMs < 1_000, "snapshot should not enter the Hikari wait: " + elapsedMs + "ms");
+        }
     }
 
     private void writeTable(String table, String query) throws SQLException {

@@ -225,13 +225,16 @@ DuckDB defaults to using 80% of system physical RAM for its buffer manager. Sinc
 To limit DuckDB memory usage:
 
 ```properties
-# Limit DuckDB buffer manager to 1GB per connection
+# Limit each DuckDB instance's buffer manager to 1GB
 yaci.store.analytics.duckdb.memory-limit=1GB
 ```
 
 If not set, DuckDB uses its default (80% of system RAM). It is recommended to set this explicitly in production and container environments.
 
-Note: With writer pool (1 connection) + reader pool (N connections), total potential DuckDB memory is `memory_limit * (1 + N)`. Some DuckDB aggregate functions may also allocate memory outside the buffer manager, so actual usage can slightly exceed the configured limit.
+The writer connection is one DuckDB instance. When the analytics query layer is enabled it
+uses a second instance whose duplicated read connections share that instance's memory limit.
+Plan capacity for up to roughly `memory_limit * 2`, plus JVM heap and allocations DuckDB makes
+outside its buffer manager.
 
 ### DuckLake requires `public` schema in PostgreSQL
 

@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.analytics.query.executor;
 
 import com.bloxbean.cardano.yaci.store.analytics.query.connection.ParquetReadConnectionProvider;
+import com.bloxbean.cardano.yaci.store.analytics.query.connection.DuckDbReadConnectionProvider;
 import com.bloxbean.cardano.yaci.store.analytics.config.AnalyticsStoreProperties;
 import com.bloxbean.cardano.yaci.store.analytics.helper.DuckDbConnectionHelper;
 import lombok.extern.slf4j.Slf4j;
@@ -196,7 +197,12 @@ public class AnalyticsQueryExecutor {
                     elapsed, DuckDbConnectionHelper.redactSecrets(e.getMessage()));
             // Sanitize error message — do not expose internal DuckDB state, file paths,
             // or PostgreSQL connection details to the caller
+            if (e instanceof SQLTimeoutException || "57014".equals(e.getSQLState())) {
+                throw new QueryTimeoutException("Query timed out. Narrow the date/epoch range or simplify the query.");
+            }
             throw new QueryExecutionException("Query execution failed. Check query syntax and filters.");
+        } catch (DuckDbReadConnectionProvider.QueryCapacityException e) {
+            throw new QueryUnavailableException("Analytics query capacity is full. Try again later.");
         }
     }
 
@@ -298,12 +304,26 @@ public class AnalyticsQueryExecutor {
     }
 
     /**
-     * A query failed inside DuckDB (syntax error, unknown table/column, timeout, ...). The
-     * message is intentionally generic — DuckDB's own message may reveal file paths or
-     * connection details — and callers should treat it as a client-side query problem.
+     * A query failed inside DuckDB for a reason other than its configured execution timeout
+     * (for example, a syntax error or unknown table/column). The message is intentionally
+     * generic because DuckDB's own message may reveal file paths or connection details.
      */
     public static class QueryExecutionException extends RuntimeException {
         public QueryExecutionException(String message) {
+            super(message);
+        }
+    }
+
+    /** The database cancelled a query after its configured execution deadline. */
+    public static class QueryTimeoutException extends QueryExecutionException {
+        public QueryTimeoutException(String message) {
+            super(message);
+        }
+    }
+
+    /** The query engine could not accept another concurrent request in time. */
+    public static class QueryUnavailableException extends RuntimeException {
+        public QueryUnavailableException(String message) {
             super(message);
         }
     }

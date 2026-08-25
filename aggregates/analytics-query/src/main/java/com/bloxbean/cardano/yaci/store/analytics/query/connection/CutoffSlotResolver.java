@@ -20,9 +20,9 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Resolves the boundary slot between historical Parquet data and live PostgreSQL data.
  *
- * <p>For each table, computes the boundary covered by completed exports as a {@link Cutoff}
- * (last slot, and last epoch for EPOCH-partitioned tables). Data at or below the boundary is
- * served from the exported data; data above it from PostgreSQL.</p>
+ * <p>For each table, computes the contiguous range covered by completed exports as a
+ * {@link Cutoff}. Data inside that range is served from the exported data; data before or
+ * after it is served from PostgreSQL.</p>
  *
  * <p>The boundary is derived from {@link ExportStateService#getCompletedPartitions(String)},
  * which tracks which date/epoch partitions have been successfully exported to Parquet.</p>
@@ -46,13 +46,21 @@ public class CutoffSlotResolver {
      * The federation boundary of a table, expressed in both units so the view builder can
      * apply it to a slot column (DAILY tables) or an epoch column (EPOCH tables).
      *
-     * @param slot  last slot covered by the exported data; -1 = nothing exported yet
-     * @param epoch last epoch covered by the exported data (EPOCH tables only); -1 = none
+     * @param slot       last slot covered by the exported data; -1 = nothing exported yet
+     * @param epoch      last epoch covered by the exported data (EPOCH tables only); -1 = none
+     * @param startSlot  first slot covered by the exported data
+     * @param startEpoch first epoch covered by the exported data (EPOCH tables only)
      */
-    public record Cutoff(long slot, long epoch) {
-        public static final Cutoff NONE = new Cutoff(-1, -1);
+    public record Cutoff(long slot, long epoch, long startSlot, long startEpoch) {
+        public static final Cutoff NONE = new Cutoff(-1, -1, 0, 0);
         /** Everything is in the exported data (non-partitioned tables). */
-        public static final Cutoff ALL_EXPORTED = new Cutoff(Long.MAX_VALUE, Long.MAX_VALUE);
+        public static final Cutoff ALL_EXPORTED = new Cutoff(
+                Long.MAX_VALUE, Long.MAX_VALUE, Long.MIN_VALUE, Long.MIN_VALUE);
+
+        /** Compatibility constructor for a range with no lower bound. */
+        public Cutoff(long slot, long epoch) {
+            this(slot, epoch, Long.MIN_VALUE, Long.MIN_VALUE);
+        }
     }
 
     public CutoffSlotResolver(ExportStateService exportStateService, EraService eraService,
@@ -63,7 +71,7 @@ public class CutoffSlotResolver {
     }
 
     /**
-     * Get the cutoff slot for a table. Data at slot &lt;= cutoff is in Parquet.
+     * Get the final slot of the contiguous exported range for a table.
      *
      * @param tableName the analytics table name
      * @return cutoff slot, or -1 if no exports exist (all data from PostgreSQL)
@@ -73,8 +81,7 @@ public class CutoffSlotResolver {
     }
 
     /**
-     * Get the cutoff for a table in both units (slot and epoch). Data at or below the cutoff
-     * is in the exported data; data above it comes from PostgreSQL.
+     * Get the contiguous exported range for a table in both slot and epoch units.
      */
     public Cutoff getCutoff(String tableName) {
         return cutoffCache.computeIfAbsent(tableName, this::computeCutoff);
@@ -118,7 +125,7 @@ public class CutoffSlotResolver {
             PartitionStrategy partitionStrategy = exporterRegistry.getExporter(tableName).getPartitionStrategy();
 
             return switch (partitionStrategy) {
-                case DAILY -> new Cutoff(computeDailyCutoff(tableName, completed), -1);
+                case DAILY -> computeDailyCutoff(tableName, completed);
                 case EPOCH -> computeEpochCutoff(tableName, completed);
                 default -> {
                     log.debug("Table '{}' has strategy '{}', not suitable for cutoff", tableName, partitionStrategy);
@@ -127,11 +134,13 @@ public class CutoffSlotResolver {
             };
         } catch (Exception e) {
             log.warn("Failed to compute cutoff for '{}' ({})", tableName, e.getClass().getSimpleName());
-            return Cutoff.NONE;
+            // During refresh, keep the last known-good range instead of routing the entire
+            // table to PostgreSQL because of a transient export-state read failure.
+            return cutoffCache.getOrDefault(tableName, Cutoff.NONE);
         }
     }
 
-    private long computeDailyCutoff(String tableName, Set<String> completed) {
+    private Cutoff computeDailyCutoff(String tableName, Set<String> completed) {
         // Partition values look like "date=2024-01-15"
         NavigableSet<LocalDate> dates = new TreeSet<>(completed.stream()
                 .filter(p -> p.startsWith("date="))
@@ -146,9 +155,10 @@ public class CutoffSlotResolver {
                 })
                 .filter(d -> d != null)
                 .toList());
-        if (dates.isEmpty()) return -1;
+        if (dates.isEmpty()) return Cutoff.NONE;
 
-        LocalDate contiguousEnd = dates.first();
+        LocalDate contiguousStart = dates.first();
+        LocalDate contiguousEnd = contiguousStart;
         for (LocalDate date : dates.tailSet(contiguousEnd, false)) {
             if (!date.equals(contiguousEnd.plusDays(1))) {
                 log.warn("Export gap detected for '{}' after {}; cutoff will not cross the gap",
@@ -157,12 +167,14 @@ public class CutoffSlotResolver {
             }
             contiguousEnd = date;
         }
+        long startSlot = new PartitionValue.DatePartition(contiguousStart)
+                .toSlotRange(eraService).startSlot();
         long cutoff = new PartitionValue.DatePartition(contiguousEnd)
                 .toSlotRange(eraService).endSlot() - 1;
         if (cutoff > 0) {
-            log.debug("Daily cutoff for '{}': slot {}", tableName, cutoff);
+            log.debug("Daily exported range for '{}': slots {} through {}", tableName, startSlot, cutoff);
         }
-        return cutoff;
+        return new Cutoff(cutoff, -1, startSlot, -1);
     }
 
     private Cutoff computeEpochCutoff(String tableName, Set<String> completed) {
@@ -186,7 +198,8 @@ public class CutoffSlotResolver {
             return Cutoff.NONE;
         }
 
-        int contiguousEnd = epochs.first();
+        int contiguousStart = epochs.first();
+        int contiguousEnd = contiguousStart;
         for (int epoch : epochs.tailSet(contiguousEnd, false)) {
             if (epoch != contiguousEnd + 1) {
                 log.warn("Export gap detected for '{}' after epoch {}; cutoff will not cross the gap",
@@ -197,10 +210,13 @@ public class CutoffSlotResolver {
         }
 
         try {
+            long startSlot = new PartitionValue.EpochPartition(contiguousStart)
+                    .toSlotRange(eraService).startSlot();
             long cutoff = new PartitionValue.EpochPartition(contiguousEnd)
                     .toSlotRange(eraService).endSlot() - 1;
-            log.debug("Epoch cutoff for '{}': epoch {} -> slot {}", tableName, contiguousEnd, cutoff);
-            return new Cutoff(cutoff, contiguousEnd);
+            log.debug("Epoch exported range for '{}': epochs {} through {}", tableName,
+                    contiguousStart, contiguousEnd);
+            return new Cutoff(cutoff, contiguousEnd, startSlot, contiguousStart);
         } catch (Exception e) {
             log.warn("Failed to convert epoch {} to slot for '{}': {}",
                     contiguousEnd, tableName, e.getClass().getSimpleName());

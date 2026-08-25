@@ -71,7 +71,7 @@ public class UnifiedViewBuilder {
      * @param tableName       the analytics table name (e.g., "block")
      * @param pgDatabaseAlias the attached PostgreSQL database alias (e.g., "pg_live")
      * @param pgSchema        the PostgreSQL schema (e.g., "preprod")
-     * @param cutoff          the boundary (data &lt;= cutoff from the exported data, &gt; cutoff from PG)
+     * @param cutoff          the contiguous range served from exported data; rows outside it come from PG
      * @param federation      exporter-declared federation metadata for the table
      * @param partitionColumn source column used to derive DuckLake's synthetic date partition
      * @param parentConn      the DuckDB parent connection (for schema introspection)
@@ -91,11 +91,14 @@ public class UnifiedViewBuilder {
             return null;
         }
         String boundaryColumn = federation.boundaryColumn();
-        long boundaryValue;
+        long rangeStart;
+        long rangeEnd;
         if (federation.strategy() == PartitionStrategy.EPOCH) {
-            boundaryValue = cutoff.epoch();
+            rangeStart = cutoff.startEpoch();
+            rangeEnd = cutoff.epoch();
         } else if (federation.strategy() == PartitionStrategy.DAILY) {
-            boundaryValue = cutoff.slot();
+            rangeStart = cutoff.startSlot();
+            rangeEnd = cutoff.slot();
         } else {
             log.debug("Table '{}' has partition strategy {}, skipping federation", tableName, federation.strategy());
             return null;
@@ -157,22 +160,22 @@ public class UnifiedViewBuilder {
 
             // Boundary predicate on the PostgreSQL side uses the source column of the boundary
             String pgBoundary = quoteId(federation.sourceColumns().getOrDefault(boundaryColumn, boundaryColumn));
+            String parquetPredicate = insideRange(quoteId(boundaryColumn), rangeStart, rangeEnd);
+            String pgPredicate = outsideRange(pgBoundary, rangeStart, rangeEnd);
 
             // Build the UNION ALL view
             String pgSelect = String.join(", ", pgSelectColumns);
             return String.format(
                     "CREATE OR REPLACE VIEW %s AS " +
-                    "SELECT * FROM %s WHERE %s <= %d " +
+                    "SELECT * FROM %s WHERE %s " +
                     "UNION ALL " +
-                    "SELECT %s FROM %s WHERE %s > %d",
+                    "SELECT %s FROM %s WHERE %s",
                     quoteId(tableName),
                     quoteId(parquetViewName),
-                    quoteId(boundaryColumn),
-                    boundaryValue,
+                    parquetPredicate,
                     pgSelect,
                     pgFullName,
-                    pgBoundary,
-                    boundaryValue
+                    pgPredicate
             );
 
         } catch (SQLException e) {
@@ -180,6 +183,18 @@ public class UnifiedViewBuilder {
                     tableName, DuckDbConnectionHelper.redactSecrets(e.getMessage()));
             return null;
         }
+    }
+
+    private static String insideRange(String column, long start, long end) {
+        if (end < start) return "FALSE";
+        if (start == Long.MIN_VALUE) return column + " <= " + end;
+        return column + " BETWEEN " + start + " AND " + end;
+    }
+
+    private static String outsideRange(String column, long start, long end) {
+        if (end < start) return "TRUE";
+        if (start == Long.MIN_VALUE) return column + " > " + end;
+        return "(" + column + " < " + start + " OR " + column + " > " + end + ")";
     }
 
     private static String buildDateExpression(

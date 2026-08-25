@@ -88,11 +88,11 @@ public abstract class DuckDbReadConnectionProvider {
     public Connection getReadConnection() {
         try {
             if (!semaphore.tryAcquire(queryTimeoutSeconds, TimeUnit.SECONDS)) {
-                throw new RuntimeException("Max concurrent DuckDB queries reached. Try again later.");
+                throw new QueryCapacityException("Analytics query capacity is full. Try again later.");
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new RuntimeException("Interrupted while waiting for DuckDB read connection", e);
+            throw new QueryCapacityException("Interrupted while waiting for analytics query capacity", e);
         }
 
         try {
@@ -110,6 +110,17 @@ public abstract class DuckDbReadConnectionProvider {
      */
     public int getQueryTimeoutSeconds() {
         return queryTimeoutSeconds;
+    }
+
+    /** No read permit became available within the configured query timeout. */
+    public static class QueryCapacityException extends RuntimeException {
+        public QueryCapacityException(String message) {
+            super(message);
+        }
+
+        public QueryCapacityException(String message, Throwable cause) {
+            super(message, cause);
+        }
     }
 
     /**
