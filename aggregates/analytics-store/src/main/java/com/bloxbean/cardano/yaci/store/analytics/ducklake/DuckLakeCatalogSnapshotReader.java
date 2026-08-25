@@ -56,25 +56,34 @@ public class DuckLakeCatalogSnapshotReader {
     private final DataSource writerDataSource;
     private final DuckDbConnectionHelper connectionHelper;
     private final AnalyticsStoreProperties properties;
+    private final DuckLakeWriterLock writerLock;
 
     public DuckLakeCatalogSnapshotReader(
             @Qualifier("duckDbWriterDataSource") DataSource writerDataSource,
             DuckDbConnectionHelper connectionHelper,
-            AnalyticsStoreProperties properties) {
+            AnalyticsStoreProperties properties,
+            DuckLakeWriterLock writerLock) {
         this.writerDataSource = writerDataSource;
         this.connectionHelper = connectionHelper;
         this.properties = properties;
+        this.writerLock = writerLock;
+    }
+
+    /** Catalog column used to expose the schema of a table that has no data files yet. */
+    public record Column(String name, String type) {
     }
 
     /**
-     * Committed data files of one DuckLake table.
+     * Catalog snapshot of one DuckLake table.
      *
      * @param table          table name in the {@code main} schema
      * @param dataFiles      absolute, normalized paths of the committed Parquet data files
+     * @param columns        columns in catalog order, including their DuckDB types
      * @param hasDeleteFiles true if the snapshot carries DuckLake delete files for this table
      *                       (never produced by the append-only exporter; reported for visibility)
      */
-    public record TableFiles(String table, List<Path> dataFiles, boolean hasDeleteFiles) {
+    public record TableFiles(String table, List<Path> dataFiles, List<Column> columns,
+                             boolean hasDeleteFiles) {
     }
 
     /**
@@ -85,16 +94,23 @@ public class DuckLakeCatalogSnapshotReader {
      * @throws SQLException if the catalog cannot be attached or queried
      */
     public Optional<Map<String, TableFiles>> readSnapshot() throws SQLException {
-        if (isWriterBusy()) {
+        Optional<DuckLakeWriterLock.Guard> guard = writerLock.tryAcquire();
+        if (guard.isEmpty()) {
             log.debug("DuckLake writer connection is busy (export in progress); snapshot deferred");
             return Optional.empty();
         }
 
-        try (Connection conn = writerDataSource.getConnection()) {
-            // Idempotent on the writer's connection: the catalog is attached read-write once
-            // (exactly what the export path and DuckLakeCatalogInitializer do) and reused.
-            connectionHelper.prepareConnectionForDuckLake(conn, false, false);
-            return Optional.of(readSnapshot(conn));
+        try (DuckLakeWriterLock.Guard ignored = guard.get()) {
+            if (isWriterBusy()) {
+                log.debug("DuckLake writer connection is busy (export in progress); snapshot deferred");
+                return Optional.empty();
+            }
+            try (Connection conn = writerDataSource.getConnection()) {
+                // Idempotent on the writer's connection: the catalog is attached read-write once
+                // (exactly what the export path and DuckLakeCatalogInitializer do) and reused.
+                connectionHelper.prepareConnectionForDuckLake(conn, false, false);
+                return Optional.of(readSnapshot(conn));
+            }
         } catch (SQLTransientConnectionException e) {
             // Lost the race with an export that grabbed the single writer connection.
             log.debug("DuckLake writer connection unavailable ({}); snapshot deferred",
@@ -139,7 +155,8 @@ public class DuckLakeCatalogSnapshotReader {
                 log.warn("DuckLake table '{}' has delete files in the current snapshot; the analytics "
                         + "query layer reads data files directly and cannot apply them", table);
             }
-            tables.put(table, new TableFiles(table, List.copyOf(files), hasDeleteFiles));
+            tables.put(table, new TableFiles(
+                    table, List.copyOf(files), listColumns(conn, table), hasDeleteFiles));
         }
         return tables;
     }
@@ -158,6 +175,24 @@ public class DuckLakeCatalogSnapshotReader {
             }
         }
         return tables;
+    }
+
+    private static List<Column> listColumns(Connection conn, String table) throws SQLException {
+        List<Column> columns = new ArrayList<>();
+        try (PreparedStatement stmt = conn.prepareStatement(
+                "SELECT column_name, data_type FROM duckdb_columns() "
+                        + "WHERE database_name = ? AND schema_name = ? AND table_name = ? "
+                        + "ORDER BY column_index")) {
+            stmt.setString(1, CATALOG_ALIAS);
+            stmt.setString(2, CATALOG_SCHEMA);
+            stmt.setString(3, table);
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    columns.add(new Column(rs.getString(1), rs.getString(2)));
+                }
+            }
+        }
+        return List.copyOf(columns);
     }
 
     /**

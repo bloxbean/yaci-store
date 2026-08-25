@@ -5,11 +5,14 @@ import com.bloxbean.cardano.yaci.store.analytics.query.connection.ParquetReadCon
 import com.bloxbean.cardano.yaci.store.analytics.query.connection.ParquetTableRegistry;
 import com.bloxbean.cardano.yaci.store.analytics.query.executor.AnalyticsQueryExecutor;
 import com.bloxbean.cardano.yaci.store.analytics.query.model.*;
+import com.bloxbean.cardano.yaci.store.analytics.state.ExportStateService;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.scheduling.annotation.Scheduled;
 
 import java.sql.Connection;
 import java.sql.ResultSet;
@@ -35,11 +38,14 @@ public class AnalyticsSchemaService {
     private final ParquetReadConnectionProvider connectionProvider;
     private final AnalyticsStoreProperties properties;
     private final AnalyticsQueryExecutor queryExecutor;
+    private final ObjectProvider<ExportStateService> exportStateServiceProvider;
 
     // Cached per table: row count and date range (expensive to compute on large tables)
     private final Map<String, Long> rowCountCache = new ConcurrentHashMap<>();
     private final Map<String, TableInfo.DateRange> dateRangeCache = new ConcurrentHashMap<>();
     private final Map<String, List<ColumnSchema>> columnCache = new ConcurrentHashMap<>();
+    private final Set<String> columnFailures = ConcurrentHashMap.newKeySet();
+    private final Set<String> dateRangeFailures = ConcurrentHashMap.newKeySet();
 
     @PostConstruct
     void warmCache() {
@@ -57,7 +63,6 @@ public class AnalyticsSchemaService {
 
     public SchemaOverview listTables() {
         int bufferDays = properties.getContinuousSync().getBufferDays();
-        String dataAsOf = LocalDate.now().minusDays(bufferDays).toString();
 
         List<TableInfo> tables = new ArrayList<>();
         for (String tableName : tableRegistry.getTableNames()) {
@@ -80,15 +85,20 @@ public class AnalyticsSchemaService {
 
         // Sort: largest tables first (most useful for analytics)
         tables.sort((a, b) -> Long.compare(b.rowCount(), a.rowCount()));
+        String dataAsOf = resolveDataAsOf(tables);
 
         Map<String, String> queryHints = new LinkedHashMap<>();
         queryHints.put("partition_pruning",
                 "Always include WHERE date = '...' or epoch BETWEEN ... for performance. DuckDB prunes Hive partitions automatically.");
+        queryHints.put("optional_tables",
+                "address, address_balance, address_tx_amount, epoch, and transaction_witness depend on optional source features. " +
+                "If absent, the table is unavailable. If listed with rowCount=0, it is currently empty; that alone does not prove " +
+                "the feature is disabled. Use GET /api/v1/analytics/query/schema/{tableName} or, when MCP is enabled, " +
+                "analytics-describe-table for table-specific fallback guidance.");
         queryHints.put("unspent_utxos",
-                "IMPORTANT: For address balance, use the 'analytics-address-balance' tool (real-time from PostgreSQL). " +
-                "For top addresses by balance, use 'analytics-top-balances' tool (Parquet, " +
-                properties.getContinuousSync().getBufferDays() + " day(s) old). " +
-                "Do NOT compute balances via ad-hoc SQL — use the dedicated tools instead.");
+                "For a current single-address balance without MCP, use GET /addresses/{address}/amounts. " +
+                "When MCP is enabled, use 'analytics-address-balance'; for top addresses by balance use " +
+                "'analytics-top-balances' (exported data, " + properties.getContinuousSync().getBufferDays() + " day(s) old).");
         queryHints.put("large_tables",
                 "address_utxo (1.47B rows) and transaction (120M rows) benefit most from partition filters.");
         queryHints.put("sql_dialect",
@@ -111,12 +121,15 @@ public class AnalyticsSchemaService {
             note = "Live PostgreSQL federation is active: " + liveTables + " of " + tables.size()
                     + " tables (dataScope 'historical+live') union the exported data with live rows and reach the "
                     + "current chain tip; the remaining tables (dataScope 'historical') contain exported data as of "
-                    + dataAsOf + " (" + bufferDays + " day(s) old). For epoch-level tables the current epoch's rows "
+                    + dataAsOf + " (configured finality buffer: " + bufferDays + " day(s)). For epoch-level tables the current epoch's rows "
                     + "come live from PostgreSQL and may still change until the epoch closes. "
-                    + "For real-time address balance, use 'analytics-address-balance' tool.";
+                    + "For a current address balance use GET /addresses/{address}/amounts or, when MCP is enabled, "
+                    + "'analytics-address-balance'.";
         } else {
-            note = "Historical analytics data (" + bufferDays + " day(s) old). " +
-                    "For real-time address balance, use 'analytics-address-balance' tool.";
+            note = "Historical analytics data as of " + dataAsOf +
+                    " (configured finality buffer: " + bufferDays + " day(s)). " +
+                    "For a current address balance use GET /addresses/{address}/amounts or, when MCP is enabled, " +
+                    "'analytics-address-balance'.";
         }
 
         return new SchemaOverview(
@@ -129,6 +142,56 @@ public class AnalyticsSchemaService {
                 tables,
                 queryHints
         );
+    }
+
+    /** Refresh successful schema metadata every 30 minutes. */
+    @Scheduled(fixedDelay = 1_800_000, initialDelay = 1_800_000)
+    void invalidateMetadataCaches() {
+        rowCountCache.clear();
+        dateRangeCache.clear();
+        columnCache.clear();
+    }
+
+    /** Retry failed metadata scans after five minutes without evicting successful results. */
+    @Scheduled(fixedDelay = 300_000, initialDelay = 300_000)
+    void clearMetadataFailures() {
+        rowCountCache.entrySet().removeIf(entry -> entry.getValue() == -1L);
+        columnFailures.clear();
+        dateRangeFailures.clear();
+    }
+
+    private String resolveDataAsOf(List<TableInfo> tables) {
+        ExportStateService stateService = exportStateServiceProvider.getIfAvailable();
+        if (stateService == null) return "unknown";
+
+        LocalDate commonEnd = null;
+        for (TableInfo table : tables) {
+            if (!"DAILY".equals(table.partitionStrategy())) continue;
+            try {
+                LocalDate tableEnd = stateService.getCompletedPartitions(table.name()).stream()
+                        .filter(partition -> partition.startsWith("date="))
+                        .map(partition -> partition.substring("date=".length()))
+                        .map(AnalyticsSchemaService::parseDate)
+                        .filter(Objects::nonNull)
+                        .max(LocalDate::compareTo)
+                        .orElse(null);
+                if (tableEnd != null && (commonEnd == null || tableEnd.isBefore(commonEnd))) {
+                    commonEnd = tableEnd;
+                }
+            } catch (Exception e) {
+                log.warn("Failed to resolve data freshness for '{}' ({})",
+                        table.name(), e.getClass().getSimpleName());
+            }
+        }
+        return commonEnd == null ? "unknown" : commonEnd.toString();
+    }
+
+    private static LocalDate parseDate(String value) {
+        try {
+            return LocalDate.parse(value);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private String dataScope(String tableName) {
@@ -166,6 +229,10 @@ public class AnalyticsSchemaService {
         if (cached != null) {
             return cached;
         }
+        if (columnFailures.contains(tableName)) {
+            throw new SchemaUnavailableException(
+                    "Schema for table '" + tableName + "' is temporarily unavailable");
+        }
 
         List<ColumnSchema> columns = new ArrayList<>();
         try (Connection conn = connectionProvider.getReadConnection();
@@ -180,8 +247,16 @@ public class AnalyticsSchemaService {
         } catch (Exception e) {
             log.error("Failed to describe table '{}' ({})",
                     tableName, e.getClass().getSimpleName());
-            // Do not cache a transient failure; a later request should retry.
-            return List.of();
+            // Retry after the scheduled five-minute failure-marker cleanup.
+            columnFailures.add(tableName);
+            throw new SchemaUnavailableException(
+                    "Schema for table '" + tableName + "' is temporarily unavailable");
+        }
+    }
+
+    public static class SchemaUnavailableException extends RuntimeException {
+        public SchemaUnavailableException(String message) {
+            super(message);
         }
     }
 
@@ -203,13 +278,16 @@ public class AnalyticsSchemaService {
         } catch (Exception e) {
             log.warn("Failed to count rows for '{}' ({})",
                     tableName, e.getClass().getSimpleName());
-            // -1 represents this response only; do not poison the cache on a transient failure.
+            // Cache the unavailable marker until the scheduled five-minute failure retry so
+            // repeated /schema calls do not rerun the same expensive timed-out scan.
+            rowCountCache.putIfAbsent(tableName, -1L);
             return -1L;
         }
     }
 
     private TableInfo.DateRange getDateRange(String tableName, String partitionColumn) {
         if (partitionColumn == null) return null;
+        if (dateRangeFailures.contains(tableName)) return null;
 
         return dateRangeCache.computeIfAbsent(tableName, t -> {
             String col = "date".equals(partitionColumn) ? "date" : partitionColumn;
@@ -227,6 +305,7 @@ public class AnalyticsSchemaService {
             } catch (Exception e) {
                 log.warn("Failed to get date range for '{}' ({})",
                         t, e.getClass().getSimpleName());
+                dateRangeFailures.add(t);
             }
             return null;
         });

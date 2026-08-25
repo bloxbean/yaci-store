@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.analytics.query.connection;
 
 import com.bloxbean.cardano.yaci.store.analytics.config.AnalyticsStoreProperties;
 import com.bloxbean.cardano.yaci.store.analytics.ducklake.DuckLakeCatalogSnapshotReader;
+import com.bloxbean.cardano.yaci.store.analytics.ducklake.DuckLakeWriterLock;
 import com.bloxbean.cardano.yaci.store.analytics.exporter.TableExporterRegistry;
 import com.bloxbean.cardano.yaci.store.analytics.helper.DuckDbConnectionHelper;
 import com.zaxxer.hikari.HikariDataSource;
@@ -49,6 +50,7 @@ class ParquetReadConnectionProviderDuckLakeTest {
     private HikariDataSource writerDataSource;
     private DuckDbConnectionHelper helper;
     private AnalyticsStoreProperties properties;
+    private DuckLakeWriterLock writerLock;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -73,6 +75,7 @@ class ParquetReadConnectionProviderDuckLakeTest {
         writerDataSource.setConnectionTimeout(1000);
 
         helper = new DuckDbConnectionHelper(environment(), properties);
+        writerLock = new DuckLakeWriterLock();
         // Same catalog initialization as DuckLakeCatalogInitializer at startup (compression,
         // and data inlining off so every committed row lands in a Parquet data file).
         try (Connection conn = writerDataSource.getConnection()) {
@@ -101,11 +104,12 @@ class ParquetReadConnectionProviderDuckLakeTest {
         // Writer (holds the catalog read-write for the JVM lifetime, like DuckLakeWriterService)
         writeTable("block", "SELECT range AS slot, CAST('2024-01-01' AS DATE) AS date FROM range(10)");
         writeTable("adapot", "SELECT 450::INTEGER AS epoch, 100::BIGINT AS slot");
+        writeTable("empty_table", "SELECT 1::BIGINT AS slot, 'x'::VARCHAR AS hash LIMIT 0");
 
         ParquetTableRegistry registry = new ParquetTableRegistry(properties);
         registry.init();
         DuckLakeCatalogSnapshotReader snapshotReader =
-                new DuckLakeCatalogSnapshotReader(writerDataSource, helper, properties);
+                new DuckLakeCatalogSnapshotReader(writerDataSource, helper, properties, writerLock);
 
         ParquetReadConnectionProvider provider = new ParquetReadConnectionProvider(
                 properties, registry,
@@ -115,9 +119,11 @@ class ParquetReadConnectionProviderDuckLakeTest {
                 objectProvider(DuckLakeCatalogSnapshotReader.class, snapshotReader));
         provider.createViews(); // discovers, creates views, locks the instance down
 
-        assertEquals(List.of("adapot", "block"), registry.getTableNames());
+        assertEquals(List.of("adapot", "block", "empty_table"), registry.getTableNames());
         assertEquals(10, count(provider, "SELECT count(*) FROM block"));
         assertEquals(1, count(provider, "SELECT count(*) FROM adapot WHERE epoch = 450"));
+        assertEquals(0, count(provider, "SELECT count(*) FROM empty_table"));
+        assertEquals(2, count(provider, "SELECT count(*) FROM (DESCRIBE empty_table)"));
 
         // Sandbox is in force on the shared instance
         try (Connection conn = provider.getReadConnection(); Statement stmt = conn.createStatement()) {
@@ -135,7 +141,7 @@ class ParquetReadConnectionProviderDuckLakeTest {
         assertEquals(15, count(provider, "SELECT count(*) FROM block"));
         assertEquals(2, count(provider, "SELECT count(DISTINCT date) FROM block"));
         assertEquals(1, count(provider, "SELECT count(*) FROM committee"));
-        assertEquals(List.of("adapot", "block", "committee"), registry.getTableNames());
+        assertEquals(List.of("adapot", "block", "committee", "empty_table"), registry.getTableNames());
     }
 
     @Test
@@ -154,7 +160,7 @@ class ParquetReadConnectionProviderDuckLakeTest {
         ParquetTableRegistry registry = new ParquetTableRegistry(properties);
         registry.init();
         DuckLakeCatalogSnapshotReader snapshotReader =
-                new DuckLakeCatalogSnapshotReader(writerDataSource, helper, properties);
+                new DuckLakeCatalogSnapshotReader(writerDataSource, helper, properties, writerLock);
         ParquetReadConnectionProvider provider = new ParquetReadConnectionProvider(
                 properties, registry,
                 objectProvider(DuckDbConnectionHelper.class, helper),
@@ -192,7 +198,7 @@ class ParquetReadConnectionProviderDuckLakeTest {
                 objectProvider(CutoffSlotResolver.class, null),
                 objectProvider(TableExporterRegistry.class, null),
                 objectProvider(DuckLakeCatalogSnapshotReader.class,
-                        new DuckLakeCatalogSnapshotReader(writerDataSource, helper, properties)));
+                        new DuckLakeCatalogSnapshotReader(writerDataSource, helper, properties, writerLock)));
         provider.createViews();
 
         assertTrue(ParquetReadConnectionProvider.hasUniformHiveLayout(registry.getDuckLakeFiles("epoch_tbl")));
@@ -215,7 +221,7 @@ class ParquetReadConnectionProviderDuckLakeTest {
         ParquetTableRegistry registry = new ParquetTableRegistry(properties);
         registry.init();
         DuckLakeCatalogSnapshotReader snapshotReader =
-                new DuckLakeCatalogSnapshotReader(writerDataSource, helper, properties);
+                new DuckLakeCatalogSnapshotReader(writerDataSource, helper, properties, writerLock);
         ParquetReadConnectionProvider provider = new ParquetReadConnectionProvider(
                 properties, registry,
                 objectProvider(DuckDbConnectionHelper.class, helper),

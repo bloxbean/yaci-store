@@ -20,6 +20,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.*;
 
@@ -231,9 +232,11 @@ public class AnalyticsQueryController {
                                     schema = @Schema(type = "boolean", example = "false"))
                     },
                     content = @Content(examples = @ExampleObject(value = "[{\"epoch\":306,\"blocks\":19342},{\"epoch\":307,\"blocks\":15583}]"))),
-            @ApiResponse(responseCode = "400", description = "Malformed request body, rejected by the validator, or failed in DuckDB "
-                    + "(unknown table/column, syntax error, timeout). No X-Analytics-* headers on error responses.",
-                    content = @Content(examples = @ExampleObject(value = "{\"error\":\"Blocked SQL token 'SHOW' is not allowed in ad-hoc queries\"}")))
+            @ApiResponse(responseCode = "400", description = "Malformed request body, rejected by the validator, or invalid DuckDB SQL "
+                    + "(unknown table/column or syntax error). No X-Analytics-* headers on error responses.",
+                    content = @Content(examples = @ExampleObject(value = "{\"error\":\"Blocked SQL token 'SHOW' is not allowed in ad-hoc queries\"}"))),
+            @ApiResponse(responseCode = "408", description = "Query execution timed out"),
+            @ApiResponse(responseCode = "503", description = "Analytics query capacity is temporarily full")
     })
     @PostMapping("/sql")
     public ResponseEntity<List<Map<String, Object>>> executeSql(
@@ -290,11 +293,22 @@ public class AnalyticsQueryController {
     }
 
     /**
-     * Queries that fail inside DuckDB (syntax error, unknown column, timeout, ...) are
+     * Invalid queries inside DuckDB (syntax error, unknown column, ...) are
      * reported as {@code 400 Bad Request}; the message is already sanitized by the executor.
      */
     @ExceptionHandler(AnalyticsQueryExecutor.QueryExecutionException.class)
     public ResponseEntity<Map<String, String>> handleQueryFailure(AnalyticsQueryExecutor.QueryExecutionException e) {
         return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+    }
+
+    @ExceptionHandler(AnalyticsQueryExecutor.QueryTimeoutException.class)
+    public ResponseEntity<Map<String, String>> handleQueryTimeout(AnalyticsQueryExecutor.QueryTimeoutException e) {
+        return ResponseEntity.status(HttpStatus.REQUEST_TIMEOUT).body(Map.of("error", e.getMessage()));
+    }
+
+    @ExceptionHandler({AnalyticsQueryExecutor.QueryUnavailableException.class,
+            AnalyticsSchemaService.SchemaUnavailableException.class})
+    public ResponseEntity<Map<String, String>> handleUnavailable(RuntimeException e) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(Map.of("error", e.getMessage()));
     }
 }

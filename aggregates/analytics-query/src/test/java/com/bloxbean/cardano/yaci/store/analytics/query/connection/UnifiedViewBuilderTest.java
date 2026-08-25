@@ -46,20 +46,22 @@ class UnifiedViewBuilderTest {
 
     @Test
     void dailyTableUsesCutoffSlotAndDerivesDateFromPostgresPartitionColumn() throws Exception {
-        exec("CREATE VIEW parquet_block AS SELECT CAST('2026-01-01' AS DATE) AS date, 1::BIGINT AS slot, to_timestamp(1) AS block_time");
+        exec("CREATE VIEW parquet_block AS SELECT CAST('2026-01-01' AS DATE) AS date, 10::BIGINT AS slot, to_timestamp(1) AS block_time");
         exec("CREATE TABLE block(slot BIGINT, block_time BIGINT)");
         exec("INSERT INTO block VALUES (1, 100), (200, 5000)");
 
-        String sql = UnifiedViewBuilder.buildUnifiedViewSql("block", database, "main", new Cutoff(100, -1),
+        String sql = UnifiedViewBuilder.buildUnifiedViewSql(
+                "block", database, "main", new Cutoff(100, -1, 10, -1),
                 new Federation("slot", PartitionStrategy.DAILY, Map.of()), "block_time", connection);
 
         assertNotNull(sql);
-        assertTrue(sql.contains("WHERE \"slot\" <= 100"), sql);
-        assertTrue(sql.contains("WHERE \"slot\" > 100"), sql);
+        assertTrue(sql.contains("WHERE \"slot\" BETWEEN 10 AND 100"), sql);
+        assertTrue(sql.contains("WHERE (\"slot\" < 10 OR \"slot\" > 100)"), sql);
         assertTrue(sql.contains("to_timestamp(\"block_time\")"), sql);
         assertTrue(sql.contains("AS \"date\""), sql);
-        // rows: 1 from the historical side (slot 1) + 1 live row above the cutoff (slot 200)
-        assertEquals(2, count(sql, "block_unified"));
+        // Rows before an admin-range export remain on PG; the exported interval and live tail
+        // are both present as well.
+        assertEquals(3, count(sql, "block_unified"));
     }
 
     @Test
@@ -85,18 +87,18 @@ class UnifiedViewBuilderTest {
         exec("CREATE VIEW parquet_reward AS SELECT 'addr' AS address, 300::INTEGER AS epoch, "
                 + "302::INTEGER AS spendable_epoch, 5::DECIMAL(38,0) AS amount, 1::BIGINT AS slot");
         exec("CREATE TABLE reward(address VARCHAR, earned_epoch INTEGER, spendable_epoch INTEGER, amount BIGINT, slot BIGINT)");
-        exec("INSERT INTO reward VALUES ('addr', 300, 302, 5, 1), ('addr', 301, 303, 7, 9999)");
+        exec("INSERT INTO reward VALUES ('addr', 299, 301, 3, 0), ('addr', 300, 302, 5, 1), ('addr', 301, 303, 7, 9999)");
 
-        String sql = UnifiedViewBuilder.buildUnifiedViewSql("reward", database, "main", new Cutoff(123_456, 300),
+        String sql = UnifiedViewBuilder.buildUnifiedViewSql(
+                "reward", database, "main", new Cutoff(123_456, 300, 100_000, 300),
                 new Federation("epoch", PartitionStrategy.EPOCH, Map.of("epoch", "earned_epoch")), "slot", connection);
 
         assertNotNull(sql);
-        assertTrue(sql.contains("WHERE \"epoch\" <= 300"), sql);            // exported side: epoch column, epoch unit
-        assertTrue(sql.contains("WHERE \"earned_epoch\" > 300"), sql);      // PG side: mapped source column
+        assertTrue(sql.contains("WHERE \"epoch\" BETWEEN 300 AND 300"), sql);
+        assertTrue(sql.contains("WHERE (\"earned_epoch\" < 300 OR \"earned_epoch\" > 300)"), sql);
         assertTrue(sql.contains("\"earned_epoch\" AS \"epoch\""), sql);     // mapped in the select list too
         assertTrue(sql.contains("CAST(\"amount\" AS DECIMAL(38,0)) AS \"amount\""), sql);
-        // historical epoch 300 + live epoch 301
-        assertEquals(2, count(sql, "reward_unified"));
+        assertEquals(3, count(sql, "reward_unified"));
     }
 
     @Test

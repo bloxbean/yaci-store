@@ -156,7 +156,7 @@ public class AnalyticsAdminController {
      */
     @Operation(summary = "Backfill one table over a date range",
             description = "Exports every day between startDate and endDate (inclusive, yyyy-MM-dd) for a DAILY-partitioned "
-                    + "table, skipping partitions that are already exported. Returns per-day success/failure counts.")
+                    + "table, skipping partitions that are already exported. Returns the number of successful days.")
     @PostMapping("/export/table/{tableName}/range")
     public ResponseEntity<BackfillResult> exportTableRange(
             @PathVariable String tableName,

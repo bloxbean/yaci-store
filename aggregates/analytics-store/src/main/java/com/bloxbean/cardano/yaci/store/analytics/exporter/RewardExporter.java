@@ -13,7 +13,7 @@ import org.springframework.stereotype.Service;
 /**
  * Exporter for staking rewards.
  *
- * Partitioning: EPOCH (epoch=N correspond to spendable_epoch)
+ * Partitioning: EPOCH (epoch=N based on earned_epoch)
  * Source: reward table
  * Output: reward/epoch=N/data.parquet
  */

@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.analytics.writer;
 
 import com.bloxbean.cardano.yaci.store.analytics.config.AnalyticsStoreProperties;
+import com.bloxbean.cardano.yaci.store.analytics.ducklake.DuckLakeWriterLock;
 import com.bloxbean.cardano.yaci.store.analytics.helper.DuckDbConnectionHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -42,13 +43,16 @@ public class DuckLakeWriterService implements StorageWriter {
     private final DataSource duckDbDataSource;
     private final AnalyticsStoreProperties properties;
     private final DuckDbConnectionHelper connectionHelper;
+    private final DuckLakeWriterLock writerLock;
 
     public DuckLakeWriterService(@Qualifier("duckDbWriterDataSource") DataSource duckDbDataSource,
                                   AnalyticsStoreProperties properties,
-                                  DuckDbConnectionHelper connectionHelper) {
+                                  DuckDbConnectionHelper connectionHelper,
+                                  DuckLakeWriterLock writerLock) {
         this.duckDbDataSource = duckDbDataSource;
         this.properties = properties;
         this.connectionHelper = connectionHelper;
+        this.writerLock = writerLock;
 
         log.info("Initialized DuckLakeWriterService (catalog: {}, source schema: {}, catalog URL: {})",
                 properties.getDucklake().getCatalogType(),
@@ -60,7 +64,8 @@ public class DuckLakeWriterService implements StorageWriter {
     public ExportResult export(String query, String outputPath, String partitionColumn) {
         long startTime = System.currentTimeMillis();
 
-        try (Connection conn = duckDbDataSource.getConnection()) {
+        try (DuckLakeWriterLock.Guard ignored = writerLock.acquire();
+             Connection conn = duckDbDataSource.getConnection()) {
             // Prepare DuckDB connection for DuckLake (installs extensions, attaches catalog + source, sets search path)
             // readOnly=false for write operations
             connectionHelper.prepareConnectionForDuckLake(conn, true, false);

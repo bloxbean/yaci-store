@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * Security-critical SQL validation for ad-hoc DuckDB queries.
@@ -22,8 +23,8 @@ import java.util.Set;
  *       ({@code SHOW}/{@code DESCRIBE}/{@code SUMMARIZE}, {@code duckdb_*}/{@code pragma_*}
  *       table functions, {@code information_schema}, {@code pg_*}) and resource-exhaustion
  *       patterns using SQL tokens rather than substring matching</li>
- *   <li><b>File path literal check</b> — rejects path/URL-like string literals that would
- *       trigger DuckDB replacement scans</li>
+ *   <li><b>File reference check</b> — rejects file-shaped names and path/URL-like quoted
+ *       values that could trigger DuckDB replacement scans</li>
  * </ol>
  *
  * <p><b>Important security notes:</b></p>
@@ -71,8 +72,21 @@ public final class SqlValidator {
             "READ_JSON", "READ_JSON_AUTO", "READ_JSON_OBJECTS", "READ_JSON_OBJECTS_AUTO",
             "READ_NDJSON", "READ_NDJSON_AUTO", "READ_NDJSON_OBJECTS",
             "READ_PARQUET", "PARQUET_SCAN", "READ_TEXT", "READ_BLOB", "GLOB",
+            "PARQUET_METADATA", "PARQUET_SCHEMA", "PARQUET_FILE_METADATA", "PARQUET_KV_METADATA",
             "HTTP_GET", "HTTP_POST", "POSTGRES_QUERY", "CURRENT_SETTING",
-            "QUERY", "QUERY_TABLE", "GENERATE_SERIES", "RANGE"
+            "QUERY", "QUERY_TABLE", "GENERATE_SERIES", "RANGE",
+            "JSON_SERIALIZE_SQL", "JSON_DESERIALIZE_SQL", "JSON_EXECUTE_SERIALIZED_SQL",
+            "REPEAT"
+    );
+
+    /**
+     * File suffixes for which DuckDB performs an implicit replacement scan on an unresolved
+     * relation name. Quotes are removed before matching so {@code data.csv}, {@code "data.csv"},
+     * {@code "data"."csv"}, and mixed forms are treated identically.
+     */
+    private static final Pattern FILE_NAME = Pattern.compile(
+            "(?i)\\.\\s*(?:csv|tsv|parquet|parq|pq|json|jsonl|ndjson)"
+                    + "(?:\\s*\\.\\s*(?:gz|zst|zstd|bz2|xz))?(?![a-z0-9_])"
     );
 
     /**
@@ -92,6 +106,13 @@ public final class SqlValidator {
         if (sql.length() > MAX_QUERY_LENGTH) {
             throw new IllegalArgumentException(
                     "SQL query exceeds maximum length of " + MAX_QUERY_LENGTH + " characters");
+        }
+
+        // Dollar quoting is unnecessary for analytics queries and DuckDB accepts a wider set
+        // of tag characters than Java's identifier helpers. Rejecting '$' outright avoids a
+        // lexer-desynchronization class instead of trying to duplicate DuckDB's tag grammar.
+        if (sql.indexOf('$') >= 0) {
+            throw new IllegalArgumentException("Dollar quoting and parameters are not allowed");
         }
 
         // Deliberately reject every semicolon, including semicolons inside literals or
@@ -142,11 +163,9 @@ public final class SqlValidator {
             }
         }
 
-        // Step 4: Block DuckDB replacement scans — direct file path references in FROM clause.
-        // DuckDB auto-detects file extensions (e.g., SELECT * FROM '/tmp/data.parquet')
-        // and internally calls read_parquet/read_csv without any function name in the SQL.
-        // The keyword blocklist cannot catch this, so we block path-like patterns in string literals.
-        rejectFilePathLiterals(stripped);
+        // Step 4: Block DuckDB replacement scans. Keep this deliberately conservative and easy
+        // to audit: file-shaped names and quoted paths are forbidden anywhere in ad-hoc SQL.
+        rejectFileReferences(stripped);
     }
 
     /**
@@ -167,68 +186,45 @@ public final class SqlValidator {
      * @param sql the comment-stripped SQL
      * @throws IllegalArgumentException if a file-path-like literal is detected
      */
-    private static void rejectFilePathLiterals(String sql) {
+    private static void rejectFileReferences(String sql) {
+        String withoutIdentifierQuotes = sql.replace("\"", "");
+        if (FILE_NAME.matcher(withoutIdentifierQuotes).find()) {
+            throw new IllegalArgumentException("File references are not allowed in queries");
+        }
+
         int i = 0;
         int len = sql.length();
 
         while (i < len) {
-            // Find next string literal
             if (sql.charAt(i) == '\'') {
                 int start = i + 1;
-                i++;
-                // Find end of string literal (handle escaped quotes)
-                while (i < len) {
-                    if (sql.charAt(i) == '\'' && i + 1 < len && sql.charAt(i + 1) == '\'') {
-                        i += 2; // skip escaped quote
-                    } else if (sql.charAt(i) == '\'') {
-                        break;
-                    } else {
-                        i++;
-                    }
-                }
-                String literal = sql.substring(start, Math.min(i, len)).trim().toLowerCase(Locale.ROOT);
-
-                // Check for path-like patterns
-                if (isPathLikeLiteral(literal)) {
+                i = skipSingleQuotedString(sql, i);
+                String value = sql.substring(start, Math.max(start, i - 1));
+                if (isPathLike(value)) {
                     throw new IllegalArgumentException(
                             "File path or URL references are not allowed in queries");
                 }
-            } else if (sql.charAt(i) == '$') {
-                String delimiter = dollarQuoteDelimiterAt(sql, i);
-                if (delimiter != null) {
-                    int start = i + delimiter.length();
-                    int end = sql.indexOf(delimiter, start);
-                    if (end < 0) {
-                        return;
-                    }
-                    String literal = sql.substring(start, end).trim().toLowerCase(Locale.ROOT);
-                    if (isPathLikeLiteral(literal)) {
-                        throw new IllegalArgumentException(
-                                "File path or URL references are not allowed in queries");
-                    }
-                    i = end + delimiter.length() - 1;
+                continue;
+            }
+            if (sql.charAt(i) == '"') {
+                int start = i + 1;
+                i = skipDoubleQuotedIdentifier(sql, i);
+                String identifier = sql.substring(start, Math.max(start, i - 1));
+                if (isPathLike(identifier)) {
+                    throw new IllegalArgumentException(
+                            "File path or URL references are not allowed in queries");
                 }
+                continue;
             }
             i++;
         }
     }
 
-    private static boolean isPathLikeLiteral(String literal) {
-        return literal.startsWith("/")          // Unix absolute path
-                        || literal.startsWith("./")  // Relative path
-                        || literal.startsWith("../") // Parent directory
-                        || literal.startsWith("~")   // Home directory
-                        || (literal.length() >= 3 && literal.charAt(1) == ':' && (literal.charAt(2) == '\\' || literal.charAt(2) == '/')) // Windows path C:\
-                        || literal.contains("/../")
-                        || literal.contains("\\..\\")
-                        || literal.startsWith("http://")
-                        || literal.startsWith("https://")
-                        || literal.startsWith("s3://")
-                        || literal.startsWith("s3a://")
-                        || literal.startsWith("gs://")
-                        || literal.startsWith("az://")
-                        || literal.startsWith("abfss://")
-                        || literal.startsWith("file://");
+    private static boolean isPathLike(String value) {
+        String plainValue = value.replace("/*", "").replace("*/", "").replace("\\'", "");
+        return plainValue.indexOf('/') >= 0
+                || plainValue.indexOf('\\') >= 0
+                || plainValue.startsWith("~");
     }
 
     private static List<Token> tokenize(String sql) {
@@ -240,14 +236,6 @@ public final class SqlValidator {
             if (c == '\'') {
                 i = skipSingleQuotedString(sql, i);
                 continue;
-            }
-            if (c == '$') {
-                String delimiter = dollarQuoteDelimiterAt(sql, i);
-                if (delimiter != null) {
-                    int end = sql.indexOf(delimiter, i + delimiter.length());
-                    i = end < 0 ? sql.length() : end + delimiter.length();
-                    continue;
-                }
             }
             if (c == '"') {
                 StringBuilder identifier = new StringBuilder();
@@ -275,8 +263,7 @@ public final class SqlValidator {
                 int start = i++;
                 while (i < sql.length()) {
                     char identifierChar = sql.charAt(i);
-                    if (!Character.isLetterOrDigit(identifierChar)
-                            && identifierChar != '_' && identifierChar != '$') {
+                    if (!Character.isLetterOrDigit(identifierChar) && identifierChar != '_') {
                         break;
                     }
                     i++;
@@ -318,6 +305,22 @@ public final class SqlValidator {
         return i;
     }
 
+    private static int skipDoubleQuotedIdentifier(String sql, int start) {
+        int i = start + 1;
+        while (i < sql.length()) {
+            if (sql.charAt(i) == '"') {
+                if (i + 1 < sql.length() && sql.charAt(i + 1) == '"') {
+                    i += 2;
+                } else {
+                    return i + 1;
+                }
+            } else {
+                i++;
+            }
+        }
+        return i;
+    }
+
     private static boolean isEscapeStringPrefix(String sql, int quoteIndex) {
         if (quoteIndex == 0 || (sql.charAt(quoteIndex - 1) != 'E' && sql.charAt(quoteIndex - 1) != 'e')) {
             return false;
@@ -325,17 +328,6 @@ public final class SqlValidator {
         return quoteIndex == 1
                 || (!Character.isLetterOrDigit(sql.charAt(quoteIndex - 2))
                 && sql.charAt(quoteIndex - 2) != '_');
-    }
-
-    private static String dollarQuoteDelimiterAt(String sql, int start) {
-        if (sql.charAt(start) != '$') {
-            return null;
-        }
-        int i = start + 1;
-        while (i < sql.length() && (Character.isLetterOrDigit(sql.charAt(i)) || sql.charAt(i) == '_')) {
-            i++;
-        }
-        return i < sql.length() && sql.charAt(i) == '$' ? sql.substring(start, i + 1) : null;
     }
 
     private static boolean isFunctionInvocation(String sql, int tokenEnd) {
@@ -423,22 +415,6 @@ public final class SqlValidator {
                     }
                 }
                 continue;
-            }
-
-            // Dollar-quoted string — preserve its contents, including comment markers.
-            if (c == '$') {
-                String delimiter = dollarQuoteDelimiterAt(sql, i);
-                if (delimiter != null) {
-                    int end = sql.indexOf(delimiter, i + delimiter.length());
-                    if (end < 0) {
-                        result.append(sql, i, len);
-                        break;
-                    }
-                    int after = end + delimiter.length();
-                    result.append(sql, i, after);
-                    i = after;
-                    continue;
-                }
             }
 
             // Block comment /* ... */ — skip entirely (handles nesting)

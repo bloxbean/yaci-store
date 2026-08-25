@@ -40,7 +40,8 @@ class CutoffSlotResolverTest {
         // Epoch 11 ends at the start of epoch 12. Epoch 13 must not move the boundary.
         assertEquals(11_999L, resolver.getCutoffSlot("reward"));
         // Both units are exposed: EPOCH tables are federated on the epoch column
-        assertEquals(new CutoffSlotResolver.Cutoff(11_999L, 11L), resolver.getCutoff("reward"));
+        assertEquals(new CutoffSlotResolver.Cutoff(11_999L, 11L, 10_000L, 10L),
+                resolver.getCutoff("reward"));
     }
 
     @Test
@@ -59,6 +60,29 @@ class CutoffSlotResolverTest {
         CutoffSlotResolver.Cutoff cutoff = resolver.getCutoff("block");
         assertEquals(-1L, cutoff.epoch());
         assertTrue(cutoff.slot() > 0);
+        assertTrue(cutoff.startSlot() < cutoff.slot());
         assertEquals(cutoff.slot(), resolver.getCutoffSlot("block"));
+    }
+
+    @Test
+    void refreshKeepsLastRangeWhenExportStateReadFails() {
+        ExportStateService stateService = mock(ExportStateService.class);
+        when(stateService.getCompletedPartitions("reward"))
+                .thenReturn(Set.of("epoch=10", "epoch=11"))
+                .thenThrow(new RuntimeException("database temporarily unavailable"));
+        TableExporter exporter = mock(TableExporter.class);
+        when(exporter.getPartitionStrategy()).thenReturn(PartitionStrategy.EPOCH);
+        TableExporterRegistry registry = mock(TableExporterRegistry.class);
+        when(registry.hasExporter("reward")).thenReturn(true);
+        when(registry.getExporter("reward")).thenReturn(exporter);
+        EraService eraService = mock(EraService.class);
+        when(eraService.getShelleyAbsoluteSlot(anyInt(), eq(0)))
+                .thenAnswer(invocation -> invocation.<Integer>getArgument(0) * 1_000L);
+
+        CutoffSlotResolver resolver = new CutoffSlotResolver(stateService, eraService, registry);
+        CutoffSlotResolver.Cutoff knownGood = resolver.getCutoff("reward");
+        resolver.refresh();
+
+        assertEquals(knownGood, resolver.getCutoff("reward"));
     }
 }

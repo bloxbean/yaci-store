@@ -82,10 +82,11 @@ public class DuckDbDataSourceConfig {
      * Executed once per new physical connection by HikariCP's connectionInitSql.
      */
     private String buildConnectionInitSql() {
+        String threadsSql = "SET threads = " + properties.getDuckdb().getThreads();
         String memoryLimit = properties.getDuckdb().getMemoryLimit();
         if (memoryLimit != null && !memoryLimit.isBlank()) {
-            return "SET memory_limit = '" + memoryLimit + "'";
+            return "SET memory_limit = '" + memoryLimit + "'; " + threadsSql;
         }
-        return null;
+        return threadsSql;
     }
 }

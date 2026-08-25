@@ -133,7 +133,7 @@ endpoints and the MCP tools use the hard limit.
 ## Data freshness and unified views
 
 By default every table is **historical**: it contains the exported data as of the last completed
-export (`dataAsOf` in `/schema`; the export pipeline stays `buffer-days` behind the tip).
+export (`dataAsOf` in `/schema`; the export pipeline stays `buffer-days` behind the finalized tip, i.e. a UTC day is exported ~13 h after it ends on mainnet).
 
 With `yaci.store.analytics.query.live-data-enabled=true` the query layer attaches your PostgreSQL
 database read-only (`postgres_scanner`, alias `pg_live`, per-statement
@@ -141,15 +141,17 @@ database read-only (`postgres_scanner`, alias `pg_live`, per-statement
 
 ```sql
 CREATE VIEW transaction AS
-  SELECT * FROM parquet_transaction              WHERE slot <= <cutoff>   -- exported data
+  SELECT * FROM parquet_transaction
+    WHERE slot BETWEEN :range_start AND :range_end                        -- exported data
   UNION ALL
-  SELECT ... FROM pg_live.<schema>.transaction   WHERE slot >  <cutoff>;  -- live PostgreSQL
+  SELECT ... FROM pg_live.<schema>.transaction
+    WHERE slot < :range_start OR slot > :range_end;                       -- PostgreSQL data
 ```
 
-- The **cutoff** is the last *contiguous* completed export partition of the table (last slot of that
-  day for DAILY tables, that epoch for EPOCH tables). It is recomputed every 5 minutes, so the
-  PostgreSQL side stays small and shrinks again as exports land. A missing/failed partition stops
-  the run, so a gap can never become silently missing data.
+- The exported range is the first *contiguous* run of completed export partitions. Data inside the
+  range comes from Parquet/DuckLake; data on either side comes from PostgreSQL. This also supports
+  an admin backfill that starts after genesis without incorrectly assuming the earlier history was
+  exported.
 - The two halves are **disjoint by construction** (split on the partition key), so no
   deduplication is needed and results reconcile with PostgreSQL row for row.
 - `/schema` reports `liveDataActive` and a `dataScope` per table: `historical+live` (reaches the
@@ -161,6 +163,59 @@ CREATE VIEW transaction AS
   `yaci.store.analytics.query.live-data-excluded-tables` stay historical.
 - Direct access to `pg_live` from ad-hoc SQL is blocked; the live data is only reachable through
   the unified views.
+
+### How the exported range is calculated
+
+The range endpoints are not stored as separate values in the Parquet files or DuckLake catalog.
+The persistent source of truth is the `analytics_export_state` table in PostgreSQL. Each successful
+partition has a `COMPLETED` record such as `epoch=450` or `date=2026-08-24`.
+
+For each table, the query layer:
+
+1. reads its `COMPLETED` partition values,
+2. parses and sorts them according to the exporter's partition strategy,
+3. starts at the earliest completed partition, and
+4. walks forward until the first gap.
+
+For example, completed epochs `400, 401, 402, 404, 405` produce the range `400–402`. Epochs
+`404–405` are not used by the unified view until epoch `403` completes; PostgreSQL serves everything
+outside `400–402`.
+
+For an `EPOCH` table, the range contains the first and last epoch and their corresponding slots.
+The start slot is the first slot of the first epoch. The inclusive end slot is the first slot of
+the following epoch minus one.
+
+For a `DAILY` table, completed `date=...` values are walked in UTC-day order. The start slot is the
+slot at the beginning of the first day, and the inclusive end slot is the slot at the beginning of
+the day after the last completed day minus one. Cardano era information is used for both conversions,
+including the special handling needed for the genesis day.
+
+The calculated range is cached in memory and the historical and unified views are rebuilt every
+5 minutes. Consequently, a newly completed or reset partition is reflected on the next successful
+refresh, rather than immediately.
+
+### Gaps, refill, and PostgreSQL pruning
+
+If a middle partition is reset, the range ends immediately before that gap on the next refresh.
+PostgreSQL then serves the gap and all later data. If the first partition is reset, the range starts
+at the next completed partition instead. Once the reset partition is completed again, the range is
+recalculated from the earliest completed partition and can include the full contiguous run again.
+
+<Callout type="warning">
+The admin state-reset endpoint only removes the export-state record; it does not remove existing
+DuckLake data. The current writer is append-only, so resetting and re-exporting an existing
+partition without separately replacing its old data can produce duplicate rows.
+</Callout>
+
+PostgreSQL pruning must use the same contiguous exported range as its safety boundary. Never prune
+an isolated completed partition beyond a gap: the unified view deliberately does not read that
+partition from Parquet/DuckLake yet. When the exported range starts at the history/retention origin,
+PostgreSQL can safely prune through the inclusive range end and retain only the live tail.
+
+After PostgreSQL history has been pruned, repairing a partition inside the exported range requires
+extra care. If the old exported data is removed before its replacement is committed, neither layer
+can serve that partition during the repair. Prefer an atomic replace (prepare the replacement, then
+commit/swap it and update export state) to avoid an availability gap.
 
 <Callout type="info">
 For epoch-level tables (`epoch`, `gov_action_proposal_status`, `committee_state`, ...) the current
