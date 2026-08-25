@@ -31,6 +31,7 @@ class DepositSnapshotServiceTest {
                 CREATE TABLE stake_registration (
                     tx_hash VARCHAR(128),
                     type VARCHAR(64),
+                    deposit NUMERIC(38, 0),
                     epoch INTEGER
                 )
                 """);
@@ -45,13 +46,13 @@ class DepositSnapshotServiceTest {
     }
 
     @Test
-    void getNetStakeDepositInEpoch_excludesSyntheticGenesisRowsOnly() {
+    void getNetStakeDepositInEpoch_usesStoredStakeDepositsAndExcludesSyntheticGenesisRows() {
         jdbcTemplate.update("""
-                INSERT INTO stake_registration(tx_hash, type, epoch)
+                INSERT INTO stake_registration(tx_hash, type, deposit, epoch)
                 VALUES
-                    ('Genesis', 'STAKE_REGISTRATION', 0),
-                    ('normal-reg', 'STAKE_REGISTRATION', 0),
-                    ('normal-dereg', 'STAKE_DEREGISTRATION', 0)
+                    ('Genesis', 'STAKE_REGISTRATION', 9000000, 0),
+                    ('normal-reg', 'STAKE_REGISTRATION', 5000000, 0),
+                    ('normal-dereg', 'STAKE_DEREGISTRATION', 2000000, 0)
                 """);
         jdbcTemplate.update("""
                 INSERT INTO pool(tx_hash, status, amount, epoch)
@@ -63,6 +64,6 @@ class DepositSnapshotServiceTest {
 
         BigInteger netDeposit = depositSnapshotService.getNetStakeDepositInEpoch(0);
 
-        assertThat(netDeposit).isEqualTo(BigInteger.valueOf(600_000_000L));
+        assertThat(netDeposit).isEqualTo(BigInteger.valueOf(603_000_000L));
     }
 }

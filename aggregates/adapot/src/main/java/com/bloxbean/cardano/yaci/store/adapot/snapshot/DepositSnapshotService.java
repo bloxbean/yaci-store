@@ -22,49 +22,39 @@ public class DepositSnapshotService {
         // stake/pool certificates. Those deposits are already seeded into epoch 0,
         // so regular epoch snapshots must exclude them to avoid double-counting.
         String stakeRegDeRegAndPoolDepositQuery = """
-                            SELECT
-                -- Net deposit from stake registrations and deregistrations in the specified epoch
-                COALESCE((
-                             SELECT
-                                 SUM(CASE
-                                         WHEN type = 'STAKE_REGISTRATION' THEN :stake_reg_deposit
-                                         WHEN type = 'STAKE_DEREGISTRATION' THEN -(:stake_reg_deposit)
-                                         ELSE 0
-                                     END) AS net_stake
-                             FROM
-                                 stake_registration
-                             WHERE
-                                 epoch = :epoch
-                               AND tx_hash <> :genesis_tx_hash
-                         ), 0) AS stake_deposits,
+                SELECT
+                    -- Net deposit from stake registrations and deregistrations in the specified epoch
+                    COALESCE((
+                        SELECT SUM(CASE
+                            WHEN type = 'STAKE_REGISTRATION' THEN deposit
+                            WHEN type = 'STAKE_DEREGISTRATION' THEN -deposit
+                            ELSE 0
+                        END)
+                        FROM stake_registration
+                        WHERE epoch = :epoch
+                          AND tx_hash <> :genesis_tx_hash
+                    ), 0) AS stake_deposits,
                 
-                -- Net deposit from pool registrations in the specified epoch
-                COALESCE((
-                             SELECT
-                                 SUM(amount) AS net_pool_deposit
-                             FROM
-                                 pool
-                             WHERE
-                                 epoch = :epoch
-                               AND status = 'REGISTRATION'
-                               AND tx_hash <> :genesis_tx_hash
-                         ), 0) AS pool_deposits,
+                    -- Net deposit from pool registrations in the specified epoch
+                    COALESCE((
+                        SELECT SUM(amount)
+                        FROM pool
+                        WHERE epoch = :epoch
+                          AND status = 'REGISTRATION'
+                          AND tx_hash <> :genesis_tx_hash
+                    ), 0) AS pool_deposits,
                 
-                -- Net deposit from pool retirements in the next epoch
-                COALESCE((
-                             SELECT
-                                 SUM(-amount) AS pool_retired
-                             FROM
-                                 pool
-                             WHERE
-                                 epoch = :epoch + 1
-                               AND status = 'RETIRED'
-                         ), 0) AS pool_retires;
+                    -- Net deposit from pool retirements in the next epoch
+                    COALESCE((
+                        SELECT SUM(-amount)
+                        FROM pool
+                        WHERE epoch = :epoch + 1
+                          AND status = 'RETIRED'
+                    ), 0) AS pool_retires;
                 """;
 
         Map<String, Object> param = new HashMap<>();
         param.put("epoch", epoch);
-        param.put("stake_reg_deposit", BigInteger.valueOf(2000000));
         param.put("genesis_tx_hash", "Genesis");
 
         var stakeDeposit = jdbcTemplate.queryForObject(stakeRegDeRegAndPoolDepositQuery, param, new RowMapper<StakeDeposit>() {
@@ -79,7 +69,7 @@ public class DepositSnapshotService {
         });
 
         BigInteger totalDeposit = BigInteger.ZERO;
-        if(stakeDeposit != null) {
+        if (stakeDeposit != null) {
             totalDeposit = stakeDeposit.netStakeDepositAmount().add(stakeDeposit.poolDepositAmount()).add(stakeDeposit.poolRetiredAmount());
         }
 
@@ -87,5 +77,7 @@ public class DepositSnapshotService {
     }
 }
 
-record StakeDeposit(BigInteger netStakeDepositAmount, BigInteger poolDepositAmount, BigInteger poolRetiredAmount) {
+record StakeDeposit(BigInteger netStakeDepositAmount,
+                    BigInteger poolDepositAmount,
+                    BigInteger poolRetiredAmount) {
 }
