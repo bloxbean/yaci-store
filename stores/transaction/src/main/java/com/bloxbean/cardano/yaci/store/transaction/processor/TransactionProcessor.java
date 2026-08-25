@@ -12,6 +12,8 @@ import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.common.domain.TxOuput;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
+import com.bloxbean.cardano.yaci.store.common.util.ErrorCode;
+import com.bloxbean.cardano.yaci.store.events.ErrorEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
@@ -275,11 +277,23 @@ public class TransactionProcessor {
             return;
         }
 
-        //Full tx cbor is spliced from the original block bytes by Yaci. It's null when it can't be
-        //derived byte-exact, in which case fall back to body-only cbor.
-        String cborHex = transactionStoreProperties.isSaveFullTxCbor() ? transaction.getTxCbor() : null;
-        if (cborHex == null || cborHex.isEmpty())
+        String cborHex;
+        if (transactionStoreProperties.isSaveFullTxCbor()) {
+            //Yaci returns null when it can't splice the exact bytes; falling back to body cbor would be silently wrong.
+            cborHex = transaction.getTxCbor();
+            if (cborHex == null || cborHex.isEmpty()) {
+                log.error("Full tx cbor not available for transaction {}. Skipping cbor storage for this transaction.", transaction.getTxHash());
+                publisher.publishEvent(ErrorEvent.builder()
+                        .block(transaction.getBlockNumber())
+                        .errorCode(ErrorCode.DATA_MISSING_ERROR.name())
+                        .reason("Full transaction cbor not available")
+                        .details("tx_hash: " + transaction.getTxHash())
+                        .build());
+                return;
+            }
+        } else {
             cborHex = transaction.getBody().getCbor();
+        }
 
         if (cborHex == null || cborHex.isEmpty()) {
             log.debug("No CBOR data available for transaction {} (YaciConfig.INSTANCE.setReturnTxBodyCbor(true) may not be set)", transaction.getTxHash());

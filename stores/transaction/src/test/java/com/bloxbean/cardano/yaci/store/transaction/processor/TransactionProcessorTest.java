@@ -6,6 +6,8 @@ import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.helper.model.Utxo;
 import com.bloxbean.cardano.yaci.store.client.utxo.DummyUtxoClient;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
+import com.bloxbean.cardano.yaci.store.common.util.ErrorCode;
+import com.bloxbean.cardano.yaci.store.events.ErrorEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
 import com.bloxbean.cardano.yaci.store.transaction.domain.InvalidTransaction;
@@ -253,13 +255,23 @@ class TransactionProcessorTest {
     }
 
     @Test
-    void givenTransactionEvent_whenFullTxCborNotAvailable_shouldFallbackToBodyCbor() {
+    void givenTransactionEvent_whenFullTxCborNotAvailable_shouldSkipCborAndPublishErrorEvent() {
         //Yaci returns a null tx cbor when it can't splice the exact on-chain bytes
         handleWithFullTxCborEnabled(transactions());
 
-        verify(transactionCborStorage, Mockito.times(1)).save(txnCborCaptor.capture());
-        assertThat(txnCborCaptor.getValue()).singleElement().satisfies(txnCbor ->
-                assertThat(txnCbor.getCborData()).isEqualTo(HexUtil.decodeHexString(TX_CBOR_HEX)));
+        verify(transactionCborStorage, Mockito.never()).save(any());
+
+        ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(publisher, Mockito.atLeastOnce()).publishEvent(eventCaptor.capture());
+
+        assertThat(eventCaptor.getAllValues())
+                .filteredOn(ErrorEvent.class::isInstance)
+                .map(ErrorEvent.class::cast)
+                .singleElement().satisfies(errorEvent -> {
+                    assertThat(errorEvent.getErrorCode()).isEqualTo(ErrorCode.DATA_MISSING_ERROR.name());
+                    assertThat(errorEvent.getBlock()).isEqualTo(eventMetadata().getBlock());
+                    assertThat(errorEvent.getDetails()).contains("f0a6e529be26c2326c447c39159e05bb904ff1f7900b6df3852dd539de0343e8");
+                });
     }
 
     private void handleWithFullTxCborEnabled(List<Transaction> transactions) {
