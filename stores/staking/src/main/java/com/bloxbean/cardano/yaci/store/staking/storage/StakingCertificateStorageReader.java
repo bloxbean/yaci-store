@@ -20,5 +20,7 @@ public interface StakingCertificateStorageReader {
 
     Optional<StakeRegistrationDetail> getRegistrationBefore(String stakeAddress, long slot, int txIndex, int certIndex);
 
+    List<StakeRegistrationDetail> findUnresolvedDeregistrations(long fromSlot, long toSlot);
+
     Optional<StakeRegistrationDetail> getRegistrationByPointer(long slot, int txIndex, int certIndex);
 }

@@ -7,6 +7,7 @@ import com.bloxbean.cardano.yaci.store.events.CertificateEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.domain.TxCertificates;
+import com.bloxbean.cardano.yaci.store.events.internal.BatchBlocksProcessedEvent;
 import com.bloxbean.cardano.yaci.store.staking.domain.Delegation;
 import com.bloxbean.cardano.yaci.store.staking.domain.StakeRegistrationDetail;
 import com.bloxbean.cardano.yaci.store.staking.domain.event.StakeRegDeregEvent;
@@ -166,6 +167,67 @@ public class StakeRegProcessor {
         //publish events
         if (!stakeRegDeRegs.isEmpty()) {
             publisher.publishEvent(new StakeRegDeregEvent(eventMetadata, stakeRegDeRegs));
+        }
+    }
+
+    /**
+     * Parallel block partitions can persist a legacy deregistration before the partition containing
+     * its active registration commits. Once every partition in the batch has completed, retry only
+     * unresolved rows from that batch against the now-complete lifecycle history. An unresolved
+     * deposit at this point is fatal because downstream deposit snapshots require complete amounts.
+     */
+    @EventListener
+    @Transactional
+    public void reconcileDeregistrationDeposits(BatchBlocksProcessedEvent event) {
+        if (event.getBlockCaches() == null || event.getBlockCaches().isEmpty()) {
+            return;
+        }
+
+        long fromSlot = event.getBlockCaches().stream()
+                .mapToLong(batchBlock -> batchBlock.getMetadata().getSlot())
+                .min()
+                .orElseThrow();
+        long toSlot = event.getBlockCaches().stream()
+                .mapToLong(batchBlock -> batchBlock.getMetadata().getSlot())
+                .max()
+                .orElseThrow();
+
+        List<StakeRegistrationDetail> unresolvedDeregistrations =
+                stakingStorageReader.findUnresolvedDeregistrations(fromSlot, toSlot);
+        if (unresolvedDeregistrations.isEmpty()) {
+            return;
+        }
+
+        List<StakeRegistrationDetail> resolvedDeregistrations = new ArrayList<>();
+        List<StakeRegistrationDetail> stillUnresolvedDeregistrations = new ArrayList<>();
+        for (StakeRegistrationDetail deregistration : unresolvedDeregistrations) {
+            Optional<BigInteger> deposit = stakingStorageReader.getRegistrationBefore(
+                            deregistration.getAddress(), deregistration.getSlot(),
+                            deregistration.getTxIndex(), deregistration.getCertIndex())
+                    .filter(registration -> registration.getType() == CertificateType.STAKE_REGISTRATION)
+                    .map(StakeRegistrationDetail::getDeposit);
+
+            if (deposit.isPresent()) {
+                deregistration.setDeposit(deposit.get());
+                resolvedDeregistrations.add(deregistration);
+            } else {
+                stillUnresolvedDeregistrations.add(deregistration);
+            }
+        }
+
+        if (!stillUnresolvedDeregistrations.isEmpty()) {
+            StakeRegistrationDetail firstUnresolved = stillUnresolvedDeregistrations.getFirst();
+            String message = ("Unable to resolve deposits for %d legacy stake deregistration certificate(s) " +
+                    "in slots %d-%d. First unresolved certificate: tx_hash=%s, cert_index=%d")
+                    .formatted(stillUnresolvedDeregistrations.size(), fromSlot, toSlot,
+                            firstUnresolved.getTxHash(), firstUnresolved.getCertIndex());
+            throw new IllegalStateException(message);
+        }
+
+        if (!resolvedDeregistrations.isEmpty()) {
+            stakingStorage.saveRegistrations(resolvedDeregistrations);
+            log.debug("Reconciled deposits for {} legacy stake deregistrations in slots {}-{}",
+                    resolvedDeregistrations.size(), fromSlot, toSlot);
         }
     }
 

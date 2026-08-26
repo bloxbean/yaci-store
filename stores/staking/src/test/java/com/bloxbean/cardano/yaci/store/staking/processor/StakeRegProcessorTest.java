@@ -7,6 +7,8 @@ import com.bloxbean.cardano.yaci.store.events.CertificateEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.domain.TxCertificates;
+import com.bloxbean.cardano.yaci.store.events.internal.BatchBlocksProcessedEvent;
+import com.bloxbean.cardano.yaci.store.events.model.internal.BatchBlock;
 import com.bloxbean.cardano.yaci.store.staking.domain.Delegation;
 import com.bloxbean.cardano.yaci.store.staking.domain.StakeRegistrationDetail;
 import com.bloxbean.cardano.yaci.store.staking.service.DepositParamService;
@@ -27,6 +29,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -195,6 +198,59 @@ class StakeRegProcessorTest {
     }
 
     @Test
+    void reconcileDeregistrationDeposits_WhenRegistrationIsVisible_UpdatesPendingDeposit() {
+        BigInteger registrationDeposit = BigInteger.valueOf(5_000_000);
+        StakeRegistrationDetail pendingDeregistration = unresolvedDeregistration(200);
+        when(stakingStorageReader.findUnresolvedDeregistrations(100, 300))
+                .thenReturn(List.of(pendingDeregistration));
+        when(stakingStorageReader.getRegistrationBefore(
+                pendingDeregistration.getAddress(), pendingDeregistration.getSlot(),
+                pendingDeregistration.getTxIndex(), pendingDeregistration.getCertIndex()))
+                .thenReturn(Optional.of(StakeRegistrationDetail.builder()
+                        .type(CertificateType.STAKE_REGISTRATION)
+                        .deposit(registrationDeposit)
+                        .build()));
+
+        stakeRegProcessor.reconcileDeregistrationDeposits(batchProcessedEvent(300, 100, 200));
+
+        verify(stakingStorage).saveRegistrations(stakeRegDetailCaptor.capture());
+        assertThat(stakeRegDetailCaptor.getValue()).containsExactly(pendingDeregistration);
+        assertThat(pendingDeregistration.getDeposit()).isEqualTo(registrationDeposit);
+    }
+
+    @Test
+    void reconcileDeregistrationDeposits_WhenLatestLifecycleRowIsDeregistration_FailsBatch() {
+        StakeRegistrationDetail pendingDeregistration = unresolvedDeregistration(200);
+        when(stakingStorageReader.findUnresolvedDeregistrations(200, 200))
+                .thenReturn(List.of(pendingDeregistration));
+        when(stakingStorageReader.getRegistrationBefore(
+                pendingDeregistration.getAddress(), pendingDeregistration.getSlot(),
+                pendingDeregistration.getTxIndex(), pendingDeregistration.getCertIndex()))
+                .thenReturn(Optional.of(StakeRegistrationDetail.builder()
+                        .type(CertificateType.STAKE_DEREGISTRATION)
+                        .deposit(BigInteger.valueOf(2_000_000))
+                        .build()));
+
+        assertThatThrownBy(() -> stakeRegProcessor.reconcileDeregistrationDeposits(batchProcessedEvent(200)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Unable to resolve deposits for 1 legacy stake deregistration certificate(s)")
+                .hasMessageContaining("slots 200-200");
+
+        assertThat(pendingDeregistration.getDeposit()).isNull();
+        verify(stakingStorage, never()).saveRegistrations(any());
+    }
+
+    @Test
+    void reconcileDeregistrationDeposits_WhenBatchHasNoPendingRows_DoesNothing() {
+        when(stakingStorageReader.findUnresolvedDeregistrations(200, 200)).thenReturn(List.of());
+
+        stakeRegProcessor.reconcileDeregistrationDeposits(batchProcessedEvent(200));
+
+        verify(stakingStorageReader, never()).getRegistrationBefore(anyString(), anyLong(), anyInt(), anyInt());
+        verify(stakingStorage, never()).saveRegistrations(any());
+    }
+
+    @Test
     void processStakeRegistration_WhenCertTypeIsStakeDelegation() {
         StakeDelegation stakeDelegationCert = StakeDelegation
                 .builder()
@@ -332,7 +388,28 @@ class StakeRegProcessorTest {
                 .build();
     }
 
+    private StakeRegistrationDetail unresolvedDeregistration(long slot) {
+        return StakeRegistrationDetail.builder()
+                .address("stake_test1upprgdf9umls0ex79gfj3ymvjeqxuse07z4wk7jutfdxejgzkmsfe")
+                .slot(slot)
+                .txIndex(3)
+                .certIndex(2)
+                .type(CertificateType.STAKE_DEREGISTRATION)
+                .build();
+    }
+
+    private BatchBlocksProcessedEvent batchProcessedEvent(long... slots) {
+        List<BatchBlock> blocks = java.util.Arrays.stream(slots)
+                .mapToObj(slot -> new BatchBlock(eventMetadata(slot), null, List.of()))
+                .toList();
+        return new BatchBlocksProcessedEvent(eventMetadata(slots[slots.length - 1]), blocks);
+    }
+
     private EventMetadata eventMetadata() {
+        return eventMetadata(31742048);
+    }
+
+    private EventMetadata eventMetadata(long slot) {
         return EventMetadata.builder()
                 .mainnet(false)
                 .epochNumber(77)
@@ -341,7 +418,7 @@ class StakeRegProcessorTest {
                 .blockHash("5f834500d2e4dde1bc07feb8e00cd320c53f26fa41749f2e2b2bd0a81fa833f7")
                 .blockTime(1687425248L)
                 .prevBlockHash("3cc1a49034fdcc2463d3a0a4d56b052429988335d6856d8f7485fbd2f2d71383")
-                .slot(31742048)
+                .slot(slot)
                 .epochSlot(119648)
                 .noOfTxs(5)
                 .syncMode(false)
