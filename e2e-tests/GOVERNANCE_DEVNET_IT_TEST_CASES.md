@@ -18,7 +18,7 @@ API status translation is intentionally separate from rule parity tests.
 | `GovernanceProposalApiStatusIT` | 1 | Public API status mapping from stored proposal status rows |
 | `GovernanceProposalOutcomeIT` | 2 | Post-bootstrap action outcome and ratification-gate parity |
 | `GovernanceDRepVoteTallyIT` | 2 | DRep vote aggregation, replacement, and accepted-ratio parity |
-| `GovernanceDRepLifecycleVoteTallyIT` | 1 | DRep unregister/re-registration lifecycle effect on active proposal tallies |
+| `GovernanceDRepLifecycleVoteTallyIT` | 1 | DRep unregister/re-registration and same-transaction cleanup effects on active proposal tallies |
 | `GovernanceSPOVoteTallyIT` | 2 | SPO stake distribution and mixed voting-group parity |
 | `GovernanceCommitteeVoteTallyIT` | 1 | Committee size and quorum parity |
 | `GovernanceRuleEdgeIT` | 6 active, 1 disabled | Proposal-scoped/default-vote reshaping and voter eligibility edges |
@@ -112,7 +112,7 @@ Covers post-bootstrap qualifier gates where votes would otherwise be sufficient:
 
 ## `GovernanceDRepLifecycleVoteTallyIT`
 
-### `dRepReregistration_shouldNotReviveStaleVoteAndShouldAcceptNewVote`
+### `dRepLifecycle_shouldClearInvalidatedVotesAndAcceptNewVote`
 
 - A DRep with dominant stake votes `YES`, unregisters, re-registers the same
   credential, and restores its delegation without casting a new vote for the proposal.
@@ -121,6 +121,15 @@ Covers post-bootstrap qualifier gates where votes would otherwise be sufficient:
   does not restore the cleared `YES` vote, so the proposal expires.
 - A control proposal verifies that a new `NO` vote cast after re-registration
   is counted while the earlier `YES` vote remains cleared.
+- A same-transaction regression creates two info proposals in one transaction,
+  then submits votes for both proposals together with DRep unregistration and
+  re-registration certificates. Re-registration leaves the DRep available to
+  the `GOV` rule after certificate processing, making the combined transaction valid.
+- The second vote has `voting_procedure.idx = 1` while the unregistration has
+  `drep_registration.cert_index = 0`; both votes must still be cleared because
+  ledger cleanup is transaction-wide and the two index spaces are unrelated.
+- The DRep delegation is restored before the outcome snapshot so distribution
+  eligibility cannot hide an incorrectly retained vote.
 - The test asserts effective voting stats and DB-vs-ledger outcome, not deletion of raw historical vote rows.
 
 ## `GovernanceSPOVoteTallyIT`

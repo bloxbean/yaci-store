@@ -189,13 +189,15 @@ public class VotingAggrService {
                 .when(VoterType.DREP_KEY_HASH.name(), StakeCredType.ADDR_KEYHASH.name())
                 .when(VoterType.DREP_SCRIPT_HASH.name(), StakeCredType.SCRIPTHASH.name());
 
-        // Unregistration clears every earlier vote; re-registration does not restore them.
+        // An unregistration invalidates a DRep's votes from earlier transactions and all of its
+        // votes in the same transaction:
+        // https://github.com/IntersectMBO/cardano-ledger/blob/15eee8cb0adfe94f8e26a7057b734b85ff8ee94e/eras/conway/impl/src/Cardano/Ledger/Conway/Rules/Gov.hs#L610-L625
         var unregistrationAtOrAfterVote = dRepUnregistration.SLOT.gt(VOTING_PROCEDURE.SLOT)
                 .or(dRepUnregistration.SLOT.eq(VOTING_PROCEDURE.SLOT)
                         .and(dRepUnregistration.TX_INDEX.gt(VOTING_PROCEDURE.TX_INDEX)))
                 .or(dRepUnregistration.SLOT.eq(VOTING_PROCEDURE.SLOT)
                         .and(dRepUnregistration.TX_INDEX.eq(VOTING_PROCEDURE.TX_INDEX))
-                        .and(dRepUnregistration.CERT_INDEX.ge(VOTING_PROCEDURE.IDX)));
+                        .and(dRepUnregistration.TX_HASH.eq(VOTING_PROCEDURE.TX_HASH)));
 
         var rankedEffectiveVoteQuery = select(
                 VOTING_PROCEDURE.TX_HASH.as("tx_hash"),
