@@ -10,14 +10,20 @@ import com.bloxbean.cardano.client.transaction.spec.governance.Voter;
 import com.bloxbean.cardano.client.transaction.spec.governance.VoterType;
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
+import com.bloxbean.cardano.yaci.store.common.model.Order;
+import com.bloxbean.cardano.yaci.store.governance.storage.DRepRegistrationStorageReader;
+import com.bloxbean.cardano.yaci.store.governance.storage.VotingProcedureStorageReader;
 import com.bloxbean.cardano.yaci.store.test.e2e.common.GovernanceTxHelper;
 import com.bloxbean.cardano.yaci.store.test.e2e.common.GovernanceTxHelper.CreatedProposal;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ContextConfiguration;
 
+import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.math.RoundingMode;
 import java.time.Duration;
 import java.util.List;
 
@@ -31,6 +37,12 @@ import static org.awaitility.Awaitility.await;
 @ContextConfiguration(initializers = AbstractGovernanceVoteTallyIT.DevKitInitializer.class)
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class GovernanceDRepLifecycleVoteTallyIT extends AbstractGovernanceVoteTallyIT {
+
+    @Autowired
+    private VotingProcedureStorageReader votingProcedureStorageReader;
+
+    @Autowired
+    private DRepRegistrationStorageReader dRepRegistrationStorageReader;
 
     /**
      * Unregistering a DRep clears earlier and same-transaction votes; re-registration does not restore them.
@@ -84,22 +96,29 @@ class GovernanceDRepLifecycleVoteTallyIT extends AbstractGovernanceVoteTallyIT {
                     assertThat(nz(stats.getDrepApprovalRatio())).isZero();
                 });
 
-        assertSameTransactionVotesAreCleared(removedYesDRep);
+        assertSameTransactionVotesAreCleared(
+                removedYesDRep,
+                remainingNoDRep,
+                removedYesStake,
+                remainingNoStake);
     }
 
-    private void assertSameTransactionVotesAreCleared(Account drepAccount) {
+    private void assertSameTransactionVotesAreCleared(Account drepAccount,
+                                                      Account remainingNoDRep,
+                                                      BigInteger expectedRestoredStake,
+                                                      BigInteger remainingNoStake) {
         CreatedProposal proposal = null;
         try {
             waitForEpoch(getCurrentEpoch() + 1);
-            var proposals = createSameTransactionInfoProposals();
+            var proposals = createSameTransactionProposals();
             proposal = proposals.get(1);
 
             assertThat(proposal.index()).isEqualTo(1);
-            assertThat(proposal.proposal().getType()).isEqualTo(GovActionType.INFO_ACTION);
+            assertThat(proposal.proposal().getType()).isEqualTo(GovActionType.NEW_CONSTITUTION);
             var indexed = governanceRuleAssertionHelper.findProposal(proposal.storeGovActionId());
             assertThat(indexed.getTxHash()).isEqualTo(proposal.txHash());
             assertThat(indexed.getIndex()).isEqualTo(proposal.index());
-            assertThat(indexed.getType()).isEqualTo(GovActionType.INFO_ACTION);
+            assertThat(indexed.getType()).isEqualTo(GovActionType.NEW_CONSTITUTION);
 
             CreatedProposal targetProposal = proposal;
             await().atMost(Duration.ofSeconds(90))
@@ -112,11 +131,33 @@ class GovernanceDRepLifecycleVoteTallyIT extends AbstractGovernanceVoteTallyIT {
                         assertThat(snapshot.presentInExpiredGovActions()).isFalse();
                     });
 
-            castVotesUnregisterAndRegister(drepAccount, proposals);
+            governanceTxHelper.castDRepVote(
+                    account0,
+                    remainingNoDRep,
+                    proposal.storeGovActionId(),
+                    Vote.NO);
+            castCommitteeYesVotes(proposal, committeeAccounts.size());
+
+            String lifecycleTxHash = castVotesUnregisterAndRegister(drepAccount, proposals);
+            assertSameTransactionRegressionShape(lifecycleTxHash, proposal);
+
+            // Unregistration also clears delegations in the ledger. Restore the delegation and wait
+            // for a new stake snapshot so an EXPIRED result can only be caused by the cleared vote,
+            // not by the DRep being absent from the ratification distribution.
             governanceTxHelper.delegateVotingPowerToDRep(
                     account0,
                     drepAccount,
                     com.bloxbean.cardano.client.governance.GovId.toDrep(drepAccount.drepId()));
+            int restoredStakeEpoch = getCurrentEpoch() + 2;
+            waitForEpoch(restoredStakeEpoch);
+            waitTillAdaPotJobDone(
+                    adaPotJobRepository,
+                    restoredStakeEpoch,
+                    () -> sameTransactionDiagnostics(targetProposal));
+
+            BigInteger restoredStake = ledgerDRepStake(
+                    com.bloxbean.cardano.client.governance.GovId.toDrep(drepAccount.drepId()));
+            assertStake("re-registered DRep stake", restoredStake, expectedRestoredStake);
 
             int statusProcessingEpoch = proposal.expiryStatusEpoch();
             waitForEpoch(statusProcessingEpoch);
@@ -131,10 +172,38 @@ class GovernanceDRepLifecycleVoteTallyIT extends AbstractGovernanceVoteTallyIT {
             governanceRuleAssertionHelper.assertVotingStats(
                     proposal.storeGovActionId(),
                     outcomeRow.getEpoch(),
-                    stats -> assertStake(
-                            "same-transaction DRep YES stake",
-                            stats.getDrepYesVoteStake(),
-                            BigInteger.ZERO));
+                    stats -> {
+                        assertStake(
+                                "same-transaction DRep YES stake",
+                                stats.getDrepYesVoteStake(),
+                                BigInteger.ZERO);
+                        assertStake(
+                                "remaining DRep NO stake",
+                                stats.getDrepNoVoteStake(),
+                                remainingNoStake);
+                        assertThat(nz(stats.getDrepDoNotVoteStake()))
+                                .as("restored DRep stake remains in the ratification distribution")
+                                .isGreaterThanOrEqualTo(restoredStake);
+                        assertCommitteePassed(stats);
+
+                        BigInteger actualYes = nz(stats.getDrepTotalYesStake());
+                        BigInteger actualNo = nz(stats.getDrepTotalNoStake());
+                        assertThat(actualNo).isGreaterThanOrEqualTo(restoredStake);
+
+                        // A same-transaction unregistration invalidates this vote even though the DRep
+                        // is active again at the snapshot. Counting the invalidated stake as YES instead
+                        // of do-not-vote/NO would cross the constitution ratification threshold.
+                        BigInteger counterfactualYes = actualYes.add(restoredStake);
+                        BigInteger counterfactualNo = actualNo.subtract(restoredStake);
+                        BigDecimal counterfactualRatio = new BigDecimal(counterfactualYes)
+                                .divide(
+                                        new BigDecimal(counterfactualYes.add(counterfactualNo)),
+                                        8,
+                                        RoundingMode.HALF_UP);
+                        assertThat(counterfactualRatio)
+                                .as("DRep ratio if the same-transaction vote were not cleared")
+                                .isGreaterThanOrEqualTo(DREP_UPDATE_TO_CONSTITUTION_THRESHOLD);
+                    });
             governanceRuleAssertionHelper.assertDbStatusMatchesLedgerSnapshot(
                     proposal.storeGovActionId(),
                     GovActionStatus.EXPIRED);
@@ -146,12 +215,12 @@ class GovernanceDRepLifecycleVoteTallyIT extends AbstractGovernanceVoteTallyIT {
         }
     }
 
-    private List<CreatedProposal> createSameTransactionInfoProposals() {
+    private List<CreatedProposal> createSameTransactionProposals() {
         Anchor firstAnchor = GovernanceTxHelper.defaultAnchor();
-        Anchor secondAnchor = new Anchor("https://xyz.com/info/1", firstAnchor.getAnchorDataHash());
+        Anchor secondAnchor = new Anchor("https://xyz.com/constitution/1", firstAnchor.getAnchorDataHash());
         var tx = new Tx()
                 .createProposal(GovernanceTxHelper.infoAction(), account0.stakeAddress(), firstAnchor)
-                .createProposal(GovernanceTxHelper.infoAction(), account0.stakeAddress(), secondAnchor)
+                .createProposal(newConstitutionAction(), account0.stakeAddress(), secondAnchor)
                 .from(account0.baseAddress());
 
         var result = new QuickTxBuilder(backendService).compose(tx)
@@ -166,7 +235,7 @@ class GovernanceDRepLifecycleVoteTallyIT extends AbstractGovernanceVoteTallyIT {
                 governanceTxHelper.waitForCreatedProposal(result.getValue(), 1));
     }
 
-    private void castVotesUnregisterAndRegister(Account drepAccount, List<CreatedProposal> proposals) {
+    private String castVotesUnregisterAndRegister(Account drepAccount, List<CreatedProposal> proposals) {
         var voter = new Voter(VoterType.DREP_KEY_HASH, drepAccount.drepCredential());
         var tx = new Tx();
         for (CreatedProposal proposal : proposals) {
@@ -187,6 +256,38 @@ class GovernanceDRepLifecycleVoteTallyIT extends AbstractGovernanceVoteTallyIT {
 
         assertThat(result.isSuccessful()).as(result.toString()).isTrue();
         checkIfUtxoAvailable(result.getValue(), account0.baseAddress());
+        return result.getValue();
+    }
+
+    private void assertSameTransactionRegressionShape(String txHash, CreatedProposal targetProposal) {
+        await().atMost(Duration.ofSeconds(90))
+                .pollInterval(Duration.ofSeconds(2))
+                .ignoreExceptions()
+                .untilAsserted(() -> {
+                    var targetVotes = votingProcedureStorageReader.findByTxHash(txHash).stream()
+                            .filter(vote -> vote.getGovActionTxHash().equals(targetProposal.txHash()))
+                            .filter(vote -> vote.getGovActionIndex().equals(targetProposal.index()))
+                            .toList();
+                    var unregistrations = dRepRegistrationStorageReader
+                            .findDeRegistrations(0, 500, Order.desc)
+                            .stream()
+                            .filter(registration -> registration.getTxHash().equals(txHash))
+                            .toList();
+
+                    assertThat(targetVotes).singleElement();
+                    assertThat(unregistrations).singleElement();
+
+                    var targetVote = targetVotes.getFirst();
+                    var unregistration = unregistrations.getFirst();
+                    assertThat(targetVote.getTxIndex()).isEqualTo(unregistration.getTxIndex());
+                    assertThat(targetVote.getIndex()).isEqualTo(1L);
+                    assertThat(unregistration.getCertIndex()).isZero();
+
+                    // Regression fixture for https://github.com/bloxbean/yaci-store/issues/1108.
+                    // Voting-procedure and certificate indexes belong to unrelated collections;
+                    // their inequality only confirms that this transaction exercises the reported case.
+                    assertThat(targetVote.getIndex()).isGreaterThan(unregistration.getCertIndex());
+                });
     }
 
     private String sameTransactionDiagnostics(CreatedProposal proposal) {

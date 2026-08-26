@@ -121,15 +121,18 @@ Covers post-bootstrap qualifier gates where votes would otherwise be sufficient:
   does not restore the cleared `YES` vote, so the proposal expires.
 - A control proposal verifies that a new `NO` vote cast after re-registration
   is counted while the earlier `YES` vote remains cleared.
-- A same-transaction regression creates two info proposals in one transaction,
-  then submits votes for both proposals together with DRep unregistration and
-  re-registration certificates. Re-registration leaves the DRep available to
-  the `GOV` rule after certificate processing, making the combined transaction valid.
+- A same-transaction regression creates an info proposal followed by a new-constitution
+  proposal, then submits votes for both proposals together with DRep unregistration and
+  re-registration certificates. The constitution proposal has enough committee support
+  and would ratify if the dominant DRep's invalidated `YES` vote were retained.
 - The second vote has `voting_procedure.idx = 1` while the unregistration has
   `drep_registration.cert_index = 0`; both votes must still be cleared because
   ledger cleanup is transaction-wide and the two index spaces are unrelated.
 - The DRep delegation is restored before the outcome snapshot so distribution
   eligibility cannot hide an incorrectly retained vote.
+- The test asserts that the restored stake remains in the distribution, calculates
+  the counterfactual accepted ratio, and verifies that the correctly cleared vote
+  changes the outcome from `RATIFIED` to `EXPIRED`.
 - The test asserts effective voting stats and DB-vs-ledger outcome, not deletion of raw historical vote rows.
 
 ## `GovernanceSPOVoteTallyIT`
