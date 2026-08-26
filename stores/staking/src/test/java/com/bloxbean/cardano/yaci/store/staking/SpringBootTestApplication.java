@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.staking;
 
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
-import com.bloxbean.cardano.yaci.store.common.genesis.ShelleyGenesisProtocolParamsProvider;
+import com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig;
 import com.bloxbean.cardano.yaci.store.epoch.service.ProtocolParamService;
 import com.bloxbean.cardano.yaci.store.plugin.core.PluginRegistry;
 import com.bloxbean.cardano.yaci.store.plugin.metrics.PluginMetricsCollector;
@@ -12,6 +12,8 @@ import org.springframework.context.annotation.Bean;
 
 import java.util.List;
 
+import static org.mockito.Mockito.mock;
+
 @SpringBootApplication
 public class SpringBootTestApplication {
     public static void main(String[] args) {
@@ -19,9 +21,14 @@ public class SpringBootTestApplication {
     }
 
     @Bean
-    public DepositParamService depositParamService(ShelleyGenesisProtocolParamsProvider protocolParamsProvider) {
+    public DepositParamService depositParamService(GenesisConfig genesisConfig) {
         ProtocolParamService protocolParamService = new ProtocolParamService(null);
-        return new DepositParamService(protocolParamService, protocolParamsProvider);
+        return new DepositParamService(protocolParamService, genesisConfig);
+    }
+
+    @Bean
+    public GenesisConfig genesisConfig() {
+        return mock(GenesisConfig.class);
     }
 
     @Bean

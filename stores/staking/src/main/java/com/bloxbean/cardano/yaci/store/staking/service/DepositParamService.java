@@ -1,7 +1,7 @@
 package com.bloxbean.cardano.yaci.store.staking.service;
 
 import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
-import com.bloxbean.cardano.yaci.store.common.genesis.ShelleyGenesisProtocolParamsProvider;
+import com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig;
 import com.bloxbean.cardano.yaci.store.epoch.service.ProtocolParamService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -14,12 +14,12 @@ import static com.bloxbean.cardano.client.common.ADAConversionUtil.adaToLovelace
 @Component
 public class DepositParamService {
     private final ProtocolParamService protocolParamService;
-    private final ShelleyGenesisProtocolParamsProvider shelleyGenesisProtocolParamsProvider;
+    private final GenesisConfig genesisConfig;
 
     public DepositParamService(@Autowired(required = false) ProtocolParamService protocolParamService,
-                               ShelleyGenesisProtocolParamsProvider shelleyGenesisProtocolParamsProvider) {
+                               GenesisConfig genesisConfig) {
         this.protocolParamService = protocolParamService;
-        this.shelleyGenesisProtocolParamsProvider = shelleyGenesisProtocolParamsProvider;
+        this.genesisConfig = genesisConfig;
     }
 
     public BigInteger getKeyDeposit(int epoch) {
@@ -30,15 +30,7 @@ public class DepositParamService {
         return resolveDeposit(epoch, ProtocolParams::getPoolDeposit, adaToLovelace(500));
     }
 
-    public BigInteger getDRepDeposit(int epoch) {
-        return adaToLovelace(1000);
-    }
-
-    public BigInteger getGovActionDeposit(int epoch) {
-        return adaToLovelace(1000);
-    }
-
-    private BigInteger resolveDeposit(int epoch, Function<ProtocolParams, BigInteger> getter, BigInteger hardcodedFallback) {
+    private BigInteger resolveDeposit(int epoch, Function<ProtocolParams, BigInteger> getter, BigInteger legacyFallback) {
         if (protocolParamService != null) {
             BigInteger fromEpoch = protocolParamService.getProtocolParam(epoch)
                     .map(getter)
@@ -48,8 +40,15 @@ public class DepositParamService {
             }
         }
 
-        return shelleyGenesisProtocolParamsProvider.getProtocolParams()
-                .map(getter)
-                .orElse(hardcodedFallback);
+        ProtocolParams genesisParams = genesisConfig.getShelleyGenesisProtocolParams();
+        if (genesisParams != null) {
+            BigInteger fromGenesis = getter.apply(genesisParams);
+            if (fromGenesis != null) {
+                return fromGenesis;
+            }
+        }
+
+        // Preserve the pre-existing defaults when epoch and Shelley genesis parameters are unavailable.
+        return legacyFallback;
     }
 }
