@@ -8,7 +8,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
-import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -29,19 +28,6 @@ public interface StakeRegistrationRepository
     @Query("select r from StakeRegistrationEntity r " +
             "where r.address = :stakeAddress and r.slot <= :slot order by r.slot desc, r.txIndex desc, r.certIndex desc limit 1")
     Optional<StakeRegistrationEntity> findRegistrationsByStakeAddress(String stakeAddress, Long slot);
-
-    @Query("select r from StakeRegistrationEntity r " +
-            "where r.address = :stakeAddress and (r.slot < :slot " +
-            "or (r.slot = :slot and r.txIndex < :txIndex) " +
-            "or (r.slot = :slot and r.txIndex = :txIndex and r.certIndex < :certIndex)) " +
-            "order by r.slot desc, r.txIndex desc, r.certIndex desc limit 1")
-    Optional<StakeRegistrationEntity> findRegistrationBefore(String stakeAddress, long slot, int txIndex, int certIndex);
-
-    @Query("select r from StakeRegistrationEntity r " +
-            "where r.type = 'STAKE_DEREGISTRATION' and r.deposit is null " +
-            "and r.slot between :fromSlot and :toSlot " +
-            "order by r.slot, r.txIndex, r.certIndex")
-    List<StakeRegistrationEntity> findUnresolvedDeregistrations(long fromSlot, long toSlot);
 
     @Query("select r from StakeRegistrationEntity r " +
             "where r.slot = :slot and r.txIndex = :txIndex and r.certIndex = :certIndex and r.type = 'STAKE_REGISTRATION'")

@@ -7,13 +7,11 @@ import com.bloxbean.cardano.yaci.store.events.CertificateEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.domain.TxCertificates;
-import com.bloxbean.cardano.yaci.store.events.internal.BatchBlocksProcessedEvent;
 import com.bloxbean.cardano.yaci.store.staking.domain.Delegation;
 import com.bloxbean.cardano.yaci.store.staking.domain.StakeRegistrationDetail;
 import com.bloxbean.cardano.yaci.store.staking.domain.event.StakeRegDeregEvent;
 import com.bloxbean.cardano.yaci.store.staking.service.DepositParamService;
 import com.bloxbean.cardano.yaci.store.staking.storage.StakingCertificateStorage;
-import com.bloxbean.cardano.yaci.store.staking.storage.StakingCertificateStorageReader;
 import com.bloxbean.cardano.yaci.store.staking.util.AddressUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,10 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigInteger;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Optional;
 
 import static com.bloxbean.cardano.yaci.store.staking.StakingStoreConfiguration.STORE_STAKING_ENABLED;
 
@@ -37,7 +32,6 @@ import static com.bloxbean.cardano.yaci.store.staking.StakingStoreConfiguration.
 @Slf4j
 public class StakeRegProcessor {
     private final StakingCertificateStorage stakingStorage;
-    private final StakingCertificateStorageReader stakingStorageReader;
     private final ApplicationEventPublisher publisher;
     private final DepositParamService depositParamService;
 
@@ -48,7 +42,6 @@ public class StakeRegProcessor {
 
         List<StakeRegistrationDetail> stakeRegDeRegs = new ArrayList<>();
         List<Delegation> delegations = new ArrayList<>();
-        Map<String, Optional<BigInteger>> activeDeposits = new HashMap<>();
 
         for (TxCertificates txCertificates : certificateEvent.getTxCertificatesList()) {
             String txHash = txCertificates.getTxHash();
@@ -81,8 +74,6 @@ public class StakeRegProcessor {
                                 resolveRegistrationDeposit(certificate, eventMetadata.getEpochNumber()), eventMetadata);
 
                         stakeRegDeRegs.add(stakeRegistrationDetail);
-                        activeDeposits.put(stakeRegistration.getStakeCredential().getHash(),
-                                Optional.ofNullable(stakeRegistrationDetail.getDeposit()));
                         break;
 
                     case STAKE_DEREGISTRATION, UNREG_CERT:
@@ -95,11 +86,9 @@ public class StakeRegProcessor {
                         }
                         stakeRegistrationDetail = buildStakeRegistrationDetail(
                                 stakeDeregistration, txHash, index, txIndex,
-                                resolveDeregistrationDeposit(certificate, stakeDeregistration.getStakeCredential(),
-                                        txIndex, index, eventMetadata, activeDeposits), eventMetadata);
+                                extractDeregistrationDeposit(certificate), eventMetadata);
 
                         stakeRegDeRegs.add(stakeRegistrationDetail);
-                        activeDeposits.put(stakeDeregistration.getStakeCredential().getHash(), Optional.empty());
                         break;
 
                     case STAKE_DELEGATION, STAKE_VOTE_DELEG_CERT:
@@ -145,8 +134,6 @@ public class StakeRegProcessor {
                                 resolveRegistrationDeposit(certificate, eventMetadata.getEpochNumber()), eventMetadata);
 
                         stakeRegDeRegs.add(stakeRegistrationDetail);
-                        activeDeposits.put(stakeRegistration.getStakeCredential().getHash(),
-                                Optional.ofNullable(stakeRegistrationDetail.getDeposit()));
                         delegations.add(delegation);
                         break;
                     default:
@@ -170,67 +157,6 @@ public class StakeRegProcessor {
         }
     }
 
-    /**
-     * Parallel block partitions can persist a legacy deregistration before the partition containing
-     * its active registration commits. Once every partition in the batch has completed, retry only
-     * unresolved rows from that batch against the now-complete lifecycle history. An unresolved
-     * deposit at this point is fatal because downstream deposit snapshots require complete amounts.
-     */
-    @EventListener
-    @Transactional
-    public void reconcileDeregistrationDeposits(BatchBlocksProcessedEvent event) {
-        if (event.getBlockCaches() == null || event.getBlockCaches().isEmpty()) {
-            return;
-        }
-
-        long fromSlot = event.getBlockCaches().stream()
-                .mapToLong(batchBlock -> batchBlock.getMetadata().getSlot())
-                .min()
-                .orElseThrow();
-        long toSlot = event.getBlockCaches().stream()
-                .mapToLong(batchBlock -> batchBlock.getMetadata().getSlot())
-                .max()
-                .orElseThrow();
-
-        List<StakeRegistrationDetail> unresolvedDeregistrations =
-                stakingStorageReader.findUnresolvedDeregistrations(fromSlot, toSlot);
-        if (unresolvedDeregistrations.isEmpty()) {
-            return;
-        }
-
-        List<StakeRegistrationDetail> resolvedDeregistrations = new ArrayList<>();
-        List<StakeRegistrationDetail> stillUnresolvedDeregistrations = new ArrayList<>();
-        for (StakeRegistrationDetail deregistration : unresolvedDeregistrations) {
-            Optional<BigInteger> deposit = stakingStorageReader.getRegistrationBefore(
-                            deregistration.getAddress(), deregistration.getSlot(),
-                            deregistration.getTxIndex(), deregistration.getCertIndex())
-                    .filter(registration -> registration.getType() == CertificateType.STAKE_REGISTRATION)
-                    .map(StakeRegistrationDetail::getDeposit);
-
-            if (deposit.isPresent()) {
-                deregistration.setDeposit(deposit.get());
-                resolvedDeregistrations.add(deregistration);
-            } else {
-                stillUnresolvedDeregistrations.add(deregistration);
-            }
-        }
-
-        if (!stillUnresolvedDeregistrations.isEmpty()) {
-            StakeRegistrationDetail firstUnresolved = stillUnresolvedDeregistrations.getFirst();
-            String message = ("Unable to resolve deposits for %d legacy stake deregistration certificate(s) " +
-                    "in slots %d-%d. First unresolved certificate: tx_hash=%s, cert_index=%d")
-                    .formatted(stillUnresolvedDeregistrations.size(), fromSlot, toSlot,
-                            firstUnresolved.getTxHash(), firstUnresolved.getCertIndex());
-            throw new IllegalStateException(message);
-        }
-
-        if (!resolvedDeregistrations.isEmpty()) {
-            stakingStorage.saveRegistrations(resolvedDeregistrations);
-            log.debug("Reconciled deposits for {} legacy stake deregistrations in slots {}-{}",
-                    resolvedDeregistrations.size(), fromSlot, toSlot);
-        }
-    }
-
     private BigInteger resolveRegistrationDeposit(Certificate certificate, int epoch) {
         BigInteger coin = switch (certificate.getType()) {
             case REG_CERT -> ((RegCert) certificate).getCoin();
@@ -246,32 +172,14 @@ public class StakeRegProcessor {
     }
 
     /**
-     * Legacy deregistration certificates omit the refund amount. The ledger refunds the deposit
-     * recorded by the active registration, not the current protocol parameter. Registrations in
-     * this event are not persisted until the batch is saved, so resolve them from in-event state
-     * before querying the latest stored lifecycle row.
+     * Conway unregistration certificates carry their refund explicitly. Legacy deregistration
+     * certificates do not, so their stored deposit remains null and is resolved from lifecycle
+     * history only by consumers that require the refund amount.
      */
-    private BigInteger resolveDeregistrationDeposit(Certificate certificate,
-                                                    StakeCredential stakeCredential,
-                                                    int txIndex,
-                                                    int certIndex,
-                                                    EventMetadata eventMetadata,
-                                                    Map<String, Optional<BigInteger>> activeDeposits) {
-        if (certificate.getType() == CertificateType.UNREG_CERT) {
-            return ((UnregCert) certificate).getCoin();
-        }
-
-        String credential = stakeCredential.getHash();
-        if (!activeDeposits.containsKey(credential)) {
-            String stakeAddress = AddressUtil.getRewardAddress(stakeCredential, eventMetadata.isMainnet()).toBech32();
-            Optional<BigInteger> storedDeposit = stakingStorageReader
-                    .getRegistrationBefore(stakeAddress, eventMetadata.getSlot(), txIndex, certIndex)
-                    .filter(registration -> registration.getType() == CertificateType.STAKE_REGISTRATION)
-                    .map(StakeRegistrationDetail::getDeposit);
-            activeDeposits.put(credential, storedDeposit);
-        }
-
-        return activeDeposits.get(credential).orElse(null);
+    private BigInteger extractDeregistrationDeposit(Certificate certificate) {
+        return certificate.getType() == CertificateType.UNREG_CERT
+                ? ((UnregCert) certificate).getCoin()
+                : null;
     }
 
     private StakeRegistrationDetail buildStakeRegistrationDetail(StakeRegistration stakeRegistration,

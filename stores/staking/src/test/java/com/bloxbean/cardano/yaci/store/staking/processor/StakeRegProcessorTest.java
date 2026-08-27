@@ -7,13 +7,10 @@ import com.bloxbean.cardano.yaci.store.events.CertificateEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.domain.TxCertificates;
-import com.bloxbean.cardano.yaci.store.events.internal.BatchBlocksProcessedEvent;
-import com.bloxbean.cardano.yaci.store.events.model.internal.BatchBlock;
 import com.bloxbean.cardano.yaci.store.staking.domain.Delegation;
 import com.bloxbean.cardano.yaci.store.staking.domain.StakeRegistrationDetail;
 import com.bloxbean.cardano.yaci.store.staking.service.DepositParamService;
 import com.bloxbean.cardano.yaci.store.staking.storage.StakingCertificateStorage;
-import com.bloxbean.cardano.yaci.store.staking.storage.StakingCertificateStorageReader;
 import org.assertj.core.groups.Tuple;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -26,10 +23,8 @@ import org.springframework.context.ApplicationEventPublisher;
 
 import java.math.BigInteger;
 import java.util.List;
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -37,9 +32,6 @@ class StakeRegProcessorTest {
 
     @Mock
     private StakingCertificateStorage stakingStorage;
-
-    @Mock
-    private StakingCertificateStorageReader stakingStorageReader;
 
     @Mock
     private ApplicationEventPublisher publisher;
@@ -96,13 +88,7 @@ class StakeRegProcessorTest {
     }
 
     @Test
-    void processStakeRegistration_WhenLegacyDeregistration_UsesActiveRegistrationDeposit() {
-        BigInteger registrationDeposit = BigInteger.valueOf(2_000_000);
-        when(stakingStorageReader.getRegistrationBefore(anyString(), anyLong(), anyInt(), anyInt()))
-                .thenReturn(Optional.of(StakeRegistrationDetail.builder()
-                        .type(CertificateType.STAKE_REGISTRATION)
-                        .deposit(registrationDeposit)
-                        .build()));
+    void processStakeRegistration_WhenLegacyDeregistration_SavesNullDeposit() {
         StakeDeregistration stakeDeregistrationCert = StakeDeregistration
                 .builder()
                 .stakeCredential(StakeCredential.builder()
@@ -137,12 +123,12 @@ class StakeRegProcessorTest {
         assertThat(stakeRegDeSaved.getCertIndex()).isEqualTo(0);
         assertThat(stakeRegDeSaved.getTxHash()).isEqualTo("08a5678d15d1a9196524a35e580b98b4e8b8dc2d57d544a6c8f9520f885d1fdb");
         assertThat(stakeRegDeSaved.getCredential()).isEqualTo(stakeDeregistrationCert.getStakeCredential().getHash());
-        assertThat(stakeRegDeSaved.getDeposit()).isEqualTo(registrationDeposit);
+        assertThat(stakeRegDeSaved.getDeposit()).isNull();
         verify(depositParamService, never()).getKeyDeposit(anyInt());
     }
 
     @Test
-    void processStakeRegistration_WhenRegistrationAndDeregistrationShareEvent_UsesPendingRegistrationDeposit() {
+    void processStakeRegistration_WhenRegistrationAndDeregistrationShareEvent_SavesCertificateDeposits() {
         BigInteger registrationDeposit = BigInteger.valueOf(5_000_000);
         when(depositParamService.getKeyDeposit(anyInt())).thenReturn(registrationDeposit);
         StakeRegistration registration = StakeRegistration.builder()
@@ -170,84 +156,7 @@ class StakeRegProcessorTest {
                 .extracting(StakeRegistrationDetail::getType, StakeRegistrationDetail::getDeposit)
                 .containsExactly(
                         Tuple.tuple(CertificateType.STAKE_REGISTRATION, registrationDeposit),
-                        Tuple.tuple(CertificateType.STAKE_DEREGISTRATION, registrationDeposit));
-        verifyNoInteractions(stakingStorageReader);
-    }
-
-    @Test
-    void processStakeRegistration_WhenActiveRegistrationDepositIsUnknown_LeavesRefundNull() {
-        when(stakingStorageReader.getRegistrationBefore(anyString(), anyLong(), anyInt(), anyInt()))
-                .thenReturn(Optional.of(StakeRegistrationDetail.builder()
-                        .type(CertificateType.STAKE_REGISTRATION)
-                        .deposit(null)
-                        .build()));
-        StakeDeregistration deregistration = StakeDeregistration.builder()
-                .stakeCredential(addrKeyCredential())
-                .build();
-        CertificateEvent certificateEvent = new CertificateEvent(eventMetadata(),
-                List.of(TxCertificates.builder()
-                        .txHash("08a5678d15d1a9196524a35e580b98b4e8b8dc2d57d544a6c8f9520f885d1fdb")
-                        .certificates(List.of(deregistration))
-                        .build()));
-
-        stakeRegProcessor.processStakeRegistration(certificateEvent);
-
-        verify(stakingStorage).saveRegistrations(stakeRegDetailCaptor.capture());
-        assertThat(stakeRegDetailCaptor.getValue().get(0).getDeposit()).isNull();
-        verify(depositParamService, never()).getKeyDeposit(anyInt());
-    }
-
-    @Test
-    void reconcileDeregistrationDeposits_WhenRegistrationIsVisible_UpdatesPendingDeposit() {
-        BigInteger registrationDeposit = BigInteger.valueOf(5_000_000);
-        StakeRegistrationDetail pendingDeregistration = unresolvedDeregistration(200);
-        when(stakingStorageReader.findUnresolvedDeregistrations(100, 300))
-                .thenReturn(List.of(pendingDeregistration));
-        when(stakingStorageReader.getRegistrationBefore(
-                pendingDeregistration.getAddress(), pendingDeregistration.getSlot(),
-                pendingDeregistration.getTxIndex(), pendingDeregistration.getCertIndex()))
-                .thenReturn(Optional.of(StakeRegistrationDetail.builder()
-                        .type(CertificateType.STAKE_REGISTRATION)
-                        .deposit(registrationDeposit)
-                        .build()));
-
-        stakeRegProcessor.reconcileDeregistrationDeposits(batchProcessedEvent(300, 100, 200));
-
-        verify(stakingStorage).saveRegistrations(stakeRegDetailCaptor.capture());
-        assertThat(stakeRegDetailCaptor.getValue()).containsExactly(pendingDeregistration);
-        assertThat(pendingDeregistration.getDeposit()).isEqualTo(registrationDeposit);
-    }
-
-    @Test
-    void reconcileDeregistrationDeposits_WhenLatestLifecycleRowIsDeregistration_FailsBatch() {
-        StakeRegistrationDetail pendingDeregistration = unresolvedDeregistration(200);
-        when(stakingStorageReader.findUnresolvedDeregistrations(200, 200))
-                .thenReturn(List.of(pendingDeregistration));
-        when(stakingStorageReader.getRegistrationBefore(
-                pendingDeregistration.getAddress(), pendingDeregistration.getSlot(),
-                pendingDeregistration.getTxIndex(), pendingDeregistration.getCertIndex()))
-                .thenReturn(Optional.of(StakeRegistrationDetail.builder()
-                        .type(CertificateType.STAKE_DEREGISTRATION)
-                        .deposit(BigInteger.valueOf(2_000_000))
-                        .build()));
-
-        assertThatThrownBy(() -> stakeRegProcessor.reconcileDeregistrationDeposits(batchProcessedEvent(200)))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("Unable to resolve deposits for 1 legacy stake deregistration certificate(s)")
-                .hasMessageContaining("slots 200-200");
-
-        assertThat(pendingDeregistration.getDeposit()).isNull();
-        verify(stakingStorage, never()).saveRegistrations(any());
-    }
-
-    @Test
-    void reconcileDeregistrationDeposits_WhenBatchHasNoPendingRows_DoesNothing() {
-        when(stakingStorageReader.findUnresolvedDeregistrations(200, 200)).thenReturn(List.of());
-
-        stakeRegProcessor.reconcileDeregistrationDeposits(batchProcessedEvent(200));
-
-        verify(stakingStorageReader, never()).getRegistrationBefore(anyString(), anyLong(), anyInt(), anyInt());
-        verify(stakingStorage, never()).saveRegistrations(any());
+                        Tuple.tuple(CertificateType.STAKE_DEREGISTRATION, null));
     }
 
     @Test
@@ -386,23 +295,6 @@ class StakeRegProcessorTest {
                 .type(StakeCredType.ADDR_KEYHASH)
                 .hash("42343525e6ff07e4de2a1328936c96406e432ff0aaeb7a5c5a5a6cc9")
                 .build();
-    }
-
-    private StakeRegistrationDetail unresolvedDeregistration(long slot) {
-        return StakeRegistrationDetail.builder()
-                .address("stake_test1upprgdf9umls0ex79gfj3ymvjeqxuse07z4wk7jutfdxejgzkmsfe")
-                .slot(slot)
-                .txIndex(3)
-                .certIndex(2)
-                .type(CertificateType.STAKE_DEREGISTRATION)
-                .build();
-    }
-
-    private BatchBlocksProcessedEvent batchProcessedEvent(long... slots) {
-        List<BatchBlock> blocks = java.util.Arrays.stream(slots)
-                .mapToObj(slot -> new BatchBlock(eventMetadata(slot), null, List.of()))
-                .toList();
-        return new BatchBlocksProcessedEvent(eventMetadata(slots[slots.length - 1]), blocks);
     }
 
     private EventMetadata eventMetadata() {
