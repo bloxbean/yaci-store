@@ -58,4 +58,38 @@ class DepositParamServiceTest {
         assertThat(service.getKeyDeposit(0)).isEqualTo(adaToLovelace(2));
     }
 
+    @Test
+    void getPoolDeposit_returnsEpochParamWhenPresent() {
+        when(protocolParamService.getProtocolParam(100))
+                .thenReturn(Optional.of(ProtocolParams.builder()
+                        .poolDeposit(BigInteger.valueOf(600_000_000))
+                        .build()));
+
+        DepositParamService service = new DepositParamService(protocolParamService, genesisConfig);
+
+        assertThat(service.getPoolDeposit(100)).isEqualTo(BigInteger.valueOf(600_000_000));
+    }
+
+    @Test
+    void getPoolDeposit_fallsBackToShelleyGenesisWhenEpochParamsMissing() {
+        when(protocolParamService.getProtocolParam(100)).thenReturn(Optional.empty());
+        when(genesisConfig.getShelleyGenesisProtocolParams())
+                .thenReturn(ProtocolParams.builder()
+                        .poolDeposit(BigInteger.valueOf(500_000_000))
+                        .build());
+
+        DepositParamService service = new DepositParamService(protocolParamService, genesisConfig);
+
+        assertThat(service.getPoolDeposit(100)).isEqualTo(BigInteger.valueOf(500_000_000));
+    }
+
+    @Test
+    void getPoolDeposit_fallsBackToFiveHundredAdaWhenGenesisMissing() {
+        when(genesisConfig.getShelleyGenesisProtocolParams()).thenReturn(null);
+
+        DepositParamService service = new DepositParamService(null, genesisConfig);
+
+        assertThat(service.getPoolDeposit(0)).isEqualTo(adaToLovelace(500));
+    }
+
 }
