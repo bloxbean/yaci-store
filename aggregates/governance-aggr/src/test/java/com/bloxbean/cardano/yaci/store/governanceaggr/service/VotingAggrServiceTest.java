@@ -65,6 +65,23 @@ class VotingAggrServiceTest {
     }
 
     @Test
+    void getVotesByDRep_excludesVoteWhenUnregistrationIsInSameTransaction() {
+        insertVote("vote-and-unregister", Vote.YES, 9, 100, 2, 2);
+        insertRegistration("vote-and-unregister", CertificateType.UNREG_DREP_CERT, 9, 100, 2, 0);
+
+        assertThat(getVotes()).isEmpty();
+    }
+
+    @Test
+    void getVotesByDRep_excludesSameTransactionVoteAfterReregistration() {
+        insertRegistration("unregister-reregister-and-vote", CertificateType.UNREG_DREP_CERT, 9, 100, 2, 0);
+        insertRegistration("unregister-reregister-and-vote", CertificateType.REG_DREP_CERT, 9, 100, 2, 1);
+        insertVote("unregister-reregister-and-vote", Vote.YES, 9, 100, 2, 2);
+
+        assertThat(getVotes()).isEmpty();
+    }
+
+    @Test
     void getVotesByDRep_ignoresUnregistrationAfterSnapshotEpoch() {
         insertVote("historical-vote", Vote.YES, SNAPSHOT_EPOCH, 100, 1, 0);
         insertRegistration("future-unregister", CertificateType.UNREG_DREP_CERT, SNAPSHOT_EPOCH + 1, 101, 0, 0);
