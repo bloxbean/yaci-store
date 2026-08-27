@@ -34,6 +34,8 @@ import java.math.BigInteger;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.function.BooleanSupplier;
 import java.util.stream.Collectors;
 
 @Component
@@ -55,9 +57,21 @@ public class AdaPotJobProcessor {
     private final DSLContext dsl;
 
     public boolean processJob(AdaPotJob job) throws InterruptedException {
-        // Set job status to STARTED and update in the database
-        job.setStatus(AdaPotJobStatus.STARTED);
-        adaPotJobStorage.save(job);
+        return processJob(job, () -> false);
+    }
+
+    public boolean processJob(AdaPotJob job, BooleanSupplier cancelled) throws InterruptedException {
+        try {
+            ensureCurrentJob(job, cancelled);
+
+            // Set job status to STARTED and update in the database
+            job.setStatus(AdaPotJobStatus.STARTED);
+            adaPotJobStorage.save(job);
+        } catch (StaleAdaPotJobException e) {
+            log.info("Skipping stale AdaPot job for epoch {} at slot {}: {}",
+                    job.getEpoch(), job.getSlot(), e.getMessage());
+            return true;
+        }
 
         int retryCount = 0;
 
@@ -71,10 +85,12 @@ public class AdaPotJobProcessor {
                 var start = Instant.now();
 
                 //Fire pre-adapot job processing event
+                ensureCurrentJob(job, cancelled);
                 var preAdaPotJobProcessingEvent = new PreAdaPotJobProcessingEvent(job.getEpoch(), job.getSlot(), job.getBlock());
                 publisher.publishEvent(preAdaPotJobProcessingEvent);
 
                 //create AdaPot entry for the epoch
+                ensureCurrentJob(job, cancelled);
                 adaPotService.createAdaPot(job.getEpoch(), job.getSlot());
 
                 //Update Fee pot
@@ -82,6 +98,7 @@ public class AdaPotJobProcessor {
                 if (totalFeeInEpoch == null) totalFeeInEpoch = BigInteger.ZERO;
                 log.info("Total fee in epoch {} : {}", job.getEpoch() - 1, totalFeeInEpoch);
                 //Update total fee in the epoch
+                ensureCurrentJob(job, cancelled);
                 adaPotService.updateEpochFee(job.getEpoch(), totalFeeInEpoch);
                 var end = Instant.now();
                 log.info("Fee snapshot time in millis : {}, epoch: {}", end.toEpochMilli() - start.toEpochMilli(), job.getEpoch());
@@ -89,13 +106,15 @@ public class AdaPotJobProcessor {
                 //Update deposit stake pot
                 start = Instant.now();
                 var deposits = depositSnapshotService.getNetStakeDepositInEpoch(job.getEpoch() - 1);
+                ensureCurrentJob(job, cancelled);
                 adaPotService.updateAdaPotDeposit(job.getEpoch(), deposits);
                 end = Instant.now();
                 log.info("Deposit snapshot time in millis : {}, epoch: {}", end.toEpochMilli() - start.toEpochMilli(), job.getEpoch());
 
                 //Calculate rewards
                 start = Instant.now();
-                Either<String, Boolean> result = calculateRewards(job);
+                ensureCurrentJob(job, cancelled);
+                Either<String, Boolean> result = calculateRewards(job, cancelled);
                 end = Instant.now();
                 job.setTotalTime(end.toEpochMilli() - start.toEpochMilli());
                 log.info("Reward calculation time in millis : {}, epoch: {}", end.toEpochMilli() - start.toEpochMilli(), job.getEpoch());
@@ -114,11 +133,13 @@ public class AdaPotJobProcessor {
 
 
                 if (result.isRight()) {
+                    ensureCurrentJob(job, cancelled);
                     job.setStatus(AdaPotJobStatus.COMPLETED);
                     job.setErrorMessage(null);
                     adaPotJobStorage.save(job);
                     return true;
                 } else {
+                    ensureCurrentJob(job, cancelled);
                     job.setErrorMessage("Reward calculation failed : " + result.getLeft());
                     adaPotJobStorage.save(job);
                     //TODO -- Retry logic
@@ -127,6 +148,7 @@ public class AdaPotJobProcessor {
 
                     if (retryCount > 3) {
                         log.error("Reward calculation failed for epoch " + job.getEpoch() + ", retry count exceeded. Marking as failed");
+                        ensureCurrentJob(job, cancelled);
                         job.setErrorMessage("Reward calculation failed. Retry count exceeded : " + result.getLeft());
                         adaPotJobStorage.save(job);
                         return false;
@@ -135,15 +157,26 @@ public class AdaPotJobProcessor {
                     Thread.sleep(5000);
                 }
             }
+        } catch (StaleAdaPotJobException e) {
+            log.info("Stopped stale AdaPot job for epoch {} at slot {}: {}",
+                    job.getEpoch(), job.getSlot(), e.getMessage());
+            return true;
         } catch (Exception e) {
             log.error("Adapot job processing failed", e);
+            try {
+                ensureCurrentJob(job, cancelled);
+            } catch (StaleAdaPotJobException staleJobException) {
+                log.info("Not saving failure state for stale or cancelled AdaPot job for epoch {} at slot {}",
+                        job.getEpoch(), job.getSlot());
+                return true;
+            }
             job.setErrorMessage("Reward calculation failed due to unknown exception : " + e.getMessage());
             adaPotJobStorage.save(job);
             return false;
         }
     }
 
-    private Either<String, Boolean> calculateRewards(AdaPotJob job) {
+    private Either<String, Boolean> calculateRewards(AdaPotJob job, BooleanSupplier cancelled) {
         try {
             long nonByronEpoch = eraService.getFirstNonByronEpoch().orElse(0);
 
@@ -195,6 +228,7 @@ public class AdaPotJobProcessor {
 
             //update rewards
             start = Instant.now();
+            ensureCurrentJob(job, cancelled);
             // Ensure partition exists for PostgreSQL (other databases use regular tables)
             if (dsl.dialect().family() == SQLDialect.POSTGRES) {
                 partitionManager.ensureRewardPartition(epoch);
@@ -205,12 +239,15 @@ public class AdaPotJobProcessor {
 
             //Now take snapshot
             start = Instant.now();
+            ensureCurrentJob(job, cancelled);
             stakeSnapshotService.takeStakeSnapshot(epoch - 1);
             end = Instant.now();
             job.setStakeSnapshotTime(end.toEpochMilli() - start.toEpochMilli());
 
+            ensureCurrentJob(job, cancelled);
             publisher.publishEvent(new StakeSnapshotTakenEvent(epoch - 1, job.getSlot()));
 
+            ensureCurrentJob(job, cancelled);
             adaPotJobStorage.getJobByTypeAndEpoch(AdaPotJobType.REWARD_CALC, epoch)
                     .ifPresent(adaPotJob -> {
                         job.setDrepDistrSnapshotTime(adaPotJob.getDrepDistrSnapshotTime());
@@ -218,9 +255,32 @@ public class AdaPotJobProcessor {
                     });
 
             return Either.right(true);
+        } catch (StaleAdaPotJobException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Error calculating rewards for epoch : " + job.getEpoch(), e);
             return Either.left(e.getMessage());
+        }
+    }
+
+    private void ensureCurrentJob(AdaPotJob job, BooleanSupplier cancelled) {
+        if (cancelled.getAsBoolean()) {
+            throw new StaleAdaPotJobException("job was cancelled by rollback");
+        }
+
+        var currentJob = adaPotJobStorage.getJobByTypeAndEpoch(job.getType(), job.getEpoch())
+                .orElseThrow(() -> new StaleAdaPotJobException("job no longer exists"));
+
+        if (!Objects.equals(currentJob.getSlot(), job.getSlot())
+                || !Objects.equals(currentJob.getBlock(), job.getBlock())
+                || !Objects.equals(currentJob.getBlockHash(), job.getBlockHash())) {
+            throw new StaleAdaPotJobException("job was replaced by a different transition block");
+        }
+    }
+
+    private static class StaleAdaPotJobException extends RuntimeException {
+        private StaleAdaPotJobException(String message) {
+            super(message);
         }
     }
 

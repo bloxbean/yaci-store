@@ -36,12 +36,17 @@ public class BFScriptsStorageReaderImpl implements BFScriptsStorageReader {
     public List<BFScriptListItem> getScripts(int page, int count, Order order) {
         int offset = page * count;
         SortField<?> sortField = order == Order.desc
-                ? SCRIPT.SLOT.desc().nullsLast()
+                ? SCRIPT.SLOT.desc()
                 : SCRIPT.SLOT.asc().nullsFirst();
+        // Many scripts share a slot, so slot alone is not a stable paging order. script_hash is the
+        // primary key, so it makes the order total and pages cannot drop or repeat rows.
+        SortField<?> tieBreaker = order == Order.desc
+                ? SCRIPT.SCRIPT_HASH.desc()
+                : SCRIPT.SCRIPT_HASH.asc();
 
         return dsl.select(SCRIPT.SCRIPT_HASH)
                 .from(SCRIPT)
-                .orderBy(sortField)
+                .orderBy(sortField, tieBreaker)
                 .limit(count)
                 .offset(offset)
                 .fetch(r -> new BFScriptListItem(r.get(SCRIPT.SCRIPT_HASH)));
@@ -63,8 +68,21 @@ public class BFScriptsStorageReaderImpl implements BFScriptsStorageReader {
     public List<BFScriptRedeemer> getScriptRedeemers(String scriptHash, int page, int count, Order order) {
         int offset = page * count;
         SortField<?> sortField = order == Order.desc
-                ? TRANSACTION_SCRIPTS.SLOT.desc().nullsLast()
+                ? TRANSACTION_SCRIPTS.SLOT.desc()
                 : TRANSACTION_SCRIPTS.SLOT.asc().nullsLast();
+        // A slot holds many transactions and a transaction can hold several redeemers for the same
+        // script, so slot alone is not a stable paging order. tx_hash, redeemer_index and purpose
+        // identify the redeemer within the slot: a tx can carry the same redeemer_index under two
+        // purposes (for example Cert and Reward), which are distinct rows in the response.
+        List<SortField<?>> orderBy = order == Order.desc
+                ? List.of(sortField,
+                          TRANSACTION_SCRIPTS.TX_HASH.desc(),
+                          TRANSACTION_SCRIPTS.REDEEMER_INDEX.desc(),
+                          TRANSACTION_SCRIPTS.PURPOSE.desc())
+                : List.of(sortField,
+                          TRANSACTION_SCRIPTS.TX_HASH.asc(),
+                          TRANSACTION_SCRIPTS.REDEEMER_INDEX.asc(),
+                          TRANSACTION_SCRIPTS.PURPOSE.asc());
 
         // Fetch execution unit prices once for the entire page — more efficient than per-row
         ExecUnitPrices prices = fetchExecUnitPrices();
@@ -81,7 +99,7 @@ public class BFScriptsStorageReaderImpl implements BFScriptsStorageReader {
                 .from(TRANSACTION_SCRIPTS)
                 .where(TRANSACTION_SCRIPTS.SCRIPT_HASH.eq(scriptHash))
                 .and(TRANSACTION_SCRIPTS.PURPOSE.isNotNull())
-                .orderBy(sortField)
+                .orderBy(orderBy)
                 .limit(count)
                 .offset(offset)
                 .fetch(r -> {

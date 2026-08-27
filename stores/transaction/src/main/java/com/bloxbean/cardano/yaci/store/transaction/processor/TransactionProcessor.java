@@ -12,6 +12,8 @@ import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.common.domain.TxOuput;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
+import com.bloxbean.cardano.yaci.store.common.util.ErrorCode;
+import com.bloxbean.cardano.yaci.store.events.ErrorEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
@@ -72,7 +74,8 @@ public class TransactionProcessor {
         List<Transaction> transactions = event.getTransactions();
         List<Txn> txList = new ArrayList<>();
         List<TxnCbor> txnCborList = new ArrayList<>();
-        boolean saveCborEnabled = transactionStoreProperties.isSaveCbor();
+        //saveFullTxCbor works standalone -- it doesn't require saveCbor to also be enabled.
+        boolean collectCbor = transactionStoreProperties.isSaveCbor() || transactionStoreProperties.isSaveFullTxCbor();
 
         var txIndex = new AtomicInteger(0);
         transactions.forEach(transaction -> {
@@ -120,6 +123,7 @@ public class TransactionProcessor {
                     .validityIntervalStart(transaction.getBody().getValidityIntervalStart())
                     .scriptDataHash(transaction.getBody().getScriptDataHash())
                     .collateralInputs(collateralInputs)
+                    .requiredSigners(transaction.getBody().getRequiredSigners())
                     .collateralReturnJson(convertOutput(transaction.getBody().getCollateralReturn()))
                     .netowrkId(transaction.getBody().getNetowrkId())
                     .totalCollateral(transaction.getBody().getTotalCollateral())
@@ -129,7 +133,7 @@ public class TransactionProcessor {
                     .invalid(transaction.isInvalid())
                     .build();
 
-            if (saveCborEnabled) {
+            if (collectCbor) {
                 collectTransactionCbor(transaction, txnCborList);
             }
 
@@ -150,10 +154,9 @@ public class TransactionProcessor {
             publisher.publishEvent(new TxnEvent(event.getMetadata(), txList));
         }
 
-        if (saveCborEnabled && !txnCborList.isEmpty()) {
+        if (!txnCborList.isEmpty()) {
             transactionCborStorage.save(txnCborList);
         }
-
     }
 
     //Resolve collateral fee for invalid transactions -- Required during parallel processing
@@ -274,7 +277,24 @@ public class TransactionProcessor {
             return;
         }
 
-        String cborHex = transaction.getBody().getCbor();
+        String cborHex;
+        if (transactionStoreProperties.isSaveFullTxCbor()) {
+            //Yaci returns null when it can't splice the exact bytes; falling back to body cbor would be silently wrong.
+            cborHex = transaction.getTxCbor();
+            if (cborHex == null || cborHex.isEmpty()) {
+                log.error("Full tx cbor not available for transaction {}. Skipping cbor storage for this transaction.", transaction.getTxHash());
+                publisher.publishEvent(ErrorEvent.builder()
+                        .block(transaction.getBlockNumber())
+                        .errorCode(ErrorCode.DATA_MISSING_ERROR.name())
+                        .reason("Full transaction cbor not available")
+                        .details("tx_hash: " + transaction.getTxHash())
+                        .build());
+                return;
+            }
+        } else {
+            cborHex = transaction.getBody().getCbor();
+        }
+
         if (cborHex == null || cborHex.isEmpty()) {
             log.debug("No CBOR data available for transaction {} (YaciConfig.INSTANCE.setReturnTxBodyCbor(true) may not be set)", transaction.getTxHash());
             return;
@@ -290,26 +310,6 @@ public class TransactionProcessor {
                 .build());
     }
 
-
-    /**
-    private TxResolvedInput resolveInput(String txHash, int outputIndex) {
-        return utxoRepository.findById(new UtxoId(txHash, outputIndex))
-                .map(addressUtxo ->
-                        TxResolvedInput.builder()
-                                .txHash(addressUtxo.getTxHash())
-                                .outputIndex(addressUtxo.getOutputIndex())
-                                .amounts(addressUtxo.getAmounts())
-                                .dataHash(addressUtxo.getDataHash())
-                                .inlineDatum(addressUtxo.getInlineDatum())
-                                .referenceScriptHash(addressUtxo.getReferenceScriptHash())
-                                .build())
-                .orElse(TxResolvedInput.builder()
-                        .txHash(txHash)
-                        .outputIndex(outputIndex)
-                        .build());
-    }
-
-     **/
     private TxOuput convertOutput(TransactionOutput output) {
         if (output == null)
             return null;

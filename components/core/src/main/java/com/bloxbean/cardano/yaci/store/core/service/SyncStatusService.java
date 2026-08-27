@@ -26,9 +26,11 @@ public class SyncStatusService {
 
     private volatile Tuple<Tip, Integer> cachedTipAndEpoch;
     private volatile long lastTipFetchTime = 0;
+    private volatile long lastTipFetchAttemptTime = 0;
 
     private static final long INITIAL_SYNC_REFRESH_INTERVAL = 15L * 60 * 1000; // 15 minutes
     private static final long SYNCED_REFRESH_INTERVAL = 3L * 60 * 1000;       // 3 minutes
+    private static final long FAILED_FETCH_RETRY_INTERVAL = 30L * 1000;       // 30 seconds
     private static final long SYNC_THRESHOLD_BLOCKS = 1000;                   // Consider syncing if > 1000 blocks behind
     private static final long SYNCED_BLOCK_TOLERANCE = 10;                    // Consider synced if within 10 blocks
 
@@ -59,10 +61,11 @@ public class SyncStatusService {
             }
         }
 
-        long networkBlock = currentBlock;
-        long networkSlot = currentSlot;
+        long networkBlock = SyncStatus.UNKNOWN_NETWORK_TIP;
+        long networkSlot = SyncStatus.UNKNOWN_NETWORK_TIP;
 
         Optional<Tuple<Tip, Integer>> tipAndEpoch = getCachedTipAndEpoch(currentBlock);
+        boolean networkTipAvailable = tipAndEpoch.isPresent();
         if (tipAndEpoch.isPresent()) {
             Tip tip = tipAndEpoch.get()._1;
             networkBlock = tip.getBlock();
@@ -75,7 +78,9 @@ public class SyncStatusService {
             syncPercentage = (double) currentBlock / finalNetworkBlock * 100.0;
         }
 
-        boolean isSynced = networkBlock > 0 && currentBlock >= networkBlock - SYNCED_BLOCK_TOLERANCE;
+        boolean isSynced = networkTipAvailable
+                && networkBlock > 0
+                && currentBlock >= networkBlock - SYNCED_BLOCK_TOLERANCE;
 
         return SyncStatus.builder()
                 .block(currentBlock)
@@ -91,13 +96,8 @@ public class SyncStatusService {
                 .build();
     }
 
-    private Optional<Tuple<Tip, Integer>> getCachedTipAndEpoch(long currentBlock) {
+    private synchronized Optional<Tuple<Tip, Integer>> getCachedTipAndEpoch(long currentBlock) {
         long now = System.currentTimeMillis();
-
-        // If cursor block is newer than cached tip, no need to fetch from node
-        if (cachedTipAndEpoch != null && currentBlock >= cachedTipAndEpoch._1.getBlock()) {
-            return Optional.of(cachedTipAndEpoch);
-        }
 
         // Determine refresh interval based on sync state
         long refreshInterval = INITIAL_SYNC_REFRESH_INTERVAL; // default: syncing
@@ -113,7 +113,14 @@ public class SyncStatusService {
             return Optional.of(cachedTipAndEpoch);
         }
 
+        // A failed node lookup can take up to the node-client timeout. Avoid making every
+        // status request immediately repeat that lookup while still reporting the tip as unknown.
+        if ((now - lastTipFetchAttemptTime) < FAILED_FETCH_RETRY_INTERVAL) {
+            return Optional.empty();
+        }
+
         // Fetch fresh tip from node
+        lastTipFetchAttemptTime = now;
         try {
             Optional<Tuple<Tip, Integer>> tipAndEpoch = chainTipService.getTipAndCurrentEpoch();
             if (tipAndEpoch.isPresent()) {
@@ -123,7 +130,7 @@ public class SyncStatusService {
             return tipAndEpoch;
         } catch (Exception e) {
             log.debug("Could not get network tip: {}", e.getMessage());
-            return Optional.ofNullable(cachedTipAndEpoch); // Return stale cache if available
+            return Optional.empty();
         }
     }
 }

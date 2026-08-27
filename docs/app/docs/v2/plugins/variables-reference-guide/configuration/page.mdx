@@ -30,6 +30,18 @@ if (env.containsProperty("plugin.feature.enabled")) {
 }
 ```
 
+```java
+// Java - Get configuration with defaults (environment() from the PluginContext)
+var env = context().environment();
+String apiUrl = env.getProperty("plugin.api.url", "http://localhost:8080");
+String apiKey = env.getProperty("API_KEY"); // Environment variable
+Integer timeout = env.getProperty("plugin.timeout", Integer.class, 30);
+
+if (env.containsProperty("plugin.feature.enabled")) {
+    Boolean featureEnabled = env.getProperty("plugin.feature.enabled", Boolean.class);
+}
+```
+
 ## Core Concepts
 
 ### Configuration Sources
@@ -59,7 +71,7 @@ Spring automatically maps environment variables: `PLUGIN_WEBHOOK_URL` → `plugi
 
 ### Core Methods
 
-<Tabs items={['MVEL', 'JavaScript', 'Python']}>
+<Tabs items={['MVEL', 'JavaScript', 'Python', 'Java']}>
 <Tabs.Tab>
 ```javascript
 // Get property as string
@@ -84,7 +96,6 @@ requiredKey = env.getRequiredProperty("api.key");
 profiles = env.getActiveProfiles();
 ```
 </Tabs.Tab>
-
 <Tabs.Tab>
 ```javascript
 // Get property as string
@@ -109,7 +120,6 @@ const requiredKey = env.getRequiredProperty("api.key");
 const profiles = env.getActiveProfiles();
 ```
 </Tabs.Tab>
-
 <Tabs.Tab>
 ```python
 # Get property as string
@@ -134,6 +144,32 @@ required_key = env.getRequiredProperty("api.key")
 profiles = env.getActiveProfiles()
 ```
 </Tabs.Tab>
+<Tabs.Tab>
+```java
+var env = context().environment();
+
+// Get property as string
+String value = env.getProperty("property.name");
+
+// Get with default value
+String defaultValue = env.getProperty("property.name", "default");
+
+// Get as specific type
+Integer port = env.getProperty("server.port", Integer.class);
+Boolean enabled = env.getProperty("feature.enabled", Boolean.class, false);
+
+// Check if property exists
+if (env.containsProperty("api.key")) {
+    // Property is defined
+}
+
+// Get required property (throws if missing)
+String requiredKey = env.getRequiredProperty("api.key");
+
+// Get active profiles
+String[] profiles = env.getActiveProfiles();
+```
+</Tabs.Tab>
 </Tabs>
 
 ### Type Conversion
@@ -151,6 +187,20 @@ doubleVal = env.getProperty("rate", Double.class);            // Double
 // With defaults
 port = env.getProperty("server.port", Integer.class, 8080);
 timeout = env.getProperty("timeout.ms", Long.class, 30000L);
+```
+
+```java
+// Java - Type conversion examples
+var env = context().environment();
+String stringVal = env.getProperty("name");                          // String (default)
+Integer intVal = env.getProperty("port", Integer.class);              // Integer
+Long longVal = env.getProperty("timeout", Long.class);               // Long
+Boolean boolVal = env.getProperty("enabled", Boolean.class);          // Boolean
+Double doubleVal = env.getProperty("rate", Double.class);            // Double
+
+// With defaults
+Integer port = env.getProperty("server.port", Integer.class, 8080);
+Long timeout = env.getProperty("timeout.ms", Long.class, 30000L);
 ```
 
 ## Common Patterns
@@ -186,6 +236,36 @@ if (apiConfig) {
 }
 ```
 
+```java
+// Java - Configure external API client (http(), environment() from the PluginContext)
+record ApiConfig(String baseUrl, String apiKey, int timeout, int retryCount) {}
+
+ApiConfig getApiClient() {
+    var env = context().environment();
+    String baseUrl = env.getProperty("external.api.url", "https://api.example.com");
+    String apiKey = env.getProperty("EXTERNAL_API_KEY");
+    int timeout = env.getProperty("external.api.timeout", Integer.class, 30);
+    int retryCount = env.getProperty("external.api.retries", Integer.class, 3);
+
+    if (apiKey == null) {
+        System.err.println("EXTERNAL_API_KEY not configured");
+        return null;
+    }
+    return new ApiConfig(baseUrl, apiKey, timeout, retryCount);
+}
+
+// Use configuration
+ApiConfig apiConfig = getApiClient();
+if (apiConfig != null) {
+    var http = context().http();
+    var response = http.retry(
+        () -> http.getWithBearerToken(apiConfig.baseUrl() + "/data", apiConfig.apiKey()),
+        apiConfig.retryCount(),
+        1
+    );
+}
+```
+
 ### 2. Environment-specific Behavior
 
 ```javascript
@@ -207,6 +287,32 @@ if (profile == "production") {
 }
 
 log.info("Running in " + profile + " mode with batch size: " + batchSize);
+```
+
+```java
+// Java - Different behavior per environment
+var env = context().environment();
+String[] profiles = env.getActiveProfiles();
+String profile = profiles.length > 0 ? profiles[0] : "default";
+
+int batchSize;
+String logLevel;
+switch (profile) {
+    case "production" -> {
+        batchSize = env.getProperty("plugin.batch.size", Integer.class, 1000);
+        logLevel = "ERROR";
+    }
+    case "development" -> {
+        batchSize = env.getProperty("plugin.batch.size", Integer.class, 10);
+        logLevel = "DEBUG";
+    }
+    default -> {
+        batchSize = 100;
+        logLevel = "INFO";
+    }
+}
+
+log.info("Running in {} mode with batch size: {}", profile, batchSize);
 ```
 
 ### 3. Feature Flags
@@ -237,6 +343,38 @@ else:
     use_legacy_algorithm()
 ```
 
+```java
+// Java - Feature flag management
+boolean isFeatureEnabled(String featureName) {
+    var env = context().environment();
+    String flagKey = "plugin.feature." + featureName + ".enabled";
+
+    // Check if explicitly set
+    if (env.containsProperty(flagKey)) {
+        return Boolean.TRUE.equals(env.getProperty(flagKey, Boolean.class));
+    }
+
+    // Check global feature flag
+    Boolean globalEnabled = env.getProperty("plugin.features.enabled", Boolean.class, true);
+
+    // Check if in beta features list
+    String betaFeatures = env.getProperty("plugin.features.beta", "");
+    if (java.util.Arrays.asList(betaFeatures.split(",")).contains(featureName)) {
+        return Boolean.TRUE.equals(
+            env.getProperty("plugin.features.beta.enabled", Boolean.class, false));
+    }
+
+    return globalEnabled;
+}
+
+// Usage
+if (isFeatureEnabled("new_algorithm")) {
+    useNewAlgorithm();
+} else {
+    useLegacyAlgorithm();
+}
+```
+
 ### 4. Service Configuration
 
 ```javascript
@@ -255,6 +393,25 @@ function getServiceConfig() {
     }
 
     return config;
+}
+```
+
+```java
+// Java - Dynamic service configuration
+record ServiceConfig(String url, String username, String password, int maxConnections) {}
+
+ServiceConfig getServiceConfig() {
+    var env = context().environment();
+    String url = env.getProperty("plugin.service.url", "http://localhost:8080");
+    String username = env.getProperty("plugin.service.username");
+    String password = env.getProperty("plugin.service.password");
+    int maxConnections = env.getProperty("plugin.service.max-connections", Integer.class, 10);
+
+    // Validate configuration
+    if (url == null) {
+        throw new IllegalStateException("Service URL not configured");
+    }
+    return new ServiceConfig(url, username, password, maxConnections);
 }
 ```
 
@@ -297,6 +454,36 @@ if (webhookConfig["enabled"]) {
 }
 ```
 
+```java
+// Java - Configure webhooks from properties (environment() from the PluginContext)
+var env = context().environment();
+List<Map<String, String>> webhookUrls = new ArrayList<>();
+
+if (Boolean.TRUE.equals(env.getProperty("plugin.webhooks.enabled", Boolean.class, false))) {
+    // Support up to 10 webhook URLs
+    for (int i = 1; i <= 10; i++) {
+        String urlKey = "plugin.webhook.url." + i;
+        if (env.containsProperty(urlKey)) {
+            String url = env.getProperty(urlKey);
+            String authKey = "plugin.webhook.auth." + i;
+            Map<String, String> webhook = new HashMap<>();
+            webhook.put("url", url);
+            if (env.containsProperty(authKey)) {
+                webhook.put("auth", env.getProperty(authKey));
+            }
+            webhookUrls.add(webhook);
+        }
+    }
+}
+int retries = env.getProperty("plugin.webhook.retries", Integer.class, 3);
+int timeout = env.getProperty("plugin.webhook.timeout", Integer.class, 10);
+
+// Use configuration
+for (Map<String, String> webhook : webhookUrls) {
+    sendWebhook(webhook.get("url"), data, webhook.get("auth"));
+}
+```
+
 ### 6. Secrets Management
 
 ```javascript
@@ -324,6 +511,33 @@ function getSecrets() {
     // Never log secrets!
     console.log("Secrets loaded successfully");
     return secrets;
+}
+```
+
+```java
+// Java - Secure secret handling
+record Secrets(String apiKey, String password) {}
+
+Secrets getSecrets() {
+    var env = context().environment();
+
+    // Try environment variables first (preferred for secrets)
+    String apiKey = env.getProperty("API_KEY");
+    if (apiKey == null) apiKey = env.getProperty("plugin.api.key");
+
+    String password = env.getProperty("APP_PASSWORD");
+    if (password == null) password = env.getProperty("plugin.password");
+
+    // Validate required secrets
+    if (apiKey == null) {
+        System.err.println("Required secret 'apiKey' not configured");
+        System.err.println("Set via environment variable or application properties");
+        return null;
+    }
+
+    // Never log secrets!
+    System.out.println("Secrets loaded successfully");
+    return new Secrets(apiKey, password);
 }
 ```
 
@@ -375,6 +589,15 @@ console.log(`  API Key: ${env.containsProperty("API_KEY") ? "***configured***" :
 console.log(`  Timeout: ${env.getProperty("plugin.timeout", "30")}s`);
 ```
 
+```java
+// Java - Safe logging of configuration (never log raw secrets)
+var env = context().environment();
+log.info("Configuration loaded:");
+log.info("  API URL: {}", env.getProperty("plugin.api.url"));
+log.info("  API Key: {}", env.containsProperty("API_KEY") ? "***configured***" : "missing");
+log.info("  Timeout: {}s", env.getProperty("plugin.timeout", "30"));
+```
+
 ## Troubleshooting
 
 ### Common Issues
@@ -399,4 +622,22 @@ console.log(`  Value: ${env.getProperty(propertyName, "not set")}`);
 // Check both environment variable and property formats
 console.log(`  As env var: ${env.getProperty("PLUGIN_API_URL", "not set")}`);
 console.log(`  As property: ${env.getProperty("plugin.api.url", "not set")}`);
+```
+
+```java
+// Java - Debugging configuration (environment() from the PluginContext)
+var env = context().environment();
+
+// List active profiles
+log.info("Active profiles: {}", java.util.Arrays.toString(env.getActiveProfiles()));
+
+// Check multiple property sources
+String propertyName = "plugin.api.url";
+log.info("Checking property: {}", propertyName);
+log.info("  Exists: {}", env.containsProperty(propertyName));
+log.info("  Value: {}", env.getProperty(propertyName, "not set"));
+
+// Check both environment variable and property formats
+log.info("  As env var: {}", env.getProperty("PLUGIN_API_URL", "not set"));
+log.info("  As property: {}", env.getProperty("plugin.api.url", "not set"));
 ```

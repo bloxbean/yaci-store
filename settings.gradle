@@ -15,6 +15,7 @@ include 'applications:admin'
 include 'applications:admin-cli'
 
 include 'components:core'
+include 'components:core-api'
 include 'components:events'
 include 'components:common'
 include 'components:client'
@@ -107,6 +108,9 @@ project(':extensions:blockfrost:blockfrost-block').projectDir = new File('extens
 include ':extensions:blockfrost:blockfrost-account'
 project(':extensions:blockfrost:blockfrost-account').projectDir = new File('extensions/blockfrost/account')
 
+include ':extensions:blockfrost:blockfrost-governance'
+project(':extensions:blockfrost:blockfrost-governance').projectDir = new File('extensions/blockfrost/governance')
+
 include ':extensions:blockfrost:blockfrost-common'
 project(':extensions:blockfrost:blockfrost-common').projectDir = new File('extensions/blockfrost/common')
 
@@ -128,3 +132,6 @@ project(':extensions:assets-ext').projectDir = new File('extensions/assets-ext')
 include ':starters:assets-ext-spring-boot-starter'
 
 include 'e2e-tests'
+
+// Example apps that embed yaci-store as a library.
+include 'examples:plugins:java:custom-indexer-with-plugins'

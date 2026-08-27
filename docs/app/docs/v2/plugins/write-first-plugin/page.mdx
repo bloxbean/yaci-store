@@ -65,9 +65,11 @@ For this guide, we'll focus on two simple expression languages:
 - **MVEL**: A powerful expression language with Java-like syntax
 - **SpEL**: Spring Expression Language, great for simple filtering
 
->> The Yaci Store plugin system also supports writing plugins in **Python** and **JavaScript**.
+> The Yaci Store plugin system also supports writing plugins in **Python**, **JavaScript**, and **Java**.
 However, Python and JavaScript support is currently in **preview**.
-We will cover them in a separate document later.
+For typed, in-app plugins, use **Java** plugins with `lang: java` and `class-name`; see the 
+[Java configuration section](./plugin-configuration#java-configuration) and the 
+[custom indexer Java example](https://github.com/bloxbean/yaci-store/tree/main/examples/plugins/java/custom-indexer-with-plugins).
 
 ## Your First Plugin: Filtering NFT Metadata
 
@@ -465,3 +467,4 @@ Once you're comfortable with basic plugins, explore:
 - [Plugin Context Variables](./context-variables.mdx) - Context variables available in plugins
 - [Plugin Configuration Reference](./plugin-configuration-reference.mdx) - Complete configuration options
 - [Plugin API Guide](./plugin_api-guide.mdx) - Developer Reference for plugin APIs
+- [Java Plugin Example App](https://github.com/bloxbean/yaci-store/tree/main/examples/plugins/java/custom-indexer-with-plugins) - Bundled Java plugins in a custom indexer
