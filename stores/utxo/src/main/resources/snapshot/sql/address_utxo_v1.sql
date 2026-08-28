@@ -37,13 +37,14 @@ grouped AS (
         any_value(block_hash)               AS block_hash,
         any_value(block_time)               AS block_time,
         sum(CASE WHEN asset_unit = 'lovelace' THEN quantity ELSE 0 END) AS lovelace_amount,
-        json_group_array(
-            json_object('unit', asset_unit,
-                        'quantity', quantity,
-                        'policy_id', policy_id,
-                        'asset_name', asset_name)
-            ORDER BY CASE WHEN asset_unit = 'lovelace' THEN 0 ELSE 1 END, asset_unit
-        ) AS amounts
+        -- list(... ORDER BY ...) is a real aggregate, so the element order is deterministic;
+        -- json_group_array is a macro and cannot take an ORDER BY.
+        CAST(list(struct_pack(unit := asset_unit,
+                              quantity := quantity,
+                              policy_id := policy_id,
+                              asset_name := asset_name)
+                  ORDER BY CASE WHEN asset_unit = 'lovelace' THEN 0 ELSE 1 END, asset_unit)
+             AS JSON) AS amounts
     FROM flattened
     GROUP BY tx_hash, output_index
 ),
@@ -57,7 +58,7 @@ SELECT
     g.block_hash                             AS block_hash,
     g.epoch                                  AS epoch,
     CAST(g.lovelace_amount AS BIGINT)        AS lovelace_amount,
-    CAST(g.amounts AS VARCHAR)               AS amounts,
+    g.amounts                                AS amounts,
     g.data_hash                              AS data_hash,
     g.inline_datum                           AS inline_datum,
     g.owner_addr                             AS owner_addr,

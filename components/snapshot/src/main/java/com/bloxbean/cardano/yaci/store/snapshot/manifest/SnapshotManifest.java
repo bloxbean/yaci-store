@@ -61,6 +61,12 @@ public record SnapshotManifest(
             long rowCount,
             List<String> key,
             String columnFingerprint,
+            /**
+             * Source column name to DuckLake type, as recorded by the producing catalog. The importer
+             * plans against these rather than the types DuckDB infers when reading Parquet, because
+             * read_parquet widens INT32 to BIGINT and would make every narrowing look unsafe.
+             */
+            Map<String, String> sourceColumns,
             Map<String, String> bounds,
             List<FileEntry> files
     ) {}

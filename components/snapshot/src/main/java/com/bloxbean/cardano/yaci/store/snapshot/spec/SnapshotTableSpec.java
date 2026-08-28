@@ -143,5 +143,12 @@ public record SnapshotTableSpec(
      */
     public record TargetPartitioning(String column, String partitionPrefix) {}
 
-    public record Validation(List<String> key, List<String> bounds, List<String> requiredColumns) {}
+    /**
+     * @param sourceKey source columns whose distinct-value count equals the number of rows the import
+     *                  will produce. Needed only when a transform changes cardinality, as the
+     *                  flattened {@code address_utxo} regroup does; otherwise the source row count is
+     *                  the target row count.
+     */
+    public record Validation(List<String> key, List<String> bounds, List<String> requiredColumns,
+                             List<String> sourceKey) {}
 }

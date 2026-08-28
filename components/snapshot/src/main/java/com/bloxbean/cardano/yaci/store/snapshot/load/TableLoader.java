@@ -17,6 +17,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 
 /**
  * Executes one batch: build the DuckDB SELECT for the declared import mode, insert it into the
@@ -71,11 +73,36 @@ public class TableLoader {
         return " WHERE " + col + " <= " + value;
     }
 
-    /** Resolve the column plan against the real source and target schemas for this batch. */
+    /**
+     * Resolve the column plan against the real source and target schemas for this batch.
+     *
+     * <p>For DIRECT and MAPPED the declared types come from the manifest, which records what the
+     * producing DuckLake catalog said. DuckDB widens INT32 to BIGINT when it reads Parquet, so
+     * planning from its view would make every {@code int32 -> integer} column look like an unsafe
+     * narrowing. The column <em>names</em> are still taken from the files, so a file whose schema has
+     * drifted from the manifest still fails.
+     *
+     * <p>For SQL mode the transform's own output types are authoritative, because the transform casts
+     * explicitly.
+     */
     public ColumnPlan planFor(DuckPgSession session, SnapshotTableSpec spec, String select,
-                              TargetTable target) throws SQLException {
-        Map<String, String> sourceColumns = session.describe(select);
-        return planner.plan(spec, sourceColumns, target);
+                              TargetTable target, Map<String, String> declaredSourceColumns)
+            throws SQLException {
+        Map<String, String> observed = session.describe(select);
+        if (spec.importSpec().mode() == ImportMode.SQL
+                || declaredSourceColumns == null || declaredSourceColumns.isEmpty()) {
+            return planner.plan(spec, observed, target);
+        }
+        if (!observed.keySet().equals(declaredSourceColumns.keySet())) {
+            Set<String> extra = new TreeSet<>(observed.keySet());
+            extra.removeAll(declaredSourceColumns.keySet());
+            Set<String> missing = new TreeSet<>(declaredSourceColumns.keySet());
+            missing.removeAll(observed.keySet());
+            throw new ColumnPlanner.MappingException("Packaged Parquet for '" + spec.id()
+                    + "' does not match the manifest: unexpected column(s) " + extra
+                    + ", missing column(s) " + missing);
+        }
+        return planner.plan(spec, declaredSourceColumns, target);
     }
 
     /**

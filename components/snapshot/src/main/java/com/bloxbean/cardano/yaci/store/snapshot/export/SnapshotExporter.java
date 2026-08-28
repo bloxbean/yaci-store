@@ -171,7 +171,7 @@ public class SnapshotExporter {
                 tableManifests.add(new SnapshotManifest.TableManifest(
                         spec.id(), spec.specVersion(), spec.digest(), spec.module(), spec.kind().name(),
                         spec.restore().name(), spec.reason(), null, null, spec.targetTable(), null, null,
-                        0, List.of(), 0L, List.of(), null, Map.of(), List.of()));
+                        0, List.of(), 0L, List.of(), null, Map.of(), Map.of(), List.of()));
             }
 
             ArchiveWriter writer = new ArchiveWriter(options.dataDir(), options.outputDir(), baseName,
@@ -229,7 +229,7 @@ public class SnapshotExporter {
                 spec.targetTable(), spec.importSpec().mode().name(), cutoffRule,
                 spec.importSpec().transformVersion(), spec.importSpec().dependencies(),
                 plan.rowCount(), spec.validation().key(), plan.columnFingerprint(),
-                plan.bounds(), entries);
+                plan.sourceColumns(), plan.bounds(), entries);
     }
 
     /**

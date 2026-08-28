@@ -45,7 +45,8 @@ public class SnapshotSpecLoader {
                     "batch-size", "target-partitioning", "handler");
     private static final Set<String> COLUMN_KEYS = Set.of("source", "converter", "constant", "use-default");
     private static final Set<String> TARGET_PARTITIONING_KEYS = Set.of("column", "partition-prefix");
-    private static final Set<String> VALIDATION_KEYS = Set.of("key", "bounds", "required-columns");
+    private static final Set<String> VALIDATION_KEYS =
+            Set.of("key", "bounds", "required-columns", "source-key");
 
     public SnapshotTableSpec loadFile(Path file) {
         try {
@@ -311,16 +312,19 @@ public class SnapshotSpecLoader {
 
     private SnapshotTableSpec.Validation readValidation(JsonNode n, String origin) {
         if (n == null || n.isNull()) {
-            return new SnapshotTableSpec.Validation(List.of(), List.of(), List.of());
+            return new SnapshotTableSpec.Validation(List.of(), List.of(), List.of(), List.of());
         }
         rejectUnknown(n, VALIDATION_KEYS, origin, "validation");
         List<String> key = stringList(n, "key", origin);
         List<String> bounds = stringList(n, "bounds", origin);
         List<String> required = stringList(n, "required-columns", origin);
+        List<String> sourceKey = stringList(n, "source-key", origin);
         key.forEach(c -> Identifiers.requireSqlIdentifier(c, "validation.key"));
         bounds.forEach(c -> Identifiers.requireSqlIdentifier(c, "validation.bounds"));
         required.forEach(c -> Identifiers.requireSqlIdentifier(c, "validation.required-columns"));
-        return new SnapshotTableSpec.Validation(List.copyOf(key), List.copyOf(bounds), List.copyOf(required));
+        sourceKey.forEach(c -> Identifiers.requireSqlIdentifier(c, "validation.source-key"));
+        return new SnapshotTableSpec.Validation(List.copyOf(key), List.copyOf(bounds),
+                List.copyOf(required), List.copyOf(sourceKey));
     }
 
     // ---------------------------------------------------------------- cross-section rules

@@ -38,6 +38,7 @@ snapshot-table:
     key: [output_index, tx_hash]
     bounds: [slot, epoch]
     required-columns: [output_index, tx_hash]
+    source-key: [tx_hash, output_index]
 
   lossy:
     owner_addr_full: >-
