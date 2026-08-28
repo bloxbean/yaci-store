@@ -10,7 +10,7 @@ snapshot-table:
     ducklake-relation: constitution
     partition:
       strategy: EPOCH
-      column: block_time
+      column: epoch
 
   consistency:
     cutoff:
