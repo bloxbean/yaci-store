@@ -128,6 +128,8 @@ public class SnapshotImporter {
                             + "Every table created by a migration needs an explicit specification.");
                 }
             }
+
+            blockers.addAll(planEveryTable(manifest, schema));
         }
 
         ArchiveVerifier.Result verified =
@@ -169,6 +171,40 @@ public class SnapshotImporter {
                         + "... locally but " + t.specDigest().substring(0, 12) + "... in the snapshot");
             }
         }
+    }
+
+    /**
+     * Resolve every table's column mapping before a single row is written.
+     *
+     * <p>The manifest records the source column types, so the whole mapping can be checked against
+     * the live target schema without reading a Parquet file. Without this, a mapping problem in a
+     * table late in the load order only surfaces after the earlier tables have been imported.
+     *
+     * <p>SQL-mode tables are skipped: their output columns come from running the transform, which is
+     * checked per batch during the load.
+     */
+    private List<String> planEveryTable(SnapshotManifest manifest, PgSchema schema) {
+        ColumnPlanner planner = new ColumnPlanner(converters);
+        List<String> problems = new ArrayList<>();
+        for (SnapshotManifest.TableManifest t : manifest.tables()) {
+            SnapshotTableSpec spec = registry.byId(t.specId()).orElse(null);
+            if (spec == null || spec.restore() != RestoreMode.IMPORT
+                    || spec.importSpec().mode() == com.bloxbean.cardano.yaci.store.snapshot.spec.ImportMode.SQL
+                    || t.sourceColumns() == null || t.sourceColumns().isEmpty()) {
+                continue;
+            }
+            try {
+                if (!schema.tableExists(spec.targetTable())) {
+                    continue;
+                }
+                planner.plan(spec, t.sourceColumns(), schema.table(spec.targetTable()));
+            } catch (ColumnPlanner.MappingException e) {
+                problems.add(e.getMessage());
+            } catch (SQLException e) {
+                problems.add("Unable to read target table " + spec.targetTable() + ": " + e.getMessage());
+            }
+        }
+        return problems;
     }
 
     public ImportReport importSnapshot(ImportOptions options, Consumer<String> progress)
@@ -233,6 +269,53 @@ public class SnapshotImporter {
         }
     }
 
+    /** Prepare and plan the first batch of every SQL-mode table, so a bad transform fails fast. */
+    private void planSqlTransforms(ImportOptions options, SnapshotManifest manifest,
+                                   List<SnapshotTableSpec> ordered,
+                                   Map<String, List<SnapshotManifest.FileEntry>> filesBySpec,
+                                   PgSchema schema, BatchPlanner planner, TableLoader loader)
+            throws SQLException {
+        List<SnapshotTableSpec> sqlTables = ordered.stream()
+                .filter(s -> s.importSpec().mode() == com.bloxbean.cardano.yaci.store.snapshot.spec.ImportMode.SQL)
+                .filter(s -> !filesBySpec.getOrDefault(s.id(), List.of()).isEmpty())
+                .toList();
+        if (sqlTables.isEmpty()) {
+            return;
+        }
+        Path spill = options.workDir().resolve("spill-plan");
+        try {
+            Files.createDirectories(spill);
+        } catch (IOException e) {
+            throw new SQLException("Unable to create planning spill directory " + spill, e);
+        }
+        List<String> problems = new ArrayList<>();
+        try (DuckPgSession session = DuckPgSession.open(options, spill, 1)) {
+            for (SnapshotTableSpec spec : sqlTables) {
+                List<ImportBatch> batches =
+                        planner.plan(manifest.snapshotId(), spec, filesBySpec.get(spec.id()));
+                if (batches.isEmpty()) {
+                    continue;
+                }
+                Map<String, List<SnapshotManifest.FileEntry>> dependencyFiles = new LinkedHashMap<>();
+                for (String dep : spec.importSpec().dependencies()) {
+                    dependencyFiles.put(dep, filesBySpec.getOrDefault(dep, List.of()));
+                }
+                String select = loader.sourceSelect(spec, batches.get(0), manifest.point().slot(),
+                        manifest.point().epoch(), dependencyFiles);
+                try {
+                    loader.planFor(session, spec, select, schema.table(spec.targetTable()),
+                            manifest.table(spec.id()).sourceColumns());
+                } catch (ColumnPlanner.MappingException e) {
+                    problems.add(e.getMessage());
+                }
+            }
+        }
+        if (!problems.isEmpty()) {
+            throw new IllegalStateException("SQL transforms do not match the schemas:\n  - "
+                    + String.join("\n  - ", problems));
+        }
+    }
+
     private record LoadResult(long planned, long skipped, long executed, long rows) {}
 
     private LoadResult loadTables(ImportOptions options, SnapshotManifest manifest, Path extractRoot,
@@ -254,6 +337,13 @@ public class SnapshotImporter {
         AtomicLong skipped = new AtomicLong();
         AtomicLong executed = new AtomicLong();
         AtomicLong rows = new AtomicLong();
+
+        // Resolve every table's mapping against the extracted files before writing a single row.
+        // Preflight already planned the DIRECT and MAPPED tables from the manifest's recorded column
+        // types; an SQL transform's output types only exist once the transform can be described, so
+        // that has to wait until extraction — but it must still happen before the load, not several
+        // tables into it.
+        planSqlTransforms(options, manifest, ordered, filesBySpec, schema, planner, loader);
 
         for (SnapshotTableSpec spec : ordered) {
             List<SnapshotManifest.FileEntry> files = filesBySpec.getOrDefault(spec.id(), List.of());

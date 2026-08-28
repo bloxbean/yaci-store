@@ -23,6 +23,13 @@ snapshot-table:
     select-resource: classpath:/snapshot/sql/pool_registration_v1.sql
     transform-version: 1
     dependencies: [block]
+    columns:
+      pool_owners:
+        source: pool_owners
+        converter: "varchar-to-jsonb"
+      relays:
+        source: relays
+        converter: "varchar-to-jsonb"
     use-target-defaults: [margin_denominator, margin_numerator, update_datetime]
     batch-boundary: FILE_SET
     batch-size: 64
