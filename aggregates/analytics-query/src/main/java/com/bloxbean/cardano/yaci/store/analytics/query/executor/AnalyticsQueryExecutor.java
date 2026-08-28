@@ -10,6 +10,13 @@ import org.springframework.stereotype.Component;
 
 import java.sql.*;
 import java.lang.reflect.Array;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.OffsetDateTime;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Base64;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -27,7 +34,8 @@ import java.util.function.Function;
  *
  * <p><b>Security measures:</b></p>
  * <ul>
- *   <li><b>Query timeout</b> — per-statement timeout (default 30s) cancels long-running queries;
+ *   <li><b>Query timeout</b> — per-statement timeout (default 30s; trusted callers such as the MCP
+ *       tools may request up to {@code query.max-timeout-seconds}) cancels long-running queries;
  *       the engine uses plain (non-streaming) JDBC result sets so the timeout covers the whole
  *       execution</li>
  *   <li><b>Result row limit</b> — every statement is wrapped in a {@code LIMIT} (default 100 rows for
@@ -57,6 +65,7 @@ public class AnalyticsQueryExecutor {
     private final ParquetReadConnectionProvider connectionProvider;
     private final int hardRowLimit;
     private final int defaultRowLimit;
+    private final int maxTimeoutSeconds;
 
     public AnalyticsQueryExecutor(ParquetReadConnectionProvider connectionProvider,
                                   AnalyticsStoreProperties properties) {
@@ -65,12 +74,19 @@ public class AnalyticsQueryExecutor {
         this.hardRowLimit = configuredMax > 0 ? Math.min(configuredMax, MAX_RESULT_ROWS) : MAX_RESULT_ROWS;
         int configuredDefault = properties.getQuery().getDefaultMaxRows();
         this.defaultRowLimit = configuredDefault > 0 ? Math.min(configuredDefault, hardRowLimit) : hardRowLimit;
-        log.info("Analytics query row limits: default={} rows, hard limit={} rows (configured max-rows={}, ceiling={})",
-                defaultRowLimit, hardRowLimit, configuredMax, MAX_RESULT_ROWS);
+        int configuredMaxTimeout = properties.getQuery().getMaxTimeoutSeconds();
+        this.maxTimeoutSeconds = Math.max(configuredMaxTimeout, connectionProvider.getQueryTimeoutSeconds());
+        log.info("Analytics query limits: default={} rows, hard limit={} rows (configured max-rows={}, ceiling={}); "
+                        + "query timeout default={}s, per-call maximum={}s",
+                defaultRowLimit, hardRowLimit, configuredMax, MAX_RESULT_ROWS,
+                connectionProvider.getQueryTimeoutSeconds(), maxTimeoutSeconds);
     }
 
-    /** Result of {@link #execute(String, Integer)}: the rows, the limit that was applied and whether more existed. */
-    public record QueryResult(List<Map<String, Object>> rows, int rowLimit, boolean truncated) {
+    /**
+     * Result of {@link #execute(String, Integer, Integer)}: the rows, the row limit and the
+     * timeout that were applied, and whether more rows existed than were returned.
+     */
+    public record QueryResult(List<Map<String, Object>> rows, int rowLimit, boolean truncated, int timeoutSeconds) {
     }
 
     /** Effective hard upper bound for rows per query (configured {@code max-rows}, at most {@link #MAX_RESULT_ROWS}). */
@@ -81,6 +97,16 @@ public class AnalyticsQueryExecutor {
     /** Rows returned when a caller does not ask for a specific {@code maxRows}. */
     public int getDefaultRowLimit() {
         return defaultRowLimit;
+    }
+
+    /** Query timeout applied when a caller does not ask for a specific one ({@code duckdb.reader.query-timeout-seconds}). */
+    public int getDefaultTimeoutSeconds() {
+        return connectionProvider.getQueryTimeoutSeconds();
+    }
+
+    /** Longest per-call query timeout a caller may request ({@code query.max-timeout-seconds}, never below the default). */
+    public int getMaxTimeoutSeconds() {
+        return maxTimeoutSeconds;
     }
 
     /**
@@ -95,23 +121,52 @@ public class AnalyticsQueryExecutor {
     }
 
     /**
+     * Resolve a caller-requested query timeout: {@code null}/non-positive → the default timeout,
+     * anything larger than {@link #getMaxTimeoutSeconds()} → that maximum.
+     */
+    private int resolveTimeoutSeconds(Integer requested) {
+        if (requested == null || requested <= 0) {
+            return getDefaultTimeoutSeconds();
+        }
+        return Math.min(requested, maxTimeoutSeconds);
+    }
+
+    /**
      * Execute a read-only query with a row limit, the way SQL front-ends cap results: the
      * statement is wrapped as {@code SELECT * FROM (<sql>) AS q LIMIT <limit + 1>} so DuckDB
      * stops producing rows at the cap (an inner {@code ORDER BY}/{@code LIMIT} keeps its
-     * meaning). One extra row is requested only to detect truncation.
+     * meaning). One extra row is requested only to detect truncation. The default query
+     * timeout applies.
      *
      * <p>Note that DuckDB de-duplicates column labels of the wrapped statement: a query that
      * yields two columns named {@code hash} returns them as {@code hash} and {@code hash_1}.</p>
      *
      * @param sql       a single SELECT/WITH statement (must be pre-validated via {@code SqlValidator})
      * @param maxRows   requested row limit; {@code null} or non-positive → default, capped by the hard limit
-     * @return rows (at most the resolved limit), the limit applied and whether more rows existed
+     * @return rows (at most the resolved limit), the limits applied and whether more rows existed
      */
     public QueryResult execute(String sql, Integer maxRows) {
+        return execute(sql, maxRows, null);
+    }
+
+    /**
+     * Like {@link #execute(String, Integer)} with a caller-chosen query timeout, for callers
+     * such as the MCP tools whose heavy analytical queries may legitimately need longer than
+     * the default. {@code timeoutSeconds} is capped by {@link #getMaxTimeoutSeconds()}; a
+     * longer timeout does not lengthen the wait for a reader permit, but the query holds its
+     * permit for its whole duration.
+     *
+     * @param sql            a single SELECT/WITH statement (must be pre-validated via {@code SqlValidator})
+     * @param maxRows        requested row limit; {@code null} or non-positive → default, capped by the hard limit
+     * @param timeoutSeconds requested query timeout; {@code null} or non-positive → default, capped by the maximum
+     * @return rows (at most the resolved limit), the limits applied and whether more rows existed
+     */
+    public QueryResult execute(String sql, Integer maxRows, Integer timeoutSeconds) {
         int limit = resolveRowLimit(maxRows);
+        int timeout = resolveTimeoutSeconds(timeoutSeconds);
         List<Map<String, Object>> rows = new ArrayList<>();
-        boolean truncated = fetch(sql, limit, this::mapRow, rows);
-        return new QueryResult(rows, limit, truncated);
+        boolean truncated = fetch(sql, limit, timeout, this::mapRow, rows);
+        return new QueryResult(rows, limit, truncated, timeout);
     }
 
     /**
@@ -130,7 +185,7 @@ public class AnalyticsQueryExecutor {
      */
     public <T> List<T> query(String sql, Function<ResultSet, T> rowMapper) {
         List<T> results = new ArrayList<>();
-        fetch(sql, hardRowLimit, rowMapper, results);
+        fetch(sql, hardRowLimit, getDefaultTimeoutSeconds(), rowMapper, results);
         return results;
     }
 
@@ -155,16 +210,17 @@ public class AnalyticsQueryExecutor {
     }
 
     /**
-     * Run the wrapped statement, append up to {@code limit} mapped rows to {@code sink}
-     * and report whether an extra row (i.e. truncation) was seen.
+     * Run the wrapped statement with the given query timeout, append up to {@code limit}
+     * mapped rows to {@code sink} and report whether an extra row (i.e. truncation) was seen.
      */
-    private <T> boolean fetch(String sql, int limit, Function<ResultSet, T> rowMapper, List<T> sink) {
+    private <T> boolean fetch(String sql, int limit, int timeoutSeconds,
+                              Function<ResultSet, T> rowMapper, List<T> sink) {
         long start = System.currentTimeMillis();
         String limited = withRowLimit(sql, limit);
         try (Connection conn = connectionProvider.getReadConnection();
              Statement stmt = conn.createStatement()) {
 
-            stmt.setQueryTimeout(connectionProvider.getQueryTimeoutSeconds());
+            stmt.setQueryTimeout(timeoutSeconds);
 
             try (ResultSet rs = stmt.executeQuery(limited)) {
                 int fetched = 0;
@@ -258,7 +314,48 @@ public class AnalyticsQueryExecutor {
         if (value instanceof byte[] bytes) {
             return Base64.getEncoder().encodeToString(bytes);
         }
-        return value;
+        Object temporal = normalizeTemporal(value);
+        return temporal != null ? temporal : value;
+    }
+
+    /**
+     * Render DuckDB temporal values as ISO-8601 strings instead of leaving them to the JSON
+     * serializer (which would emit {@code [2026,8,19]} for a DATE or epoch seconds for a
+     * TIMESTAMPTZ). TIMESTAMP WITH TIME ZONE values come back from the driver in the JVM's
+     * local offset and are normalized to UTC ({@code ...Z}) so the output does not depend on the
+     * host's time zone.
+     *
+     * @return the ISO string, or {@code null} if {@code value} is not a temporal type
+     */
+    static String normalizeTemporal(Object value) {
+        if (value instanceof java.sql.Timestamp ts) {
+            return DateTimeFormatter.ISO_LOCAL_DATE_TIME.format(ts.toLocalDateTime());
+        }
+        if (value instanceof java.sql.Date d) {
+            return d.toLocalDate().toString();
+        }
+        if (value instanceof java.sql.Time t) {
+            return DateTimeFormatter.ISO_LOCAL_TIME.format(t.toLocalTime());
+        }
+        if (value instanceof OffsetDateTime odt) {
+            return odt.toInstant().toString();
+        }
+        if (value instanceof ZonedDateTime zdt) {
+            return zdt.toInstant().toString();
+        }
+        if (value instanceof Instant instant) {
+            return instant.toString();
+        }
+        if (value instanceof LocalDateTime ldt) {
+            return DateTimeFormatter.ISO_LOCAL_DATE_TIME.format(ldt);
+        }
+        if (value instanceof LocalDate ld) {
+            return ld.toString();
+        }
+        if (value instanceof LocalTime lt) {
+            return DateTimeFormatter.ISO_LOCAL_TIME.format(lt);
+        }
+        return null;
     }
 
     private static List<Object> normalizeArray(Object array) throws SQLException {

@@ -17,6 +17,13 @@ spring:
     job:
       enabled: false
 
+  ai:
+    mcp:
+      server:
+        # The MCP server (the /mcp endpoint and the tools) is opt-in: it follows
+        # yaci.store.mcp-server.enabled (default false; the 'mcp' profile sets it to true).
+        enabled: ${yaci.store.mcp-server.enabled:false}
+
 #  jpa:
 #    hibernate:
 #      ddl-auto: none

@@ -155,6 +155,54 @@ class AnalyticsQueryExecutorLimitTest {
         assertTrue(elapsed < 5_000, "query was not cancelled by the timeout; took " + elapsed + "ms");
     }
 
+    /**
+     * A caller may ask for its own timeout (MCP tools): it is applied per statement, capped by
+     * {@code query.max-timeout-seconds}, and never lower than the default when the maximum is
+     * misconfigured below it.
+     */
+    @Test
+    void perCallTimeoutIsAppliedAndCappedByTheMaximum() throws Exception {
+        AnalyticsStoreProperties properties = new AnalyticsStoreProperties();
+        properties.getQuery().setMaxTimeoutSeconds(120);
+        AnalyticsQueryExecutor executor = new AnalyticsQueryExecutor(provider, properties);   // default timeout 30 s
+        assertEquals(30, executor.getDefaultTimeoutSeconds());
+        assertEquals(120, executor.getMaxTimeoutSeconds());
+
+        assertEquals(30, executor.execute("SELECT 1", null, null).timeoutSeconds());
+        assertEquals(30, executor.execute("SELECT 1", null, 0).timeoutSeconds());
+        assertEquals(90, executor.execute("SELECT 1", null, 90).timeoutSeconds());
+        assertEquals(120, executor.execute("SELECT 1", null, 3_600).timeoutSeconds());
+
+        // A per-call timeout of 1 s cancels the endless scan even though the default is 30 s
+        StringBuilder wideColumns = new StringBuilder("range AS x");
+        for (int i = 1; i <= 20; i++) {
+            wideColumns.append(", range AS c").append(i);
+        }
+        String endless = "SELECT " + wideColumns + " FROM range(4000000000) WHERE range < 10000 OR hash(range + 1) = 0";
+        long start = System.currentTimeMillis();
+        assertThrows(AnalyticsQueryExecutor.QueryExecutionException.class,
+                () -> executor.execute(endless, 10_000, 1));
+        assertTrue(System.currentTimeMillis() - start < 5_000);
+
+        // max-timeout below the default: the default still applies
+        properties.getQuery().setMaxTimeoutSeconds(5);
+        assertEquals(30, new AnalyticsQueryExecutor(provider, properties).getMaxTimeoutSeconds());
+    }
+
+    @Test
+    void temporalValuesAreRenderedAsIsoStrings() {
+        AnalyticsQueryExecutor executor = executor(100, 10_000);
+        Map<String, Object> row = executor.execute(
+                "SELECT DATE '2026-08-19' AS d, TIMESTAMP '2026-08-19 10:00:00.123456' AS ts, "
+                        + "TIMESTAMPTZ '2026-08-19 10:00:00+02' AS tstz, TIME '10:00:00' AS t, "
+                        + "to_timestamp(1787098225) AS epoch_ts", 1).rows().get(0);
+        assertEquals("2026-08-19", row.get("d"));
+        assertEquals("2026-08-19T10:00:00.123456", row.get("ts"));
+        assertEquals("2026-08-19T08:00:00Z", row.get("tstz"));        // normalized to UTC
+        assertEquals("10:00:00", row.get("t"));
+        assertEquals("2026-08-19T00:10:25Z", row.get("epoch_ts"));
+    }
+
     @Test
     void binderErrorContainingTimeoutIsNotMisclassifiedAsExecutionTimeout() {
         AnalyticsQueryExecutor.QueryExecutionException error = assertThrows(
