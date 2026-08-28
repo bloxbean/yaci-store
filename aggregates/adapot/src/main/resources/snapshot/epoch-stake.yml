@@ -1,0 +1,38 @@
+snapshot-table:
+  id: epoch-stake
+  spec-version: 1
+  module: adapot
+  kind: DERIVED_DATA
+  restore: IMPORT
+
+  source:
+    exporter-id: epoch_stake
+    ducklake-relation: epoch_stake
+    partition:
+      strategy: EPOCH
+      column: block_time
+
+  consistency:
+    completed-epoch:
+      type: MAX_EPOCH
+      column: epoch
+    cutoff:
+      type: EPOCH_LTE
+      column: epoch
+    coverage:
+      type: EPOCH_GTE_COMPLETED
+      column: epoch
+
+  import:
+    target-table: epoch_stake
+    mode: MAPPED
+    use-target-defaults: [create_datetime]
+    batch-boundary: SINGLE_BATCH
+    target-partitioning:
+      column: epoch
+      partition-prefix: epoch_stake_p
+
+  validation:
+    key: [epoch, address]
+    bounds: [epoch]
+    required-columns: [epoch, address]

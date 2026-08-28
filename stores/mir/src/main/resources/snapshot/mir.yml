@@ -1,0 +1,32 @@
+snapshot-table:
+  id: mir
+  spec-version: 1
+  module: mir
+  kind: CHAIN_DATA
+  restore: IMPORT
+
+  source:
+    exporter-id: mir
+    ducklake-relation: mir
+    partition:
+      strategy: EPOCH
+      column: block_time
+
+  consistency:
+    cutoff:
+      type: SLOT_LTE
+      column: slot
+
+  import:
+    target-table: mir
+    mode: SQL
+    select-resource: classpath:/snapshot/sql/mir_v1.sql
+    transform-version: 1
+    dependencies: [block]
+    use-target-defaults: [update_datetime]
+    batch-boundary: SINGLE_BATCH
+
+  validation:
+    key: [id]
+    bounds: [slot, epoch]
+    required-columns: [id]

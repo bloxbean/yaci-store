@@ -1,0 +1,35 @@
+snapshot-table:
+  id: stake-registration
+  spec-version: 1
+  module: staking
+  kind: CHAIN_DATA
+  restore: IMPORT
+
+  source:
+    exporter-id: stake_registration
+    ducklake-relation: stake_registration
+    partition:
+      strategy: DAILY
+      column: block_time
+
+  consistency:
+    cutoff:
+      type: SLOT_LTE
+      column: slot
+
+  import:
+    target-table: stake_registration
+    mode: MAPPED
+    columns:
+      block_time:
+        source: block_time
+        converter: "timestamp-to-epoch-seconds"
+    ignore-source-columns: [date]
+    use-target-defaults: [update_datetime]
+    batch-boundary: FILE_SET
+    batch-size: 64
+
+  validation:
+    key: [tx_hash, cert_index]
+    bounds: [slot, epoch]
+    required-columns: [tx_hash, cert_index]

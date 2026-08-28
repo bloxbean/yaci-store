@@ -1,0 +1,80 @@
+/**
+ * Snapshot export/import component (ADR 0003).
+ *
+ * Deliberately framework-free: the admin CLI drives it directly and the unit tests run without
+ * a Spring context. It must not depend on analytics-store or any store module, so the CLI does
+ * not have to load every store processor just to read specification resources.
+ */
+dependencies {
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+    implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-yaml'
+    implementation 'org.slf4j:slf4j-api'
+
+    implementation(libs.duckdb.jdbc.snapshot)
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation(libs.assertj.core)
+    testRuntimeOnly "org.postgresql:postgresql:${postgresDriverVersion}"
+}
+
+/**
+ * Collect module-owned snapshot specifications (src/main/resources/snapshot/**) into this
+ * component's resources and generate a deterministic index. This is a plain file copy: no
+ * project dependency and no classpath scanning is introduced.
+ */
+def collectedSpecsDir = layout.buildDirectory.dir("generated-resources/snapshot-specs")
+
+tasks.register('collectSnapshotSpecs') {
+    description = 'Collects module-owned snapshot specification resources and writes an index.'
+    group = 'build'
+
+    def sourceDirs = rootProject.subprojects
+            .findAll { it.path != project.path }
+            .collect { new File(it.projectDir, 'src/main/resources/snapshot') }
+            .findAll { it.isDirectory() }
+            .sort { it.absolutePath }
+
+    inputs.files(sourceDirs.collect { project.fileTree(it) })
+    outputs.dir(collectedSpecsDir)
+
+    doLast {
+        def outDir = collectedSpecsDir.get().asFile
+        outDir.deleteDir()
+        def specRoot = new File(outDir, 'snapshot')
+        specRoot.mkdirs()
+
+        def collected = [] as List<String>
+        sourceDirs.each { dir ->
+            project.fileTree(dir).sort { it.absolutePath }.each { File f ->
+                def rel = dir.toPath().relativize(f.toPath()).toString().replace(File.separator, '/')
+                def target = new File(specRoot, rel)
+                target.parentFile.mkdirs()
+                if (target.exists()) {
+                    throw new GradleException("Duplicate snapshot resource '${rel}' contributed by ${dir}")
+                }
+                target.bytes = f.bytes
+                if (rel.endsWith('.yml')) {
+                    collected << rel
+                }
+            }
+        }
+        collected.sort()
+        new File(specRoot, 'specs.index').text = collected.join('\n') + (collected.isEmpty() ? '' : '\n')
+        logger.lifecycle("Collected ${collected.size()} snapshot specification(s) from ${sourceDirs.size()} module(s)")
+    }
+}
+
+sourceSets.main.output.dir(collectedSpecsDir, builtBy: 'collectSnapshotSpecs')
+processResources.dependsOn('collectSnapshotSpecs')
+tasks.named('sourceJar') { dependsOn('collectSnapshotSpecs') }
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store Snapshot'
+                description = 'Parquet snapshot export, packaging and PostgreSQL import'
+            }
+        }
+    }
+}

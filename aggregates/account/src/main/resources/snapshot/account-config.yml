@@ -1,0 +1,12 @@
+snapshot-table:
+  id: account-config
+  spec-version: 1
+  module: account
+  kind: DERIVED_DATA
+  restore: NOT_RESTORED
+  reason: >-
+    the account module analytics export is a daily downsample (latest balance per address per
+    day), so restoring it would produce incorrect historical balances
+
+  import:
+    target-table: account_config

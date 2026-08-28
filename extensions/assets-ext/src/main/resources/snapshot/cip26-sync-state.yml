@@ -1,0 +1,12 @@
+snapshot-table:
+  id: cip26-sync-state
+  spec-version: 1
+  module: assets-ext
+  kind: EXTENSION_DATA
+  restore: EMPTY_EXPECTED
+  reason: >-
+    assets extension data is fetched from its own registry sources after start-up and is not
+    part of the analytics export
+
+  import:
+    target-table: cip26_sync_state

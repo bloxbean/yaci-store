@@ -1,0 +1,36 @@
+snapshot-table:
+  id: adapot
+  spec-version: 1
+  module: adapot
+  kind: DERIVED_DATA
+  restore: IMPORT
+
+  source:
+    exporter-id: adapot
+    ducklake-relation: adapot
+    partition:
+      strategy: EPOCH
+      column: block_time
+
+  consistency:
+    completed-epoch:
+      type: MAX_EPOCH_OFFSET
+      column: epoch
+      offset: -1
+    cutoff:
+      type: EPOCH_LTE
+      column: epoch
+    coverage:
+      type: EPOCH_GTE_COMPLETED
+      column: epoch
+
+  import:
+    target-table: adapot
+    mode: MAPPED
+    use-target-defaults: [update_datetime]
+    batch-boundary: SINGLE_BATCH
+
+  validation:
+    key: [epoch]
+    bounds: [epoch, slot]
+    required-columns: [epoch]

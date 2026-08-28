@@ -1,0 +1,12 @@
+snapshot-table:
+  id: block-cbor
+  spec-version: 1
+  module: blocks
+  kind: CHAIN_DATA
+  restore: NOT_RESTORED
+  reason: >-
+    block CBOR has no analytics export; enable it only on an instance that syncs the range
+    itself
+
+  import:
+    target-table: block_cbor

@@ -1,0 +1,13 @@
+snapshot-table:
+  id: adapot-jobs
+  spec-version: 1
+  module: adapot
+  kind: CONTROL_STATE
+  restore: HANDLER
+  reason: >-
+    reward calculation jobs are marked complete up to the snapshot epoch so completed history is
+    not recalculated and the current epoch still replays
+
+  import:
+    target-table: adapot_jobs
+    handler: adapot-jobs
