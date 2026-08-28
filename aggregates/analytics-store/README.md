@@ -181,12 +181,13 @@ duckdb -c "
 |---|---|---|
 | `yaci.store.analytics.enabled` | `false` | Enable analytics store |
 | `yaci.store.analytics.export-path` | `./data/analytics` | Output directory for exported files |
-| `yaci.store.analytics.finalization-lag-days` | `2` | Days to lag behind tip (ensures immutability) |
 | `yaci.store.analytics.enabled-tables` | _(empty = all)_ | Comma-separated list of tables to export |
 | `yaci.store.analytics.admin.enabled` | `false` | Enable admin REST API |
 | `yaci.store.analytics.storage.type` | `parquet` | Storage format: `parquet` or `ducklake` |
 | `yaci.store.analytics.state-management.stale-timeout-minutes` | `60` | Timeout before stuck exports are recovered |
-| `yaci.store.analytics.continuous-sync.buffer-days` | `2` | Buffer days for continuous sync |
+| `yaci.store.analytics.continuous-sync.buffer-days` | `1` | UTC days the daily exports stay behind the *finalized* tip (latest block time minus the finality window); with the defaults a day is exported ~13 h after it ends on mainnet. Minimum 1 |
+| `yaci.store.analytics.continuous-sync.finality-margin-hours` | `1` | Added to the finality window derived from genesis (`k × slotLength / activeSlotsCoeff`: 12 h on mainnet/preprod, ~2.4 h on preview) |
+| `yaci.store.analytics.continuous-sync.finality-window-hours` | `0` | Override for the derived finality window (`0` = derive from genesis); the margin is still added |
 | `yaci.store.analytics.continuous-sync.sync-check-interval-minutes` | `15` | Gap detection interval when fully synced |
 | `yaci.store.analytics.continuous-sync.catch-up-interval-minutes` | `1` | Gap detection interval when catching up |
 | `yaci.store.analytics.continuous-sync.export-after-sync` | `true` | Defer exports until the sync reaches chain tip. Set `false` to export during the sync |
@@ -224,13 +225,16 @@ DuckDB defaults to using 80% of system physical RAM for its buffer manager. Sinc
 To limit DuckDB memory usage:
 
 ```properties
-# Limit DuckDB buffer manager to 1GB per connection
+# Limit each DuckDB instance's buffer manager to 1GB
 yaci.store.analytics.duckdb.memory-limit=1GB
 ```
 
 If not set, DuckDB uses its default (80% of system RAM). It is recommended to set this explicitly in production and container environments.
 
-Note: With writer pool (1 connection) + reader pool (N connections), total potential DuckDB memory is `memory_limit * (1 + N)`. Some DuckDB aggregate functions may also allocate memory outside the buffer manager, so actual usage can slightly exceed the configured limit.
+The writer connection is one DuckDB instance. When the analytics query layer is enabled it
+uses a second instance whose duplicated read connections share that instance's memory limit.
+Plan capacity for up to roughly `memory_limit * 2`, plus JVM heap and allocations DuckDB makes
+outside its buffer manager.
 
 ### DuckLake requires `public` schema in PostgreSQL
 
