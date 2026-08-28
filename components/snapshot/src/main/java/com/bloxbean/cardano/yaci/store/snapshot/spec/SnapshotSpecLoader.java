@@ -102,7 +102,13 @@ public class SnapshotSpecLoader {
         SnapshotTableSpec.Validation validation = readValidation(n.get("validation"), origin);
         Map<String, String> lossy = readLossy(n.get("lossy"), origin);
 
+        // The digest covers the transform resource too. Without that, editing a SQL transform would
+        // change what an import produces while still matching the digest a manifest recorded.
         String digest = Digests.sha256Hex(yaml);
+        if (importSpec.selectResource() != null) {
+            digest = Digests.sha256Hex(digest + "\n"
+                    + Digests.sha256Hex(readTransform(importSpec.selectResource(), origin)));
+        }
         SnapshotTableSpec spec = new SnapshotTableSpec(id, specVersion, module, kind, restore, reason,
                 source, consistency, importSpec, validation, lossy, digest, origin);
         validateSemantics(spec, origin);
@@ -262,6 +268,10 @@ public class SnapshotSpecLoader {
         defaults.forEach(c -> Identifiers.requireSqlIdentifier(c, "import.use-target-defaults"));
 
         String selectResource = optionalText(n, "select-resource");
+        if (selectResource != null && !selectResource.startsWith("classpath:/snapshot/sql/")) {
+            throw new SpecException(origin + ": import.select-resource must be a built-in "
+                    + "classpath:/snapshot/sql/ resource, got " + selectResource);
+        }
         int transformVersion = n.has("transform-version") ? n.get("transform-version").asInt() : 1;
         List<String> dependencies = stringList(n, "dependencies", origin);
         BatchBoundary boundary = n.has("batch-boundary")
@@ -327,6 +337,18 @@ public class SnapshotSpecLoader {
                 List.copyOf(required), List.copyOf(sourceKey));
     }
 
+    private static byte[] readTransform(String resourceRef, String origin) {
+        String path = resourceRef.substring("classpath:".length());
+        try (InputStream in = SnapshotSpecLoader.class.getResourceAsStream(path)) {
+            if (in == null) {
+                throw new SpecException(origin + ": SQL transform resource not found: " + path);
+            }
+            return in.readAllBytes();
+        } catch (IOException e) {
+            throw new SpecException(origin + ": unable to read SQL transform resource " + path, e);
+        }
+    }
+
     // ---------------------------------------------------------------- cross-section rules
 
     private void validateSemantics(SnapshotTableSpec spec, String origin) {
@@ -337,13 +359,7 @@ public class SnapshotSpecLoader {
                     throw new SpecException(origin + ": restore: IMPORT requires a 'source' section");
                 }
                 if (imp.mode() == ImportMode.SQL) {
-                    if (imp.selectResource() == null) {
-                        throw new SpecException(origin + ": SQL mode requires import.select-resource");
-                    }
-                    if (!imp.selectResource().startsWith("classpath:/snapshot/sql/")) {
-                        throw new SpecException(origin + ": import.select-resource must be a built-in "
-                                + "classpath:/snapshot/sql/ resource, got " + imp.selectResource());
-                    }
+    
                 } else if (imp.selectResource() != null) {
                     throw new SpecException(origin + ": import.select-resource is only valid in SQL mode");
                 }

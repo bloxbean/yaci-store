@@ -39,11 +39,24 @@ grouped AS (
         sum(CASE WHEN asset_unit = 'lovelace' THEN quantity ELSE 0 END) AS lovelace_amount,
         -- list(... ORDER BY ...) is a real aggregate, so the element order is deterministic;
         -- json_group_array is a macro and cannot take an ORDER BY.
+        --
+        -- Element order reproduces what the operational writer stores: lovelace first, then the
+        -- canonical CBOR ordering of the multiasset map -- by policy id, then by asset name with
+        -- shorter names before longer ones.
+        --
+        -- asset_name is restored to the empty string for an asset that has none: the analytics view
+        -- applies NULLIF(asset_name, ''), so a NULL here means the asset had an empty name. policy_id
+        -- is NULL only for lovelace, which the view maps the same way.
         CAST(list(struct_pack(unit := asset_unit,
                               quantity := quantity,
                               policy_id := policy_id,
-                              asset_name := asset_name)
-                  ORDER BY CASE WHEN asset_unit = 'lovelace' THEN 0 ELSE 1 END, asset_unit)
+                              asset_name := CASE WHEN asset_unit = 'lovelace' THEN asset_name
+                                                 WHEN asset_name IS NULL THEN ''
+                                                 ELSE asset_name END)
+                  ORDER BY CASE WHEN asset_unit = 'lovelace' THEN 0 ELSE 1 END,
+                           substr(asset_unit, 1, 56),
+                           length(asset_unit),
+                           substr(asset_unit, 57))
              AS JSON) AS amounts
     FROM flattened
     GROUP BY tx_hash, output_index

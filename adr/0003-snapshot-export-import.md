@@ -2,11 +2,12 @@
 
 ## Status
 
-Proposed
+Accepted, implemented. Amended 2026-08-29 with corrections that implementation
+evidence required; each amendment is marked **Implementation note**.
 
 ## Date
 
-2026-08-28
+2026-08-28 (amended 2026-08-29)
 
 ## Context
 
@@ -143,6 +144,13 @@ progress reporting. It will depend on the snapshot component and DuckDB JDBC,
 but it should not depend on the full analytics Spring application or instantiate
 all store processors.
 
+**Implementation note (DuckDB version).** A DuckLake catalog written by DuckDB
+1.5.x uses storage version 68, which the 1.4.4.0 driver analytics-store pins
+cannot open. The snapshot component therefore depends on a separate version
+catalog entry pinned to 1.5.5.0, and `libs.duckdb-jdbc` is left untouched so
+analytics behaviour does not change. The two never share a classpath, because
+the admin CLI does not depend on analytics-store.
+
 This separation also allows future use from a non-interactive container entry
 point and integration tests.
 
@@ -174,6 +182,25 @@ Typical cutoff rules include `slot <= :cutSlot`,
 `spent_at_slot <= :cutSlot`, `epoch <= :completedEpoch`, or an explicitly
 documented epoch offset. There must be no generic guess based only on a column
 called `slot` or `epoch`.
+
+**Implementation note (epoch partition column).** An epoch-partitioned exporter
+reports `block_time` from `getPartitionColumn()`, because that is the expression
+DuckLake partitions on, but it writes `epoch=N` directories and the exported data
+carries an `epoch` column, not `block_time`. A specification for an
+epoch-partitioned relation therefore names `epoch` as its partition column. The
+first `snapshot inspect` run against the preprod export failed on exactly this
+for all fourteen epoch-partitioned tables.
+
+**Implementation note (which tables may gate).** Only a table guaranteed to
+produce data for every epoch may constrain the point. A sparse table -- a
+committee change, a pool retirement -- would otherwise drag the snapshot back to
+its last active epoch. Sparse tables declare no gating rule and are constrained
+only by their cutoff, with a separate coverage assertion checked after the point
+is chosen. Against the preprod export the gating set is `adapot`,
+`address_utxo`, `block`, `drep_dist`, `epoch`, `epoch_param`, `epoch_stake`,
+`gov_epoch_activity` and `transaction`, and it selects epoch 308: the last block
+of epoch 308 at slot 131,846,389, 4,011 blocks behind the newest exported block,
+rather than the epoch-309 tip.
 
 Selecting an epoch boundary means a restored node may need to replay up to one
 epoch, but avoids importing partial reward, stake, governance, or AdaPot state.
@@ -232,8 +259,8 @@ The canonical JSON manifest includes at least:
 - Flyway history fingerprint and PostgreSQL schema fingerprint;
 - per-table specification ID, specification version and digest, source and
   target names, owning module, load mode, cutoff rule, transform version,
-  dependencies, row count, key, column fingerprint, min/max slot or epoch, and
-  expected null counts;
+  dependencies, row count, key, column fingerprint, observed source column
+  types, min/max slot or epoch, and expected null counts;
 - all archive parts, sizes, SHA-256 values, and contained files; and
 - declared lossy or unsupported fields, which are empty for a production
   snapshot.
@@ -245,6 +272,19 @@ disabled.
 
 The manifest contains no database URL, user name, password, host name, or local
 absolute path.
+
+**Implementation note (source column types).** The manifest records each table's
+source column name and DuckLake type, not only a fingerprint of them. DuckDB
+widens `INT32` to `BIGINT` when it reads Parquet, so an importer that planned
+from the types it observes in the files would treat every `int32 -> integer`
+column as an unsafe narrowing. The importer therefore plans against the types
+the producing catalog recorded, while still comparing the column *names* with
+the files so real schema drift fails.
+
+**Implementation note (specification digest).** The recorded digest covers the
+YAML specification *and* the SQL transform resource it references. Without that,
+editing a transform would change what an import produces while still matching
+the digest the manifest recorded.
 
 ## Table Inventory and Mapping Contract
 
@@ -518,6 +558,30 @@ initial snapshot import development or qualification.
 The manifest and import report must record `owner_addr_full` as unavailable so
 the limitation is visible and cannot be mistaken for exact database parity.
 
+**Implementation note (reconstruction fidelity).** Comparing the reconstructed
+rows with an independently synced preprod database over a 46,000-slot window,
+all 19,325 rows matched on every scalar column, and 19,318 of them matched the
+`amounts` JSONB byte for byte. Reaching that required two corrections the
+original text did not anticipate:
+
+- the analytics view applies `NULLIF(asset_name, '')`, so an asset with an empty
+  name arrives as NULL. The transform restores the empty string, because NULL is
+  unambiguous for a non-lovelace asset;
+- the operational writer stores the multiasset entries in canonical CBOR order --
+  lovelace first, then by policy id, then by asset name with shorter names
+  before longer ones -- not in plain unit order.
+
+The seven residual rows carry an identical set of assets and quantities in a
+different array order, from historical transactions whose multiasset map was not
+canonically ordered. No value differs.
+
+**Implementation note (row counts for regrouping transforms).** A transform that
+regroups rows produces fewer rows than it reads, so the source row count is not
+the count the importer must reproduce. A specification declares
+`validation.source-key` for that case, and the manifest records the number of
+distinct source keys: 22,194,183 for `address_utxo`, against 46 million
+flattened source rows.
+
 A later snapshot-format/exporter revision will add a lossless,
 snapshot-oriented projection. It should retain the operational row shape,
 including `amounts`, `owner_addr_full`, and block number, or at least carry all
@@ -540,6 +604,32 @@ This applies in particular to `cursor_`, `era`, `adapot_jobs`, current/cache
 tables, `epoch_nonce`, block/transaction CBOR tables, and downstream extension
 tables. The first production release supports only module profiles for which
 every target table has an explicit, tested classification.
+
+**Implementation note (classifications used).** The implementation gives every
+target table exactly one of five restore modes: `IMPORT`, `HANDLER`,
+`EMPTY_EXPECTED`, `RUNTIME_REBUILT` or `NOT_RESTORED`, and a CI check fails when
+a migration adds a table without one. `cursor_`, `era` and `adapot_jobs` are
+`HANDLER`; the `local_*` governance views are `RUNTIME_REBUILT`; the assets
+extension and operational log tables are `EMPTY_EXPECTED`.
+
+**Implementation note (the account module).** The account module is
+`NOT_RESTORED`, for a reason the original text did not have: its export is not
+merely absent, it is a *downsample*. `AddressBalanceExporter` and
+`StakeAddressBalanceExporter` keep only the latest balance per address per day
+(`ROW_NUMBER() ... WHERE rn = 1`), so the export is correct for analytics and
+wrong as a restore source -- importing it would produce a database whose
+historical balances look complete and are not. `address_balance`,
+`stake_address_balance`, `address_tx_amount`, both `*_current` caches and
+`account_config` are therefore left empty and declared. A lossless account
+export is the prerequisite for supporting that module, not a snapshot-format
+change.
+
+**Implementation note (`era` reconstruction).** Rebuilding one era row from the
+first imported block of each era reproduces the independently synced preprod
+`era` table exactly for eras 2 to 7. It additionally produces an era 1 (Byron)
+row at slot 0, block 0, which a normally synced database does not always have.
+That is harmless: `EraRepository.findFirstNonByronEra()` selects `era > 1`, so
+the Shelley start slot the epoch calculation depends on is unchanged.
 
 ## Export Command
 
