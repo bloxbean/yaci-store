@@ -1,0 +1,35 @@
+snapshot-table:
+  id: transaction-scripts
+  spec-version: 1
+  module: script
+  kind: CHAIN_DATA
+  restore: IMPORT
+
+  source:
+    exporter-id: transaction_scripts
+    ducklake-relation: transaction_scripts
+    partition:
+      strategy: DAILY
+      column: block_time
+
+  consistency:
+    cutoff:
+      type: SLOT_LTE
+      column: slot
+
+  import:
+    target-table: transaction_scripts
+    mode: MAPPED
+    columns:
+      block_time:
+        source: block_time
+        converter: "timestamp-to-epoch-seconds"
+    ignore-source-columns: [date]
+    use-target-defaults: [update_datetime]
+    batch-boundary: FILE_SET
+    batch-size: 64
+
+  validation:
+    key: [id]
+    bounds: [slot]
+    required-columns: [id]

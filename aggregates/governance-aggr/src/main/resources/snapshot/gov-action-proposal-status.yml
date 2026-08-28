@@ -1,0 +1,33 @@
+snapshot-table:
+  id: gov-action-proposal-status
+  spec-version: 1
+  module: governance-aggr
+  kind: DERIVED_DATA
+  restore: IMPORT
+
+  source:
+    exporter-id: gov_action_proposal_status
+    ducklake-relation: gov_action_proposal_status
+    partition:
+      strategy: EPOCH
+      column: block_time
+
+  consistency:
+    cutoff:
+      type: EPOCH_LTE
+      column: epoch
+
+  import:
+    target-table: gov_action_proposal_status
+    mode: MAPPED
+    columns:
+      voting_stats:
+        source: voting_stats
+        converter: "varchar-to-jsonb"
+    use-target-defaults: [update_datetime]
+    batch-boundary: SINGLE_BATCH
+
+  validation:
+    key: [gov_action_tx_hash, gov_action_index, epoch]
+    bounds: [epoch]
+    required-columns: [gov_action_tx_hash, gov_action_index, epoch]

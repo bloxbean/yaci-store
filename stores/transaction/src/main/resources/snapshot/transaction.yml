@@ -1,0 +1,63 @@
+snapshot-table:
+  id: transaction
+  spec-version: 1
+  module: transaction
+  kind: CHAIN_DATA
+  restore: IMPORT
+
+  source:
+    exporter-id: transaction
+    ducklake-relation: transaction
+    partition:
+      strategy: DAILY
+      column: block_time
+
+  consistency:
+    completed-epoch:
+      type: MAX_EPOCH_OFFSET
+      column: epoch
+      offset: -1
+    cutoff:
+      type: SLOT_LTE
+      column: slot
+    coverage:
+      type: SLOT_GTE_CUT
+      column: slot
+
+  import:
+    target-table: transaction
+    mode: MAPPED
+    columns:
+      collateral_inputs:
+        source: collateral_inputs
+        converter: "varchar-to-jsonb"
+      collateral_return:
+        source: collateral_return
+        converter: "varchar-to-jsonb"
+      inputs:
+        source: inputs
+        converter: "varchar-to-jsonb"
+      outputs:
+        source: outputs
+        converter: "varchar-to-jsonb"
+      reference_inputs:
+        source: reference_inputs
+        converter: "varchar-to-jsonb"
+      required_signers:
+        source: required_signers
+        converter: "varchar-to-jsonb"
+      collateral_return_json:
+        source: collateral_return_json
+        converter: "varchar-to-jsonb"
+      block_time:
+        source: block_time
+        converter: "timestamp-to-epoch-seconds"
+    ignore-source-columns: [date]
+    use-target-defaults: [update_datetime]
+    batch-boundary: FILE_SET
+    batch-size: 64
+
+  validation:
+    key: [tx_hash]
+    bounds: [slot, epoch, block]
+    required-columns: [tx_hash]

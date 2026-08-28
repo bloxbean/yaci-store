@@ -1,0 +1,45 @@
+snapshot-table:
+  id: address-utxo
+  spec-version: 1
+  module: utxo
+  kind: CHAIN_DATA
+  restore: IMPORT
+
+  source:
+    exporter-id: address_utxo
+    ducklake-relation: address_utxo
+    partition:
+      strategy: DAILY
+      column: block_time
+
+  consistency:
+    completed-epoch:
+      type: MAX_EPOCH_OFFSET
+      column: epoch
+      offset: -1
+    cutoff:
+      type: SLOT_LTE
+      column: slot
+    coverage:
+      type: SLOT_GTE_CUT
+      column: slot
+
+  import:
+    target-table: address_utxo
+    mode: SQL
+    select-resource: classpath:/snapshot/sql/address_utxo_v1.sql
+    transform-version: 1
+    dependencies: [block]
+    use-target-defaults: [owner_addr_full, update_datetime]
+    batch-boundary: WHOLE_PARTITION
+    batch-size: 8
+
+  validation:
+    key: [output_index, tx_hash]
+    bounds: [slot, epoch]
+    required-columns: [output_index, tx_hash]
+
+  lossy:
+    owner_addr_full: >-
+      the flattened analytics export keeps only owner_addr, so the full address of a long (>500
+      char) output cannot be recovered

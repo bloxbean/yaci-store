@@ -1,0 +1,39 @@
+snapshot-table:
+  id: drep-dist
+  spec-version: 1
+  module: governance-aggr
+  kind: DERIVED_DATA
+  restore: IMPORT
+
+  source:
+    exporter-id: drep_dist
+    ducklake-relation: drep_dist
+    partition:
+      strategy: EPOCH
+      column: block_time
+
+  consistency:
+    completed-epoch:
+      type: MAX_EPOCH_OFFSET
+      column: epoch
+      offset: -1
+    cutoff:
+      type: EPOCH_LTE
+      column: epoch
+    coverage:
+      type: EPOCH_GTE_COMPLETED
+      column: epoch
+
+  import:
+    target-table: drep_dist
+    mode: MAPPED
+    use-target-defaults: [update_datetime]
+    batch-boundary: SINGLE_BATCH
+    target-partitioning:
+      column: epoch
+      partition-prefix: drep_dist_p
+
+  validation:
+    key: [drep_hash, drep_type, epoch]
+    bounds: [epoch]
+    required-columns: [drep_hash, drep_type, epoch]

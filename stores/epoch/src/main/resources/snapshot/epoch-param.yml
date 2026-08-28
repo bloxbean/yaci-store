@@ -1,0 +1,43 @@
+snapshot-table:
+  id: epoch-param
+  spec-version: 1
+  module: epoch
+  kind: DERIVED_DATA
+  restore: IMPORT
+
+  source:
+    exporter-id: epoch_param
+    ducklake-relation: epoch_param
+    partition:
+      strategy: EPOCH
+      column: block_time
+
+  consistency:
+    completed-epoch:
+      type: MAX_EPOCH_OFFSET
+      column: epoch
+      offset: -1
+    cutoff:
+      type: EPOCH_LTE
+      column: epoch
+    coverage:
+      type: EPOCH_GTE_COMPLETED
+      column: epoch
+
+  import:
+    target-table: epoch_param
+    mode: MAPPED
+    columns:
+      params:
+        source: params
+        converter: "varchar-to-jsonb"
+      block_time:
+        source: block_time
+        converter: "timestamp-to-epoch-seconds"
+    use-target-defaults: [update_datetime]
+    batch-boundary: SINGLE_BATCH
+
+  validation:
+    key: [epoch]
+    bounds: [epoch, slot]
+    required-columns: [epoch]

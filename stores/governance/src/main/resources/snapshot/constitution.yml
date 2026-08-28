@@ -1,0 +1,32 @@
+snapshot-table:
+  id: constitution
+  spec-version: 1
+  module: governance
+  kind: DERIVED_DATA
+  restore: IMPORT
+
+  source:
+    exporter-id: constitution
+    ducklake-relation: constitution
+    partition:
+      strategy: EPOCH
+      column: block_time
+
+  consistency:
+    cutoff:
+      type: EPOCH_LTE
+      column: epoch
+
+  import:
+    target-table: constitution
+    mode: MAPPED
+    columns:
+      active_epoch:
+        source: epoch
+    use-target-defaults: [update_datetime]
+    batch-boundary: SINGLE_BATCH
+
+  validation:
+    key: [active_epoch]
+    bounds: [slot]
+    required-columns: [active_epoch]

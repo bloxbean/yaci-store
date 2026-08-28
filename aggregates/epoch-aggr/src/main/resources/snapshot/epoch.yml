@@ -1,0 +1,38 @@
+snapshot-table:
+  id: epoch
+  spec-version: 1
+  module: epoch-aggr
+  kind: DERIVED_DATA
+  restore: IMPORT
+
+  source:
+    exporter-id: epoch
+    ducklake-relation: epoch
+    partition:
+      strategy: EPOCH
+      column: block_time
+
+  consistency:
+    completed-epoch:
+      type: MAX_EPOCH
+      column: epoch
+    cutoff:
+      type: EPOCH_LTE
+      column: epoch
+    coverage:
+      type: EPOCH_GTE_COMPLETED
+      column: epoch
+
+  import:
+    target-table: epoch
+    mode: MAPPED
+    columns:
+      number:
+        source: epoch
+    use-target-defaults: [create_datetime, update_datetime]
+    batch-boundary: SINGLE_BATCH
+
+  validation:
+    key: [number]
+    bounds: [max_slot]
+    required-columns: [number]

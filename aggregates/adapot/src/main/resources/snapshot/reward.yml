@@ -1,0 +1,40 @@
+snapshot-table:
+  id: reward
+  spec-version: 1
+  module: adapot
+  kind: DERIVED_DATA
+  restore: IMPORT
+
+  source:
+    exporter-id: reward
+    ducklake-relation: reward
+    partition:
+      strategy: EPOCH
+      column: block_time
+
+  consistency:
+    completed-epoch:
+      type: MAX_EPOCH_OFFSET
+      column: epoch
+      offset: 2
+    cutoff:
+      type: EPOCH_LTE_OFFSET
+      column: epoch
+      offset: 2
+
+  import:
+    target-table: reward
+    mode: MAPPED
+    columns:
+      earned_epoch:
+        source: epoch
+    use-target-defaults: [update_datetime]
+    batch-boundary: SINGLE_BATCH
+    target-partitioning:
+      column: spendable_epoch
+      partition-prefix: reward_p
+
+  validation:
+    key: [address, earned_epoch, type, pool_id, spendable_epoch]
+    bounds: [epoch, spendable_epoch]
+    required-columns: [address, earned_epoch, type, pool_id, spendable_epoch]

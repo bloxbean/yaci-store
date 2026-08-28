@@ -1,0 +1,36 @@
+snapshot-table:
+  id: gov-epoch-activity
+  spec-version: 1
+  module: governance-aggr
+  kind: DERIVED_DATA
+  restore: IMPORT
+
+  source:
+    exporter-id: gov_epoch_activity
+    ducklake-relation: gov_epoch_activity
+    partition:
+      strategy: EPOCH
+      column: block_time
+
+  consistency:
+    completed-epoch:
+      type: MAX_EPOCH_OFFSET
+      column: epoch
+      offset: -1
+    cutoff:
+      type: EPOCH_LTE
+      column: epoch
+    coverage:
+      type: EPOCH_GTE_COMPLETED
+      column: epoch
+
+  import:
+    target-table: gov_epoch_activity
+    mode: MAPPED
+    use-target-defaults: [update_datetime]
+    batch-boundary: SINGLE_BATCH
+
+  validation:
+    key: [epoch]
+    bounds: [epoch]
+    required-columns: [epoch]

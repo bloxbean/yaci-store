@@ -28,6 +28,9 @@ parallel-collector="com.pivovarit:parallel-collectors:3.0.0"
 apache-commons-pool="org.apache.commons:commons-pool2:2.12.0"
 
 duckdb-jdbc="org.duckdb:duckdb_jdbc:1.4.4.0"
+# Snapshot tooling reads DuckLake catalogs written by newer DuckDB releases (storage version 68+).
+# Kept separate from libs.duckdb-jdbc so analytics-store behaviour is unchanged.
+duckdb-jdbc-snapshot="org.duckdb:duckdb_jdbc:1.5.5.0"
 
 vavr="io.vavr:vavr:0.10.5"
 commons-csv="org.apache.commons:commons-csv:1.14.0"

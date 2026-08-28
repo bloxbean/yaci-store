@@ -1,0 +1,29 @@
+snapshot-table:
+  id: committee
+  spec-version: 1
+  module: governance
+  kind: DERIVED_DATA
+  restore: IMPORT
+
+  source:
+    exporter-id: committee
+    ducklake-relation: committee
+    partition:
+      strategy: EPOCH
+      column: block_time
+
+  consistency:
+    cutoff:
+      type: EPOCH_LTE
+      column: epoch
+
+  import:
+    target-table: committee
+    mode: MAPPED
+    use-target-defaults: [update_datetime]
+    batch-boundary: SINGLE_BATCH
+
+  validation:
+    key: [epoch]
+    bounds: [epoch, slot]
+    required-columns: [epoch]
