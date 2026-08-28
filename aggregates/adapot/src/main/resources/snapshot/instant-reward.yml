@@ -10,7 +10,7 @@ snapshot-table:
     ducklake-relation: instant_reward
     partition:
       strategy: EPOCH
-      column: block_time
+      column: epoch
 
   consistency:
     cutoff:

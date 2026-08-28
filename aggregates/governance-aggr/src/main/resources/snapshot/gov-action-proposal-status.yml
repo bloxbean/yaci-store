@@ -10,7 +10,7 @@ snapshot-table:
     ducklake-relation: gov_action_proposal_status
     partition:
       strategy: EPOCH
-      column: block_time
+      column: epoch
 
   consistency:
     cutoff:

@@ -36,6 +36,7 @@ public class DuckLakeCatalog implements AutoCloseable {
 
     private final Connection conn;
     private final Path dataDir;
+    private final Map<String, String> relationPrefixes = new java.util.HashMap<>();
     private final boolean temporaryCatalogCopy;
     private final Path catalogPath;
 
@@ -111,6 +112,66 @@ public class DuckLakeCatalog implements AutoCloseable {
                         + " AND (end_snapshot IS NULL OR end_snapshot > " + snapshotId + ")", 0);
     }
 
+
+    /**
+     * DuckLake composes a file's location from three relative segments: the data path, the schema's
+     * path and the table's path. Resolving them here keeps every path in this class relative to the
+     * analytics data directory, which is exactly what the archive stores.
+     */
+    String relationPrefix(String relation, long snapshotId) throws SQLException {
+        String cached = relationPrefixes.get(relation);
+        if (cached != null) {
+            return cached;
+        }
+        String sql = "SELECT s.path, s.path_is_relative, t.path, t.path_is_relative"
+                + " FROM " + CAT + ".ducklake_table t"
+                + " JOIN " + CAT + ".ducklake_schema s ON s.schema_id = t.schema_id"
+                + " WHERE t.table_name = " + Identifiers.literal(relation)
+                + "   AND t.begin_snapshot <= " + snapshotId
+                + "   AND (t.end_snapshot IS NULL OR t.end_snapshot > " + snapshotId + ")"
+                + "   AND s.begin_snapshot <= " + snapshotId
+                + "   AND (s.end_snapshot IS NULL OR s.end_snapshot > " + snapshotId + ")"
+                + " LIMIT 1";
+        String prefix = "";
+        try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery(sql)) {
+            if (rs.next()) {
+                String schemaPath = rs.getString(1);
+                boolean schemaRelative = rs.getBoolean(2);
+                String tablePath = rs.getString(3);
+                boolean tableRelative = rs.getBoolean(4);
+                StringBuilder sb = new StringBuilder();
+                if (schemaRelative && schemaPath != null) {
+                    sb.append(schemaPath);
+                }
+                if (tablePath != null) {
+                    if (tableRelative) {
+                        sb.append(tablePath);
+                    } else {
+                        sb.setLength(0);
+                        sb.append(relativize(tablePath));
+                        if (sb.length() > 0 && sb.charAt(sb.length() - 1) != '/') {
+                            sb.append('/');
+                        }
+                    }
+                }
+                prefix = sb.toString();
+            }
+        }
+        relationPrefixes.put(relation, prefix);
+        return prefix;
+    }
+
+    /** Compose one file's path, relative to the analytics data directory. */
+    private String filePath(String prefix, String path, boolean relative) {
+        return relative ? prefix + path : relativize(path);
+    }
+
+    private String relativize(String absolute) {
+        Path p = Path.of(absolute);
+        Path base = dataDir.toAbsolutePath();
+        return p.startsWith(base) ? base.relativize(p).toString() : absolute;
+    }
+
     public List<String> relations(long snapshotId) throws SQLException {
         List<String> out = new ArrayList<>();
         try (Statement st = conn.createStatement();
@@ -158,12 +219,11 @@ public class DuckLakeCatalog implements AutoCloseable {
                 + "   AND f.begin_snapshot <= " + snapshotId
                 + "   AND (f.end_snapshot IS NULL OR f.end_snapshot > " + snapshotId + ")"
                 + " ORDER BY f.path";
+        String prefix = relationPrefix(relation, snapshotId);
         try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery(sql)) {
             while (rs.next()) {
-                String path = rs.getString(1);
-                boolean relative = rs.getBoolean(2);
-                String rel = relative ? path : dataDir.toAbsolutePath().relativize(Path.of(path)).toString();
-                out.add(new DuckLakeFile(rel, rs.getLong(3), rs.getLong(4)));
+                out.add(new DuckLakeFile(filePath(prefix, rs.getString(1), rs.getBoolean(2)),
+                        rs.getLong(3), rs.getLong(4)));
             }
         }
         return out;
@@ -259,12 +319,11 @@ public class DuckLakeCatalog implements AutoCloseable {
                 + "   AND TRY_CAST(s.min_value AS HUGEINT) <= " + max
                 + "   AND TRY_CAST(s.max_value AS HUGEINT) >= " + min
                 + " ORDER BY f.path";
+        String prefix = relationPrefix(relation, snapshotId);
         try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery(sql)) {
             while (rs.next()) {
-                String path = rs.getString(1);
-                boolean relative = rs.getBoolean(2);
-                String rel = relative ? path : dataDir.toAbsolutePath().relativize(Path.of(path)).toString();
-                out.add(new DuckLakeFile(rel, rs.getLong(3), rs.getLong(4)));
+                out.add(new DuckLakeFile(filePath(prefix, rs.getString(1), rs.getBoolean(2)),
+                        rs.getLong(3), rs.getLong(4)));
             }
         }
         return out;
@@ -308,11 +367,10 @@ public class DuckLakeCatalog implements AutoCloseable {
                 + "   AND f.begin_snapshot <= " + snapshotId
                 + "   AND (f.end_snapshot IS NULL OR f.end_snapshot > " + snapshotId + ")"
                 + "   AND TRY_CAST(s.min_value AS HUGEINT) > " + cut;
+        String prefix = relationPrefix(relation, snapshotId);
         try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery(sql)) {
             while (rs.next()) {
-                String path = rs.getString(1);
-                boolean relative = rs.getBoolean(2);
-                out.add(relative ? path : dataDir.toAbsolutePath().relativize(Path.of(path)).toString());
+                out.add(filePath(prefix, rs.getString(1), rs.getBoolean(2)));
             }
         }
         return out;
@@ -342,12 +400,10 @@ public class DuckLakeCatalog implements AutoCloseable {
                 + "   AND (f.end_snapshot IS NULL OR f.end_snapshot > " + snapshotId + ")"
                 + "   AND TRY_CAST(s.max_value AS HUGEINT) <= " + cut
                 + "   AND s.null_count = 0";
+        String prefix = relationPrefix(relation, snapshotId);
         try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery(sql)) {
             while (rs.next()) {
-                String path = rs.getString(1);
-                boolean relative = rs.getBoolean(2);
-                out.put(relative ? path : dataDir.toAbsolutePath().relativize(Path.of(path)).toString(),
-                        rs.getLong(3));
+                out.put(filePath(prefix, rs.getString(1), rs.getBoolean(2)), rs.getLong(3));
             }
         }
         return out;

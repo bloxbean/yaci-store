@@ -64,9 +64,16 @@ public class ColumnPlanner {
         for (String d : imp.useTargetDefaults()) {
             if (!remainingTarget.remove(d)) {
                 problems.add("use-target-defaults lists '" + d + "' which the target does not have");
-            } else {
-                defaulted.add(d);
+                continue;
             }
+            // Leaving a NOT NULL column without a default to "its default" would fail at insert time,
+            // one batch into a multi-hour load. Catch it while planning instead.
+            boolean nullable = Boolean.TRUE.equals(target.nullable().get(d));
+            if (!nullable && !target.defaults().containsKey(d)) {
+                problems.add("use-target-defaults lists '" + d + "' but that column is NOT NULL and has "
+                        + "no default; it must be mapped or given a constant");
+            }
+            defaulted.add(d);
         }
 
         List<String> targetColumns = new ArrayList<>();
