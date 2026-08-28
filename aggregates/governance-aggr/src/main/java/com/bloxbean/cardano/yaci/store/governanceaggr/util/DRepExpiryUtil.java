@@ -259,6 +259,148 @@ public class DRepExpiryUtil {
     }
 
     /**
+     * Replays the ledger's stored {@code drepExpiry} state up to the evaluated epoch.
+     *
+     * <p>Proposal transactions fold pending dormant epochs into the stored value. DRep
+     * registration, update, and vote events recompute the stored value from the current
+     * protocol parameters and pending dormant counter.</p>
+     */
+    public static int calculateDRepActiveUntil(
+            DRepRegistrationInfo registrationInfo,
+            List<DRepInteractionInfo> dRepInteractions,
+            List<ProposalSubmissionInfo> proposalSubmissions,
+            Set<Integer> nonDormantProposalEpochs,
+            int eraFirstEpoch,
+            int evaluatedEpoch
+    ) {
+        int activeUntil = 0;
+        int dormantCounter = 0;
+        boolean registered = false;
+
+        List<ExpiryEvent> events = new java.util.ArrayList<>();
+        events.add(new ExpiryEvent(
+                EventType.REGISTRATION,
+                registrationInfo.epoch(),
+                registrationInfo.slot(),
+                registrationInfo.txIndex(),
+                registrationInfo.certIndex(),
+                registrationInfo.dRepActivity(),
+                registrationInfo.protocolMajorVersion()));
+
+        dRepInteractions.stream()
+                .filter(interaction -> isAfterOrSamePosition(
+                        interaction.epoch(),
+                        interaction.slot(),
+                        interaction.txIndex(),
+                        interaction.eventIndex(),
+                        registrationInfo.epoch(),
+                        registrationInfo.slot(),
+                        registrationInfo.txIndex(),
+                        registrationInfo.certIndex()))
+                .filter(interaction -> interaction.epoch() <= evaluatedEpoch)
+                .forEach(interaction -> events.add(new ExpiryEvent(
+                        EventType.INTERACTION,
+                        interaction.epoch(),
+                        interaction.slot(),
+                        interaction.txIndex(),
+                        interaction.eventIndex(),
+                        interaction.dRepActivity(),
+                        0)));
+
+        proposalSubmissions.stream()
+                .filter(proposal -> proposal.epoch() >= eraFirstEpoch && proposal.epoch() <= evaluatedEpoch)
+                .forEach(proposal -> events.add(new ExpiryEvent(
+                        EventType.PROPOSAL,
+                        proposal.epoch(),
+                        proposal.slot(),
+                        proposal.txIndex(),
+                        proposal.index(),
+                        0,
+                        0)));
+
+        events.sort(Comparator
+                .comparingInt(ExpiryEvent::epoch)
+                .thenComparingLong(ExpiryEvent::slot)
+                .thenComparingInt(ExpiryEvent::txIndex)
+                .thenComparingInt(ExpiryEvent::priority)
+                .thenComparingInt(ExpiryEvent::eventIndex));
+
+        int eventIndex = 0;
+        for (int epoch = eraFirstEpoch; epoch <= evaluatedEpoch; epoch++) {
+            // Ledger updates the dormant counter at the epoch boundary before in-epoch events.
+            if (!nonDormantProposalEpochs.contains(epoch)) {
+                dormantCounter++;
+            }
+
+            while (eventIndex < events.size() && events.get(eventIndex).epoch() == epoch) {
+                ExpiryEvent event = events.get(eventIndex);
+                switch (event.type()) {
+                    case PROPOSAL -> {
+                        if (registered && activeUntil + dormantCounter >= epoch) {
+                            activeUntil += dormantCounter;
+                        }
+                        dormantCounter = 0;
+                    }
+                    case REGISTRATION -> {
+                        registered = true;
+                        if (event.protocolMajorVersion() == 9) {
+                            activeUntil = epoch + event.dRepActivity();
+                        } else {
+                            activeUntil = epoch + event.dRepActivity() - dormantCounter;
+                        }
+                    }
+                    case INTERACTION -> {
+                        if (registered) {
+                            activeUntil = epoch + event.dRepActivity() - dormantCounter;
+                        }
+                    }
+                }
+                eventIndex++;
+            }
+        }
+
+        return activeUntil;
+    }
+
+    private static boolean isAfterOrSamePosition(int epoch, long slot, int txIndex, int eventIndex,
+                                                 int otherEpoch, long otherSlot, int otherTxIndex, int otherEventIndex) {
+        if (epoch != otherEpoch) {
+            return epoch > otherEpoch;
+        }
+        if (slot != otherSlot) {
+            return slot > otherSlot;
+        }
+        if (txIndex != otherTxIndex) {
+            return txIndex > otherTxIndex;
+        }
+        return eventIndex >= otherEventIndex;
+    }
+
+    private enum EventType {
+        PROPOSAL,
+        REGISTRATION,
+        INTERACTION
+    }
+
+    private record ExpiryEvent(
+            EventType type,
+            int epoch,
+            long slot,
+            int txIndex,
+            int eventIndex,
+            int dRepActivity,
+            int protocolMajorVersion
+    ) {
+        int priority() {
+            return switch (type) {
+                case PROPOSAL -> 0;
+                case REGISTRATION -> 1;
+                case INTERACTION -> 2;
+            };
+        }
+    }
+
+    /**
      * Finds the last dormant period from a set of dormant epochs.
      * A dormant period is a continuous sequence of dormant epochs.
      *
@@ -308,7 +450,11 @@ public class DRepExpiryUtil {
      * @param dRepActivity         The {@code dRepActivity} value from protocol parameters at the time of registration.
      * @param protocolMajorVersion The major protocol version at the time of registration.
      */
-    public record DRepRegistrationInfo(long slot, int epoch, int dRepActivity, int protocolMajorVersion) {
+    public record DRepRegistrationInfo(long slot, int epoch, int dRepActivity, int protocolMajorVersion,
+                                       int txIndex, int certIndex) {
+        public DRepRegistrationInfo(long slot, int epoch, int dRepActivity, int protocolMajorVersion) {
+            this(slot, epoch, dRepActivity, protocolMajorVersion, 0, 0);
+        }
     }
 
     /**
@@ -318,7 +464,10 @@ public class DRepExpiryUtil {
      * @param epoch        The epoch in which the interaction occurred.
      * @param dRepActivity The {@code dRepActivity} value from protocol parameters at the time of registration.
      */
-    public record DRepInteractionInfo(int epoch, int dRepActivity) {
+    public record DRepInteractionInfo(int epoch, int dRepActivity, long slot, int txIndex, int eventIndex) {
+        public DRepInteractionInfo(int epoch, int dRepActivity) {
+            this(epoch, dRepActivity, 0, 0, 0);
+        }
     }
 
     /**
@@ -328,6 +477,9 @@ public class DRepExpiryUtil {
      * @param epoch             The epoch in which the proposal was submitted.
      * @param govActionLifeTime The {@code govActionLifeTime} value from protocol parameters, the number of epochs the proposal is considered active.
      */
-    public record ProposalSubmissionInfo(long slot, int epoch, int govActionLifeTime) {
+    public record ProposalSubmissionInfo(long slot, int epoch, int govActionLifeTime, int txIndex, int index) {
+        public ProposalSubmissionInfo(long slot, int epoch, int govActionLifeTime) {
+            this(slot, epoch, govActionLifeTime, 0, 0);
+        }
     }
 }
