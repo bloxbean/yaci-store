@@ -252,7 +252,8 @@ class ArchiveTest {
                                                List<SnapshotManifest.PartManifest> parts) {
         SnapshotManifest.TableManifest table = new SnapshotManifest.TableManifest(
                 "widget", 1, "d", "test", "CHAIN_DATA", "IMPORT", null, "widget", "widget", "widget",
-                "DIRECT", "NONE", 1, List.of(), entries.size(), List.of("id"), "fp", Map.of(), entries);
+                "DIRECT", "NONE", 1, List.of(), entries.size(), List.of("id"), "fp", Map.of(),
+                Map.of(), entries);
         return new SnapshotManifest(1, "sid", "now", "test", "0", "1", "duck", "1", null, null,
                 List.of(), Map.of(), null, null, List.of(table), parts, List.of());
     }

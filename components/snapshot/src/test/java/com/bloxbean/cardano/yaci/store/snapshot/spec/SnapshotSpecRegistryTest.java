@@ -126,7 +126,7 @@ class SnapshotSpecRegistryTest {
                 null, null,
                 new SnapshotTableSpec.Import(id, ImportMode.DIRECT, Map.of(), List.of(), List.of(),
                         null, 1, List.of(dependsOn), BatchBoundary.FILE_SET, 0, null, null),
-                new SnapshotTableSpec.Validation(List.of("k"), List.of(), List.of()),
+                new SnapshotTableSpec.Validation(List.of("k"), List.of(), List.of(), List.of()),
                 Map.of(), "digest", "test");
     }
 

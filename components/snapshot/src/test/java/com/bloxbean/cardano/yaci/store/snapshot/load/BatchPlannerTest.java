@@ -23,7 +23,7 @@ class BatchPlannerTest {
                 null, null,
                 new SnapshotTableSpec.Import("widget", ImportMode.DIRECT, Map.of(), List.of(), List.of(),
                         null, 1, List.of(), boundary, batchSize, null, null),
-                new SnapshotTableSpec.Validation(List.of("id"), List.of(), List.of()),
+                new SnapshotTableSpec.Validation(List.of("id"), List.of(), List.of(), List.of()),
                 Map.of(), "digest", "test");
     }
 
@@ -92,7 +92,7 @@ class BatchPlannerTest {
                 RestoreMode.IMPORT, null, null, null,
                 new SnapshotTableSpec.Import("widget", ImportMode.DIRECT, Map.of(), List.of(), List.of(),
                         null, 2, List.of(), BatchBoundary.FILE_SET, 4, null, null),
-                new SnapshotTableSpec.Validation(List.of("id"), List.of(), List.of()),
+                new SnapshotTableSpec.Validation(List.of("id"), List.of(), List.of(), List.of()),
                 Map.of(), "digest", "test");
         assertThat(ImportBatch.of("sid", v2, f, null).batchId()).isNotEqualTo(base);
     }

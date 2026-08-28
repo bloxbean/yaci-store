@@ -58,7 +58,16 @@ public class ExportPlanner {
         long rowCount;
         boolean exact;
 
-        if (cutoff.type() == CutoffType.NONE) {
+        List<String> sourceKey = spec.validation().sourceKey();
+        if (!sourceKey.isEmpty()) {
+            // A transform that regroups rows produces fewer rows than it reads, so the count the
+            // importer must reproduce is the number of distinct source keys, not the file row count.
+            Set<String> beyond = cutoff.type() == CutoffType.NONE ? Set.of()
+                    : catalog.filePathsEntirelyAbove(relation, cutoff.column(), cutValue, snapshotId);
+            files = allFiles.stream().filter(f -> !beyond.contains(f.relativePath())).toList();
+            rowCount = files.isEmpty() ? 0 : countDistinct(files, sourceKey, cutoff, cutValue);
+            exact = true;
+        } else if (cutoff.type() == CutoffType.NONE) {
             files = allFiles;
             rowCount = allFiles.stream().mapToLong(DuckLakeFile::rowCount).sum();
             exact = true;
@@ -101,6 +110,18 @@ public class ExportPlanner {
             case EPOCH_LTE -> completedEpoch;
             case EPOCH_LTE_OFFSET -> completedEpoch - cutoff.offset();
         };
+    }
+
+    private long countDistinct(List<DuckLakeFile> files, List<String> keyColumns,
+                               SnapshotTableSpec.CutoffRule cutoff, long cut) throws SQLException {
+        String key = keyColumns.stream().map(Identifiers::quote).reduce((a, b) -> a + ", " + b).orElseThrow();
+        String where = cutoff.type() == CutoffType.NONE ? ""
+                : " WHERE " + Identifiers.quote(cutoff.column()) + " <= " + cut;
+        String sql = "SELECT count(*) FROM (SELECT DISTINCT " + key + " FROM read_parquet("
+                + catalog.parquetList(files) + ")" + where + ")";
+        try (Statement st = catalog.connection().createStatement(); ResultSet rs = st.executeQuery(sql)) {
+            return rs.next() ? rs.getLong(1) : 0;
+        }
     }
 
     private long countRows(List<DuckLakeFile> files, String column, long cut) throws SQLException {

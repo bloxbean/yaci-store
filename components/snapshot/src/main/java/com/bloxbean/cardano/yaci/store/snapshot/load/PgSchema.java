@@ -118,6 +118,9 @@ public class PgSchema {
     /**
      * Stable fingerprint of the whole schema shape. Import requires this to equal the value recorded
      * at export time, so a snapshot cannot be loaded into a schema it was not built for.
+     *
+     * <p>The importer's own journal tables are excluded: they appear as soon as a first import
+     * starts, and including them would make every resumed import fail its own compatibility check.
      */
     public String fingerprint() throws SQLException {
         StringBuilder sb = new StringBuilder();
@@ -129,6 +132,7 @@ public class PgSchema {
                 WHERE n.nspname = ?
                   AND c.relkind IN ('r','p')
                   AND c.relname <> 'flyway_schema_history'
+                  AND c.relname NOT LIKE '\\_yaci\\_snapshot\\_import%'
                   AND NOT EXISTS (SELECT 1 FROM pg_inherits i WHERE i.inhrelid = c.oid)
                 ORDER BY c.relname, a.attname
                 """;

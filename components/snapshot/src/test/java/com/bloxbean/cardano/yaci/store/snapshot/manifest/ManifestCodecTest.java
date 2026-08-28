@@ -24,7 +24,7 @@ class ManifestCodecTest {
         SnapshotManifest.TableManifest table = new SnapshotManifest.TableManifest(
                 "block", 1, "specdigest", "blocks", "CHAIN_DATA", "IMPORT", null, "block", "block",
                 "block", "MAPPED", "SLOT_LTE(slot)", 1, List.of(), 10, List.of("hash"), "colfp",
-                bounds, List.of(file));
+                Map.of("hash", "varchar"), bounds, List.of(file));
         SnapshotManifest.PartManifest part =
                 new SnapshotManifest.PartManifest(1, "snap.part-00001.zip", 200, "def", 1, List.of("block"));
         return new SnapshotManifest(1, "sid", "2026-01-01T00:00:00Z", "test", "3.0.0", "1",

@@ -55,6 +55,14 @@ public class SnapshotValidator {
             if (spec == null || spec.restore() != RestoreMode.IMPORT) {
                 continue;
             }
+            if (!pgs.tableExists(t.targetTable())) {
+                // A module the target schema does not enable. Only a problem if the snapshot
+                // actually carries rows for it.
+                b.check("rows:" + t.targetTable(), t.rowCount() == 0,
+                        "table not present in the target schema, manifest declares " + t.rowCount()
+                                + " row(s)");
+                continue;
+            }
             long actual = count(pg, schema, t.targetTable());
             b.check("rows:" + t.targetTable(), actual == t.rowCount(),
                     actual + " rows (manifest declares " + t.rowCount() + ")");
@@ -152,9 +160,10 @@ public class SnapshotValidator {
         b.check("block-tail-chain", blockChainBreaks == 0,
                 blockChainBreaks + " prev-hash discontinuity(ies) in the retained block tail");
 
+        PgSchema pgs = new PgSchema(pg, schema);
         for (SnapshotTableSpec spec : registry.importedTables()) {
             SnapshotTableSpec.CutoffRule cutoff = spec.consistency().cutoff();
-            if (cutoff.type() == CutoffType.NONE) {
+            if (cutoff.type() == CutoffType.NONE || !pgs.tableExists(spec.targetTable())) {
                 continue;
             }
             long limit = switch (cutoff.type()) {

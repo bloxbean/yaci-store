@@ -244,7 +244,11 @@ public class SnapshotImporter {
 
         List<SnapshotTableSpec> ordered = registry.importedTables();
         Map<String, List<SnapshotManifest.FileEntry>> filesBySpec = new HashMap<>();
-        manifest.tables().forEach(t -> filesBySpec.put(t.specId(), t.files()));
+        Map<String, Map<String, String>> declaredColumns = new HashMap<>();
+        manifest.tables().forEach(t -> {
+            filesBySpec.put(t.specId(), t.files());
+            declaredColumns.put(t.specId(), t.sourceColumns());
+        });
 
         AtomicLong planned = new AtomicLong();
         AtomicLong skipped = new AtomicLong();
@@ -286,7 +290,8 @@ public class SnapshotImporter {
                                 }
                                 String select = loader.sourceSelect(spec, batch,
                                         manifest.point().slot(), manifest.point().epoch(), dependencyFiles);
-                                ColumnPlan plan = loader.planFor(session, spec, select, target);
+                                ColumnPlan plan = loader.planFor(session, spec, select, target,
+                                        declaredColumns.get(spec.id()));
                                 long n = loader.loadBatch(session, batch, plan, select,
                                         manifest.snapshotId(), options.schema());
                                 rows.addAndGet(n);
