@@ -307,6 +307,9 @@ public class SnapshotImporter {
                             manifest.table(spec.id()).sourceColumns());
                 } catch (ColumnPlanner.MappingException e) {
                     problems.add(e.getMessage());
+                } catch (SQLException e) {
+                    problems.add("transform for '" + spec.id() + "' could not be prepared: "
+                            + DuckPgSession.redact(e.getMessage(), options.password()));
                 }
             }
         }

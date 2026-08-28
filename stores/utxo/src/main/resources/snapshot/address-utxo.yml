@@ -28,7 +28,7 @@ snapshot-table:
     target-table: address_utxo
     mode: SQL
     select-resource: classpath:/snapshot/sql/address_utxo_v1.sql
-    transform-version: 1
+    transform-version: 2
     dependencies: [block]
     use-target-defaults: [owner_addr_full, update_datetime]
     batch-boundary: WHOLE_PARTITION

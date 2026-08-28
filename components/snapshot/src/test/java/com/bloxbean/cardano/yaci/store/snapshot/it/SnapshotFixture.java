@@ -288,9 +288,15 @@ final class SnapshotFixture {
             st.execute("COPY (SELECT"
                     + " printf('%064x', n + 50000) AS tx_hash,"
                     + " CAST(0 AS SMALLINT) AS output_index,"
-                    + " asset AS asset_unit,"
-                    + " CASE WHEN asset = 'lovelace' THEN NULL ELSE printf('%056x', n) END AS policy_id,"
-                    + " CASE WHEN asset = 'lovelace' THEN 'lovelace' ELSE 'TOKEN' END AS asset_name,"
+                    + " CASE asset WHEN 'lovelace' THEN 'lovelace'"
+                    + "             WHEN 'tok'      THEN printf('%056x', 7) || '746f6b'"
+                    + "             WHEN 'longname' THEN printf('%056x', 7) || '6c6f6e676e616d65'"
+                    + "             ELSE                 printf('%056x', 7) END AS asset_unit,"
+                    + " CASE WHEN asset = 'lovelace' THEN NULL ELSE printf('%056x', 7) END AS policy_id,"
+                    + " CASE asset WHEN 'lovelace' THEN 'lovelace'"
+                    + "            WHEN 'tok'      THEN 'tok'"
+                    + "            WHEN 'longname' THEN 'longname'"
+                    + "            ELSE NULL END AS asset_name,"
                     + " CAST(CASE WHEN asset = 'lovelace' THEN 1000000 + n ELSE 5 END AS DECIMAL(38,0)) AS quantity,"
                     + " 'addr_test1' || printf('%040x', n) AS owner_addr,"
                     + " 'stake_test1' || printf('%040x', n) AS owner_stake_addr,"
@@ -306,8 +312,11 @@ final class SnapshotFixture {
                     + " printf('%064x', n + 1) AS block_hash,"
                     + " to_timestamp(1700000000 + n * 20) AS block_time,"
                     + " CAST(to_timestamp(1700000000 + n * 20) AS DATE) AS date"
+                    // 'tok' is a named asset; the two 'pol...' units share a policy and differ in
+                    // asset-name length, and one has an empty name, which is what the analytics view
+                    // turns into NULL.
                     + " FROM range(" + from + ", " + to + ") t(n),"
-                    + "      (SELECT unnest(['lovelace', 'tok']) AS asset))"
+                    + "      (SELECT unnest(['lovelace', 'tok', 'longname', 'empty']) AS asset))"
                     + " TO '" + target + "' (FORMAT PARQUET)");
         }
     }

@@ -95,9 +95,20 @@ class SnapshotImportIT {
             // SQL mode: regrouped one row per (tx_hash, output_index), rebuilt amounts, joined block.
             assertThat(count(conn, "address_utxo")).isEqualTo(SnapshotFixture.POINT_BLOCK + 1);
             assertThat(scalarLong(conn, "SELECT jsonb_array_length(amounts) FROM " + qt("address_utxo")
-                    + " WHERE slot = 0")).isEqualTo(2);
+                    + " WHERE slot = 0")).isEqualTo(4);
             assertThat(scalarString(conn, "SELECT amounts->0->>'unit' FROM " + qt("address_utxo")
                     + " WHERE slot = 0")).isEqualTo("lovelace");
+            // Canonical CBOR order after lovelace: same policy, shorter asset name first.
+            assertThat(scalarString(conn, "SELECT string_agg(e->>'asset_name', ',' ORDER BY o) FROM "
+                    + qt("address_utxo") + " u, jsonb_array_elements(u.amounts) WITH ORDINALITY t(e, o)"
+                    + " WHERE u.slot = 0")).isEqualTo("lovelace,,tok,longname");
+            // The analytics view maps an empty asset name to NULL; the transform restores the empty
+            // string the operational writer stores.
+            assertThat(scalarLong(conn, "SELECT count(*) FROM " + qt("address_utxo") + " u,"
+                    + " jsonb_array_elements(u.amounts) e WHERE e->>'asset_name' = ''")).isPositive();
+            assertThat(scalarLong(conn, "SELECT count(*) FROM " + qt("address_utxo") + " u,"
+                    + " jsonb_array_elements(u.amounts) e"
+                    + " WHERE e->>'unit' <> 'lovelace' AND e->>'asset_name' IS NULL")).isZero();
             assertThat(scalarLong(conn, "SELECT lovelace_amount FROM " + qt("address_utxo")
                     + " WHERE slot = 0")).isEqualTo(1000000L);
             assertThat(scalarLong(conn, "SELECT block FROM " + qt("address_utxo")
