@@ -1,0 +1,432 @@
+import { Callout } from 'nextra/components'
+
+# Snapshot Export and Import
+
+Bootstrap a Yaci Store PostgreSQL database from a packaged Parquet snapshot instead of syncing the
+chain from genesis.
+
+## Overview
+
+The analytics store already exports most operational data to Parquet managed by DuckLake. The
+snapshot commands turn that output into a versioned, verifiable restore format:
+
+```text
+PostgreSQL -> analytics exporters -> immutable DuckLake files
+                                       |
+                          epoch-aligned snapshot manifest
+                                       |
+                          independent ZIP parts + checksums
+                                       |
+                                       v
+empty migrated PostgreSQL <- transform/load <- extracted Parquet
+          |
+          v
+control state + validation -> resume Yaci Store
+          |
+          v
+manual `apply-indexes`
+```
+
+A snapshot restores to **one Cardano point**: the last block of the newest epoch that every required
+table fully supports. It is deliberately *not* the newest exported block, because daily and epoch
+exports advance independently and the newest block can be ahead of the derived state that must
+accompany it.
+
+<Callout type="warning">
+A snapshot is not a database backup. It carries what the analytics exporters produce, and every
+field it cannot carry is declared in the manifest. Read [Known limitations](#known-limitations)
+before treating a restored database as equivalent to a synced one.
+</Callout>
+
+## Commands
+
+| Command | Purpose |
+|---|---|
+| `snapshot inspect` | Read-only: candidate consistency point, coverage, limitations, blockers |
+| `snapshot export` | Package the pinned DuckLake file set into independent ZIP parts |
+| `snapshot verify` | Verify a manifest and every part, without touching a database |
+| `snapshot import` | Load a verified snapshot into an empty, migrated schema |
+| `snapshot import-status` | Show the state of any import recorded in the configured schema |
+| `snapshot validate` | Run the offline validation levels against the imported database |
+
+All of them use the datasource and schema from the same Spring configuration the admin CLI already
+uses. Passwords are never accepted as command arguments and never appear in a manifest, report or
+log.
+
+## Producing a snapshot
+
+### 1. Inspect
+
+```bash
+snapshot inspect --data-dir ./data/analytics --work-dir ./.snapshot-work --verbose
+```
+
+Reports the consistency point that would be selected, which tables constrained it, how far it sits
+behind the newest exported block, the estimated archive size, every declared limitation, and any
+blocker. It writes nothing.
+
+Example output:
+
+```text
+Consistency point: epoch 308, block 5091913, slot 131846389
+  Block hash     : 8082778ebea46f3caaa814b3628de17a69aa32e5b7366f419412bec93db6281e
+  Newest export  : block 5095924 (the point is 4011 blocks behind it)
+  Limited by     : adapot, address-utxo, block, drep-dist, epoch, epoch-param, epoch-stake, ...
+Coverage: 44 table(s), 22429 file(s), 104297087 row(s), about 7.2 GiB
+```
+
+### 2. Export
+
+```bash
+snapshot export --data-dir ./data/analytics \
+                --output /path/to/output \
+                --work-dir ./.snapshot-work \
+                --part-size 8GiB
+```
+
+Export packages files an exporter has already written; it never reruns or replaces an analytics
+exporter. It pins one DuckLake catalog snapshot, resolves the exact immutable file set, streams it
+into parts, re-reads and checksums every part, and publishes the manifest last with an atomic rename.
+
+| Option | Default | Purpose |
+|---|---|---|
+| `--part-size` | `8GiB` | Target size per ZIP part. A Parquet file is never split. |
+| `--min-confirmations` | `2160` | Blocks the point must sit behind the newest exported block |
+| `--allow-incomplete` | `false` | Package even though the snapshot declares limitations |
+| `--unsigned` | `false` | Acknowledge that no signature will be produced |
+| `--spec-file`, `--allow-custom-specs` | – | Operator-supplied specifications |
+
+<Callout type="info">
+Snapshot export and DuckLake garbage collection must not run at the same time. Export reads a copy
+of the catalog so a running exporter's file lock cannot block it, but files removed by a compaction
+mid-export would still invalidate the pinned set.
+</Callout>
+
+### Archive layout
+
+```text
+yaci-preprod-e308-<id>.manifest.json
+yaci-preprod-e308-<id>.part-00001.zip
+yaci-preprod-e308-<id>.part-00002.zip
+...
+SHA256SUMS
+```
+
+Parts are **independent** archives, not a spanned ZIP: each can be retried, mirrored and verified on
+its own. Entries are stored uncompressed, because DuckLake already writes Zstandard-compressed
+Parquet and re-deflating costs hours of CPU for a fraction of a percent. Paths inside a part are
+relative to the analytics data directory, for example
+`main/block/date=2026-08-24/ducklake-....parquet`.
+
+`SHA256SUMS` is in the usual format, so parts can be checked with standard tools before any Yaci
+Store code runs:
+
+```bash
+sha256sum -c SHA256SUMS
+```
+
+### Manifest
+
+The canonical JSON manifest records the snapshot format version and id, the producing release, the
+complete consistency point, the pinned DuckLake catalog snapshot, the module set and pruning
+settings, the PostgreSQL schema and Flyway fingerprints, every archive part, and per table: the
+specification id, version and SHA-256 digest, the load mode and cutoff rule, the row count, the
+key, the observed source column types, bounds, and every packaged file with its digest.
+
+It contains no database URL, user name, password, host name or local absolute path. Keys are sorted
+and nulls omitted, so the same pinned file set always produces a byte-identical manifest.
+
+## Restoring a snapshot
+
+### 1. Prepare the target schema
+
+The target must be created by **the same Yaci Store release named in the manifest**, with the same
+enabled modules, and must be empty:
+
+```properties
+store.sync-auto-start=false
+```
+
+Start the application once with that setting so Flyway creates the exact schema, then stop it. Yaci
+Store must not be running against the schema while the import runs.
+
+Do not run `apply-indexes` first. The base tables, primary keys and unique constraints created by
+Flyway are required; the optional read indexes from `index.yml` and `extra-index.yml` are applied
+afterwards.
+
+### 2. Verify
+
+```bash
+snapshot verify --manifest /path/to/yaci-preprod-e308-<id>.manifest.json
+```
+
+### 3. Preflight
+
+```bash
+snapshot import --manifest <manifest> --work-dir /path/to/work --dry-run
+```
+
+Import refuses to run unless the archive verifies, the network and protocol magic match the
+configured instance, the schema and Flyway fingerprints match, every locally installed specification
+matches the manifest's version and digest, every table in the target schema has a classification,
+and the schema is either empty or holds a matching incomplete import journal.
+
+A network mismatch is never overridable.
+
+### 4. Import
+
+```bash
+snapshot import --manifest <manifest> \
+                --work-dir /path/to/work \
+                --workers 4 \
+                --memory-limit 4GB \
+                --min-free-disk-gb 20
+```
+
+| Option | Default | Purpose |
+|---|---|---|
+| `--workers` | `4` | Bounded worker count; each gets its own connection, memory limit, spill directory and transaction |
+| `--memory-limit` | `4GB` | Per-worker DuckDB memory limit |
+| `--min-free-disk-gb` | `20` | Abort before free space at `--work-dir` drops below this |
+| `--keep-extracted` | `false` | Keep extracted Parquet after a successful import |
+| `--dry-run` | `false` | Preflight only; write nothing |
+
+<Callout type="warning">
+`--min-free-disk-gb` guards the **work directory** (extraction and DuckDB spill). Make sure the
+PostgreSQL data volume separately has room for the restored database, which is much larger than the
+archive.
+</Callout>
+
+The work directory needs roughly the uncompressed archive size for extraction, plus spill space per
+worker.
+
+### 5. Validate
+
+```bash
+snapshot validate --manifest <manifest>
+```
+
+Four levels are defined; the first three are offline and must all pass before sync is enabled.
+
+1. **Artifact** — signature policy, manifest and part digests, ZIP traversal/duplicate/size
+   protections, exact required part set, per-file digest after extraction.
+2. **Schema and load** — schema and Flyway fingerprints, per-table row counts after cutoff, tables
+   that must be empty really are, sequence values, no unfinished import batches.
+3. **Semantic** — the manifest point equals the last imported block *and* the final cursor, the
+   retained block and cursor tails have a continuous previous-hash chain, no rows beyond any
+   table's declared cutoff, era rows point at real blocks, `address_utxo` has one row per
+   `(tx_hash, output_index)` with valid JSONB amounts, exactly one lovelace entry, a matching
+   lovelace total and a resolved block number.
+4. **Application acceptance** — an operational gate, listed by the command: start with
+   `store.sync-auto-start=false` and smoke-test reads, start against a node and confirm the point is
+   accepted, observe the normal restart rollback and replay, sync past the point, restart, kill and
+   recover, and exercise a rollback within retained cursor history.
+
+Pass `--mark-ready` once every gate has passed. That marks the import `READY` and drops the
+temporary journal.
+
+### 6. Apply indexes
+
+```bash
+apply-indexes                        # default read indexes plus extra indexes
+apply-indexes --skip-extra-indexes   # default read indexes only
+verify-indexes                       # check what is present
+```
+
+Index creation is **not** part of snapshot import. The importer never creates, drops, defers or
+rebuilds an admin-managed index; if some already exist it warns that loading will be slower and
+leaves them alone. Index build time is reported by the normal admin CLI workflow and is measured
+separately from the heap load.
+
+## Resuming an interrupted import
+
+Work is a content-addressed queue of `(table, batch)` items. A batch's rows and its journal record
+commit in the **same transaction**, so a recorded batch is committed and an unrecorded batch left no
+rows. Re-running the same command resumes:
+
+```bash
+snapshot import-status          # what was completed
+snapshot import --manifest <manifest> --work-dir <dir>
+```
+
+The report distinguishes batches skipped (already committed) from batches loaded. Batch identity is
+derived from the snapshot id, the table, the transform version and the sorted digests of the batch's
+input files, so retuning `--workers` or batch sizes does not invalidate completed work.
+
+Deleting a partial import is never an automatic recovery action. Clearing a non-empty schema is a
+separate, explicit operation.
+
+## Table specifications
+
+Each table's snapshot behaviour is a versioned YAML resource owned by the module that owns the
+target table, beside its migrations:
+
+```text
+stores/blocks/src/main/resources/snapshot/block.yml
+stores/utxo/src/main/resources/snapshot/address-utxo.yml
+stores/utxo/src/main/resources/snapshot/sql/address_utxo_v1.sql
+aggregates/adapot/src/main/resources/snapshot/reward.yml
+```
+
+A build task collects them into the snapshot component with a deterministic index, so the admin CLI
+reads them without classpath scanning, a Spring context, or any store implementation class.
+
+<Callout type="info">
+A specification is **additive**. It describes output an existing exporter already produces and never
+registers, schedules or executes one. Built-in `TableExporter` classes, `CustomTableExporter`,
+`TableExporterRegistry`, exporter properties, the analytics admin endpoints and
+`application-custom-exporters.yml` all keep their current behaviour and format, and analytics works
+unchanged with no snapshot specification present.
+</Callout>
+
+### Anatomy
+
+```yaml
+snapshot-table:
+  id: pool-registration
+  spec-version: 1
+  module: staking
+  kind: CHAIN_DATA          # CHAIN_DATA | DERIVED_DATA | CONTROL_STATE | EXTENSION_DATA
+  restore: IMPORT           # IMPORT | HANDLER | EMPTY_EXPECTED | RUNTIME_REBUILT | NOT_RESTORED
+
+  source:
+    exporter-id: pool_registration      # the existing exporter's stable name
+    ducklake-relation: pool_registration
+    partition:
+      strategy: DAILY                   # DAILY | EPOCH | NONE
+      column: block_time
+
+  consistency:
+    completed-epoch:                    # how far this table gates the snapshot point
+      type: MAX_EPOCH_OFFSET            # NONE | MAX_EPOCH | MAX_EPOCH_OFFSET
+      column: epoch
+      offset: -1
+    cutoff:                             # which rows survive the point
+      type: SLOT_LTE                    # NONE | SLOT_LTE | EPOCH_LTE | EPOCH_LTE_OFFSET
+      column: slot
+    coverage:                           # asserted after the point is chosen
+      type: SLOT_GTE_CUT
+      column: slot
+
+  import:
+    target-table: pool_registration
+    mode: MAPPED                        # DIRECT | MAPPED | SQL
+    columns:
+      vrf_key:
+        source: vrf_key_hash
+      block_time:
+        source: block_time
+        converter: timestamp-to-epoch-seconds
+    ignore-source-columns: [date]
+    use-target-defaults: [update_datetime]
+    batch-boundary: FILE_SET            # FILE_SET | WHOLE_PARTITION | SINGLE_BATCH
+    batch-size: 64
+
+  validation:
+    key: [tx_hash, cert_index]
+    bounds: [slot, epoch]
+    required-columns: [tx_hash, cert_index]
+```
+
+### Import modes
+
+| Mode | Purpose | Java needed |
+|---|---|---|
+| `DIRECT` | Identical source and target names, compatible types | No |
+| `MAPPED` | Renames, named converters, constants, omissions, target defaults | No |
+| `SQL` | One trusted read-only DuckDB `SELECT` for joins, grouping or reshaping | No table class |
+| `HANDLER` | Operational lifecycle state that is not a projection of exported rows | Small SPI |
+
+Adding an ordinary table needs a migration and one YAML specification. Adding an ordinary column
+needs an update to that specification. Java is needed only for a genuinely new reusable converter or
+a new control-state handler.
+
+### Column accounting is total
+
+Columns not listed under `import.columns` are matched by identical name, and only when their types
+are compatible. After explicit mappings, `ignore-source-columns` and `use-target-defaults` are
+applied, **every** source and target column must be accounted for. An unknown source column, an
+unwritten target column, a rename that has not been declared, or a `NOT NULL` target left to a
+default it does not have is an error at planning time.
+
+This is the point of the design: a permissive name-based mapper silently writes NULL when a column
+is renamed or added, producing a database that looks populated but is wrong.
+
+### Named converters
+
+| Converter | Use |
+|---|---|
+| `timestamp-to-epoch-seconds` | `timestamptz` export column to a Unix-seconds `bigint` |
+| `varchar-to-jsonb` | JSON text to a `jsonb` column |
+| `to-smallint`, `to-integer`, `to-bigint`, `to-decimal38`, `to-varchar` | Checked numeric conversion; overflow fails the batch |
+| `uuid-v5:<key columns>` | Deterministic RFC 4122 v5 id for a row whose export omits it |
+| `null-literal` | Explicit null |
+
+`uuid-v5` derives an id from a fixed namespace and the row's natural key, so re-importing the same
+snapshot reproduces byte-identical ids.
+
+### SQL transforms
+
+`SQL` mode references a versioned resource rather than embedding a query in YAML or Java:
+
+```yaml
+    mode: SQL
+    select-resource: classpath:/snapshot/sql/address_utxo_v1.sql
+    transform-version: 1
+    dependencies: [block]
+    batch-boundary: WHOLE_PARTITION
+```
+
+The importer supplies `${files}`, `${dep.<spec id>}`, `${cutSlot}`, `${completedEpoch}` and
+`${uuidNamespace}`. A resource must be a single read-only `SELECT` (a leading `WITH` is allowed) and
+may not contain DDL, transaction control, `ATTACH`, `COPY` or `INSTALL`.
+
+`WHOLE_PARTITION` batching is required whenever a transform groups rows: a partition split across
+two batches could emit the same grouped key twice.
+
+When a transform changes cardinality, declare `validation.source-key` so the manifest records the
+number of rows the import will actually produce, rather than the number of rows it reads.
+
+### Custom specifications and trust
+
+Executable mapping rules are never taken from a downloaded archive. The archive carries only
+specification ids, versions and digests; the rules themselves come from the local installation, and
+the local digest must equal the manifest digest.
+
+Operator specifications are loaded only from an explicit `--spec-file` and require
+`--allow-custom-specs`. A custom specification can never override a built-in one, and two
+specifications can never claim the same target table.
+
+## Known limitations
+
+A snapshot's manifest lists every declared limitation, and `snapshot validate` repeats them. For a
+snapshot produced from the current analytics export:
+
+- **`address_utxo.owner_addr_full`** is not present in the flattened export and cannot be recovered
+  from it. It is populated only for addresses longer than 500 characters, so it is null for
+  effectively all rows in practice, but the limitation is real and recorded. A later
+  snapshot-format revision will add a lossless projection.
+- **The account module is not restored.** `address_balance` and `stake_address_balance` are exported
+  as a daily downsample (latest balance per address per day), so importing them would produce
+  incorrect historical balances. `address_balance`, `stake_address_balance`, `address_tx_amount`,
+  both `*_current` caches and `account_config` are therefore classified `NOT_RESTORED` and left
+  empty. Restore into an instance with the account module disabled, or sync that module separately.
+- **`block_cbor` and `transaction_cbor`** have no analytics export.
+- **`epoch_nonce`** and **`ptr_address`** have no analytics export.
+- **`pool_registration.margin_numerator` / `margin_denominator`** are not exported; only the computed
+  `margin` is.
+- **`address.stake_credential`** is not exported and is not derivable from what is.
+
+A snapshot with a non-empty limitations list is a development snapshot. `snapshot export` refuses to
+package one unless `--allow-incomplete` is given.
+
+## Safety notes
+
+- Extraction rejects absolute paths, `..` traversal, entries resolving outside the work directory,
+  duplicate entries, symbolic links, entries not declared in the manifest, and entries whose size
+  differs from the manifest.
+- Import takes a PostgreSQL advisory lock, so two imports cannot run against one database.
+- Every identifier that reaches generated SQL is validated and quoted.
+- The DuckDB PostgreSQL attachment exposes every schema on the server, so all generated SQL is
+  schema-qualified with the configured target schema.
+- Credentials are redacted from messages and exceptions.

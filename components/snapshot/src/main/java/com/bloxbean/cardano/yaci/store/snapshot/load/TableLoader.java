@@ -51,11 +51,56 @@ public class TableLoader {
             params.put("cutSlot", Long.toString(cutSlot));
             params.put("completedEpoch", Integer.toString(completedEpoch));
             params.put("uuidNamespace", Identifiers.literal(ConverterRegistry.UUID_NAMESPACE));
-            dependencyFiles.forEach((dep, files) -> params.put("dep." + dep, parquetList(files)));
+            dependencyFiles.forEach((dep, files) ->
+                    params.put("dep." + dep, parquetList(narrowToBatchPartitions(batch, files))));
             return "(" + SqlResources.bind(sql, params) + ")";
         }
         return "(SELECT * FROM read_parquet(" + parquetList(batch.files()) + ")"
                 + cutoffPredicate(spec, cutSlot, completedEpoch) + ")";
+    }
+
+    /**
+     * Restrict a dependency's files to the partitions this batch actually needs.
+     *
+     * <p>Both sides of the {@code address_utxo} and pool-certificate joins are partitioned daily on
+     * {@code block_time}, and a row's block_time is its block's block_time, so the same {@code date=}
+     * partition on the dependency holds every block the batch can reference. Without this each batch
+     * would re-read the whole block export.
+     *
+     * <p>Falls back to the full dependency when the partition keys do not line up, so correctness
+     * never depends on the optimisation.
+     */
+    static List<SnapshotManifest.FileEntry> narrowToBatchPartitions(
+            ImportBatch batch, List<SnapshotManifest.FileEntry> dependency) {
+        Set<String> wanted = new TreeSet<>();
+        for (SnapshotManifest.FileEntry f : batch.files()) {
+            String key = partitionKey(f.partition());
+            if (key == null) {
+                return dependency;
+            }
+            wanted.add(key);
+        }
+        List<SnapshotManifest.FileEntry> narrowed = new ArrayList<>();
+        for (SnapshotManifest.FileEntry f : dependency) {
+            String key = partitionKey(f.partition());
+            if (key == null) {
+                return dependency;
+            }
+            if (wanted.contains(key)) {
+                narrowed.add(f);
+            }
+        }
+        return narrowed.isEmpty() ? dependency : narrowed;
+    }
+
+    /** The {@code date=...} or {@code epoch=...} segment of a partition path. */
+    private static String partitionKey(String partition) {
+        if (partition == null) {
+            return null;
+        }
+        int slash = partition.lastIndexOf('/');
+        String last = slash < 0 ? partition : partition.substring(slash + 1);
+        return last.contains("=") ? last : null;
     }
 
     static String cutoffPredicate(SnapshotTableSpec spec, long cutSlot, int completedEpoch) {

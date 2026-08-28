@@ -62,8 +62,11 @@ public final class TypeCompatibility {
         if (INTEGERS.contains(t)) {
             return Family.INTEGER;
         }
+        // DuckLake names its floating point types float32/float64; PostgreSQL uses real and
+        // double precision. Both live in the numeric family together with decimal/numeric.
         if (t.startsWith("decimal") || t.startsWith("numeric") || t.equals("double")
-                || t.equals("float") || t.equals("real") || t.equals("hugeint")) {
+                || t.equals("float") || t.equals("real") || t.equals("hugeint")
+                || t.equals("float32") || t.equals("float64")) {
             return Family.DECIMAL;
         }
         if (TEXTS.contains(t)) {
