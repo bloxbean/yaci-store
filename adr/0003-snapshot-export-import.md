@@ -631,6 +631,45 @@ row at slot 0, block 0, which a normally synced database does not always have.
 That is harmless: `EraRepository.findFirstNonByronEra()` selects `era > 1`, so
 the Shelley start slot the epoch calculation depends on is unchanged.
 
+### Ledger-state qualification findings
+
+**Implementation note (export chain facts, derive instance facts).** Running a
+restored database with the ledger-state profile across real epoch boundaries and
+comparing the AdaPot against Koios preprod distilled a rule the original text
+lacked: a table should be *exported* when its content is a fact about the chain,
+and *derived by the importer* when its correct value in the restored database
+differs from its value in the source. `era` (which block started each era) and
+the pool margin rationals are chain facts and belong in the export;
+`account_config` (this instance's balance watermark), `cursor_` and
+`adapot_jobs` are instance facts whose correct restored value is the snapshot
+point, which only the importer knows -- exporting them would silently assert
+progress the restored database has not made.
+
+**Implementation note (epoch-boundary snapshot tagging).** Verified in code and
+against the preprod job table: the reward-calculation job for the N to N+1
+boundary carries epoch N+1 and runs at the first block of epoch N+1. It writes
+`adapot` N+1, rewards spendable in N+1 (earned N-1), `epoch_stake` tagged N
+(`takeStakeSnapshot(epoch - 1)`), and `drep_dist` tagged N+1. A snapshot taken
+at the last block of epoch N therefore correctly contains `epoch_stake` tagged
+at most N-1 and `drep_dist` tagged at most N, and the first job after restore
+recreates the rest. `takeStakeSnapshot` deletes and rewrites its tag
+unconditionally, so importing one extra `epoch_stake` epoch is redundant but
+harmless.
+
+**Implementation note (pool margin rationals are required for reward
+calculation).** The analytics export carries `pool_registration.margin` as a
+float; the reward calculation deliberately reads the exact
+`margin_numerator`/`margin_denominator` because double arithmetic drifts from
+Haskell ledger math (`PoolDetails.getMargin`). With those columns restored as
+NULL, every pool's operator/member split is computed with margin zero. Measured
+on preprod: 10,545 of 11,129 member rewards for the first recomputed epoch
+differed, and the AdaPot treasury drifted +28,639 lovelace at epoch 299,
+accumulating every epoch. With the rationals backfilled and the boundary
+replayed, the restored database computed reserves and treasury byte-identical to
+Koios for every recomputed epoch. Until the exporter carries the rationals, the
+ledger-state profile must not be run on a restored database, and the
+specification says so in its declared limitation.
+
 ## Export Command
 
 Proposed command shape:
