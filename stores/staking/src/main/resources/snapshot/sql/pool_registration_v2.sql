@@ -1,8 +1,9 @@
 -- pool_registration carries block_hash but not the block number, which the operational table stores.
 -- Recover it by joining the block export, and rename vrf_key_hash to the operational vrf_key.
 --
--- margin_numerator and margin_denominator are not exported (only the computed margin is), so they
--- are left to their column defaults. That is declared in the specification.
+-- v2 carries margin_numerator and margin_denominator. The AdaPot reward calculation reads the exact
+-- rational rather than the float, so a snapshot without them makes every pool split rewards at
+-- margin zero. Requires an export produced after the exporter was widened.
 --
 -- Parameters: ${files}, ${dep.block}, ${cutSlot}
 WITH src AS (
@@ -20,6 +21,8 @@ SELECT
     s.pledge                            AS pledge,
     s.cost                              AS cost,
     s.margin                            AS margin,
+    s.margin_numerator                  AS margin_numerator,
+    s.margin_denominator                AS margin_denominator,
     s.reward_account                    AS reward_account,
     s.pool_owners                       AS pool_owners,
     s.relays                            AS relays,

@@ -16,6 +16,16 @@ import org.springframework.stereotype.Service;
  * Source: pool_registration table
  * Output: pool_registration/date=yyyy-MM-dd/data.parquet
  */
+/*
+ * margin_numerator and margin_denominator are exported alongside the computed margin because the
+ * AdaPot reward calculation reads the exact rational (PoolDetails.getMargin) rather than the float:
+ * double arithmetic drifts from Haskell ledger math. Without them a database restored from a
+ * snapshot computes every pool's operator/member split at margin zero.
+ *
+ * Note for operators: this widens the pool_registration DuckLake relation. The writer creates the
+ * table once by CTAS and thereafter inserts into it, so an existing export must have its
+ * pool_registration table and export state cleared before the new columns appear.
+ */
 @Service
 @Slf4j
 @ConditionalOnProperty(prefix = "yaci.store.analytics", name = "enabled", havingValue = "true")
@@ -55,6 +65,8 @@ public class PoolRegistrationExporter extends AbstractTableExporter {
                     pr.pledge,
                     pr.cost,
                     pr.margin,
+                    pr.margin_numerator,
+                    pr.margin_denominator,
                     pr.reward_account,
                     pr.pool_owners::text as pool_owners,
                     pr.relays::text as relays,

@@ -413,9 +413,32 @@ snapshot produced from the current analytics export:
   empty. Restore into an instance with the account module disabled, or sync that module separately.
 - **`block_cbor` and `transaction_cbor`** have no analytics export.
 - **`epoch_nonce`** and **`ptr_address`** have no analytics export.
-- **`pool_registration.margin_numerator` / `margin_denominator`** are not exported; only the computed
-  `margin` is.
 - **`address.stake_credential`** is not exported and is not derivable from what is.
+
+<Callout type="warning">
+**Snapshots produced before the margin fix cannot run the ledger-state profile.** The exporter now
+carries `pool_registration.margin_numerator` and `margin_denominator`, because the AdaPot reward
+calculation reads the exact rational rather than the float. An older export lacks them, and
+`snapshot inspect` will refuse it: the `pool_registration` transform cannot be prepared. Re-export
+that relation (see below) before producing a snapshot intended for a ledger-state instance.
+</Callout>
+
+### Widening an exporter
+
+The DuckLake writer creates a relation once with `CREATE TABLE AS SELECT ... LIMIT 0` and inserts
+into it thereafter, so adding a column to an exporter does not change an existing relation. To pick
+up the new columns, drop that relation and its export state so it is rebuilt:
+
+```sql
+-- against the analytics catalog
+DROP TABLE ducklake_catalog.pool_registration;
+-- against the operational database
+DELETE FROM analytics_export_state WHERE table_name = 'pool_registration';
+```
+
+The next export run recreates the relation with the wider schema and re-exports its partitions.
+`pool_registration` is small (about 1,400 rows), so this is cheap; for a large relation, plan the
+re-export accordingly.
 
 A snapshot with a non-empty limitations list is a development snapshot. `snapshot export` refuses to
 package one unless `--allow-incomplete` is given.

@@ -666,9 +666,21 @@ on preprod: 10,545 of 11,129 member rewards for the first recomputed epoch
 differed, and the AdaPot treasury drifted +28,639 lovelace at epoch 299,
 accumulating every epoch. With the rationals backfilled and the boundary
 replayed, the restored database computed reserves and treasury byte-identical to
-Koios for every recomputed epoch. Until the exporter carries the rationals, the
-ledger-state profile must not be run on a restored database, and the
-specification says so in its declared limitation.
+Koios for every recomputed epoch. The exporter now carries the
+rationals and the specification maps them, at `spec-version` 2 with transform
+`pool_registration_v2.sql`. Because the DuckLake writer creates a relation once
+and inserts into it thereafter, an existing export keeps its old schema: the
+`pool_registration` relation and its export state must be dropped so the wider
+schema is rebuilt.
+
+**Implementation note (SQL transforms are prepared at export).** An SQL-mode
+transform binds its own source columns, so the declared-column check cannot see
+what it needs, and drift in such a table used to surface only at import. Export
+now prepares every transform against a sample of the real files and refuses the
+directory if one cannot bind. Widening the pool exporter proved the point: with
+the check, `snapshot inspect` reports `pool_registration_v2.sql cannot be
+prepared ... does not have a column named margin_numerator` in seconds; without
+it, the snapshot packaged cleanly and would have failed an hour into an import.
 
 ## Export Command
 
