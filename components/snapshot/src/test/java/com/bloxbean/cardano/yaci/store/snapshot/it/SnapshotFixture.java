@@ -216,8 +216,9 @@ final class SnapshotFixture {
         return block * 20;
     }
 
+    /** Blocks 0-4 are Byron, so the era handler's Byron exclusion is exercised. */
     static int eraOf(long block) {
-        return block < 10 ? 5 : block < 20 ? 6 : 7;
+        return block < 5 ? 1 : block < 10 ? 5 : block < 20 ? 6 : 7;
     }
 
     /** DuckDB's COPY TO does not create parent directories. */
@@ -241,7 +242,8 @@ final class SnapshotFixture {
                     + " CAST(n * 1000 AS DECIMAL(38,0)) AS total_output,"
                     + " CAST(n AS BIGINT) AS total_fees,"
                     + " to_timestamp(1700000000 + n * 20) AS block_time,"
-                    + " CAST(CASE WHEN n < 10 THEN 5 WHEN n < 20 THEN 6 ELSE 7 END AS SMALLINT) AS era,"
+                    + " CAST(CASE WHEN n < 5 THEN 1 WHEN n < 10 THEN 5 WHEN n < 20 THEN 6 ELSE 7 END"
+                    + "      AS SMALLINT) AS era,"
                     + " printf('%064x', n + 2000) AS issuer_vkey,"
                     + " '{\"output\": \"a\"}' AS leader_vrf,"
                     + " '{\"output\": \"b\"}' AS nonce_vrf,"

@@ -130,8 +130,8 @@ public class SnapshotCliSupport {
     }
 
     public ExportOptions exportOptions(String dataDir, String outputDir, String workDir, String partSize,
-                                       long minConfirmations, boolean allowIncomplete, boolean unsigned)
-            throws SQLException {
+                                       int targetEpoch, long minConfirmations, boolean allowIncomplete,
+                                       boolean unsigned) throws SQLException {
         String schemaFingerprint;
         String flywayFingerprint;
         try (Connection conn = connect()) {
@@ -144,7 +144,7 @@ public class SnapshotCliSupport {
                 Path.of(workDir).toAbsolutePath().normalize(),
                 Path.of(outputDir).toAbsolutePath().normalize(),
                 network(), protocolMagic(), null,
-                parseSize(partSize), minConfirmations, allowIncomplete, unsigned,
+                parseSize(partSize), targetEpoch, minConfirmations, allowIncomplete, unsigned,
                 yaciStoreVersion(), enabledModules(), pruningSettings(),
                 schemaFingerprint, flywayFingerprint);
     }

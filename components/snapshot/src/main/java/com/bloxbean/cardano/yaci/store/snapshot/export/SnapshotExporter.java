@@ -80,7 +80,7 @@ public class SnapshotExporter {
                 ? new ConsistencyPointSelector.Selection(-1, null, Map.of(), List.of(), -1,
                 List.of("No catalog snapshot"))
                 : selector.select(imported, snapshotId, options.network(), options.protocolMagic(),
-                options.minConfirmations());
+                options.minConfirmations(), options.targetEpoch());
         blockers.addAll(selection.blockers());
 
         List<TablePlan> plans = new ArrayList<>();
@@ -109,6 +109,9 @@ public class SnapshotExporter {
             }
             spec.lossy().forEach((column, reason) ->
                     lossy.add(spec.targetTable() + "." + column + ": " + reason));
+            if (spec.lossyNote() != null) {
+                lossy.add(spec.targetTable() + ": " + spec.lossyNote());
+            }
         }
         lossy.sort(String::compareTo);
 

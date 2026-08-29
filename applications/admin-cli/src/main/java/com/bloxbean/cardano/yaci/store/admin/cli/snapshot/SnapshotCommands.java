@@ -55,6 +55,9 @@ public class SnapshotCommands {
             @Option(longNames = "min-confirmations", defaultValue = "2160",
                     description = "Blocks the point must sit behind the newest exported block")
             long minConfirmations,
+            @Option(longNames = "target-epoch", defaultValue = "0",
+                    description = "Restore to this completed epoch instead of the newest supported one")
+            int targetEpoch,
             @Option(longNames = "spec-file", description = "Additional local specification file(s)")
             String specFile,
             @Option(longNames = "allow-custom-specs", defaultValue = "false",
@@ -66,7 +69,7 @@ public class SnapshotCommands {
             SnapshotCliSupport.ensureDirectory(Path.of(workDir));
             SnapshotSpecRegistry registry = support.registry(specFile, allowCustomSpecs);
             ExportOptions options = support.exportOptions(dataDir, workDir, workDir, "8GiB",
-                    minConfirmations, true, true);
+                    targetEpoch, minConfirmations, true, true);
             InspectionReport report = new SnapshotExporter(registry).inspect(options);
             printInspection(report, verbose);
         } catch (Exception e) {
@@ -88,6 +91,9 @@ public class SnapshotCommands {
             @Option(longNames = "min-confirmations", defaultValue = "2160",
                     description = "Blocks the point must sit behind the newest exported block")
             long minConfirmations,
+            @Option(longNames = "target-epoch", defaultValue = "0",
+                    description = "Restore to this completed epoch instead of the newest supported one")
+            int targetEpoch,
             @Option(longNames = "allow-incomplete", defaultValue = "false",
                     description = "Package even though the snapshot has declared limitations")
             boolean allowIncomplete,
@@ -103,7 +109,7 @@ public class SnapshotCommands {
             SnapshotCliSupport.ensureDirectory(Path.of(output));
             SnapshotSpecRegistry registry = support.registry(specFile, allowCustomSpecs);
             ExportOptions options = support.exportOptions(dataDir, output, workDir, partSize,
-                    minConfirmations, allowIncomplete, unsigned);
+                    targetEpoch, minConfirmations, allowIncomplete, unsigned);
 
             writeLn(info("Packaging snapshot from %s", options.dataDir()));
             AtomicLong done = new AtomicLong();

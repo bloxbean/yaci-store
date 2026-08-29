@@ -127,7 +127,7 @@ class SnapshotSpecRegistryTest {
                 new SnapshotTableSpec.Import(id, ImportMode.DIRECT, Map.of(), List.of(), List.of(),
                         null, 1, List.of(dependsOn), BatchBoundary.FILE_SET, 0, null, null),
                 new SnapshotTableSpec.Validation(List.of("k"), List.of(), List.of(), List.of()),
-                Map.of(), "digest", "test");
+                Map.of(), null, "digest", "test");
     }
 
     private static Path writeCustom(Path dir, String id, String targetTable) throws IOException {

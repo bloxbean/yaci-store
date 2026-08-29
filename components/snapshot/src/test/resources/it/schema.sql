@@ -143,3 +143,12 @@ create table rollback
 );
 
 create sequence rollback_id_seq owned by rollback.id;
+
+create table account_config
+(
+    config_id  varchar(50) not null primary key,
+    status     varchar(50),
+    slot       bigint,
+    block      bigint,
+    block_hash varchar(64)
+);

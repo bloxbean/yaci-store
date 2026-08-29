@@ -124,10 +124,19 @@ class SnapshotImportIT {
                     + " ORDER BY slot DESC LIMIT 1"))
                     .isEqualTo(SnapshotFixture.hashOf(SnapshotFixture.POINT_BLOCK));
 
-            // era rebuilt from the first block of each era.
+            // era rebuilt from the first block of each era, with Byron excluded: a Byron row makes
+            // EraService.getEraForEpoch() throw and breaks the first reward calculation after a restore.
             assertThat(count(conn, "era")).isEqualTo(3);
             assertThat(scalarLong(conn, "SELECT block FROM " + qt("era") + " WHERE era = 7"))
                     .isEqualTo(20);
+            assertThat(scalarLong(conn, "SELECT count(*) FROM " + qt("era") + " WHERE era <= 1"))
+                    .isZero();
+
+            // The account balance watermark gates AccountBalanceProcessor; at 0 it skips every
+            // calculation and starves the AdaPot stake snapshot.
+            assertThat(scalarLong(conn, "SELECT block FROM " + qt("account_config")
+                    + " WHERE config_id = 'last_account_balance_processed_block'"))
+                    .isEqualTo(SnapshotFixture.POINT_BLOCK);
 
             // AdaPot jobs marked complete only up to the snapshot epoch.
             assertThat(scalarLong(conn, "SELECT max(epoch) FROM " + qt("adapot_jobs")))
@@ -136,7 +145,7 @@ class SnapshotImportIT {
                     .isEqualTo("COMPLETED");
         }
 
-        assertThat(report.handlerResults()).hasSize(3);
+        assertThat(report.handlerResults()).hasSize(4);
         assertThat(report.sequencesReset()).containsKey("rollback_id_seq");
     }
 
