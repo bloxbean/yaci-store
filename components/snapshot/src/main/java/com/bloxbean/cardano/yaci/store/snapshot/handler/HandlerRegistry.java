@@ -20,6 +20,7 @@ public class HandlerRegistry {
         register(new CursorTailHandler(), true);
         register(new EraTransitionHandler(), true);
         register(new AdaPotJobsHandler(), true);
+        register(new AccountConfigHandler(), true);
         for (SnapshotHandler h : ServiceLoader.load(SnapshotHandler.class)) {
             register(h, false);
         }

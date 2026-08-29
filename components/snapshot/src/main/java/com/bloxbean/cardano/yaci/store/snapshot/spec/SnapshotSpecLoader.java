@@ -34,7 +34,7 @@ public class SnapshotSpecLoader {
 
     private static final Set<String> ROOT_KEYS =
             Set.of("id", "spec-version", "module", "kind", "restore", "reason",
-                    "source", "consistency", "import", "validation", "lossy");
+                    "source", "consistency", "import", "validation", "lossy", "lossy-note");
     private static final Set<String> SOURCE_KEYS = Set.of("exporter-id", "ducklake-relation", "partition");
     private static final Set<String> PARTITION_KEYS = Set.of("strategy", "column");
     private static final Set<String> CONSISTENCY_KEYS = Set.of("completed-epoch", "cutoff", "coverage");
@@ -101,6 +101,7 @@ public class SnapshotSpecLoader {
         SnapshotTableSpec.Import importSpec = readImport(n.get("import"), origin, restore);
         SnapshotTableSpec.Validation validation = readValidation(n.get("validation"), origin);
         Map<String, String> lossy = readLossy(n.get("lossy"), origin);
+        String lossyNote = optionalText(n, "lossy-note");
 
         // The digest covers the transform resource too. Without that, editing a SQL transform would
         // change what an import produces while still matching the digest a manifest recorded.
@@ -110,7 +111,7 @@ public class SnapshotSpecLoader {
                     + Digests.sha256Hex(readTransform(importSpec.selectResource(), origin)));
         }
         SnapshotTableSpec spec = new SnapshotTableSpec(id, specVersion, module, kind, restore, reason,
-                source, consistency, importSpec, validation, lossy, digest, origin);
+                source, consistency, importSpec, validation, lossy, lossyNote, digest, origin);
         validateSemantics(spec, origin);
         return spec;
     }

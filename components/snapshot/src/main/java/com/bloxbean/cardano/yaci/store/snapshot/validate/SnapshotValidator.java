@@ -186,6 +186,22 @@ public class SnapshotValidator {
                 + "    OR b.era <> e.era");
         b.check("era-points-at-real-blocks", eraMismatch == 0, eraMismatch + " inconsistent era row(s)");
 
+        // A Byron era row breaks EraService.getEraForEpoch(), which walks every era row and cannot
+        // derive an epoch from a Byron slot. A normally synced database has no such row.
+        long byronEraRows = scalar(pg, "SELECT count(*) FROM " + qt(schema, "era") + " WHERE era <= 1");
+        b.check("era-excludes-byron", byronEraRows == 0,
+                byronEraRows + " Byron era row(s); a synced database has none and the AdaPot job "
+                        + "fails if one is present");
+
+        // The account balance watermark gates AccountBalanceProcessor, which in turn feeds the
+        // AdaPot stake snapshot. At block 0 it reports a multi-million block gap and skips.
+        if (pgs.tableExists("account_config")) {
+            long watermark = scalar(pg, "SELECT COALESCE(max(block), -1) FROM " + qt(schema, "account_config")
+                    + " WHERE config_id = 'last_account_balance_processed_block'");
+            b.check("account-balance-watermark", watermark == point.blockNumber(),
+                    "watermark block " + watermark + ", snapshot point " + point.blockNumber());
+        }
+
         validateAddressUtxo(pg, schema, b);
 
         long epochMax = scalar(pg, "SELECT COALESCE(max(number), -1) FROM " + qt(schema, "epoch"));

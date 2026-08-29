@@ -31,7 +31,7 @@ class DependencyNarrowingTest {
                         "classpath:/snapshot/sql/address_utxo_v1.sql", 1, List.of("block"),
                         BatchBoundary.WHOLE_PARTITION, 1, null, null),
                 new SnapshotTableSpec.Validation(List.of("tx_hash"), List.of(), List.of(), List.of()),
-                Map.of(), "digest", "test");
+                Map.of(), null, "digest", "test");
         return ImportBatch.of("sid", spec, files, null);
     }
 

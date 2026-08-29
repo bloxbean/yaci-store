@@ -13,8 +13,11 @@ import java.sql.Statement;
  * slot, number and hash. Deriving the same rows from the imported block table reproduces exactly
  * that, and {@code EraService} then resolves the Shelley start slot the way it always does.
  *
- * <p>The Byron genesis pseudo-block is excluded ({@code number >= 0}), so an era row always points
- * at a real block.
+ * <p>Byron is excluded. A normally synced database holds one row per era from the first non-Byron
+ * era onward, and {@code EraService.getEraForEpoch()} walks {@code findAllEras()} calling
+ * {@code getEpochNo()} on each row -- which throws for a Byron row, because an epoch cannot be
+ * derived from a Byron slot. Writing a Byron row therefore breaks the AdaPot reward calculation at
+ * the first epoch boundary after a restore.
  */
 public class EraTransitionHandler implements SnapshotHandler {
 
@@ -40,7 +43,7 @@ public class EraTransitionHandler implements SnapshotHandler {
                 + "   SELECT b.era, b.slot, b.number, b.hash,"
                 + "          row_number() OVER (PARTITION BY b.era ORDER BY b.number) AS rn"
                 + "   FROM " + block + " b"
-                + "   WHERE b.number >= 0 AND b.number <= ? AND b.era IS NOT NULL"
+                + "   WHERE b.number >= 0 AND b.number <= ? AND b.era IS NOT NULL AND b.era > 1"
                 + " ) first_of_era WHERE rn = 1";
         int inserted;
         try (PreparedStatement ps = ctx.connection().prepareStatement(insert)) {

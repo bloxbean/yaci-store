@@ -65,6 +65,17 @@ public class ConsistencyPointSelector {
      */
     public Selection select(List<SnapshotTableSpec> specs, long snapshotId, String network,
                             long protocolMagic, long minConfirmations) throws SQLException {
+        return select(specs, snapshotId, network, protocolMagic, minConfirmations, 0);
+    }
+
+    /**
+     * @param targetEpoch restore to this completed epoch rather than the newest one every gating
+     *                    table supports. Useful for qualification runs that need to replay several
+     *                    epoch boundaries. It may never exceed what the data actually supports.
+     */
+    public Selection select(List<SnapshotTableSpec> specs, long snapshotId, String network,
+                            long protocolMagic, long minConfirmations, int targetEpoch)
+            throws SQLException {
         List<String> blockers = new ArrayList<>();
         Map<String, Integer> gating = new LinkedHashMap<>();
 
@@ -92,12 +103,23 @@ public class ConsistencyPointSelector {
             return new Selection(-1, null, gating, List.of(), -1, blockers);
         }
 
-        int completedEpoch = gating.values().stream().mapToInt(Integer::intValue).min().orElse(-1);
-        List<String> limitedBy = gating.entrySet().stream()
-                .filter(e -> e.getValue() == completedEpoch)
-                .map(Map.Entry::getKey)
-                .sorted()
-                .toList();
+        int supportedEpoch = gating.values().stream().mapToInt(Integer::intValue).min().orElse(-1);
+        int completedEpoch = supportedEpoch;
+        if (targetEpoch > 0) {
+            if (targetEpoch > supportedEpoch) {
+                blockers.add("Requested target epoch " + targetEpoch + " is beyond the newest epoch "
+                        + "the export supports (" + supportedEpoch + ")");
+            }
+            completedEpoch = targetEpoch;
+        }
+        final int selectedEpoch = completedEpoch;
+        List<String> limitedBy = targetEpoch > 0
+                ? List.of("explicit --target-epoch " + targetEpoch + " (newest supported: " + supportedEpoch + ")")
+                : gating.entrySet().stream()
+                        .filter(e -> e.getValue() == selectedEpoch)
+                        .map(Map.Entry::getKey)
+                        .sorted()
+                        .toList();
 
         SnapshotTableSpec blockSpec = specs.stream()
                 .filter(s -> s.id().equals(BLOCK_SPEC_ID))

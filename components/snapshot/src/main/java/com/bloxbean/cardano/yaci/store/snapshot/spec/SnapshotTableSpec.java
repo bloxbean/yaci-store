@@ -27,6 +27,11 @@ public record SnapshotTableSpec(
         Validation validation,
         /** Target column to the reason its value cannot be recovered from the current export. */
         Map<String, String> lossy,
+        /**
+         * Table-level lossiness that is not attributable to one column -- a source export that is a
+         * downsample, for instance. Recorded in the manifest alongside {@link #lossy()}.
+         */
+        String lossyNote,
         /** SHA-256 of the canonical YAML bytes this spec was loaded from. */
         String digest,
         /** Where the spec came from, for diagnostics only. Never written to a manifest. */
