@@ -41,6 +41,11 @@ snapshot-table:
 
   lossy:
     margin_numerator: >-
-      the analytics export carries the computed margin only, not its numerator and denominator
+      the analytics export carries the computed margin as a float only. The reward calculation
+      reads the exact numerator/denominator (PoolDetails.getMargin), so a restored database
+      computes every pool's operator/member split with margin zero: rewards, epoch_stake and the
+      AdaPot drift from the chain at the first epoch boundary. Measured on preprod at epoch 299:
+      treasury +28,639 lovelace, accumulating each epoch. Do not run the ledger-state profile on
+      a restored database until the export carries the margin rationals
     margin_denominator: >-
-      the analytics export carries the computed margin only, not its numerator and denominator
+      see margin_numerator
