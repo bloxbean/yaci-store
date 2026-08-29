@@ -100,6 +100,25 @@ public class SnapshotExporter {
             }
         }
 
+        // SQL transforms bind their own columns, so prepare each one against the real files before
+        // declaring the directory exportable.
+        if (selection.point() != null) {
+            ExportPlanner planner = new ExportPlanner(catalog);
+            Map<String, List<DuckLakeFile>> samples = new java.util.HashMap<>();
+            for (TablePlan p : plans) {
+                samples.put(p.spec().id(), p.files().subList(0, Math.min(2, p.files().size())));
+            }
+            for (TablePlan plan : plans) {
+                Map<String, List<DuckLakeFile>> deps = new java.util.LinkedHashMap<>();
+                for (String dep : plan.spec().importSpec().dependencies()) {
+                    deps.put(dep, samples.getOrDefault(dep, List.of()));
+                }
+                planner.validateSqlTransform(plan.spec(), samples.get(plan.spec().id()), deps,
+                                selection.completedEpoch(), selection.point().slot())
+                        .forEach(problem -> blockers.add("[" + plan.spec().id() + "] " + problem));
+            }
+        }
+
         // Declared limitations, gathered from the specifications themselves so they can never drift
         // from what the importer actually does. address_utxo.owner_addr_full is the known example.
         List<String> lossy = new ArrayList<>();

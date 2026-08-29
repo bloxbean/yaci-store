@@ -184,6 +184,44 @@ public class ExportPlanner {
         return out;
     }
 
+    /**
+     * Prepare an SQL transform against the real files and report what it cannot bind.
+     *
+     * <p>A transform reads its source through its own resource, so the declared-column check cannot
+     * see which columns it needs. Without this, widening an exporter (or a transform referencing a
+     * column the export does not have) would package cleanly and only fail hours later at import.
+     *
+     * @param sample a few of the relation's files -- enough to bind the query, not to run it
+     */
+    public List<String> validateSqlTransform(SnapshotTableSpec spec, List<DuckLakeFile> sample,
+                                             Map<String, List<DuckLakeFile>> dependencySamples,
+                                             int completedEpoch, long cutSlot) {
+        if (spec.importSpec().mode() != com.bloxbean.cardano.yaci.store.snapshot.spec.ImportMode.SQL
+                || sample.isEmpty()) {
+            return List.of();
+        }
+        Map<String, String> params = new LinkedHashMap<>();
+        params.put("files", catalog.parquetList(sample));
+        params.put("cutSlot", Long.toString(cutSlot));
+        params.put("completedEpoch", Integer.toString(completedEpoch));
+        params.put("uuidNamespace", Identifiers.literal(
+                com.bloxbean.cardano.yaci.store.snapshot.convert.ConverterRegistry.UUID_NAMESPACE));
+        dependencySamples.forEach((dep, files) ->
+                params.put("dep." + dep, files.isEmpty() ? "[]" : catalog.parquetList(files)));
+
+        String sql = com.bloxbean.cardano.yaci.store.snapshot.load.SqlResources
+                .read(spec.importSpec().selectResource());
+        String bound = com.bloxbean.cardano.yaci.store.snapshot.load.SqlResources.bind(sql, params);
+        try (Statement st = catalog.connection().createStatement()) {
+            st.executeQuery("DESCRIBE (" + bound + ")").close();
+            return List.of();
+        } catch (SQLException e) {
+            String message = e.getMessage() == null ? "" : e.getMessage().replaceAll("\\s+", " ").trim();
+            return List.of("SQL transform " + spec.importSpec().selectResource()
+                    + " cannot be prepared against the export: " + message);
+        }
+    }
+
     /** Digest of the observed source column names and types, so schema drift is detectable. */
     public static String columnFingerprint(Map<String, String> columns) {
         StringBuilder sb = new StringBuilder();

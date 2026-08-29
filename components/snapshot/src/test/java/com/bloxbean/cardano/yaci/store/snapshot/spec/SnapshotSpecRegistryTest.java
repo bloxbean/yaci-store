@@ -72,6 +72,17 @@ class SnapshotSpecRegistryTest {
     }
 
     @Test
+    void poolMarginRationalsAreRestored() {
+        // The AdaPot reward calculation reads the exact margin rational, not the float. Leaving these
+        // to their column defaults makes a restored database split every pool's rewards at margin
+        // zero, which drifts the AdaPot from the chain at the first epoch boundary after a restore.
+        SnapshotTableSpec spec = SnapshotSpecRegistry.builtIn().byId("pool-registration").orElseThrow();
+        assertThat(spec.importSpec().useTargetDefaults())
+                .doesNotContain("margin_numerator", "margin_denominator");
+        assertThat(spec.lossy()).doesNotContainKeys("margin_numerator", "margin_denominator");
+    }
+
+    @Test
     void everyDeclaredDependencyResolves() {
         SnapshotSpecRegistry registry = SnapshotSpecRegistry.builtIn();
         for (SnapshotTableSpec spec : registry.all()) {
