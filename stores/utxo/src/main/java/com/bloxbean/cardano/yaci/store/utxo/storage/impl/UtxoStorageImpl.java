@@ -9,6 +9,7 @@ import com.bloxbean.cardano.yaci.store.plugin.aspect.Plugin;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.mapper.UtxoMapper;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.model.AddressUtxoEntity;
+import com.bloxbean.cardano.yaci.store.utxo.storage.impl.model.TxInputEntity;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.model.UtxoId;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.TxInputRepository;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.UtxoRepository;
@@ -108,6 +109,10 @@ public class UtxoStorageImpl implements UtxoStorage {
     @Transactional
     public int deleteUnspentBySlotGreaterThan(Long slot) {
         return utxoRepository.deleteBySlotGreaterThan(slot);
+    }
+
+    public List<TxInput> findSpentBySlotGreaterThan(Long slot) {
+        return spentOutputRepository.findBySpentAtSlotGreaterThan(slot).stream().map(mapper::toTxInput).toList();
     }
 
     @Override
