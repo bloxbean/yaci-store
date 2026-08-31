@@ -9,6 +9,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 
+import java.math.BigInteger;
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -38,6 +40,9 @@ public class StakeRegistrationEntity extends BlockAwareEntity {
     @Column(name = "type")
     @Enumerated(EnumType.STRING)
     private CertificateType type;
+
+    @Column(name = "deposit")
+    private BigInteger deposit;
 
     @Column(name = "address")
     private String address;
