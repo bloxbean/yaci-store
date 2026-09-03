@@ -63,19 +63,24 @@ public class LocalClientProviderManager {
      * @return LocalClientProvider
      */
     public Optional<LocalClientProvider> getLocalClientProvider() {
+        long startNanos = System.nanoTime();
         if (isPoolEnabled) {
             try {
                 var provider = localClientProviderPool.borrowObject();
                 if (log.isDebugEnabled())
-                    log.debug("Borrowed LocalClientProvider from pool");
+                    log.debug("Borrowed LocalClientProvider from pool in {} ms", elapsedMs(startNanos));
                 return Optional.of(provider);
             } catch (Exception e) {
+                log.error("Error getting LocalClientProvider from pool after {} ms", elapsedMs(startNanos), e);
                 throw new IllegalStateException("Error getting LocalClientProvider from pool", e);
             }
         } else {
             if (log.isDebugEnabled())
                 log.debug("Creating new LocalClientProvider");
-            return getNewLocalClientProvider();
+            Optional<LocalClientProvider> provider = getNewLocalClientProvider();
+            if (log.isDebugEnabled())
+                log.debug("Created new LocalClientProvider present={} in {} ms", provider.isPresent(), elapsedMs(startNanos));
+            return provider;
         }
     }
 
@@ -84,10 +89,15 @@ public class LocalClientProviderManager {
      * @return LocalClientProvider
      */
     public Optional<LocalClientProvider> getNewLocalClientProvider() {
+        long startNanos = System.nanoTime();
         LocalClientProvider localClientProvider = null;
         if (isNodeSocketFileEnabled) {
+            if (log.isDebugEnabled())
+                log.debug("Initializing LocalClientProvider using socket path");
             localClientProvider = new LocalClientProvider(n2cSocket, protocolMagic);
         } else if (isNodeHostEnabled) {
+            if (log.isDebugEnabled())
+                log.debug("Initializing LocalClientProvider using host and port");
             localClientProvider = new LocalClientProvider(n2cHost, n2cPort, protocolMagic);
         } else {
             log.error("LocalClientProvider not initialized. Please check the configuration");
@@ -95,6 +105,8 @@ public class LocalClientProviderManager {
 
         localClientProvider.suppressConnectionInfoLog(true);
         localClientProvider.start();
+        if (log.isDebugEnabled())
+            log.debug("LocalClientProvider start completed in {} ms", elapsedMs(startNanos));
 
         return Optional.ofNullable(localClientProvider);
     }
@@ -104,19 +116,28 @@ public class LocalClientProviderManager {
      * @param localClientProvider
      */
     public void close(LocalClientProvider localClientProvider) {
+        long startNanos = System.nanoTime();
         if (isPoolEnabled) {
             if (log.isDebugEnabled())
                 log.debug("Returning LocalClientProvider to pool");
             try {
                 localClientProviderPool.returnObject(localClientProvider);
+                if (log.isDebugEnabled())
+                    log.debug("Returned LocalClientProvider to pool in {} ms", elapsedMs(startNanos));
             } catch (Exception e) {
                 log.error("Error returning LocalClientProvider to pool", e);
             }
         } else {
             if(localClientProvider != null) {
                 localClientProvider.shutdown();
+                if (log.isDebugEnabled())
+                    log.debug("LocalClientProvider shutdown completed in {} ms", elapsedMs(startNanos));
             }
         }
 
+    }
+
+    private long elapsedMs(long startNanos) {
+        return (System.nanoTime() - startNanos) / 1_000_000;
     }
 }

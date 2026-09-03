@@ -27,6 +27,7 @@ import reactor.core.publisher.Mono;
 
 import java.time.Duration;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static com.bloxbean.cardano.yaci.store.epoch.EpochStoreConfiguration.STORE_EPOCH_ENABLED;
 
@@ -37,6 +38,8 @@ import static com.bloxbean.cardano.yaci.store.epoch.EpochStoreConfiguration.STOR
 @EnableIf(STORE_EPOCH_ENABLED)
 @Slf4j
 public class LocalEpochParamService {
+    private static final AtomicLong FETCH_SEQUENCE = new AtomicLong(0);
+
     private final LocalClientProviderManager localClientProviderManager;
     private final ChainTipService chainTipService;
     private final LocalEpochParamsStorage localProtocolParamsStorage;
@@ -70,8 +73,8 @@ public class LocalEpochParamService {
             //This is required for custom network directly starting from latest era like Conway era. So, after first block, when correct era is detected
             //fetch protocol params.
             try {
-                log.info("Fetching protocol params ...");
-                fetchAndSetCurrentProtocolParams();
+                log.info("Fetching protocol params ... trigger=eraChange, thread={}", Thread.currentThread().getName());
+                fetchAndSetCurrentProtocolParams("eraChange");
             } catch (Exception e) {
                 log.error("Fetching local protocol params failed", e);
             }
@@ -90,8 +93,9 @@ public class LocalEpochParamService {
         era = Era.valueOf(epochChangeEvent.getEra().name());
         if (era.getValue() >= Era.Conway.value) {
             try {
-                log.info("Epoch change event received. Fetching protocol params ...");
-                fetchAndSetCurrentProtocolParams();
+                log.info("Epoch change event received. Fetching protocol params ... trigger=epochEvent, previousEpoch={}, epoch={}, era={}, thread={}",
+                        epochChangeEvent.getPreviousEpoch(), epochChangeEvent.getEpoch(), era, Thread.currentThread().getName());
+                fetchAndSetCurrentProtocolParams("epochEvent");
             } catch (Exception e) {
                 log.error("Fetching local protocol params failed", e);
             }
@@ -99,50 +103,90 @@ public class LocalEpochParamService {
     }
 
     public synchronized void fetchAndSetCurrentProtocolParams() {
+        fetchAndSetCurrentProtocolParams("manual");
+    }
+
+    public synchronized void fetchAndSetCurrentProtocolParams(String trigger) {
+        long fetchId = FETCH_SEQUENCE.incrementAndGet();
+        long fetchStart = System.nanoTime();
+        String threadName = Thread.currentThread().getName();
+        log.info("[pp-fetch:{}] start trigger={}, currentEra={}, thread={}", fetchId, trigger, era, threadName);
+
+        long tipStart = System.nanoTime();
         Optional<Tuple<Tip, Integer>> epochAndTip = chainTipService.getTipAndCurrentEpoch();
+        log.info("[pp-fetch:{}] getTipAndCurrentEpoch completed present={}, durationMs={}",
+                fetchId, epochAndTip.isPresent(), elapsedMs(tipStart));
         if (epochAndTip.isEmpty()) {
-            log.error("Epoch is null. Cannot fetch protocol params");
+            log.error("[pp-fetch:{}] Epoch is null. Cannot fetch protocol params. totalDurationMs={}",
+                    fetchId, elapsedMs(fetchStart));
             return;
         }
 
+        Tip tip = epochAndTip.get()._1;
         Integer epoch = epochAndTip.get()._2;
+        log.info("[pp-fetch:{}] resolved tip slot={}, hash={}, epoch={}",
+                fetchId, tip.getPoint().getSlot(), tip.getPoint().getHash(), epoch);
+
+        long providerStart = System.nanoTime();
         Optional<LocalClientProvider> localClientProvider
                 = localClientProviderManager != null ? localClientProviderManager.getLocalClientProvider() : Optional.empty();
+        log.info("[pp-fetch:{}] getLocalClientProvider completed present={}, durationMs={}",
+                fetchId, localClientProvider.isPresent(), elapsedMs(providerStart));
 
         try {
             var localStateQueryClient = localClientProvider.map(LocalClientProvider::getLocalStateQueryClient).orElse(null);
             if (localStateQueryClient == null) {
-                log.info("LocalStateQueryClient is not initialized. Please check if n2c-node-socket-path or n2c-host is configured properly.");
+                log.info("[pp-fetch:{}] LocalStateQueryClient is not initialized. Please check if n2c-node-socket-path or n2c-host is configured properly. totalDurationMs={}",
+                        fetchId, elapsedMs(fetchStart));
                 return;
             }
 
             //Try to release first before a new query to avoid stale data
+            long releaseStart = System.nanoTime();
             try {
                 localStateQueryClient.release().block(Duration.ofSeconds(5));
+                log.info("[pp-fetch:{}] local state release completed durationMs={}", fetchId, elapsedMs(releaseStart));
             } catch (Exception e) {
-                //Ignore the error
+                log.warn("[pp-fetch:{}] local state release failed after durationMs={}: {}",
+                        fetchId, elapsedMs(releaseStart), e.getMessage());
             }
 
+            long acquireStart = System.nanoTime();
             try {
                 localStateQueryClient.acquire().block(Duration.ofSeconds(5));
+                log.info("[pp-fetch:{}] local state acquire completed durationMs={}", fetchId, elapsedMs(acquireStart));
             } catch (Exception e) {
-                // Ignore the error
+                log.warn("[pp-fetch:{}] local state acquire failed after durationMs={}: {}",
+                        fetchId, elapsedMs(acquireStart), e.getMessage());
             }
 
+            long queryStart = System.nanoTime();
             Mono<CurrentProtocolParamQueryResult> mono = localStateQueryClient.executeQuery(new CurrentProtocolParamsQuery(era));
             mono.map(CurrentProtocolParamQueryResult::getProtocolParams)
+                    .doOnSubscribe(subscription ->
+                            log.info("[pp-fetch:{}] protocol params query subscribed era={}, epoch={}",
+                                    fetchId, era, epoch))
                     .doOnError(throwable ->
-                            log.error("Protocol param sync error {}", throwable.getMessage()))
+                            log.error("[pp-fetch:{}] protocol param sync error after durationMs={}: {}",
+                                    fetchId, elapsedMs(queryStart), throwable.getMessage(), throwable))
                     .doFinally(
-                            signalType -> localClientProviderManager.close(localClientProvider.get()))
+                            signalType -> {
+                                log.info("[pp-fetch:{}] protocol params query finished signal={}, queryDurationMs={}, totalDurationMs={}",
+                                        fetchId, signalType, elapsedMs(queryStart), elapsedMs(fetchStart));
+                                localClientProvider.ifPresent(localClientProviderManager::close);
+                            })
                     .subscribe(protocolParamUpdate -> {
                         EpochParam epochParam = new EpochParam();
                         epochParam.setEpoch(epoch);
                         epochParam.setParams(convertProtoParams(protocolParamUpdate));
                         localProtocolParamsStorage.save(epochParam);
+                        log.info("[pp-fetch:{}] protocol params saved epoch={}, totalDurationMs={}",
+                                fetchId, epoch, elapsedMs(fetchStart));
                     });
         } catch (Exception e) {
-            localClientProviderManager.close(localClientProvider.get());
+            log.error("[pp-fetch:{}] protocol params fetch failed before subscription. totalDurationMs={}",
+                    fetchId, elapsedMs(fetchStart), e);
+            localClientProvider.ifPresent(localClientProviderManager::close);
         }
     }
 
@@ -162,6 +206,10 @@ public class LocalEpochParamService {
 
     private ProtocolParams convertProtoParams(ProtocolParamUpdate protocolParamUpdate) {
         return domainMapper.toProtocolParams(protocolParamUpdate);
+    }
+
+    private long elapsedMs(long startNanos) {
+        return Duration.ofNanos(System.nanoTime() - startNanos).toMillis();
     }
 
 }

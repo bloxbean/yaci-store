@@ -27,7 +27,7 @@ class LocalEpochParamsSchedulerTest {
         localProtocolParamsSchduler = new LocalEpochParamsScheduler(protocolParamService, storeProperties);
 
         localProtocolParamsSchduler.scheduleFetchAndSetCurrentProtocolParams();
-        Mockito.verify(protocolParamService, Mockito.times(1)).fetchAndSetCurrentProtocolParams();
+        Mockito.verify(protocolParamService, Mockito.times(1)).fetchAndSetCurrentProtocolParams("scheduler");
     }
 
     @Test
@@ -36,6 +36,6 @@ class LocalEpochParamsSchedulerTest {
         localProtocolParamsSchduler = new LocalEpochParamsScheduler(protocolParamService, storeProperties);
         
         localProtocolParamsSchduler.scheduleFetchAndSetCurrentProtocolParams();
-        Mockito.verify(protocolParamService, Mockito.never()).fetchAndSetCurrentProtocolParams();
+        Mockito.verify(protocolParamService, Mockito.never()).fetchAndSetCurrentProtocolParams(Mockito.anyString());
     }
 }
