@@ -568,6 +568,10 @@ public class BlockFetchService implements BlockChainDataListener {
                 .previousEra(previousEra)
                 .era(eventMetadata.getEra())
                 .build();
+        log.info("Publishing EpochChangeEvent previousEpoch={}, epoch={}, previousEra={}, era={}, block={}, slot={}, hash={}, syncMode={}, thread={}",
+                previousEpoch, eventMetadata.getEpochNumber(), previousEra, eventMetadata.getEra(),
+                eventMetadata.getBlock(), eventMetadata.getSlot(), eventMetadata.getBlockHash(),
+                eventMetadata.isSyncMode(), Thread.currentThread().getName());
         publisher.publishEvent(epochChangeEvent);
     }
 
