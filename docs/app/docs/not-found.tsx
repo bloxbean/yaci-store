@@ -33,6 +33,10 @@ export default function NotFound() {
       router.replace('/docs/v2/introduction/overview')
       return
     }
+    if (pathname.includes('/docs/v3')) {
+      router.replace('/docs/v3/introduction/overview')
+      return
+    }
 
     // Default to V2 overview
     router.replace('/docs/v2/introduction/overview')

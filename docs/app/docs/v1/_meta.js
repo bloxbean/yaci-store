@@ -5,6 +5,5 @@ export default {
   "stores": "Stores",
   "api-reference": "API Reference",
   "advanced-configuration": "Advanced Configuration",
-  "upgrade-guide": "Upgrade Guide",
   "showcase": "Showcase"
 }
