@@ -59,6 +59,16 @@ class RollbackLoaderTest {
         assertEquals("slot", assetTable.getCondition().getColumn());
         assertEquals(">", assetTable.getCondition().getOperator());
         assertNull(assetTable.getCondition().getOffset());
+
+        RollbackConfig.TableRollbackDefinition cip68Table = findTableByName(config.getTables(), "cip68_metadata");
+        assertNotNull(cip68Table);
+        assertEquals("DELETE", cip68Table.getOperation());
+        assertEquals("slot", cip68Table.getCondition().getType());
+        assertEquals("slot", cip68Table.getCondition().getColumn());
+        assertEquals(">", cip68Table.getCondition().getOperator());
+        assertNull(cip68Table.getCondition().getOffset());
+
+        assertNull(findTableByName(config.getTables(), "cip113_registry_node"));
     }
 
     @Test
@@ -73,6 +83,8 @@ class RollbackLoaderTest {
         assertTrue(tableNames.contains("adapot_jobs"));
         assertTrue(tableNames.contains("tx_input"));
         assertTrue(tableNames.contains("assets"));
+        assertTrue(tableNames.contains("cip68_metadata"));
+        assertFalse(tableNames.contains("cip113_registry_node"));
     }
 
     @Test
