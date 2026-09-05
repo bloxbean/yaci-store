@@ -1,11 +1,16 @@
 - table: address_utxo
   indexes:
+    # btree is impossible on mainnet for this column: at least one Byron-era
+    # address exceeds the btree row limit ("index row requires 10520 bytes,
+    # maximum size is 8191"). The BF address endpoints look this column up by
+    # equality only, which a hash index serves without any key-size limit.
     - name: idx_address_utxo_owner_addr_full
       columns:
         - owner_addr_full
-    - name: idx_address_utxo_block
+      type: hash
+    - name: idx_address_utxo_block_number
       columns:
-        - block_hash
+        - block
 
 - table: assets
   indexes:
@@ -57,3 +62,10 @@
       excludes:
         - mysql
         - h2
+
+- table: reward
+  indexes:
+    - name: idx_reward_pool_id_earned_epoch
+      columns:
+        - pool_id
+        - earned_epoch

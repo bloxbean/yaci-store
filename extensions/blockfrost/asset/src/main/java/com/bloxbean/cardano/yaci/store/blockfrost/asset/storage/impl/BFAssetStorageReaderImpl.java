@@ -249,7 +249,7 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
     private List<BFAssetHistory> findAssetHistoryFallback(String unit, int page, int count, Order order) {
         int offset = Math.max(page, 0) * count;
         Condition assetCondition = buildAssetCondition(unit);
-        SortField<?> slotOrder = order == Order.desc ? ASSETS.SLOT.desc().nullsLast() : ASSETS.SLOT.asc().nullsLast();
+        SortField<?> slotOrder = order == Order.desc ? ASSETS.SLOT.desc() : ASSETS.SLOT.asc().nullsLast();
         SortField<?> txIndexOrder = order == Order.desc
                 ? TRANSACTION.TX_INDEX.desc().nullsLast()
                 : TRANSACTION.TX_INDEX.asc().nullsFirst();
@@ -722,7 +722,7 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
         Field<Long> txIndexField = DSL.coalesce(txIndexSortField, 0).cast(Long.class).as("tx_index");
 
         SortField<?> blockOrder = order == Order.desc
-                ? TRANSACTION.BLOCK.desc().nullsLast()
+                ? TRANSACTION.BLOCK.desc()
                 : TRANSACTION.BLOCK.asc().nullsLast();
         SortField<?> txIndexOrder = order == Order.desc
                 ? txIndexSortField.desc().nullsLast()

@@ -164,4 +164,5 @@ public class StoreProperties { //TODO - replace this with YaciStoreProperties fr
     private long autoRestartDebounceWindowMs = 30000;
     private int autoRestartMaxAttempts = 5;
     private long autoRestartBackoffBaseMs = 5000;
+    private long autoRestartWindowMs = 600000;
 }

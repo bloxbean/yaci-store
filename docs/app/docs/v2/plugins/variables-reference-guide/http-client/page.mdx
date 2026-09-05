@@ -2,12 +2,12 @@
 
 ## Overview
 
-The enhanced `PluginHttpClient` provides a comprehensive HTTP client designed specifically for plugin developers using MVEL, JavaScript, or Python. It offers simple, intuitive methods for common HTTP operations with built-in support for authentication, JSON handling, and error management.
+The enhanced `PluginHttpClient` provides a comprehensive HTTP client designed specifically for plugin developers using MVEL, JavaScript, Python, or Java. It offers simple, intuitive methods for common HTTP operations with built-in support for authentication, JSON handling, and error management.
 
 ## Key Features
 
 - **Simple API**: Minimal parameters for common use cases
-- **Script-Friendly**: Designed for MVEL, JavaScript, and Python developers
+- **Script-Friendly**: Designed for MVEL, JavaScript, Python, and Java developers
 - **JSON-first**: Built-in JSON serialization and parsing with `asJson()` and `asJsonList()`
 - **Authentication**: Easy basic auth, bearer tokens, and API keys
 - **Error Handling**: Status checking and timeout support
@@ -51,6 +51,25 @@ response = http.get("https://api.example.com/data", {
 if response.isSuccess():
     data = response.asJsonMap()
     print(f"Data received: {len(data)} items")
+```
+
+```java
+// Java - Basic GET request (http() from the PluginContext)
+PluginHttpClient http = context().http();
+
+HttpResponseWrapper response = http.get("https://api.example.com/users");
+if (response.isSuccess()) {
+    Map<String, Object> users = response.asJsonMap();
+    System.out.println("Found " + users.size() + " users");
+}
+
+// GET with query parameters
+HttpResponseWrapper resp = http.getWithParams("https://api.example.com/search",
+        Map.of("q", "example", "limit", "10"));
+
+// GET with headers
+HttpResponseWrapper resp2 = http.get("https://api.example.com/data",
+        Map.of("User-Agent", "YaciPlugin/1.0", "Accept", "application/json"));
 ```
 
 ### JSON POST Requests
@@ -103,6 +122,37 @@ if response.isSuccess():
     print("Transaction data sent successfully")
 ```
 
+```java
+// Java - POST JSON data (http() returns a PluginHttpClient)
+PluginHttpClient http = context().http();
+
+// POST a Map (postJson(url, Map<String, Object> body))
+Map<String, Object> user = Map.of(
+    "name", "Alice",
+    "email", "alice@example.com",
+    "age", 30
+);
+HttpResponseWrapper response = http.postJson("https://api.example.com/users", user);
+if (response.isSuccess()) {
+    Map<String, Object> createdUser = response.asJsonMap();
+    System.out.println("Created user with ID: " + createdUser.get("id"));
+} else {
+    System.out.println("Failed to create user: " + response.getStatus());
+}
+
+// POST with custom headers
+Map<String, Object> newRecord = Map.of(
+    "event_id", "evt123",
+    "amount", 1000000,
+    "user_id", "user1"
+);
+HttpResponseWrapper resp = http.postJson("https://webhook.example.com/notify", newRecord,
+        Map.of("Content-Type", "application/json", "X-Source", "yaci-store"));
+if (resp.isError()) {
+    System.err.println("Webhook failed: " + resp.getStatus() + " " + resp.getBody());
+}
+```
+
 ## Authentication Examples
 
 ### Basic Authentication
@@ -126,6 +176,23 @@ const response = http.postJsonWithBasicAuth(
 );
 ```
 
+```java
+// Java - Basic auth (http() returns a PluginHttpClient)
+PluginHttpClient http = context().http();
+
+// GET with basic auth
+HttpResponseWrapper response = http.getWithBasicAuth(
+    "https://api.example.com/protected", "username", "password");
+if (response.isSuccess()) {
+    Map<String, Object> data = response.asJsonMap();
+}
+
+// POST with basic auth
+Object payload = Map.of("action", "sync", "item_id", 12345);
+HttpResponseWrapper resp = http.postJsonWithBasicAuth(
+    "https://api.example.com/sync", payload, "api_user", "secret_key");
+```
+
 ### Bearer Token Authentication
 
 ```javascript
@@ -140,6 +207,18 @@ bearer_token = os.getenv("API_TOKEN")
 response = http.getWithBearerToken("https://api.example.com/data", bearer_token)
 ```
 
+```java
+// Java - Bearer token from configuration (http()/environment() from the PluginContext)
+PluginHttpClient http = context().http();
+String bearerToken = context().environment().getRequiredProperty("API_TOKEN");
+HttpResponseWrapper response = http.getWithBearerToken("https://api.example.com/data", bearerToken);
+
+// POST JSON with a bearer token
+Object payload = Map.of("event", "sync");
+HttpResponseWrapper resp = http.postJsonWithBearerToken(
+    "https://api.example.com/events", payload, bearerToken);
+```
+
 ### API Key Authentication
 
 ```javascript
@@ -150,6 +229,18 @@ const response = http.getWithApiKey("https://api.example.com/stats", "X-API-Key"
 ```javascript
 // MVEL - Custom API key header
 response = http.getWithApiKey("https://api.example.com/data", "Authorization", "ApiKey " + apiKey)
+```
+
+```java
+// Java - API key in a custom header (http() returns a PluginHttpClient)
+PluginHttpClient http = context().http();
+
+// Default header "X-API-Key"
+HttpResponseWrapper response = http.getWithApiKey("https://api.example.com/stats", "abc123");
+
+// Custom header name
+String apiKey = context().environment().getRequiredProperty("api.key");
+HttpResponseWrapper resp = http.getWithApiKey("https://api.example.com/data", "Authorization", "ApiKey " + apiKey);
 ```
 
 ## Form Data Submission
@@ -178,6 +269,28 @@ response = http.postForm("https://webhook.site/unique-id", form_fields, {
 })
 ```
 
+```java
+// Java - Form submission (http() returns a PluginHttpClient)
+PluginHttpClient http = context().http();
+
+// postForm takes Map<String, String>
+Map<String, String> formData = Map.of(
+    "name", "Transaction Alert",
+    "email", "admin@example.com",
+    "message", "Large value detected: " + amount
+);
+HttpResponseWrapper response = http.postForm("https://contact.example.com/submit", formData);
+
+// Form with custom headers
+Map<String, String> formFields = Map.of(
+    "event_type", "item_processed",
+    "block_number", String.valueOf(blockNumber),
+    "timestamp", String.valueOf(System.currentTimeMillis())
+);
+HttpResponseWrapper resp = http.postForm("https://webhook.site/unique-id", formFields,
+        Map.of("X-Source", "yaci-store-plugin"));
+```
+
 ## Response Handling
 
 ### Status Code Checking
@@ -195,6 +308,22 @@ if (response.isSuccess()) {
     // Maybe retry logic here
 } else {
     console.info("Unexpected status:", response.getStatus());
+}
+```
+
+```java
+// Java - Comprehensive error handling (http() returns a PluginHttpClient)
+HttpResponseWrapper response = context().http().get("https://api.example.com/status");
+
+if (response.isSuccess()) {
+    System.out.println("API is healthy");
+} else if (response.isClientError()) {
+    System.err.println("Client error: " + response.getStatus() + " " + response.getBody());
+} else if (response.isServerError()) {
+    System.err.println("Server error: " + response.getStatus());
+    // Maybe retry logic here
+} else {
+    System.out.println("Unexpected status: " + response.getStatus());
 }
 ```
 
@@ -245,6 +374,34 @@ else:
     print(f"Unexpected content type: {response.getContentType()}")
 ```
 
+```java
+// Java - Parse JSON objects and arrays (http() returns a PluginHttpClient)
+PluginHttpClient http = context().http();
+HttpResponseWrapper response = http.get("https://api.example.com/blocks/latest");
+
+if (response.isJson()) {
+    // For a JSON object — asJson() / asJsonMap() return Map<String, Object>
+    Map<String, Object> blockData = response.asJsonMap();
+    Object blockNumber = blockData.get("number");
+    Object blockHash = blockData.get("hash");
+    System.out.println("Latest block: " + blockNumber + " (" + blockHash + ")");
+
+    // For a JSON array — asJsonList() returns List<Object>
+    HttpResponseWrapper txResp = http.get("https://api.example.com/transactions");
+    if (txResp.isJson()) {
+        List<Object> transactions = txResp.asJsonList();
+        System.out.println("Found " + transactions.size() + " transactions");
+        for (Object tx : transactions) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> txMap = (Map<String, Object>) tx;
+            System.out.println("TX: " + txMap.get("hash") + ", Amount: " + txMap.get("amount"));
+        }
+    }
+} else {
+    System.out.println("Unexpected content type: " + response.getContentType());
+}
+```
+
 ### Response Headers
 
 ```javascript
@@ -256,6 +413,17 @@ const rateLimit = response.getHeader("X-RateLimit-Remaining");
 const etag = response.getHeader("ETag");
 
 console.log(`Content-Type: ${contentType}, Rate Limit: ${rateLimit}`);
+```
+
+```java
+// Java - Access response headers (http() returns a PluginHttpClient)
+HttpResponseWrapper response = context().http().get("https://api.example.com/data");
+
+String contentType = response.getContentType();
+String rateLimit = response.getHeader("X-RateLimit-Remaining");
+String etag = response.getHeader("ETag");
+
+System.out.println("Content-Type: " + contentType + ", Rate Limit: " + rateLimit);
 ```
 
 ## Advanced Usage
@@ -293,4 +461,32 @@ response = http.postJsonWithTimeoutSeconds(
     {"alert": "High priority"},
     5  # 5 seconds
 )
+```
+
+```java
+// Java - Custom timeouts (http() returns a PluginHttpClient)
+PluginHttpClient http = context().http();
+
+// Timeout in milliseconds
+HttpResponseWrapper response = http.getWithTimeout("https://slow-api.example.com/process", 60000L);
+if (response.isSuccess()) {
+    Map<String, Object> data = response.asJsonMap();
+}
+
+// Timeout in seconds (more readable)
+HttpResponseWrapper resp = http.getWithTimeoutSeconds("https://api.example.com/data", 30);
+
+// POST with timeout in milliseconds
+Object body = Map.of("alert", "High priority");
+HttpResponseWrapper r1 = http.postJsonWithTimeout("https://api.example.com/urgent", body, 5000L);
+
+// POST with timeout in seconds (cleaner)
+HttpResponseWrapper r2 = http.postJsonWithTimeoutSeconds("https://api.example.com/urgent", body, 5);
+
+// Generic retry wrapper — retries any HTTP operation (exponential backoff)
+HttpResponseWrapper retried = http.retry(
+    () -> http.get("https://flaky-api.example.com/data"),
+    3,    // max retries
+    1     // initial delay in seconds
+);
 ```

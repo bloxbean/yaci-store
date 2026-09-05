@@ -41,8 +41,8 @@ public class BFBlocksStorageReaderImpl implements BFBlocksStorageReader {
         var nextBlockField = nextBlockField(block);
         var confirmationsField = confirmationsField(block);
 
-        return blockBaseSelect(block, nextBlockField, confirmationsField, DSL.trueCondition())
-                .orderBy(block.NUMBER.desc().nullsLast())
+        return blockBaseSelect(block, nextBlockField, confirmationsField, block.NUMBER.isNotNull())
+                .orderBy(block.NUMBER.desc())
                 .limit(1)
                 .fetchOptional(record -> toBlockRow(record, block, nextBlockField, confirmationsField));
     }
@@ -76,7 +76,7 @@ public class BFBlocksStorageReaderImpl implements BFBlocksStorageReader {
         var confirmationsField = confirmationsField(block);
 
         return blockBaseSelect(block, nextBlockField, confirmationsField, block.SLOT.eq(slot))
-                .orderBy(block.NUMBER.desc().nullsLast())
+                .orderBy(block.NUMBER.desc())
                 .limit(1)
                 .fetchOptional(record -> toBlockRow(record, block, nextBlockField, confirmationsField));
     }
@@ -93,7 +93,7 @@ public class BFBlocksStorageReaderImpl implements BFBlocksStorageReader {
                 confirmationsField,
                 block.EPOCH.eq(epoch).and(block.EPOCH_SLOT.eq(epochSlot))
         )
-                .orderBy(block.NUMBER.desc().nullsLast())
+                .orderBy(block.NUMBER.desc())
                 .limit(1)
                 .fetchOptional(record -> toBlockRow(record, block, nextBlockField, confirmationsField));
     }
@@ -125,7 +125,7 @@ public class BFBlocksStorageReaderImpl implements BFBlocksStorageReader {
         // then reverse to return in ascending order matching Blockfrost convention.
         List<BFBlockRow> results = new ArrayList<>(
                 blockBaseSelect(block, nextBlockField, confirmationsField, block.NUMBER.lt(blockNumber))
-                        .orderBy(block.NUMBER.desc().nullsLast())
+                        .orderBy(block.NUMBER.desc())
                         .limit(count)
                         .offset(offset)
                         .fetch(record -> toBlockRow(record, block, nextBlockField, confirmationsField))
@@ -215,13 +215,10 @@ public class BFBlocksStorageReaderImpl implements BFBlocksStorageReader {
                 .and(spentInput.SPENT_TX_HASH.isNotNull())
                 .and(spentAddressExpr.isNotNull());
 
-        Table<?> affected = outputsSelect.unionAll(spentSelect).asTable("affected");
-        Field<String> affectedAddressField = affected.field("address", String.class);
-        Field<String> affectedTxHashField = affected.field("tx_hash", String.class);
-
-        if (affectedAddressField == null || affectedTxHashField == null) {
-            return List.of();
-        }
+        var affectedCte = DSL.name("affected").as(outputsSelect.unionAll(spentSelect));
+        Table<?> affected = DSL.table(DSL.name("affected"));
+        Field<String> affectedAddressField = DSL.field(DSL.name("affected", "address"), String.class);
+        Field<String> affectedTxHashField = DSL.field(DSL.name("affected", "tx_hash"), String.class);
 
         Table<?> pagedAddresses = dsl.selectDistinct(affectedAddressField.as("address"))
                 .from(affected)
@@ -231,15 +228,13 @@ public class BFBlocksStorageReaderImpl implements BFBlocksStorageReader {
                 .offset(offset)
                 .asTable("paged_addresses");
 
-        Field<String> pagedAddressField = pagedAddresses.field("address", String.class);
-        if (pagedAddressField == null) {
-            return List.of();
-        }
+        Field<String> pagedAddressField = DSL.field(DSL.name("paged_addresses", "address"), String.class);
 
         var transaction = TRANSACTION.as("tx");
         Field<Integer> txIndexField = DSL.min(transaction.TX_INDEX).as("tx_index");
 
-        return dsl.select(
+        return dsl.with(affectedCte)
+                .select(
                         pagedAddressField.as("address"),
                         affectedTxHashField.as("tx_hash"),
                         txIndexField

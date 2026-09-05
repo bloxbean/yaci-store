@@ -1,10 +1,14 @@
 package com.bloxbean.cardano.yaci.store.adapot.service;
 
+import com.bloxbean.cardano.yaci.core.model.PoolParams;
 import com.bloxbean.cardano.yaci.store.adapot.domain.RewardRest;
 import com.bloxbean.cardano.yaci.store.adapot.domain.UnclaimedRewardRest;
 import com.bloxbean.cardano.yaci.store.adapot.storage.RewardStorage;
+import com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig;
+import com.bloxbean.cardano.yaci.store.events.GenesisStaking;
 import com.bloxbean.cardano.yaci.store.events.domain.RewardRestType;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionStorageReader;
+import org.cardanofoundation.rewards.calculation.domain.PoolBlock;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -15,6 +19,8 @@ import java.util.List;
 
 import static com.bloxbean.cardano.client.common.ADAConversionUtil.adaToLovelace;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -25,6 +31,12 @@ class EpochRewardCalculationServiceTest {
 
     @Mock
     private RewardStorage rewardStorage;
+
+    @Mock
+    private GenesisConfig genesisConfig;
+
+    @Mock
+    private BlockInfoService blockInfoService;
 
     @InjectMocks
     private EpochRewardCalculationService epochRewardCalculationService;
@@ -69,5 +81,46 @@ class EpochRewardCalculationServiceTest {
         assertThat(newTreasuryAmount).isEqualTo(expectedTreasury);
     }
 
+    @Test
+    void includeDirectStartGenesisSlot0Block_addsOneBlockToInferredPool() {
+        when(genesisConfig.getGenesisStaking()).thenReturn(new GenesisStaking(
+                List.of(PoolParams.builder().operator("pool1").build()),
+                List.of()));
+        when(blockInfoService.hasPoolBlockAtSlot(0)).thenReturn(false);
+
+        List<PoolBlock> adjustedBlocks = epochRewardCalculationService.includeDirectStartGenesisSlot0Block(
+                0,
+                0,
+                List.of(PoolBlock.builder().poolId("pool1").blockCount(58).build()));
+
+        assertThat(adjustedBlocks)
+                .extracting(PoolBlock::getPoolId, PoolBlock::getBlockCount)
+                .containsExactly(org.assertj.core.groups.Tuple.tuple("pool1", 59));
+    }
+
+    @Test
+    void includeDirectStartGenesisSlot0Block_doesNotChangePublicOrNonGenesisEpochs() {
+        List<PoolBlock> poolBlocks = List.of(PoolBlock.builder().poolId("pool1").blockCount(58).build());
+
+        assertThat(epochRewardCalculationService.includeDirectStartGenesisSlot0Block(0, 1, poolBlocks))
+                .isSameAs(poolBlocks);
+        assertThat(epochRewardCalculationService.includeDirectStartGenesisSlot0Block(1, 0, poolBlocks))
+                .isSameAs(poolBlocks);
+
+        verify(genesisConfig, never()).getGenesisStaking();
+    }
+
+    @Test
+    void includeDirectStartGenesisSlot0Block_doesNotDoubleCountExistingSlot0Block() {
+        when(genesisConfig.getGenesisStaking()).thenReturn(new GenesisStaking(
+                List.of(PoolParams.builder().operator("pool1").build()),
+                List.of()));
+        when(blockInfoService.hasPoolBlockAtSlot(0)).thenReturn(true);
+
+        List<PoolBlock> poolBlocks = List.of(PoolBlock.builder().poolId("pool1").blockCount(59).build());
+
+        assertThat(epochRewardCalculationService.includeDirectStartGenesisSlot0Block(0, 0, poolBlocks))
+                .isSameAs(poolBlocks);
+    }
 
 }

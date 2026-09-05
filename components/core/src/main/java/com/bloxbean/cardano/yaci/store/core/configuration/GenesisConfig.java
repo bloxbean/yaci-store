@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.core.configuration;
 import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.NetworkType;
+import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
 import com.bloxbean.cardano.yaci.store.common.exception.StoreRuntimeException;
 import com.bloxbean.cardano.yaci.store.common.genesis.ByronGenesis;
 import com.bloxbean.cardano.yaci.store.common.genesis.ShelleyGenesis;
@@ -48,7 +49,11 @@ public class GenesisConfig {
 
     private double activeSlotsCoeff;
     private int securityParam;
+    private int updateQuorum;
+    private long slotsPerKesPeriod;
+    private int maxKesEvolutions;
     private BigInteger maxLovelaceSupply = BigInteger.valueOf(45000000000000000L);
+    private ProtocolParams shelleyGenesisProtocolParams;
 
     public GenesisConfig(StoreProperties storeProperties, ObjectMapper objectMapper, ResourceLoader resourceLoader) {
         this.storeProperties = storeProperties;
@@ -186,8 +191,12 @@ public class GenesisConfig {
         shelleySlotLength = shelleyGenesis.getSlotLength();
         activeSlotsCoeff = shelleyGenesis.getActiveSlotsCoeff();
         securityParam = shelleyGenesis.getSecurityParam();
+        updateQuorum = shelleyGenesis.getUpdateQuorum();
+        slotsPerKesPeriod = shelleyGenesis.getSlotsPerKesPeriod();
+        maxKesEvolutions = shelleyGenesis.getMaxKesEvolutions();
         maxLovelaceSupply = shelleyGenesis.getMaxLovelaceSupply();
         epochLength = shelleyGenesis.getEpochLength();
+        shelleyGenesisProtocolParams = shelleyGenesis.getProtocolParams();
 
         long networkMagic = shelleyGenesis.getNetworkMagic();
         if (networkMagic != storeProperties.getProtocolMagic())

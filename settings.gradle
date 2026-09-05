@@ -15,6 +15,7 @@ include 'applications:admin'
 include 'applications:admin-cli'
 
 include 'components:core'
+include 'components:core-api'
 include 'components:events'
 include 'components:common'
 include 'components:client'
@@ -60,6 +61,8 @@ include 'aggregates:governance-rules'
 include 'aggregates:governance-aggr'
 include 'aggregates:epoch-nonce'
 include 'aggregates:analytics-store'
+include 'aggregates:analytics-query'
+include 'aggregates:mcp-server'
 
 include ':starters:spring-boot-starter'
 include ':starters:utxo-spring-boot-starter'
@@ -98,11 +101,17 @@ project(':extensions:blockfrost:blockfrost-address').projectDir = new File('exte
 include ':extensions:blockfrost:blockfrost-asset'
 project(':extensions:blockfrost:blockfrost-asset').projectDir = new File('extensions/blockfrost/asset')
 
+include ':extensions:blockfrost:blockfrost-pools'
+project(':extensions:blockfrost:blockfrost-pools').projectDir = new File('extensions/blockfrost/pools')
+
 include ':extensions:blockfrost:blockfrost-block'
 project(':extensions:blockfrost:blockfrost-block').projectDir = new File('extensions/blockfrost/block')
 
 include ':extensions:blockfrost:blockfrost-account'
 project(':extensions:blockfrost:blockfrost-account').projectDir = new File('extensions/blockfrost/account')
+
+include ':extensions:blockfrost:blockfrost-governance'
+project(':extensions:blockfrost:blockfrost-governance').projectDir = new File('extensions/blockfrost/governance')
 
 include ':extensions:blockfrost:blockfrost-common'
 project(':extensions:blockfrost:blockfrost-common').projectDir = new File('extensions/blockfrost/common')
@@ -119,4 +128,12 @@ project(':extensions:blockfrost:blockfrost-scripts').projectDir = new File('exte
 include ':extensions:blockfrost:blockfrost-util'
 project(':extensions:blockfrost:blockfrost-util').projectDir = new File('extensions/blockfrost/util')
 
+include ':extensions:assets-ext'
+project(':extensions:assets-ext').projectDir = new File('extensions/assets-ext')
+
+include ':starters:assets-ext-spring-boot-starter'
+
 include 'e2e-tests'
+
+// Example apps that embed yaci-store as a library.
+include 'examples:plugins:java:custom-indexer-with-plugins'

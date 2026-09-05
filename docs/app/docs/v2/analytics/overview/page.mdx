@@ -44,6 +44,7 @@ Once the sync reaches tip, exports begin automatically via the `ContinuousSyncSc
 - Uses adaptive gap detection to find and export missing daily and epoch partitions
 - **Catching up**: checks every 1 minute by default (`yaci.store.analytics.continuous-sync.catch-up-interval-minutes`)
 - **Fully synced**: checks every 15 minutes by default (`yaci.store.analytics.continuous-sync.sync-check-interval-minutes`)
+- **Finality**: a day partition is exported only once every row in it is older than the network's rollback bound — the finality window derived from genesis (`k × slotLength / activeSlotsCoeff`, 12 h on mainnet) plus `finality-margin-hours` (1 h) — and the day is `buffer-days` (1) behind that finalized tip. On mainnet that means each UTC day is exported ~13 h after it ends. See [Configuration](/docs/v2/analytics/configuration).
 
 Exported files are written to `./data/analytics/` by default.
 
@@ -75,18 +76,26 @@ DuckDB (in-process, via JDBC)
 ### Module Structure
 
 ```
-analytics/
+analytics-store (write side: exports and catalog ownership)
   admin/           - Admin REST controller and service
   config/          - Spring configuration and properties
-  ducklake/        - DuckLake catalog initialization
+  ducklake/        - DuckLake catalog initialization, catalog snapshot reader
   exporter/        - 47 built-in table exporters (31 daily + 16 epoch)
   gap/             - Gap detection for continuous sync
   helper/          - DuckDB connection helper utilities
-  query/           - DuckLake query controller and service
   scheduler/       - Export schedulers and recovery services
   state/           - Export state management (JPA entities)
   writer/          - Parquet and DuckLake writer services
+
+analytics-query (read side: sandboxed DuckDB engine over the exported data)
+  connection/      - Query engine, view registry, unified (live-federated) views
+  controller/      - REST API under /api/v1/analytics/query/*
+  service/         - Schema discovery, pre-built statistics, SQL validator
+  executor/        - Query execution (timeouts, row cap, JSON-safe results)
 ```
+
+All reads (REST and MCP) go through `analytics-query`; see
+[Query API & Unified Views](/docs/v2/analytics/query-api).
 
 ### Schedulers
 

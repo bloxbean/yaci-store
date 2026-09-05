@@ -1,12 +1,12 @@
 [libraries]
-yaci = "com.bloxbean.cardano:yaci:0.4.4"
+yaci = "com.bloxbean.cardano:yaci:0.4.5"
 cardano-client-lib = "com.bloxbean.cardano:cardano-client-lib:0.8.0-pre4"
 cardano-client-backend = "com.bloxbean.cardano:cardano-client-backend:0.8.0-pre4"
 cardano-client-backend-ogmios = "com.bloxbean.cardano:cardano-client-backend-ogmios:0.8.0-pre4"
 cardano-client-backend-blockfrost = "com.bloxbean.cardano:cardano-client-backend-blockfrost:0.8.0-pre4"
-scalus-bloxbean-cardano-client-lib = "org.scalus:scalus-bloxbean-cardano-client-lib_3:0.17.0"
+scalus-bloxbean-cardano-client-lib = "org.scalus:scalus-bloxbean-cardano-client-lib_3:1.1.0"
 
-cf-rewards="org.cardanofoundation:cf-rewards-calculation:1.0.0"
+cf-rewards="org.cardanofoundation:cf-rewards-calculation:1.0.2"
 
 rocks-types="com.bloxbean:rocks-types:0.0.1-preview6"
 
@@ -27,7 +27,7 @@ messagepack-jackson="org.msgpack:jackson-dataformat-msgpack:0.9.6"
 parallel-collector="com.pivovarit:parallel-collectors:3.0.0"
 apache-commons-pool="org.apache.commons:commons-pool2:2.12.0"
 
-duckdb-jdbc="org.duckdb:duckdb_jdbc:1.4.4.0"
+duckdb-jdbc="org.duckdb:duckdb_jdbc:1.5.5.0"
 
 vavr="io.vavr:vavr:0.10.5"
 commons-csv="org.apache.commons:commons-csv:1.14.0"

@@ -75,15 +75,24 @@ public final class VoteTallyCalculator {
         BigInteger doNotVote = nz(spo.getDoNotVoteStake());
 
         BigInteger totalYesStake = yesVote;
-        if (type == GovActionType.NO_CONFIDENCE) {
-            totalYesStake = totalYesStake.add(delegateToNoConfidenceDRep);
-        }
+        BigInteger totalAbstainStake = abstainVote;
 
-        BigInteger totalAbstainStake = abstainVote.add(delegateAutoAbstainDRep);
-
-        // In bootstrap phase, all do not vote stake is considered as abstain stake except for HardForkInitiationAction
-        if (isInBootstrapPhase && type != GovActionType.HARD_FORK_INITIATION_ACTION) {
-            totalAbstainStake = totalAbstainStake.add(doNotVote);
+        /*
+            Match spoAcceptedRatio in cardano-ledger's Ratify.hs: handle HardForkInitiation
+            before the bootstrap rule, then apply default delegation only post-bootstrap.
+         */
+        if (type != GovActionType.HARD_FORK_INITIATION_ACTION) {
+            if (isInBootstrapPhase) {
+                totalAbstainStake = totalAbstainStake
+                        .add(delegateAutoAbstainDRep)
+                        .add(delegateToNoConfidenceDRep)
+                        .add(doNotVote);
+            } else {
+                totalAbstainStake = totalAbstainStake.add(delegateAutoAbstainDRep);
+                if (type == GovActionType.NO_CONFIDENCE) {
+                    totalYesStake = totalYesStake.add(delegateToNoConfidenceDRep);
+                }
+            }
         }
 
         BigInteger totalNoStake = total.subtract(totalYesStake).subtract(totalAbstainStake);

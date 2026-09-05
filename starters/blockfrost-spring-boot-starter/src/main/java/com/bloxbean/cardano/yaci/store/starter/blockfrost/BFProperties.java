@@ -31,6 +31,8 @@ public class BFProperties {
             private Scripts scripts = new Scripts();
             private Metadata metadata = new Metadata();
             private Util util = new Util();
+            private Pools pools = new Pools();
+            private Governance governance = new Governance();
 
             @Getter
             @Setter
@@ -83,6 +85,18 @@ public class BFProperties {
             @Getter
             @Setter
             public static final class Util {
+                private boolean enabled = true;
+            }
+
+            @Getter
+            @Setter
+            public static final class Pools {
+                private boolean enabled = true;
+            }
+
+            @Getter
+            @Setter
+            public static final class Governance {
                 private boolean enabled = true;
             }
 

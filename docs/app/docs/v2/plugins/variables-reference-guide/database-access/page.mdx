@@ -26,6 +26,17 @@ txCount = result["tx_count"];
 System.out.println("Address has " + txCount + " transactions");
 ```
 
+```java
+// Java - Count transactions for an address (namedJdbc() from the PluginContext)
+Map<String, Object> params = Map.of("address", "addr1...");
+Map<String, Object> result = context().namedJdbc().queryForMap(
+    "SELECT COUNT(distinct tx_hash) as tx_count FROM address_utxo WHERE owner_addr = :address",
+    params
+);
+long txCount = ((Number) result.get("tx_count")).longValue();
+System.out.println("Address has " + txCount + " transactions");
+```
+
 ### Writing Data
 ```javascript
 // JavaScript - Insert custom data
@@ -35,6 +46,18 @@ const params = {
     timestamp: Date.now()
 };
 named_jdbc.update(
+    "INSERT INTO plugin_tracking (tx_hash, processed, timestamp) VALUES (:txHash, :processed, :timestamp)",
+    params
+);
+```
+
+```java
+// Java - Insert custom data
+Map<String, Object> params = new HashMap<>();
+params.put("txHash", transaction.getTxHash());
+params.put("processed", true);
+params.put("timestamp", System.currentTimeMillis());
+context().namedJdbc().update(
     "INSERT INTO plugin_tracking (tx_hash, processed, timestamp) VALUES (:txHash, :processed, :timestamp)",
     params
 );
@@ -52,7 +75,7 @@ named_jdbc.update(
 
 ### named_jdbc Methods
 
-<Tabs items={['MVEL', 'JavaScript', 'Python']}>
+<Tabs items={['MVEL', 'JavaScript', 'Python', 'Java']}>
 <Tabs.Tab>
 ```javascript
 // Query for single row
@@ -77,7 +100,6 @@ rowsUpdated = named_jdbc.update(
 );
 ```
 </Tabs.Tab>
-
 <Tabs.Tab>
 ```javascript
 // Query for single row
@@ -102,7 +124,6 @@ const rowsUpdated = named_jdbc.update(
 );
 ```
 </Tabs.Tab>
-
 <Tabs.Tab>
 ```python
 # Query for single row
@@ -127,6 +148,30 @@ rows_updated = named_jdbc.update(
 )
 ```
 </Tabs.Tab>
+<Tabs.Tab>
+```java
+// Query for single row
+Map<String, Object> params = Map.of("blockNumber", 12345);
+Map<String, Object> block = context().namedJdbc().queryForMap(
+    "SELECT * FROM block WHERE number = :blockNumber",
+    params
+);
+
+// Query for multiple rows
+Map<String, Object> params2 = Map.of("epoch", 400);
+List<Map<String, Object>> blocks = context().namedJdbc().queryForList(
+    "SELECT * FROM block WHERE epoch = :epoch ORDER BY slot",
+    params2
+);
+
+// Update operations
+Map<String, Object> params3 = Map.of("status", "processed", "id", recordId);
+int rowsUpdated = context().namedJdbc().update(
+    "UPDATE processing_queue SET status = :status WHERE id = :id",
+    params3
+);
+```
+</Tabs.Tab>
 </Tabs>
 
 ## Best Practices
@@ -146,6 +191,15 @@ params = ["hash": userInput];
 named_jdbc.queryForMap("SELECT * FROM tx WHERE hash = :hash", params);
 ```
 
+```java
+// BAD - SQL injection risk
+String query = "SELECT * FROM tx WHERE hash = '" + userInput + "'";
+
+// GOOD - safe parameterized query
+Map<String, Object> params = Map.of("hash", userInput);
+context().namedJdbc().queryForMap("SELECT * FROM tx WHERE hash = :hash", params);
+```
+
 ### 2. Handle Null Results
 
 ```javascript
@@ -159,5 +213,20 @@ if (result && result.hash) {
     processBlock(result);
 } else {
     console.log("Block not found");
+}
+```
+
+```java
+// Java - Safe null handling (queryForMap throws EmptyResultDataAccessException if no row matches)
+try {
+    Map<String, Object> result = context().namedJdbc().queryForMap(
+        "SELECT * FROM block WHERE number = :num",
+        Map.of("num", blockNumber)
+    );
+    if (result.get("hash") != null) {
+        processBlock(result);
+    }
+} catch (org.springframework.dao.EmptyResultDataAccessException e) {
+    System.out.println("Block not found");
 }
 ```
