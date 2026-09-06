@@ -172,6 +172,12 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
         return findAssetHistoryFallback(unit, page, count, order);
     }
 
+    /**
+     * Pages an asset's mint and burn events by {@code (slot, tx_index)}. The first phase works only with the
+     * asset rows so the {@code transaction} join used to obtain {@code tx_index} is limited to the page's slot
+     * range. All events in the boundary slots must be included before the final ranking because the provisional
+     * slot-only page may split transactions that share a slot.
+     */
     private List<BFAssetHistory> findAssetHistoryPostgres(String unit, int page, int count, Order order) {
         int offset = Math.max(page, 0) * count;
         String slotOrder = order == Order.desc ? "desc nulls last" : "asc nulls last";
@@ -185,11 +191,15 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
         Table<?> historyPage = DSL.table(
                 """
                 (
+                    /* Preserve every mint/burn event for the unit. Materialize the set because the provisional
+                       page, prefix count, and candidate selection all reuse it. */
                     with events as materialized (
                         select tx_hash, mint_type, quantity, slot::bigint as slot
                         from assets
                         where unit = {2}
                     ),
+                    /* This page establishes only the slot boundaries; tx_index is not available until the
+                       transaction join below, so these rows are not yet the final page. */
                     page_window as materialized (
                         select slot, tx_hash
                         from events
@@ -200,11 +210,14 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
                         select %s(slot) as start_slot, %s(slot) as end_slot
                         from page_window
                     ),
+                    /* Events strictly before the first boundary slot already occupy this many global positions.
+                       Same-slot events stay in candidates so tx_index can place them on the correct page. */
                     prefix as (
                         select count(*) as cnt
                         from events
                         where slot %s (select start_slot from boundary)
                     ),
+                    /* Expand the inclusive boundary range, then obtain tx_index only for that smaller set. */
                     candidates as (
                         select e.tx_hash, e.mint_type, e.quantity, e.slot, t.tx_index
                         from events e
@@ -212,6 +225,7 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
                         where e.slot %s b.start_slot
                           and e.slot %s b.end_slot
                     ),
+                    /* rn is one-based within candidates; prefix.cnt + rn is its one-based global position. */
                     ranked as (
                         select tx_hash, mint_type, quantity,
                                row_number() over (order by slot %s, tx_index %s) as rn
@@ -219,18 +233,24 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
                     )
                     select tx_hash, mint_type, quantity
                     from ranked
+                    /* Select global positions offset + 1 through offset + count. */
                     where rn > ({0} - (select cnt from prefix))
                       and rn <= ({0} - (select cnt from prefix) + {1})
                     order by rn
                 ) as history_page
                 """.formatted(
-                        slotOrder,
-                        boundaryStartAgg, boundaryEndAgg,
-                        prefixCmp,
-                        candLo, candHi,
-                        slotOrder, txIndexOrder
+                        slotOrder,        // %s 1: provisional page slot order
+                        boundaryStartAgg, // %s 2: first boundary slot in the requested direction
+                        boundaryEndAgg,   // %s 3: last boundary slot in the requested direction
+                        prefixCmp,        // %s 4: slots strictly before the first boundary
+                        candLo,           // %s 5: inclusive comparison with the first boundary
+                        candHi,           // %s 6: inclusive comparison with the last boundary
+                        slotOrder,        // %s 7: final slot order
+                        txIndexOrder      // %s 8: final order within a slot
                 ),
-                DSL.inline(offset), DSL.inline(count), DSL.val(unit)
+                DSL.inline(offset), // {0}: number of globally ordered events to skip (page * count)
+                DSL.inline(count),  // {1}: maximum number of events in the requested page
+                DSL.val(unit)       // {2}: bound asset unit used to filter mint/burn events
         );
 
         Field<String> txHashField = DSL.field(DSL.name("history_page", "tx_hash"), String.class);
@@ -319,6 +339,11 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
      * by its latest UTXO instead. Since the two directions look at different rows, desc is not simply asc
      * reversed. Address is the final tie-break.
      *
+     * <p>The query derives the ordering key and total quantity separately from the same unspent UTXO set.
+     * Pagination happens only after those per-address results are joined, so a holder's quantity always includes
+     * all of its current UTXOs. The returned {@code firstSeenSlot} is the selected ordering slot: earliest for
+     * asc, but latest for desc.
+     *
      * <p>This still scans and aggregates every holder UTXO, so it's slow on units with many holders.
      */
     private List<BFAssetAddress> findAssetAddressesPostgres(String unit, int page, int count, Order order) {
@@ -329,9 +354,13 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
         Table<?> assetAddresses = DSL.table(
                 """
                 (
+                    /* One row per current UTXO containing the unit. An output is current when no tx_input spends
+                       the same (tx_hash, output_index). Prefer the full address representation when available. */
                     with cand as (
                         select coalesce(au.owner_addr_full, au.owner_addr) as address,
                                au.slot as slot, t.tx_index as tx_index, au.output_index as output_index,
+                               /* A Cardano value contains at most one entry per unit. Extract that entry's quantity
+                                  for aggregation; the containment predicate below first narrows matching UTXOs. */
                                (
                                    select (elem->>'quantity')::numeric
                                    from jsonb_array_elements(au.amounts) elem
@@ -346,25 +375,35 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
                               where ti.tx_hash = au.tx_hash and ti.output_index = au.output_index
                           )
                     ),
+                    /* DISTINCT ON keeps one correlated ordering key per holder. In asc it is the earliest UTXO;
+                       in desc it is the latest. tx_index and output_index resolve rows sharing a slot. */
                     keyed as (
                         select distinct on (address)
                                address, slot as k_slot, tx_index as k_tx_index, output_index as k_output_index
                         from cand
                         order by address, slot %1$s, tx_index %1$s, output_index %1$s
                     ),
+                    /* Quantity is independent of the ordering key and must include every current UTXO per holder. */
                     agg as (
                         select address, sum(quantity) as quantity
                         from cand
                         group by address
                     )
+                    /* keyed and agg each contain one row per address. Apply stable holder ordering and pagination
+                       only after combining the selected key with the complete quantity. */
                     select k.address as address, a.quantity as quantity, k.k_slot as first_seen_slot
                     from keyed k
                     join agg a on a.address = k.address
                     order by k.k_slot %1$s, k.k_tx_index %1$s, k.k_output_index %1$s, k.address %1$s
                     offset {0} rows fetch next {1} rows only
                 ) as asset_addresses
-                """.formatted(dir),
-                DSL.inline(offset), DSL.inline(count), DSL.val(unit), DSL.val(unitJson)
+                """.formatted(
+                        dir // %1$s: reuse the same asc/desc direction at every ordering level
+                ),
+                DSL.inline(offset), // {0}: number of fully aggregated holders to skip (page * count)
+                DSL.inline(count),  // {1}: maximum number of holders in the requested page
+                DSL.val(unit),      // {2}: bound unit used to extract quantity from each amounts array
+                DSL.val(unitJson)   // {3}: bound JSONB containment value used to find matching UTXOs
         );
 
         Field<String> addressField = DSL.field(DSL.name("asset_addresses", "address"), String.class);
