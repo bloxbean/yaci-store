@@ -493,9 +493,10 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
     /**
      * Postgres implementation of {@link #findAssetsByPolicy}.
      *
-     * <p>Since {@code unit} is policy-prefixed, the first-mint pass runs as a unit-range index-only scan
-     * on the partial mint index instead of sorting every mint row of the policy; the slot-window then
-     * limits the {@code transaction} join and quantity aggregation to the page's units only.
+     * <p>The policy prefix restricts the first-mint pass to units belonging to that policy. The query first
+     * identifies each unit's earliest mint slot, then expands the provisional page's boundary slots so
+     * {@code tx_index} can determine the exact Blockfrost order. Transaction lookup and lifetime quantity
+     * aggregation happen only for units that can belong to the requested page.
      */
     private List<BFPolicyAsset> findAssetsByPolicyPostgres(String policyId, int page, int count, Order order) {
         int offset = Math.max(page, 0) * count;
@@ -509,12 +510,16 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
         Table<?> policyAssets = DSL.table(
                 """
                 (
+                    /* Reduce all MINT rows under the policy to one earliest slot per unit. The lexical range
+                       uses the 56-character policy prefix; left(...) is an additional policy-boundary check. */
                     with first_mints as materialized (
                         select distinct on (unit) unit, slot::bigint as slot
                         from assets
                         where mint_type = 'MINT' and unit >= {2} and unit < {2} || 'g' and left(unit, 56) = {2}
                         order by unit, slot asc nulls last
                     ),
+                    /* Provisional page ordered without tx_index. Its purpose is to locate boundary slots, not to
+                       decide which same-slot units belong to the final page. */
                     page_window as materialized (
                         select unit, slot from first_mints
                         order by slot %1$s nulls last, unit %1$s
@@ -523,14 +528,19 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
                     boundary as (
                         select %2$s(slot) as start_slot, %3$s(slot) as end_slot from page_window
                     ),
+                    /* Units in slots strictly before start_slot already occupy this many global positions. */
                     prefix as (
                         select count(*) as cnt from first_mints
                         where slot %4$s (select start_slot from boundary)
                     ),
+                    /* Include every unit in the boundary-slot range so a page never cuts a slot before the
+                       tx_index tie-break is available. */
                     candidates as (
                         select fm.unit, fm.slot from first_mints fm, boundary b
                         where fm.slot %5$s b.start_slot and fm.slot %6$s b.end_slot
                     ),
+                    /* A unit can have several MINT rows at its first slot. For each candidate, the lateral query
+                       selects the transaction with the smallest tx_index as that unit's first mint transaction. */
                     enriched as (
                         select c.unit, c.slot, picked.tx_hash, picked.tx_index
                         from candidates c
@@ -542,16 +552,19 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
                             fetch next 1 rows only
                         ) picked on true
                     ),
+                    /* Assign one-based positions using the complete (slot, tx_index, unit) ordering. */
                     ranked as (
                         select unit, slot, tx_hash,
                                row_number() over (order by slot %1$s nulls last, tx_index %1$s, unit %1$s) as rn
                         from enriched
                     ),
+                    /* Convert the global offset to the local candidate interval by subtracting prefix.cnt. */
                     page as (
                         select unit, slot, tx_hash, rn from ranked
                         where rn > ({0} - (select cnt from prefix))
                           and rn <= ({0} - (select cnt from prefix) + {1})
                     )
+                    /* Sum every mint and burn row for page units only; this is the asset's lifetime net quantity. */
                     select p.unit as unit, agg.quantity as quantity, p.slot as slot, p.tx_hash as tx_hash
                     from page p
                     join lateral (
@@ -560,8 +573,17 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
                     ) agg on true
                     order by p.rn
                 ) as policy_assets
-                """.formatted(dir, boundaryStartAgg, boundaryEndAgg, prefixCmp, candLo, candHi),
-                DSL.inline(offset), DSL.inline(count), DSL.val(policyId)
+                """.formatted(
+                        dir,              // %1$s: final direction for slot, tx_index, and unit
+                        boundaryStartAgg, // %2$s: first boundary slot in that direction
+                        boundaryEndAgg,   // %3$s: last boundary slot in that direction
+                        prefixCmp,        // %4$s: slots strictly before the first boundary
+                        candLo,           // %5$s: inclusive comparison with the first boundary
+                        candHi            // %6$s: inclusive comparison with the last boundary
+                ),
+                DSL.inline(offset), // {0}: number of globally ordered policy units to skip (page * count)
+                DSL.inline(count),  // {1}: maximum number of policy units in the requested page
+                DSL.val(policyId)   // {2}: bound policy id, reused for filtering and quantity aggregation
         );
 
         Field<String> unitField = DSL.field(DSL.name("policy_assets", "unit"), String.class);
@@ -823,32 +845,36 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
         return findFirstSeenUnitsPageNonPostgres(offset, count, order);
     }
 
+    /**
+     * Resolves the global asset page used by {@link #findAssets}. This is the unbounded-policy counterpart of
+     * {@link #findAssetsByPolicyPostgres}: it derives one first mint per unit across the entire assets table,
+     * then uses the same boundary expansion to apply the final {@code (slot, tx_index, unit)} ordering.
+     * Quantity aggregation is deliberately left to {@link #findAssets} after this method returns the page units.
+     */
     private List<FirstSeenUnit> findFirstSeenUnitsPagePostgres(int offset, int count, Order order) {
         String slotOrder = order == Order.desc ? "desc nulls last" : "asc nulls last";
         String txIndexOrder = order == Order.desc ? "desc" : "asc";
         String unitOrder = order == Order.desc ? "desc" : "asc";
 
-        // Boundary comparisons for slot range selection
-        // For ASC: we want the page_window starting from offset, boundary is min/max of that window
-        // For DESC: reversed
         String boundaryStartAgg = order == Order.desc ? "max" : "min";
         String boundaryEndAgg = order == Order.desc ? "min" : "max";
-
-        // prefix counts rows strictly before the boundary slot
         String prefixCmp = order == Order.desc ? ">" : "<";
-        // candidates are rows within the boundary slot range (inclusive)
         String candCmp1 = order == Order.desc ? "<=" : ">=";
         String candCmp2 = order == Order.desc ? ">=" : "<=";
 
         Table<?> firstSeenUnits = DSL.table(
                 """
                 (
+                    /* Reduce all MINT rows to one earliest slot per unit. This global set is materialized because
+                       the provisional page, prefix count, and boundary expansion all reuse it. */
                     with first_mints as materialized (
                         select distinct on (unit) unit as unit, slot::bigint as slot
                         from assets
                         where mint_type = 'MINT'
                         order by unit, slot asc nulls last
                     ),
+                    /* The slot/unit order is provisional because tx_index is not available yet. This page exists
+                       only to discover the slots that may contain the requested final page. */
                     page_window as materialized (
                         select unit, slot
                         from first_mints
@@ -859,17 +885,21 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
                         select %s(slot) as start_slot, %s(slot) as end_slot
                         from page_window
                     ),
+                    /* Units in slots strictly before start_slot already occupy this many global positions. */
                     prefix as (
                         select count(*) as cnt
                         from first_mints
                         where slot %s (select start_slot from boundary)
                     ),
+                    /* Expand both boundary slots completely so tx_index can resolve units tied on first-mint slot. */
                     candidates as (
                         select fm.unit, fm.slot
                         from first_mints fm, boundary b
                         where fm.slot %s b.start_slot
                           and fm.slot %s b.end_slot
                     ),
+                    /* Resolve the earliest transaction within each unit's first mint slot. The lateral lookup runs
+                       only for boundary candidates, not for every globally minted unit. */
                     enriched as (
                         select c.unit, c.slot, picked.tx_hash, picked.tx_index
                         from candidates c
@@ -884,24 +914,32 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
                             fetch next 1 rows only
                         ) picked on true
                     ),
+                    /* rn is one-based within candidates and uses the complete Blockfrost ordering. */
                     ranked as (
                         select unit, slot, tx_hash,
                                row_number() over (order by slot %s, tx_index %s, unit %s) as rn
                         from enriched
                     )
+                    /* Select global positions offset + 1 through offset + count after removing prefix.cnt. */
                     select unit, slot, tx_hash
                     from ranked
                     where rn > ({0} - (select cnt from prefix))
                       and rn <= ({0} - (select cnt from prefix) + {1})
                 ) as first_seen_units
                 """.formatted(
-                        slotOrder, unitOrder,
-                        boundaryStartAgg, boundaryEndAgg,
-                        prefixCmp,
-                        candCmp1, candCmp2,
-                        slotOrder, txIndexOrder, unitOrder
+                        slotOrder,        // %s 1: provisional page slot order
+                        unitOrder,        // %s 2: provisional same-slot unit order
+                        boundaryStartAgg, // %s 3: first boundary slot in the requested direction
+                        boundaryEndAgg,   // %s 4: last boundary slot in the requested direction
+                        prefixCmp,        // %s 5: slots strictly before the first boundary
+                        candCmp1,         // %s 6: inclusive comparison with the first boundary
+                        candCmp2,         // %s 7: inclusive comparison with the last boundary
+                        slotOrder,        // %s 8: final slot order
+                        txIndexOrder,     // %s 9: final order within a slot
+                        unitOrder         // %s 10: deterministic tie-break after tx_index
                 ),
-                DSL.inline(offset), DSL.inline(count)
+                DSL.inline(offset), // {0}: number of globally ordered units to skip
+                DSL.inline(count)   // {1}: maximum number of units in the requested page
         );
 
         Field<String> unitField = DSL.field(DSL.name("first_seen_units", "unit"), String.class);
