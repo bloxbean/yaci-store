@@ -18,6 +18,14 @@
       columns:
         - unit
         - slot
+    - name: idx_assets_mint_unit_slot
+      columns:
+        - unit
+        - slot
+      where: mint_type = 'MINT'
+      excludes:
+        - mysql
+        - h2
     - name: idx_assets_unit_policy
       columns:
         - unit
