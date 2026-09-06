@@ -921,7 +921,7 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
                         from enriched
                     )
                     /* Select global positions offset + 1 through offset + count after removing prefix.cnt. */
-                    select unit, slot, tx_hash
+                    select unit, slot, tx_hash, rn
                     from ranked
                     where rn > ({0} - (select cnt from prefix))
                       and rn <= ({0} - (select cnt from prefix) + {1})
@@ -945,9 +945,11 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
         Field<String> unitField = DSL.field(DSL.name("first_seen_units", "unit"), String.class);
         Field<Long> slotField = DSL.field(DSL.name("first_seen_units", "slot"), Long.class);
         Field<String> txHashField = DSL.field(DSL.name("first_seen_units", "tx_hash"), String.class);
+        Field<Long> rnField = DSL.field(DSL.name("first_seen_units", "rn"), Long.class);
 
         var query = dsl.select(unitField, slotField, txHashField)
-                .from(firstSeenUnits);
+                .from(firstSeenUnits)
+                .orderBy(rnField);
         logQuery("findAssetsUnitsPage", query);
 
         return query.fetch(record -> new FirstSeenUnit(
