@@ -623,6 +623,16 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
         return assetTxPageFallback(unit, page, count, order);
     }
 
+    /**
+     * Uses a slot window to postpone the {@code transaction} join until after the requested offset has
+     * narrowed the result. The initial UTXO scan and de-duplication still cover every transaction containing
+     * the unit; the optimization only bounds the rows enriched with transaction metadata.
+     *
+     * <p>The provisional page is ordered by slot alone because {@code tx_index} lives in {@code transaction}.
+     * A page may cut through a slot containing several transactions, so the query expands both boundary slots,
+     * applies the final {@code (slot, tx_index)} order, and then slices the requested page. This assumes a
+     * canonical slot contains at most one block and {@code tx_index} is unique within that block.
+     */
     private List<AssetTxRow> assetTxPagePostgres(String unit, int page, int count, Order order) {
         int offset = Math.max(page, 0) * count;
         String slotOrder = order == Order.desc ? "desc nulls last" : "asc nulls last";
@@ -638,12 +648,16 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
         Table<?> assetTxPage = DSL.table(
                 """
                 (
+                    /* One transaction may have several outputs containing the unit. Materialize the de-duplicated
+                       set because the page window, prefix count, and candidate selection all reuse it. */
                     with distinct_tx as materialized (
                         select tx_hash, min(slot) as slot
                         from address_utxo
                         where amounts @> {2}::jsonb
                         group by tx_hash
                     ),
+                    /* This is only a cheap provisional page used to discover its boundary slots. It is not safe
+                       to return directly because rows sharing a slot still need tx_index ordering. */
                     page_window as materialized (
                         select tx_hash, slot
                         from distinct_tx
@@ -654,11 +668,14 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
                         select %s(slot) as start_slot, %s(slot) as end_slot
                         from page_window
                     ),
+                    /* Count only rows strictly before the first boundary slot. Rows tied at that slot remain in
+                       candidates so the final tx_index ordering can decide which side of the page they belong to. */
                     prefix as (
                         select count(*) as cnt
                         from distinct_tx
                         where slot %s (select start_slot from boundary)
                     ),
+                    /* Expand the complete inclusive slot range and enrich only those rows with transaction data. */
                     candidates as (
                         select dt.tx_hash, dt.slot, t.tx_index, t.block, t.block_time
                         from distinct_tx dt
@@ -666,6 +683,7 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
                         where dt.slot %s b.start_slot
                           and dt.slot %s b.end_slot
                     ),
+                    /* rn is one-based within candidates. A row's one-based global position is prefix.cnt + rn. */
                     ranked as (
                         select tx_hash, tx_index, block, block_time,
                                row_number() over (order by slot %s, tx_index %s) as rn
@@ -673,6 +691,7 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
                     )
                     select tx_hash, coalesce(tx_index, 0) as tx_index, block, block_time
                     from ranked
+                    /* offset < prefix.cnt + rn <= offset + count, rearranged to use the local rn. */
                     where rn > ({0} - (select cnt from prefix))
                       and rn <= ({0} - (select cnt from prefix) + {1})
                     order by rn
@@ -684,7 +703,9 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
                         candLo, candHi,
                         slotOrder, txIndexOrder
                 ),
-                DSL.inline(offset), DSL.inline(count), DSL.val(unitJson)
+                DSL.inline(offset),  // {0}: number of globally ordered rows to skip (page * count)
+                DSL.inline(count),   // {1}: maximum number of rows in the requested page
+                DSL.val(unitJson)    // {2}: bound JSONB containment value for the requested asset unit
         );
 
         Field<String> txHashField = DSL.field(DSL.name("asset_tx_page", "tx_hash"), String.class);
