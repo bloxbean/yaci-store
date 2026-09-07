@@ -47,22 +47,3 @@ CREATE TABLE cip68_metadata (
 
 CREATE INDEX idx_cip68_metadata_slot  ON cip68_metadata(slot);
 CREATE INDEX idx_cip68_metadata_label ON cip68_metadata(label);
-
--- CIP-113 — programmable token registry nodes (`key` / `next` backtick-quoted: MySQL reserved words)
-CREATE TABLE cip113_registry_node (
-    `key`                                  VARCHAR(64)  NOT NULL,
-    slot                                   BIGINT       NOT NULL,
-    tx_hash                                VARCHAR(64)  NOT NULL,
-    tx_index                               INTEGER      NOT NULL,
-    transfer_logic_script                  VARCHAR(56),
-    transfer_logic_script_type             VARCHAR(8),
-    third_party_transfer_logic_script      VARCHAR(56),
-    third_party_transfer_logic_script_type VARCHAR(8),
-    global_state_policy_id                 VARCHAR(56),
-    `next`                                 VARCHAR(64)  NOT NULL,
-    datum                                  LONGTEXT     NOT NULL,
-    last_synced_at                         TIMESTAMP NULL,
-    PRIMARY KEY (`key`, slot, tx_hash)
-);
-
-CREATE INDEX idx_cip113_slot ON cip113_registry_node(slot);
