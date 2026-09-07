@@ -4,8 +4,6 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.QueryPriori
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.Subject;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.service.TokenQueryService;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.service.TokenQueryService.BatchPrefetchData;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.model.ProgrammableTokenCip113;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.Cip113StorageReader;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.Cip26Metadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.Cip26StorageReader;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
@@ -14,9 +12,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.util.Collection;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -29,7 +25,6 @@ import java.util.Optional;
  *   <li>{@link #getSubject} — merged metadata with configurable CIP priority</li>
  *   <li>{@link #getCip26Metadata} — CIP-26 offchain metadata only</li>
  *   <li>{@link #getCip68Metadata} — CIP-68 on-chain reference NFT metadata only</li>
- *   <li>{@link #getCip113RegistryNode} — CIP-113 programmable token info only (when enabled)</li>
  * </ul>
  */
 @Service
@@ -40,7 +35,6 @@ public class AssetsReader {
     private final TokenQueryService tokenQueryService;
     private final Cip26StorageReader cip26StorageReader;
     private final Cip68StorageReader cip68StorageReader;
-    private final Cip113StorageReader cip113StorageReader;
 
     // ========== Merged queries ==========
 
@@ -48,7 +42,7 @@ public class AssetsReader {
      * Query merged metadata for a subject using default priority (CIP_68, CIP_26).
      *
      * @param subject the subject (policyId + hex assetName)
-     * @return the merged subject with metadata and extensions, or empty if not found
+     * @return the merged subject with metadata, or empty if not found
      */
     public Optional<Subject> getSubject(String subject) {
         return getSubject(subject, List.of(QueryPriority.CIP_68, QueryPriority.CIP_26));
@@ -59,7 +53,7 @@ public class AssetsReader {
      *
      * @param subject       the subject (policyId + hex assetName)
      * @param queryPriority ordered list of CIP standards to query
-     * @return the merged subject with metadata and extensions, or empty if not found
+     * @return the merged subject with metadata, or empty if not found
      */
     public Optional<Subject> getSubject(String subject, List<QueryPriority> queryPriority) {
         return getSubject(subject, queryPriority, List.of());
@@ -71,7 +65,7 @@ public class AssetsReader {
      * @param subject       the subject (policyId + hex assetName)
      * @param queryPriority ordered list of CIP standards to query
      * @param properties    list of property names to include (empty = all)
-     * @return the merged subject with metadata and extensions, or empty if not found
+     * @return the merged subject with metadata, or empty if not found
      */
     public Optional<Subject> getSubject(String subject, List<QueryPriority> queryPriority, List<String> properties) {
         return tokenQueryService.querySubject(subject, queryPriority, properties, false);
@@ -115,30 +109,6 @@ public class AssetsReader {
      */
     public Optional<FungibleTokenMetadata> getCip68Metadata(String subject) {
         return cip68StorageReader.findBySubject(subject);
-    }
-
-    /**
-     * Look up CIP-113 programmable token registry node for a policy ID.
-     * Returns empty if CIP-113 is not enabled (no-op reader returns empty).
-     */
-    public Optional<ProgrammableTokenCip113> getCip113RegistryNode(String policyId) {
-        return cip113StorageReader.findByPolicyId(policyId);
-    }
-
-    /**
-     * Batch look up CIP-113 registry nodes for multiple policy IDs.
-     * Returns empty map if CIP-113 is not enabled (no-op reader returns empty map).
-     */
-    public Map<String, ProgrammableTokenCip113> getCip113RegistryNodes(Collection<String> policyIds) {
-        return cip113StorageReader.findByPolicyIds(policyIds);
-    }
-
-    /**
-     * Check whether a policy ID is registered as a CIP-113 programmable token.
-     * Returns false if CIP-113 is not enabled.
-     */
-    public boolean isProgrammableToken(String policyId) {
-        return cip113StorageReader.isProgrammableToken(policyId);
     }
 
 }

@@ -19,6 +19,3 @@ CREATE INDEX IF NOT EXISTS idx_cip68_metadata_policy_label ON cip68_metadata(pol
 
 -- CIP-68 NFT image / collection-attribute lookups via the JSONB column (PostgreSQL only):
 -- CREATE INDEX IF NOT EXISTS idx_cip68_metadata_properties ON cip68_metadata USING GIN(properties);
-
--- CIP-113: no additional index needed — PK (key, slot, tx_hash) supports backward scan
--- for findFirstByKeyOrderBySlotDesc and findLatestByKeys queries.

@@ -2,14 +2,10 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.api.service;
 
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.QueryPriority;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.Subject;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.model.Cip113CredentialType;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.model.ProgrammableTokenCip113;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.Cip113StorageReader;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.Item;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.Mapping;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.Cip26Metadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.Cip26StorageReader;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.AssetType;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.Cip68StorageReader;
 import org.junit.jupiter.api.BeforeEach;
@@ -22,14 +18,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
@@ -41,7 +35,6 @@ class TokenQueryServiceTest {
     private static final String KNOWN_SUBJECT = "025146866af908340247fe4e9672d5ac7059f1e8534696b5f920c9e66362544848";
     private static final String UNKNOWN_SUBJECT = "025146866af908340247fe4e9672d5ac7059f1e8534696b5f920c9e66362544843";
     private static final String FLDT_SUBJECT = "577f0b1342f8f8f4aed3388b80a8535812950c7a892495c0ecdf0f1e0014df10464c4454";
-    private static final String FLDT_POLICY_ID = "577f0b1342f8f8f4aed3388b80a8535812950c7a892495c0ecdf0f1e";
 
     private static final List<QueryPriority> DEFAULT_PRIORITY = List.of(QueryPriority.CIP_68, QueryPriority.CIP_26);
 
@@ -51,17 +44,13 @@ class TokenQueryServiceTest {
     @Mock
     private Cip68StorageReader cip68StorageReader;
 
-    @Mock
-    private Cip113StorageReader cip113StorageReader;
-
     private TokenQueryService service;
 
     @BeforeEach
     void setUp() {
-        service = new TokenQueryService(cip26StorageReader, cip68StorageReader, cip113StorageReader);
+        service = new TokenQueryService(cip26StorageReader, cip68StorageReader);
 
         // Unknown subject: no CIP-26, no CIP-68
-        AssetType unknownAssetType = AssetType.fromUnit(UNKNOWN_SUBJECT);
         when(cip26StorageReader.findBySubject(UNKNOWN_SUBJECT)).thenReturn(Optional.empty());
         when(cip68StorageReader.findBySubject(eq(UNKNOWN_SUBJECT), any())).thenReturn(Optional.empty());
 
@@ -103,29 +92,6 @@ class TokenQueryServiceTest {
                 .thenReturn(Optional.of(new FungibleTokenMetadata(null,
                         "The official token of FluidTokens, a leading DeFi ecosystem fueled by innovation and community backing.",
                         null, "FLDT", "FLDT", null, null)));
-
-        // CIP-113: FLDT is programmable
-        when(cip113StorageReader.findByPolicyId(FLDT_POLICY_ID))
-                .thenReturn(Optional.of(new ProgrammableTokenCip113(
-                        "aabbccdd11223344aabbccdd11223344aabbccdd11223344aabbccdd",
-                        Cip113CredentialType.SCRIPT,
-                        "11223344aabbccdd11223344aabbccdd11223344aabbccdd11223344",
-                        Cip113CredentialType.SCRIPT,
-                        "eeff0011eeff0011eeff0011eeff0011eeff0011eeff0011eeff0011")));
-
-        // CIP-113: non-programmable tokens return empty
-        AssetType knownAssetType = AssetType.fromUnit(KNOWN_SUBJECT);
-        when(cip113StorageReader.findByPolicyId(knownAssetType.policyId())).thenReturn(Optional.empty());
-        when(cip113StorageReader.findByPolicyId(unknownAssetType.policyId())).thenReturn(Optional.empty());
-
-        // CIP-113 batch
-        when(cip113StorageReader.findByPolicyIds(anyCollection()))
-                .thenReturn(Map.of(FLDT_POLICY_ID, new ProgrammableTokenCip113(
-                        "aabbccdd11223344aabbccdd11223344aabbccdd11223344aabbccdd",
-                        Cip113CredentialType.SCRIPT,
-                        "11223344aabbccdd11223344aabbccdd11223344aabbccdd11223344",
-                        Cip113CredentialType.SCRIPT,
-                        "eeff0011eeff0011eeff0011eeff0011eeff0011eeff0011eeff0011")));
 
         // CIP-26 batch: findBySubjects returns all known metadata
         when(cip26StorageReader.findBySubjects(any())).thenAnswer(invocation -> {
@@ -182,13 +148,6 @@ class TokenQueryServiceTest {
             assertThat(result.metadata().description().value()).isEqualTo("The legendary Nutcoin, the first native asset minted on Cardano.");
             assertThat(result.metadata().description().source()).isEqualTo("CIP_26");
         }
-
-        @Test
-        void nonProgrammableTokenShouldNotHaveExtensions() {
-            Subject result = service.querySubject(KNOWN_SUBJECT, DEFAULT_PRIORITY, List.of(), false).orElseThrow();
-            assertThat(result.type()).isEqualTo(com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.TokenType.NATIVE);
-            assertThat(result.extensions()).isNull();
-        }
     }
 
     @Nested
@@ -238,30 +197,6 @@ class TokenQueryServiceTest {
             assertThat(result.metadata().name().source()).isEqualTo("CIP_26");
             assertThat(result.metadata().url().value()).isEqualTo("https://fluidtokens.com");
             assertThat(result.metadata().url().source()).isEqualTo("CIP_26");
-        }
-    }
-
-    @Nested
-    @DisplayName("querySubject - CIP-113 extensions")
-    class Cip113Extensions {
-
-        @Test
-        void cip113ExtensionShouldAppearForProgrammableToken() {
-            Subject result = service.querySubject(FLDT_SUBJECT, DEFAULT_PRIORITY, List.of(), false).orElseThrow();
-            assertThat(result.type()).isEqualTo(com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.TokenType.PROGRAMMABLE);
-            assertThat(result.extensions()).isNotNull();
-            assertThat(result.extensions()).containsKey("cip113");
-
-            ProgrammableTokenCip113 cip113 = (ProgrammableTokenCip113) result.extensions().get("cip113");
-            assertThat(cip113.transferLogicScript())
-                    .isEqualTo("aabbccdd11223344aabbccdd11223344aabbccdd11223344aabbccdd");
-        }
-
-        @Test
-        void nonProgrammableTokenShouldNotHaveExtensions() {
-            Subject result = service.querySubject(KNOWN_SUBJECT, DEFAULT_PRIORITY, List.of(), false).orElseThrow();
-            assertThat(result.type()).isEqualTo(com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.TokenType.NATIVE);
-            assertThat(result.extensions()).isNull();
         }
     }
 

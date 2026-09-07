@@ -63,21 +63,12 @@ class AssetsExtPropertiesTest {
     }
 
     @Test
-    @DisplayName("CIP-113 is disabled by default until officially live on mainnet")
-    void cip113IsDisabledByDefault() {
-        // Team decision while CIP-113 is still pre-mainnet — see commit history.
-        // If this is ever flipped back to true, expect a coordinated yaci-store
-        // release that ships matching registry NFT policy IDs.
-        assertThat(new AssetsExtProperties.Cip113().isEnabled()).isFalse();
-    }
-
-    @Test
     @DisplayName("master extension flag is disabled by default (blockfrost pattern — opt in via one flag)")
     void rootEnabledIsFalseByDefault() {
         // Mirrors the AssetsExtConfiguration @ConditionalOnProperty(matchIfMissing = false)
         // master gate, matching the blockfrost extension (BFAutoConfiguration): the whole
         // extension stays off until an operator sets store.assets.ext.enabled=true, which
-        // then brings up CIP-26 + CIP-68 by default (CIP-113 stays off).
+        // then brings up CIP-26 + CIP-68 by default.
         assertThat(new AssetsExtProperties().isEnabled()).isFalse();
     }
 }
