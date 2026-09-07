@@ -68,6 +68,7 @@ class RollbackServiceTest {
         assertTrue(result.getSecond());
 
         verify(jdbcTemplate, times(1)).update(eq("DELETE FROM assets WHERE slot > :slot"), any(SqlParameterSource.class));
+        verify(jdbcTemplate, times(1)).update(eq("DELETE FROM cip68_metadata WHERE slot > :slot"), any(SqlParameterSource.class));
         verify(jdbcTemplate, times(1)).update(eq("DELETE FROM block WHERE slot > :slot"), any(SqlParameterSource.class));
         verify(jdbcTemplate, times(1)).update(eq("DELETE FROM block_cbor WHERE slot > :slot"), any(SqlParameterSource.class));
         verify(jdbcTemplate, times(1)).update(eq("DELETE FROM transaction_cbor WHERE slot > :slot"), any(SqlParameterSource.class));
@@ -111,6 +112,7 @@ class RollbackServiceTest {
         assertTrue(result.getSecond());
 
         verify(jdbcTemplate, times(1)).update(eq("DELETE FROM assets WHERE slot > :slot"), any(SqlParameterSource.class));
+        verify(jdbcTemplate, times(1)).update(eq("DELETE FROM cip68_metadata WHERE slot > :slot"), any(SqlParameterSource.class));
         verify(jdbcTemplate, times(1)).update(eq("DELETE FROM epoch_stake WHERE epoch >= (:epoch + -1)"), any(SqlParameterSource.class));
         verify(jdbcTemplate, times(1)).update(eq("DELETE FROM tx_input WHERE spent_at_slot > :slot"), any(SqlParameterSource.class));
         verify(jdbcTemplate, times(1)).update(eq("DELETE FROM adapot_jobs WHERE slot > :slot"), any(SqlParameterSource.class));
