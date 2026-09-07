@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.core.configuration;
 
+import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.NetworkType;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -21,5 +22,17 @@ class GenesisConfigTest {
 
         assertThat(genesisConfig.getShelleyGenesisProtocolParams().getKeyDeposit())
                 .isEqualTo(BigInteger.valueOf(2_000_000));
+    }
+
+    @Test
+    void slotDuration_byron_ReturnsValueFromGenesis() {
+        StoreProperties storeProperties = new StoreProperties();
+        storeProperties.setProtocolMagic(NetworkType.MAINNET.getProtocolMagic());
+        GenesisConfig genesisConfig = new GenesisConfig(
+                storeProperties, new ObjectMapper(), new DefaultResourceLoader());
+
+        //slotDuration in mainnet byron genesis is 20000 ms
+        assertThat(genesisConfig.getByronSlotLength()).isEqualTo(20);
+        assertThat(genesisConfig.slotDuration(Era.Byron)).isEqualTo(20.0);
     }
 }
