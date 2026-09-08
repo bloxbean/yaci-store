@@ -30,6 +30,10 @@ public class AddressUtxoEntity extends BlockAwareEntity {
     @Column(name = "output_index")
     private Integer outputIndex;
 
+    //Null for genesis utxos, which are not produced by a block transaction
+    @Column(name = "tx_index")
+    private Integer txIndex;
+
     @Column(name = "slot")
     private Long slot;
 

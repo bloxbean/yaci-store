@@ -51,6 +51,7 @@ public class UtxoRollbackProcessorIT {
                                 .quantity(BigInteger.valueOf(2))
                                 .build()
                 )).slot(2000L)
+                .txIndex(3)
                 .blockNumber(200L)
                 .blockTime(1600098L)
                 .build();
@@ -145,6 +146,7 @@ public class UtxoRollbackProcessorIT {
         assertThat(allUtxos.get(0).getTxHash()).isEqualTo(utxo1.getTxHash());
         assertThat(allUtxos.get(0).getOutputIndex()).isEqualTo(utxo1.getOutputIndex());
         assertThat(allUtxos.get(0).getSlot()).isEqualTo(utxo1.getSlot());
+        assertThat(allUtxos.get(0).getTxIndex()).isEqualTo(utxo1.getTxIndex());
         assertThat(allUtxos.get(0).getBlockNumber()).isEqualTo(utxo1.getBlockNumber());
         assertThat(allUtxos.get(0).getAmounts()).hasSize(utxo1.getAmounts().size());
         assertThat(allUtxos.get(0).getAmounts().stream().map(amtEntity -> Amt.builder()
