@@ -20,6 +20,9 @@ import java.math.BigInteger;
 public class Withdrawal extends BlockAwareDomain {
     private String address;
     private String txHash;
+    /** Index of the withdrawing transaction within its block (0-based), counting invalid
+     *  transactions, so same-slot withdrawals can be ordered deterministically. */
+    private Integer txIndex;
     private BigInteger amount;
     private Integer epoch;
     private Long slot;

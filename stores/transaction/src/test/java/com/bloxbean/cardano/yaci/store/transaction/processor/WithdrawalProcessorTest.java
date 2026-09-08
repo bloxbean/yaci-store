@@ -20,6 +20,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 
 import java.math.BigInteger;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -74,6 +75,7 @@ public class WithdrawalProcessorTest {
         assertThat(withdrawals.get(0).getTxHash()).isEqualTo("f0a6e529be26c2326c447c39159e05bb904ff1f7900b6df3852dd539de0343e8");
         assertThat(withdrawals.get(0).getEpoch()).isEqualTo(29);
         assertThat(withdrawals.get(0).getSlot()).isEqualTo(10926774);
+        assertThat(withdrawals.get(0).getTxIndex()).isEqualTo(0);
 
         assertThat(withdrawals.get(1).getAddress()).isEqualTo("stake1u9q0cgjgpulrnqmqpkef2gpkj4d0svwxv2u2fps30xda2wswap4kk");
         assertThat(withdrawals.get(1).getAmount()).isEqualTo(BigInteger.valueOf(2000));
@@ -82,6 +84,27 @@ public class WithdrawalProcessorTest {
         assertThat(withdrawals.get(1).getEpoch()).isEqualTo(29);
         assertThat(withdrawals.get(1).getSlot()).isEqualTo(10926774);
 
+    }
+
+    @Test
+    void givenInvalidTransactionBeforeValidOne_shouldCountItInTxIndex() {
+        var transactions = new ArrayList<Transaction>();
+        transactions.addAll(invalidTransactions());
+        transactions.addAll(transactions());
+
+        TransactionEvent transactionEvent = TransactionEvent.builder()
+                .transactions(transactions)
+                .metadata(eventMetadata())
+                .build();
+
+        withdrawalProcessor.processWithdrawal(transactionEvent);
+
+        verify(withdrawalStorage, Mockito.times(1)).save(withdrawalListCaptor.capture());
+        List<Withdrawal> withdrawals = withdrawalListCaptor.getValue();
+
+        //The invalid transaction contributes no withdrawal but still occupies index 0
+        assertThat(withdrawals).hasSize(2);
+        assertThat(withdrawals).allMatch(withdrawal -> withdrawal.getTxIndex() == 1);
     }
 
     @Test
