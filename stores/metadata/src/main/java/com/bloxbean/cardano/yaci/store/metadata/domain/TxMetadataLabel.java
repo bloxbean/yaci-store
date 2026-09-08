@@ -16,6 +16,9 @@ import lombok.experimental.SuperBuilder;
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public class TxMetadataLabel extends BlockAwareDomain {
     private String txHash;
+    /** Index of the transaction within its block (0-based), counting invalid transactions,
+     *  so same-slot metadata rows can be ordered deterministically. */
+    private Integer txIndex;
     private Long slot;
     private String label;
     private String body;

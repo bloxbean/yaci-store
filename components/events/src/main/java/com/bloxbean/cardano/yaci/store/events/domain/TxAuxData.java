@@ -12,5 +12,7 @@ import lombok.NoArgsConstructor;
 @Builder
 public class TxAuxData {
     private String txHash;
+    /** Index of the transaction within its block (0-based), counting invalid transactions. */
+    private Integer txIndex;
     private AuxData auxData;
 }

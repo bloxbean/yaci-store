@@ -130,6 +130,36 @@ class ShelleyBlockEventPublisherTest {
     }
 
     @Test
+    void shouldSetAuxDataTxIndexCountingInvalidTransactions() {
+        AuxData auxData = new AuxData();
+
+        List<Transaction> transactions = List.of(
+                Transaction.builder()
+                        .txHash("bbbbbbbbbb9cecf2602f1110e53331a3b305ec668ad57081df98416b30473f5d")
+                        .body(minimalBody())
+                        .witnesses(emptyWitnesses())
+                        .auxData(auxData)
+                        .invalid(true)
+                        .build(),
+                Transaction.builder()
+                        .txHash("aaaaaaaaaa9cecf2602f1110e53331a3b305ec668ad57081df98416b30473f5d")
+                        .body(minimalBody())
+                        .witnesses(emptyWitnesses())
+                        .auxData(auxData)
+                        .invalid(false)
+                        .build()
+        );
+
+        shelleyBlockEventPublisher.publishBlockEvents(eventMetadata(), mockBlock(), transactions);
+
+        var auxDataEvent = capturePublishedEvent(AuxDataEvent.class);
+        assertThat(auxDataEvent).isNotNull();
+        assertThat(auxDataEvent.getTxAuxDataList()).hasSize(1);
+        //The dropped invalid transaction still occupies index 0
+        assertThat(auxDataEvent.getTxAuxDataList().get(0).getTxIndex()).isEqualTo(1);
+    }
+
+    @Test
     void shouldNotPublishUpdateDataForInvalidTransactions() {
         Update update = mock(Update.class);
 
