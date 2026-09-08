@@ -36,7 +36,7 @@ public class ByronGenesis extends GenesisFile {
     private List<GenesisBalance> avvmGenesisBalances;
     private List<GenesisBalance> nonAvvmGenesisBalances;
     private long startTime;
-    private long byronSlotLength;
+    private long byronSlotLength; //in second
     private long protocolMagic;
     private long k;
 
@@ -50,13 +50,6 @@ public class ByronGenesis extends GenesisFile {
 
     public ByronGenesis(long protocolMagic) {
         super(protocolMagic);
-    }
-
-    public long getByronSlotLength() {
-        if (byronSlotLength == 0)
-            return 0;
-        else
-            return byronSlotLength / 1000;
     }
 
     public long getEpochLength() {

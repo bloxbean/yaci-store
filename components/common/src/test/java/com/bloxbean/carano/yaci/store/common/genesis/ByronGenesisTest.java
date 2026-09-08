@@ -23,6 +23,7 @@ class ByronGenesisTest {
 
     public static final String GENESIS_MAINNET_BYRON_GENESIS_JSON = "/genesis/mainnet-byron-genesis.json";
     public static final String GENESIS_PREPROD_BYRON_GENESIS_JSON = "/genesis/preprod-byron-genesis.json";
+    public static final String GENESIS_CUSTOM_BYRON_GENESIS_JSON = "/genesis/custom-byron-genesis.json";
 
     ObjectMapper objectMapper = new ObjectMapper();
 
@@ -77,6 +78,24 @@ class ByronGenesisTest {
         List<GenesisBalance> avvmGenesisBalances = byronGenesis.getAvvmGenesisBalances();
         List<GenesisBalance> nonAvvmGenesisBalances = byronGenesis.getNonAvvmGenesisBalances();
         System.out.println(avvmGenesisBalances);
+    }
+
+    @Test
+    void getByronSlotLength_mainnet() {
+        InputStream is = this.getClass().getResourceAsStream(GENESIS_MAINNET_BYRON_GENESIS_JSON);
+        ByronGenesis byronGenesis = new ByronGenesis(is);
+
+        //slotDuration in mainnet byron genesis is 20000 ms
+        assertThat(byronGenesis.getByronSlotLength()).isEqualTo(20);
+    }
+
+    @Test
+    void getByronSlotLength_custom() {
+        InputStream is = this.getClass().getResourceAsStream(GENESIS_CUSTOM_BYRON_GENESIS_JSON);
+        ByronGenesis byronGenesis = new ByronGenesis(is);
+
+        //slotDuration in this custom byron genesis is 1000 ms
+        assertThat(byronGenesis.getByronSlotLength()).isEqualTo(1);
     }
 
     private Map<String, BigInteger> loadMap(String file) {
