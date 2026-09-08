@@ -57,39 +57,49 @@ public class VotingAggrService {
                 .map(id -> row(id.getTransactionId(), id.getGov_action_index()))
                 .collect(Collectors.toList());
 
-        var cteQuery = select(
+        var rankedVoteQuery = select(
+                VOTING_PROCEDURE.TX_HASH.as("tx_hash"),
                 VOTING_PROCEDURE.VOTER_HASH.as("voter_hash"),
                 VOTING_PROCEDURE.VOTER_TYPE.as("voter_type"),
                 VOTING_PROCEDURE.GOV_ACTION_TX_HASH.as("gov_action_tx_hash"),
                 VOTING_PROCEDURE.GOV_ACTION_INDEX.as("gov_action_index"),
-                max(VOTING_PROCEDURE.SLOT).as("max_slot")
+                rowNumber()
+                        .over(partitionBy(
+                                VOTING_PROCEDURE.VOTER_HASH,
+                                VOTING_PROCEDURE.VOTER_TYPE,
+                                VOTING_PROCEDURE.GOV_ACTION_TX_HASH,
+                                VOTING_PROCEDURE.GOV_ACTION_INDEX
+                        ).orderBy(
+                                VOTING_PROCEDURE.SLOT.desc(),
+                                VOTING_PROCEDURE.TX_INDEX.desc(),
+                                VOTING_PROCEDURE.IDX.desc()
+                        ))
+                        .as("vote_rank")
         )
                 .from(VOTING_PROCEDURE)
                 .where(VOTING_PROCEDURE.EPOCH.le(epoch))
                 .and(row(VOTING_PROCEDURE.GOV_ACTION_TX_HASH, VOTING_PROCEDURE.GOV_ACTION_INDEX).in(govActionPairs))
-                .and(VOTING_PROCEDURE.VOTER_TYPE.eq("STAKING_POOL_KEY_HASH"))
-                .groupBy(
-                        VOTING_PROCEDURE.VOTER_HASH,
-                        VOTING_PROCEDURE.VOTER_TYPE,
-                        VOTING_PROCEDURE.GOV_ACTION_TX_HASH,
-                        VOTING_PROCEDURE.GOV_ACTION_INDEX
-                );
+                .and(VOTING_PROCEDURE.VOTER_TYPE.eq("STAKING_POOL_KEY_HASH"));
 
-        var voteWithMaxSlot = table(name("vote_with_max_slot"));
+        var rankedVote = table(name("ranked_vote"));
 
-        var vVoterHash = field(name("vote_with_max_slot", "voter_hash"), String.class);
-        var vGovActionTxHash = field(name("vote_with_max_slot", "gov_action_tx_hash"), String.class);
-        var vGovActionIndex = field(name("vote_with_max_slot", "gov_action_index"), Integer.class);
-        var vMaxSlot = field(name("vote_with_max_slot", "max_slot"), Long.class);
+        var vTxHash = field(name("ranked_vote", "tx_hash"), String.class);
+        var vVoterHash = field(name("ranked_vote", "voter_hash"), String.class);
+        var vVoterType = field(name("ranked_vote", "voter_type"), String.class);
+        var vGovActionTxHash = field(name("ranked_vote", "gov_action_tx_hash"), String.class);
+        var vGovActionIndex = field(name("ranked_vote", "gov_action_index"), Integer.class);
+        var vVoteRank = field(name("ranked_vote", "vote_rank"), Integer.class);
 
-        Result<Record> result = dsl.with("vote_with_max_slot").as(cteQuery)
+        Result<Record> result = dsl.with("ranked_vote").as(rankedVoteQuery)
                 .select(VOTING_PROCEDURE.fields())
                 .from(VOTING_PROCEDURE)
-                .join(voteWithMaxSlot)
-                .on(VOTING_PROCEDURE.VOTER_HASH.eq(vVoterHash)
+                .join(rankedVote)
+                .on(VOTING_PROCEDURE.TX_HASH.eq(vTxHash)
+                        .and(VOTING_PROCEDURE.VOTER_HASH.eq(vVoterHash))
+                        .and(VOTING_PROCEDURE.VOTER_TYPE.eq(vVoterType))
                         .and(VOTING_PROCEDURE.GOV_ACTION_TX_HASH.eq(vGovActionTxHash))
                         .and(VOTING_PROCEDURE.GOV_ACTION_INDEX.eq(vGovActionIndex))
-                        .and(VOTING_PROCEDURE.SLOT.eq(vMaxSlot)))
+                        .and(vVoteRank.eq(1)))
                 .andExists(
                         selectOne()
                                 .from(EPOCH_STAKE)
@@ -120,12 +130,24 @@ public class VotingAggrService {
                 .map(id -> row(id.getTransactionId(), id.getGov_action_index()))
                 .collect(Collectors.toList());
 
-        var cteQuery = select(
+        var rankedVoteQuery = select(
+                VOTING_PROCEDURE.TX_HASH.as("tx_hash"),
                 VOTING_PROCEDURE.VOTER_HASH.as("voter_hash"),
                 VOTING_PROCEDURE.VOTER_TYPE.as("voter_type"),
                 VOTING_PROCEDURE.GOV_ACTION_TX_HASH.as("gov_action_tx_hash"),
                 VOTING_PROCEDURE.GOV_ACTION_INDEX.as("gov_action_index"),
-                max(VOTING_PROCEDURE.SLOT).as("max_slot")
+                rowNumber()
+                        .over(partitionBy(
+                                VOTING_PROCEDURE.VOTER_HASH,
+                                VOTING_PROCEDURE.VOTER_TYPE,
+                                VOTING_PROCEDURE.GOV_ACTION_TX_HASH,
+                                VOTING_PROCEDURE.GOV_ACTION_INDEX
+                        ).orderBy(
+                                VOTING_PROCEDURE.SLOT.desc(),
+                                VOTING_PROCEDURE.TX_INDEX.desc(),
+                                VOTING_PROCEDURE.IDX.desc()
+                        ))
+                        .as("vote_rank")
         )
                 .from(VOTING_PROCEDURE)
                 .where(VOTING_PROCEDURE.EPOCH.le(epoch))
@@ -134,31 +156,27 @@ public class VotingAggrService {
                         "CONSTITUTIONAL_COMMITTEE_HOT_SCRIPT_HASH",
                         "CONSTITUTIONAL_COMMITTEE_HOT_KEY_HASH"
                 ))
-                .and(VOTING_PROCEDURE.VOTER_HASH.in(committeeHotKeys))
-                .groupBy(
-                        VOTING_PROCEDURE.VOTER_HASH,
-                        VOTING_PROCEDURE.VOTER_TYPE,
-                        VOTING_PROCEDURE.GOV_ACTION_TX_HASH,
-                        VOTING_PROCEDURE.GOV_ACTION_INDEX
-                );
+                .and(VOTING_PROCEDURE.VOTER_HASH.in(committeeHotKeys));
 
-        var voteWithMaxSlot = table(name("vote_with_max_slot"));
+        var rankedVote = table(name("ranked_vote"));
 
-        var vVoterHash = field(name("vote_with_max_slot", "voter_hash"), String.class);
-        var vGovActionTxHash = field(name("vote_with_max_slot", "gov_action_tx_hash"), String.class);
-        var vGovActionIndex = field(name("vote_with_max_slot", "gov_action_index"), Integer.class);
-        var vMaxSlot = field(name("vote_with_max_slot", "max_slot"), Long.class);
+        var vTxHash = field(name("ranked_vote", "tx_hash"), String.class);
+        var vVoterHash = field(name("ranked_vote", "voter_hash"), String.class);
+        var vVoterType = field(name("ranked_vote", "voter_type"), String.class);
+        var vGovActionTxHash = field(name("ranked_vote", "gov_action_tx_hash"), String.class);
+        var vGovActionIndex = field(name("ranked_vote", "gov_action_index"), Integer.class);
+        var vVoteRank = field(name("ranked_vote", "vote_rank"), Integer.class);
 
-        Result<org.jooq.Record> result = dsl.with("vote_with_max_slot").as(
-                        cteQuery
-                )
+        Result<Record> result = dsl.with("ranked_vote").as(rankedVoteQuery)
                 .select(VOTING_PROCEDURE.fields())
                 .from(VOTING_PROCEDURE)
-                .join(voteWithMaxSlot)
-                .on(VOTING_PROCEDURE.VOTER_HASH.eq(vVoterHash)
+                .join(rankedVote)
+                .on(VOTING_PROCEDURE.TX_HASH.eq(vTxHash)
+                        .and(VOTING_PROCEDURE.VOTER_HASH.eq(vVoterHash))
+                        .and(VOTING_PROCEDURE.VOTER_TYPE.eq(vVoterType))
                         .and(VOTING_PROCEDURE.GOV_ACTION_TX_HASH.eq(vGovActionTxHash))
                         .and(VOTING_PROCEDURE.GOV_ACTION_INDEX.eq(vGovActionIndex))
-                        .and(VOTING_PROCEDURE.SLOT.eq(vMaxSlot)))
+                        .and(vVoteRank.eq(1)))
                 .fetch();
 
         return mapToVotingProcedures(result);
