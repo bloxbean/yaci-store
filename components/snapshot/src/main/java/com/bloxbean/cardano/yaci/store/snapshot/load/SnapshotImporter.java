@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.snapshot.load;
 
+import com.bloxbean.cardano.yaci.store.snapshot.manifest.ManifestValidator;
 import com.bloxbean.cardano.yaci.store.snapshot.archive.ArchiveExtractor;
 import com.bloxbean.cardano.yaci.store.snapshot.archive.ArchiveVerifier;
 import com.bloxbean.cardano.yaci.store.snapshot.convert.ConverterRegistry;
@@ -73,7 +74,16 @@ public class SnapshotImporter {
         List<String> blockers = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
 
-        checkSpecCompatibility(manifest, blockers);
+        blockers.addAll(new ManifestValidator(registry)
+                .validate(manifest));
+        if (!options.allowUnsigned()) {
+            blockers.add("Snapshot signing is not implemented; --allow-unsigned is required");
+        }
+        if (!blockers.isEmpty()) {
+            return new Preflight(manifest, blockers, warnings, null);
+        }
+        // Resolve both database connection paths before any extraction or target writes.
+        DuckPgSession.pgConnectionString(options);
 
         if (!options.network().equalsIgnoreCase(manifest.point().network())
                 || options.protocolMagic() != manifest.point().protocolMagic()) {
@@ -99,6 +109,10 @@ public class SnapshotImporter {
 
             ImportJournal journal = new ImportJournal(pg, options.schema());
             existing = journal.currentRun().orElse(null);
+            if (existing != null && !existing.manifestDigest().equals(new ManifestCodec().digest(manifest))) {
+                blockers.add("Import journal manifest digest does not match this manifest. "
+                        + "Resume requires the exact original manifest.");
+            }
             if (existing != null && !existing.snapshotId().equals(manifest.snapshotId())) {
                 blockers.add("The schema holds an incomplete import of a different snapshot ("
                         + existing.snapshotId() + ", status " + existing.status()
@@ -133,7 +147,7 @@ public class SnapshotImporter {
         }
 
         ArchiveVerifier.Result verified =
-                new ArchiveVerifier().verify(manifest, options.archiveDir(), false);
+                new ArchiveVerifier().inspect(manifest, options.archiveDir());
         if (!verified.ok()) {
             verified.problems().forEach(p -> blockers.add("Archive: " + p));
         }
@@ -149,28 +163,6 @@ public class SnapshotImporter {
         }
 
         return new Preflight(manifest, blockers, warnings, existing);
-    }
-
-    /**
-     * Every spec the manifest names must exist locally at the same version and digest. Mapping rules
-     * are executable, so they always come from the local installation, never from the archive.
-     */
-    private void checkSpecCompatibility(SnapshotManifest manifest, List<String> blockers) {
-        for (SnapshotManifest.TableManifest t : manifest.tables()) {
-            SnapshotTableSpec local = registry.byId(t.specId()).orElse(null);
-            if (local == null) {
-                blockers.add("Snapshot references specification '" + t.specId()
-                        + "' which is not installed locally");
-                continue;
-            }
-            if (local.specVersion() != t.specVersion()) {
-                blockers.add("Specification '" + t.specId() + "' is version " + local.specVersion()
-                        + " locally but " + t.specVersion() + " in the snapshot");
-            } else if (!local.digest().equals(t.specDigest())) {
-                blockers.add("Specification '" + t.specId() + "' has digest " + local.digest().substring(0, 12)
-                        + "... locally but " + t.specDigest().substring(0, 12) + "... in the snapshot");
-            }
-        }
     }
 
     /**
@@ -217,23 +209,32 @@ public class SnapshotImporter {
         SnapshotManifest manifest = pre.manifest();
         List<String> warnings = new ArrayList<>(pre.warnings());
 
-        long t0 = System.currentTimeMillis();
-        ArchiveVerifier.Result verified = new ArchiveVerifier().verify(manifest, options.archiveDir(), true);
-        if (!verified.ok()) {
-            throw new IllegalStateException("Archive verification failed:\n  - "
-                    + String.join("\n  - ", verified.problems()));
-        }
-        long verifyMillis = System.currentTimeMillis() - t0;
-
-        Path extractRoot = options.workDir().resolve("extracted");
-        long t1 = System.currentTimeMillis();
-        if (!options.skipExtraction()) {
-            extract(manifest, options, extractRoot, progress);
-        }
-        long extractMillis = System.currentTimeMillis() - t1;
-
         try (Connection pg = connect(options)) {
             acquireAdvisoryLock(pg);
+            // Recheck database state after acquiring the lock: another importer may have finished
+            // since preflight. Resume is bound to the entire manifest.
+            ImportJournal.Run current = new ImportJournal(pg, options.schema()).currentRun().orElse(null);
+            if (current != null && !current.manifestDigest().equals(new ManifestCodec().digest(manifest))) {
+                throw new IllegalStateException("Import journal manifest digest does not match this manifest");
+            }
+            if (current == null && !nonEmptyChainTables(pg, options.schema()).isEmpty()) {
+                throw new IllegalStateException("Target schema already contains chain data");
+            }
+            long t0 = System.currentTimeMillis();
+            ArchiveVerifier.Result verified = new ArchiveVerifier().verify(manifest, options.archiveDir(), true);
+            if (!verified.ok()) {
+                throw new IllegalStateException("Archive verification failed:\n  - "
+                        + String.join("\n  - ", verified.problems()));
+            }
+            long verifyMillis = System.currentTimeMillis() - t0;
+
+            Path extractRoot = options.workDir().resolve("extracted");
+            long t1 = System.currentTimeMillis();
+            if (!options.skipExtraction()) {
+                extract(manifest, options, extractRoot, progress);
+            }
+            long extractMillis = System.currentTimeMillis() - t1;
+
             ImportJournal journal = new ImportJournal(pg, options.schema());
             journal.createIfAbsent();
             PgSchema schema = new PgSchema(pg, options.schema());

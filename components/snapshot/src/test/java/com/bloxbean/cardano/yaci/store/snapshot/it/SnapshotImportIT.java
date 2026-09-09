@@ -200,24 +200,15 @@ class SnapshotImportIT {
 
     @Test
     void aResumedImportSkipsCommittedBatchesAndDoesNotDuplicateRows() throws Exception {
-        // An interrupted import is modelled as a first run that carried only some of the tables,
-        // leaving its journal behind. Batch identity is content-addressed, so the second run
-        // recognises the already-committed work by its files, not by any ordinal.
-        String snapshotId = "it-resume-snapshot";
-        SnapshotFixture.Built partial;
-        SnapshotFixture.Built full;
-        try (Connection conn = PostgresSupport.connect()) {
-            PgSchema pgs = new PgSchema(conn, schema);
-            partial = SnapshotFixture.build(root.resolve("partial"), pgs.fingerprint(),
-                    pgs.flywayFingerprint(), List.of("block", "epoch"), snapshotId);
-            full = SnapshotFixture.build(root.resolve("full"), pgs.fingerprint(),
-                    pgs.flywayFingerprint(), SnapshotFixture.ALL_TABLES, snapshotId);
-        }
-
-        ImportReport first = new SnapshotImporter(registry)
-                .importSnapshot(options(partial.manifestPath(), 1), null);
-        assertThat(first.batchesLoaded()).isGreaterThan(0);
-        assertThat(first.batchesSkipped()).isZero();
+        SnapshotFixture.Built full = fixture();
+        String snapshotId = full.manifest().snapshotId();
+        // Fail after a committed batch, keeping the original manifest and archive unchanged.
+        assertThatThrownBy(() -> new SnapshotImporter(registry)
+                .importSnapshot(options(full.manifestPath(), 1), progress -> {
+                    if (progress.startsWith("block +")) {
+                        throw new IllegalStateException("simulated interruption after block commit");
+                    }
+                })).isInstanceOf(IllegalStateException.class).hasMessageContaining("simulated interruption");
 
         long blocksAfterFirst;
         long completedAfterFirst;
@@ -227,7 +218,7 @@ class SnapshotImportIT {
             assertThat(count(conn, "address_utxo")).isZero();
         }
         assertThat(blocksAfterFirst).isEqualTo(SnapshotFixture.POINT_BLOCK + 1);
-        assertThat(completedAfterFirst).isEqualTo(first.batchesLoaded());
+        assertThat(completedAfterFirst).isPositive();
 
         ImportReport second = new SnapshotImporter(registry)
                 .importSnapshot(options(full.manifestPath(), 1), null);
@@ -341,10 +332,13 @@ class SnapshotImportIT {
         bytes[bytes.length / 2] ^= 0x33;
         Files.write(part, bytes);
 
-        SnapshotImporter.Preflight pre =
-                new SnapshotImporter(registry).preflight(options(built.manifestPath(), 1));
-        assertThat(pre.ok()).isFalse();
-        assertThat(pre.blockers()).anySatisfy(b -> assertThat(b).contains("SHA-256 mismatch"));
+        assertThatThrownBy(() -> new SnapshotImporter(registry)
+                .importSnapshot(options(built.manifestPath(), 1), null))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("SHA-256 mismatch");
+        try (Connection conn = PostgresSupport.connect()) {
+            assertThat(count(conn, "block")).isZero();
+            assertThat(new ImportJournal(conn, schema).exists()).isFalse();
+        }
     }
 
     @Test
@@ -358,6 +352,44 @@ class SnapshotImportIT {
         SnapshotImporter.Preflight pre = new SnapshotImporter(registry).preflight(tight);
         assertThat(pre.ok()).isFalse();
         assertThat(pre.blockers()).anySatisfy(b -> assertThat(b).contains("free at"));
+    }
+
+    @Test
+    void refusesMissingAndDuplicateManifestTablesBeforeWriting() throws Exception {
+        SnapshotFixture.Built built = fixture();
+        List<SnapshotManifest.TableManifest> missing = built.manifest().tables().stream()
+                .filter(t -> !t.specId().equals("delegation")).toList();
+        new ManifestCodec().writeAtomically(replaceTables(built.manifest(), missing), built.manifestPath());
+        assertThat(new SnapshotImporter(registry).preflight(options(built.manifestPath(), 1)).blockers())
+                .anyMatch(p -> p.contains("Missing manifest specification 'delegation'"));
+        try (Connection conn = PostgresSupport.connect()) {
+            assertThat(new SnapshotValidator(registry).validateLoad(conn, schema,
+                    replaceTables(built.manifest(), missing)).passed()).isFalse();
+            assertThat(new ImportJournal(conn, schema).exists()).isFalse();
+        }
+        var duplicate = new java.util.ArrayList<>(built.manifest().tables());
+        duplicate.add(duplicate.get(0));
+        new ManifestCodec().writeAtomically(replaceTables(built.manifest(), duplicate), built.manifestPath());
+        assertThat(new SnapshotImporter(registry).preflight(options(built.manifestPath(), 1)).blockers())
+                .anyMatch(p -> p.contains("Duplicate manifest specification"));
+    }
+
+    @Test
+    void resumeAndValidationRequireTheOriginalManifestDigest() throws Exception {
+        SnapshotFixture.Built built = fixture();
+        new SnapshotImporter(registry).importSnapshot(options(built.manifestPath(), 1), null);
+        ManifestCodec codec = new ManifestCodec();
+        // Same snapshot ID, files, and spec versions, but a different manifest.
+        Files.writeString(built.manifestPath(), codec.toJson(built.manifest())
+                .replace("2026-01-01T00:00:00Z", "2026-01-02T00:00:00Z"));
+        assertThatThrownBy(() -> new SnapshotImporter(registry)
+                .importSnapshot(options(built.manifestPath(), 1), null))
+                .hasMessageContaining("manifest digest");
+        try (Connection conn = PostgresSupport.connect()) {
+            assertThat(new SnapshotValidator(registry).validateLoad(conn, schema,
+                    codec.read(built.manifestPath())).passed()).isFalse();
+            assertThat(count(conn, "block")).isEqualTo(SnapshotFixture.POINT_BLOCK + 1);
+        }
     }
 
     // ------------------------------------------------------------------ helpers

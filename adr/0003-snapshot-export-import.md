@@ -154,6 +154,23 @@ the admin CLI does not depend on analytics-store.
 This separation also allows future use from a non-interactive container entry
 point and integration tests.
 
+## Export and resume safety
+
+The source analytics writer must be stopped and its catalog connections closed.
+Export holds a read-only attachment to the original catalog until packaging ends;
+a raw copy of a live database would omit committed WAL entries. For every required
+daily/epoch partition, including empty and early partitions, inspection requires a
+COMPLETED `analytics_export_state` record whose row count matches the pinned catalog.
+Missing or failed partitions and count mismatches block export rather than relying
+on maximum row timestamps. The configured source datasource supplies that journal.
+
+Import and validation require exactly one entry for every installed specification.
+Resume requires the original canonical manifest digest, checked under the import
+lock. Worker concurrency can change, but batch sizes, specs and manifest contents
+cannot. Preflight checks part sizes; import hashes each part once before extraction
+and verifies extracted-file digests. Required target columns are checked for nulls
+by post-import validation.
+
 ## Snapshot Consistency Point
 
 Every snapshot has one immutable Cardano point:
@@ -612,17 +629,13 @@ a migration adds a table without one. `cursor_`, `era` and `adapot_jobs` are
 `HANDLER`; the `local_*` governance views are `RUNTIME_REBUILT`; the assets
 extension and operational log tables are `EMPTY_EXPECTED`.
 
-**Implementation note (the account module).** The account module is
-`NOT_RESTORED`, for a reason the original text did not have: its export is not
-merely absent, it is a *downsample*. `AddressBalanceExporter` and
-`StakeAddressBalanceExporter` keep only the latest balance per address per day
-(`ROW_NUMBER() ... WHERE rn = 1`), so the export is correct for analytics and
-wrong as a restore source -- importing it would produce a database whose
-historical balances look complete and are not. `address_balance`,
-`stake_address_balance`, `address_tx_amount`, both `*_current` caches and
-`account_config` are therefore left empty and declared. A lossless account
-export is the prerequisite for supporting that module, not a snapshot-format
-change.
+**Implementation note (the account module).** Daily downsampled balances cannot
+restore state at an epoch boundary or within the rollback tail. Snapshot spec
+version 2 therefore imports `stake_address_balance` from the separate lossless
+`stake_address_balance_snapshot` exporter, preserving all retained balance changes.
+The existing daily analytics exporter is unchanged. Backfill the new relation
+from unpruned source history before producing a snapshot. Address balances and
+transaction amounts remain `NOT_RESTORED`; `account_config` is seeded by its handler.
 
 **Implementation note (`era` reconstruction).** Rebuilding one era row from the
 first imported block of each era reproduces the independently synced preprod

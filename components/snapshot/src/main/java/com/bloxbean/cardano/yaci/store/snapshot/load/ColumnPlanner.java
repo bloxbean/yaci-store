@@ -50,6 +50,11 @@ public class ColumnPlanner {
     public ColumnPlan plan(SnapshotTableSpec spec, Map<String, String> sourceColumns, TargetTable target) {
         SnapshotTableSpec.Import imp = spec.importSpec();
         List<String> problems = new ArrayList<>();
+        for (String required : spec.validation().requiredColumns()) {
+            if (!target.columns().containsKey(required)) {
+                problems.add("required target column '" + required + "' does not exist");
+            }
+        }
 
         Set<String> remainingSource = new LinkedHashSet<>(sourceColumns.keySet());
         Set<String> remainingTarget = new LinkedHashSet<>(target.columns().keySet());

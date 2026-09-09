@@ -23,6 +23,16 @@ public class ArchiveVerifier {
     public record Result(boolean ok, List<String> problems, long bytesVerified) {}
 
     public Result verify(SnapshotManifest manifest, Path archiveDir, boolean deepEntryScan) {
+        return check(manifest, archiveDir, deepEntryScan, true);
+    }
+
+    /** Cheap preflight: existence and sizes only. Import verifies every digest before extraction. */
+    public Result inspect(SnapshotManifest manifest, Path archiveDir) {
+        return check(manifest, archiveDir, false, false);
+    }
+
+    private Result check(SnapshotManifest manifest, Path archiveDir, boolean deepEntryScan,
+                         boolean hashParts) {
         List<String> problems = new ArrayList<>();
         long bytes = 0;
 
@@ -41,11 +51,13 @@ public class ArchiveVerifier {
                 if (size != part.size()) {
                     problems.add(part.fileName() + ": size " + size + " but manifest declares " + part.size());
                 }
-                String sha = Digests.sha256Hex(p);
-                if (!sha.equals(part.sha256())) {
-                    problems.add(part.fileName() + ": SHA-256 mismatch");
+                if (hashParts) {
+                    String sha = Digests.sha256Hex(p);
+                    if (!sha.equals(part.sha256())) {
+                        problems.add(part.fileName() + ": SHA-256 mismatch");
+                    }
+                    bytes += size;
                 }
-                bytes += size;
 
                 if (deepEntryScan) {
                     Set<String> entries = ArchiveExtractor.listEntries(p);

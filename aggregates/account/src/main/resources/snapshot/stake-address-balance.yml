@@ -1,13 +1,13 @@
 snapshot-table:
   id: stake-address-balance
-  spec-version: 1
+  spec-version: 2
   module: account
   kind: DERIVED_DATA
   restore: IMPORT
 
   source:
-    exporter-id: stake_address_balance
-    ducklake-relation: stake_address_balance
+    exporter-id: stake_address_balance_snapshot
+    ducklake-relation: stake_address_balance_snapshot
     partition:
       strategy: DAILY
       column: block_time
@@ -33,11 +33,3 @@ snapshot-table:
     key: [address, slot]
     bounds: [slot, epoch]
     required-columns: [address, slot]
-
-  lossy-note: >-
-    the analytics export keeps only the latest balance per address per day, so intra-day balance
-    history is absent. The AdaPot stake snapshot reads only each address latest balance at or
-    before an epoch boundary, which the downsample preserves except for an address that also
-    transacts after the boundary on the same day: measured at the epoch-298 boundary, 3 of
-    532,112 addresses differed, by 279 ADA against 2,808,441,931 ADA staked. Historical
-    per-address balance queries are not accurate against a restored database.

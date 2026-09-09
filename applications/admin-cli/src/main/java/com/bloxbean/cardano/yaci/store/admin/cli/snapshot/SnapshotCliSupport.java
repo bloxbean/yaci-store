@@ -134,10 +134,21 @@ public class SnapshotCliSupport {
                                        boolean unsigned) throws SQLException {
         String schemaFingerprint;
         String flywayFingerprint;
+        Map<String, Map<String, Long>> completedPartitions = new LinkedHashMap<>();
         try (Connection conn = connect()) {
             PgSchema pgs = new PgSchema(conn, schema());
             schemaFingerprint = pgs.fingerprint();
             flywayFingerprint = pgs.flywayFingerprint();
+            String stateTable = com.bloxbean.cardano.yaci.store.snapshot.util.Identifiers.quote(schema())
+                    + ".analytics_export_state";
+            try (var st = conn.createStatement();
+                 var rs = st.executeQuery("SELECT table_name, partition_value, row_count FROM " + stateTable
+                         + " WHERE export_status = 'COMPLETED' AND row_count IS NOT NULL")) {
+                while (rs.next()) {
+                    completedPartitions.computeIfAbsent(rs.getString(1), k -> new LinkedHashMap<>())
+                            .put(rs.getString(2), rs.getLong(3));
+                }
+            }
         }
         return new ExportOptions(
                 Path.of(dataDir != null ? dataDir : analyticsDataDir()).toAbsolutePath().normalize(),
@@ -146,7 +157,7 @@ public class SnapshotCliSupport {
                 network(), protocolMagic(), null,
                 parseSize(partSize), targetEpoch, minConfirmations, allowIncomplete, unsigned,
                 yaciStoreVersion(), enabledModules(), pruningSettings(),
-                schemaFingerprint, flywayFingerprint);
+                schemaFingerprint, flywayFingerprint, completedPartitions);
     }
 
     public ImportOptions importOptions(String manifest, String workDir, int workers, String memoryLimit,

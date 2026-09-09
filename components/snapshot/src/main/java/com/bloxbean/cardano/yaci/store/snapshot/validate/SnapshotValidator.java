@@ -1,5 +1,7 @@
 package com.bloxbean.cardano.yaci.store.snapshot.validate;
 
+import com.bloxbean.cardano.yaci.store.snapshot.manifest.ManifestCodec;
+import com.bloxbean.cardano.yaci.store.snapshot.manifest.ManifestValidator;
 import com.bloxbean.cardano.yaci.store.snapshot.load.ImportJournal;
 import com.bloxbean.cardano.yaci.store.snapshot.load.PgSchema;
 import com.bloxbean.cardano.yaci.store.snapshot.manifest.ConsistencyPoint;
@@ -39,6 +41,13 @@ public class SnapshotValidator {
     public ValidationReport validateLoad(Connection pg, String schema, SnapshotManifest manifest)
             throws SQLException {
         ValidationReport.Builder b = new ValidationReport.Builder("schema-and-load");
+        for (String problem : new ManifestValidator(registry)
+                .validate(manifest)) {
+            b.fail("manifest", problem);
+        }
+        if (!b.build().passed()) {
+            return b.build();
+        }
         PgSchema pgs = new PgSchema(pg, schema);
 
         String fingerprint = pgs.fingerprint();
@@ -63,9 +72,23 @@ public class SnapshotValidator {
                                 + " row(s)");
                 continue;
             }
-            long actual = count(pg, schema, t.targetTable());
-            b.check("rows:" + t.targetTable(), actual == t.rowCount(),
-                    actual + " rows (manifest declares " + t.rowCount() + ")");
+            // Count rows and check required values in one pass over potentially very large tables.
+            String counts = "count(*)" + spec.validation().requiredColumns().stream()
+                    .map(c -> ", count(*) FILTER (WHERE " + Identifiers.quote(c) + " IS NULL)")
+                    .collect(java.util.stream.Collectors.joining());
+            try (Statement st = pg.createStatement();
+                 ResultSet rs = st.executeQuery("SELECT " + counts + " FROM " + qt(schema, t.targetTable()))) {
+                rs.next();
+                long actual = rs.getLong(1);
+                b.check("rows:" + t.targetTable(), actual == t.rowCount(),
+                        actual + " rows (manifest declares " + t.rowCount() + ")");
+                for (int i = 0; i < spec.validation().requiredColumns().size(); i++) {
+                    String column = spec.validation().requiredColumns().get(i);
+                    long nulls = rs.getLong(i + 2);
+                    b.check("required:" + spec.targetTable() + "." + column, nulls == 0,
+                            nulls + " null value(s)");
+                }
+            }
         }
 
         // Tables the specification says must stay empty really are empty.
@@ -95,8 +118,10 @@ public class SnapshotValidator {
 
         ImportJournal journal = new ImportJournal(pg, schema);
         if (journal.exists()) {
-            long completed = journal.completedCount(manifest.snapshotId());
-            b.pass("import-journal", completed + " completed batch(es) recorded");
+            ImportJournal.Run run = journal.currentRun().orElse(null);
+            b.check("import-journal", run != null && run.manifestDigest().equals(
+                    new ManifestCodec().digest(manifest)),
+                    "journal must match the exact manifest being validated");
         } else {
             b.fail("import-journal", "no import journal found for this schema");
         }
