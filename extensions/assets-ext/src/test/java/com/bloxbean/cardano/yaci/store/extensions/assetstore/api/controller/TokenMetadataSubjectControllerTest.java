@@ -4,7 +4,6 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.AssetsExtStorePrope
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.Metadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.StringProperty;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.Subject;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.TokenType;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.service.TokenQueryService;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.service.TokenQueryService.BatchPrefetchData;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -69,7 +68,7 @@ class TokenMetadataSubjectControllerTest {
                 .name(new StringProperty(name, "CIP_26"))
                 .description(new StringProperty("a token", "CIP_26"))
                 .build();
-        return new Subject(subject, TokenType.NATIVE, metadata, null, null);
+        return new Subject(subject, metadata, null);
     }
 
     @Nested
@@ -149,7 +148,7 @@ class TokenMetadataSubjectControllerTest {
         @Test
         void returns200WithBatchResultsWhenValid() throws Exception {
             when(tokenQueryService.prefetchBatch(anyList(), anyList()))
-                    .thenReturn(new BatchPrefetchData(Map.of(), Map.of(), Map.of(), Map.of()));
+                    .thenReturn(new BatchPrefetchData(Map.of(), Map.of(), Map.of()));
             when(tokenQueryService.querySubjectBatch(eq(VALID_SUBJECT), anyList(), anyList(), any(), anyBoolean()))
                     .thenReturn(subjectWithName(VALID_SUBJECT, "Nutcoin"));
             when(tokenQueryService.querySubjectBatch(eq(VALID_SUBJECT_2), anyList(), anyList(), any(), anyBoolean()))
@@ -170,9 +169,9 @@ class TokenMetadataSubjectControllerTest {
         @Test
         void filtersOutSubjectsWithEmptyMetadata() throws Exception {
             when(tokenQueryService.prefetchBatch(anyList(), anyList()))
-                    .thenReturn(new BatchPrefetchData(Map.of(), Map.of(), Map.of(), Map.of()));
+                    .thenReturn(new BatchPrefetchData(Map.of(), Map.of(), Map.of()));
             when(tokenQueryService.querySubjectBatch(eq(VALID_SUBJECT), anyList(), anyList(), any(), anyBoolean()))
-                    .thenReturn(new Subject(VALID_SUBJECT, TokenType.NATIVE, Metadata.empty(), null, null));
+                    .thenReturn(new Subject(VALID_SUBJECT, Metadata.empty(), null));
 
             String body = objectMapper.writeValueAsString(Map.of("subjects", List.of(VALID_SUBJECT)));
 
