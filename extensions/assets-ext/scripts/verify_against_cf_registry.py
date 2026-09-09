@@ -367,8 +367,8 @@ def subset_diff(expected: Any, actual: Any, label_actual: str, path: str = "") -
     Returns a list of human-readable diff strings.
 
     Asymmetric: every field in `expected` must appear in `actual` with the same
-    value. Fields in `actual` but not in `expected` are tolerated (services
-    may add e.g. `type`, `extensions.cip113`).
+    value. Fields in `actual` but not in `expected` are tolerated, so a service
+    may carry extra fields alongside the registry's.
 
     `label_actual` is used in the diff message ("missing in <label>", etc.).
     """
