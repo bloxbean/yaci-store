@@ -5,8 +5,9 @@ Flyway migrations for the `assets-ext` extension, one file per supported SQL dia
 the same schema — the differences are type names (`TEXT` ↔ `LONGTEXT`, `JSONB` ↔ `JSON`),
 identifier quoting, and a `TIMESTAMP` nullability quirk on MySQL.
 
-`optional-indexes.sql` (in this folder) lists indexes that are NOT applied automatically.
-Apply them after the initial sync reaches chain tip — e.g. via the yaci-store admin CLI.
+Optional indexes are declared in `components/dbutils/src/main/resources/asset-ext-index.yml`
+and are NOT applied automatically. Apply them once the initial sync reaches chain tip:
+`apply-optional-indexes --indexes asset-ext-index` in the admin CLI.
 
 Column type bounds across the SQL files follow the CIP-26 / CIP-68 specs and
 their canonical implementations. Tightening beyond these bounds is likely unsafe;
@@ -90,7 +91,7 @@ row stored under label=222). Read-path queries must **not** filter by label — 
 | `last_synced_at` | `TIMESTAMP` | |
 
 Indexes: `idx_cip68_metadata_slot`, `idx_cip68_metadata_label`. See
-`optional-indexes.sql` for additional indexes that pay off at chain-tip scale.
+`asset-ext-index.yml` for additional indexes that pay off at chain-tip scale.
 
 ---
 
