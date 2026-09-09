@@ -10,7 +10,7 @@ dependencies {
     implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-yaml'
     implementation 'org.slf4j:slf4j-api'
 
-    implementation(libs.duckdb.jdbc.snapshot)
+    implementation(libs.duckdb.jdbc)
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation(libs.assertj.core)

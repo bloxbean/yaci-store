@@ -1,6 +1,6 @@
 # Querying Data
 
-Once the Analytics Store has exported data, you can query it using the DuckDB CLI or any tool that supports Parquet files.
+Once the Analytics Store has exported data, you can query it using the DuckDB CLI or any tool that supports Parquet files. For querying over HTTP (or from LLM agents via MCP) — including views that union the exported history with the live PostgreSQL tail — see [Query API & Unified Views](/docs/v2/analytics/query-api).
 
 ## Prerequisites: Installing DuckDB CLI
 
@@ -42,6 +42,8 @@ EOF
 > **Note:** Always prefix table names with the catalog name (e.g., `analytics.block`). Querying without the prefix will fail:
 > - `SELECT * FROM block;` — Table not found
 > - `SELECT * FROM analytics.block;` — Correct
+
+> **Note:** With the DuckDB-file catalog type the catalog file is locked by the running yaci-store process; an `ATTACH` from another process fails with `Could not set lock on file ...` until the application is stopped. While it is running, use `read_parquet()` on the exported files (below) or the [Query API](/docs/v2/analytics/query-api). This does not apply to the PostgreSQL catalog type. Use a DuckDB CLI version at least as new as the one bundled with yaci-store (1.5.x): the DuckLake catalog is written in that version's format.
 
 ### Using `read_parquet()` with DuckLake
 

@@ -10,6 +10,7 @@ dependencies {
     api project(":aggregates:adapot")
     api project(":stores:governance")
 
+    implementation project(":components:core")
     implementation 'org.springframework.boot:spring-boot-starter-web'
 }
 

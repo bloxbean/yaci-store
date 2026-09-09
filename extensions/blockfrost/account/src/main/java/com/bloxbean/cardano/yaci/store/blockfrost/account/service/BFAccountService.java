@@ -3,9 +3,10 @@ package com.bloxbean.cardano.yaci.store.blockfrost.account.service;
 import com.bloxbean.cardano.yaci.store.blockfrost.account.dto.*;
 import com.bloxbean.cardano.yaci.store.blockfrost.account.mapper.BFAccountMapper;
 import com.bloxbean.cardano.yaci.store.blockfrost.account.storage.BFAccountStorageReader;
-import com.bloxbean.cardano.client.api.model.ProtocolParams;
 import com.bloxbean.cardano.yaci.store.client.epoch.EpochParamClient;
+import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
+import com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
@@ -13,6 +14,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigInteger;
 import java.util.Collections;
 import java.util.List;
 
@@ -22,6 +24,7 @@ import java.util.List;
 public class BFAccountService {
     private final BFAccountStorageReader storageReader;
     private final ObjectProvider<EpochParamClient> epochParamClient;
+    private final GenesisConfig genesisConfig;
     private final BFAccountMapper mapper = BFAccountMapper.INSTANCE;
 
     public BFAccountContentDto getAccountInfo(String stakeAddress) {
@@ -47,14 +50,19 @@ public class BFAccountService {
     }
 
     public List<BFAccountRegistrationDto> findRegistrations(String stakeAddress, int page, int count, Order order) {
-        String keyDeposit = currentKeyDeposit();
+        String fallbackDeposit = currentKeyDeposit();
 
         return storageReader.findRegistrations(stakeAddress, page, count, order)
                 .stream()
                 .map(registration -> {
                     var dto = mapper.toRegistrationDto(registration);
-                    if (BFAccountMapper.ACTION_REGISTERED.equals(dto.getAction()))
-                        dto.setDeposit(keyDeposit);
+                    if (BFAccountMapper.ACTION_DEREGISTERED.equals(dto.getAction())) {
+                        dto.setDeposit(null);
+                    } else if (registration.deposit() != null) {
+                        dto.setDeposit(registration.deposit().toString());
+                    } else {
+                        dto.setDeposit(fallbackDeposit);
+                    }
                     return dto;
                 })
                 .toList();
@@ -62,12 +70,15 @@ public class BFAccountService {
 
     private String currentKeyDeposit() {
         var client = epochParamClient.getIfAvailable();
-        if (client == null)
-            return null;
+        if (client != null) {
+            return client.getLatestProtocolParams()
+                    .map(params -> params.getKeyDeposit())
+                    .orElse(null);
+        }
 
-        return client.getLatestProtocolParams()
-                .map(ProtocolParams::getKeyDeposit)
-                .orElse(null);
+        ProtocolParams params = genesisConfig.getShelleyGenesisProtocolParams();
+        BigInteger keyDeposit = params == null ? null : params.getKeyDeposit();
+        return keyDeposit == null ? null : keyDeposit.toString();
     }
 
     public List<BFAccountWithdrawalDto> findWithdrawals(String stakeAddress, int page, int count, Order order) {

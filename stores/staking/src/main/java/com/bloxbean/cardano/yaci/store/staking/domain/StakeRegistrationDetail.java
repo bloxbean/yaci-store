@@ -11,6 +11,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 
+import java.math.BigInteger;
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -25,6 +27,7 @@ public class StakeRegistrationDetail extends BlockAwareDomain {
     private int certIndex;
     private int txIndex;
     private CertificateType type;
+    private BigInteger deposit;
     private int epoch;
     private long slot;
     private String blockHash;
