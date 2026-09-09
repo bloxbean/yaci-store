@@ -37,40 +37,33 @@ public class DuckLakeCatalog implements AutoCloseable {
     private final Connection conn;
     private final Path dataDir;
     private final Map<String, String> relationPrefixes = new java.util.HashMap<>();
-    private final boolean temporaryCatalogCopy;
-    private final Path catalogPath;
 
-    private DuckLakeCatalog(Connection conn, Path dataDir, Path catalogPath, boolean temporaryCatalogCopy) {
+    private DuckLakeCatalog(Connection conn, Path dataDir) {
         this.conn = conn;
         this.dataDir = dataDir;
-        this.catalogPath = catalogPath;
-        this.temporaryCatalogCopy = temporaryCatalogCopy;
     }
 
     /**
-     * @param dataDir     analytics data directory (the parent of {@code ducklake.catalog.db})
-     * @param workDir     where a private catalog copy is placed; the original is treated as read-only
-     * @param copyCatalog copy the catalog before attaching, so a running exporter's file lock and
-     *                    ongoing writes cannot affect or be affected by the snapshot read
+     * Attach the original catalog read-only and hold its database lock until packaging finishes.
+     * The analytics writer must be stopped and its connections closed first. Copying only a live
+     * database file loses committed WAL entries and can race with checkpoints.
      */
-    public static DuckLakeCatalog open(Path dataDir, Path workDir, boolean copyCatalog) throws SQLException, IOException {
+    public static DuckLakeCatalog open(Path dataDir, Path workDir) throws SQLException, IOException {
         Path catalog = dataDir.resolve("ducklake.catalog.db");
         if (!Files.isRegularFile(catalog)) {
             throw new IllegalArgumentException("DuckLake catalog not found: " + catalog);
         }
-        Path attachPath = catalog;
-        boolean copied = false;
-        if (copyCatalog) {
-            Files.createDirectories(workDir);
-            attachPath = workDir.resolve("ducklake.catalog.snapshot.db");
-            Files.copy(catalog, attachPath, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-            copied = true;
-        }
+        Files.createDirectories(workDir);
         Connection conn = DuckDb.open("2GB", workDir, 0);
-        DuckDb.exec(conn, "ATTACH '" + attachPath.toAbsolutePath().toString().replace("'", "''")
-                + "' AS " + CAT + " (READ_ONLY)");
-        log.debug("Attached DuckLake catalog {} (copy={})", attachPath, copied);
-        return new DuckLakeCatalog(conn, dataDir, attachPath, copied);
+        try {
+            DuckDb.exec(conn, "ATTACH '" + catalog.toAbsolutePath().toString().replace("'", "''")
+                    + "' AS " + CAT + " (READ_ONLY)");
+            return new DuckLakeCatalog(conn, dataDir);
+        } catch (SQLException e) {
+            conn.close();
+            throw new SQLException("Cannot open the snapshot catalog read-only. Stop analytics exports "
+                    + "and close the writer before inspecting or exporting a snapshot. " + e.getMessage(), e);
+        }
     }
 
     public Path dataDir() {
@@ -415,13 +408,6 @@ public class DuckLakeCatalog implements AutoCloseable {
             conn.close();
         } catch (SQLException e) {
             log.debug("Error closing catalog connection", e);
-        }
-        if (temporaryCatalogCopy) {
-            try {
-                Files.deleteIfExists(catalogPath);
-            } catch (IOException e) {
-                log.debug("Could not remove temporary catalog copy {}", catalogPath, e);
-            }
         }
     }
 

@@ -11,10 +11,10 @@ dependencies {
     implementation 'org.slf4j:slf4j-api'
 
     implementation(libs.duckdb.jdbc)
+    implementation "org.postgresql:postgresql:${postgresDriverVersion}"
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation(libs.assertj.core)
-    testRuntimeOnly "org.postgresql:postgresql:${postgresDriverVersion}"
 }
 
 /**

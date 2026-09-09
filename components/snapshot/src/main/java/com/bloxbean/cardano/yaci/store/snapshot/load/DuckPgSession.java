@@ -1,5 +1,7 @@
 package com.bloxbean.cardano.yaci.store.snapshot.load;
 
+import java.util.TreeMap;
+import java.util.Properties;
 import com.bloxbean.cardano.yaci.store.snapshot.ducklake.DuckDb;
 import com.bloxbean.cardano.yaci.store.snapshot.util.Identifiers;
 
@@ -34,11 +36,12 @@ public class DuckPgSession implements AutoCloseable {
 
     public static DuckPgSession open(ImportOptions options, Path spillDir, int threads) throws SQLException {
         String schema = Identifiers.requireSqlIdentifier(options.schema(), "target schema");
+        String connectionString = pgConnectionString(options);
         Connection duck = DuckDb.open(options.memoryLimit(), spillDir, threads);
         try {
             DuckDb.exec(duck, "INSTALL postgres");
             DuckDb.exec(duck, "LOAD postgres");
-            DuckDb.exec(duck, "ATTACH " + Identifiers.literal(pgConnectionString(options))
+            DuckDb.exec(duck, "ATTACH " + Identifiers.literal(connectionString)
                     + " AS " + PG_ALIAS + " (TYPE POSTGRES)");
         } catch (SQLException e) {
             duck.close();
@@ -49,15 +52,49 @@ public class DuckPgSession implements AutoCloseable {
 
     /** libpq key/value string built from the already-resolved JDBC settings. */
     static String pgConnectionString(ImportOptions options) {
-        String url = options.jdbcUrl();
-        String rest = url.substring(url.indexOf("//") + 2);
-        String hostPort = rest.contains("/") ? rest.substring(0, rest.indexOf('/')) : rest;
-        String host = hostPort.contains(":") ? hostPort.substring(0, hostPort.indexOf(':')) : hostPort;
-        String port = hostPort.contains(":") ? hostPort.substring(hostPort.indexOf(':') + 1) : "5432";
-        String dbPart = rest.contains("/") ? rest.substring(rest.indexOf('/') + 1) : "";
-        String db = dbPart.contains("?") ? dbPart.substring(0, dbPart.indexOf('?')) : dbPart;
-        return "dbname=" + db + " user=" + options.user() + " password=" + options.password()
-                + " host=" + host + " port=" + port;
+        Properties defaults = new Properties();
+        defaults.setProperty("user", options.user());
+        defaults.setProperty("password", options.password());
+        Properties properties = org.postgresql.Driver.parseURL(options.jdbcUrl(), defaults);
+        if (properties == null) {
+            throw new IllegalArgumentException("Snapshot import requires a PostgreSQL JDBC URL");
+        }
+        Map<String, String> keys = Map.ofEntries(
+                Map.entry("PGHOST", "host"), Map.entry("PGPORT", "port"), Map.entry("PGDBNAME", "dbname"),
+                Map.entry("user", "user"), Map.entry("password", "password"),
+                Map.entry("sslmode", "sslmode"), Map.entry("sslrootcert", "sslrootcert"),
+                Map.entry("sslcert", "sslcert"), Map.entry("sslkey", "sslkey"),
+                Map.entry("sslpassword", "sslpassword"), Map.entry("connectTimeout", "connect_timeout"),
+                Map.entry("ApplicationName", "application_name"), Map.entry("options", "options"));
+        for (String name : properties.stringPropertyNames()) {
+            if (!keys.containsKey(name) && !name.equals("currentSchema") && !name.equals("ssl")) {
+                throw new IllegalArgumentException("Unsupported PostgreSQL JDBC setting for snapshot import: " + name);
+            }
+        }
+        String host = properties.getProperty("PGHOST");
+        if (host.contains(",")) {
+            throw new IllegalArgumentException("Snapshot import requires a single PostgreSQL host");
+        }
+        // pgjdbc retains IPv6 brackets; libpq's keyword format takes the unbracketed address.
+        if (host.startsWith("[") && host.endsWith("]")) {
+            properties.setProperty("PGHOST", host.substring(1, host.length() - 1));
+        }
+        if (properties.getProperty("sslmode") == null && properties.containsKey("ssl")) {
+            String ssl = properties.getProperty("ssl");
+            if (ssl.isEmpty() || ssl.equalsIgnoreCase("true")) {
+                properties.setProperty("sslmode", "verify-full");
+            }
+        }
+        StringBuilder result = new StringBuilder();
+        new TreeMap<>(keys).forEach((jdbc, pq) -> {
+            String value = properties.getProperty(jdbc);
+            if (value != null) {
+                result.append(pq).append("='")
+                        .append(value.replace("\\", "\\\\").replace("'", "\\'"))
+                        .append("' ");
+            }
+        });
+        return result.toString().trim();
     }
 
     /** Never let a connection string carrying a password reach a log or an exception message. */
@@ -67,9 +104,11 @@ public class DuckPgSession implements AutoCloseable {
         }
         String out = message;
         if (password != null && !password.isEmpty()) {
-            out = out.replace(password, "****");
+            String escaped = password.replace("\\", "\\\\").replace("'", "\\'");
+            out = out.replace(escaped.replace("'", "''"), "****")
+                    .replace(escaped, "****").replace(password, "****");
         }
-        return out.replaceAll("password=\\S+", "password=****");
+        return out.replaceAll("(?i)(?:sslpassword|password)=(?:'(?:\\\\.|[^'\\\\])*'|\\S+)", "password=****");
     }
 
     public Connection connection() {

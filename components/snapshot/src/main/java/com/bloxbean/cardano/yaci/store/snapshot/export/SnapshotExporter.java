@@ -1,5 +1,7 @@
 package com.bloxbean.cardano.yaci.store.snapshot.export;
 
+import java.time.ZoneOffset;
+import java.time.LocalDate;
 import com.bloxbean.cardano.yaci.store.snapshot.archive.ArchiveVerifier;
 import com.bloxbean.cardano.yaci.store.snapshot.archive.ArchiveWriter;
 import com.bloxbean.cardano.yaci.store.snapshot.ducklake.DuckLakeCatalog;
@@ -43,7 +45,7 @@ public class SnapshotExporter {
 
     /** Read-only analysis: candidate point, coverage, lossy mappings, estimated size and blockers. */
     public InspectionReport inspect(ExportOptions options) throws SQLException, IOException {
-        try (DuckLakeCatalog catalog = DuckLakeCatalog.open(options.dataDir(), options.workDir(), true)) {
+        try (DuckLakeCatalog catalog = DuckLakeCatalog.open(options.dataDir(), options.workDir())) {
             return inspect(catalog, options);
         }
     }
@@ -86,10 +88,22 @@ public class SnapshotExporter {
         List<TablePlan> plans = new ArrayList<>();
         if (selection.point() != null) {
             ExportPlanner planner = new ExportPlanner(catalog);
+            var firstBlock = catalog.numericBounds("block", "number", snapshotId);
+            if (firstBlock.isEmpty() || firstBlock.get()[0] > 1) {
+                blockers.add("Block export must include the beginning of the chain; pruned exports are unsupported");
+            }
+            var timeBounds = catalog.bounds("block", "block_time", snapshotId).orElseThrow(
+                    () -> new IllegalStateException("Block export has no block_time bounds"));
+            LocalDate firstDay = LocalDate.parse(timeBounds.min().substring(0, 10));
+            LocalDate lastDay = Instant.ofEpochSecond(selection.point().blockTime())
+                    .atOffset(ZoneOffset.UTC).toLocalDate();
             for (SnapshotTableSpec spec : imported) {
                 if (!availableRelations.contains(spec.relation())) {
                     continue;
                 }
+                blockers.addAll(ExportCoverage.check(spec, catalog.files(spec.relation(), snapshotId),
+                        options.completedPartitions().getOrDefault(spec.source().exporterId(), Map.of()),
+                        firstDay, lastDay, selection.completedEpoch(), selection.point().slot()));
                 TablePlan plan = planner.plan(spec, snapshotId, selection.completedEpoch(),
                         selection.point().slot());
                 plans.add(plan);
@@ -147,8 +161,11 @@ public class SnapshotExporter {
      * published last with an atomic rename, so a manifest on disk always describes complete parts.
      */
     public ExportResult export(ExportOptions options, Consumer<String> progress) throws SQLException, IOException {
+        if (!options.unsigned()) {
+            throw new IllegalArgumentException("Snapshot signing is not implemented; --unsigned is required");
+        }
         long started = System.currentTimeMillis();
-        try (DuckLakeCatalog catalog = DuckLakeCatalog.open(options.dataDir(), options.workDir(), true)) {
+        try (DuckLakeCatalog catalog = DuckLakeCatalog.open(options.dataDir(), options.workDir())) {
             InspectionReport report = inspect(catalog, options);
             if (!report.canExport()) {
                 throw new IllegalStateException("Snapshot export is blocked:\n  - "

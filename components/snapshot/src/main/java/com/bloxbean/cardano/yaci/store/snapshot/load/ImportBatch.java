@@ -11,9 +11,8 @@ import java.util.List;
  * One independently committable unit of work.
  *
  * <p>The identity is content-addressed: it is derived from the snapshot id, the table, the transform
- * version and the sorted digests of the batch's input files. Retuning the batch size therefore does
- * not invalidate previously completed work the way an ordinal would, and an interrupted import
- * resumes by skipping exactly the batches already recorded.
+ * version and the sorted digests of the batch's input files. Resume requires the original manifest
+ * and specification (including its batch size); only worker concurrency may be changed.
  */
 public record ImportBatch(String batchId,
                           SnapshotTableSpec spec,

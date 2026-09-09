@@ -15,6 +15,8 @@ import java.util.Map;
  * @param minConfirmations blocks the point must sit behind the newest exported block
  * @param allowIncomplete  publish even though some tables are declared lossy; development only
  * @param unsigned         acknowledge that no signature will be produced
+ * @param completedPartitions source export journal: exporter id → partition value → completed row count.
+ *                            Must include zero-row partitions; missing entries block publication.
  */
 public record ExportOptions(Path dataDir,
                             Path workDir,
@@ -31,7 +33,8 @@ public record ExportOptions(Path dataDir,
                             List<String> modules,
                             Map<String, String> pruningSettings,
                             String schemaFingerprint,
-                            String flywayFingerprint) {
+                            String flywayFingerprint,
+                            Map<String, Map<String, Long>> completedPartitions) {
 
     public static final long DEFAULT_MIN_CONFIRMATIONS = 2160;
 }

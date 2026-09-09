@@ -50,7 +50,7 @@ public class SnapshotCommands {
             @Option(longNames = "data-dir", description = "Analytics data directory (defaults to the configured export path)")
             String dataDir,
             @Option(longNames = "work-dir", defaultValue = "./.snapshot-work",
-                    description = "Scratch directory for the catalog copy")
+                    description = "Scratch directory for DuckDB work files")
             String workDir,
             @Option(longNames = "min-confirmations", defaultValue = "2160",
                     description = "Blocks the point must sit behind the newest exported block")
@@ -180,7 +180,7 @@ public class SnapshotCommands {
             @Option(longNames = "memory-limit", defaultValue = "4GB", description = "Per-worker DuckDB memory limit")
             String memoryLimit,
             @Option(longNames = "min-free-disk-gb", defaultValue = "20",
-                    description = "Abort before free space drops below this")
+                    description = "Minimum free space required in the work directory at preflight")
             long minFreeDiskGb,
             @Option(longNames = "allow-unsigned", defaultValue = "false",
                     description = "Import a snapshot with no signature")
@@ -202,20 +202,16 @@ public class SnapshotCommands {
                     minFreeDiskGb, allowUnsigned, specFile, allowCustomSpecs, keepExtracted);
             SnapshotImporter importer = new SnapshotImporter(registry);
 
-            SnapshotImporter.Preflight pre = importer.preflight(options);
-            pre.warnings().forEach(w -> writeLn(warn(w)));
-            if (!pre.ok()) {
-                writeLn(error("Import is blocked:"));
-                pre.blockers().forEach(bl -> writeLn("    - %s", bl));
-                return;
-            }
             if (dryRun) {
-                writeLn(success("Preflight passed. Nothing was written (--dry-run)."));
+                SnapshotImporter.Preflight pre = importer.preflight(options);
+                pre.warnings().forEach(w -> writeLn(warn(w)));
+                if (!pre.ok()) {
+                    writeLn(error("Import is blocked:"));
+                    pre.blockers().forEach(bl -> writeLn("    - %s", bl));
+                } else {
+                    writeLn(success("Preflight passed (existence and sizes checked; import verifies digests). Nothing written."));
+                }
                 return;
-            }
-            if (pre.existingRun() != null) {
-                writeLn(info("Resuming import %s (status %s)", pre.existingRun().snapshotId(),
-                        pre.existingRun().status()));
             }
 
             AtomicLong ticks = new AtomicLong();
