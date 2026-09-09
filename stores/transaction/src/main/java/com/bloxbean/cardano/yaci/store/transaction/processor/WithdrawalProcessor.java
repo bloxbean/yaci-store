@@ -37,7 +37,6 @@ public class WithdrawalProcessor {
         var transactions = transactionEvent.getTransactions();
 
         List<Withdrawal> withdrawals = null;
-        //Index every transaction, including invalid ones, so tx_index matches transaction.tx_index
         for (int txIndex = 0; txIndex < transactions.size(); txIndex++) {
             var transaction = transactions.get(txIndex);
             if (transaction.isInvalid())

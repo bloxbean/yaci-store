@@ -102,7 +102,6 @@ public class WithdrawalProcessorTest {
         verify(withdrawalStorage, Mockito.times(1)).save(withdrawalListCaptor.capture());
         List<Withdrawal> withdrawals = withdrawalListCaptor.getValue();
 
-        //The invalid transaction contributes no withdrawal but still occupies index 0
         assertThat(withdrawals).hasSize(2);
         assertThat(withdrawals).allMatch(withdrawal -> withdrawal.getTxIndex() == 1);
     }

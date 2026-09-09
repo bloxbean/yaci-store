@@ -155,7 +155,6 @@ class ShelleyBlockEventPublisherTest {
         var auxDataEvent = capturePublishedEvent(AuxDataEvent.class);
         assertThat(auxDataEvent).isNotNull();
         assertThat(auxDataEvent.getTxAuxDataList()).hasSize(1);
-        //The dropped invalid transaction still occupies index 0
         assertThat(auxDataEvent.getTxAuxDataList().get(0).getTxIndex()).isEqualTo(1);
     }
 
