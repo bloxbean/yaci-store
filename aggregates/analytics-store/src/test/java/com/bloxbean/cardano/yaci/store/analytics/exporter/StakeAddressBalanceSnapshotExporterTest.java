@@ -3,6 +3,10 @@ package com.bloxbean.cardano.yaci.store.analytics.exporter;
 import com.bloxbean.cardano.yaci.store.analytics.writer.StorageWriter;
 import com.bloxbean.cardano.yaci.store.analytics.config.AnalyticsStoreProperties;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import com.bloxbean.cardano.yaci.store.analytics.state.ExportStateService;
+import com.bloxbean.cardano.yaci.store.core.service.EraService;
+import com.bloxbean.cardano.yaci.store.adapot.job.storage.AdaPotJobStorage;
 import java.sql.DriverManager;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -11,6 +15,22 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 
 class StakeAddressBalanceSnapshotExporterTest {
+    @Test
+    void registersWithAnalyticsWithoutAnExtraOptIn() {
+        var context = new ApplicationContextRunner()
+                .withUserConfiguration(StakeAddressBalanceSnapshotExporter.class)
+                .withBean(StorageWriter.class, () -> mock(StorageWriter.class))
+                .withBean(ExportStateService.class, () -> mock(ExportStateService.class))
+                .withBean(EraService.class, () -> mock(EraService.class))
+                .withBean(AnalyticsStoreProperties.class, AnalyticsStoreProperties::new)
+                .withBean(AdaPotJobStorage.class, () -> mock(AdaPotJobStorage.class));
+        context.withPropertyValues("yaci.store.analytics.enabled=true")
+                .run(ctx -> assertThat(ctx).hasSingleBean(StakeAddressBalanceSnapshotExporter.class));
+        context.run(ctx -> assertThat(ctx).doesNotHaveBean(StakeAddressBalanceSnapshotExporter.class));
+        context.withPropertyValues("yaci.store.analytics.enabled=false")
+                .run(ctx -> assertThat(ctx).doesNotHaveBean(StakeAddressBalanceSnapshotExporter.class));
+    }
+
     @Test
     void preservesIntraDayHistoryForEpochCutoffsAndRollback() throws Exception {
         var writer = mock(StorageWriter.class);

@@ -636,7 +636,9 @@ extension and operational log tables are `EMPTY_EXPECTED`.
 restore state at an epoch boundary or within the rollback tail. Snapshot spec
 version 2 therefore imports `stake_address_balance` from the separate lossless
 `stake_address_balance_snapshot` exporter, preserving all retained balance changes.
-The existing daily analytics exporter is unchanged. Backfill the new relation
+The lossless exporter is enabled by default with analytics and follows the existing
+per-exporter disable flag and table allowlist. The existing daily analytics exporter
+is unchanged. Backfill the new relation
 from unpruned source history before producing a snapshot. Address balances and
 transaction amounts remain `NOT_RESTORED`; `account_config` is seeded by its handler.
 

@@ -105,19 +105,22 @@ of the analytics export: its `analytics_export_state` journal provides completio
 Snapshot inspection compares each required partition's recorded row count with the pinned catalog;
 missing, failed, or mismatched partitions block export.
 
-Stake balances use the lossless `stake_address_balance_snapshot` exporter. Enable it with
-`yaci.store.analytics.exporter.stake_address_balance_snapshot.enabled=true`, include it in
-`yaci.store.analytics.enabled-tables` if you use an allowlist, and backfill it from retained,
+Stake balances use the lossless `stake_address_balance_snapshot` exporter, enabled by default
+when analytics is enabled. Include it in `yaci.store.analytics.enabled-tables` if you use an
+allowlist, and backfill existing installations from retained,
 unpruned `stake_address_balance` history. The existing `stake_address_balance` analytics exporter
 continues to produce daily downsampled data and cannot be used for restore. Existing snapshots with
 the old stake-balance spec must be regenerated.
 
-While the source analytics process is running, enable its admin API and the lossless exporter:
+Analytics-only installations can disable this exporter with
+`yaci.store.analytics.exporter.stake_address_balance_snapshot.enabled=false`.
+Snapshot export requires the lossless relation to be complete.
+
+While the source analytics process is running, enable its admin API:
 
 ```properties
 yaci.store.analytics.enabled=true
 yaci.store.analytics.admin.enabled=true
-yaci.store.analytics.exporter.stake_address_balance_snapshot.enabled=true
 ```
 
 Backfill the lossless relation through the source's analytics API. Dates are inclusive; replace the
@@ -413,7 +416,7 @@ its process exit code alone is not an acceptance result.
 |---|---|
 | No completed export record | Backfill the reported partition, including an empty partition, using the correct source database. |
 | Catalog row count differs from export journal | Check that the data directory and source datasource belong together. Investigate failed/repeated exports; repair and re-export affected data before packaging. |
-| Missing `stake_address_balance_snapshot` relation | Enable the opt-in lossless exporter, include it in any allowlist, and backfill retained history. |
+| Missing `stake_address_balance_snapshot` relation | Restart with the updated analytics build, ensure the lossless exporter is not disabled or excluded by an allowlist, and backfill retained history. |
 | Catalog cannot open read-only | Shut down the analytics process cleanly. If it crashed, recover and close it normally before trying again. |
 | Schema or spec mismatch | Use the matching build and complete schema. Regenerate old snapshots that used the downsampled stake-balance spec. |
 | Resume manifest digest mismatch | Restore the original manifest and archive. Do not edit the journal to force a match. |
