@@ -242,6 +242,11 @@ Unsigned imports require explicit `--allow-unsigned`.
 
 ### 1. Prepare the target schema
 
+Schema fingerprints exclude the known reward-calculation working tables (`ss_*` names explicitly
+listed by the snapshot component), which are recreated by aggregate jobs and absent in a fresh
+schema. Other table-definition differences still block import. Snapshots produced before this
+correction must be regenerated; do not edit the manifest fingerprint by hand.
+
 The target must be created by **the same Yaci Store release named in the manifest**, with the same
 enabled modules, and must be empty:
 
@@ -583,6 +588,16 @@ carries `pool_registration.margin_numerator` and `margin_denominator`, because t
 calculation reads the exact rational rather than the float. An older export lacks them, and
 `snapshot inspect` will refuse it: the `pool_registration` transform cannot be prepared. Re-export
 that relation (see below) before producing a snapshot intended for a ledger-state instance.
+</Callout>
+
+<Callout type="warning">
+**Older stake-registration exports must also be refreshed.** The lossless registration projection
+now includes `deposit`, preserving explicit registration deposits and nullable deregistration
+refunds. Stake-registration snapshot spec version 2 requires this column during inspection.
+Do not add `deposit` to `use-target-defaults`: that would silently discard ledger data.
+Refresh the `stake_registration` relation and its export state using the widening procedure below,
+then let analytics backfill it from retained PostgreSQL history and generate a new snapshot.
+The `stake_address_balance_snapshot` relation does not need to be rebuilt for this change.
 </Callout>
 
 ### Widening an exporter

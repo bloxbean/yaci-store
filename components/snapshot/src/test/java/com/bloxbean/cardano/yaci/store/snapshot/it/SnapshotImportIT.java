@@ -54,6 +54,23 @@ class SnapshotImportIT {
         }
     }
 
+    @Test
+    void fingerprintIgnoresKnownRewardWorkTablesButStillDetectsSchemaChanges() throws Exception {
+        try (var conn = PostgresSupport.connect(); var st = conn.createStatement()) {
+            st.execute("SET search_path TO " + Identifiers.quote(schema));
+            var pgs = new PgSchema(conn, schema);
+            String original = pgs.fingerprint();
+            st.execute("CREATE UNLOGGED TABLE ss_max_slot_balances(address TEXT, max_slot BIGINT)");
+            st.execute("CREATE TABLE ss_drep_status(address TEXT)");
+            assertThat(pgs.fingerprint()).isEqualTo(original);
+            st.execute("CREATE UNLOGGED TABLE ss_unknown_state(value BIGINT)");
+            assertThat(pgs.fingerprint()).isNotEqualTo(original);
+            st.execute("DROP TABLE ss_unknown_state");
+            st.execute("ALTER TABLE block ADD COLUMN unexpected BIGINT");
+            assertThat(pgs.fingerprint()).isNotEqualTo(original);
+        }
+    }
+
     private SnapshotFixture.Built fixture() throws Exception {
         try (Connection conn = PostgresSupport.connect()) {
             PgSchema pgs = new PgSchema(conn, schema);
