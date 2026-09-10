@@ -1,0 +1,33 @@
+snapshot-table:
+  id: pool-retirement
+  spec-version: 1
+  module: staking
+  kind: CHAIN_DATA
+  restore: IMPORT
+
+  source:
+    exporter-id: pool_retirement
+    ducklake-relation: pool_retirement
+    partition:
+      strategy: DAILY
+      column: block_time
+
+  consistency:
+    cutoff:
+      type: SLOT_LTE
+      column: slot
+
+  import:
+    target-table: pool_retirement
+    mode: SQL
+    select-resource: classpath:/snapshot/sql/pool_retirement_v1.sql
+    transform-version: 1
+    dependencies: [block]
+    use-target-defaults: [update_datetime]
+    batch-boundary: FILE_SET
+    batch-size: 64
+
+  validation:
+    key: [tx_hash, cert_index]
+    bounds: [slot, epoch]
+    required-columns: [tx_hash, cert_index]

@@ -1,0 +1,37 @@
+snapshot-table:
+  id: protocol-params-proposal
+  spec-version: 1
+  module: epoch
+  kind: CHAIN_DATA
+  restore: IMPORT
+
+  source:
+    exporter-id: protocol_params_proposal
+    ducklake-relation: protocol_params_proposal
+    partition:
+      strategy: DAILY
+      column: block_time
+
+  consistency:
+    cutoff:
+      type: SLOT_LTE
+      column: slot
+
+  import:
+    target-table: protocol_params_proposal
+    mode: MAPPED
+    columns:
+      params:
+        source: params
+        converter: "varchar-to-jsonb"
+      block_time:
+        source: block_time
+        converter: "timestamp-to-epoch-seconds"
+    ignore-source-columns: [date]
+    use-target-defaults: [update_datetime]
+    batch-boundary: SINGLE_BATCH
+
+  validation:
+    key: [tx_hash, key_hash]
+    bounds: [slot, epoch]
+    required-columns: [tx_hash, key_hash]

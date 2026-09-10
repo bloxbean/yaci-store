@@ -1,0 +1,11 @@
+snapshot-table:
+  id: error
+  spec-version: 1
+  module: core
+  kind: CONTROL_STATE
+  restore: EMPTY_EXPECTED
+  reason: >-
+    operational error log; a restored database starts with none
+
+  import:
+    target-table: error
