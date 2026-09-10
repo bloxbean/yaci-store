@@ -37,7 +37,8 @@ public class WithdrawalProcessor {
         var transactions = transactionEvent.getTransactions();
 
         List<Withdrawal> withdrawals = null;
-        for (var transaction : transactions) {
+        for (int txIndex = 0; txIndex < transactions.size(); txIndex++) {
+            var transaction = transactions.get(txIndex);
             if (transaction.isInvalid())
                 continue;
 
@@ -48,6 +49,7 @@ public class WithdrawalProcessor {
             if (withdrawals == null)
                 withdrawals = new ArrayList<>();
 
+            final int currentTxIndex = txIndex;
             var withdrawalsToSave = txWithdrawals.entrySet().stream()
                     .map(entry -> {
                         var addressHex = entry.getKey();
@@ -60,6 +62,7 @@ public class WithdrawalProcessor {
                         withdrawal.setAddress(stakeAddress);
                         withdrawal.setAmount(amount);
                         withdrawal.setTxHash(transaction.getTxHash());
+                        withdrawal.setTxIndex(currentTxIndex);
                         withdrawal.setSlot(metadata.getSlot());
                         withdrawal.setEpoch(metadata.getEpochNumber());
                         withdrawal.setBlockNumber(metadata.getBlock());

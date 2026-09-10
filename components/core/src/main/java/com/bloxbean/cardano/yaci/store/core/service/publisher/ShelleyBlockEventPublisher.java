@@ -139,12 +139,14 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
 
         //AuxData event
         var txAuxDataEvent = CompletableFuture.supplyAsync(() -> {
-            List<TxAuxData> txAuxDataList = transactions.stream()
-                    .filter(transaction -> !transaction.isInvalid())
-                    .filter(transaction -> transaction.getAuxData() != null)
-                    .map(transaction -> TxAuxData.builder()
-                            .txHash(transaction.getTxHash())
-                            .auxData(transaction.getAuxData())
+            //Index over the full list so tx_index counts invalid transactions, then filter
+            List<TxAuxData> txAuxDataList = IntStream.range(0, transactions.size())
+                    .filter(i -> !transactions.get(i).isInvalid())
+                    .filter(i -> transactions.get(i).getAuxData() != null)
+                    .mapToObj(i -> TxAuxData.builder()
+                            .txHash(transactions.get(i).getTxHash())
+                            .txIndex(i)
+                            .auxData(transactions.get(i).getAuxData())
                             .build()
                     ).collect(Collectors.toList());
             publisher.publishEvent(new AuxDataEvent(eventMetadata, txAuxDataList));
@@ -245,12 +247,14 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
         publisher.publishEvent(new ScriptEvent(eventMetadata, txScriptsList));
 
         //AuxData event
-        List<TxAuxData> txAuxDataList = transactions.stream()
-                .filter(transaction -> !transaction.isInvalid())
-                .filter(transaction -> transaction.getAuxData() != null)
-                .map(transaction -> TxAuxData.builder()
-                        .txHash(transaction.getTxHash())
-                        .auxData(transaction.getAuxData())
+        //Index over the full list so tx_index counts invalid transactions, then filter
+        List<TxAuxData> txAuxDataList = IntStream.range(0, transactions.size())
+                .filter(i -> !transactions.get(i).isInvalid())
+                .filter(i -> transactions.get(i).getAuxData() != null)
+                .mapToObj(i -> TxAuxData.builder()
+                        .txHash(transactions.get(i).getTxHash())
+                        .txIndex(i)
+                        .auxData(transactions.get(i).getAuxData())
                         .build()
                 ).collect(Collectors.toList());
         publisher.publishEvent(new AuxDataEvent(eventMetadata, txAuxDataList));
