@@ -1,0 +1,34 @@
+# Optional indexes for the assets-ext extension (CIP-26 / CIP-68 token metadata).
+#
+# Not applied automatically during sync. Apply once the initial sync reaches chain tip:
+#   apply-optional-indexes --indexes asset-ext-index
+
+- table: cip26_metadata
+  indexes:
+    # Ticker lookups (Cip26StorageReader.findByTicker).
+    - name: idx_cip26_metadata_ticker
+      columns:
+        - ticker
+
+- table: cip68_metadata
+  indexes:
+    # Label-filtered lookups by policy (findLatestByConcatenatedKeys). The
+    # (policy_id, label, slot DESC) prefix also serves findFirst*OrderBySlotDesc and the
+    # ROW_NUMBER() OVER (PARTITION BY policy_id, asset_name ORDER BY slot DESC) windowing.
+    - name: idx_cip68_metadata_policy_label
+      columns:
+        - policy_id
+        - label
+        - slot DESC
+
+# Not declared here — PostgreSQL-only shapes this format cannot express:
+#
+#   Case-insensitive name search (searchByName, ILIKE) is best served by pg_trgm:
+#     CREATE INDEX idx_cip26_metadata_name_trgm ON cip26_metadata USING GIN(name gin_trgm_ops);
+#   The gin_trgm_ops operator class has no equivalent field in an index definition, and the
+#   index needs the pg_trgm extension installed first.
+#
+#   JSONB containment queries on the properties column of either table:
+#     CREATE INDEX idx_cip26_metadata_properties ON cip26_metadata USING GIN(properties);
+#     CREATE INDEX idx_cip68_metadata_properties ON cip68_metadata USING GIN(properties);
+#   Left out because no read path queries properties by containment today.

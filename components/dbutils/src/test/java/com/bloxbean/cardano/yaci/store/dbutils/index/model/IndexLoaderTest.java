@@ -30,6 +30,17 @@ class IndexLoaderTest {
     }
 
     @Test
+    void loadAssetExtIndexes() {
+        List<IndexDefinition> indexDefinitions = new IndexLoader().loadIndexes("asset-ext-index.yml");
+        assertThat(indexDefinitions).hasSize(2);
+        assertThat(indexDefinitions)
+                .extracting(IndexDefinition::getTable)
+                .containsExactly("cip26_metadata", "cip68_metadata");
+        assertThat(indexDefinitions.get(1).getIndexes().get(0).getColumns())
+                .containsExactly("policy_id", "label", "slot DESC");
+    }
+
+    @Test
     void loadIndexesFromMultipleFiles() {
         List<IndexDefinition> indexDefinitions = new IndexLoader()
                 .loadIndexesFromMultipleFiles("test-index-1.yml", "test-index-2.yml");
