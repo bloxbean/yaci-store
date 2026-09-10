@@ -69,7 +69,10 @@ public class IndexService {
                     return null;
 
                 String using = index.getType() != null? "USING " + index.getType().trim() : "";
-                return String.format("CREATE INDEX IF NOT EXISTS %s ON %s %s (%s);", indexName, tableName, using, columns);
+                String where = index.getWhere() != null && !index.getWhere().trim().isEmpty()
+                        ? " WHERE " + index.getWhere().trim()
+                        : "";
+                return String.format("CREATE INDEX IF NOT EXISTS %s ON %s %s (%s) %s;", indexName, tableName, using, columns, where);
             case h2:
                 if (index.getExcludes() != null && index.getExcludes().contains(DatabaseUtils.DbType.h2.toString()))
                     return null;
