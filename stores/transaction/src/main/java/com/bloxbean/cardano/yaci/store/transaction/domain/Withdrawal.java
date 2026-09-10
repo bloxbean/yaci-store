@@ -20,6 +20,7 @@ import java.math.BigInteger;
 public class Withdrawal extends BlockAwareDomain {
     private String address;
     private String txHash;
+    private Integer txIndex;
     private BigInteger amount;
     private Integer epoch;
     private Long slot;

@@ -151,6 +151,12 @@ public class ParquetWriterService implements StorageWriter {
 
                 return new ExportResult(outputPath, rowCount, fileSize, duration);
             }
+        } catch (SQLException rawError) {
+            // postgres_scanner errors echo the connection string (including the password);
+            // log and propagate a redacted copy only.
+            SQLException e = DuckDbConnectionHelper.sanitize(rawError);
+            log.error("Failed to export to Parquet: {}", e.getMessage(), e);
+            throw new RuntimeException("Export to Parquet failed: " + e.getMessage(), e);
         } catch (Exception e) {
             log.error("Failed to export to Parquet: {}", e.getMessage(), e);
             throw new RuntimeException("Export to Parquet failed: " + e.getMessage(), e);

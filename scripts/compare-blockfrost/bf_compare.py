@@ -511,7 +511,9 @@ def run_module(net, module, endpoints, strict=False, depth=20, throttle=0.2,
                csv_out=None, orders=("asc", "desc"), pages=(1, 2), count=100,
                param_sets=None):
     """
-    endpoints: list of (path_template, is_list, [required_param_keys])
+    endpoints: list of (path_template, is_list, [required_param_keys], [label_template]).
+               label_template is optional and lets a module use internal format
+               keys while keeping the canonical endpoint in terminal/CSV output.
     csv_out:   optional file path; if given, appends one row per comparison to a CSV.
     orders:    order values to exercise on list endpoints (e.g. ("asc","desc")).
     pages:     page numbers to exercise on list endpoints (e.g. (1, 2)).
@@ -619,7 +621,8 @@ def run_module(net, module, endpoints, strict=False, depth=20, throttle=0.2,
     runs = [{**params, **ps} for ps in param_sets] if param_sets else [params]
 
     for run_params in runs:
-        sample = str(run_params.get("address")
+        sample = str(run_params.get("sample")
+                     or run_params.get("address")
                      or run_params.get("asset")
                      or run_params.get("tx_hash")
                      or "default")
@@ -632,12 +635,16 @@ def run_module(net, module, endpoints, strict=False, depth=20, throttle=0.2,
         for entry in endpoints:
             path_tpl, is_list = entry[0], entry[1]
             req_keys = entry[2] if len(entry) > 2 else []
-            missing = [k for k in req_keys if not run_params.get(k)]
+            label_tpl = entry[3] if len(entry) > 3 else path_tpl
+            # Numeric path identifiers such as governance cert_index may
+            # legitimately be zero; only None/empty values are missing.
+            missing = [k for k in req_keys
+                       if run_params.get(k) is None or run_params.get(k) == ""]
             if missing:
-                print(f"  SKIP  {path_tpl}  (no param: {missing})")
+                print(f"  SKIP  {label_tpl}  (no param: {missing})")
                 totals["skip"] += 1
                 csv_rows.append(dict(date=run_dt, network=net, module=module,
-                                     endpoint=path_tpl, result="SKIP",
+                                     endpoint=label_tpl, result="SKIP",
                                      yaci_status="", bf_status="",
                                      yaci_ms="", bf_ms="", slow="",
                                      diff_count="", diff_fields=f"missing params: {missing}"))
@@ -646,14 +653,14 @@ def run_module(net, module, endpoints, strict=False, depth=20, throttle=0.2,
             path = path_tpl.format(**run_params)
 
             if not is_list:
-                compare_call(path_tpl, path, "")
+                compare_call(label_tpl, path, "")
                 continue
 
             # List endpoint: exercise every (order, page) combination.
             for order in orders:
                 for page in pages:
                     q     = f"?count={count}&page={page}&order={order}"
-                    label = f"{path_tpl}?order={order}&page={page}"
+                    label = f"{label_tpl}?order={order}&page={page}"
                     compare_call(label, path, q)
 
         # Tag every row produced by this param set with its sample identifier.

@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.analytics.exporter;
 
+import java.util.Map;
 import com.bloxbean.cardano.yaci.store.adapot.job.storage.AdaPotJobStorage;
 import com.bloxbean.cardano.yaci.store.analytics.config.AnalyticsStoreProperties;
 import com.bloxbean.cardano.yaci.store.analytics.state.ExportStateService;
@@ -38,6 +39,12 @@ public class ConstitutionExporter extends AbstractTableExporter {
     @Override
     public PartitionStrategy getPartitionStrategy() {
         return PartitionStrategy.EPOCH;
+    }
+
+    /** Unified view: the exported {@code epoch} column is PostgreSQL {@code active_epoch}. */
+    @Override
+    public Map<String, String> getSourceColumnMappings() {
+        return Map.of("epoch", "active_epoch");
     }
 
     @Override

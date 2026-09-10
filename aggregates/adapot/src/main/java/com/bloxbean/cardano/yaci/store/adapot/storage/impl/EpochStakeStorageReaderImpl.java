@@ -7,6 +7,7 @@ import com.bloxbean.cardano.yaci.store.adapot.storage.impl.repository.EpochStake
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 
 import java.math.BigInteger;
 import java.util.ArrayList;
@@ -15,6 +16,11 @@ import java.util.Optional;
 
 @RequiredArgsConstructor
 public class EpochStakeStorageReaderImpl implements EpochStakeStorageReader {
+    //Paged reads need a stable order, otherwise rows can be dropped or repeated across pages.
+    //(epoch, address) is the primary key of epoch_stake, so address alone is unique within an
+    //epoch and the sort is served by the primary key index without an extra sort step.
+    private static final Sort ADDRESS_SORT = Sort.by(Sort.Direction.ASC, "address");
+
     private final EpochStakeRepository stakeSnapshotRepository;
     private final Mapper mapper;
 
@@ -36,7 +42,7 @@ public class EpochStakeStorageReaderImpl implements EpochStakeStorageReader {
 
     @Override
     public List<EpochStake> getAllActiveStakesByEpoch(Integer epoch, int page, int count) {
-        Pageable pageable = PageRequest.of(page, count);
+        Pageable pageable = PageRequest.of(page, count, ADDRESS_SORT);
 
         return stakeSnapshotRepository.getAllActiveStakesByEpoch(epoch, pageable)
                 .stream().map(mapper::toEpochStake).toList();
@@ -44,7 +50,7 @@ public class EpochStakeStorageReaderImpl implements EpochStakeStorageReader {
 
     @Override
     public List<EpochStake> getAllActiveStakesByEpochAndPool(Integer epoch, String poolId, int page, int count) {
-        Pageable pageable = PageRequest.of(page, count);
+        Pageable pageable = PageRequest.of(page, count, ADDRESS_SORT);
 
         return stakeSnapshotRepository.getAllByActiveEpochAndPool(epoch, poolId, pageable)
                 .stream().map(mapper::toEpochStake).toList();

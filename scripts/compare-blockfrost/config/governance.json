@@ -1,0 +1,23 @@
+{
+  "preprod": {
+    "drep_id": "",
+    "proposal": {},
+    "parameter_proposal": {},
+    "withdrawal_proposal": {},
+    "metadata_proposal": {}
+  },
+  "preview": {
+    "drep_id": "",
+    "proposal": {},
+    "parameter_proposal": {},
+    "withdrawal_proposal": {},
+    "metadata_proposal": {}
+  },
+  "mainnet": {
+    "drep_id": "",
+    "proposal": {},
+    "parameter_proposal": {},
+    "withdrawal_proposal": {},
+    "metadata_proposal": {}
+  }
+}

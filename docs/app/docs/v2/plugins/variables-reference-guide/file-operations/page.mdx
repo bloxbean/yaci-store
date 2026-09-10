@@ -2,12 +2,12 @@
 
 ## Overview
 
-The `PluginFileClient` provides essential file operations designed specifically for plugin developers using MVEL, JavaScript, or Python. It offers simple, secure methods for file I/O, JSON/CSV handling, and directory operations with built-in error handling and sandboxing.
+The `PluginFileClient` provides essential file operations designed specifically for plugin developers using MVEL, JavaScript, Python, or Java. It offers simple, secure methods for file I/O, JSON/CSV handling, and directory operations with built-in error handling and sandboxing.
 
 ## Key Features
 
 - **Simplified API**: Only essential methods for data processing
-- **Script-Friendly**: Designed for MVEL, JavaScript, and Python developers
+- **Script-Friendly**: Designed for MVEL, JavaScript, Python, and Java developers
 - **Secure by Design**: Sandboxed operations with path validation
 - **Atomic Writes**: Data integrity for configuration and export files
 - **JSON/CSV Support**: Built-in support for common data formats
@@ -88,6 +88,27 @@ if not files.exists("output.csv"):
 files.append("debug.log", f"Processing item {item_id}\n")
 ```
 
+```java
+// Java - File operations with error handling (files() from the PluginContext)
+PluginFileClient files = context().files();
+
+// Read configuration
+FileOperationResult content = files.read("config.txt");
+if (content.isSuccess()) {
+    String configText = content.getAsString();
+    log.info("Config loaded: {}", configText);
+}
+
+// Write processing data
+FileOperationResult result = files.write("output.txt", "Item processed: " + itemId);
+if (result.isSuccess()) {
+    log.info("Data written successfully");
+}
+
+// Append to log file
+files.append("process.log", "Event: " + eventId + "\n");
+```
+
 ### JSON Operations
 
 ```javascript
@@ -151,6 +172,36 @@ audit_entry = {
     "records": record_count
 }
 files.appendJson("audit.json", audit_entry)
+```
+
+```java
+// Java - JSON configuration and logging (files() from the PluginContext)
+PluginFileClient files = context().files();
+
+// Read configuration
+FileOperationResult configResult = files.readJson("config.json");
+if (configResult.isSuccess()) {
+    @SuppressWarnings("unchecked")
+    Map<String, Object> config = (Map<String, Object>) configResult.getData();
+    Object apiUrl = config.get("api_url");
+    Object timeout = config.get("timeout");
+}
+
+// Export data
+Map<String, Object> eventData = Map.of(
+    "id", eventId,
+    "timestamp", System.currentTimeMillis(),
+    "count", eventCount
+);
+files.writeJson("events/" + eventId + ".json", eventData);
+
+// Append to event log
+Map<String, Object> event = Map.of(
+    "type", "item_processed",
+    "item_id", itemId,
+    "time", System.currentTimeMillis()
+);
+files.appendJson("events.json", event);
 ```
 
 ### CSV Operations
@@ -217,6 +268,26 @@ row = [
 files.appendCsv("blocks.csv", [row])
 ```
 
+```java
+// Java - Export event data to CSV (files() from the PluginContext)
+PluginFileClient files = context().files();
+
+List<String> headers = List.of("block_hash", "tx_hash", "fee");
+List<List<?>> rows = new ArrayList<>();
+for (Transaction transaction : event.getTransactions()) {
+    rows.add(List.of(
+            event.getMetadata().getBlockHash(),
+            transaction.getTxHash(),
+            String.valueOf(transaction.getBody().getFee())));
+}
+
+// Write new CSV file
+files.writeCsv("transactions.csv", headers, rows, false);
+
+// Or append to existing CSV
+files.appendCsv("all_transactions.csv", rows);
+```
+
 ### Directory Operations
 
 ```javascript
@@ -279,6 +350,30 @@ if listing.isSuccess():
     print(f"Total blocks stored: {file_count}")
 ```
 
+```java
+PluginFileClient files = context().files();
+
+// Create a date-partitioned export directory
+String dateDir = "exports/" + java.time.LocalDate.now().toString();
+files.createDir(dateDir);
+files.writeJson(dateDir + "/block_" + event.getBlock().getHeader().getHeaderBody().getBlockNumber() + ".json", event.getBlock().getTransactionBodies());
+
+// List and process files
+DirectoryListing listing = files.listFiles("imports/");
+if (listing.isSuccess()) {
+    List<FileInfo> fileList = listing.getFiles();
+    log.info("Found {} files to process", fileList.size());
+
+    for (FileInfo fileInfo : fileList) {
+        if (fileInfo.getName().endsWith(".json")) {
+            // Process JSON file
+            FileOperationResult data = files.readJson("imports/" + fileInfo.getName());
+            // ...
+        }
+    }
+}
+```
+
 ### Path Operations
 
 ```javascript
@@ -310,6 +405,24 @@ const savedFile = files.getFileName(fullPath);
 console.log(`Data saved to: ${savedFile}`);
 ```
 
+```java
+// Java - Build paths safely (files() from the PluginContext)
+PluginFileClient files = context().files();
+
+String basePath = "exports";
+String yearMonth = java.time.YearMonth.now().toString().replace("-", "/"); // e.g. 2026/07
+String fileName = "block_" + event.getBlock().getHeader().getHeaderBody().getBlockNumber() + ".json";
+
+// Cross-platform path construction
+String fullPath = files.joinPath(basePath, yearMonth, fileName);
+files.createDir(files.joinPath(basePath, yearMonth));
+files.writeJson(fullPath, event.getBlock().getTransactionBodies());
+
+// Extract filename for logging
+String savedFile = files.getFileName(fullPath);
+log.info("Data saved to: {}", savedFile);
+```
+
 ## Best Practices
 
 ### 1. Always Check Operation Results
@@ -322,6 +435,16 @@ if (!result.isSuccess()) {
 const data = result.getAsString();
 ```
 
+```java
+FileOperationResult result = context().files().read("important.json");
+if (!result.isSuccess()) {
+    log.error("Failed to read file: {}", result.getErrorMessage());
+    return; // Handle error appropriately
+}
+String data = result.getAsString();
+log.info(data);
+```
+
 ### 2. Use Path Utilities for Cross-Platform Compatibility
 ```javascript
 // Good - works on all platforms
@@ -332,8 +455,30 @@ const logPath = files.joinPath("logs", "2024", "01", "app.log");
 // const logPath = "logs\\2024\\01\\app.log"; // Windows only
 ```
 
+```java
+// Java - Good: joinPath works on all platforms (files() from the PluginContext)
+String logPath = context().files().joinPath("logs", "2024", "01", "app.log");
+
+// Avoid - platform-specific
+// String logPath = "logs/2024/01/app.log";   // Unix only
+// String logPath = "logs\\2024\\01\\app.log"; // Windows only
+```
+
 ### 3. Choose Appropriate Write Mode
 ```javascript
+// For configuration and complete data - use write (overwrites)
+files.writeJson("config.json", settings);
+
+// For logs and continuous data - use append
+files.append("transaction.log", logEntry);
+files.appendJson("events.json", eventData);
+files.appendCsv("metrics.csv", newRows);
+```
+
+```java
+// Java - Choose the appropriate write mode (files() from the PluginContext)
+PluginFileClient files = context().files();
+
 // For configuration and complete data - use write (overwrites)
 files.writeJson("config.json", settings);
 
@@ -355,6 +500,20 @@ const dateDir = new Date().toISOString().split('T')[0];
 files.createDir(files.joinPath("exports", dateDir));
 ```
 
+```java
+// Java - Organize data with directories (files() from the PluginContext)
+PluginFileClient files = context().files();
+
+// Create logical directory structure
+files.createDir("data/blocks");
+files.createDir("data/transactions");
+files.createDir("logs/daily");
+
+// Use date-based organization for time-series data
+String dateDir = java.time.LocalDate.now().toString();
+files.createDir(files.joinPath("exports", dateDir));
+```
+
 ### 5. Handle Missing Files Gracefully
 ```javascript
 // Check existence before reading
@@ -364,6 +523,21 @@ if (files.exists("state.json")) {
 } else {
     // Initialize new state
     const newState = { startBlock: 0, processed: 0 };
+    files.writeJson("state.json", newState);
+}
+```
+
+```java
+// Java - Handle missing files gracefully (files() from the PluginContext)
+PluginFileClient files = context().files();
+
+// Check existence before reading
+if (files.exists("state.json")) {
+    FileOperationResult state = files.readJson("state.json");
+    // Resume from saved state
+} else {
+    // Initialize new state
+    Map<String, Object> newState = Map.of("startBlock", 0, "processed", 0);
     files.writeJson("state.json", newState);
 }
 ```
@@ -392,5 +566,20 @@ if (result.isSuccess()) {
 } else {
     const error = result.getErrorMessage();
     console.error(`Operation failed: ${error}`);
+}
+```
+
+```java
+// Java - All operations return a FileOperationResult (files() from the PluginContext)
+FileOperationResult result = context().files().readJson("data.json");
+
+if (result.isSuccess()) {
+    Object data = result.getData();     // For JSON/CSV operations
+    // or
+    String text = result.getAsString(); // For text operations
+    // Process data...
+} else {
+    String error = result.getErrorMessage();
+    System.err.println("Operation failed: " + error);
 }
 ```

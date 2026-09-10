@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import static com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.util.MappingsUtil.extractLogo;
@@ -72,6 +73,40 @@ public class Cip26MetadataService {
                     cip26Metadata.getSubject(), e.getMessage(), e);
             return InsertOutcome.TRANSIENTLY_FAILED;
         }
+    }
+
+    /**
+     * Deletes the metadata row (logo included — it lives on the same row) for a subject
+     * whose mapping file was removed from the upstream registry. Deleting a subject that
+     * is not present locally is a no-op and still counts as {@link DeleteOutcome#DELETED}.
+     */
+    @Transactional
+    public DeleteOutcome deleteMapping(String subject) {
+        try {
+            cip26MetadataRepository.deleteById(subject);
+            return DeleteOutcome.DELETED;
+        } catch (NonTransientDataAccessException e) {
+            log.error("Permanent delete failure for token subject '{}', skipping: {}",
+                    subject, e.getMessage());
+            return DeleteOutcome.PERMANENTLY_FAILED;
+        } catch (TransientDataAccessException e) {
+            log.warn("Transient delete failure for token subject '{}', will retry next sync: {}",
+                    subject, e.getMessage());
+            return DeleteOutcome.TRANSIENTLY_FAILED;
+        } catch (Exception e) {
+            // Unknown exception type — conservative default is "transient" so
+            // we don't silently leave a removed token behind.
+            log.error("Unclassified delete failure for token subject '{}', will retry next sync: {}",
+                    subject, e.getMessage(), e);
+            return DeleteOutcome.TRANSIENTLY_FAILED;
+        }
+    }
+
+    /**
+     * @return subjects of all CIP-26 metadata rows currently stored locally
+     */
+    public List<String> findAllSubjects() {
+        return cip26MetadataRepository.findAllSubjects();
     }
 
     /**

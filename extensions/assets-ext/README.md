@@ -10,7 +10,6 @@ query a single yaci-store instance and get merged metadata transparently.
 |----------|--------|-------------|
 | CIP-26 | Off-chain (GitHub [cardano-token-registry](https://github.com/cardano-foundation/cardano-token-registry)) | Fungible token metadata synced periodically from Git |
 | CIP-68 | On-chain (reference NFT inline datums, label 333) | Fungible token metadata parsed from blockchain |
-| CIP-113 | On-chain (programmable token registry NFTs) | Transfer logic scripts (disabled by default) |
 
 ## REST API
 
@@ -89,10 +88,6 @@ store:
     cip68:
       enabled: true                    # Fungible token support (label 333)
 
-    cip113:
-      enabled: false                   # Disabled by default
-      registry-nft-policy-ids: []      # Override auto-detected policy IDs
-
     query:
       priority: "CIP_68,CIP_26"       # Default merge priority
 ```
@@ -105,7 +100,6 @@ store:
 | `ft_offchain_logo` | CIP-26 token logos (separated for performance) |
 | `off_chain_sync_state` | GitHub sync progress tracking |
 | `metadata_reference_nft` | CIP-68 on-chain reference NFT metadata (composite PK: policy_id, asset_name, slot). `label` column discriminates FT (333) vs NFT (222) for future use. |
-| `cip113_registry_node` | CIP-113 programmable token registry nodes |
 
 All tables include a `last_synced_at` timestamp for monitoring.
 

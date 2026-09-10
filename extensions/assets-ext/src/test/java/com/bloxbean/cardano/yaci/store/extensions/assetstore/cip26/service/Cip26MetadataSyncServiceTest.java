@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.service;
 
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.AssetsExtStoreProperties;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.Cip26NetworkDefaults;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.ChangedMappings;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.Mapping;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.MappingUpdateDetails;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.enums.SyncStatusEnum;
@@ -106,7 +107,7 @@ class Cip26MetadataSyncServiceTest {
 
             service.synchronizeDatabase();
 
-            verify(gitService, never()).getChangedFiles(any(), any());
+            verify(gitService, never()).getChangedMappings(any(), any());
             assertThat(service.getSyncStatus().getStatus()).isEqualTo(SyncStatusEnum.SYNC_DONE);
         }
 
@@ -141,8 +142,8 @@ class Cip26MetadataSyncServiceTest {
                     .thenReturn(Optional.of(Path.of("/tmp/repo")));
             when(gitService.getHeadCommitHash()).thenReturn(Optional.of(NEW_HASH));
 
-            when(gitService.getChangedFiles(OLD_HASH, NEW_HASH))
-                    .thenReturn(List.of(Path.of("/tmp/repo/mappings/test.json")));
+            when(gitService.getChangedMappings(OLD_HASH, NEW_HASH))
+                    .thenReturn(new ChangedMappings(List.of(Path.of("/tmp/repo/mappings/test.json")), List.of()));
 
             // filename ("test") MUST equal inner subject — the sync now skips mismatches deterministically.
             Mapping mockMapping = new Mapping("test", null, null, null, null, null, null, null);
@@ -157,6 +158,7 @@ class Cip26MetadataSyncServiceTest {
 
             verify(tokenMetadataService).insertMapping(any(), any(), any());
             verify(tokenMetadataService).insertLogo(any());
+            verify(tokenMetadataService, never()).deleteMapping(any());
             verify(syncStateRepository).save(any(Cip26SyncState.class));
             assertThat(service.getSyncStatus().getStatus()).isEqualTo(SyncStatusEnum.SYNC_DONE);
             assertThat(service.getSyncStatus().isInitialSyncDone()).isTrue();
@@ -171,8 +173,8 @@ class Cip26MetadataSyncServiceTest {
                     .thenReturn(Optional.of(Path.of("/tmp/repo")));
             when(gitService.getHeadCommitHash()).thenReturn(Optional.of(NEW_HASH));
 
-            when(gitService.getChangedFiles(OLD_HASH, NEW_HASH))
-                    .thenReturn(List.of(Path.of("/tmp/repo/mappings/fail.json")));
+            when(gitService.getChangedMappings(OLD_HASH, NEW_HASH))
+                    .thenReturn(new ChangedMappings(List.of(Path.of("/tmp/repo/mappings/fail.json")), List.of()));
 
             Mapping mockMapping = new Mapping("fail", null, null, null, null, null, null, null);
             when(tokenMappingService.parseMappings(any())).thenReturn(Optional.of(mockMapping));
@@ -197,8 +199,8 @@ class Cip26MetadataSyncServiceTest {
                     .thenReturn(Optional.of(Path.of("/tmp/repo")));
             when(gitService.getHeadCommitHash()).thenReturn(Optional.of(NEW_HASH));
 
-            when(gitService.getChangedFiles(OLD_HASH, NEW_HASH))
-                    .thenReturn(List.of(Path.of("/tmp/repo/mappings/perm.json")));
+            when(gitService.getChangedMappings(OLD_HASH, NEW_HASH))
+                    .thenReturn(new ChangedMappings(List.of(Path.of("/tmp/repo/mappings/perm.json")), List.of()));
 
             Mapping mockMapping = new Mapping("perm", null, null, null, null, null, null, null);
             when(tokenMappingService.parseMappings(any())).thenReturn(Optional.of(mockMapping));
@@ -235,8 +237,8 @@ class Cip26MetadataSyncServiceTest {
 
             service.synchronizeDatabase();
 
-            // Full sync doesn't call getChangedFiles — uses listFiles instead
-            verify(gitService, never()).getChangedFiles(any(), any());
+            // Full sync doesn't call getChangedMappings — uses listFiles instead
+            verify(gitService, never()).getChangedMappings(any(), any());
             assertThat(service.getSyncStatus().getStatus()).isEqualTo(SyncStatusEnum.SYNC_DONE);
         }
     }
@@ -268,7 +270,10 @@ class Cip26MetadataSyncServiceTest {
 
             service.synchronizeDatabase();
 
-            verifyNoInteractions(tokenMetadataService);
+            // Full-sync reconciliation still reads the stored subjects, but nothing is written.
+            verify(tokenMetadataService, never()).insertMapping(any(), any(), any());
+            verify(tokenMetadataService, never()).insertLogo(any());
+            verify(tokenMetadataService, never()).deleteMapping(any());
             // Hash still advanced — parsing failures are skipped, not errors
             verify(syncStateRepository).save(any(Cip26SyncState.class));
         }
@@ -285,7 +290,10 @@ class Cip26MetadataSyncServiceTest {
 
             service.synchronizeDatabase();
 
-            verifyNoInteractions(tokenMetadataService);
+            // Full-sync reconciliation still reads the stored subjects, but nothing is written.
+            verify(tokenMetadataService, never()).insertMapping(any(), any(), any());
+            verify(tokenMetadataService, never()).insertLogo(any());
+            verify(tokenMetadataService, never()).deleteMapping(any());
             verify(syncStateRepository).save(any(Cip26SyncState.class));
         }
 
@@ -334,6 +342,118 @@ class Cip26MetadataSyncServiceTest {
             // Only the legit file's mapping made it through to insertMapping.
             verify(tokenMetadataService, times(1)).insertMapping(any(), any(), any());
             verify(syncStateRepository).save(any(Cip26SyncState.class));
+        }
+    }
+
+    @Nested
+    @DisplayName("token removals")
+    class TokenRemovals {
+
+        @TempDir
+        Path repoDir;
+
+        @BeforeEach
+        void initStatus() {
+            assetsStoreProperties.getCip26().setEnabled(true);
+            service.initSyncStatus();
+            when(networkDefaults.isRegistryAvailable()).thenReturn(true);
+        }
+
+        private void stubIncrementalSync() {
+            when(syncStateRepository.findTopByOrderByIdDesc())
+                    .thenReturn(Optional.of(offChainState(OLD_HASH)));
+            when(gitService.cloneCardanoTokenRegistryGitRepository())
+                    .thenReturn(Optional.of(Path.of("/tmp/repo")));
+            when(gitService.getHeadCommitHash()).thenReturn(Optional.of(NEW_HASH));
+        }
+
+        @Test
+        void incrementalSync_deletesTokensRemovedFromRegistry() {
+            stubIncrementalSync();
+            when(gitService.getChangedMappings(OLD_HASH, NEW_HASH))
+                    .thenReturn(new ChangedMappings(List.of(), List.of("removedtoken.json")));
+            when(tokenMetadataService.deleteMapping("removedtoken")).thenReturn(DeleteOutcome.DELETED);
+
+            service.synchronizeDatabase();
+
+            verify(tokenMetadataService).deleteMapping("removedtoken");
+            verify(tokenMetadataService, never()).insertMapping(any(), any(), any());
+            verify(syncStateRepository).save(any(Cip26SyncState.class));
+            assertThat(service.getSyncStatus().getStatus()).isEqualTo(SyncStatusEnum.SYNC_DONE);
+        }
+
+        @Test
+        void hashNotAdvanced_whenDeleteTransientlyFails() {
+            stubIncrementalSync();
+            when(gitService.getChangedMappings(OLD_HASH, NEW_HASH))
+                    .thenReturn(new ChangedMappings(List.of(), List.of("removedtoken.json")));
+            when(tokenMetadataService.deleteMapping("removedtoken"))
+                    .thenReturn(DeleteOutcome.TRANSIENTLY_FAILED);
+
+            service.synchronizeDatabase();
+
+            // A transiently-failed deletion must be retried on the next sync,
+            // so the commit hash is not advanced.
+            verify(syncStateRepository, never()).save(any());
+            assertThat(service.getSyncStatus().getStatus()).isEqualTo(SyncStatusEnum.SYNC_DONE);
+        }
+
+        @Test
+        void hashAdvances_whenDeletePermanentlyFails() {
+            stubIncrementalSync();
+            when(gitService.getChangedMappings(OLD_HASH, NEW_HASH))
+                    .thenReturn(new ChangedMappings(List.of(), List.of("removedtoken.json")));
+            when(tokenMetadataService.deleteMapping("removedtoken"))
+                    .thenReturn(DeleteOutcome.PERMANENTLY_FAILED);
+
+            service.synchronizeDatabase();
+
+            // Permanent failures must NOT block the cursor — otherwise the sync
+            // would loop forever on a delete that can never succeed.
+            verify(syncStateRepository).save(any(Cip26SyncState.class));
+        }
+
+        @Test
+        void fullSync_deletesStaleSubjectsNoLongerInRegistry() throws IOException {
+            when(syncStateRepository.findTopByOrderByIdDesc()).thenReturn(Optional.empty());
+            when(gitService.cloneCardanoTokenRegistryGitRepository())
+                    .thenReturn(Optional.of(repoDir));
+            when(gitService.getHeadCommitHash()).thenReturn(Optional.of(NEW_HASH));
+
+            Files.writeString(repoDir.resolve("presenttoken.json"), "{}");
+            when(tokenMappingService.parseMappings(any()))
+                    .thenReturn(Optional.of(new Mapping("presenttoken", null, null, null, null, null, null, null)));
+            when(gitService.getAllMappingDetails(any())).thenReturn(
+                    Map.of("presenttoken.json", new MappingUpdateDetails("author@test.com", LocalDateTime.now())));
+            when(tokenMetadataService.insertMapping(any(), any(), any()))
+                    .thenReturn(InsertOutcome.INSERTED);
+            when(tokenMetadataService.insertLogo(any())).thenReturn(InsertOutcome.INSERTED);
+            when(tokenMetadataService.findAllSubjects())
+                    .thenReturn(List.of("presenttoken", "staletoken"));
+            when(tokenMetadataService.deleteMapping("staletoken")).thenReturn(DeleteOutcome.DELETED);
+
+            service.synchronizeDatabase();
+
+            verify(tokenMetadataService).deleteMapping("staletoken");
+            verify(tokenMetadataService, never()).deleteMapping("presenttoken");
+            verify(syncStateRepository).save(any(Cip26SyncState.class));
+            assertThat(service.getSyncStatus().getStatus()).isEqualTo(SyncStatusEnum.SYNC_DONE);
+        }
+
+        @Test
+        void fullSync_skipsStaleCleanup_whenNoMappingFilesFound() {
+            when(syncStateRepository.findTopByOrderByIdDesc()).thenReturn(Optional.empty());
+            when(gitService.cloneCardanoTokenRegistryGitRepository())
+                    .thenReturn(Optional.of(repoDir)); // empty temp dir — no mapping files
+            when(gitService.getHeadCommitHash()).thenReturn(Optional.of(NEW_HASH));
+
+            service.synchronizeDatabase();
+
+            // An empty mappings folder is treated as a broken clone, not a registry
+            // where every token was removed — nothing must be deleted.
+            verify(tokenMetadataService, never()).findAllSubjects();
+            verify(tokenMetadataService, never()).deleteMapping(any());
+            assertThat(service.getSyncStatus().getStatus()).isEqualTo(SyncStatusEnum.SYNC_DONE);
         }
     }
 

@@ -20,6 +20,9 @@ public class AdaPotJobEntity {
     @Column(name = "block")
     private Long block;
 
+    @Column(name = "block_hash")
+    private String blockHash;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "type", nullable = false)
     private AdaPotJobType type;
@@ -74,6 +77,14 @@ public class AdaPotJobEntity {
 
     public void setBlock(Long block) {
         this.block = block;
+    }
+
+    public String getBlockHash() {
+        return blockHash;
+    }
+
+    public void setBlockHash(String blockHash) {
+        this.blockHash = blockHash;
     }
 
     public AdaPotJobType getType() {

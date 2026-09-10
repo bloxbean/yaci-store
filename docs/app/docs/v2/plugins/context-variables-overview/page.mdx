@@ -2,18 +2,18 @@ import { Callout, Tabs } from 'nextra/components'
 
 # Context Variables Overview
 
-**Built-in variables and utilities available in all plugin scripts**
+**Built-in variables and utilities available in plugin scripts and Java plugin contexts**
 
 ## What are Context Variables?
 
-Context variables are pre-defined objects that are automatically injected into your plugin scripts. They provide instant access to:
+Context variables are pre-defined objects that are automatically injected into plugin scripts. Java plugins access the same services through the typed `PluginContext`. They provide instant access to:
 - Database operations
 - HTTP client for API calls
 - File I/O operations
 - State management
 - Configuration access
 
-No imports or initialization needed - just use them directly in your MVEL, JavaScript, or Python plugins.
+No imports or initialization needed for script plugins - just use them directly in your MVEL, JavaScript, or Python plugins. In Java plugins, use `context()` / `PluginContext`, for example `context().namedJdbc()`, `context().http()`, `context().files()`, and `state()`.
 
 <Callout type="tip">
 **New to plugins?** Check our [Quick Reference](./variables/quick-reference) for a concise overview of all variables.
@@ -154,9 +154,9 @@ if (config.isSuccess()) {
 
 ## Language Support
 
-All context variables work seamlessly across supported scripting languages:
+All context variables work seamlessly across supported scripting languages. Java plugins use equivalent typed accessors on `PluginContext`:
 
-<Tabs items={['MVEL', 'JavaScript', 'Python']}>
+<Tabs items={['MVEL', 'JavaScript', 'Python', 'Java']}>
 <Tabs.Tab>
 ```javascript
 // MVEL - Direct and concise
@@ -181,6 +181,18 @@ const response = http.get("https://api.example.com/data");
 result = named_jdbc.queryForMap("SELECT * FROM block WHERE number = :num", {"num": 100})
 state.increment("counter")
 response = http.get("https://api.example.com/data")
+```
+</Tabs.Tab>
+
+<Tabs.Tab>
+```java
+// Java - Typed PluginContext access
+var result = context().namedJdbc().queryForMap(
+    "SELECT * FROM block WHERE number = :num",
+    java.util.Map.of("num", 100)
+);
+state().increment("counter");
+var response = context().http().get("https://api.example.com/data");
 ```
 </Tabs.Tab>
 </Tabs>

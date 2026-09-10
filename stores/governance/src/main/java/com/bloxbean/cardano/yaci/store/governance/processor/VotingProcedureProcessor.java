@@ -18,6 +18,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -30,6 +31,10 @@ import static com.bloxbean.cardano.yaci.store.governance.GovernanceStoreConfigur
 @Slf4j
 public class VotingProcedureProcessor {
 
+    private static final Comparator<GovActionId> GOV_ACTION_ID_ORDER = Comparator
+            .comparing(GovActionId::getTransactionId)
+            .thenComparingInt(GovActionId::getGov_action_index);
+
     private final VotingProcedureStorage votingProcedureStorage;
     private final ApplicationEventPublisher publisher;
 
@@ -39,7 +44,6 @@ public class VotingProcedureProcessor {
         EventMetadata eventMetadata = governanceEvent.getMetadata();
 
         List<VotingProcedure> votingProcedures = new ArrayList<>();
-        int index = 0;
 
         for (TxGovernance txGovernance : governanceEvent.getTxGovernanceList()) {
             if (txGovernance.getVotingProcedures() == null) {
@@ -53,8 +57,14 @@ public class VotingProcedureProcessor {
             for (var entry : voting.entrySet()) {
                 Voter voter = entry.getKey();
                 var votingInfoMap = entry.getValue();
+                int index = 0;
 
-                for (var votingInfoEntry : votingInfoMap.entrySet()) {
+                // Ledger GovActionId ordering compares transactionId first, then actionIndex.
+                var orderedVotingInfo = votingInfoMap.entrySet().stream()
+                        .sorted(Map.Entry.comparingByKey(GOV_ACTION_ID_ORDER))
+                        .toList();
+
+                for (var votingInfoEntry : orderedVotingInfo) {
                     VotingProcedure votingProcedure = new VotingProcedure();
 
                     var govActionId = votingInfoEntry.getKey();

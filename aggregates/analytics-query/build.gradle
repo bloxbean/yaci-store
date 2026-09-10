@@ -1,0 +1,20 @@
+dependencies {
+    api project(":aggregates:analytics-store")
+
+    implementation(libs.duckdb.jdbc)
+    implementation 'org.springframework.boot:spring-boot-starter'
+    compileOnly 'org.springframework.boot:spring-boot-starter-web'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            pom {
+                name = 'Yaci Store Analytics Query'
+                description = 'DuckDB query layer over Parquet analytics data'
+            }
+        }
+    }
+}

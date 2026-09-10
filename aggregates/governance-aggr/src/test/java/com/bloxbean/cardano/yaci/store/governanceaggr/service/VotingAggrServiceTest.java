@@ -14,9 +14,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+import java.math.BigInteger;
 import java.util.List;
 import java.util.UUID;
 
+import static com.bloxbean.cardano.yaci.store.adapot.jooq.Tables.EPOCH_STAKE;
 import static com.bloxbean.cardano.yaci.store.governance.jooq.Tables.DREP_REGISTRATION;
 import static com.bloxbean.cardano.yaci.store.governance.jooq.Tables.VOTING_PROCEDURE;
 import static com.bloxbean.cardano.yaci.store.governance_aggr.jooq.Tables.DREP_DIST;
@@ -25,6 +27,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 class VotingAggrServiceTest {
     private static final int SNAPSHOT_EPOCH = 10;
     private static final String DREP_HASH = "11111111111111111111111111111111111111111111111111111111";
+    private static final String SPO_HASH = "22222222222222222222222222222222222222222222222222222222";
+    private static final String COMMITTEE_HASH = "33333333333333333333333333333333333333333333333333333333";
     private static final String GOV_ACTION_TX_HASH = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
     private DSLContext dsl;
@@ -40,6 +44,65 @@ class VotingAggrServiceTest {
         votingAggrService = new VotingAggrService(dsl, null, null);
         createSchema();
         insertDRepDistribution(SNAPSHOT_EPOCH + 1);
+        insertEpochStake();
+    }
+
+    @Test
+    void getVotesBySPO_returnsVoteWithHighestTxIndexAtLatestSlot() {
+        insertVote("earlier-spo-vote", Vote.NO, VoterType.STAKING_POOL_KEY_HASH, SPO_HASH, SNAPSHOT_EPOCH, 100, 1, 0);
+        insertVote("latest-spo-vote", Vote.YES, VoterType.STAKING_POOL_KEY_HASH, SPO_HASH, SNAPSHOT_EPOCH, 100, 2, 0);
+
+        assertThat(votingAggrService.getVotesBySPO(SNAPSHOT_EPOCH, List.of(govActionId())))
+                .singleElement()
+                .satisfies(vote -> {
+                    assertThat(vote.getTxHash()).isEqualTo("latest-spo-vote");
+                    assertThat(vote.getVote()).isEqualTo(Vote.YES);
+                });
+    }
+
+    @Test
+    void getVotesBySPO_usesVoteIndexAsFinalTieBreaker() {
+        insertVote("earlier-spo-vote", Vote.NO, VoterType.STAKING_POOL_KEY_HASH, SPO_HASH, SNAPSHOT_EPOCH, 100, 1, 0);
+        insertVote("latest-spo-vote", Vote.YES, VoterType.STAKING_POOL_KEY_HASH, SPO_HASH, SNAPSHOT_EPOCH, 100, 1, 1);
+
+        assertThat(votingAggrService.getVotesBySPO(SNAPSHOT_EPOCH, List.of(govActionId())))
+                .singleElement()
+                .satisfies(vote -> {
+                    assertThat(vote.getTxHash()).isEqualTo("latest-spo-vote");
+                    assertThat(vote.getVote()).isEqualTo(Vote.YES);
+                });
+    }
+
+    @Test
+    void getVotesByCommittee_returnsVoteWithHighestTxIndexAtLatestSlot() {
+        insertVote("earlier-committee-vote", Vote.NO, VoterType.CONSTITUTIONAL_COMMITTEE_HOT_KEY_HASH,
+                COMMITTEE_HASH, SNAPSHOT_EPOCH, 100, 1, 0);
+        insertVote("latest-committee-vote", Vote.YES, VoterType.CONSTITUTIONAL_COMMITTEE_HOT_KEY_HASH,
+                COMMITTEE_HASH, SNAPSHOT_EPOCH, 100, 2, 0);
+
+        assertThat(votingAggrService.getVotesByCommittee(
+                SNAPSHOT_EPOCH, List.of(govActionId()), List.of(COMMITTEE_HASH)))
+                .singleElement()
+                .satisfies(vote -> {
+                    assertThat(vote.getTxHash()).isEqualTo("latest-committee-vote");
+                    assertThat(vote.getVote()).isEqualTo(Vote.YES);
+                });
+    }
+
+    @Test
+    void getVotesByCommittee_usesVoteIndexAsFinalTieBreaker() {
+        insertVote("earlier-committee-vote", Vote.NO, VoterType.CONSTITUTIONAL_COMMITTEE_HOT_KEY_HASH,
+                COMMITTEE_HASH, SNAPSHOT_EPOCH, 100, 1, 0);
+        insertVote("latest-committee-vote", Vote.YES, VoterType.CONSTITUTIONAL_COMMITTEE_HOT_KEY_HASH,
+                COMMITTEE_HASH, SNAPSHOT_EPOCH, 100, 1, 1);
+
+        assertThat(votingAggrService.getVotesByCommittee(
+                SNAPSHOT_EPOCH, List.of(govActionId()), List.of(COMMITTEE_HASH)))
+                .singleElement()
+                .satisfies(vote -> {
+                    assertThat(vote.getTxHash()).isEqualTo("latest-committee-vote");
+                    assertThat(vote.getVote()).isEqualTo(Vote.YES);
+                });
     }
 
     @Test
@@ -65,6 +128,23 @@ class VotingAggrServiceTest {
     }
 
     @Test
+    void getVotesByDRep_excludesVoteWhenUnregistrationIsInSameTransaction() {
+        insertVote("vote-and-unregister", Vote.YES, 9, 100, 2, 2);
+        insertRegistration("vote-and-unregister", CertificateType.UNREG_DREP_CERT, 9, 100, 2, 0);
+
+        assertThat(getVotes()).isEmpty();
+    }
+
+    @Test
+    void getVotesByDRep_excludesSameTransactionVoteAfterReregistration() {
+        insertRegistration("unregister-reregister-and-vote", CertificateType.UNREG_DREP_CERT, 9, 100, 2, 0);
+        insertRegistration("unregister-reregister-and-vote", CertificateType.REG_DREP_CERT, 9, 100, 2, 1);
+        insertVote("unregister-reregister-and-vote", Vote.YES, 9, 100, 2, 2);
+
+        assertThat(getVotes()).isEmpty();
+    }
+
+    @Test
     void getVotesByDRep_ignoresUnregistrationAfterSnapshotEpoch() {
         insertVote("historical-vote", Vote.YES, SNAPSHOT_EPOCH, 100, 1, 0);
         insertRegistration("future-unregister", CertificateType.UNREG_DREP_CERT, SNAPSHOT_EPOCH + 1, 101, 0, 0);
@@ -76,26 +156,43 @@ class VotingAggrServiceTest {
     }
 
     private List<com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure> getVotes() {
-        var govActionId = GovActionId.builder()
+        return votingAggrService.getVotesByDRep(SNAPSHOT_EPOCH, List.of(govActionId()));
+    }
+
+    private GovActionId govActionId() {
+        return GovActionId.builder()
                 .transactionId(GOV_ACTION_TX_HASH)
                 .gov_action_index(0)
                 .build();
-        return votingAggrService.getVotesByDRep(SNAPSHOT_EPOCH, List.of(govActionId));
     }
 
     private void insertVote(String txHash, Vote vote, int epoch, long slot, int txIndex, int index) {
+        insertVote(txHash, vote, VoterType.DREP_KEY_HASH, DREP_HASH, epoch, slot, txIndex, index);
+    }
+
+    private void insertVote(String txHash, Vote vote, VoterType voterType, String voterHash,
+                            int epoch, long slot, int txIndex, int index) {
         dsl.insertInto(VOTING_PROCEDURE)
                 .set(VOTING_PROCEDURE.ID, UUID.randomUUID())
                 .set(VOTING_PROCEDURE.TX_HASH, txHash)
                 .set(VOTING_PROCEDURE.IDX, index)
                 .set(VOTING_PROCEDURE.TX_INDEX, txIndex)
-                .set(VOTING_PROCEDURE.VOTER_TYPE, VoterType.DREP_KEY_HASH.name())
-                .set(VOTING_PROCEDURE.VOTER_HASH, DREP_HASH)
+                .set(VOTING_PROCEDURE.VOTER_TYPE, voterType.name())
+                .set(VOTING_PROCEDURE.VOTER_HASH, voterHash)
                 .set(VOTING_PROCEDURE.GOV_ACTION_TX_HASH, GOV_ACTION_TX_HASH)
                 .set(VOTING_PROCEDURE.GOV_ACTION_INDEX, 0)
                 .set(VOTING_PROCEDURE.VOTE, vote.name())
                 .set(VOTING_PROCEDURE.EPOCH, epoch)
                 .set(VOTING_PROCEDURE.SLOT, slot)
+                .execute();
+    }
+
+    private void insertEpochStake() {
+        dsl.insertInto(EPOCH_STAKE)
+                .set(EPOCH_STAKE.EPOCH, SNAPSHOT_EPOCH)
+                .set(EPOCH_STAKE.ADDRESS, "stake-address")
+                .set(EPOCH_STAKE.AMOUNT, BigInteger.valueOf(1_000L))
+                .set(EPOCH_STAKE.POOL_ID, SPO_HASH)
                 .execute();
     }
 
@@ -174,6 +271,18 @@ class VotingAggrServiceTest {
                     expiry int,
                     update_datetime timestamp,
                     primary key (drep_hash, drep_type, epoch)
+                )
+                """);
+        dsl.execute("""
+                CREATE TABLE epoch_stake (
+                    epoch int,
+                    address varchar(255),
+                    amount numeric(38),
+                    pool_id varchar(56),
+                    delegation_epoch int,
+                    active_epoch int,
+                    create_datetime timestamp,
+                    primary key (epoch, address)
                 )
                 """);
     }

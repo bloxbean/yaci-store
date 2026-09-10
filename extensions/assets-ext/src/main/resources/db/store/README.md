@@ -5,10 +5,11 @@ Flyway migrations for the `assets-ext` extension, one file per supported SQL dia
 the same schema — the differences are type names (`TEXT` ↔ `LONGTEXT`, `JSONB` ↔ `JSON`),
 identifier quoting, and a `TIMESTAMP` nullability quirk on MySQL.
 
-`optional-indexes.sql` (in this folder) lists indexes that are NOT applied automatically.
-Apply them after the initial sync reaches chain tip — e.g. via the yaci-store admin CLI.
+Optional indexes are declared in `components/dbutils/src/main/resources/asset-ext-index.yml`
+and are NOT applied automatically. Apply them once the initial sync reaches chain tip:
+`apply-optional-indexes --indexes asset-ext-index` in the admin CLI.
 
-Column type bounds across the SQL files follow the CIP-26 / CIP-68 / CIP-113 specs and
+Column type bounds across the SQL files follow the CIP-26 / CIP-68 specs and
 their canonical implementations. Tightening beyond these bounds is likely unsafe;
 loosening is acceptable but wasteful.
 
@@ -90,53 +91,7 @@ row stored under label=222). Read-path queries must **not** filter by label — 
 | `last_synced_at` | `TIMESTAMP` | |
 
 Indexes: `idx_cip68_metadata_slot`, `idx_cip68_metadata_label`. See
-`optional-indexes.sql` for additional indexes that pay off at chain-tip scale.
-
----
-
-## `cip113_registry_node` — CIP-113 programmable token registry (Aiken linked list)
-
-The datum is an Aiken `RegistryNode` sorted-linked-list entry. Column names mirror the
-on-chain datum field names — see
-[CIP-143](https://github.com/cardano-foundation/CIPs/blob/master/CIP-0143/README.md)
-(parent spec) and
-[`cip113-programmable-tokens`](https://github.com/cardano-foundation/cip113-programmable-tokens).
-
-**Why `key` and not `policy_id`** — the registry is a sorted linked list. For real
-registered tokens the `key` column equals the programmable token's policy ID (56 hex).
-But two rows per registry are *sentinel* nodes — the head (empty string) and the tail
-(conventionally 32 bytes of `0xFF` in the aiken-linked-list library) — that are
-linked-list machinery, not registrations, and do NOT hold policy IDs. Naming the
-column `policy_id` would overclaim what is stored. See the Javadoc on
-`Cip113RegistryNode.key` for the full rationale. `key` and `next` are reserved words
-in H2 and MySQL (but not in PostgreSQL) so those two dialects quote them.
-
-| Column | Type | Note |
-|---|---|---|
-| `key` | `VARCHAR(64)` NOT NULL | Three possible values: empty string (head sentinel), 56 hex chars (real policy ID), or 58–64 hex chars (tail sentinel). **Do not shrink to 56.** Quoted as `"key"` (H2) / `` `key` `` (MySQL). |
-| `slot` | `BIGINT` NOT NULL | |
-| `tx_hash` | `VARCHAR(64)` NOT NULL | Cardano transaction hash: 32 B = 64 hex. PK component — tx identity preserves per-update history. |
-| `tx_index` | `INTEGER` NOT NULL | Producing tx's index within its block. Non-key ordering column — disambiguates same-slot updates. |
-| `transfer_logic_script` | `VARCHAR(56)` | Aiken Credential inner hash (28 B = 56 hex). Both NULL together when the on-chain Credential field encodes "absent"; both non-NULL otherwise. |
-| `transfer_logic_script_type` | `VARCHAR(8)` | Companion to above: `"VKEY"` or `"SCRIPT"`. |
-| `third_party_transfer_logic_script` | `VARCHAR(56)` | Same pattern. |
-| `third_party_transfer_logic_script_type` | `VARCHAR(8)` | |
-| `global_state_policy_id` | `VARCHAR(56)` | Currency symbol of the global-state NFT (28-byte policy_id). |
-| `next` | `VARCHAR(64)` NOT NULL | Sorted-linked-list pointer. Same range as `key`. Quoted as `"next"` / `` `next` ``. |
-| `datum` | `TEXT` (PG/H2) / `LONGTEXT` (MySQL) NOT NULL | Full CBOR hex of the inline datum. |
-| `last_synced_at` | `TIMESTAMP` | |
-
-PK: `(key, slot, tx_hash)`. Index: `idx_cip113_slot`
-(used by `Cip113RegistryNodeRepository.deleteBySlotGreaterThan`).
-
-Keying on `tx_hash` keeps full per-transaction history rather than doing in-place updates —
-consistent with the rest of yaci-store (stake registration, governance, etc., all key on
-`tx_hash`). Two updates to the same registry node within a single slot (possible via intra-block
-transaction chaining) are preserved as distinct `(key, slot, tx_hash)` rows. `tx_index` is a
-non-key ordering column: the readers resolve a single current-state row per key by
-`ORDER BY slot DESC, tx_index DESC` — `findLatestByKeys` pins each key to its MAX(slot) then
-MAX(tx_index), so `Cip113StorageReaderImpl.findByPolicyIds` returns exactly one row per key and
-cannot hit a duplicate-key collision.
+`asset-ext-index.yml` for additional indexes that pay off at chain-tip scale.
 
 ---
 
@@ -146,6 +101,5 @@ cannot hit a duplicate-key collision.
 |---|---|---|---|
 | Big text columns | `TEXT` | `TEXT` | `LONGTEXT` (`TEXT` caps at 64 KB) |
 | JSON column | `JSONB` | `TEXT` | `JSON` |
-| `key` / `next` identifier | unquoted (non-reserved) | `"key"` / `"next"` (reserved) | `` `key` `` / `` `next` `` (reserved) |
 | Auto-increment PK | `BIGSERIAL` | `BIGINT AUTO_INCREMENT` | `BIGINT AUTO_INCREMENT` |
 | `TIMESTAMP` nullability | implicit nullable | implicit nullable | requires explicit `NULL` |

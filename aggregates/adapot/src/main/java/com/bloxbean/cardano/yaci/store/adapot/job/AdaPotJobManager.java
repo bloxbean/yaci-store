@@ -6,12 +6,19 @@ import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobStatus;
 import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobType;
 import com.bloxbean.cardano.yaci.store.adapot.job.storage.AdaPotJobStorage;
 import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
+import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.event.EventListener;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Manages and processes AdaPot jobs, specifically related to reward calculations.
@@ -23,11 +30,18 @@ import java.util.concurrent.LinkedBlockingQueue;
 @Slf4j
 public class AdaPotJobManager {
     private final BlockingQueue<AdaPotJob> jobQueue = new LinkedBlockingQueue<>();
+    private final AtomicReference<ActiveJob> activeJob = new AtomicReference<>();
 
     private final AdaPotJobStorage adaPotJobStorage;
     private final AdaPotJobProcessor adaPotJobProcessor;
 
+    @Autowired
     public AdaPotJobManager(AdaPotJobStorage adaPotJobStorage, AdaPotJobProcessor adaPotJobProcessor) {
+        this(adaPotJobStorage, adaPotJobProcessor, true);
+    }
+
+    AdaPotJobManager(AdaPotJobStorage adaPotJobStorage, AdaPotJobProcessor adaPotJobProcessor,
+                     boolean startProcessor) {
         this.adaPotJobStorage = adaPotJobStorage;
         this.adaPotJobProcessor = adaPotJobProcessor;
 
@@ -36,8 +50,10 @@ public class AdaPotJobManager {
         resetStartedJobs();
         loadPendingJobs();
 
-        // Start a virtual thread for job processing
-        Thread.startVirtualThread(this::processJobs);
+        if (startProcessor) {
+            // Start a virtual thread for job processing
+            Thread.startVirtualThread(this::processJobs);
+        }
     }
 
     // Reset jobs from STARTED to NOT_STARTED on restart
@@ -62,10 +78,52 @@ public class AdaPotJobManager {
      * @param slot  slot number
      */
     public void triggerRewardCalcJob(int epoch, long slot, long block) {
-        AdaPotJob job = new AdaPotJob(epoch, slot, block, AdaPotJobType.REWARD_CALC, AdaPotJobStatus.NOT_STARTED, 0L, 0L, 0L, 0L, 0L,
-                AdaPotJobExtraInfo.builder().drepExpiryCalcTime(0L).govActionStatusCalcTime(0L).build(), null);
+        triggerRewardCalcJob(epoch, slot, block, null);
+    }
+
+    public void triggerRewardCalcJob(int epoch, long slot, long block, String blockHash) {
+        AdaPotJob job = AdaPotJob.builder()
+                .epoch(epoch)
+                .slot(slot)
+                .block(block)
+                .blockHash(blockHash)
+                .type(AdaPotJobType.REWARD_CALC)
+                .status(AdaPotJobStatus.NOT_STARTED)
+                .totalTime(0L)
+                .rewardCalcTime(0L)
+                .updateRewardTime(0L)
+                .stakeSnapshotTime(0L)
+                .drepDistrSnapshotTime(0L)
+                .extraInfo(AdaPotJobExtraInfo.builder()
+                        .drepExpiryCalcTime(0L)
+                        .govActionStatusCalcTime(0L)
+                        .build())
+                .build();
         adaPotJobStorage.save(job);
         jobQueue.add(job);
+    }
+
+    @EventListener
+    @Order(Ordered.HIGHEST_PRECEDENCE)
+    public void handleRollback(RollbackEvent rollbackEvent) {
+        long rollbackSlot = rollbackEvent.getRollbackTo().getSlot();
+
+        jobQueue.removeIf(job -> {
+            if (job.getSlot() != null && job.getSlot() > rollbackSlot) {
+                log.info("Removed queued AdaPot job for epoch {} at slot {} after rollback to slot {}",
+                        job.getEpoch(), job.getSlot(), rollbackSlot);
+                return true;
+            }
+            return false;
+        });
+
+        ActiveJob runningJob = activeJob.get();
+        if (runningJob != null && runningJob.job().getSlot() != null
+                && runningJob.job().getSlot() > rollbackSlot) {
+            runningJob.cancel();
+            log.info("Cancelled running AdaPot job for epoch {} at slot {} after rollback to slot {}",
+                    runningJob.job().getEpoch(), runningJob.job().getSlot(), rollbackSlot);
+        }
     }
 
     private void processJobs() {
@@ -77,22 +135,59 @@ public class AdaPotJobManager {
                 if (job == null)
                     continue;
 
+                ActiveJob runningJob = activateJob(job);
                 try {
-                    Thread.sleep(5000);
-                } catch (InterruptedException e) {
-                    log.error("Error in thread.sleep", e);
-                }
+                    try {
+                        Thread.sleep(5000);
+                    } catch (InterruptedException e) {
+                        log.error("Error in thread.sleep", e);
+                    }
 
-                if (job != null) {
-                    boolean status = adaPotJobProcessor.processJob(job);
+                    boolean status;
+                    status = adaPotJobProcessor.processJob(job, runningJob::isCancelled);
                     if (!status) {
                         log.error("Reward calculation failed for epoch : " + job.getEpoch());
                         return;
                     }
+                } finally {
+                    activeJob.compareAndSet(runningJob, null);
                 }
             } catch (Exception e) {
                 log.error("Error processing reward calc job", e);
             }
+        }
+    }
+
+    int queuedJobCount() {
+        return jobQueue.size();
+    }
+
+    boolean isCancelled(AdaPotJob job) {
+        ActiveJob runningJob = activeJob.get();
+        return runningJob != null
+                && runningJob.key().equals(JobKey.from(job))
+                && runningJob.isCancelled();
+    }
+
+    private ActiveJob activateJob(AdaPotJob job) {
+        ActiveJob runningJob = new ActiveJob(job, JobKey.from(job), new AtomicBoolean(false));
+        activeJob.set(runningJob);
+        return runningJob;
+    }
+
+    private record JobKey(Integer epoch, Long slot, Long block, String blockHash) {
+        private static JobKey from(AdaPotJob job) {
+            return new JobKey(job.getEpoch(), job.getSlot(), job.getBlock(), job.getBlockHash());
+        }
+    }
+
+    private record ActiveJob(AdaPotJob job, JobKey key, AtomicBoolean cancelled) {
+        private void cancel() {
+            cancelled.set(true);
+        }
+
+        private boolean isCancelled() {
+            return cancelled.get();
         }
     }
 }

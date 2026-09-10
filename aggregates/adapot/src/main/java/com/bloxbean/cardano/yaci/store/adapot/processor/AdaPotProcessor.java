@@ -54,7 +54,10 @@ public class AdaPotProcessor {
 
         //Calculate epoch rewards
         Integer epoch = epochTransitionCommitEvent.getEpoch();
-        adaPotJobManager.triggerRewardCalcJob(epoch, epochTransitionCommitEvent.getMetadata().getSlot(), epochTransitionCommitEvent.getMetadata().getBlock());
+        adaPotJobManager.triggerRewardCalcJob(epoch,
+                epochTransitionCommitEvent.getMetadata().getSlot(),
+                epochTransitionCommitEvent.getMetadata().getBlock(),
+                epochTransitionCommitEvent.getMetadata().getBlockHash());
     }
 
     @EventListener

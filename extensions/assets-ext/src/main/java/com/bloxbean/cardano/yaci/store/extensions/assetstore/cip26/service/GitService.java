@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.service;
 
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.AssetsExtStoreProperties;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.Cip26NetworkDefaults;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.ChangedMappings;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.MappingUpdateDetails;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -336,10 +337,10 @@ public class GitService {
         return Optional.empty();
     }
 
-    public List<Path> getChangedFiles(String fromHash, String toHash) {
+    public ChangedMappings getChangedMappings(String fromHash, String toHash) {
         if (git == null) {
             log.warn(GIT_NOT_INITIALIZED);
-            return List.of();
+            return ChangedMappings.empty();
         }
         try {
             Repository repository = git.getRepository();
@@ -349,7 +350,7 @@ public class GitService {
 
             if (oldId == null || newId == null) {
                 log.warn("Could not resolve commit hashes: {} -> {}", fromHash, toHash);
-                return List.of();
+                return ChangedMappings.empty();
             }
 
             AbstractTreeIterator oldTree = prepareTreeParser(repository, oldId);
@@ -362,17 +363,26 @@ public class GitService {
                     .call();
 
             Path repoRoot = getGitFolder().toPath();
-            return diffs.stream()
+            List<Path> upsertedFiles = diffs.stream()
                     .filter(d -> d.getChangeType() == DiffEntry.ChangeType.ADD
                             || d.getChangeType() == DiffEntry.ChangeType.MODIFY)
                     .map(DiffEntry::getNewPath)
                     .filter(path -> path.endsWith(".json"))
                     .map(repoRoot::resolve)
                     .toList();
+
+            List<String> deletedFileNames = diffs.stream()
+                    .filter(d -> d.getChangeType() == DiffEntry.ChangeType.DELETE)
+                    .map(DiffEntry::getOldPath)
+                    .filter(path -> path.endsWith(".json"))
+                    .map(path -> path.substring(path.lastIndexOf('/') + 1))
+                    .toList();
+
+            return new ChangedMappings(upsertedFiles, deletedFileNames);
         } catch (Exception e) {
             log.warn("Failed to get changed files between {} and {}", fromHash, toHash, e);
         }
-        return List.of();
+        return ChangedMappings.empty();
     }
 
     private AbstractTreeIterator prepareTreeParser(Repository repository, ObjectId objectId) throws IOException {

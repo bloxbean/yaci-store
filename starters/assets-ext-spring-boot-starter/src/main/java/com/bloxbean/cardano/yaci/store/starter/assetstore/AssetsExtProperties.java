@@ -5,21 +5,16 @@ import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
-import java.util.ArrayList;
-import java.util.List;
-
 @Getter
 @Setter
 @ConfigurationProperties(prefix = "store.assets.ext", ignoreUnknownFields = true)
 public class AssetsExtProperties {
     // Defaults mirror the @ConditionalOnProperty gates so config metadata matches runtime.
     // Blockfrost-extension pattern: the master flag is OFF by default; the sub-flags CIP-26 and
-    // CIP-68 default ON, so enabling the master flag alone yields the default behaviour. CIP-113
-    // is the exception and stays OFF until it is live on mainnet.
+    // CIP-68 default ON, so enabling the master flag alone yields the default behaviour.
     private boolean enabled = false;
     private Cip26 cip26 = new Cip26();
     private Cip68 cip68 = new Cip68();
-    private Cip113 cip113 = new Cip113();
     private Query query = new Query();
 
     /**
@@ -63,21 +58,6 @@ public class AssetsExtProperties {
     @Setter
     public static final class Cip68 {
         private boolean enabled = true;
-    }
-
-    @Getter
-    @Setter
-    public static final class Cip113 {
-        // Disabled by default until CIP-113 is officially live on mainnet.
-        // Re-enable per deployment via store.assets.ext.cip113.enabled=true.
-        private boolean enabled = false;
-        /**
-         * Comma-separated list of CIP-113 registry NFT policy IDs to monitor.
-         * If empty (and no per-network defaults exist), CIP-113 is disabled.
-         * If empty but defaults are available, policy IDs are auto-detected from
-         * the network's property file.
-         */
-        private List<String> registryNftPolicyIds = new ArrayList<>();
     }
 
     @Getter

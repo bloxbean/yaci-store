@@ -1,12 +1,9 @@
 package com.bloxbean.cardano.yaci.store.analytics.scheduler;
 
-import com.bloxbean.cardano.yaci.store.analytics.config.AnalyticsStoreProperties;
 import com.bloxbean.cardano.yaci.store.analytics.exporter.PartitionStrategy;
 import com.bloxbean.cardano.yaci.store.analytics.exporter.PartitionValue;
 import com.bloxbean.cardano.yaci.store.analytics.exporter.TableExporter;
 import com.bloxbean.cardano.yaci.store.analytics.exporter.TableExporterRegistry;
-import com.bloxbean.cardano.yaci.store.blocks.domain.Block;
-import com.bloxbean.cardano.yaci.store.blocks.storage.BlockStorageReader;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -15,7 +12,6 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
-import java.util.Optional;
 
 /**
  * Service for exporting all registered analytics tables.
@@ -23,15 +19,14 @@ import java.util.Optional;
  * Provides a unified export API for all enabled tables:
  * - Automatically discovers and exports all enabled tables
  * - Supports multiple partition strategies (DAILY, EPOCH)
- * - Uses finalization buffer to ensure immutable data
+ * - Immutability of the exported data is ensured by the caller's date/epoch choice
+ *   (the scheduler stays {@code continuous-sync.buffer-days} behind the tip)
  *
  * Called by:
  * - {@link ContinuousSyncScheduler} for automated gap-based exports
  * - {@link com.bloxbean.cardano.yaci.store.analytics.admin.AnalyticsAdminController} for manual/admin exports
  *
  * Export Methods:
- * - exportDailyTables() - Export all daily tables for finalized date
- * - exportEpochTables() - Export all epoch tables for previous epoch
  * - exportAllDailyTables() - Export all daily tables for a specific date
  * - exportAllEpochTables() - Export all epoch tables for a specific epoch
  * - exportTable() - Export specific table for specific partition
@@ -45,114 +40,6 @@ import java.util.Optional;
 public class UniversalExportService {
 
     private final TableExporterRegistry registry;
-    private final AnalyticsStoreProperties properties;
-    private final BlockStorageReader blockStorageReader;
-
-    /**
-     * Export all daily tables for finalized date.
-     *
-     * Exports data from N days ago, where N = finalizationLagDays (default: 2).
-     *
-     * This ensures:
-     * - Data is past Cardano's 2160 block security parameter (~12 hours)
-     * - Additional buffer for potential chain reorganizations
-     * - Exported data is immutable and safe for analytics
-     *
-     * Example: If today is 2024-01-17 and finalizationLagDays=2:
-     * - Exports data for 2024-01-15
-     */
-    public void exportDailyTables() {
-        // Calculate finalized date (N days ago)
-        LocalDate exportDate = LocalDate.now().minusDays(properties.getFinalizationLagDays());
-
-        log.info("Starting daily table exports for date: {} (finalization lag: {} days)",
-                exportDate, properties.getFinalizationLagDays());
-
-        // Get enabled daily tables
-        List<String> enabledDailyTables = registry.getEnabledTablesByStrategy(PartitionStrategy.DAILY);
-
-        if (enabledDailyTables.isEmpty()) {
-            log.info("No daily tables enabled, skipping export");
-            return;
-        }
-
-        log.info("Exporting {} daily tables: {}", enabledDailyTables.size(), enabledDailyTables);
-
-        int successCount = 0;
-        int failureCount = 0;
-
-        for (String tableName : enabledDailyTables) {
-            try {
-                TableExporter exporter = registry.getExporter(tableName);
-                boolean success = exporter.exportForPartition(PartitionValue.ofDate(exportDate));
-
-                if (success) {
-                    successCount++;
-                } else {
-                    failureCount++;
-                }
-            } catch (Exception e) {
-                log.error("Failed to export table {}: {}", tableName, e.getMessage(), e);
-                failureCount++;
-            }
-        }
-
-        log.info("Daily export completed: {} successful, {} failed", successCount, failureCount);
-    }
-
-    /**
-     * Export all epoch tables for the current epoch.
-     *
-     * Attempts to export data for the current epoch. Each exporter's
-     * preExportValidation() gates whether the data is actually ready
-     * (e.g. adapot job completion check).
-     *
-     * Example: If current epoch is 451:
-     * - Attempts to export epoch 451
-     * - Exporters with adapot dependency will skip if job not yet complete
-     */
-    public void exportEpochTables() {
-        Optional<Block> latestBlock = blockStorageReader.findRecentBlock();
-        if (latestBlock.isEmpty()) {
-            log.warn("No blocks found, cannot determine current epoch. Skipping epoch export.");
-            return;
-        }
-
-        int exportEpoch = latestBlock.get().getEpochNumber();
-
-        log.info("Starting epoch table exports for epoch: {}", exportEpoch);
-
-        // Get enabled epoch tables
-        List<String> enabledEpochTables = registry.getEnabledTablesByStrategy(PartitionStrategy.EPOCH);
-
-        if (enabledEpochTables.isEmpty()) {
-            log.info("No epoch tables enabled, skipping export");
-            return;
-        }
-
-        log.info("Exporting {} epoch tables: {}", enabledEpochTables.size(), enabledEpochTables);
-
-        int successCount = 0;
-        int failureCount = 0;
-
-        for (String tableName : enabledEpochTables) {
-            try {
-                TableExporter exporter = registry.getExporter(tableName);
-                boolean success = exporter.exportForPartition(PartitionValue.ofEpoch(exportEpoch));
-
-                if (success) {
-                    successCount++;
-                } else {
-                    failureCount++;
-                }
-            } catch (Exception e) {
-                log.error("Failed to export table {}: {}", tableName, e.getMessage(), e);
-                failureCount++;
-            }
-        }
-
-        log.info("Epoch export completed: {} successful, {} failed", successCount, failureCount);
-    }
 
     /**
      * Manual export for specific table and partition.

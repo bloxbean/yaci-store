@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.service;
 
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.AssetsExtStoreProperties;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.Cip26NetworkDefaults;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.ChangedMappings;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.MappingUpdateDetails;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.errors.GitAPIException;
@@ -102,8 +103,17 @@ class GitServiceTest {
     }
 
     @Nested
-    @DisplayName("getChangedFiles")
-    class GetChangedFiles {
+    @DisplayName("getChangedMappings")
+    class GetChangedMappings {
+
+        private RevCommit deleteMappingFile(Git git, String fileName) throws Exception {
+            Path repoDir = git.getRepository().getWorkTree().toPath();
+            Files.delete(repoDir.resolve("mappings/" + fileName));
+            git.rm().addFilepattern("mappings/" + fileName).call();
+            return git.commit().setMessage("delete " + fileName)
+                    .setAuthor(new PersonIdent("Dev", "dev@test.com"))
+                    .call();
+        }
 
         @Test
         void returnsChangedMappingFiles() throws Exception {
@@ -114,15 +124,88 @@ class GitServiceTest {
             addMappingFile(testRepo, "token1.json", "{}", "dev@test.com");
             String newHash = testRepo.log().setMaxCount(1).call().iterator().next().getName();
 
-            List<Path> changed = gitService.getChangedFiles(oldHash, newHash);
+            ChangedMappings changed = gitService.getChangedMappings(oldHash, newHash);
 
-            assertThat(changed).hasSize(1);
-            assertThat(changed.getFirst().getFileName().toString()).isEqualTo("token1.json");
+            assertThat(changed.upsertedFiles()).hasSize(1);
+            assertThat(changed.upsertedFiles().getFirst().getFileName().toString()).isEqualTo("token1.json");
+            assertThat(changed.deletedFileNames()).isEmpty();
+        }
+
+        @Test
+        void reportsDeletedJsonFiles() throws Exception {
+            testRepo = initRepoWithMappings();
+            gitService.git = testRepo;
+            addMappingFile(testRepo, "token1.json", "{}", "dev@test.com");
+            addMappingFile(testRepo, "token2.json", "{}", "dev@test.com");
+            String oldHash = testRepo.getRepository().resolve("HEAD").name();
+
+            deleteMappingFile(testRepo, "token1.json");
+            String newHash = testRepo.getRepository().resolve("HEAD").name();
+
+            ChangedMappings changed = gitService.getChangedMappings(oldHash, newHash);
+
+            assertThat(changed.upsertedFiles()).isEmpty();
+            assertThat(changed.deletedFileNames()).containsExactly("token1.json");
+        }
+
+        @Test
+        void filtersOutDeletedNonJsonFiles() throws Exception {
+            testRepo = initRepoWithMappings();
+            gitService.git = testRepo;
+            addMappingFile(testRepo, "readme.txt", "text", "dev@test.com");
+            String oldHash = testRepo.getRepository().resolve("HEAD").name();
+
+            deleteMappingFile(testRepo, "readme.txt");
+            String newHash = testRepo.getRepository().resolve("HEAD").name();
+
+            ChangedMappings changed = gitService.getChangedMappings(oldHash, newHash);
+
+            assertThat(changed.upsertedFiles()).isEmpty();
+            assertThat(changed.deletedFileNames()).isEmpty();
+        }
+
+        @Test
+        void reportsDeletionsAlongsideUpserts() throws Exception {
+            testRepo = initRepoWithMappings();
+            gitService.git = testRepo;
+            addMappingFile(testRepo, "token1.json", "{}", "dev@test.com");
+            String oldHash = testRepo.getRepository().resolve("HEAD").name();
+
+            deleteMappingFile(testRepo, "token1.json");
+            addMappingFile(testRepo, "token2.json", "{}", "dev@test.com");
+            String newHash = testRepo.getRepository().resolve("HEAD").name();
+
+            ChangedMappings changed = gitService.getChangedMappings(oldHash, newHash);
+
+            assertThat(changed.upsertedFiles()).hasSize(1);
+            assertThat(changed.upsertedFiles().getFirst().getFileName().toString()).isEqualTo("token2.json");
+            assertThat(changed.deletedFileNames()).containsExactly("token1.json");
+        }
+
+        @Test
+        void doesNotReportDeletionWhenFileIsDeletedAndReAddedWithinRange() throws Exception {
+            testRepo = initRepoWithMappings();
+            gitService.git = testRepo;
+            addMappingFile(testRepo, "token1.json", "{\"v\":1}", "dev@test.com");
+            String oldHash = testRepo.getRepository().resolve("HEAD").name();
+
+            deleteMappingFile(testRepo, "token1.json");
+            addMappingFile(testRepo, "token1.json", "{\"v\":2}", "dev@test.com");
+            String newHash = testRepo.getRepository().resolve("HEAD").name();
+
+            ChangedMappings changed = gitService.getChangedMappings(oldHash, newHash);
+
+            // The tree diff sees the net change (a modification), not the intermediate delete.
+            assertThat(changed.upsertedFiles()).hasSize(1);
+            assertThat(changed.deletedFileNames()).isEmpty();
         }
 
         @Test
         void returnsEmptyWhenGitIsNull() {
-            assertThat(gitService.getChangedFiles("aaa", "bbb")).isEmpty();
+            ChangedMappings changed = gitService.getChangedMappings("aaa", "bbb");
+
+            assertThat(changed.upsertedFiles()).isEmpty();
+            assertThat(changed.deletedFileNames()).isEmpty();
         }
 
         @Test
@@ -130,8 +213,12 @@ class GitServiceTest {
             testRepo = initRepoWithMappings();
             gitService.git = testRepo;
 
-            assertThat(gitService.getChangedFiles("0000000000000000000000000000000000000000",
-                    "1111111111111111111111111111111111111111")).isEmpty();
+            ChangedMappings changed = gitService.getChangedMappings(
+                    "0000000000000000000000000000000000000000",
+                    "1111111111111111111111111111111111111111");
+
+            assertThat(changed.upsertedFiles()).isEmpty();
+            assertThat(changed.deletedFileNames()).isEmpty();
         }
     }
 
