@@ -113,6 +113,9 @@ project(':extensions:blockfrost:blockfrost-account').projectDir = new File('exte
 include ':extensions:blockfrost:blockfrost-governance'
 project(':extensions:blockfrost:blockfrost-governance').projectDir = new File('extensions/blockfrost/governance')
 
+include ':extensions:blockfrost:blockfrost-network'
+project(':extensions:blockfrost:blockfrost-network').projectDir = new File('extensions/blockfrost/network')
+
 include ':extensions:blockfrost:blockfrost-common'
 project(':extensions:blockfrost:blockfrost-common').projectDir = new File('extensions/blockfrost/common')
 
