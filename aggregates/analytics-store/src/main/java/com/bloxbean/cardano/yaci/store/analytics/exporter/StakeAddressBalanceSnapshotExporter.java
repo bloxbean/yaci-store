@@ -17,7 +17,7 @@ import org.springframework.stereotype.Service;
 @Service
 @Slf4j
 @ConditionalOnProperty(prefix = "yaci.store.analytics",
-        name = {"enabled", "exporter.stake_address_balance_snapshot.enabled"}, havingValue = "true")
+        name = "enabled", havingValue = "true")
 public class StakeAddressBalanceSnapshotExporter extends AbstractTableExporter {
 
     public StakeAddressBalanceSnapshotExporter(
