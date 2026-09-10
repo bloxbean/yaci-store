@@ -32,7 +32,7 @@ public class BFNetworkController {
         log.info("Blockfrost NetworkController initialized >>>");
     }
 
-    @GetMapping
+    @GetMapping({"", "/"})
     @Operation(summary = "Root endpoint", description = "Root endpoint.")
     public BFRootDto getRoot() {
         return bfNetworkService.getRoot();
