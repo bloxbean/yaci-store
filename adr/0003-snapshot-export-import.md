@@ -162,7 +162,10 @@ a raw copy of a live database would omit committed WAL entries. For every requir
 daily/epoch partition, including empty and early partitions, inspection requires a
 COMPLETED `analytics_export_state` record whose row count matches the pinned catalog.
 Missing or failed partitions and count mismatches block export rather than relying
-on maximum row timestamps. The configured source datasource supplies that journal.
+on maximum row timestamps. Daily coverage starts at the beginning of the chain;
+epoch coverage starts at the first non-Byron epoch derived from the pinned blocks,
+matching analytics gap detection. Byron epochs require no epoch-export records.
+The configured source datasource supplies that journal.
 
 Import and validation require exactly one entry for every installed specification.
 Resume requires the original canonical manifest digest, checked under the import

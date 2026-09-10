@@ -17,7 +17,7 @@ public final class ExportCoverage {
 
     public static List<String> check(SnapshotTableSpec spec, List<DuckLakeFile> files,
                                      Map<String, Long> completed, LocalDate firstDay,
-                                     LocalDate lastDay, int completedEpoch, long cutSlot) {
+                                     LocalDate lastDay, int firstNonByronEpoch, int completedEpoch, long cutSlot) {
         Map<String, Long> observed = new TreeMap<>();
         for (DuckLakeFile file : files) {
             String dir = file.partition();
@@ -30,13 +30,16 @@ public final class ExportCoverage {
                 required.add("date=" + day);
             }
         } else if (spec.source().partition().strategy() == PartitionStrategy.EPOCH) {
+            if (firstNonByronEpoch < 0) {
+                return List.of("[" + spec.id() + "] cannot determine the first non-Byron epoch from exported blocks");
+            }
             long lastEpoch = ExportPlanner.cutoffValue(spec.consistency().cutoff(), completedEpoch, cutSlot);
             // Epoch partitions with a slot cutoff (mir) are still required through the selected epoch.
             if (spec.consistency().cutoff().type() == CutoffType.SLOT_LTE
                     || lastEpoch == Long.MAX_VALUE) {
                 lastEpoch = completedEpoch;
             }
-            for (int epoch = 0; epoch <= lastEpoch; epoch++) {
+            for (int epoch = firstNonByronEpoch; epoch <= lastEpoch; epoch++) {
                 required.add("epoch=" + epoch);
             }
         } else {

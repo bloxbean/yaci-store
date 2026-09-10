@@ -222,6 +222,27 @@ public class DuckLakeCatalog implements AutoCloseable {
         return out;
     }
 
+    /** Epoch exporters start at the first non-Byron epoch, including networks starting after Shelley. */
+    public java.util.OptionalInt firstNonByronEpoch(long snapshotId) throws SQLException {
+        var blocks = files("block", snapshotId);
+        if (blocks.isEmpty()) {
+            return java.util.OptionalInt.empty();
+        }
+        // Read the pinned blocks, not the export journal: its earliest entry may itself be missing.
+        // Byron is era 1. Include epoch zero on networks that start in a later era.
+        String sql = "SELECT min(epoch) FROM read_parquet(" + parquetList(blocks)
+                + ") WHERE era > 1 AND number >= 0";
+        try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery(sql)) {
+            if (rs.next()) {
+                int epoch = rs.getInt(1);
+                if (!rs.wasNull()) {
+                    return java.util.OptionalInt.of(epoch);
+                }
+            }
+        }
+        return java.util.OptionalInt.empty();
+    }
+
     /** Aggregated min/max of one column across the pinned file set, read from catalog statistics. */
     public Optional<Bounds> bounds(String relation, String column, long snapshotId) throws SQLException {
         Identifiers.requireSqlIdentifier(relation, "ducklake relation");
