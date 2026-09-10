@@ -1,0 +1,5 @@
+- table: test_table_2
+  indexes:
+    - name: idx_test_table_2_hash
+      columns:
+        - hash
