@@ -1546,6 +1546,7 @@ export default function LandingPage() {
                           <div className="detail-item">Epoch Store</div>
                           <div className="detail-item">Metadata Store</div>
                           <div className="detail-item">Adapot</div>
+                          <div className="detail-item">Analytics Store</div>
                           <div className="detail-item">Plugin Framework</div>
                         </div>
                         <div className="processing-indicator"></div>
@@ -1593,6 +1594,7 @@ export default function LandingPage() {
                           <div className="node-title">Access Layer</div>
                           <div className="node-details">
                             <div className="detail-item">REST APIs</div>
+                            <div className="detail-item">Blockfrost APIs</div>
                             <div className="detail-item">Java SDK</div>
                             <div className="detail-item">Direct SQL</div>
                           </div>
@@ -1691,19 +1693,19 @@ export default function LandingPage() {
 
               <div className="feature-card">
                 <div className="feature-header">
-                  <div className="feature-icon">✅</div>
-                  <h3 className="feature-title">Production Ready</h3>
+                  <div className="feature-icon">📈</div>
+                  <h3 className="feature-title">Analytics Store</h3>
                 </div>
                 <p className="feature-description">
-                  Trusted by major Cardano infrastructure providers with enterprise-grade reliability and monitoring capabilities.
+                  Export indexed Cardano data from your database to Parquet for analytical workloads — as plain Parquet files or DuckLake-managed catalogs with ACID transactions, time-travel queries, and schema evolution.
                 </p>
                 <ul className="feature-list">
-                  <li>Enterprise-grade architecture with horizontal scaling</li>
-                  <li>Built-in health checks and metrics endpoints</li>
-                  <li>High availability with automatic failover support</li>
-                  <li>Production monitoring with Prometheus integration</li>
-                  <li>Zero-downtime deployments and rolling updates</li>
-                  <li>Comprehensive logging and error tracking</li>
+                  <li>Export to Parquet files or DuckLake (DuckDB) catalogs</li>
+                  <li>ACID transactions, time-travel queries, and schema evolution</li>
+                  <li>Enabled with the <code>analytics</code> Spring profile</li>
+                  <li>Automatic export at chain tip with adaptive gap detection</li>
+                  <li>Query exported data directly with DuckDB</li>
+                  <li>Custom exporters for your own datasets</li>
                 </ul>
               </div>
 

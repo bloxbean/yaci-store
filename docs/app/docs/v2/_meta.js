@@ -4,7 +4,6 @@ export default {
   "usage": "Usage",
   "stores": "Stores",
   "api-reference": "API Reference",
-  "blockfrost": "Blockfrost APIs",
   "plugins": "Plugin Framework",
   "analytics": "Analytics Store",
   "advanced-configuration": "Advanced Configuration",

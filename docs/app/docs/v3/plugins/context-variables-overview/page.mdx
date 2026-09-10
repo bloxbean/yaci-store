@@ -1,0 +1,230 @@
+import { Callout, Tabs } from 'nextra/components'
+
+# Context Variables Overview
+
+**Built-in variables and utilities available in all plugin scripts**
+
+## What are Context Variables?
+
+Context variables are pre-defined objects that are automatically injected into your plugin scripts. They provide instant access to:
+- Database operations
+- HTTP client for API calls
+- File I/O operations
+- State management
+- Configuration access
+
+No imports or initialization needed - just use them directly in your MVEL, JavaScript, or Python plugins.
+
+<Callout type="tip">
+**New to plugins?** Check our [Quick Reference](./variables/quick-reference) for a concise overview of all variables.
+</Callout>
+
+## Available Variables
+
+### Essential Variables
+
+#### `named_jdbc` - Database Access (Recommended)
+**Type**: `NamedParameterJdbcTemplate`
+**Purpose**: Execute SQL queries with named parameters for better readability and safety.
+
+```javascript
+// Query with named parameters
+params = ["address": ownerAddr];
+result = named_jdbc.queryForMap(
+    "SELECT COUNT(*) as count FROM address_utxo WHERE owner_addr = :address",
+    params
+);
+```
+
+[📖 Full Database Guide →](./variables/database-access)
+
+#### `http` - HTTP Client
+**Type**: `PluginHttpClient`
+**Purpose**: Make HTTP requests with built-in JSON handling.
+
+```javascript
+// GET request
+response = http.get("https://api.example.com/data")
+
+if (response.isSuccess()) {
+    data = response.asJson();
+}
+```
+
+[📖 Full HTTP Client Guide →](./variables/http-client)
+
+#### `files` - File Operations
+**Type**: `PluginFileClient`
+**Purpose**: Read/write files with JSON and CSV support.
+
+```javascript
+// Read and write JSON
+config = files.readJson("config.json");
+if (config.isSuccess()) {
+    settings = config.getData();
+    // Process...
+    files.writeJson("output.json", results);
+}
+```
+
+[📖 Full File Operations Guide →](./variables/file-operations)
+
+#### `env` - Configuration Access
+**Type**: `Environment`
+**Purpose**: Access environment variables and application properties.
+
+```javascript
+// Get configuration with defaults
+apiUrl = env.getProperty("plugin.api.url", "http://localhost:8080");
+apiKey = env.getProperty("API_KEY"); // Environment variable
+```
+
+[📖 Full Configuration Guide →](./variables/configuration)
+
+#### `state` & `global_state` - State Management
+**Type**: `State`
+**Purpose**: Plugin or global state with atomic operations.
+
+- **`state`**: Plugin-specific storage
+- **`global_state`**: Shared across all plugins
+
+```javascript
+// Store progress
+state.put("last_block", blockNumber);
+
+// Atomic counter
+count = state.increment("processed_count");
+
+// Thread-safe set operations
+state.addToSet("processed_txs", txHash);
+```
+
+[📖 Full State Management Guide →](./variables/state-management)
+
+### Quick Examples
+
+<Tabs items={['Database', 'HTTP', 'State', 'Files']}>
+<Tabs.Tab>
+```javascript
+// Count transactions for an address
+params = ["addr": "addr1..."];
+result = named_jdbc.queryForMap(
+    "SELECT COUNT(*) as cnt FROM tx WHERE address = :addr",
+    params
+);
+count = result["cnt"];
+```
+</Tabs.Tab>
+
+<Tabs.Tab>
+```javascript
+// Send webhook
+response = http.postJson("https://webhook.site/id", {
+        "block": blockNumber,
+        "txCount": transactions.size()
+    });
+```
+</Tabs.Tab>
+
+<Tabs.Tab>
+```javascript
+// Track processing progress
+state.put("last_block", blockNumber);
+count = state.increment("blocks_processed");
+
+if (!state.addToSet("seen_txs", txHash)) {
+    // Already processed this transaction
+    return;
+}
+```
+</Tabs.Tab>
+
+<Tabs.Tab>
+```javascript
+// Read config and write results
+config = files.readJson("config.json");
+if (config.isSuccess()) {
+    // Process with config...
+    files.writeJson("results.json", data);
+    files.appendCsv("log.csv", [[timestamp, status]]);
+}
+```
+</Tabs.Tab>
+</Tabs>
+
+## Language Support
+
+All context variables work seamlessly across supported scripting languages:
+
+<Tabs items={['MVEL', 'JavaScript', 'Python']}>
+<Tabs.Tab>
+```javascript
+// MVEL - Direct and concise
+result = named_jdbc.queryForMap("SELECT * FROM block WHERE number = :num", ["num": 100]);
+state.increment("counter");
+response = http.get("https://api.example.com/data");
+```
+</Tabs.Tab>
+
+<Tabs.Tab>
+```javascript
+// JavaScript - Familiar syntax
+const result = named_jdbc.queryForMap("SELECT * FROM block WHERE number = :num", {num: 100});
+state.increment("counter");
+const response = http.get("https://api.example.com/data");
+```
+</Tabs.Tab>
+
+<Tabs.Tab>
+```python
+# Python - Pythonic style
+result = named_jdbc.queryForMap("SELECT * FROM block WHERE number = :num", {"num": 100})
+state.increment("counter")
+response = http.get("https://api.example.com/data")
+```
+</Tabs.Tab>
+</Tabs>
+
+## Best Practices
+
+1. **Handle errors gracefully**: Check operation results before using data
+2. **Use atomic operations**: For counters and concurrent access
+3. **Clean up resources**: Remove old state data periodically
+4. **Never log secrets**: Mask sensitive configuration values
+
+## Custom Variable Providers
+
+Extend the plugin framework by creating your own Variable Providers:
+
+### What is a Variable Provider?
+
+A Java class that implements the `VariableProvider` interface to add new variables to the plugin context.
+
+### How to Create One
+
+1. Implement the `VariableProvider` interface
+2. Bundle as a JAR file
+3. Place in `plugins/ext-jars` folder
+4. Configure in `application-plugins.yml`
+5. Use the new variables in your plugins
+
+### Example Use Cases
+
+- **Communication**: Telegram, Slack, Email variables
+- **Storage**: IPFS, S3, Redis variables
+- **Blockchain**: Blockfrost, Koios API variables
+- **Monitoring**: Prometheus, custom metrics variables
+
+<Callout type="info">
+Variable Providers must be thread-safe as they may be accessed concurrently.
+</Callout>
+
+## Next Steps
+
+- **Quick Start**: See our [Variable Quick Reference](./variables/quick-reference)
+- **Learn by Example**: Check [Getting Started](./plugin-getting-started) for complete plugin examples
+- **Advanced Topics**: Read the [Plugin API Guide](./plugin_api-guide)
+
+---
+
+The context variable system makes yaci-store's plugin framework powerful yet simple, providing everything you need to build sophisticated blockchain data processing pipelines.

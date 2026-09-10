@@ -10,7 +10,11 @@ export default function VersionFilteredLayout({ children, pageMap }: { children:
   const pathname = usePathname();
 
   // Determine current version from URL
-  const currentVersion = pathname?.includes('/docs/v1') ? 'v1' : 'v2';
+  const currentVersion = pathname?.includes('/docs/v1')
+    ? 'v1'
+    : pathname?.includes('/docs/v3')
+      ? 'v3'
+      : 'v2';
 
   // Find the docs entry in the pageMap
   const docsEntry = pageMap.find((item: any) => item.name === 'docs');
@@ -28,6 +32,10 @@ export default function VersionFilteredLayout({ children, pageMap }: { children:
         }
         // Exclude items named 'page' (both .mdx and .tsx files)
         if (item.name === 'page') {
+          return false;
+        }
+        // Exclude the version-root redirect index page (e.g. /docs/v3 -> introduction/overview)
+        if (item.name === 'index') {
           return false;
         }
         return true;

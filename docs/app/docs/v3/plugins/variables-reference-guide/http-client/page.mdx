@@ -1,0 +1,296 @@
+# Plugin HTTP Client Usage Guide
+
+## Overview
+
+The enhanced `PluginHttpClient` provides a comprehensive HTTP client designed specifically for plugin developers using MVEL, JavaScript, or Python. It offers simple, intuitive methods for common HTTP operations with built-in support for authentication, JSON handling, and error management.
+
+## Key Features
+
+- **Simple API**: Minimal parameters for common use cases
+- **Script-Friendly**: Designed for MVEL, JavaScript, and Python developers
+- **JSON-first**: Built-in JSON serialization and parsing with `asJson()` and `asJsonList()`
+- **Authentication**: Easy basic auth, bearer tokens, and API keys
+- **Error Handling**: Status checking and timeout support
+- **Response Headers**: Access to response headers and content types
+- **Query Parameters**: Easy URL building with parameters
+- **Timeout Support**: Integer-based timeouts (milliseconds or seconds) instead of Java Duration objects
+
+## Basic Usage Examples
+
+### Simple GET Requests
+
+```javascript
+// MVEL - Basic GET request
+response = http.get("https://api.example.com/users")
+if (response.isSuccess()) {
+    users = response.asJsonMap()
+    System.out.println("Found " + users.size() + " users")
+}
+```
+
+```javascript
+// JavaScript - GET with query parameters
+const response = http.getWithParams("https://api.example.com/search", {
+    "q": "example",
+    "limit": "10"
+});
+
+if (response.isSuccess()) {
+    const data = response.asJsonMap();
+    console.log("Search results:", data.results.length);
+}
+```
+
+```python
+# Python - GET with headers
+response = http.get("https://api.example.com/data", {
+    "User-Agent": "YaciPlugin/1.0",
+    "Accept": "application/json"
+})
+
+if response.isSuccess():
+    data = response.asJsonMap()
+    print(f"Data received: {len(data)} items")
+```
+
+### JSON POST Requests
+
+```javascript
+// MVEL - POST JSON data
+user = {
+    "name": "Alice",
+    "email": "alice@example.com",
+    "age": 30
+}
+
+response = http.postJson("https://api.example.com/users", user)
+if (response.isSuccess()) {
+    createdUser = response.asJsonMap()
+    System.out.println("Created user with ID: " + createdUser.id)
+} else {
+    System.out.println("Failed to create user: " + response.getStatus())
+}
+```
+
+```javascript
+// JavaScript - POST with custom headers
+const newRecord = {
+    event_id: "evt123",
+    amount: 1000000,
+    user_id: "user1"
+};
+
+const response = http.postJson("https://webhook.example.com/notify", newRecord, {
+    "Content-Type": "application/json",
+    "X-Source": "yaci-store"
+});
+
+if (response.isError()) {
+    console.error("Webhook failed:", response.getStatus(), response.getBody());
+}
+```
+
+```python
+# Python - POST with object serialization
+event_data = {
+    "event_id": event.getId(),
+    "user_id": event.getUserId(),
+    "values": [item.getValue() for item in event.getItems()]
+}
+
+response = http.postJson("https://analytics.example.com/events", event_data)
+if response.isSuccess():
+    print("Transaction data sent successfully")
+```
+
+## Authentication Examples
+
+### Basic Authentication
+
+```javascript
+// MVEL - Basic auth
+response = http.getWithBasicAuth("https://api.example.com/protected", "username", "password")
+if (response.isSuccess()) {
+    data = response.asJsonMap()
+}
+```
+
+```javascript
+// JavaScript - Basic auth with POST
+const payload = { "action": "sync", "item_id": 12345 };
+const response = http.postJsonWithBasicAuth(
+    "https://api.example.com/sync",
+    payload,
+    "api_user",
+    "secret_key"
+);
+```
+
+### Bearer Token Authentication
+
+```javascript
+// MVEL - Bearer token
+token = "eyJhbGciOiJIUzI1NiIs..."
+response = http.getWithBearerToken("https://api.example.com/me", token)
+```
+
+```python
+# Python - Bearer token from environment or config
+bearer_token = os.getenv("API_TOKEN")
+response = http.getWithBearerToken("https://api.example.com/data", bearer_token)
+```
+
+### API Key Authentication
+
+```javascript
+// JavaScript - API key in header
+const response = http.getWithApiKey("https://api.example.com/stats", "X-API-Key", "abc123");
+```
+
+```javascript
+// MVEL - Custom API key header
+response = http.getWithApiKey("https://api.example.com/data", "Authorization", "ApiKey " + apiKey)
+```
+
+## Form Data Submission
+
+```javascript
+// MVEL - Form submission
+formData = {
+    "name": "Transaction Alert",
+    "email": "admin@example.com",
+    "message": "Large value detected: " + amount
+}
+
+response = http.postForm("https://contact.example.com/submit", formData)
+```
+
+```python
+# Python - Form with custom headers
+form_fields = {
+    "event_type": "item_processed",
+    "block_number": str(block_number),
+    "timestamp": str(System.currentTimeMillis())
+}
+
+response = http.postForm("https://webhook.site/unique-id", form_fields, {
+    "X-Source": "yaci-store-plugin"
+})
+```
+
+## Response Handling
+
+### Status Code Checking
+
+```javascript
+// JavaScript - Comprehensive error handling
+const response = http.get("https://api.example.com/status");
+
+if (response.isSuccess()) {
+    console.log("API is healthy");
+} else if (response.isClientError()) {
+    console.warn("Client error:", response.getStatus(), response.getBody());
+} else if (response.isServerError()) {
+    console.error("Server error:", response.getStatus());
+    // Maybe retry logic here
+} else {
+    console.info("Unexpected status:", response.getStatus());
+}
+```
+
+### JSON Response Parsing (Script-Friendly)
+
+```javascript
+// MVEL - Parse JSON objects (most common case)
+response = http.get("https://api.example.com/blocks/latest")
+
+if (response.isJson()) {
+    blockData = response.asJson()  // Simple and intuitive
+    blockNumber = blockData.number
+    blockHash = blockData.hash
+
+    System.out.println("Latest block: " + blockNumber + " (" + blockHash + ")")
+}
+```
+
+```javascript
+// JavaScript - Parse JSON arrays
+const response = http.get("https://api.example.com/transactions");
+if (response.isJson()) {
+    const transactions = response.asJsonList();  // For JSON arrays
+    console.log(`Found ${transactions.length} transactions`);
+
+    transactions.forEach(tx => {
+        console.log(`TX: ${tx.hash}, Amount: ${tx.amount}`);
+    });
+}
+```
+
+```python
+# Python - Handle both objects and arrays
+response = http.get("https://api.example.com/data")
+
+if response.isJson():
+    try:
+        data = response.asJson()  # For JSON objects
+        process_data(data)
+    except Exception as e:
+        # Try as array if object parsing fails
+        try:
+            data = response.asJsonList()  # For JSON arrays
+            process_array_data(data)
+        except Exception as e2:
+            print(f"JSON parsing failed: {e2}")
+else:
+    print(f"Unexpected content type: {response.getContentType()}")
+```
+
+### Response Headers
+
+```javascript
+// JavaScript - Access response headers
+const response = http.get("https://api.example.com/data");
+
+const contentType = response.getContentType();
+const rateLimit = response.getHeader("X-RateLimit-Remaining");
+const etag = response.getHeader("ETag");
+
+console.log(`Content-Type: ${contentType}, Rate Limit: ${rateLimit}`);
+```
+
+## Advanced Usage
+
+### Custom Timeouts (Script-Friendly)
+
+```javascript
+// MVEL - Timeout in milliseconds
+response = http.getWithTimeout("https://slow-api.example.com/process", 60000)
+if (response.isSuccess()) {
+    data = response.asJson()
+}
+```
+
+```javascript
+// JavaScript - Timeout in seconds (more readable)
+const response = http.getWithTimeoutSeconds("https://api.example.com/data", 30);
+if (response.isSuccess()) {
+    const data = response.asJson();
+    console.log("Data received:", data);
+}
+```
+
+```python
+# Python - POST with timeout in milliseconds
+response = http.postJsonWithTimeout(
+    "https://api.example.com/urgent",
+    {"alert": "High priority"},
+    5000  # 5 seconds in milliseconds
+)
+
+# Python - POST with timeout in seconds (cleaner)
+response = http.postJsonWithTimeoutSeconds(
+    "https://api.example.com/urgent",
+    {"alert": "High priority"},
+    5  # 5 seconds
+)
+```

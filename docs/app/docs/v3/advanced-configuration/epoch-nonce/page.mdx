@@ -1,0 +1,64 @@
+import { Callout } from 'nextra/components'
+
+# Epoch Nonce
+
+<Callout type="info">
+Available since **v2.1.0-pre4**.
+</Callout>
+
+The **epoch-nonce** module is an optional store that computes and persists Cardano epoch nonces by processing VRF outputs from block headers.
+The epoch nonce is the protocol value used in the leader-election process for each epoch.
+
+At each epoch transition, the module processes the blocks of the just-completed epoch and writes one row to the `epoch_nonce` table for the
+**new** epoch — including the final nonce and the intermediate values required to keep nonce computation continuous across epoch boundaries.
+
+## Enabling the Module
+
+<Callout type="warning">
+The epoch-nonce module is **disabled by default**. After enabling it you must **resync from the genesis block** so the module can compute
+nonces for all historical epochs. Enabling it on an already-synced database will leave a gap and break nonce-state continuity across epochs.
+</Callout>
+
+To enable the module, add the following to your `application.properties` file:
+
+```properties
+store.epoch-nonce.enabled=true
+```
+
+<Callout type="warning">
+For correct Shelley-Alonzo nonce calculation, the epoch store must also be enabled and synced so epoch protocol parameters are available.
+This is required for TPraos epochs with non-neutral `extra_entropy`, such as mainnet epoch 259.
+</Callout>
+
+## Calculation
+
+The epoch nonce formula depends on the era:
+
+- Shelley-Alonzo (TPraos): `(candidate_nonce ⭒ previous_epoch_last_block_nonce) ⭒ extra_entropy`
+- Babbage and later (Praos): `candidate_nonce ⭒ previous_epoch_last_block_nonce`
+
+Missing, null, or neutral extra entropy is treated as `NeutralNonce`, so it does not change the result.
+
+## What Gets Stored
+
+Each row represents one epoch's nonce state and is written at the corresponding epoch transition, after processing the previous (completed) epoch's blocks:
+
+| Column | Description |
+|--------|-------------|
+| `epoch` | Epoch number that this row's `nonce` applies to (primary key) |
+| `nonce` | Final epoch nonce for this epoch — the primary protocol output. Computed from `candidate_nonce`, the previous epoch's last block nonce, and TPraos `extra_entropy` when applicable |
+| `evolving_nonce` | Running hash of VRF outputs, continuous across epochs — restored from the previous row and updated by every block of the completed epoch |
+| `candidate_nonce` | Snapshot of `evolving_nonce` taken before the stability-window cutoff in the completed epoch |
+| `lab_nonce` | `prevHash` of the last block in the completed epoch |
+| `last_epoch_block_nonce` | `lab_nonce` snapshot stored for use by the **next** epoch's TICKN step (combined there with that epoch's `candidate_nonce` to form its `nonce`) |
+| `slot` / `block` / `block_time` | Position metadata used for rollback handling and auditing |
+
+The intermediate values are persisted for two reasons:
+
+- **Computation continuity** — Nonce state is continuous across epochs and never resets. Each epoch's computation restores the previous epoch's
+  `evolving_nonce` and `candidate_nonce` as its starting point.
+- **Debugging** — When a computed nonce doesn't match expectations, the intermediate fields make it possible to pinpoint exactly where the divergence occurred.
+
+<Callout>
+This module does not expose any REST endpoints. Consumers read epoch nonces directly from the `epoch_nonce` table.
+</Callout>

@@ -5,14 +5,22 @@ import { useRouter, usePathname } from "next/navigation";
 
 const versions = [
   {
+    value: "v3",
+    label: "v3.x.x",
+    isLatest: false,
+    isBeta: true,
+  },
+  {
     value: "v2",
     label: "v2.x.x",
     isLatest: true,
+    isBeta: false,
   },
   {
     value: "v1",
     label: "v0.1.x",
     isLatest: false,
+    isBeta: false,
   },
 ];
 
@@ -48,6 +56,9 @@ export function ModernVersionSelector() {
     if (pathname?.includes("/docs/v2")) {
       return "v2";
     }
+    if (pathname?.includes("/docs/v3")) {
+      return "v3";
+    }
     return null;
   };
 
@@ -61,12 +72,14 @@ export function ModernVersionSelector() {
     const currentPath = pathname || '/';
     let pathWithoutVersion = currentPath;
 
-    // Extract the path after /docs/v1/ or /docs/v2/
+    // Extract the path after /docs/v1/, /docs/v2/ or /docs/v3/
     if (currentPath.includes('/docs/v1/')) {
       pathWithoutVersion = currentPath.replace('/docs/v1', '');
     } else if (currentPath.includes('/docs/v2/')) {
       pathWithoutVersion = currentPath.replace('/docs/v2', '');
-    } else if (currentPath === '/docs/v1' || currentPath === '/docs/v2') {
+    } else if (currentPath.includes('/docs/v3/')) {
+      pathWithoutVersion = currentPath.replace('/docs/v3', '');
+    } else if (currentPath === '/docs/v1' || currentPath === '/docs/v2' || currentPath === '/docs/v3') {
       pathWithoutVersion = '';
     }
 
@@ -227,6 +240,11 @@ export function ModernVersionSelector() {
           color: #92400e;
         }
 
+        .badge-beta {
+          background: #dbeafe;
+          color: #1e40af;
+        }
+
         :global(.dark) .badge-latest {
           background: #16a34a;
           color: #ffffff;
@@ -235,6 +253,11 @@ export function ModernVersionSelector() {
         :global(.dark) .badge-legacy {
           background: #d97706;
           color: #fef3c7;
+        }
+
+        :global(.dark) .badge-beta {
+          background: #1d4ed8;
+          color: #dbeafe;
         }
 
         .current-indicator {
@@ -278,8 +301,8 @@ export function ModernVersionSelector() {
                 >
                   <div className="version-info">
                     <span className="version-label">{version.label}</span>
-                    <span className={`version-badge ${version.isLatest ? 'badge-latest' : 'badge-legacy'}`}>
-                      {version.isLatest ? 'Latest' : 'Legacy'}
+                    <span className={`version-badge ${version.isLatest ? 'badge-latest' : version.isBeta ? 'badge-beta' : 'badge-legacy'}`}>
+                      {version.isLatest ? 'Latest' : version.isBeta ? 'Beta' : 'Legacy'}
                     </span>
                   </div>
                   {version.value === currentVersion && (
