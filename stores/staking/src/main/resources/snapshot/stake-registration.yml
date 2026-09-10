@@ -1,6 +1,6 @@
 snapshot-table:
   id: stake-registration
-  spec-version: 1
+  spec-version: 2
   module: staking
   kind: CHAIN_DATA
   restore: IMPORT
@@ -21,6 +21,8 @@ snapshot-table:
     target-table: stake_registration
     mode: MAPPED
     columns:
+      deposit:
+        source: deposit
       block_time:
         source: block_time
         converter: "timestamp-to-epoch-seconds"

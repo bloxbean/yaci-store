@@ -18,6 +18,17 @@ import java.util.TreeSet;
 /** Reads the live PostgreSQL target schema. */
 public class PgSchema {
 
+    // Working tables recreated by StakeSnapshotService, DRepDistService and
+    // DRepPv9ClearEventCacheService. A synced source can retain them; a fresh migration cannot.
+    // Use exact names rather than excluding arbitrary unlogged tables or every ss_* table.
+    private static final java.util.Set<String> REWARD_WORK_TABLES = java.util.Set.of(
+            "ss_last_withdrawal", "ss_max_slot_balances", "ss_ranked_delegations",
+            "ss_pool_refund_rewards", "ss_pool_rewards", "ss_insta_spendable_rewards",
+            "ss_spendable_reward_rest", "ss_pool_status", "ss_drep_ranked_delegations",
+            "ss_drep_status", "ss_gov_active_proposal_deposits",
+            "ss_gov_scheduled_to_drop_proposal_deposits", "ss_gov_spendable_reward_rest",
+            "ss_gov_pool_refund_rewards", "ss_pv9_cleared_addresses");
+
     private final Connection conn;
     private final String schema;
 
@@ -121,6 +132,7 @@ public class PgSchema {
      *
      * <p>The importer's own journal tables are excluded: they appear as soon as a first import
      * starts, and including them would make every resumed import fail its own compatibility check.
+     * Known reward working tables are also excluded; they are runtime artifacts, not migrations.
      */
     public String fingerprint() throws SQLException {
         StringBuilder sb = new StringBuilder();
@@ -140,6 +152,9 @@ public class PgSchema {
             ps.setString(1, schema);
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
+                    if (REWARD_WORK_TABLES.contains(rs.getString(1))) {
+                        continue;
+                    }
                     sb.append(rs.getString(1)).append('.').append(rs.getString(2)).append(':')
                             .append(rs.getString(3)).append(':').append(rs.getBoolean(4)).append('\n');
                 }

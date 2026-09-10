@@ -166,6 +166,10 @@ on maximum row timestamps. Daily coverage starts at the beginning of the chain;
 epoch coverage starts at the first non-Byron epoch derived from the pinned blocks,
 matching analytics gap detection. Byron epochs require no epoch-export records.
 The configured source datasource supplies that journal.
+Schema fingerprints exclude the explicitly listed reward working tables recreated by the
+aggregates; a populated source and fresh target must compare on persistent schema structure.
+Stake-registration spec version 2 requires the exported `deposit` column, including nulls
+for deregistration refunds. Existing exports without it must be backfilled and repackaged.
 
 Import and validation require exactly one entry for every installed specification.
 Resume requires the original canonical manifest digest, checked under the import
