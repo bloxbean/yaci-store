@@ -97,8 +97,10 @@ Configure the source for [DuckLake analytics export](/docs/v2/analytics/overview
 ledger-state data required by the snapshot specs. The `ledger-state,analytics` profiles are the
 usual source setup; enabling the analytics property alone does not populate historical data.
 
-Before inspecting or exporting, backfill all required daily/epoch partitions from the beginning
-of the chain, including empty partitions. The configured PostgreSQL datasource must be the source
+Before inspecting or exporting, backfill daily partitions from the beginning of the chain and
+epoch partitions from the first non-Byron epoch, including empty partitions. Snapshot inspection
+derives this epoch boundary from the exported blocks, matching analytics gap detection.
+Byron epochs do not need epoch-export records. The configured PostgreSQL datasource must be the source
 of the analytics export: its `analytics_export_state` journal provides completion evidence.
 Snapshot inspection compares each required partition's recorded row count with the pinned catalog;
 missing, failed, or mismatched partitions block export.
@@ -128,7 +130,7 @@ curl -X POST 'http://localhost:8080/api/v1/analytics/admin/export/table/stake_ad
 Other daily tables use the same endpoint with their exporter name. Epoch tables use:
 
 ```bash
-curl -X POST 'http://localhost:8080/api/v1/analytics/admin/export/table/<TABLE>/epoch-range?startEpoch=0&endEpoch=<LAST_COMPLETED_EPOCH>'
+curl -X POST 'http://localhost:8080/api/v1/analytics/admin/export/table/<TABLE>/epoch-range?startEpoch=<FIRST_NON_BYRON_EPOCH>&endEpoch=<LAST_COMPLETED_EPOCH>'
 ```
 
 Check the response's successful-partition count and the export logs. Backfill requires retained

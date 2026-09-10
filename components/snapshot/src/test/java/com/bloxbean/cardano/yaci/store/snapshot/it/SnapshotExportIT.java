@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.snapshot.it;
 
 import com.bloxbean.cardano.yaci.store.snapshot.export.ExportOptions;
+import com.bloxbean.cardano.yaci.store.snapshot.ducklake.DuckLakeCatalog;
 import com.bloxbean.cardano.yaci.store.snapshot.export.SnapshotExporter;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.SnapshotSpecLoader;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.SnapshotSpecRegistry;
@@ -65,6 +66,9 @@ class SnapshotExportIT {
             st.execute("ALTER TABLE lake.delegation SET PARTITIONED BY (date)");
             st.execute("INSERT INTO lake.delegation VALUES ('d',1,'2026-01-01 12:00:00+00','2026-01-01')");
         }
+        try (var catalog = DuckLakeCatalog.open(root, root.resolve("work"))) {
+            assertThat(catalog.firstNonByronEpoch(catalog.latestSnapshotId())).hasValue(0);
+        }
         var registry = mock(SnapshotSpecRegistry.class);
         List<SnapshotTableSpec> specs = List.of(spec("block", true), spec("delegation", false));
         when(registry.importedTables()).thenReturn(specs);
@@ -83,6 +87,32 @@ class SnapshotExportIT {
         assertThat(exporter.inspect(incomplete).blockers())
                 .anyMatch(p -> p.contains("delegation") && p.contains("date=2026-01-02"));
         assertThatThrownBy(() -> exporter.export(incomplete, null)).hasMessageContaining("incomplete export");
+    }
+
+    @Test
+    void derivesEpochStartFromPinnedBlocksRatherThanByronOrLaterExportJournalEntries() throws Exception {
+        try (var conn = DriverManager.getConnection("jdbc:duckdb:"); var st = conn.createStatement()) {
+            st.execute("LOAD ducklake");
+            st.execute("ATTACH 'ducklake:" + root.resolve("ducklake.catalog.db")
+                    + "' AS lake (DATA_PATH '" + root + "')");
+            st.execute("CALL lake.set_option('data_inlining_row_limit', 0)");
+            st.execute("CREATE TABLE lake.block(number BIGINT, era INTEGER, epoch INTEGER)");
+            st.execute("INSERT INTO lake.block VALUES (0,1,0), (1,1,3)");
+        }
+        long byronSnapshot;
+        try (var catalog = DuckLakeCatalog.open(root, root.resolve("work"))) {
+            byronSnapshot = catalog.latestSnapshotId();
+            assertThat(catalog.firstNonByronEpoch(byronSnapshot)).isEmpty();
+        }
+        try (var conn = DriverManager.getConnection("jdbc:duckdb:"); var st = conn.createStatement()) {
+            st.execute("LOAD ducklake");
+            st.execute("ATTACH 'ducklake:" + root.resolve("ducklake.catalog.db") + "' AS lake");
+            st.execute("INSERT INTO lake.block VALUES (2,2,4), (3,6,5)");
+        }
+        try (var catalog = DuckLakeCatalog.open(root, root.resolve("work"))) {
+            assertThat(catalog.firstNonByronEpoch(catalog.latestSnapshotId())).hasValue(4);
+            assertThat(catalog.firstNonByronEpoch(byronSnapshot)).isEmpty();
+        }
     }
 
     private ExportOptions options(Map<String, Map<String, Long>> completed) {

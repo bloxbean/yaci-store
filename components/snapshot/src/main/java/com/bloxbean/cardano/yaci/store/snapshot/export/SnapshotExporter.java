@@ -97,13 +97,14 @@ public class SnapshotExporter {
             LocalDate firstDay = LocalDate.parse(timeBounds.min().substring(0, 10));
             LocalDate lastDay = Instant.ofEpochSecond(selection.point().blockTime())
                     .atOffset(ZoneOffset.UTC).toLocalDate();
+            int firstNonByronEpoch = catalog.firstNonByronEpoch(snapshotId).orElse(-1);
             for (SnapshotTableSpec spec : imported) {
                 if (!availableRelations.contains(spec.relation())) {
                     continue;
                 }
                 blockers.addAll(ExportCoverage.check(spec, catalog.files(spec.relation(), snapshotId),
                         options.completedPartitions().getOrDefault(spec.source().exporterId(), Map.of()),
-                        firstDay, lastDay, selection.completedEpoch(), selection.point().slot()));
+                        firstDay, lastDay, firstNonByronEpoch, selection.completedEpoch(), selection.point().slot()));
                 TablePlan plan = planner.plan(spec, snapshotId, selection.completedEpoch(),
                         selection.point().slot());
                 plans.add(plan);
