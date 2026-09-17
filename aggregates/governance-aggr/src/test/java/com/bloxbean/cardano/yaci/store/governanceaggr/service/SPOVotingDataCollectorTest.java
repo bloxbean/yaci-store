@@ -1,11 +1,21 @@
 package com.bloxbean.cardano.yaci.store.governanceaggr.service;
 
 import com.bloxbean.cardano.yaci.core.model.governance.DrepType;
+import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
 import com.bloxbean.cardano.yaci.core.model.governance.Vote;
+import com.bloxbean.cardano.yaci.core.model.governance.actions.NoConfidence;
 import com.bloxbean.cardano.yaci.store.adapot.domain.EpochStake;
 import com.bloxbean.cardano.yaci.store.adapot.storage.EpochStakeStorageReader;
+import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
+import com.bloxbean.cardano.yaci.store.common.domain.PoolVotingThresholds;
+import com.bloxbean.cardano.yaci.store.common.util.UnitIntervalUtil;
 import com.bloxbean.cardano.yaci.store.governance.domain.DelegationVote;
 import com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure;
+import com.bloxbean.cardano.yaci.store.governanceaggr.domain.AggregatedVotingData;
+import com.bloxbean.cardano.yaci.store.governancerules.api.VotingData;
+import com.bloxbean.cardano.yaci.store.governancerules.voting.VotingEvaluationContext;
+import com.bloxbean.cardano.yaci.store.governancerules.voting.VotingStatus;
+import com.bloxbean.cardano.yaci.store.governancerules.voting.spo.SPOVotingEvaluator;
 import com.bloxbean.cardano.yaci.store.staking.domain.Pool;
 import com.bloxbean.cardano.yaci.store.staking.domain.PoolDetails;
 import com.bloxbean.cardano.yaci.store.staking.storage.PoolStorage;
@@ -15,13 +25,16 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -103,6 +116,35 @@ class SPOVotingDataCollectorTest {
     }
 
     @Test
+    void collectSPOVotes_shouldIncludeMultipleProposalDepositsInExplicitAndDefaultStake() {
+        configureEpochSnapshot(DrepType.ABSTAIN);
+        var collector = new SPOVotingDataCollector(epochStakeStorage, poolStorage, poolStorageReader, delegationVoteDataService);
+
+        when(epochStakeStorage.getAllActiveStakesByAddressesAndEpoch(anyList(), eq(ACTIVE_EPOCH)))
+                .thenReturn(List.of(
+                        epochStake(EXPLICIT_VOTER, "stake_test1_explicit_1", 60),
+                        epochStake(EXPLICIT_VOTER, "stake_test1_explicit_2", 40),
+                        epochStake(POOL_WITH_DEFAULT, REWARD_ACCOUNT, 100)));
+
+        var activeProposals = List.of(
+                proposal("stake_test1_explicit_1", 10),
+                proposal("stake_test1_explicit_2", 20),
+                proposal(REWARD_ACCOUNT, 30));
+
+        var epochAggregates = collector.buildEpochAggregates(SNAPSHOT_EPOCH, activeProposals);
+        var proposalVotes = collector.collectSPOVotes(
+                List.of(vote(EXPLICIT_VOTER, "proposal", Vote.YES)), epochAggregates);
+
+        assertThat(epochAggregates.proposalDepositByPool()).containsExactlyInAnyOrderEntriesOf(Map.of(
+                EXPLICIT_VOTER, BigInteger.valueOf(30),
+                POOL_WITH_DEFAULT, BigInteger.valueOf(30)));
+        assertThat(proposalVotes.getTotalStake()).isEqualTo(BigInteger.valueOf(260));
+        assertThat(proposalVotes.getYesVoteStake()).isEqualTo(BigInteger.valueOf(130));
+        assertThat(proposalVotes.getDelegateToAutoAbstainDRepStake()).isEqualTo(BigInteger.valueOf(130));
+        assertThat(proposalVotes.getDoNotVoteStake()).isZero();
+    }
+
+    @Test
     void collectSPOVotes_shouldApplyOneRewardAccountDefaultToEveryPoolUsingIt() {
         configureSharedRewardAccountSnapshot(true);
         var collector = new SPOVotingDataCollector(epochStakeStorage, poolStorage, poolStorageReader, delegationVoteDataService);
@@ -113,6 +155,89 @@ class SPOVotingDataCollectorTest {
 
         assertThat(proposalVotes.getDelegateToAutoAbstainDRepStake()).isEqualTo(BigInteger.valueOf(200));
         assertThat(proposalVotes.getDoNotVoteStake()).isZero();
+    }
+
+    @Test
+    void buildEpochAggregates_shouldExcludeIneligibleDepositsAndNotRetainThemOnReplay() {
+        var eligiblePool = "eligible-pool";
+        when(epochStakeStorage.getTotalActiveStakeByEpoch(ACTIVE_EPOCH))
+                .thenReturn(Optional.of(BigInteger.valueOf(100)));
+        when(poolStorage.findActivePools(SNAPSHOT_EPOCH)).thenReturn(List.of());
+        when(epochStakeStorage.getAllActiveStakesByAddressesAndEpoch(anyList(), eq(ACTIVE_EPOCH)))
+                .thenReturn(List.of(
+                        epochStake(eligiblePool, "stake_test1_eligible_1", 60),
+                        epochStake(eligiblePool, "stake_test1_eligible_2", 40)));
+        when(epochStakeStorage.getAllActiveStakesByEpochAndPools(eq(ACTIVE_EPOCH), anyList()))
+                .thenAnswer(invocation -> {
+                    List<String> poolIds = invocation.getArgument(1);
+                    return List.of(
+                                    epochStake(eligiblePool, "stake_test1_eligible_1", 60),
+                                    epochStake(eligiblePool, "stake_test1_eligible_2", 40))
+                            .stream()
+                            .filter(stake -> poolIds.contains(stake.getPoolId()))
+                            .toList();
+                });
+
+        var collector = new SPOVotingDataCollector(epochStakeStorage, poolStorage, poolStorageReader, delegationVoteDataService);
+        var epochAggregates = collector.buildEpochAggregates(SNAPSHOT_EPOCH, List.of(
+                proposal("stake_test1_eligible_1", 10),
+                proposal("stake_test1_eligible_2", 15),
+                proposal("stake_test1_no_pool_delegation", 20),
+                proposal("stake_test1_deregistered", 25),
+                proposal("stake_test1_absent_pool", 30)));
+
+        assertThat(epochAggregates.totalStake()).isEqualTo(BigInteger.valueOf(125));
+        assertThat(epochAggregates.proposalDepositByPool())
+                .containsExactly(Map.entry(eligiblePool, BigInteger.valueOf(25)));
+
+        var proposalVotes = collector.collectSPOVotes(
+                List.of(vote(eligiblePool, "proposal", Vote.YES)), epochAggregates);
+        assertThat(proposalVotes.getYesVoteStake()).isEqualTo(BigInteger.valueOf(125));
+        assertThat(proposalVotes.getDoNotVoteStake()).isZero();
+
+        // A replay after the proposal leaves the active set recomputes from input and
+        // must not retain or duplicate its deposit from the prior snapshot.
+        var replayedAggregates = collector.buildEpochAggregates(SNAPSHOT_EPOCH, List.of());
+        assertThat(replayedAggregates.totalStake()).isEqualTo(BigInteger.valueOf(100));
+        assertThat(replayedAggregates.proposalDepositByPool()).isEmpty();
+    }
+
+    @Test
+    void collectSPOVotes_shouldCrossRatificationThresholdWhenEligibleDepositBacksYesPool() {
+        var yesPool = "yes-pool";
+        var returnAccount = "stake_test1_near_threshold";
+        when(epochStakeStorage.getTotalActiveStakeByEpoch(ACTIVE_EPOCH))
+                .thenReturn(Optional.of(BigInteger.valueOf(200)));
+        when(poolStorage.findActivePools(SNAPSHOT_EPOCH)).thenReturn(List.of());
+        when(epochStakeStorage.getAllActiveStakesByAddressesAndEpoch(anyList(), eq(ACTIVE_EPOCH)))
+                .thenReturn(List.of(epochStake(yesPool, returnAccount, 100)));
+        when(epochStakeStorage.getAllActiveStakesByEpochAndPools(eq(ACTIVE_EPOCH), anyList()))
+                .thenReturn(List.of(epochStake(yesPool, returnAccount, 100)));
+
+        var collector = new SPOVotingDataCollector(epochStakeStorage, poolStorage, poolStorageReader, delegationVoteDataService);
+        var yesVote = List.of(vote(yesPool, "proposal", Vote.YES));
+
+        var withoutDeposit = collector.collectSPOVotes(
+                yesVote, collector.buildEpochAggregates(SNAPSHOT_EPOCH, List.of()));
+        var withDeposit = collector.collectSPOVotes(
+                yesVote,
+                collector.buildEpochAggregates(
+                        SNAPSHOT_EPOCH, List.of(proposal(returnAccount, 51))));
+
+        var noConfidence = mock(NoConfidence.class);
+        when(noConfidence.getType()).thenReturn(GovActionType.NO_CONFIDENCE);
+        var votingContext = VotingEvaluationContext.builder()
+                .govAction(noConfidence)
+                .poolThresholds(PoolVotingThresholds.builder()
+                        .pvtMotionNoConfidence(UnitIntervalUtil.decimalToUnitInterval(new BigDecimal("0.60")))
+                        .build())
+                .build();
+        var evaluator = new SPOVotingEvaluator();
+
+        assertThat(evaluator.evaluate(toVotingData(withoutDeposit), votingContext))
+                .isEqualTo(VotingStatus.NOT_PASS_THRESHOLD);
+        assertThat(evaluator.evaluate(toVotingData(withDeposit), votingContext))
+                .isEqualTo(VotingStatus.PASS_THRESHOLD);
     }
 
     @Test
@@ -207,10 +332,35 @@ class SPOVotingDataCollectorTest {
     }
 
     private EpochStake epochStake(String poolId, long amount) {
+        return epochStake(poolId, null, amount);
+    }
+
+    private EpochStake epochStake(String poolId, String address, long amount) {
         return EpochStake.builder()
                 .activeEpoch(ACTIVE_EPOCH)
                 .poolId(poolId)
+                .address(address)
                 .amount(BigInteger.valueOf(amount))
+                .build();
+    }
+
+    private GovActionProposal proposal(String returnAddress, long deposit) {
+        return GovActionProposal.builder()
+                .returnAddress(returnAddress)
+                .deposit(BigInteger.valueOf(deposit))
+                .build();
+    }
+
+    private VotingData toVotingData(AggregatedVotingData.SPOVotes spoVotes) {
+        return VotingData.builder()
+                .spoVotes(VotingData.SPOVotes.builder()
+                        .yesVoteStake(spoVotes.getYesVoteStake())
+                        .delegateToAutoAbstainDRepStake(spoVotes.getDelegateToAutoAbstainDRepStake())
+                        .delegateToNoConfidenceDRepStake(spoVotes.getDelegateToNoConfidenceDRepStake())
+                        .abstainVoteStake(spoVotes.getAbstainVoteStake())
+                        .doNotVoteStake(spoVotes.getDoNotVoteStake())
+                        .totalStake(spoVotes.getTotalStake())
+                        .build())
                 .build();
     }
 
