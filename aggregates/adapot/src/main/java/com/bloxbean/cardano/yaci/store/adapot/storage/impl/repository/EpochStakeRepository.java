@@ -23,6 +23,9 @@ public interface EpochStakeRepository extends JpaRepository<EpochStakeEntity, Ep
     @Query("select e from EpochStakeEntity e where e.address = :address and e.epoch = :activeEpoch - 2")
     Optional<EpochStakeEntity> findByAddressAndActiveEpoch(String address, Integer activeEpoch);
 
+    @Query("select e from EpochStakeEntity e where e.address in :addresses and e.epoch = :activeEpoch - 2")
+    List<EpochStakeEntity> findByAddressesAndActiveEpoch(List<String> addresses, Integer activeEpoch);
+
     @Query("select sum(e.amount) from EpochStakeEntity e where e.epoch = :activeEpoch - 2 and e.poolId = :poolId")
     Optional<BigInteger> getActiveStakeByPoolAndEpoch(Integer activeEpoch, String poolId);
 
