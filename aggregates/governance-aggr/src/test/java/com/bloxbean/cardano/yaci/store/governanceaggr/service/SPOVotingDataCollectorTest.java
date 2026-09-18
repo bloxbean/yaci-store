@@ -32,6 +32,8 @@ class SPOVotingDataCollectorTest {
     private static final String POOL_WITH_DEFAULT = "pool-with-default";
     private static final String EXPLICIT_VOTER = "explicit-voter";
     private static final String REWARD_ACCOUNT = "stake_test1_default";
+    private static final String SHARED_ACCOUNT_POOL_A = "shared-account-pool-a";
+    private static final String SHARED_ACCOUNT_POOL_B = "shared-account-pool-b";
 
     @Mock
     private EpochStakeStorageReader epochStakeStorage;
@@ -98,6 +100,68 @@ class SPOVotingDataCollectorTest {
         assertThat(proposalVotes.getDelegateToAutoAbstainDRepStake()).isZero();
         assertThat(proposalVotes.getDelegateToNoConfidenceDRepStake()).isZero();
         assertThat(proposalVotes.getDoNotVoteStake()).isEqualTo(BigInteger.valueOf(100));
+    }
+
+    @Test
+    void collectSPOVotes_shouldApplyOneRewardAccountDefaultToEveryPoolUsingIt() {
+        configureSharedRewardAccountSnapshot(true);
+        var collector = new SPOVotingDataCollector(epochStakeStorage, poolStorage, poolStorageReader, delegationVoteDataService);
+
+        // Both pools declare the same reward account, so its AlwaysAbstain delegation applies twice.
+        var epochAggregates = collector.buildEpochAggregates(SNAPSHOT_EPOCH);
+        var proposalVotes = collector.collectSPOVotes(List.of(), epochAggregates);
+
+        assertThat(proposalVotes.getDelegateToAutoAbstainDRepStake()).isEqualTo(BigInteger.valueOf(200));
+        assertThat(proposalVotes.getDoNotVoteStake()).isZero();
+    }
+
+    @Test
+    void collectSPOVotes_shouldTreatSharedRewardAccountWithoutEffectiveDelegationAsNonDelegating() {
+        configureSharedRewardAccountSnapshot(false);
+        var collector = new SPOVotingDataCollector(epochStakeStorage, poolStorage, poolStorageReader, delegationVoteDataService);
+
+        // Once the shared reward account no longer has an effective delegation, for example after
+        // deregistration, neither pool may keep the AlwaysAbstain default.
+        var epochAggregates = collector.buildEpochAggregates(SNAPSHOT_EPOCH);
+        var proposalVotes = collector.collectSPOVotes(List.of(), epochAggregates);
+
+        assertThat(proposalVotes.getDelegateToAutoAbstainDRepStake()).isZero();
+        assertThat(proposalVotes.getDelegateToNoConfidenceDRepStake()).isZero();
+        assertThat(proposalVotes.getDoNotVoteStake()).isEqualTo(BigInteger.valueOf(200));
+    }
+
+    private void configureSharedRewardAccountSnapshot(boolean rewardAccountHasEffectiveAbstainDelegation) {
+        var firstPool = Pool.builder().poolId(SHARED_ACCOUNT_POOL_A).build();
+        var secondPool = Pool.builder().poolId(SHARED_ACCOUNT_POOL_B).build();
+        var firstPoolDetails = PoolDetails.builder()
+                .poolId(SHARED_ACCOUNT_POOL_A)
+                .rewardAccount(REWARD_ACCOUNT)
+                .build();
+        var secondPoolDetails = PoolDetails.builder()
+                .poolId(SHARED_ACCOUNT_POOL_B)
+                .rewardAccount(REWARD_ACCOUNT)
+                .build();
+
+        when(epochStakeStorage.getTotalActiveStakeByEpoch(ACTIVE_EPOCH))
+                .thenReturn(Optional.of(BigInteger.valueOf(200)));
+        when(poolStorage.findActivePools(SNAPSHOT_EPOCH))
+                .thenReturn(List.of(firstPool, secondPool));
+        when(poolStorageReader.getPoolDetails(anyList(), eq(SNAPSHOT_EPOCH)))
+                .thenReturn(List.of(firstPoolDetails, secondPoolDetails));
+        when(delegationVoteDataService.getDelegationVotesByDRepTypeAndAddressList(anyList(), eq(DrepType.ABSTAIN), eq(SNAPSHOT_EPOCH)))
+                .thenReturn(rewardAccountHasEffectiveAbstainDelegation
+                        ? List.of(DelegationVote.builder().address(REWARD_ACCOUNT).drepType(DrepType.ABSTAIN).build())
+                        : List.of());
+        when(delegationVoteDataService.getDelegationVotesByDRepTypeAndAddressList(anyList(), eq(DrepType.NO_CONFIDENCE), eq(SNAPSHOT_EPOCH)))
+                .thenReturn(List.of());
+
+        if (rewardAccountHasEffectiveAbstainDelegation) {
+            when(epochStakeStorage.getAllActiveStakesByEpochAndPools(eq(ACTIVE_EPOCH), anyList()))
+                    .thenAnswer(invocation -> {
+                        List<String> poolIds = invocation.getArgument(1);
+                        return poolIds.stream().map(poolId -> epochStake(poolId, 100)).toList();
+                    });
+        }
     }
 
     private void configureEpochSnapshot(DrepType defaultType) {
