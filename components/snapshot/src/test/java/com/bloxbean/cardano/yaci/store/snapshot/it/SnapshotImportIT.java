@@ -1,0 +1,442 @@
+package com.bloxbean.cardano.yaci.store.snapshot.it;
+
+import com.bloxbean.cardano.yaci.store.snapshot.load.ImportJournal;
+import com.bloxbean.cardano.yaci.store.snapshot.load.ImportOptions;
+import com.bloxbean.cardano.yaci.store.snapshot.load.ImportReport;
+import com.bloxbean.cardano.yaci.store.snapshot.load.PgSchema;
+import com.bloxbean.cardano.yaci.store.snapshot.load.SnapshotImporter;
+import com.bloxbean.cardano.yaci.store.snapshot.manifest.ManifestCodec;
+import com.bloxbean.cardano.yaci.store.snapshot.manifest.SnapshotManifest;
+import com.bloxbean.cardano.yaci.store.snapshot.spec.SnapshotSpecRegistry;
+import com.bloxbean.cardano.yaci.store.snapshot.util.Identifiers;
+import com.bloxbean.cardano.yaci.store.snapshot.validate.SnapshotValidator;
+import com.bloxbean.cardano.yaci.store.snapshot.validate.ValidationReport;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.junit.jupiter.api.io.TempDir;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+/**
+ * End-to-end import against a real PostgreSQL server, using real Parquet, real ZIP parts and the
+ * real built-in specifications.
+ *
+ * <p>Runs only when {@code SNAPSHOT_IT_JDBC_URL} is set, and only ever against its own dedicated
+ * schema. See {@link PostgresSupport}.
+ */
+@EnabledIfEnvironmentVariable(named = "SNAPSHOT_IT_JDBC_URL", matches = ".+")
+@TestInstance(TestInstance.Lifecycle.PER_METHOD)
+class SnapshotImportIT {
+
+    @TempDir
+    Path root;
+
+    private SnapshotSpecRegistry registry;
+    private String schema;
+
+    @BeforeEach
+    void setUp() throws Exception {
+        registry = SnapshotSpecRegistry.builtIn();
+        schema = PostgresSupport.schema();
+        try (Connection conn = PostgresSupport.connect()) {
+            PostgresSupport.resetSchema(conn);
+        }
+    }
+
+    @Test
+    void fingerprintIgnoresKnownRewardWorkTablesButStillDetectsSchemaChanges() throws Exception {
+        try (var conn = PostgresSupport.connect(); var st = conn.createStatement()) {
+            st.execute("SET search_path TO " + Identifiers.quote(schema));
+            var pgs = new PgSchema(conn, schema);
+            String original = pgs.fingerprint();
+            st.execute("CREATE UNLOGGED TABLE ss_max_slot_balances(address TEXT, max_slot BIGINT)");
+            st.execute("CREATE TABLE ss_drep_status(address TEXT)");
+            assertThat(pgs.fingerprint()).isEqualTo(original);
+            st.execute("CREATE UNLOGGED TABLE ss_unknown_state(value BIGINT)");
+            assertThat(pgs.fingerprint()).isNotEqualTo(original);
+            st.execute("DROP TABLE ss_unknown_state");
+            st.execute("ALTER TABLE block ADD COLUMN unexpected BIGINT");
+            assertThat(pgs.fingerprint()).isNotEqualTo(original);
+        }
+    }
+
+    private SnapshotFixture.Built fixture() throws Exception {
+        try (Connection conn = PostgresSupport.connect()) {
+            PgSchema pgs = new PgSchema(conn, schema);
+            return SnapshotFixture.build(root, pgs.fingerprint(), pgs.flywayFingerprint());
+        }
+    }
+
+    private ImportOptions options(Path manifest, int workers) {
+        return new ImportOptions(manifest, manifest.getParent(), root.resolve("work"),
+                PostgresSupport.schemaUrl(), PostgresSupport.user(), PostgresSupport.password(),
+                schema, "preprod", 1, 1, 10, workers, "512MB", 0,
+                true, false, List.of(), false, false);
+    }
+
+    // ------------------------------------------------------------------ happy path
+
+    @Test
+    void importsEveryModeAndReconstructsControlState() throws Exception {
+        SnapshotFixture.Built built = fixture();
+        ImportReport report = new SnapshotImporter(registry)
+                .importSnapshot(options(built.manifestPath(), 2), null);
+
+        assertThat(report.status()).isEqualTo(ImportJournal.STATUS_VALIDATING);
+        assertThat(report.batchesLoaded()).isGreaterThan(0);
+        assertThat(report.batchesSkipped()).isZero();
+
+        try (Connection conn = PostgresSupport.connect()) {
+            // MAPPED with a timestamp conversion and three jsonb conversions.
+            assertThat(count(conn, "block")).isEqualTo(SnapshotFixture.POINT_BLOCK + 1);
+            assertThat(scalarLong(conn, "SELECT block_time FROM " + qt("block")
+                    + " WHERE number = 0")).isEqualTo(1700000000L);
+            assertThat(scalarString(conn, "SELECT jsonb_typeof(leader_vrf) FROM " + qt("block")
+                    + " WHERE number = 0")).isEqualTo("object");
+
+            // MAPPED with a rename: epoch.number comes from the export's epoch column.
+            assertThat(count(conn, "epoch")).isEqualTo(3);
+            assertThat(scalarLong(conn, "SELECT max(number) FROM " + qt("epoch"))).isEqualTo(2);
+
+            // SQL mode: regrouped one row per (tx_hash, output_index), rebuilt amounts, joined block.
+            assertThat(count(conn, "address_utxo")).isEqualTo(SnapshotFixture.POINT_BLOCK + 1);
+            assertThat(scalarLong(conn, "SELECT jsonb_array_length(amounts) FROM " + qt("address_utxo")
+                    + " WHERE slot = 0")).isEqualTo(4);
+            assertThat(scalarString(conn, "SELECT amounts->0->>'unit' FROM " + qt("address_utxo")
+                    + " WHERE slot = 0")).isEqualTo("lovelace");
+            // Canonical CBOR order after lovelace: same policy, shorter asset name first.
+            assertThat(scalarString(conn, "SELECT string_agg(e->>'asset_name', ',' ORDER BY o) FROM "
+                    + qt("address_utxo") + " u, jsonb_array_elements(u.amounts) WITH ORDINALITY t(e, o)"
+                    + " WHERE u.slot = 0")).isEqualTo("lovelace,,tok,longname");
+            // The analytics view maps an empty asset name to NULL; the transform restores the empty
+            // string the operational writer stores.
+            assertThat(scalarLong(conn, "SELECT count(*) FROM " + qt("address_utxo") + " u,"
+                    + " jsonb_array_elements(u.amounts) e WHERE e->>'asset_name' = ''")).isPositive();
+            assertThat(scalarLong(conn, "SELECT count(*) FROM " + qt("address_utxo") + " u,"
+                    + " jsonb_array_elements(u.amounts) e"
+                    + " WHERE e->>'unit' <> 'lovelace' AND e->>'asset_name' IS NULL")).isZero();
+            assertThat(scalarLong(conn, "SELECT lovelace_amount FROM " + qt("address_utxo")
+                    + " WHERE slot = 0")).isEqualTo(1000000L);
+            assertThat(scalarLong(conn, "SELECT block FROM " + qt("address_utxo")
+                    + " WHERE slot = 0")).isZero();
+            assertThat(scalarLong(conn, "SELECT count(*) FROM " + qt("address_utxo")
+                    + " WHERE owner_addr_full IS NOT NULL")).isZero();
+
+            // cursor_ tail seeded to the configured depth, ending exactly at the point.
+            assertThat(count(conn, "cursor_")).isEqualTo(10);
+            assertThat(scalarLong(conn, "SELECT max(block_number) FROM " + qt("cursor_")))
+                    .isEqualTo(SnapshotFixture.POINT_BLOCK);
+            assertThat(scalarString(conn, "SELECT block_hash FROM " + qt("cursor_")
+                    + " ORDER BY slot DESC LIMIT 1"))
+                    .isEqualTo(SnapshotFixture.hashOf(SnapshotFixture.POINT_BLOCK));
+
+            // era rebuilt from the first block of each era, with Byron excluded: a Byron row makes
+            // EraService.getEraForEpoch() throw and breaks the first reward calculation after a restore.
+            assertThat(count(conn, "era")).isEqualTo(3);
+            assertThat(scalarLong(conn, "SELECT block FROM " + qt("era") + " WHERE era = 7"))
+                    .isEqualTo(20);
+            assertThat(scalarLong(conn, "SELECT count(*) FROM " + qt("era") + " WHERE era <= 1"))
+                    .isZero();
+
+            // The account balance watermark gates AccountBalanceProcessor; at 0 it skips every
+            // calculation and starves the AdaPot stake snapshot.
+            assertThat(scalarLong(conn, "SELECT block FROM " + qt("account_config")
+                    + " WHERE config_id = 'last_account_balance_processed_block'"))
+                    .isEqualTo(SnapshotFixture.POINT_BLOCK);
+
+            // AdaPot jobs marked complete only up to the snapshot epoch.
+            assertThat(scalarLong(conn, "SELECT max(epoch) FROM " + qt("adapot_jobs")))
+                    .isEqualTo(SnapshotFixture.POINT_EPOCH);
+            assertThat(scalarString(conn, "SELECT DISTINCT status FROM " + qt("adapot_jobs")))
+                    .isEqualTo("COMPLETED");
+        }
+
+        assertThat(report.handlerResults()).hasSize(4);
+        assertThat(report.sequencesReset()).containsKey("rollback_id_seq");
+    }
+
+    @Test
+    void nothingIsLoadedBeyondTheConsistencyPoint() throws Exception {
+        SnapshotFixture.Built built = fixture();
+        new SnapshotImporter(registry).importSnapshot(options(built.manifestPath(), 2), null);
+
+        try (Connection conn = PostgresSupport.connect()) {
+            assertThat(scalarLong(conn, "SELECT count(*) FROM " + qt("block") + " WHERE slot > "
+                    + SnapshotFixture.slotOf(SnapshotFixture.POINT_BLOCK))).isZero();
+            assertThat(scalarLong(conn, "SELECT count(*) FROM " + qt("address_utxo") + " WHERE slot > "
+                    + SnapshotFixture.slotOf(SnapshotFixture.POINT_BLOCK))).isZero();
+            assertThat(scalarLong(conn, "SELECT count(*) FROM " + qt("epoch") + " WHERE number > "
+                    + SnapshotFixture.POINT_EPOCH)).isZero();
+            assertThat(scalarLong(conn, "SELECT count(*) FROM " + qt("adapot") + " WHERE epoch > "
+                    + SnapshotFixture.POINT_EPOCH)).isZero();
+        }
+    }
+
+    @Test
+    void sequencesAreResetSoTheNextInsertDoesNotCollide() throws Exception {
+        SnapshotFixture.Built built = fixture();
+        new SnapshotImporter(registry).importSnapshot(options(built.manifestPath(), 1), null);
+
+        try (Connection conn = PostgresSupport.connect(); Statement st = conn.createStatement()) {
+            long maxId = scalarLong(conn, "SELECT max(id) FROM " + qt("rollback"));
+            try (ResultSet rs = st.executeQuery("SELECT nextval('" + schema + ".rollback_id_seq')")) {
+                rs.next();
+                assertThat(rs.getLong(1)).isGreaterThan(maxId);
+            }
+        }
+    }
+
+    @Test
+    void offlineValidationPasses() throws Exception {
+        SnapshotFixture.Built built = fixture();
+        new SnapshotImporter(registry).importSnapshot(options(built.manifestPath(), 2), null);
+
+        try (Connection conn = PostgresSupport.connect()) {
+            List<ValidationReport> reports = new SnapshotValidator(registry)
+                    .validateAll(conn, schema, built.manifest(), 1, 10);
+            for (ValidationReport report : reports) {
+                assertThat(report.failures())
+                        .as("failures in %s: %s", report.level(), report.failures())
+                        .isEmpty();
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------ resume
+
+    @Test
+    void aResumedImportSkipsCommittedBatchesAndDoesNotDuplicateRows() throws Exception {
+        SnapshotFixture.Built full = fixture();
+        String snapshotId = full.manifest().snapshotId();
+        // Fail after a committed batch, keeping the original manifest and archive unchanged.
+        assertThatThrownBy(() -> new SnapshotImporter(registry)
+                .importSnapshot(options(full.manifestPath(), 1), progress -> {
+                    if (progress.startsWith("block +")) {
+                        throw new IllegalStateException("simulated interruption after block commit");
+                    }
+                })).isInstanceOf(IllegalStateException.class).hasMessageContaining("simulated interruption");
+
+        long blocksAfterFirst;
+        long completedAfterFirst;
+        try (Connection conn = PostgresSupport.connect()) {
+            blocksAfterFirst = count(conn, "block");
+            completedAfterFirst = new ImportJournal(conn, schema).completedCount(snapshotId);
+            assertThat(count(conn, "address_utxo")).isZero();
+        }
+        assertThat(blocksAfterFirst).isEqualTo(SnapshotFixture.POINT_BLOCK + 1);
+        assertThat(completedAfterFirst).isPositive();
+
+        ImportReport second = new SnapshotImporter(registry)
+                .importSnapshot(options(full.manifestPath(), 1), null);
+
+        assertThat(second.batchesSkipped()).isEqualTo(completedAfterFirst);
+        assertThat(second.batchesLoaded()).isGreaterThan(0);
+
+        try (Connection conn = PostgresSupport.connect()) {
+            assertThat(count(conn, "block")).isEqualTo(blocksAfterFirst);
+            assertThat(count(conn, "address_utxo")).isEqualTo(SnapshotFixture.POINT_BLOCK + 1);
+            assertThat(scalarLong(conn, "SELECT count(*) FROM (SELECT hash FROM " + qt("block")
+                    + " GROUP BY hash HAVING count(*) > 1) d")).isZero();
+        }
+    }
+
+    @Test
+    void aFailedBatchLeavesNeitherRowsNorAJournalRecord() throws Exception {
+        SnapshotFixture.Built built = fixture();
+
+        // Corrupt an extracted file after verification by importing with extraction skipped and an
+        // empty work directory: the batch fails, and the transaction must leave nothing behind.
+        ImportOptions broken = new ImportOptions(built.manifestPath(), built.archiveDir(),
+                root.resolve("empty-work"), PostgresSupport.schemaUrl(), PostgresSupport.user(),
+                PostgresSupport.password(), schema, "preprod", 1, 1, 10, 1, "512MB", 0,
+                true, false, List.of(), false, true);
+        Files.createDirectories(root.resolve("empty-work"));
+
+        assertThatThrownBy(() -> new SnapshotImporter(registry).importSnapshot(broken, null))
+                .isInstanceOf(IllegalStateException.class);
+
+        try (Connection conn = PostgresSupport.connect()) {
+            assertThat(count(conn, "block")).isZero();
+            ImportJournal journal = new ImportJournal(conn, schema);
+            assertThat(journal.completedCount(built.manifest().snapshotId())).isZero();
+        }
+    }
+
+    // ------------------------------------------------------------------ refusals
+
+    @Test
+    void refusesANetworkMismatch() throws Exception {
+        SnapshotFixture.Built built = fixture();
+        ImportOptions wrongNetwork = new ImportOptions(built.manifestPath(), built.archiveDir(),
+                root.resolve("work"), PostgresSupport.schemaUrl(), PostgresSupport.user(),
+                PostgresSupport.password(), schema, "mainnet", 764824073L, 1, 10, 1, "512MB", 0,
+                true, false, List.of(), false, false);
+
+        SnapshotImporter.Preflight pre = new SnapshotImporter(registry).preflight(wrongNetwork);
+        assertThat(pre.ok()).isFalse();
+        assertThat(pre.blockers()).anySatisfy(b -> assertThat(b).contains("Network mismatch"));
+    }
+
+    @Test
+    void refusesAMismatchedSchemaFingerprint() throws Exception {
+        SnapshotFixture.Built built = fixture();
+        SnapshotManifest tampered = new SnapshotManifest(built.manifest().formatVersion(),
+                built.manifest().snapshotId(), built.manifest().createdAt(), built.manifest().producer(),
+                built.manifest().yaciStoreVersion(), built.manifest().specFormatVersion(),
+                built.manifest().duckdbVersion(), built.manifest().ducklakeFormatVersion(),
+                built.manifest().point(), built.manifest().genesisHash(), built.manifest().modules(),
+                built.manifest().pruningSettings(), "0".repeat(64), built.manifest().flywayFingerprint(),
+                built.manifest().tables(), built.manifest().parts(), built.manifest().declaredLossy());
+        Path path = built.archiveDir().resolve("tampered.manifest.json");
+        new ManifestCodec().writeAtomically(tampered, path);
+
+        SnapshotImporter.Preflight pre = new SnapshotImporter(registry).preflight(options(path, 1));
+        assertThat(pre.ok()).isFalse();
+        assertThat(pre.blockers()).anySatisfy(b -> assertThat(b).contains("schema fingerprint"));
+    }
+
+    @Test
+    void refusesASpecificationDigestMismatch() throws Exception {
+        SnapshotFixture.Built built = fixture();
+        List<SnapshotManifest.TableManifest> tables = built.manifest().tables().stream()
+                .map(t -> t.specId().equals("block")
+                        ? new SnapshotManifest.TableManifest(t.specId(), t.specVersion(), "0".repeat(64),
+                        t.module(), t.kind(), t.restore(), t.reason(), t.sourceRelation(), t.exporterId(),
+                        t.targetTable(), t.loadMode(), t.cutoffRule(), t.transformVersion(),
+                        t.dependencies(), t.rowCount(), t.key(), t.columnFingerprint(),
+                        t.sourceColumns(), t.bounds(), t.files())
+                        : t)
+                .toList();
+        SnapshotManifest tampered = replaceTables(built.manifest(), tables);
+        Path path = built.archiveDir().resolve("badspec.manifest.json");
+        new ManifestCodec().writeAtomically(tampered, path);
+
+        SnapshotImporter.Preflight pre = new SnapshotImporter(registry).preflight(options(path, 1));
+        assertThat(pre.ok()).isFalse();
+        assertThat(pre.blockers()).anySatisfy(b -> assertThat(b).contains("has digest"));
+    }
+
+    @Test
+    void refusesANonEmptySchemaWithNoMatchingJournal() throws Exception {
+        SnapshotFixture.Built built = fixture();
+        try (Connection conn = PostgresSupport.connect(); Statement st = conn.createStatement()) {
+            st.execute("INSERT INTO " + qt("block") + " (hash, number, slot) VALUES ('"
+                    + "f".repeat(64) + "', 1, 1)");
+        }
+        SnapshotImporter.Preflight pre =
+                new SnapshotImporter(registry).preflight(options(built.manifestPath(), 1));
+        assertThat(pre.ok()).isFalse();
+        assertThat(pre.blockers())
+                .anySatisfy(b -> assertThat(b).contains("already contains chain data"));
+    }
+
+    @Test
+    void refusesATamperedArchivePart() throws Exception {
+        SnapshotFixture.Built built = fixture();
+        Path part = built.archiveDir().resolve(built.manifest().parts().get(0).fileName());
+        byte[] bytes = Files.readAllBytes(part);
+        bytes[bytes.length / 2] ^= 0x33;
+        Files.write(part, bytes);
+
+        assertThatThrownBy(() -> new SnapshotImporter(registry)
+                .importSnapshot(options(built.manifestPath(), 1), null))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("SHA-256 mismatch");
+        try (Connection conn = PostgresSupport.connect()) {
+            assertThat(count(conn, "block")).isZero();
+            assertThat(new ImportJournal(conn, schema).exists()).isFalse();
+        }
+    }
+
+    @Test
+    void abortsWhenFreeDiskIsBelowTheConfiguredFloor() throws Exception {
+        SnapshotFixture.Built built = fixture();
+        ImportOptions tight = new ImportOptions(built.manifestPath(), built.archiveDir(),
+                root.resolve("work"), PostgresSupport.schemaUrl(), PostgresSupport.user(),
+                PostgresSupport.password(), schema, "preprod", 1, 1, 10, 1, "512MB",
+                Long.MAX_VALUE / 2, true, false, List.of(), false, false);
+
+        SnapshotImporter.Preflight pre = new SnapshotImporter(registry).preflight(tight);
+        assertThat(pre.ok()).isFalse();
+        assertThat(pre.blockers()).anySatisfy(b -> assertThat(b).contains("free at"));
+    }
+
+    @Test
+    void refusesMissingAndDuplicateManifestTablesBeforeWriting() throws Exception {
+        SnapshotFixture.Built built = fixture();
+        List<SnapshotManifest.TableManifest> missing = built.manifest().tables().stream()
+                .filter(t -> !t.specId().equals("delegation")).toList();
+        new ManifestCodec().writeAtomically(replaceTables(built.manifest(), missing), built.manifestPath());
+        assertThat(new SnapshotImporter(registry).preflight(options(built.manifestPath(), 1)).blockers())
+                .anyMatch(p -> p.contains("Missing manifest specification 'delegation'"));
+        try (Connection conn = PostgresSupport.connect()) {
+            assertThat(new SnapshotValidator(registry).validateLoad(conn, schema,
+                    replaceTables(built.manifest(), missing)).passed()).isFalse();
+            assertThat(new ImportJournal(conn, schema).exists()).isFalse();
+        }
+        var duplicate = new java.util.ArrayList<>(built.manifest().tables());
+        duplicate.add(duplicate.get(0));
+        new ManifestCodec().writeAtomically(replaceTables(built.manifest(), duplicate), built.manifestPath());
+        assertThat(new SnapshotImporter(registry).preflight(options(built.manifestPath(), 1)).blockers())
+                .anyMatch(p -> p.contains("Duplicate manifest specification"));
+    }
+
+    @Test
+    void resumeAndValidationRequireTheOriginalManifestDigest() throws Exception {
+        SnapshotFixture.Built built = fixture();
+        new SnapshotImporter(registry).importSnapshot(options(built.manifestPath(), 1), null);
+        ManifestCodec codec = new ManifestCodec();
+        // Same snapshot ID, files, and spec versions, but a different manifest.
+        Files.writeString(built.manifestPath(), codec.toJson(built.manifest())
+                .replace("2026-01-01T00:00:00Z", "2026-01-02T00:00:00Z"));
+        assertThatThrownBy(() -> new SnapshotImporter(registry)
+                .importSnapshot(options(built.manifestPath(), 1), null))
+                .hasMessageContaining("manifest digest");
+        try (Connection conn = PostgresSupport.connect()) {
+            assertThat(new SnapshotValidator(registry).validateLoad(conn, schema,
+                    codec.read(built.manifestPath())).passed()).isFalse();
+            assertThat(count(conn, "block")).isEqualTo(SnapshotFixture.POINT_BLOCK + 1);
+        }
+    }
+
+    // ------------------------------------------------------------------ helpers
+
+    private String qt(String table) {
+        return Identifiers.quote(schema) + "." + Identifiers.quote(table);
+    }
+
+    private long count(Connection conn, String table) throws SQLException {
+        return scalarLong(conn, "SELECT count(*) FROM " + qt(table));
+    }
+
+    private static long scalarLong(Connection conn, String sql) throws SQLException {
+        try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery(sql)) {
+            return rs.next() ? rs.getLong(1) : -1;
+        }
+    }
+
+    private static String scalarString(Connection conn, String sql) throws SQLException {
+        try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery(sql)) {
+            return rs.next() ? rs.getString(1) : null;
+        }
+    }
+
+    private static SnapshotManifest replaceTables(SnapshotManifest m,
+                                                  List<SnapshotManifest.TableManifest> tables) {
+        return new SnapshotManifest(m.formatVersion(), m.snapshotId(), m.createdAt(), m.producer(),
+                m.yaciStoreVersion(), m.specFormatVersion(), m.duckdbVersion(),
+                m.ducklakeFormatVersion(), m.point(), m.genesisHash(), m.modules(),
+                m.pruningSettings(), m.schemaFingerprint(), m.flywayFingerprint(), tables, m.parts(),
+                m.declaredLossy());
+    }
+}
