@@ -69,7 +69,8 @@ public class VotingDataCollector {
         var committeeVotesByProposal = groupVotesByGovAction(committeeVotes);
 
         var dRepEpochAggregates = isInConwayBootstrapPhase ? null : buildDRepEpochAggregates(epoch + 1);
-        var spoEpochAggregates = spoVotingDataCollector.buildEpochAggregates(epoch);
+        // The lifecycle-filtered evaluation set is also the ledger's active proposal-deposit set.
+        var spoEpochAggregates = spoVotingDataCollector.buildEpochAggregates(epoch, proposals);
 
         return proposals.stream()
             .collect(Collectors.toMap(

@@ -4,6 +4,7 @@ import com.bloxbean.cardano.yaci.core.model.governance.DrepType;
 import com.bloxbean.cardano.yaci.core.model.governance.Vote;
 import com.bloxbean.cardano.yaci.store.adapot.domain.EpochStake;
 import com.bloxbean.cardano.yaci.store.adapot.storage.EpochStakeStorageReader;
+import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.common.util.ListUtil;
 import com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.AggregatedVotingData;
@@ -41,9 +42,25 @@ public class SPOVotingDataCollector {
      * @return pool-level stake metrics shared across proposals
      */
     public SPOEpochAggregates buildEpochAggregates(int epoch) {
+        return buildEpochAggregates(epoch, List.of());
+    }
+
+    /**
+     * Build the pool-level SPO stake snapshot for the supplied epoch, including
+     * deposits for proposals that remain active at the snapshot boundary.
+     *
+     * @param epoch epoch for which to compute aggregates
+     * @param activeProposals proposals retained across the epoch boundary and evaluated against this snapshot
+     * @return pool-level stake metrics shared across proposals
+     */
+    public SPOEpochAggregates buildEpochAggregates(int epoch, List<GovActionProposal> activeProposals) {
         // The epoch-stake table stores the snapshot used here under activeEpoch = epoch + 2.
-        BigInteger totalActiveStake = epochStakeStorage.getTotalActiveStakeByEpoch(epoch + 2)
+        int activeEpoch = epoch + 2;
+        BigInteger totalActiveStake = epochStakeStorage.getTotalActiveStakeByEpoch(activeEpoch)
                 .orElse(BigInteger.ZERO);
+
+        Map<String, BigInteger> proposalDepositByPool = getProposalDepositByPool(
+                activeEpoch, activeProposals, QUERY_BATCH_SIZE);
 
         List<String> activePools = poolStorage.findActivePools(epoch).stream()
                 .map(com.bloxbean.cardano.yaci.store.staking.domain.Pool::getPoolId)
@@ -72,7 +89,8 @@ public class SPOVotingDataCollector {
                 .toList();
 
         Map<String, BigInteger> alwaysAbstainStakeByPool = getActiveStakeByPoolBatch(
-                epoch + 2, poolsDelegatedToAlwaysAbstainDRep, QUERY_BATCH_SIZE);
+                activeEpoch, poolsDelegatedToAlwaysAbstainDRep, QUERY_BATCH_SIZE);
+        addProposalDeposits(alwaysAbstainStakeByPool, proposalDepositByPool);
 
         List<String> poolsDelegatedToNoConfidenceDRep = activeRewardAccountBatches.parallelStream()
                 .flatMap(batch -> delegationVoteDataService
@@ -85,15 +103,17 @@ public class SPOVotingDataCollector {
                 .toList();
 
         Map<String, BigInteger> alwaysNoConfidenceStakeByPool = getActiveStakeByPoolBatch(
-                epoch + 2, poolsDelegatedToNoConfidenceDRep, QUERY_BATCH_SIZE);
+                activeEpoch, poolsDelegatedToNoConfidenceDRep, QUERY_BATCH_SIZE);
+        addProposalDeposits(alwaysNoConfidenceStakeByPool, proposalDepositByPool);
 
         return new SPOEpochAggregates(
                 epoch,
-                totalActiveStake,
+                totalActiveStake.add(sumStake(proposalDepositByPool)),
                 sumStake(alwaysAbstainStakeByPool),
                 sumStake(alwaysNoConfidenceStakeByPool),
                 Map.copyOf(alwaysAbstainStakeByPool),
-                Map.copyOf(alwaysNoConfidenceStakeByPool));
+                Map.copyOf(alwaysNoConfidenceStakeByPool),
+                Map.copyOf(proposalDepositByPool));
     }
 
     /**
@@ -120,9 +140,9 @@ public class SPOVotingDataCollector {
      * @return aggregated SPO voting data for the proposal
      */
     public AggregatedVotingData.SPOVotes collectSPOVotes(List<VotingProcedure> spoVotesForProposal, SPOEpochAggregates spoEpochAggregates) {
-        var yesVoteStake = calculateSPOStakeByVote(spoVotesForProposal, Vote.YES, spoEpochAggregates.epoch());
-        var abstainVoteStake = calculateSPOStakeByVote(spoVotesForProposal, Vote.ABSTAIN, spoEpochAggregates.epoch());
-        var noVoteStake = calculateSPOStakeByVote(spoVotesForProposal, Vote.NO, spoEpochAggregates.epoch());
+        var yesVoteStake = calculateSPOStakeByVote(spoVotesForProposal, Vote.YES, spoEpochAggregates);
+        var abstainVoteStake = calculateSPOStakeByVote(spoVotesForProposal, Vote.ABSTAIN, spoEpochAggregates);
+        var noVoteStake = calculateSPOStakeByVote(spoVotesForProposal, Vote.NO, spoEpochAggregates);
 
         Set<String> poolsThatVotedForProposal = spoVotesForProposal.stream()
                 .map(VotingProcedure::getVoterHash)
@@ -158,7 +178,9 @@ public class SPOVotingDataCollector {
                 .build();
     }
 
-    private BigInteger calculateSPOStakeByVote(List<VotingProcedure> votes, Vote voteType, int epoch) {
+    private BigInteger calculateSPOStakeByVote(List<VotingProcedure> votes,
+                                               Vote voteType,
+                                               SPOEpochAggregates spoEpochAggregates) {
         var poolIds = votes.stream()
                 .filter(vote -> vote.getVote().equals(voteType))
                 .map(VotingProcedure::getVoterHash)
@@ -168,10 +190,19 @@ public class SPOVotingDataCollector {
             return BigInteger.ZERO;
         }
 
-        return epochStakeStorage.getAllActiveStakesByEpochAndPools(epoch + 2, poolIds)
+        BigInteger activeStake = epochStakeStorage.getAllActiveStakesByEpochAndPools(
+                        spoEpochAggregates.epoch() + 2, poolIds)
                 .stream()
                 .map(EpochStake::getAmount)
                 .reduce(BigInteger.ZERO, BigInteger::add);
+
+        BigInteger proposalDeposits = poolIds.stream()
+                .distinct()
+                .map(poolId -> spoEpochAggregates.proposalDepositByPool()
+                        .getOrDefault(poolId, BigInteger.ZERO))
+                .reduce(BigInteger.ZERO, BigInteger::add);
+
+        return activeStake.add(proposalDeposits);
     }
 
     private BigInteger defaultStakeForNonVoters(Map<String, BigInteger> stakeByPool,
@@ -192,6 +223,46 @@ public class SPOVotingDataCollector {
     private BigInteger sumStake(Map<String, BigInteger> stakeByPool) {
         return stakeByPool.values().stream()
                 .reduce(BigInteger.ZERO, BigInteger::add);
+    }
+
+    private Map<String, BigInteger> getProposalDepositByPool(int activeEpoch,
+                                                             List<GovActionProposal> activeProposals,
+                                                             int batchSize) {
+        Map<String, BigInteger> proposalDepositByAddress = activeProposals.stream()
+                .collect(Collectors.toMap(
+                        GovActionProposal::getReturnAddress,
+                        GovActionProposal::getDeposit,
+                        BigInteger::add));
+
+        if (proposalDepositByAddress.isEmpty()) {
+            return Map.of();
+        }
+
+        List<EpochStake> returnAccountStakes = ListUtil.partition(
+                        new ArrayList<>(proposalDepositByAddress.keySet()), batchSize)
+                .parallelStream()
+                .flatMap(batch -> epochStakeStorage
+                        .getAllActiveStakesByAddressesAndEpoch(batch, activeEpoch)
+                        .stream())
+                .toList();
+
+        // Membership in epoch_stake means the return account is registered and delegates
+        // to a pool present in this snapshot. The account's stake may legitimately be zero.
+        return returnAccountStakes.stream()
+                .collect(Collectors.toMap(
+                        EpochStake::getPoolId,
+                        epochStake -> proposalDepositByAddress.get(epochStake.getAddress()),
+                        BigInteger::add));
+    }
+
+    private void addProposalDeposits(Map<String, BigInteger> stakeByPool,
+                                     Map<String, BigInteger> proposalDepositByPool) {
+        if (stakeByPool.isEmpty()) {
+            return;
+        }
+
+        stakeByPool.replaceAll((poolId, stake) -> stake.add(
+                proposalDepositByPool.getOrDefault(poolId, BigInteger.ZERO)));
     }
 
     private Map<String, BigInteger> getActiveStakeByPoolBatch(int activeEpoch, List<String> poolIds, int batchSize) {
@@ -215,7 +286,24 @@ public class SPOVotingDataCollector {
                                      BigInteger delegateToAutoAbstainDRepStake,
                                      BigInteger delegateToNoConfidenceDRepStake,
                                      Map<String, BigInteger> alwaysAbstainStakeByPool,
-                                     Map<String, BigInteger> alwaysNoConfidenceStakeByPool) {
+                                     Map<String, BigInteger> alwaysNoConfidenceStakeByPool,
+                                     Map<String, BigInteger> proposalDepositByPool) {
+
+        public SPOEpochAggregates(int epoch,
+                                  BigInteger totalStake,
+                                  BigInteger delegateToAutoAbstainDRepStake,
+                                  BigInteger delegateToNoConfidenceDRepStake,
+                                  Map<String, BigInteger> alwaysAbstainStakeByPool,
+                                  Map<String, BigInteger> alwaysNoConfidenceStakeByPool) {
+            this(
+                    epoch,
+                    totalStake,
+                    delegateToAutoAbstainDRepStake,
+                    delegateToNoConfidenceDRepStake,
+                    alwaysAbstainStakeByPool,
+                    alwaysNoConfidenceStakeByPool,
+                    Map.of());
+        }
 
         public SPOEpochAggregates(int epoch,
                                   BigInteger totalStake,
@@ -226,6 +314,7 @@ public class SPOVotingDataCollector {
                     totalStake,
                     delegateToAutoAbstainDRepStake,
                     delegateToNoConfidenceDRepStake,
+                    Map.of(),
                     Map.of(),
                     Map.of());
         }

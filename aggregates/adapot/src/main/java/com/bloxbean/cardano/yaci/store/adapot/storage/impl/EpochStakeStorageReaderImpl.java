@@ -36,6 +36,14 @@ public class EpochStakeStorageReaderImpl implements EpochStakeStorageReader {
     }
 
     @Override
+    public List<EpochStake> getAllActiveStakesByAddressesAndEpoch(List<String> addresses, Integer activeEpoch) {
+        return stakeSnapshotRepository.findByAddressesAndActiveEpoch(addresses, activeEpoch)
+                .stream()
+                .map(mapper::toEpochStake)
+                .toList();
+    }
+
+    @Override
     public Optional<BigInteger> getActiveStakeByPoolAndEpoch(String poolId, Integer epoch) {
         return stakeSnapshotRepository.getActiveStakeByPoolAndEpoch(epoch, poolId);
     }
