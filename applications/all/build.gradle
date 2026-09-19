@@ -71,6 +71,17 @@ graalvmNative {
                 buildArgs.add('--gc=parallel')
                 println "Liberica NIK detected, setting GC to parallel"
             }
+
+            // native-image sizes the builder heap from the memory available when it starts.
+            // On CI runners that sometimes lands around 7.5GB, which pushes the build into
+            // 50-80% GC and trips the image heap writer on the JDK locale cache. Pin it on
+            // machines where we know how much memory there is. Off by default so local builds
+            // keep the auto-detected value.
+            def builderMaxHeap = project.findProperty('nativeBuilderMaxHeap') ?: System.getenv('NATIVE_BUILDER_MAX_HEAP')
+            if (builderMaxHeap) {
+                buildArgs.add("-J-Xmx${builderMaxHeap}")
+                println "Setting native-image builder max heap to ${builderMaxHeap}"
+            }
         }
     }
 

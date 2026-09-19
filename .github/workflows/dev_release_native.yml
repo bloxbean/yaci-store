@@ -2,10 +2,21 @@ name: Build Native Dev Build
 
 on:
   workflow_dispatch:
+  # Also runs on a PR carrying the 'test-native' label, so a native build can be
+  # verified on the branch before a rel-native-* tag is cut. Label-gated because a
+  # full matrix is ~25 min x 7 jobs.
+  pull_request:
+    types: [ labeled, synchronize ]
+
+concurrency:
+  group: native-dev-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   buildAndUpload-mostly-static:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'test-native')
     strategy:
+      fail-fast: false
       matrix:
         os: [ "ubuntu-22.04", "macOS" ]
         profile: [ "n2c", "all" ]
@@ -33,6 +44,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           echo "os_prefix=linux" >> $GITHUB_ENV
+          echo "NATIVE_BUILDER_MAX_HEAP=11g" >> $GITHUB_ENV
       - name: MacOS specific env
         if: runner.os == 'macOS'
         run: |
@@ -58,6 +70,7 @@ jobs:
           path: ./applications/all/build/output/yaci-store-${{ env.VERSION }}-${{ env.os_prefix }}-${{ env.arch }}${{ env.PROFILE_SUFFIX }}.zip
 
   buildAndUpload-musl:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'test-native')
     strategy:
       fail-fast: false
       matrix:
@@ -89,6 +102,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           echo "os_prefix=linux" >> $GITHUB_ENV
+          echo "NATIVE_BUILDER_MAX_HEAP=11g" >> $GITHUB_ENV
           cp applications/all/src/main/resources/META-INF/native-image/yaci-store-all/native-image.properties.musl applications/all/src/main/resources/META-INF/native-image/yaci-store-all/native-image.properties
       - name: MacOS specific env
         if: runner.os == 'macOS'
@@ -115,6 +129,7 @@ jobs:
           path: ./applications/all/build/output/yaci-store-${{ env.VERSION }}-${{ env.os_prefix }}-musl-${{ env.arch }}${{ env.PROFILE_SUFFIX }}.zip
 
   windowBuild:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'test-native')
     strategy:
       matrix:
         profile: ["all"]
