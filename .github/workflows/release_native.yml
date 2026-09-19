@@ -8,6 +8,7 @@ on:
 jobs:
   buildAndUpload-mostly-static:
     strategy:
+      fail-fast: false
       matrix:
         os: [ "ubuntu-22.04", "macOS" ]
         profile: [ "n2c", "all" ]
@@ -35,6 +36,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           echo "os_prefix=linux" >> $GITHUB_ENV
+          echo "NATIVE_BUILDER_MAX_HEAP=11g" >> $GITHUB_ENV
       - name: MacOS specific env
         if: runner.os == 'macOS'
         run: |
@@ -94,6 +96,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           echo "os_prefix=linux" >> $GITHUB_ENV
+          echo "NATIVE_BUILDER_MAX_HEAP=11g" >> $GITHUB_ENV
           cp applications/all/src/main/resources/META-INF/native-image/yaci-store-all/native-image.properties.musl applications/all/src/main/resources/META-INF/native-image/yaci-store-all/native-image.properties
       - name: MacOS specific env
         if: runner.os == 'macOS'
