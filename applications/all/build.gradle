@@ -111,6 +111,7 @@ task distNativeZip(type: Zip) {
         include 'application-custom-exporters.yml'
         include 'application-ledger-state.properties'
         include 'application-plugins.yml'
+        include 'application-mcp.yml'
         into zipDirName + '/' + configDir
     }
 
