@@ -1,0 +1,11 @@
+snapshot-table:
+  id: local-gov-action-proposal-status
+  spec-version: 1
+  module: governance
+  kind: DERIVED_DATA
+  restore: RUNTIME_REBUILT
+  reason: >-
+    live governance view populated from the local Cardano node after start-up
+
+  import:
+    target-table: local_gov_action_proposal_status

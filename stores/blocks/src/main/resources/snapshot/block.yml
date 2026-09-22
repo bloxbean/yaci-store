@@ -1,0 +1,51 @@
+snapshot-table:
+  id: block
+  spec-version: 1
+  module: blocks
+  kind: CHAIN_DATA
+  restore: IMPORT
+
+  source:
+    exporter-id: block
+    ducklake-relation: block
+    partition:
+      strategy: DAILY
+      column: block_time
+
+  consistency:
+    completed-epoch:
+      type: MAX_EPOCH_OFFSET
+      column: epoch
+      offset: -1
+    cutoff:
+      type: SLOT_LTE
+      column: slot
+    coverage:
+      type: SLOT_GTE_CUT
+      column: slot
+
+  import:
+    target-table: block
+    mode: MAPPED
+    columns:
+      block_time:
+        source: block_time
+        converter: "timestamp-to-epoch-seconds"
+      leader_vrf:
+        source: leader_vrf
+        converter: "varchar-to-jsonb"
+      nonce_vrf:
+        source: nonce_vrf
+        converter: "varchar-to-jsonb"
+      vrf_result:
+        source: vrf_result
+        converter: "varchar-to-jsonb"
+    ignore-source-columns: [date]
+    use-target-defaults: [create_datetime, update_datetime]
+    batch-boundary: FILE_SET
+    batch-size: 64
+
+  validation:
+    key: [hash]
+    bounds: [slot, epoch, number]
+    required-columns: [hash]

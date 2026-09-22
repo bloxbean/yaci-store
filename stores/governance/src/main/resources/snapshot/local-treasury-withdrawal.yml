@@ -1,0 +1,11 @@
+snapshot-table:
+  id: local-treasury-withdrawal
+  spec-version: 1
+  module: governance
+  kind: DERIVED_DATA
+  restore: RUNTIME_REBUILT
+  reason: >-
+    live governance view populated from the local Cardano node after start-up
+
+  import:
+    target-table: local_treasury_withdrawal

@@ -1,0 +1,12 @@
+snapshot-table:
+  id: era
+  spec-version: 1
+  module: core
+  kind: CONTROL_STATE
+  restore: HANDLER
+  reason: >-
+    rebuilt from the first imported block of each era
+
+  import:
+    target-table: era
+    handler: era-transitions

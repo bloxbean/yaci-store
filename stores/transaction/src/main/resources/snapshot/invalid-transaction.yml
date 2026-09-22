@@ -1,0 +1,35 @@
+snapshot-table:
+  id: invalid-transaction
+  spec-version: 1
+  module: transaction
+  kind: CHAIN_DATA
+  restore: IMPORT
+
+  source:
+    exporter-id: invalid_transaction
+    ducklake-relation: invalid_transaction
+    partition:
+      strategy: DAILY
+      column: block_time
+
+  consistency:
+    cutoff:
+      type: SLOT_LTE
+      column: slot
+
+  import:
+    target-table: invalid_transaction
+    mode: MAPPED
+    columns:
+      transaction:
+        source: transaction
+        converter: "varchar-to-jsonb"
+    ignore-source-columns: [block_time, date]
+    use-target-defaults: [create_datetime, update_datetime]
+    batch-boundary: FILE_SET
+    batch-size: 64
+
+  validation:
+    key: [tx_hash]
+    bounds: [slot]
+    required-columns: [tx_hash]
