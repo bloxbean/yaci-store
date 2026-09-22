@@ -53,7 +53,10 @@ public interface PluginContext {
     /** Look up any Spring bean by type (e.g. a storage reader). */
     <T> T bean(Class<T> type);
 
-    /** Look up any Spring bean by name (e.g. {@code "asset_reader"}). */
+    /**
+     * Look up any Spring bean by name (e.g. {@code "utxoStorageReader"}). Script variable aliases such as
+     * {@code "utxo_reader"} are not bean names; prefer {@link #bean(Class)}.
+     */
     Object bean(String name);
 
     /** The underlying Spring context, for advanced cases. */
