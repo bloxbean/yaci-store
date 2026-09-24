@@ -119,9 +119,8 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 
 ## Branching & releases
 
-- `main` → active development for the next minor release (2.1.x)
-- `release/2.0.x` → patch fixes for the 2.0.x line
-- `next` → development of the next major version (3.0)
+- `main` → active development for the 3.0.x line (currently 3.0.0-beta pre-releases)
+- `release/2.0.x` → patch fixes for the 2.0.x stable line
 
 Please open pull requests against the `main` branch unless advised otherwise.
 
