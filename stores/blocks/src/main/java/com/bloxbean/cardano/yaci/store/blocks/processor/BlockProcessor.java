@@ -10,9 +10,12 @@ import com.bloxbean.cardano.yaci.store.blocks.domain.Vrf;
 import com.bloxbean.cardano.yaci.store.blocks.storage.BlockCborStorage;
 import com.bloxbean.cardano.yaci.store.blocks.storage.BlockStorage;
 import com.bloxbean.cardano.yaci.store.blocks.util.BlockUtil;
+import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClient;
 import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
+import com.bloxbean.cardano.yaci.store.common.util.TransactionFeeUtil;
 import com.bloxbean.cardano.yaci.store.events.BlockEvent;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
+import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
 import jakarta.validation.constraints.NotNull;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
@@ -22,7 +25,11 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigInteger;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import static com.bloxbean.cardano.yaci.store.blocks.BlocksStoreConfiguration.STORE_BLOCKS_ENABLED;
 
@@ -33,13 +40,20 @@ public class BlockProcessor {
     private final BlockStorage blockStorage;
     private final BlockCborStorage blockCborStorage;
     private final BlocksStoreProperties blocksStoreProperties;
+    private final UtxoClient utxoClient;
+    private final List<PendingBlock> pendingBlocks = Collections.synchronizedList(new ArrayList<>());
+
+    private record PendingBlock(Block block, List<TransactionBody> bodies, Set<Integer> invalidTransactions) {
+    }
 
     public BlockProcessor(BlockStorage blockStorage,
                           BlockCborStorage blockCborStorage,
-                          BlocksStoreProperties blocksStoreProperties) {
+                          BlocksStoreProperties blocksStoreProperties,
+                          UtxoClient utxoClient) {
         this.blockStorage = blockStorage;
         this.blockCborStorage = blockCborStorage;
         this.blocksStoreProperties = blocksStoreProperties;
+        this.utxoClient = utxoClient;
     }
 
     @EventListener
@@ -83,7 +97,15 @@ public class BlockProcessor {
 
         handleTransaction(block, blockEvent.getBlock().getTransactionBodies());
 
-        blockStorage.save(block);
+        var invalidTransactions = blockEvent.getBlock().getInvalidTransactions();
+        var pendingBlock = new PendingBlock(block, blockEvent.getBlock().getTransactionBodies(),
+                invalidTransactions == null ? Set.of() : new HashSet<>(invalidTransactions));
+        if (resolveFees(pendingBlock)) {
+            blockStorage.save(block);
+        } else {
+            // A collateral output may be produced by another block still processing in this batch.
+            pendingBlocks.add(pendingBlock);
+        }
 
         if (blocksStoreProperties.isSaveCbor()) {
             saveBlockCbor(blockEvent, blockHeader.getHeaderBody().getBlockHash(), slot);
@@ -137,10 +159,42 @@ public class BlockProcessor {
         block.setTotalFees(totalFees == null ? BigInteger.ZERO : totalFees);
     }
 
+    private boolean resolveFees(PendingBlock pendingBlock) {
+        if (pendingBlock.invalidTransactions().isEmpty())
+            return true;
+
+        BigInteger totalFees = BigInteger.ZERO;
+        for (int i = 0; i < pendingBlock.bodies().size(); i++) {
+            var fee = TransactionFeeUtil.resolveFee(pendingBlock.bodies().get(i),
+                    pendingBlock.invalidTransactions().contains(i),
+                    utxoClient::getUtxosByIds);
+            if (fee == null)
+                return false;
+            totalFees = totalFees.add(fee);
+        }
+        pendingBlock.block().setTotalFees(totalFees);
+        return true;
+    }
+
+    @EventListener
+    @Transactional
+    public void handleCollateralFees(PreCommitEvent event) {
+        try {
+            for (var pendingBlock : pendingBlocks) {
+                if (!resolveFees(pendingBlock))
+                    throw new IllegalStateException("Collateral fee not resolved for block " + pendingBlock.block().getHash());
+                blockStorage.save(pendingBlock.block());
+            }
+        } finally {
+            pendingBlocks.clear();
+        }
+    }
+
     @EventListener
     @Order(1)
     @Transactional
     public void handleRollbackEvent(@NotNull RollbackEvent rollbackEvent) {
+        pendingBlocks.clear();
         int count = blockStorage.deleteBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
         log.info("Rollback -- {} block records", count);
 
