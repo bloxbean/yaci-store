@@ -110,6 +110,75 @@ class BlockProcessorTest {
     }
 
     @Test
+    void successfulPlutusTransactionIncludesNormalOutputsOnly() {
+        var body = outputTransaction("valid",
+                List.of(output(lovelace(5_000_000), token(10)), output(lovelace(3_000_000))), 7_000_000L);
+        blockProcessor.handleBlockHeaderEvent(blockEvent(List.of(body), List.of()));
+
+        verify(blockStorage).save(blockArgCaptor.capture());
+        assertThat(blockArgCaptor.getValue().getTotalOutput()).isEqualTo(8_000_000);
+    }
+
+    @Test
+    void invalidBabbageTransactionIncludesOnlyCollateralReturnLovelace() {
+        var body = outputTransaction("invalid", List.of(output(lovelace(48_000_000))), null).toBuilder()
+                .totalCollateral(BigInteger.valueOf(3_000_000))
+                .collateralReturn(output(lovelace(7_000_000), token(5)))
+                .build();
+        blockProcessor.handleBlockHeaderEvent(blockEvent(List.of(body), List.of(0)));
+
+        verify(blockStorage).save(blockArgCaptor.capture());
+        assertThat(blockArgCaptor.getValue().getTotalOutput()).isEqualTo(7_000_000);
+    }
+
+    @Test
+    void invalidAlonzoTransactionWithoutCollateralReturnContributesNoOutput() {
+        var body = outputTransaction("alonzo", List.of(output(lovelace(10_000_000))), null);
+        when(utxoClient.getUtxosByIds(anyList())).thenReturn(List.of(utxo(5_000_000)));
+
+        blockProcessor.handleBlockHeaderEvent(blockEvent(List.of(body), List.of(0)));
+
+        verify(blockStorage).save(blockArgCaptor.capture());
+        assertThat(blockArgCaptor.getValue().getTotalOutput()).isZero();
+    }
+
+    @Test
+    void mixedBlockIncludesEachCollateralReturnOnceAndKeepsOutputWhenFeesAreDeferred() {
+        var event = blockEvent(List.of(
+                outputTransaction("valid", List.of(output(lovelace(10_000_000))), 9_000_000L),
+                outputTransaction("return-a", List.of(output(lovelace(20_000_000))), 2_000_000L),
+                outputTransaction("return-b", List.of(output(lovelace(30_000_000))), 3_000_000L),
+                outputTransaction("no-return", List.of(output(lovelace(40_000_000))), null)), List.of(1, 2, 3));
+        when(utxoClient.getUtxosByIds(anyList())).thenReturn(List.of(), List.of(utxo(4_000_000)),
+                List.of(utxo(5_000_000)), List.of(utxo(6_000_000)));
+
+        blockProcessor.handleBlockHeaderEvent(event);
+        verify(blockStorage, never()).save(any());
+        blockProcessor.handleCollateralFees(new PreCommitEvent(event.getMetadata()));
+
+        verify(blockStorage).save(blockArgCaptor.capture());
+        assertThat(blockArgCaptor.getValue().getTotalOutput()).isEqualTo(15_000_000);
+        assertThat(blockArgCaptor.getValue().getTotalFees()).isEqualTo(200_000 + 2_000_000 + 2_000_000 + 6_000_000);
+    }
+
+    @Test
+    void outputTotalIsIdenticalAfterRollbackAndReapplication() {
+        var event = blockEvent(List.of(
+                outputTransaction("valid", List.of(output(lovelace(10_000_000))), null),
+                outputTransaction("invalid", List.of(output(lovelace(48_000_000))), 7_000_000L).toBuilder()
+                        .totalCollateral(BigInteger.valueOf(3_000_000)).build()), List.of(1));
+
+        blockProcessor.handleBlockHeaderEvent(event);
+        blockProcessor.handleRollbackEvent(RollbackEvent.builder()
+                .rollbackTo(new Point(86879, "previous")).build());
+        blockProcessor.handleBlockHeaderEvent(event);
+
+        verify(blockStorage, times(2)).save(blockArgCaptor.capture());
+        assertThat(blockArgCaptor.getAllValues()).allSatisfy(block ->
+                assertThat(block.getTotalOutput()).isEqualTo(17_000_000));
+    }
+
+    @Test
     void successfulPlutusTransactionUsesDeclaredFee() {
         var body = collateralTransaction("valid", 2_000_000, 3_000_000L, 7_000_000L);
         blockProcessor.handleBlockHeaderEvent(blockEvent(List.of(body), List.of()));
@@ -294,10 +363,28 @@ class BlockProcessorTest {
                 .outputs(List.of())
                 .collateralInputs(Set.of(new TransactionInput(hash + "-input", 0)))
                 .totalCollateral(totalCollateral == null ? null : BigInteger.valueOf(totalCollateral))
-                .collateralReturn(collateralReturn == null ? null : TransactionOutput.builder()
-                        .amounts(List.of(Amount.builder().unit("lovelace")
-                                .quantity(BigInteger.valueOf(collateralReturn)).build())).build())
+                .collateralReturn(collateralReturn == null ? null : output(lovelace(collateralReturn)))
                 .build();
+    }
+
+    private TransactionBody outputTransaction(String hash, List<TransactionOutput> outputs, Long collateralReturn) {
+        return collateralTransaction(hash, 200_000, null, collateralReturn).toBuilder()
+                .outputs(outputs)
+                .build();
+    }
+
+    private TransactionOutput output(Amount... amounts) {
+        return TransactionOutput.builder().amounts(List.of(amounts)).build();
+    }
+
+    private Amount lovelace(long quantity) {
+        return Amount.builder().unit("lovelace").assetName("lovelace")
+                .quantity(BigInteger.valueOf(quantity)).build();
+    }
+
+    private Amount token(long quantity) {
+        return Amount.builder().unit("policy.token").policyId("policy").assetName("token")
+                .quantity(BigInteger.valueOf(quantity)).build();
     }
 
     private AddressUtxo utxo(long lovelace) {
