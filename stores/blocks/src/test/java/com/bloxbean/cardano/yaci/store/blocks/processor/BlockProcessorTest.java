@@ -14,6 +14,7 @@ import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
 import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClient;
+import com.bloxbean.cardano.yaci.store.client.utxo.DummyUtxoClient;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import org.junit.jupiter.api.BeforeEach;
@@ -21,6 +22,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
+import org.springframework.web.client.ResourceAccessException;
 
 import java.math.BigInteger;
 import java.util.ArrayList;
@@ -181,15 +185,89 @@ class BlockProcessorTest {
     }
 
     @Test
-    void unresolvedCollateralFailsPreCommitAndClearsPendingBlock() {
-        var event = blockEvent(List.of(collateralTransaction("missing", 200_000, null, null)), List.of(0));
+    @ExtendWith(OutputCaptureExtension.class)
+    void unresolvedCollateralUsesDeclaredFeeOnlyForMissingTransactionAndClearsPendingBlock(CapturedOutput output) {
+        var event = blockEvent(List.of(
+                collateralTransaction("valid", 1_494_944, null, null),
+                collateralTransaction("missing", 200_000, null, null),
+                collateralTransaction("known", 2_000_000, 3_000_000L, null)), List.of(1, 2));
         when(utxoClient.getUtxosByIds(anyList())).thenReturn(List.of());
 
         blockProcessor.handleBlockHeaderEvent(event);
-        assertThatThrownBy(() -> blockProcessor.handleCollateralFees(new PreCommitEvent(event.getMetadata())))
-                .isInstanceOf(IllegalStateException.class).hasMessageContaining("Collateral fee not resolved");
-        blockProcessor.handleCollateralFees(new PreCommitEvent(event.getMetadata()));
         verify(blockStorage, never()).save(any());
+        blockProcessor.handleCollateralFees(new PreCommitEvent(event.getMetadata()));
+        blockProcessor.handleCollateralFees(new PreCommitEvent(event.getMetadata()));
+
+        verify(blockStorage).save(blockArgCaptor.capture());
+        assertThat(blockArgCaptor.getValue().getTotalFees()).isEqualTo(4_694_944);
+        assertThat(output).contains("Collateral fee unresolved for transaction missing")
+                .contains("using declared fee 200000. Block and epoch total fees may be inaccurate.");
+    }
+
+    @Test
+    void dummyUtxoClientDoesNotStopBlockProcessing() {
+        var processor = new BlockProcessor(blockStorage, blockCborStorage, blocksStoreProperties, new DummyUtxoClient());
+        var event = blockEvent(List.of(collateralTransaction("alonzo", 200_000, null, null)), List.of(0));
+
+        processor.handleBlockHeaderEvent(event);
+        processor.handleCollateralFees(new PreCommitEvent(event.getMetadata()));
+        processor.handleBlockHeaderEvent(blockEvent());
+
+        verify(blockStorage, times(2)).save(blockArgCaptor.capture());
+        assertThat(blockArgCaptor.getAllValues().get(0).getTotalFees()).isEqualTo(200_000);
+    }
+
+    @Test
+    void nullCollateralResponseUsesDeclaredFeeAtPreCommit() {
+        var event = blockEvent(List.of(collateralTransaction("missing", 200_000, null, null)), List.of(0));
+        when(utxoClient.getUtxosByIds(anyList())).thenReturn(null);
+
+        blockProcessor.handleBlockHeaderEvent(event);
+        blockProcessor.handleCollateralFees(new PreCommitEvent(event.getMetadata()));
+
+        verify(blockStorage).save(blockArgCaptor.capture());
+        assertThat(blockArgCaptor.getValue().getTotalFees()).isEqualTo(200_000);
+    }
+
+    @Test
+    @ExtendWith(OutputCaptureExtension.class)
+    void remoteLookupFailureIsRetriedBeforeUsingDeclaredFee(CapturedOutput output) {
+        var event = blockEvent(List.of(collateralTransaction("remote", 200_000, null, 2_000_000L)), List.of(0));
+        when(utxoClient.getUtxosByIds(anyList())).thenThrow(new ResourceAccessException("Unavailable"))
+                .thenReturn(List.of(utxo(5_000_000)));
+
+        blockProcessor.handleBlockHeaderEvent(event);
+        verify(blockStorage, never()).save(any());
+        blockProcessor.handleCollateralFees(new PreCommitEvent(event.getMetadata()));
+
+        verify(blockStorage).save(blockArgCaptor.capture());
+        assertThat(blockArgCaptor.getValue().getTotalFees()).isEqualTo(3_000_000);
+        assertThat(output).doesNotContain("using declared fee");
+    }
+
+    @Test
+    void persistentRemoteLookupFailureUsesDeclaredFeeAtPreCommit() {
+        var event = blockEvent(List.of(collateralTransaction("remote", 200_000, null, null)), List.of(0));
+        when(utxoClient.getUtxosByIds(anyList())).thenThrow(new ResourceAccessException("Unavailable"));
+
+        blockProcessor.handleBlockHeaderEvent(event);
+        blockProcessor.handleCollateralFees(new PreCommitEvent(event.getMetadata()));
+        blockProcessor.handleCollateralFees(new PreCommitEvent(event.getMetadata()));
+
+        verify(blockStorage).save(blockArgCaptor.capture());
+        assertThat(blockArgCaptor.getValue().getTotalFees()).isEqualTo(200_000);
+    }
+
+    @Test
+    void storageFailureStillPropagatesAtPreCommit() {
+        var event = blockEvent(List.of(collateralTransaction("missing", 200_000, null, null)), List.of(0));
+        when(utxoClient.getUtxosByIds(anyList())).thenReturn(List.of());
+        doThrow(new IllegalStateException("Storage unavailable")).when(blockStorage).save(any());
+
+        blockProcessor.handleBlockHeaderEvent(event);
+
+        assertThatThrownBy(() -> blockProcessor.handleCollateralFees(new PreCommitEvent(event.getMetadata())))
+                .isInstanceOf(IllegalStateException.class).hasMessage("Storage unavailable");
     }
 
     @Test

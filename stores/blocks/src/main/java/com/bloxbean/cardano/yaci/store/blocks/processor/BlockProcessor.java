@@ -23,6 +23,7 @@ import org.springframework.context.event.EventListener;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestClientException;
 
 import java.math.BigInteger;
 import java.util.ArrayList;
@@ -100,10 +101,11 @@ public class BlockProcessor {
         var invalidTransactions = blockEvent.getBlock().getInvalidTransactions();
         var pendingBlock = new PendingBlock(block, blockEvent.getBlock().getTransactionBodies(),
                 invalidTransactions == null ? Set.of() : new HashSet<>(invalidTransactions));
-        if (resolveFees(pendingBlock)) {
+        if (resolveFees(pendingBlock, false)) {
             blockStorage.save(block);
         } else {
             // A collateral output may be produced by another block still processing in this batch.
+            // Defer saving the block until precommit so its fee is resolved before it becomes visible.
             pendingBlocks.add(pendingBlock);
         }
 
@@ -159,17 +161,33 @@ public class BlockProcessor {
         block.setTotalFees(totalFees == null ? BigInteger.ZERO : totalFees);
     }
 
-    private boolean resolveFees(PendingBlock pendingBlock) {
+    private boolean resolveFees(PendingBlock pendingBlock, boolean useDeclaredFeeIfUnresolved) {
         if (pendingBlock.invalidTransactions().isEmpty())
             return true;
 
         BigInteger totalFees = BigInteger.ZERO;
         for (int i = 0; i < pendingBlock.bodies().size(); i++) {
-            var fee = TransactionFeeUtil.resolveFee(pendingBlock.bodies().get(i),
-                    pendingBlock.invalidTransactions().contains(i),
-                    utxoClient::getUtxosByIds);
-            if (fee == null)
-                return false;
+            var body = pendingBlock.bodies().get(i);
+            BigInteger fee;
+            try {
+                fee = TransactionFeeUtil.resolveFee(body, pendingBlock.invalidTransactions().contains(i),
+                        utxoClient::getUtxosByIds);
+            } catch (RestClientException e) {
+                log.debug("Collateral UTxO lookup failed for transaction {} in block {}",
+                        body.getTxHash(), pendingBlock.block().getHash(), e);
+                fee = null;
+            }
+            if (fee == null) {
+                if (!useDeclaredFeeIfUnresolved)
+                    return false;
+
+                // Blocks can be indexed without an available UTxO store. Preserve sync progress,
+                // retaining declared fees only for transactions whose collateral cannot be resolved.
+                fee = body.getFee();
+                log.warn("Collateral fee unresolved for transaction {} in block {} at slot {}; "
+                                + "using declared fee {}. Block and epoch total fees may be inaccurate.",
+                        body.getTxHash(), pendingBlock.block().getHash(), pendingBlock.block().getSlot(), fee);
+            }
             totalFees = totalFees.add(fee);
         }
         pendingBlock.block().setTotalFees(totalFees);
@@ -181,8 +199,7 @@ public class BlockProcessor {
     public void handleCollateralFees(PreCommitEvent event) {
         try {
             for (var pendingBlock : pendingBlocks) {
-                if (!resolveFees(pendingBlock))
-                    throw new IllegalStateException("Collateral fee not resolved for block " + pendingBlock.block().getHash());
+                resolveFees(pendingBlock, true);
                 blockStorage.save(pendingBlock.block());
             }
         } finally {

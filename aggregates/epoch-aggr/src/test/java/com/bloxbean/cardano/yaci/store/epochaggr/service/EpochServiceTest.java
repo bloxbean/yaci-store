@@ -28,7 +28,7 @@ class EpochServiceTest {
     private EpochService epochService;
 
     @Test
-    void aggregatesEffectiveBlockFeesAndRecomputesAfterRollbackAndReplay() {
+    void sumsBlockFeesAndRecomputesWhenStoredBlocksChange() {
         var first = block(100, 4_494_944);
         var second = block(101, 15_494_944);
         when(blockStorage.findRecentBlock()).thenReturn(Optional.of(second), Optional.of(first), Optional.of(second));

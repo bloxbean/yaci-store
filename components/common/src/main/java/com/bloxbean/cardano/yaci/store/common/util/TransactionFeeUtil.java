@@ -40,7 +40,7 @@ public final class TransactionFeeUtil {
                 var collateralUtxos = utxoLookup.apply(collateralUtxoKeys);
 
                 if (collateralUtxos == null || collateralUtxos.size() != collateralUtxoKeys.size()) {
-                    log.error("Collateral utxos not found for transaction : {}", body.getTxHash());
+                    log.debug("Collateral utxos not found for transaction : {}", body.getTxHash());
                     return null;
                 }
 
