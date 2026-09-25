@@ -10,15 +10,30 @@ import com.bloxbean.cardano.yaci.store.blocks.storage.BlockCborStorage;
 import com.bloxbean.cardano.yaci.store.blocks.storage.BlockStorage;
 import com.bloxbean.cardano.yaci.store.events.BlockEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
+import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
+import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
+import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
+import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClient;
+import com.bloxbean.cardano.yaci.store.client.utxo.DummyUtxoClient;
+import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
+import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
+import org.springframework.web.client.ResourceAccessException;
 
+import java.math.BigInteger;
 import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class BlockProcessorTest {
@@ -28,6 +43,8 @@ class BlockProcessorTest {
     private BlockCborStorage blockCborStorage;
     @Mock
     private BlocksStoreProperties blocksStoreProperties;
+    @Mock
+    private UtxoClient utxoClient;
     @InjectMocks
     private BlockProcessor blockProcessor;
     @Captor
@@ -90,6 +107,211 @@ class BlockProcessorTest {
         assertThat(blockCbor.getSlot()).isEqualTo(86880);
         assertThat(blockCbor.getCborData()).isEqualTo(HexUtil.decodeHexString("A1B2C3"));
         assertThat(blockCbor.getCborSize()).isEqualTo(3);
+    }
+
+    @Test
+    void successfulPlutusTransactionUsesDeclaredFee() {
+        var body = collateralTransaction("valid", 2_000_000, 3_000_000L, 7_000_000L);
+        blockProcessor.handleBlockHeaderEvent(blockEvent(List.of(body), List.of()));
+
+        verify(blockStorage).save(blockArgCaptor.capture());
+        assertThat(blockArgCaptor.getValue().getTotalFees()).isEqualTo(2_000_000);
+        verifyNoInteractions(utxoClient);
+    }
+
+    @Test
+    void invalidBabbageTransactionUsesTotalCollateralWithoutSubtractingReturnTwice() {
+        var body = collateralTransaction("invalid", 2_000_000, 3_000_000L, 7_000_000L);
+        blockProcessor.handleBlockHeaderEvent(blockEvent(List.of(body), List.of(0)));
+
+        verify(blockStorage).save(blockArgCaptor.capture());
+        assertThat(blockArgCaptor.getValue().getTotalFees()).isEqualTo(3_000_000);
+        verifyNoInteractions(utxoClient);
+    }
+
+    @Test
+    void invalidAlonzoTransactionUsesAllCollateralInputs() {
+        var body = collateralTransaction("alonzo", 2_000_000, null, null).toBuilder()
+                .collateralInputs(Set.of(new TransactionInput("input1", 0), new TransactionInput("input2", 1)))
+                .build();
+        when(utxoClient.getUtxosByIds(anyList())).thenReturn(List.of(utxo(3_000_000), utxo(5_000_000)));
+
+        blockProcessor.handleBlockHeaderEvent(blockEvent(List.of(body), List.of(0)));
+
+        verify(blockStorage).save(blockArgCaptor.capture());
+        assertThat(blockArgCaptor.getValue().getTotalFees()).isEqualTo(8_000_000);
+    }
+
+    @Test
+    void mixedBlockIncludesEveryInvalidFeeOnceAndReplaysAfterRollback() {
+        var event = blockEvent(List.of(
+                collateralTransaction("valid", 1_494_944, 9_000_000L, null),
+                collateralTransaction("babbage", 2_000_000, 3_000_000L, 7_000_000L),
+                collateralTransaction("alonzo", 200_000, null, null),
+                collateralTransaction("return", 400_000, null, 2_000_000L)), List.of(1, 2, 3));
+        when(utxoClient.getUtxosByIds(List.of(new UtxoKey("alonzo-input", 0))))
+                .thenReturn(List.of(utxo(5_000_000)));
+        when(utxoClient.getUtxosByIds(List.of(new UtxoKey("return-input", 0))))
+                .thenReturn(List.of(utxo(8_000_000)));
+
+        blockProcessor.handleBlockHeaderEvent(event);
+        blockProcessor.handleCollateralFees(new PreCommitEvent(event.getMetadata()));
+        blockProcessor.handleRollbackEvent(RollbackEvent.builder()
+                .rollbackTo(new Point(86879, "previous")).build());
+        blockProcessor.handleBlockHeaderEvent(event);
+        blockProcessor.handleCollateralFees(new PreCommitEvent(event.getMetadata()));
+
+        verify(blockStorage).deleteBySlotGreaterThan(86879);
+        verify(blockStorage, times(2)).save(blockArgCaptor.capture());
+        assertThat(blockArgCaptor.getAllValues()).allSatisfy(block ->
+                assertThat(block.getTotalFees()).isEqualTo(15_494_944));
+    }
+
+    @Test
+    void missingCollateralIsResolvedAtPreCommitWithoutDoubleCounting() {
+        var event = blockEvent(List.of(
+                collateralTransaction("valid", 1_494_944, null, null),
+                collateralTransaction("known", 2_000_000, 3_000_000L, null),
+                collateralTransaction("later", 200_000, null, 2_000_000L)), List.of(1, 2));
+        when(utxoClient.getUtxosByIds(anyList())).thenReturn(List.of(), List.of(utxo(8_000_000)));
+
+        blockProcessor.handleBlockHeaderEvent(event);
+        verify(blockStorage, never()).save(any());
+        blockProcessor.handleCollateralFees(new PreCommitEvent(event.getMetadata()));
+        blockProcessor.handleCollateralFees(new PreCommitEvent(event.getMetadata()));
+
+        verify(blockStorage).save(blockArgCaptor.capture());
+        assertThat(blockArgCaptor.getValue().getTotalFees()).isEqualTo(10_494_944);
+    }
+
+    @Test
+    @ExtendWith(OutputCaptureExtension.class)
+    void unresolvedCollateralUsesDeclaredFeeOnlyForMissingTransactionAndClearsPendingBlock(CapturedOutput output) {
+        var event = blockEvent(List.of(
+                collateralTransaction("valid", 1_494_944, null, null),
+                collateralTransaction("missing", 200_000, null, null),
+                collateralTransaction("known", 2_000_000, 3_000_000L, null)), List.of(1, 2));
+        when(utxoClient.getUtxosByIds(anyList())).thenReturn(List.of());
+
+        blockProcessor.handleBlockHeaderEvent(event);
+        verify(blockStorage, never()).save(any());
+        blockProcessor.handleCollateralFees(new PreCommitEvent(event.getMetadata()));
+        blockProcessor.handleCollateralFees(new PreCommitEvent(event.getMetadata()));
+
+        verify(blockStorage).save(blockArgCaptor.capture());
+        assertThat(blockArgCaptor.getValue().getTotalFees()).isEqualTo(4_694_944);
+        assertThat(output).contains("Collateral fee unresolved for transaction missing")
+                .contains("using declared fee 200000. Block and epoch total fees may be inaccurate.");
+    }
+
+    @Test
+    void dummyUtxoClientDoesNotStopBlockProcessing() {
+        var processor = new BlockProcessor(blockStorage, blockCborStorage, blocksStoreProperties, new DummyUtxoClient());
+        var event = blockEvent(List.of(collateralTransaction("alonzo", 200_000, null, null)), List.of(0));
+
+        processor.handleBlockHeaderEvent(event);
+        processor.handleCollateralFees(new PreCommitEvent(event.getMetadata()));
+        processor.handleBlockHeaderEvent(blockEvent());
+
+        verify(blockStorage, times(2)).save(blockArgCaptor.capture());
+        assertThat(blockArgCaptor.getAllValues().get(0).getTotalFees()).isEqualTo(200_000);
+    }
+
+    @Test
+    void nullCollateralResponseUsesDeclaredFeeAtPreCommit() {
+        var event = blockEvent(List.of(collateralTransaction("missing", 200_000, null, null)), List.of(0));
+        when(utxoClient.getUtxosByIds(anyList())).thenReturn(null);
+
+        blockProcessor.handleBlockHeaderEvent(event);
+        blockProcessor.handleCollateralFees(new PreCommitEvent(event.getMetadata()));
+
+        verify(blockStorage).save(blockArgCaptor.capture());
+        assertThat(blockArgCaptor.getValue().getTotalFees()).isEqualTo(200_000);
+    }
+
+    @Test
+    @ExtendWith(OutputCaptureExtension.class)
+    void remoteLookupFailureIsRetriedBeforeUsingDeclaredFee(CapturedOutput output) {
+        var event = blockEvent(List.of(collateralTransaction("remote", 200_000, null, 2_000_000L)), List.of(0));
+        when(utxoClient.getUtxosByIds(anyList())).thenThrow(new ResourceAccessException("Unavailable"))
+                .thenReturn(List.of(utxo(5_000_000)));
+
+        blockProcessor.handleBlockHeaderEvent(event);
+        verify(blockStorage, never()).save(any());
+        blockProcessor.handleCollateralFees(new PreCommitEvent(event.getMetadata()));
+
+        verify(blockStorage).save(blockArgCaptor.capture());
+        assertThat(blockArgCaptor.getValue().getTotalFees()).isEqualTo(3_000_000);
+        assertThat(output).doesNotContain("using declared fee");
+    }
+
+    @Test
+    void persistentRemoteLookupFailureUsesDeclaredFeeAtPreCommit() {
+        var event = blockEvent(List.of(collateralTransaction("remote", 200_000, null, null)), List.of(0));
+        when(utxoClient.getUtxosByIds(anyList())).thenThrow(new ResourceAccessException("Unavailable"));
+
+        blockProcessor.handleBlockHeaderEvent(event);
+        blockProcessor.handleCollateralFees(new PreCommitEvent(event.getMetadata()));
+        blockProcessor.handleCollateralFees(new PreCommitEvent(event.getMetadata()));
+
+        verify(blockStorage).save(blockArgCaptor.capture());
+        assertThat(blockArgCaptor.getValue().getTotalFees()).isEqualTo(200_000);
+    }
+
+    @Test
+    void storageFailureStillPropagatesAtPreCommit() {
+        var event = blockEvent(List.of(collateralTransaction("missing", 200_000, null, null)), List.of(0));
+        when(utxoClient.getUtxosByIds(anyList())).thenReturn(List.of());
+        doThrow(new IllegalStateException("Storage unavailable")).when(blockStorage).save(any());
+
+        blockProcessor.handleBlockHeaderEvent(event);
+
+        assertThatThrownBy(() -> blockProcessor.handleCollateralFees(new PreCommitEvent(event.getMetadata())))
+                .isInstanceOf(IllegalStateException.class).hasMessage("Storage unavailable");
+    }
+
+    @Test
+    void rollbackDiscardsPendingBlockBeforeReapplication() {
+        var event = blockEvent(List.of(collateralTransaction("pending", 200_000, null, null)), List.of(0));
+        when(utxoClient.getUtxosByIds(anyList())).thenReturn(List.of(), List.of(utxo(3_000_000)));
+
+        blockProcessor.handleBlockHeaderEvent(event);
+        blockProcessor.handleRollbackEvent(RollbackEvent.builder()
+                .rollbackTo(new Point(86879, "previous")).build());
+        blockProcessor.handleCollateralFees(new PreCommitEvent(event.getMetadata()));
+        verify(blockStorage, never()).save(any());
+        blockProcessor.handleBlockHeaderEvent(event);
+        blockProcessor.handleCollateralFees(new PreCommitEvent(event.getMetadata()));
+
+        verify(blockStorage).save(blockArgCaptor.capture());
+        assertThat(blockArgCaptor.getValue().getTotalFees()).isEqualTo(3_000_000);
+    }
+
+    private TransactionBody collateralTransaction(String hash, long fee, Long totalCollateral, Long collateralReturn) {
+        return TransactionBody.builder()
+                .txHash(hash)
+                .fee(BigInteger.valueOf(fee))
+                .outputs(List.of())
+                .collateralInputs(Set.of(new TransactionInput(hash + "-input", 0)))
+                .totalCollateral(totalCollateral == null ? null : BigInteger.valueOf(totalCollateral))
+                .collateralReturn(collateralReturn == null ? null : TransactionOutput.builder()
+                        .amounts(List.of(Amount.builder().unit("lovelace")
+                                .quantity(BigInteger.valueOf(collateralReturn)).build())).build())
+                .build();
+    }
+
+    private AddressUtxo utxo(long lovelace) {
+        return AddressUtxo.builder().lovelaceAmount(BigInteger.valueOf(lovelace)).build();
+    }
+
+    private BlockEvent blockEvent(List<TransactionBody> bodies, List<Integer> invalidTransactions) {
+        var template = blockEvent();
+        return BlockEvent.builder().metadata(template.getMetadata())
+                .block(com.bloxbean.cardano.yaci.core.model.Block.builder()
+                        .header(template.getBlock().getHeader())
+                        .transactionBodies(bodies)
+                        .invalidTransactions(invalidTransactions)
+                        .build()).build();
     }
 
     private BlockEvent blockEvent() {
