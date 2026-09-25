@@ -181,8 +181,9 @@ public class BlockProcessor {
                 if (!useDeclaredFeeIfUnresolved)
                     return false;
 
-                // Blocks can be indexed without an available UTxO store. Preserve sync progress,
-                // retaining declared fees only for transactions whose collateral cannot be resolved.
+                // Collateral values can be unavailable (no UTxO store, missing outputs, remote lookup failure).
+                // Fall back to the declared fee instead of halting sync; block and epoch totals are then
+                // inaccurate for this transaction.
                 fee = body.getFee();
                 log.warn("Collateral fee unresolved for transaction {} in block {} at slot {}; "
                                 + "using declared fee {}. Block and epoch total fees may be inaccurate.",
