@@ -227,6 +227,121 @@ class Cip68DatumParserTest {
     }
 
     @Nested
+    class OutOfRangeDecimals {
+
+        private Optional<ParsedCip68Datum> parseWithDecimals(BigInteger decimals) throws Exception {
+            MapPlutusData properties = new MapPlutusData();
+            properties.put(BytesPlutusData.of("name"), BytesPlutusData.of("Token"));
+            properties.put(BytesPlutusData.of("description"), BytesPlutusData.of("Desc"));
+            properties.put(BytesPlutusData.of("decimals"), BigIntPlutusData.of(decimals));
+
+            ConstrPlutusData datum = ConstrPlutusData.of(0, properties, BigIntPlutusData.of(1));
+
+            return parser.parse(HexUtil.encodeHexString(CborSerializationUtil.serialize(datum.serialize())));
+        }
+
+        @Test
+        void shouldKeepDecimalsAtUpperBound() throws Exception {
+            assertThat(parseWithDecimals(BigInteger.valueOf(255)))
+                    .hasValueSatisfying(m -> assertThat(m.decimals()).isEqualTo(255L));
+        }
+
+        @Test
+        void shouldDropDecimalsAboveUpperBoundButKeepMetadata() throws Exception {
+            assertThat(parseWithDecimals(BigInteger.valueOf(256))).hasValueSatisfying(m -> {
+                assertThat(m.name()).isEqualTo("Token");
+                assertThat(m.decimals()).isNull();
+            });
+        }
+
+        @Test
+        void shouldDropDecimalsBeyondIntRange() throws Exception {
+            assertThat(parseWithDecimals(BigInteger.TWO.pow(40)))
+                    .hasValueSatisfying(m -> assertThat(m.decimals()).isNull());
+        }
+
+        @Test
+        void shouldDropDecimalsThatWouldWrapWhenNarrowedToLong() throws Exception {
+            // 2^64 + 3: longValue() gives 3, which would otherwise look valid.
+            assertThat(parseWithDecimals(BigInteger.TWO.pow(64).add(BigInteger.valueOf(3))))
+                    .hasValueSatisfying(m -> assertThat(m.decimals()).isNull());
+        }
+
+        @Test
+        void shouldDropNegativeDecimals() throws Exception {
+            assertThat(parseWithDecimals(BigInteger.valueOf(-1)))
+                    .hasValueSatisfying(m -> assertThat(m.decimals()).isNull());
+        }
+    }
+
+    @Nested
+    class OversizedValues {
+
+        private Optional<ParsedCip68Datum> parse(String key, String value, BigInteger version) throws Exception {
+            MapPlutusData properties = new MapPlutusData();
+            properties.put(BytesPlutusData.of("name"), BytesPlutusData.of("Token"));
+            properties.put(BytesPlutusData.of("description"), BytesPlutusData.of("Desc"));
+            properties.put(BytesPlutusData.of(key), BytesPlutusData.of(value));
+
+            ConstrPlutusData datum = ConstrPlutusData.of(0, properties, BigIntPlutusData.of(version));
+
+            return parser.parse(HexUtil.encodeHexString(CborSerializationUtil.serialize(datum.serialize())));
+        }
+
+        private Optional<ParsedCip68Datum> parse(String key, String value) throws Exception {
+            return parse(key, value, BigInteger.ONE);
+        }
+
+        @Test
+        void shouldKeepStringsAtColumnWidth() throws Exception {
+            assertThat(parse("ticker", "T".repeat(32)))
+                    .hasValueSatisfying(m -> assertThat(m.ticker()).hasSize(32));
+            assertThat(parse("url", "u".repeat(250)))
+                    .hasValueSatisfying(m -> assertThat(m.url()).hasSize(250));
+            assertThat(parse("mediaType", "m".repeat(255)))
+                    .hasValueSatisfying(m -> assertThat(m.mediaType()).hasSize(255));
+        }
+
+        @Test
+        void shouldDropStringsWiderThanColumnButKeepMetadata() throws Exception {
+            assertThat(parse("ticker", "T".repeat(33))).hasValueSatisfying(m -> {
+                assertThat(m.ticker()).isNull();
+                assertThat(m.name()).isEqualTo("Token");
+            });
+            assertThat(parse("url", "u".repeat(251)))
+                    .hasValueSatisfying(m -> assertThat(m.url()).isNull());
+            assertThat(parse("mediaType", "m".repeat(256)))
+                    .hasValueSatisfying(m -> assertThat(m.mediaType()).isNull());
+        }
+
+        @Test
+        void shouldDropOversizedNameSoDatumFailsRequiredFieldCheck() throws Exception {
+            assertThat(parse("name", "N".repeat(256)))
+                    .hasValueSatisfying(m -> assertThat(m.name()).isNull());
+        }
+
+        @Test
+        void shouldCountCodePointsNotUtf16Units() throws Exception {
+            // 255 emoji = 510 UTF-16 units but 255 characters, which fits VARCHAR(255)
+            assertThat(parse("name", "🚀".repeat(255)))
+                    .hasValueSatisfying(m -> assertThat(m.name()).isNotNull());
+        }
+
+        @Test
+        void shouldRejectDatumWhoseVersionWouldWrapWhenNarrowedToLong() throws Exception {
+            // 2^64 + 1: longValue() gives 1, which would otherwise look like a valid version
+            assertThat(parse("ticker", "TT", BigInteger.TWO.pow(64).add(BigInteger.ONE))).isEmpty();
+        }
+
+        @Test
+        void shouldAcceptVersionUpToLongMaxAndRejectBeyond() throws Exception {
+            assertThat(parse("ticker", "TT", BigInteger.valueOf(Long.MAX_VALUE)))
+                    .hasValueSatisfying(m -> assertThat(m.version()).isEqualTo(Long.MAX_VALUE));
+            assertThat(parse("ticker", "TT", BigInteger.TWO.pow(63))).isEmpty();
+        }
+    }
+
+    @Nested
     class ParseInvalidDatum {
 
         @Test
