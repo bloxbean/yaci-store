@@ -3,10 +3,13 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.parser;
 import com.bloxbean.cardano.client.plutus.spec.*;
 import com.bloxbean.cardano.client.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.ParsedCip68Datum;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.Cip68Metadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.util.TokenDecimals;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -77,21 +80,27 @@ public class Cip68DatumParser {
             return Optional.empty();
         }
 
+        // version is required and stored as a long: reject rather than let longValue() wrap it
+        if (version.getValue().bitLength() >= Long.SIZE) {
+            log.warn("Ignoring CIP-68 datum with out-of-range version {}", version.getValue());
+            return Optional.empty();
+        }
+
         return Optional.of(new DatumParts(properties, version));
     }
 
     /** Build the typed {@link ParsedCip68Datum} from the unwrapped (Map, version) pair. */
     private ParsedCip68Datum buildParsedDatum(MapPlutusData properties, BigIntPlutusData version) {
         return new ParsedCip68Datum(
-                getNumericProperty(DECIMALS, properties).orElse(null),
+                getDecimalsProperty(properties).orElse(null),
                 getStringProperty(DESCRIPTION, properties).orElse(null),
                 getStringProperty(LOGO, properties).orElse(null),
-                getStringProperty(NAME, properties).orElse(null),
-                getStringProperty(TICKER, properties).orElse(null),
-                getStringProperty(URL, properties).orElse(null),
+                getBoundedStringProperty(NAME, properties, Cip68Metadata.NAME_MAX_LENGTH).orElse(null),
+                getBoundedStringProperty(TICKER, properties, Cip68Metadata.TICKER_MAX_LENGTH).orElse(null),
+                getBoundedStringProperty(URL, properties, Cip68Metadata.URL_MAX_LENGTH).orElse(null),
                 version.getValue().longValue(),
                 getStringOrChunkedProperty(IMAGE, properties).orElse(null),
-                getStringProperty(MEDIA_TYPE, properties).orElse(null),
+                getBoundedStringProperty(MEDIA_TYPE, properties, Cip68Metadata.MEDIA_TYPE_MAX_LENGTH).orElse(null),
                 buildPropertiesJson(properties));
     }
 
@@ -105,7 +114,7 @@ public class Cip68DatumParser {
         Map<String, Object> additional = parseAdditionalProperties(properties);
 
         boolean hasFiles = files != null && !files.isEmpty();
-        boolean hasAdditional = additional != null && !additional.isEmpty();
+        boolean hasAdditional = !additional.isEmpty();
         if (!hasFiles && !hasAdditional) {
             return null;
         }
@@ -132,12 +141,30 @@ public class Cip68DatumParser {
     }
 
     /**
+     * Reads a string property bound for a fixed-width column. Longer values are dropped, since an
+     * oversized value would fail the insert and stop the sync; for the required {@code name} that
+     * means the datum is then skipped by {@code Cip68TokenService.isValidMetadata}.
+     * Length is counted in code points, matching how VARCHAR(n) counts characters.
+     */
+    private Optional<String> getBoundedStringProperty(String propertyName, MapPlutusData mapPlutusData, int maxLength) {
+        return getStringProperty(propertyName, mapPlutusData).filter(value -> {
+            int length = value.codePointCount(0, value.length());
+            if (length > maxLength) {
+                log.warn("Ignoring CIP-68 '{}' of {} characters (max {})", propertyName, length, maxLength);
+                return false;
+            }
+            return true;
+        });
+    }
+
+    /**
      * CIP-25 convention (inherited by CIP-68 NFTs): if a string value exceeds 64 bytes
      * the issuer may split it into a list of byte-string chunks. This helper joins them
      * back together. Falls back to {@link #getStringProperty} for the simple-string case.
      */
     private Optional<String> getStringOrChunkedProperty(String propertyName, MapPlutusData mapPlutusData) {
         PlutusData property = mapPlutusData.getMap().get(BytesPlutusData.of(propertyName));
+
         return switch (property) {
             case BytesPlutusData bytes -> Optional.of(bytesToString(bytes.getValue()));
             case ListPlutusData list -> {
@@ -153,12 +180,26 @@ public class Cip68DatumParser {
         };
     }
 
-    private Optional<Long> getNumericProperty(String propertyName, MapPlutusData mapPlutusData) {
-        PlutusData property = mapPlutusData.getMap().get(BytesPlutusData.of(propertyName));
-        return switch (property) {
-            case BigIntPlutusData bigInt -> Optional.of(bigInt.getValue().longValue());
-            case null, default -> Optional.empty();
-        };
+    /**
+     * Reads {@code decimals} from the datum. The value is an unbounded on-chain integer, so values that
+     * don't fit in a {@code long} are rejected before narrowing: {@code longValue()} alone would
+     * silently wrap values above {@code 2^63} into a plausible-looking number. An out-of-range value
+     * is dropped (the rest of the metadata is kept) rather than stored.
+     */
+    private Optional<Long> getDecimalsProperty(MapPlutusData mapPlutusData) {
+        PlutusData property = mapPlutusData.getMap().get(BytesPlutusData.of(DECIMALS));
+        if (!(property instanceof BigIntPlutusData bigInt)) {
+            return Optional.empty();
+        }
+
+        BigInteger value = bigInt.getValue();
+        // bitLength guard first: longValue() is only exact when the value fits in a long
+        if (value.bitLength() >= Long.SIZE || !TokenDecimals.isInRange(value.longValue())) {
+            log.warn("Ignoring out-of-range CIP-68 decimals {} (allowed {})", value, TokenDecimals.RANGE);
+            return Optional.empty();
+        }
+
+        return Optional.of(value.longValue());
     }
 
     /**

@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.util;
 
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.Cip26Metadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.util.TokenDecimals;
 import lombok.extern.slf4j.Slf4j;
 import org.cardanofoundation.metadatatools.core.cip26.MetadataCreator;
 import org.cardanofoundation.metadatatools.core.cip26.ValidationField;
@@ -27,6 +28,15 @@ public class Cip26MetadataValidator {
      * @return true if valid according to CIP-26, false otherwise
      */
     public boolean validate(Cip26Metadata tokenMetadata) {
+        // cf-tokens-cip26 only checks decimals >= 0, and on an int: range-check the stored Long
+        // here, before convertToMetadata narrows it (4294967301 would otherwise pass as 5).
+        Long decimals = tokenMetadata.getDecimals();
+        if (decimals != null && !TokenDecimals.isInRange(decimals)) {
+            log.warn("CIP-26 validation failed for subject '{}': decimals {} not in {}",
+                    tokenMetadata.getSubject(), decimals, TokenDecimals.RANGE);
+            return false;
+        }
+
         try {
             Metadata cip26Metadata = convertToMetadata(tokenMetadata);
             ValidationResult validationResult = MetadataCreator.validateMetadata(cip26Metadata);
