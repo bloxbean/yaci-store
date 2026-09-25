@@ -34,7 +34,7 @@ Anything exceeding the limits is rejected by `Cip26MetadataValidator` before ins
 | `ticker` | `VARCHAR(9)` | CIP-26 cap, 2–9 chars. |
 | `url` | `VARCHAR(250)` | CIP-26 cap. |
 | `description` | `VARCHAR(500)` | CIP-26 cap (see `MetadataValidationRules.MAX_DESCRIPTION_LENGTH`). |
-| `decimals` | `BIGINT` | Spec range [0, 19]. Stored as `BIGINT` to match the rest of the pipeline (Java `Long` in parser, entity, DTO) and avoid type-conversion noise at every boundary. The 4-byte overhead vs `INTEGER` is negligible. |
+| `decimals` | `BIGINT` | 0–19 in practice; the write paths limit it to [0, 255] (`TokenDecimals`), no DB constraint. Stored as `BIGINT` to match the rest of the pipeline (Java `Long` in parser, entity, DTO) and avoid type-conversion noise at every boundary. The 4-byte overhead vs `INTEGER` is negligible. |
 | `logo` | `TEXT` (PG/H2) / `LONGTEXT` (MySQL) | Base64-encoded image, up to ~87 KB per CIP-26. MySQL `TEXT` caps at 64 KB so `LONGTEXT` is required. PostgreSQL TOAST keeps the bulky column out of the row when not selected. |
 | `updated`, `updated_by` | `TIMESTAMP`, `VARCHAR(255)` | Audit fields from the registry entry. |
 | `properties` | `JSONB` (PG) / `JSON` (MySQL) / `TEXT` (H2) | Catch-all: full original `Mapping` JSON with per-property signed envelopes (`{value, signatures, sequenceNumber}`) and any non-well-known properties. |
