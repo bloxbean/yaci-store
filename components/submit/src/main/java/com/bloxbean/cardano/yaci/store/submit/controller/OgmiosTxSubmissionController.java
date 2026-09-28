@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -30,20 +31,21 @@ public class OgmiosTxSubmissionController {
 
     @PostMapping(value = "submit", consumes = {MediaType.APPLICATION_CBOR_VALUE})
     public ResponseEntity<String> submitTx(@RequestBody byte[] txBytes) {
-        return ogmiosTxSubmission(txBytes);
+        return ogmiosTxSubmission(txBytes, true);
     }
 
     @PostMapping(value = "submit", consumes = {MediaType.TEXT_PLAIN_VALUE})
     public ResponseEntity<String> submitTx(@RequestBody String txBytesHex) {
         byte[] cborBytes = HexUtil.decodeHexString(txBytesHex);
-        return ogmiosTxSubmission(cborBytes);
+        return ogmiosTxSubmission(cborBytes, false);
     }
 
-    private ResponseEntity<String> ogmiosTxSubmission(byte[] cborTx) {
+    private ResponseEntity<String> ogmiosTxSubmission(byte[] cborTx, boolean blockfrostStatus) {
         try {
             Result<String> result = ogmiosService.submitTx(cborTx);
             if (result.isSuccessful()) {
-                return ResponseEntity.accepted()
+                //200 OK on the Blockfrost compatible application/cbor endpoint, 202 on the text/plain (hex) endpoint
+                return ResponseEntity.status(blockfrostStatus ? HttpStatus.OK : HttpStatus.ACCEPTED)
                         .contentType(MediaType.APPLICATION_JSON)
                         .body("\"" + result.getValue() + "\"");
             } else {
