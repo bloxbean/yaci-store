@@ -75,6 +75,7 @@ if item.label == "721": ...  # ❌ Throws AttributeError
 ```
 
 #### Java
+- **Availability**: 3.x only (3.0.0-beta and later)
 - **Strongly typed access**: Java plugins operate on typed domain objects such as `TxMetadataLabel` or `AddressUtxo`
 - **Use normal Java methods**: Access fields with getters/setters, e.g. `item.getLabel()` or `utxo.getLovelaceAmount()`
 - **Use `PluginContext` for utilities**: Access built-ins with `context().namedJdbc()`, `context().http()`, `context().files()`, `context().environment()`, `state()`, and `globalState()`
