@@ -14,6 +14,7 @@ import com.bloxbean.cardano.yaci.store.common.genesis.util.PlutusKeys;
 import com.bloxbean.cardano.yaci.store.epoch.dto.ProtocolParamsDto;
 import com.bloxbean.cardano.yaci.store.epoch.util.PlutusOps;
 
+import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.*;
 
@@ -131,6 +132,16 @@ public class DomainMapperDecorator implements DomainMapper {
         protocolParamsDto.setDecentralisationParam(safeRatio(protocolParams.getDecentralisationParam()));
         protocolParamsDto.setPriceMem(safeRatio(protocolParams.getPriceMem()));
         protocolParamsDto.setPriceStep(safeRatio(protocolParams.getPriceStep()));
+
+        //To align with Blockfrost, which returns these legacy params for every era
+        if (protocolParamsDto.getDecentralisationParam() == null)
+            protocolParamsDto.setDecentralisationParam(BigDecimal.ZERO);
+        if (protocolParamsDto.getCoinsPerUtxoSize() != null) {
+            if (protocolParamsDto.getMinUtxo() == null)
+                protocolParamsDto.setMinUtxo(protocolParamsDto.getCoinsPerUtxoSize());
+            if (protocolParamsDto.getCoinsPerUtxoWord() == null)
+                protocolParamsDto.setCoinsPerUtxoWord(protocolParamsDto.getCoinsPerUtxoSize());
+        }
 
         //pvt
         PoolVotingThresholds poolVotingThresholds = protocolParams.getPoolVotingThresholds();

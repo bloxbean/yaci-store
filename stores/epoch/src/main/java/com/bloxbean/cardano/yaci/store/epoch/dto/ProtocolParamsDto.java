@@ -5,6 +5,8 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -38,6 +40,8 @@ public class ProtocolParamsDto {
     private BigDecimal rho;
     private BigDecimal tau;
     private BigDecimal decentralisationParam;
+    //Always included (null when not set) to align with Blockfrost
+    @JsonInclude(JsonInclude.Include.ALWAYS)
     private String extraEntropy;
     private Integer protocolMajorVer;
     private Integer protocolMinorVer;
@@ -78,17 +82,28 @@ public class ProtocolParamsDto {
     private BigDecimal dvtCommitteeNoConfidence;
     private BigDecimal dvtUpdateToConstitution;
     private BigDecimal dvtHardForkInitiation;
+    @JsonProperty("dvt_p_p_network_group")
     private BigDecimal dvtPPNetworkGroup;
+    @JsonProperty("dvt_p_p_economic_group")
     private BigDecimal dvtPPEconomicGroup;
+    @JsonProperty("dvt_p_p_technical_group")
     private BigDecimal dvtPPTechnicalGroup;
+    @JsonProperty("dvt_p_p_gov_group")
     private BigDecimal dvtPPGovGroup;
     private BigDecimal dvtTreasuryWithdrawal;
 
+    //Serialized as strings to align with Blockfrost
+    @JsonSerialize(using = ToStringSerializer.class)
     private Integer committeeMinSize;
+    @JsonSerialize(using = ToStringSerializer.class)
     private Integer committeeMaxTermLength;
+    @JsonSerialize(using = ToStringSerializer.class)
     private Integer govActionLifetime;
+    @JsonSerialize(using = ToStringSerializer.class)
     private BigInteger govActionDeposit;
+    @JsonSerialize(using = ToStringSerializer.class)
     private BigInteger drepDeposit;
+    @JsonSerialize(using = ToStringSerializer.class)
     private Integer drepActivity;
     private BigDecimal minFeeRefScriptCostPerByte;
 
