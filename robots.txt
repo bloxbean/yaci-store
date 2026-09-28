@@ -1,4 +1,4 @@
 User-Agent: *
 Allow: /
 
-Sitemap: https://store.yaci.xyz//sitemap.xml
+Sitemap: https://store.yaci.xyz/sitemap.xml
