@@ -42,6 +42,7 @@ class UtxoUtil {
                 .epoch(addressUtxo.getEpoch())
                 .blockNumber(addressUtxo.getBlockNumber())
                 .blockTime(addressUtxo.getBlockTime())
+                .block(addressUtxo.getBlockHash())
                 .build();
     }
 }
