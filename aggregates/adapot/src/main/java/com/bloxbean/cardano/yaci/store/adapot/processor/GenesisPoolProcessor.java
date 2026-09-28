@@ -189,6 +189,7 @@ public class GenesisPoolProcessor {
                     .certIndex(i)
                     .txIndex(0)
                     .type(CertificateType.STAKE_REGISTRATION)
+                    .deposit(depositParamService.getKeyDeposit(0))
                     .epoch(genesisBlockEvent.getEpoch())
                     .blockNumber(genesisBlockEvent.getBlock())
                     .blockHash(genesisBlockEvent.getBlockHash())

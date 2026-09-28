@@ -20,6 +20,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -177,6 +178,67 @@ class Cip26MetadataServiceTest {
             InsertOutcome outcome = service.insertLogo(mapping("subject1"));
 
             assertThat(outcome).isEqualTo(InsertOutcome.TRANSIENTLY_FAILED);
+        }
+    }
+
+    @Nested
+    @DisplayName("deleteMapping")
+    class DeleteMapping {
+
+        private static final String SUBJECT =
+                "ff7cad970d3a755a1ff0335ccb3f3c1cabf31aacf3f23dd13db61b0630313030";
+
+        @Test
+        void returnsDeletedOnHappyPath() {
+            DeleteOutcome outcome = service.deleteMapping(SUBJECT);
+
+            assertThat(outcome).isEqualTo(DeleteOutcome.DELETED);
+            verify(cip26MetadataRepository).deleteById(SUBJECT);
+        }
+
+        @Test
+        void returnsPermanentlyFailedOnNonTransientDataAccessException() {
+            doThrow(new DataIntegrityViolationException("fk violation"))
+                    .when(cip26MetadataRepository).deleteById(SUBJECT);
+
+            DeleteOutcome outcome = service.deleteMapping(SUBJECT);
+
+            assertThat(outcome).isEqualTo(DeleteOutcome.PERMANENTLY_FAILED);
+        }
+
+        @Test
+        void returnsTransientlyFailedOnTransientDataAccessException() {
+            doThrow(new CannotAcquireLockException("lock timeout"))
+                    .when(cip26MetadataRepository).deleteById(SUBJECT);
+
+            DeleteOutcome outcome = service.deleteMapping(SUBJECT);
+
+            assertThat(outcome).isEqualTo(DeleteOutcome.TRANSIENTLY_FAILED);
+        }
+
+        @Test
+        void returnsTransientlyFailedOnUnclassifiedException() {
+            // Unknown exception type — conservative default so a removed token
+            // is not silently left behind.
+            doThrow(new RuntimeException("DB error"))
+                    .when(cip26MetadataRepository).deleteById(SUBJECT);
+
+            DeleteOutcome outcome = service.deleteMapping(SUBJECT);
+
+            assertThat(outcome).isEqualTo(DeleteOutcome.TRANSIENTLY_FAILED);
+        }
+    }
+
+    @Nested
+    @DisplayName("findAllSubjects")
+    class FindAllSubjects {
+
+        @Test
+        void delegatesToRepository() {
+            when(cip26MetadataRepository.findAllSubjects())
+                    .thenReturn(java.util.List.of("subject1", "subject2"));
+
+            assertThat(service.findAllSubjects()).containsExactly("subject1", "subject2");
         }
     }
 }

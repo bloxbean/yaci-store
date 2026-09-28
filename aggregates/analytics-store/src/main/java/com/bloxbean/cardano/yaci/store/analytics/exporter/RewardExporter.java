@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.analytics.exporter;
 
+import java.util.Map;
 import com.bloxbean.cardano.yaci.store.adapot.job.storage.AdaPotJobStorage;
 import com.bloxbean.cardano.yaci.store.analytics.config.AnalyticsStoreProperties;
 import com.bloxbean.cardano.yaci.store.analytics.state.ExportStateService;
@@ -12,7 +13,7 @@ import org.springframework.stereotype.Service;
 /**
  * Exporter for staking rewards.
  *
- * Partitioning: EPOCH (epoch=N correspond to spendable_epoch)
+ * Partitioning: EPOCH (epoch=N based on earned_epoch)
  * Source: reward table
  * Output: reward/epoch=N/data.parquet
  */
@@ -38,6 +39,12 @@ public class RewardExporter extends AbstractTableExporter {
     @Override
     public PartitionStrategy getPartitionStrategy() {
         return PartitionStrategy.EPOCH;
+    }
+
+    /** Unified view: the exported {@code epoch} column is PostgreSQL {@code earned_epoch}. */
+    @Override
+    public Map<String, String> getSourceColumnMappings() {
+        return Map.of("epoch", "earned_epoch");
     }
 
     @Override

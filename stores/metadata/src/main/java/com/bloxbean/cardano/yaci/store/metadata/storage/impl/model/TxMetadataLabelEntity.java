@@ -27,6 +27,9 @@ public class TxMetadataLabelEntity extends BlockAwareEntity {
     @Column(name = "tx_hash")
     private String txHash;
 
+    @Column(name = "tx_index")
+    private Integer txIndex;
+
     @Column(name = "label")
     private String label;
 

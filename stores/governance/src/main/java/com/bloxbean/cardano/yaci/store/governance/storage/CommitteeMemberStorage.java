@@ -8,7 +8,14 @@ import java.util.List;
 public interface CommitteeMemberStorage {
     void saveAll(List<CommitteeMember> committeeMembers);
     List<CommitteeMember> getCommitteeMembersByEpoch(int epoch);
+
+    /**
+     * Resolves active committee members for vote collection at the snapshot epoch.
+     */
     List<CommitteeMemberDetails> getActiveCommitteeMembersDetailsByEpoch(int epoch);
+    /**
+     * Resolves active committee members for ratification at the current epoch.
+     */
     List<CommitteeMemberDetails> getActiveCommitteeMembersDetailsForRatificationByEpoch(int epoch);
     int deleteBySlotGreaterThan(long slot);
 }

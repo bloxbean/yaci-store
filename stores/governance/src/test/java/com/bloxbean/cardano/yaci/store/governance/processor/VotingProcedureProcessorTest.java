@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -94,6 +95,57 @@ class VotingProcedureProcessorTest {
         assertThat(votingProceduresSaved.get(0).getGovActionIndex()).isEqualTo(1);
     }
 
+    @Test
+    void givenMultipleVotersAndTransactions_ShouldDeriveIndexPerOrderedVoterActions() {
+        String firstTxHash = "1111111111111111111111111111111111111111111111111111111111111111";
+        String secondTxHash = "2222222222222222222222222222222222222222222222222222222222222222";
+        String firstVoterHash = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        String secondVoterHash = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        String firstGovActionTxHash = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        String secondGovActionTxHash = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+
+        Map<GovActionId, VotingProcedure> firstVoterActions = new LinkedHashMap<>();
+        firstVoterActions.put(govAction(secondGovActionTxHash, 0), vote(Vote.YES));
+        firstVoterActions.put(govAction(firstGovActionTxHash, 2), vote(Vote.NO));
+        firstVoterActions.put(govAction(firstGovActionTxHash, 1), vote(Vote.ABSTAIN));
+
+        Map<Voter, Map<GovActionId, VotingProcedure>> firstTxVoting = new LinkedHashMap<>();
+        firstTxVoting.put(voter(VoterType.DREP_KEY_HASH, firstVoterHash), firstVoterActions);
+        firstTxVoting.put(voter(VoterType.STAKING_POOL_KEY_HASH, secondVoterHash),
+                Map.of(govAction(secondGovActionTxHash, 1), vote(Vote.YES)));
+
+        Map<Voter, Map<GovActionId, VotingProcedure>> secondTxVoting = new LinkedHashMap<>();
+        secondTxVoting.put(voter(VoterType.DREP_KEY_HASH, firstVoterHash),
+                Map.of(govAction(secondGovActionTxHash, 2), vote(Vote.NO)));
+
+        GovernanceEvent governanceEvent = GovernanceEvent.builder()
+                .metadata(eventMetadata())
+                .txGovernanceList(List.of(
+                        txGovernance(firstTxHash, firstTxVoting),
+                        txGovernance(secondTxHash, secondTxVoting)
+                ))
+                .build();
+
+        votingProcedureProcessor.handleVotingProcedure(governanceEvent);
+
+        verify(votingProcedureStorage).saveAll(votingProceduresCaptor.capture());
+        assertThat(votingProceduresCaptor.getValue())
+                .extracting(
+                        com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure::getTxHash,
+                        com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure::getVoterHash,
+                        com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure::getGovActionTxHash,
+                        com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure::getGovActionIndex,
+                        com.bloxbean.cardano.yaci.store.governance.domain.VotingProcedure::getIndex
+                )
+                .containsExactly(
+                        tuple(firstTxHash, firstVoterHash, firstGovActionTxHash, 1, 0L),
+                        tuple(firstTxHash, firstVoterHash, firstGovActionTxHash, 2, 1L),
+                        tuple(firstTxHash, firstVoterHash, secondGovActionTxHash, 0, 2L),
+                        tuple(firstTxHash, secondVoterHash, secondGovActionTxHash, 1, 0L),
+                        tuple(secondTxHash, firstVoterHash, secondGovActionTxHash, 2, 0L)
+                );
+    }
+
     private EventMetadata eventMetadata() {
         return EventMetadata.builder()
                 .block(100L)
@@ -119,5 +171,24 @@ class VotingProcedureProcessorTest {
                                                 .anchor_data_hash("1111111111111111111111111111111111111111111111111111111111111111")
                                                 .build()).build())));
         return votingMap;
+    }
+
+    private TxGovernance txGovernance(String txHash, Map<Voter, Map<GovActionId, VotingProcedure>> voting) {
+        return TxGovernance.builder()
+                .txHash(txHash)
+                .votingProcedures(VotingProcedures.builder().voting(voting).build())
+                .build();
+    }
+
+    private Voter voter(VoterType type, String hash) {
+        return Voter.builder().type(type).hash(hash).build();
+    }
+
+    private GovActionId govAction(String transactionId, int index) {
+        return GovActionId.builder().transactionId(transactionId).gov_action_index(index).build();
+    }
+
+    private VotingProcedure vote(Vote vote) {
+        return VotingProcedure.builder().vote(vote).build();
     }
 }

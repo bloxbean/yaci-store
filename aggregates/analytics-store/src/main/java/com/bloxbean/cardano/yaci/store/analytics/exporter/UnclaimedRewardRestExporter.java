@@ -9,6 +9,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
+import java.util.Map;
+
 /**
  * Exporter for unclaimed reward rest (rewards not claimed before treasury transfer).
  *
@@ -46,6 +48,12 @@ public class UnclaimedRewardRestExporter extends AbstractTableExporter {
     @Override
     public PartitionStrategy getPartitionStrategy() {
         return PartitionStrategy.EPOCH;
+    }
+
+    /** Unified view: the exported {@code epoch} column is PostgreSQL {@code earned_epoch}. */
+    @Override
+    public Map<String, String> getSourceColumnMappings() {
+        return Map.of("epoch", "earned_epoch");
     }
 
     @Override

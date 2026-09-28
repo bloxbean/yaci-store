@@ -10,14 +10,17 @@ import org.springframework.context.annotation.Configuration;
 import javax.sql.DataSource;
 
 /**
- * Configuration for DuckDB DataSources with connection pooling.
+ * Configuration for the DuckDB writer DataSource.
  *
- * Creates separate pooled DataSources for DuckDB:
- * - Writer DataSource: For export operations
- * - Reader DataSource: Multiple connections for concurrent analytical queries
+ * <p>A single pooled in-memory DuckDB connection is used for export operations. It ATTACHes
+ * the DuckLake catalog via the {@code ducklake:} protocol in
+ * {@code prepareConnectionForDuckLake()} and keeps it attached for the JVM lifetime.</p>
  *
- * All connections are in-memory and ATTACH the DuckLake catalog via the
- * ducklake: protocol in prepareConnectionForDuckLake().
+ * <p>There is deliberately no separate reader pool: DuckDB allows exactly one DuckDB instance
+ * per process to have a given catalog file open ({@code Unique file handle conflict}),
+ * READ_ONLY included. Catalog metadata for read-only consumers is obtained through this
+ * writer connection ({@code DuckLakeCatalogSnapshotReader}); all serving reads happen in the
+ * analytics query layer, which reads the committed Parquet files directly.</p>
  */
 @Configuration
 @ConditionalOnProperty(prefix = "yaci.store.analytics", name = "enabled", havingValue = "true")
@@ -62,40 +65,6 @@ public class DuckDbDataSourceConfig {
     }
 
     /**
-     * Create DuckDB Reader DataSource with HikariCP connection pooling.
-     *
-     * Used for read-only analytical queries against DuckLake catalog.
-     * Supports multiple concurrent readers for optimal query throughput.
-     * Pool size defaults to available processor cores but can be configured.
-     *
-     * Note: Read-only mode is enforced at the DuckDB ATTACH level (READ_ONLY option),
-     * not at the connection level. DuckDB doesn't support connection-level read-only mode.
-     */
-    @Bean(name = "duckDbReaderDataSource")
-    @ConditionalOnProperty(prefix = "yaci.store.analytics.storage", name = "type", havingValue = "ducklake")
-    public DataSource duckDbReaderDataSource() {
-        String jdbcUrl = buildJdbcUrl();
-
-        HikariDataSource dataSource = DataSourceBuilder.create()
-                .type(HikariDataSource.class)
-                .driverClassName("org.duckdb.DuckDBDriver")
-                .url(jdbcUrl)
-                .build();
-
-        // Configure pool size for concurrent reads
-        int poolSize = properties.getDuckdb().getReader().getMaximumPoolSize();
-        dataSource.setMaximumPoolSize(poolSize);
-        dataSource.setMinimumIdle(Math.min(2, poolSize));
-
-        String initSql = buildConnectionInitSql();
-        if (initSql != null) {
-            dataSource.setConnectionInitSql(initSql);
-        }
-
-        return dataSource;
-    }
-
-    /**
      * Build JDBC URL — always uses in-memory connections.
      *
      * The DuckLake catalog (both DuckDB-file and PostgreSQL types) is
@@ -113,10 +82,11 @@ public class DuckDbDataSourceConfig {
      * Executed once per new physical connection by HikariCP's connectionInitSql.
      */
     private String buildConnectionInitSql() {
+        String threadsSql = "SET threads = " + properties.getDuckdb().getThreads();
         String memoryLimit = properties.getDuckdb().getMemoryLimit();
         if (memoryLimit != null && !memoryLimit.isBlank()) {
-            return "SET memory_limit = '" + memoryLimit + "'";
+            return "SET memory_limit = '" + memoryLimit + "'; " + threadsSql;
         }
-        return null;
+        return threadsSql;
     }
 }

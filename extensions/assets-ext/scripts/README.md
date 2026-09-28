@@ -145,5 +145,4 @@ limit — prefer it when available.
 - [`SKILL.md`](../../../.claude/skills/assets-ext-regression/SKILL.md) — Claude
   Code skill that wraps these scripts for one-command QA invocation.
 - [`db/store/README.md`](../src/main/resources/db/store/README.md) — schema
-  documentation for `cip26_metadata` / `cip26_sync_state` / `cip68_metadata` /
-  `cip113_registry_node`.
+  documentation for `cip26_metadata` / `cip26_sync_state` / `cip68_metadata`.

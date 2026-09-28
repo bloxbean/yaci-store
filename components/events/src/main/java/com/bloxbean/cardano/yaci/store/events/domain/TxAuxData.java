@@ -12,5 +12,6 @@ import lombok.NoArgsConstructor;
 @Builder
 public class TxAuxData {
     private String txHash;
+    private Integer txIndex;
     private AuxData auxData;
 }

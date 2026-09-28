@@ -47,6 +47,12 @@ public class SpentOutputsExporter extends AbstractTableExporter {
         return PartitionStrategy.DAILY;
     }
 
+    /** Unified view boundary: spent outputs are keyed (and partitioned) by when they were spent. */
+    @Override
+    public String getFederationBoundaryColumn() {
+        return "spent_at_slot";
+    }
+
     @Override
     public String getPartitionColumn() {
         // Spent outputs are partitioned by when they were spent, not created

@@ -3,11 +3,8 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.api.service;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.QueryPriority;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.*;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.cip26.Cip26TokenMetadata;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.model.ProgrammableTokenCip113;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.Cip113StorageReader;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.Cip26StorageReader;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.Cip26Metadata;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.AssetType;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.Cip68StorageReader;
 import lombok.RequiredArgsConstructor;
@@ -23,8 +20,7 @@ import java.util.stream.Collectors;
 /**
  * Core query and merge logic for multi-standard token metadata.
  * <p>
- * Merges CIP-26 and CIP-68 metadata based on a configurable priority order,
- * and appends CIP-113 extensions when applicable.
+ * Merges CIP-26 and CIP-68 metadata based on a configurable priority order.
  */
 @Service
 @RequiredArgsConstructor
@@ -35,7 +31,6 @@ public class TokenQueryService {
 
     private final Cip26StorageReader cip26StorageReader;
     private final Cip68StorageReader cip68StorageReader;
-    private final Cip113StorageReader cip113StorageReader;
 
     /**
      * Query and merge metadata for a single subject.
@@ -58,12 +53,8 @@ public class TokenQueryService {
             return Optional.empty();
         }
 
-        Map<String, Extension> extensions = buildExtensions(subject);
-        TokenType type = extensions.isEmpty() ? TokenType.NATIVE : TokenType.PROGRAMMABLE;
-
-        return Optional.of(new Subject(subject, type, resolved.metadata(),
-                showCipsDetails ? resolved.standards() : null,
-                extensions.isEmpty() ? null : extensions));
+        return Optional.of(new Subject(subject, resolved.metadata(),
+                showCipsDetails ? resolved.standards() : null));
     }
 
     /**
@@ -79,32 +70,16 @@ public class TokenQueryService {
         ResolvedMetadata resolved = queryPriority.stream()
                 .reduce(IDENTITY, combineStandardsBatch(subject, queryProperties, prefetchData), aggregateResults());
 
-        Map<String, Extension> extensions = new LinkedHashMap<>();
-        ProgrammableTokenCip113 cip113 = prefetchData.cip113Map().get(AssetType.fromUnit(subject).policyId());
-        if (cip113 != null) {
-            extensions.put(ProgrammableTokenCip113.EXTENSION_KEY, cip113);
-        }
-
-        TokenType type = extensions.isEmpty() ? TokenType.NATIVE : TokenType.PROGRAMMABLE;
-
-        return new Subject(subject, type, resolved.metadata(),
-                showCipsDetails ? resolved.standards() : null,
-                extensions.isEmpty() ? null : extensions);
+        return new Subject(subject, resolved.metadata(),
+                showCipsDetails ? resolved.standards() : null);
     }
 
     /**
      * Pre-fetch all data for a batch of subjects in bulk queries to avoid N+1.
-     * Issues at most 4 queries regardless of batch size:
-     * CIP-26 metadata, CIP-26 logos, CIP-68 reference NFTs, CIP-113 registry nodes.
+     * Issues at most 3 queries regardless of batch size:
+     * CIP-26 metadata, CIP-26 logos, CIP-68 reference NFTs.
      */
     public BatchPrefetchData prefetchBatch(List<String> subjects, List<String> queryProperties) {
-        // CIP-113: one query for all distinct policy IDs
-        List<String> policyIds = subjects.stream()
-                .map(s -> AssetType.fromUnit(s).policyId())
-                .distinct()
-                .toList();
-        Map<String, ProgrammableTokenCip113> cip113Map = cip113StorageReader.findByPolicyIds(policyIds);
-
         // CIP-26: one query for all metadata, one query for all logos
         Map<String, Cip26Metadata> cip26MetadataMap = cip26StorageReader.findBySubjects(subjects).stream()
                 .collect(Collectors.toMap(Cip26Metadata::getSubject, Function.identity()));
@@ -119,14 +94,13 @@ public class TokenQueryService {
         // batch is safe and avoids a double prefix-check here.
         Map<String, FungibleTokenMetadata> cip68MetadataMap = cip68StorageReader.findBySubjects(subjects, queryProperties);
 
-        return new BatchPrefetchData(cip113Map, cip26MetadataMap, cip26LogoMap, cip68MetadataMap);
+        return new BatchPrefetchData(cip26MetadataMap, cip26LogoMap, cip68MetadataMap);
     }
 
     /**
      * Pre-fetched data for batch operations. Eliminates N+1 queries.
      */
     public record BatchPrefetchData(
-            Map<String, ProgrammableTokenCip113> cip113Map,
             Map<String, Cip26Metadata> cip26MetadataMap,
             Map<String, String> cip26LogoMap,
             Map<String, FungibleTokenMetadata> cip68MetadataMap) {
@@ -219,14 +193,6 @@ public class TokenQueryService {
         return Optional.of(new ResolvedMetadata(
                 Metadata.from(cip68TokenMetadata),
                 new Standards(null, cip68TokenMetadata)));
-    }
-
-    private Map<String, Extension> buildExtensions(String subject) {
-        Map<String, Extension> extensions = new LinkedHashMap<>();
-        cip113StorageReader.findByPolicyId(AssetType.fromUnit(subject).policyId())
-                .ifPresent(cip113 -> extensions.put(ProgrammableTokenCip113.EXTENSION_KEY, cip113));
-
-        return extensions;
     }
 
     /**

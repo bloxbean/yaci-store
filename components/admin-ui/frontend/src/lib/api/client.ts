@@ -9,6 +9,7 @@ export interface SyncStatus {
     syncPercentage: number;
     networkBlock: number;
     networkSlot: number;
+    networkTipAvailable: boolean;
     synced: boolean;
     protocolMagic: number;
 }

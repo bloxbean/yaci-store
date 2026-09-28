@@ -8,7 +8,7 @@ import com.bloxbean.cardano.yaci.store.governancerules.voting.VotingEvaluator;
 import com.bloxbean.cardano.yaci.store.governancerules.voting.VotingStatus;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
+import java.math.BigInteger;
 
 public class CommitteeVotingEvaluator implements VotingEvaluator<VotingData> {
 
@@ -33,8 +33,8 @@ public class CommitteeVotingEvaluator implements VotingEvaluator<VotingData> {
             return VotingStatus.NOT_PASS_THRESHOLD;
         }
 
-        var threshold = committee.getThreshold().safeRatio();
-        if (threshold.equals(BigDecimal.ZERO)) {
+        var threshold = committee.getThreshold();
+        if (threshold.safeRatio().compareTo(BigDecimal.ZERO) == 0) {
             return VotingStatus.PASS_THRESHOLD;
         }
 
@@ -49,11 +49,14 @@ public class CommitteeVotingEvaluator implements VotingEvaluator<VotingData> {
         if (totalExcludingAbstain == 0) {
             return VotingStatus.NOT_PASS_THRESHOLD;
         }
-        
-        BigDecimal acceptedRatio = BigDecimal.valueOf(yesVotes)
-                .divide(BigDecimal.valueOf(totalExcludingAbstain), 4, RoundingMode.HALF_UP);
 
-        return acceptedRatio.compareTo(threshold) >= 0 ?
+        // Compare yes/total >= thresholdNumerator/thresholdDenominator exactly by cross-multiplying.
+        BigInteger acceptedRatioSide = BigInteger.valueOf(yesVotes)
+                .multiply(threshold.getDenominator());
+        BigInteger thresholdSide = BigInteger.valueOf(totalExcludingAbstain)
+                .multiply(threshold.getNumerator());
+
+        return acceptedRatioSide.compareTo(thresholdSide) >= 0 ?
                 VotingStatus.PASS_THRESHOLD : VotingStatus.NOT_PASS_THRESHOLD;
     }
 }

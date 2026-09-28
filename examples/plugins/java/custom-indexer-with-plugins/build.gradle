@@ -1,0 +1,38 @@
+// This example is a subproject of the yaci-store build (see settings.gradle:
+// include 'examples:plugins:java:custom-indexer-with-plugins'). It depends on the yaci-store
+// modules directly via project() coordinates, so it always builds against the in-tree source —
+// no composite build / dependencySubstitution is required.
+//
+// The root build.gradle subprojects block already applies `java`, `io.spring.dependency-management`
+// (which imports the spring-boot-dependencies BOM that versions the unversioned deps below),
+// `java-library`, and sets Java 21 source/target. So this file only adds the Spring Boot plugin
+// and the module dependencies.
+plugins {
+    id 'org.springframework.boot' version "${springBootVersion}"
+}
+
+// A custom Cardano indexer app. Mirrors the dependency set of the upstream `applications/utxo-indexer`:
+//   - spring-boot-starter: sync core + plugin system (auto-configured via YaciStoreAutoConfiguration)
+//   - utxo-spring-boot-starter: UTXO store + the `utxo.unspent.save` extension point AddressFilterPlugin hooks
+//   - metadata-spring-boot-starter: metadata store + the `metadata.save` extension point our two
+//     metadata filters hook (also brings the TxMetadataLabel domain class they operate on)
+//   - epoch / submit / admin / dbutils: the same supporting modules the utxo-indexer uses
+//
+// All three filter plugins live in this app's own source (com.bloxbean.example.*), so they are
+// on the app classpath (BOOT-INF/classes) and JavaStorePluginFactory resolves them via
+// Class.forName(...) — no plugins/ext-jars or -Dloader.path required.
+dependencies {
+    implementation project(':starters:spring-boot-starter')
+    implementation project(':starters:utxo-spring-boot-starter')
+    implementation project(':starters:metadata-spring-boot-starter')
+    implementation project(':starters:epoch-spring-boot-starter')
+    implementation project(':starters:submit-spring-boot-starter')
+    implementation project(':starters:admin-spring-boot-starter')
+    implementation project(':components:dbutils')
+
+    runtimeOnly 'org.postgresql:postgresql:42.7.1'
+}
+
+tasks.named('bootJar') {
+    archiveBaseName = 'yaci-custom-indexer'
+}

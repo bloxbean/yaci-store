@@ -6,11 +6,14 @@ import com.bloxbean.cardano.yaci.store.blocks.domain.Block;
 import com.bloxbean.cardano.yaci.store.blocks.storage.BlockStorageReader;
 import com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
+import com.bloxbean.cardano.yaci.core.model.Era;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -36,6 +39,39 @@ public class GapDetectionService {
     private final ExportStateService stateService;
     private final AnalyticsStoreProperties properties;
     private final EraService eraService;
+
+    @PostConstruct
+    void validateAndLogFinalitySettings() {
+        int bufferDays = properties.getContinuousSync().getBufferDays();
+        if (bufferDays < 1) {
+            log.warn("yaci.store.analytics.continuous-sync.buffer-days={} is below the minimum of 1 (a day partition "
+                    + "can only be exported once the day is complete) — using 1", bufferDays);
+            properties.getContinuousSync().setBufferDays(1);
+            bufferDays = 1;
+        }
+        int margin = properties.getContinuousSync().getFinalityMarginHours();
+        if (margin < 0) {
+            log.warn("yaci.store.analytics.continuous-sync.finality-margin-hours={} is negative (it would move the "
+                    + "finalized tip into the future) — using 0", margin);
+            properties.getContinuousSync().setFinalityMarginHours(0);
+            margin = 0;
+        }
+        Duration derived = derivedFinalityWindow();
+        if (derived.isZero()) {
+            log.warn("Cannot derive the finality window from genesis (securityParam={}, activeSlotsCoeff={}, "
+                    + "slotLength={}) and finality-window-hours is not set; only finality-margin-hours ({}h) and "
+                    + "buffer-days ({}) keep exports behind the tip",
+                    genesisConfig.getSecurityParam(), genesisConfig.getActiveSlotsCoeff(),
+                    genesisConfig.slotDuration(Era.Shelley), margin, bufferDays);
+        }
+        int override = properties.getContinuousSync().getFinalityWindowHours();
+        String source = override > 0
+                ? "overridden by finality-window-hours=" + override
+                : String.format("k=%d, activeSlotsCoeff=%s, slotLength=%ss", genesisConfig.getSecurityParam(),
+                        genesisConfig.getActiveSlotsCoeff(), genesisConfig.slotDuration(Era.Shelley));
+        log.info("Analytics export finality: window {}h ({}) + margin {}h, buffer-days={}",
+                derived.toMinutes() / 60.0, source, margin, bufferDays);
+    }
 
     /**
      * Find all missing export dates for a table.
@@ -98,34 +134,77 @@ public class GapDetectionService {
      * @return Latest synced date as LocalDate
      */
     public LocalDate getLatestSyncedDate() {
-        Block recentBlock = blockStorageReader.findRecentBlock()
-            .orElse(null);
-
-        if (recentBlock == null || recentBlock.getBlockTime() == null) {
-            log.warn("No blocks synced yet, using genesis date");
-            return getGenesisDate();
-        }
-
-        long blockTimeEpochSeconds = recentBlock.getBlockTime();
-        return Instant.ofEpochSecond(blockTimeEpochSeconds)
-            .atZone(ZoneOffset.UTC)
-            .toLocalDate();
+        return getLatestSyncedBlockTime()
+            .map(t -> t.atZone(ZoneOffset.UTC).toLocalDate())
+            .orElseGet(() -> {
+                log.warn("No blocks synced yet, using genesis date");
+                return getGenesisDate();
+            });
     }
 
     /**
-     * Calculate the safe end date for exports (latest sync - buffer).
+     * Block time of the most recent synced block, if any.
+     */
+    public Optional<Instant> getLatestSyncedBlockTime() {
+        return blockStorageReader.findRecentBlock()
+            .map(Block::getBlockTime)
+            .map(Instant::ofEpochSecond);
+    }
+
+    /**
+     * Finality window applied before a day is considered exportable: the time Cardano needs
+     * to produce {@code securityParam} (k) blocks — {@code k × slotLength / activeSlotsCoeff},
+     * 12 h on mainnet and preprod — plus {@code continuous-sync.finality-margin-hours}.
+     * {@code continuous-sync.finality-window-hours} replaces the derived part when set.
+     * Cardano's rollback bound is k <em>blocks</em>; this window is the expected time for them,
+ * so rows older than it are beyond the bound with overwhelming probability.
      *
-     * This ensures we don't export data for dates that are still being populated,
-     * providing a safety buffer during initial blockchain synchronization.
+     * @return finality window including the margin
+     */
+    public Duration getFinalityWindow() {
+        int margin = Math.max(0, properties.getContinuousSync().getFinalityMarginHours());
+        return derivedFinalityWindow().plusHours(margin);
+    }
+
+    private Duration derivedFinalityWindow() {
+        int override = properties.getContinuousSync().getFinalityWindowHours();
+        if (override > 0) {
+            return Duration.ofHours(override);
+        }
+        int k = genesisConfig.getSecurityParam();
+        double f = genesisConfig.getActiveSlotsCoeff();
+        double slotLength = genesisConfig.slotDuration(Era.Shelley);
+        if (k <= 0 || f <= 0 || slotLength <= 0) {
+            // Reported once at startup (validateAndLogFinalitySettings); this method runs per gap check
+            log.debug("Cannot derive the finality window from genesis (securityParam={}, activeSlotsCoeff={}, "
+                    + "slotLength={}); only continuous-sync.finality-margin-hours and buffer-days apply",
+                    k, f, slotLength);
+            return Duration.ZERO;
+        }
+        return Duration.ofSeconds(Math.round(k * slotLength / f));
+    }
+
+    /**
+     * Calculate the safe end date for exports.
+     *
+     * The latest synced block time is first moved back by the {@linkplain #getFinalityWindow()
+     * finality window} ("finalized tip"), then {@code buffer-days} UTC days are subtracted. A day
+     * partition is therefore exported only when all of its rows are older than the finality
+     * window (with buffer-days=1: exported ~13 h after midnight UTC on mainnet). During the
+     * initial sync the same rule keeps exports safely behind the sync point.
      *
      * If the buffer pushes the end date before genesis, return it as-is.
      *
      * @return Safe end date for exports as LocalDate
      */
     public LocalDate getExportEndDate() {
-        LocalDate latestSynced = getLatestSyncedDate();
         int bufferDays = properties.getContinuousSync().getBufferDays();
-        return latestSynced.minusDays(bufferDays);
+        Instant latest = getLatestSyncedBlockTime().orElse(null);
+        if (latest == null) {
+            return getGenesisDate().minusDays(bufferDays);
+        }
+        Instant finalizedTip = latest.minus(getFinalityWindow());
+        return finalizedTip.atZone(ZoneOffset.UTC).toLocalDate().minusDays(bufferDays);
     }
 
     /**

@@ -16,6 +16,7 @@ import lombok.experimental.SuperBuilder;
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public class TxMetadataLabel extends BlockAwareDomain {
     private String txHash;
+    private Integer txIndex;
     private Long slot;
     private String label;
     private String body;

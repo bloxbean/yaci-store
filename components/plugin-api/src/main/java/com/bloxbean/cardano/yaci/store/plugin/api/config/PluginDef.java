@@ -10,6 +10,7 @@ import lombok.NoArgsConstructor;
 public class PluginDef {
     private String name;
     private String lang;
+    private String className; //nullable — FQCN used by the `java` plugin factory
     private String expression; //nullable
     private String inlineScript; //nullable
     private ScriptDef script; //nullable

@@ -21,8 +21,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 // OFF by default (matchIfMissing = false), so enabling the single store.assets.ext.enabled
 // flag is the one opt-in an operator needs. The per-CIP sub-flags then default ON
 // (matchIfMissing = true) for CIP-26 and CIP-68, so the master flag alone gives the default
-// behaviour. CIP-113 is the one exception — it stays OFF by default (matchIfMissing = false)
-// until it is live on mainnet.
+// behaviour.
 @ConditionalOnProperty(
         name = "store.assets.ext.enabled",
         havingValue = "true",

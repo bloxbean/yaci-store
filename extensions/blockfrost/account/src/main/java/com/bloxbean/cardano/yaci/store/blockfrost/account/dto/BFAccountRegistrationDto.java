@@ -17,6 +17,7 @@ import lombok.NoArgsConstructor;
 public class BFAccountRegistrationDto {
     private String txHash;
     private String action;
+    private String deposit;
     private Long txSlot;
     private Long blockTime;
     private Long blockHeight;

@@ -12,6 +12,13 @@ public interface EpochStakeStorageReader {
 
     Optional<EpochStake> getActiveStakeByAddressAndEpoch(String address, Integer activeEpoch);
 
+    default List<EpochStake> getAllActiveStakesByAddressesAndEpoch(List<String> addresses, Integer activeEpoch) {
+        return addresses.stream()
+                .map(address -> getActiveStakeByAddressAndEpoch(address, activeEpoch))
+                .flatMap(Optional::stream)
+                .toList();
+    }
+
     Optional<BigInteger> getActiveStakeByPoolAndEpoch(String poolId, Integer epoch);
 
     List<EpochStake> getAllActiveStakesByEpoch(Integer epoch, int page , int count);

@@ -86,6 +86,7 @@ class GenesisPoolProcessorTest {
     void handleGenesisPoolRegistration_booksPoolDepositsAndStakeRegistrations() {
         when(storeProperties.isMainnet()).thenReturn(false);
         when(depositParamService.getPoolDeposit(0)).thenReturn(POOL_DEPOSIT);
+        when(depositParamService.getKeyDeposit(0)).thenReturn(KEY_DEPOSIT);
 
         genesisPoolProcessor.handleGenesisPoolRegistration(genesisBlockEvent(genesisStaking()));
 
@@ -117,6 +118,9 @@ class GenesisPoolProcessorTest {
         assertThat(stakeRegistrationsCaptor.getValue())
                 .extracting(StakeRegistrationDetail::getTxHash)
                 .containsOnly("Genesis");
+        assertThat(stakeRegistrationsCaptor.getValue())
+                .extracting(StakeRegistrationDetail::getDeposit)
+                .containsOnly(KEY_DEPOSIT);
     }
 
     @Test

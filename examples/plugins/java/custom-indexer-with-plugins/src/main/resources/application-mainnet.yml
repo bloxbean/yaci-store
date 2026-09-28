@@ -1,0 +1,13 @@
+store:
+  cardano:
+    # network: MAIN
+    host: backbone.cardano.iog.io
+    port: 3001
+    protocol-magic: 764824073
+    sync-start-blockhash: bbda7df8f258f52a223b10aa4197e651bda618b1ad35771eb262005afea98933
+    sync-start-slot: 159468745
+
+# Addresses to keep (comma- or whitespace-separated). Empty => keep everything.
+plugin:
+  address-filter:
+    addresses: "addr1qy77xcgfw6h867lt4r3px9rvtmf73a5em4h3ncs2rrewrhv9vmdr4wcalzyuua0jp2k9l729nychdd3ht8kgf2l9mrmq750nwl"

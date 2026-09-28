@@ -5,6 +5,8 @@ import com.bloxbean.cardano.yaci.store.analytics.exporter.PartitionValue;
 import com.bloxbean.cardano.yaci.store.analytics.exporter.TableExporterRegistry;
 import com.bloxbean.cardano.yaci.store.analytics.scheduler.ContinuousSyncScheduler;
 import com.bloxbean.cardano.yaci.store.analytics.scheduler.UniversalExportService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,6 +31,8 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/v1/analytics/admin")
+@Tag(name = "Analytics Admin API",
+        description = "Operations API for the analytics export pipeline: manual exports, export state and sync status")
 @RequiredArgsConstructor
 @Slf4j
 @ConditionalOnProperty(prefix = "yaci.store.analytics.admin", name = "enabled", havingValue = "true")
@@ -44,6 +48,9 @@ public class AnalyticsAdminController {
      *
      * @return List of table information
      */
+    @Operation(summary = "List table exporters",
+            description = "All registered analytics table exporters with their partition strategy (DAILY / EPOCH / NONE) "
+                    + "and whether the exporter is enabled.")
     @GetMapping("/tables")
     public ResponseEntity<List<TableInfo>> listTables() {
         List<TableInfo> tables = registry.getAllTables().stream()
@@ -67,6 +74,10 @@ public class AnalyticsAdminController {
      * @param date Date in yyyy-MM-dd format
      * @return Export result
      */
+    @Operation(summary = "Export all daily tables for one day",
+            description = "Runs the export of every enabled DAILY-partitioned table for the given date (yyyy-MM-dd). "
+                    + "Partitions that are already exported are skipped. Note: the DuckLake writer is append-only — "
+                    + "reset the partition state first if you intend to re-export.")
     @PostMapping("/export/date/{date}")
     public ResponseEntity<ExportResult> exportDate(@PathVariable String date) {
         LocalDate exportDate = LocalDate.parse(date);
@@ -89,6 +100,9 @@ public class AnalyticsAdminController {
      * @param date Date in yyyy-MM-dd format
      * @return Export result
      */
+    @Operation(summary = "Export one table for one day",
+            description = "Runs the export of a single DAILY-partitioned table for the given date (yyyy-MM-dd). "
+                    + "Skipped if that partition is already exported.")
     @PostMapping("/export/table/{tableName}/date/{date}")
     public ResponseEntity<ExportResult> exportTableDate(
             @PathVariable String tableName,
@@ -113,6 +127,9 @@ public class AnalyticsAdminController {
      * @param epoch Epoch number
      * @return Export result
      */
+    @Operation(summary = "Export one table for one epoch",
+            description = "Runs the export of a single EPOCH-partitioned table for the given epoch. "
+                    + "Skipped if that partition is already exported.")
     @PostMapping("/export/table/{tableName}/epoch/{epoch}")
     public ResponseEntity<ExportResult> exportTableEpoch(
             @PathVariable String tableName,
@@ -137,6 +154,9 @@ public class AnalyticsAdminController {
      * @param endDate End date (inclusive, yyyy-MM-dd format)
      * @return Backfill result
      */
+    @Operation(summary = "Backfill one table over a date range",
+            description = "Exports every day between startDate and endDate (inclusive, yyyy-MM-dd) for a DAILY-partitioned "
+                    + "table, skipping partitions that are already exported. Returns the number of successful days.")
     @PostMapping("/export/table/{tableName}/range")
     public ResponseEntity<BackfillResult> exportTableRange(
             @PathVariable String tableName,
@@ -168,6 +188,9 @@ public class AnalyticsAdminController {
      * @param endEpoch End epoch (inclusive)
      * @return Backfill result
      */
+    @Operation(summary = "Backfill one table over an epoch range",
+            description = "Exports every epoch between startEpoch and endEpoch (inclusive) for an EPOCH-partitioned "
+                    + "table, skipping partitions that are already exported.")
     @PostMapping("/export/table/{tableName}/epoch-range")
     public ResponseEntity<EpochBackfillResult> exportTableEpochRange(
             @PathVariable String tableName,
@@ -193,6 +216,10 @@ public class AnalyticsAdminController {
      *
      * @return SyncStatus with current sync information
      */
+    @Operation(summary = "Export pipeline status",
+            description = "Continuous-sync status: genesis and latest synced dates, the export end date (latest synced "
+                    + "date minus the buffer), buffer days, number of missing daily/epoch exports, whether exports are "
+                    + "deferred until the node reaches the chain tip, and whether everything is fully exported.")
     @GetMapping("/status")
     public ResponseEntity<ContinuousSyncScheduler.SyncStatus> getStatus() {
         return ResponseEntity.ok(continuousSyncScheduler.getSyncStatus());
@@ -204,6 +231,8 @@ public class AnalyticsAdminController {
      * @param tableName Table name
      * @return ExportStatistics with aggregate information
      */
+    @Operation(summary = "Export statistics of one table",
+            description = "Counts of completed / failed / in-progress partitions and rows for the given table.")
     @GetMapping("/statistics/{tableName}")
     public ResponseEntity<ExportStateAdminService.ExportStatistics> getStatistics(
             @PathVariable String tableName) {
@@ -219,6 +248,10 @@ public class AnalyticsAdminController {
      * @param partitionValue Partition value (e.g., "2024-01-15" or "450")
      * @return Success message
      */
+    @Operation(summary = "Reset the export state of one partition",
+            description = "Deletes the export-state record of one partition (e.g. 'date=2024-01-15' or 'epoch=450') so "
+                    + "that the scheduler or a manual export runs it again. Does not delete already exported data — "
+                    + "with the append-only DuckLake writer a re-export appends rows.")
     @DeleteMapping("/state/{tableName}/{partitionValue}")
     public ResponseEntity<String> resetState(
             @PathVariable String tableName,
@@ -239,6 +272,9 @@ public class AnalyticsAdminController {
      * @param endDate End date (inclusive, yyyy-MM-dd format)
      * @return Number of states reset
      */
+    @Operation(summary = "Reset the export state of a date range",
+            description = "Deletes the export-state records of every day between startDate and endDate (inclusive, "
+                    + "yyyy-MM-dd) for the given table. Same caveats as the single-partition reset.")
     @DeleteMapping("/state/{tableName}/range")
     public ResponseEntity<String> resetStateRange(
             @PathVariable String tableName,
@@ -257,6 +293,9 @@ public class AnalyticsAdminController {
      *
      * @return Success message
      */
+    @Operation(summary = "Trigger a sync check now",
+            description = "Runs the continuous-sync check immediately instead of waiting for the next scheduled run: "
+                    + "finds missing daily/epoch partitions and exports them.")
     @PostMapping("/sync/trigger")
     public ResponseEntity<String> triggerSync() {
         log.info("Manual sync triggered via API");

@@ -10,8 +10,10 @@ import com.bloxbean.cardano.yaci.store.events.GenesisBalance;
 import com.bloxbean.cardano.yaci.store.events.GenesisStaking;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayInputStream;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -32,6 +34,10 @@ class ShelleyGenesisTest {
         assertThat(shelleyGenesis.getMaxLovelaceSupply()).isEqualTo(new BigInteger("45000000000000000"));
         assertThat(shelleyGenesis.getEpochLength()).isEqualTo(432000);
         assertThat(shelleyGenesis.getNetworkMagic()).isEqualTo(764824073L);
+        assertThat(shelleyGenesis.getSecurityParam()).isEqualTo(2160);
+        assertThat(shelleyGenesis.getUpdateQuorum()).isEqualTo(5);
+        assertThat(shelleyGenesis.getSlotsPerKesPeriod()).isEqualTo(129600);
+        assertThat(shelleyGenesis.getMaxKesEvolutions()).isEqualTo(62);
     }
 
     @Test
@@ -50,6 +56,10 @@ class ShelleyGenesisTest {
         assertThat(shelleyGenesis.getMaxLovelaceSupply()).isEqualTo(new BigInteger("20000000000000000"));
         assertThat(shelleyGenesis.getEpochLength()).isEqualTo(500);
         assertThat(shelleyGenesis.getNetworkMagic()).isEqualTo(42);
+        assertThat(shelleyGenesis.getSecurityParam()).isEqualTo(10);
+        assertThat(shelleyGenesis.getUpdateQuorum()).isEqualTo(2);
+        assertThat(shelleyGenesis.getSlotsPerKesPeriod()).isEqualTo(129600);
+        assertThat(shelleyGenesis.getMaxKesEvolutions()).isEqualTo(60);
 
         assertThat(shelleyGenesis.getInitialFunds()).containsAll(expectedInitialUtxos);
 
@@ -73,6 +83,28 @@ class ShelleyGenesisTest {
 
         assertThat(stake.getStakeKeyHash()).isEqualTo("295b987135610616f3c74e11c94d77b6ced5ccc93a7d719cfb135062");
         assertThat(stake.getPoolHash()).isEqualTo("7301761068762f5900bde9eb7c1c15b09840285130f5b0f53606cc57");
+    }
+
+    @Test
+    void parseShelleyGenesis_missingOptionalKesAttributes() {
+        String minimalGenesis = """
+                {
+                  "systemStart": "2022-09-15T04:09:11Z",
+                  "slotLength": 1,
+                  "activeSlotsCoeff": 1.0,
+                  "maxLovelaceSupply": 20000000000000000,
+                  "epochLength": 500,
+                  "networkMagic": 42,
+                  "securityParam": 10
+                }
+                """;
+
+        ShelleyGenesis shelleyGenesis = new ShelleyGenesis(new ByteArrayInputStream(minimalGenesis.getBytes(StandardCharsets.UTF_8)));
+
+        assertThat(shelleyGenesis.getSecurityParam()).isEqualTo(10);
+        assertThat(shelleyGenesis.getUpdateQuorum()).isZero();
+        assertThat(shelleyGenesis.getSlotsPerKesPeriod()).isZero();
+        assertThat(shelleyGenesis.getMaxKesEvolutions()).isZero();
     }
 
     @Test

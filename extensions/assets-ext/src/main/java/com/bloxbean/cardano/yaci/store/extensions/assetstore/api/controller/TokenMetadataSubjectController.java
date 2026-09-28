@@ -29,7 +29,6 @@ import java.util.stream.Collectors;
  * <ul>
  *   <li><b>CIP-26</b> — offchain metadata synced from the GitHub cardano-token-registry</li>
  *   <li><b>CIP-68</b> — on-chain reference NFT metadata parsed from inline datums</li>
- *   <li><b>CIP-113</b> — programmable token extensions (transfer logic scripts, when enabled)</li>
  * </ul>
  *
  * <p><b>Query Priority:</b>

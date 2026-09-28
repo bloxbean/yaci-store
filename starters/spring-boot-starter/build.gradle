@@ -2,6 +2,7 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter'
     api project(":components:common")
     api project(':components:core')
+    api project(':components:core-api')
     api project(":components:events")
     api project(":components:client")
 

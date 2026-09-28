@@ -39,6 +39,9 @@ public class ShelleyGenesis extends GenesisFile {
     public static final String ATTR_EPOCH_LENGTH = "epochLength";
     public static final String ATTR_NETWORK_MAGIC = "networkMagic";
     public static final String SECURITY_PARAM = "securityParam";
+    public static final String ATTR_UPDATE_QUORUM = "updateQuorum";
+    public static final String ATTR_SLOTS_PER_KES_PERIOD = "slotsPerKESPeriod";
+    public static final String ATTR_MAX_KES_EVOLUTIONS = "maxKESEvolutions";
     public static final String MIN_FEE_A = "minFeeA";
     public static final String MIN_FEE_B = "minFeeB";
     public static final String MAX_BLOCK_BODY_SIZE = "maxBlockBodySize";
@@ -69,6 +72,9 @@ public class ShelleyGenesis extends GenesisFile {
     private long epochLength;
     private long networkMagic;
     private int securityParam;
+    private int updateQuorum;
+    private long slotsPerKesPeriod;
+    private int maxKesEvolutions;
 
     private List<GenesisBalance> initialFunds;
     private ProtocolParams protocolParams;
@@ -95,6 +101,13 @@ public class ShelleyGenesis extends GenesisFile {
         epochLength = genesisJson.get(ATTR_EPOCH_LENGTH).asLong();
         networkMagic = genesisJson.get(ATTR_NETWORK_MAGIC).asLong();
         securityParam = genesisJson.get(SECURITY_PARAM).asInt();
+        //Optional attributes for older/minimal custom genesis files
+        if (genesisJson.has(ATTR_UPDATE_QUORUM))
+            updateQuorum = genesisJson.get(ATTR_UPDATE_QUORUM).asInt();
+        if (genesisJson.has(ATTR_SLOTS_PER_KES_PERIOD))
+            slotsPerKesPeriod = genesisJson.get(ATTR_SLOTS_PER_KES_PERIOD).asLong();
+        if (genesisJson.has(ATTR_MAX_KES_EVOLUTIONS))
+            maxKesEvolutions = genesisJson.get(ATTR_MAX_KES_EVOLUTIONS).asInt();
 
         JsonNode initialFundJson = genesisJson.get("initialFunds");
         initialFunds = new ArrayList<>();

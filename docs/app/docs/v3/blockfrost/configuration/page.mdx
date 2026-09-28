@@ -16,7 +16,8 @@ import { Callout } from 'nextra/components'
 | `store.extensions.blockfrost.scripts.enabled` | `true` | Script and datum endpoints (`/scripts`). |
 | `store.extensions.blockfrost.transaction.enabled` | `true` | Transaction read endpoints (`/txs`) and tx submit (`/tx/submit`). |
 | `store.extensions.blockfrost.util.enabled` | `true` | Tx execution-units evaluate and xpub-derive utilities (`/utils`). |
-| `blockfrost.apiPrefix` | _(none — required)_ | URL prefix prepended to every Blockfrost controller path. Set by the `blockfrost` profile to `/api/v1/blockfrost`. |
+| `blockfrost.apiPrefix` | _(none — required)_ | URL prefix prepended to every yaci-store Blockfrost-compatible controller path. Set by the `blockfrost` profile to `/api/v1/blockfrost`. |
+| `blockfrost.hostname` | `""` | Public base URL for this yaci-store instance. Used only by the yaci-store Blockfrost-compatible root endpoint to return an absolute `url` when set. |
 
 <Callout type="info">
 `store.extensions.blockfrost.enabled` gates the entire extension. When it is `false` (the default), the auto-configuration does not load and the sub-module flags have no effect. When it is `true`, all sub-module flags default to `true`, so a single line is enough to enable the full surface.
@@ -30,11 +31,11 @@ A ready-made profile lives at `config/application-blockfrost.properties` (and th
 SPRING_PROFILES_ACTIVE=ledger-state,blockfrost
 ```
 
-The profile sets `store.extensions.blockfrost.enabled=true` and overrides `blockfrost.apiPrefix=/api/v1/blockfrost` so the Blockfrost endpoints don't collide with yaci-store's own `/api/v1/...` controllers.
+The profile sets `store.extensions.blockfrost.enabled=true` and overrides `blockfrost.apiPrefix=/api/v1/blockfrost` so the Blockfrost-compatible endpoints don't collide with yaci-store's own `/api/v1/...` controllers.
 
 ## API base path
 
-`blockfrost.apiPrefix` is a required property when the extension is enabled — every Blockfrost controller is mapped under `${blockfrost.apiPrefix}`. It has no default; if missing, the application fails to start.
+`blockfrost.apiPrefix` is a required property when the extension is enabled — every yaci-store Blockfrost-compatible controller is mapped under `${blockfrost.apiPrefix}`. It has no default; if missing, the application fails to start.
 
 The `blockfrost` profile sets it for you:
 
@@ -48,13 +49,20 @@ Set it explicitly when not using that profile:
 blockfrost.apiPrefix=/api/v1/blockfrost
 ```
 
+The yaci-store Blockfrost-compatible root endpoint (`GET ${blockfrost.apiPrefix}`) returns `blockfrost.hostname + blockfrost.apiPrefix` in its `url` field. Leave `blockfrost.hostname` empty for a relative URL, or set it to this yaci-store instance's public origin when clients expect the root response to contain an absolute URL:
+
+```properties
+blockfrost.hostname=https://store.example.com
+blockfrost.apiPrefix=/api/v1/blockfrost
+```
+
 <Callout type="info">
 Yaci-store's native stores-api controllers use a separate `apiPrefix` property (`/api/v1` in the bundled apps). Keeping `blockfrost.apiPrefix` distinct (e.g. `/api/v1/blockfrost`) prevents path collisions between the two surfaces.
 </Callout>
 
 ## Store dependencies
 
-Blockfrost controllers read from data the underlying yaci-store modules have indexed. The bundled `applications/all` distribution enables every store by default, so no extra wiring is needed.
+Blockfrost-compatible controllers read from data the underlying yaci-store modules have indexed. The bundled `applications/all` distribution enables every store by default, so no extra wiring is needed.
 <Callout type="info">
 **Recommended: activate `ledger-state` alongside `blockfrost`.** Account info, rewards, and epoch-stake data depend on values that are only computed when the `ledger-state` profile is active. Without it, those endpoints return empty or partial responses.
 

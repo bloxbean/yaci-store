@@ -34,8 +34,9 @@ import java.sql.Statement;
  * - Detects existing catalog file
  * - Skips initialization
  *
- * This allows multiple pooled connections to connect to the same catalog file
- * without file locking conflicts.
+ * Note: DuckDB allows only one DuckDB instance per process to hold a given catalog file
+ * (READ_ONLY included). After this one-off initialization the writer connection is the
+ * only in-process holder; readers go through it or read the committed Parquet files.
  */
 @Component
 @ConditionalOnProperty(prefix = "yaci.store.analytics.storage", name = "type", havingValue = "ducklake")

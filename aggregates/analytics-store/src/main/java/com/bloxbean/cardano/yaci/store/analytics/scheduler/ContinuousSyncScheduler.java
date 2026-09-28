@@ -286,6 +286,7 @@ public class ContinuousSyncScheduler {
             .latestSyncedDate(latestSynced)
             .exportEndDate(exportEndDate)
             .bufferDays(properties.getContinuousSync().getBufferDays())
+            .finalityWindowHours(gapDetectionService.getFinalityWindow().toMinutes() / 60.0)
             .missingExportCount(allMissingDates.size())
             .isFullySynced(fullySynced)
             .enabledTableCount(enabledDailyTables.size())
@@ -305,6 +306,8 @@ public class ContinuousSyncScheduler {
         private LocalDate latestSyncedDate;
         private LocalDate exportEndDate;
         private int bufferDays;
+        /** Finality window incl. margin (hours) subtracted from the tip before buffer-days is applied. */
+        private double finalityWindowHours;
         private int missingExportCount;
         private boolean isFullySynced;
         private int enabledTableCount;

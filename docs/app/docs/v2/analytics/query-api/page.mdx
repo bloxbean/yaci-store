@@ -1,0 +1,293 @@
+import { Callout } from 'nextra/components'
+
+# Query API & Unified Views
+
+The **analytics query layer** (`analytics-query` module) serves the exported analytics data over HTTP
+and to the MCP tools without touching your PostgreSQL database for historical data. It runs an
+in-process, sandboxed DuckDB engine over the exported Parquet / DuckLake files and exposes:
+
+- **schema discovery** — which tables/columns exist, how they are partitioned, how fresh they are,
+- **pre-built statistics** — epoch/block/transaction aggregates and counts,
+- **ad-hoc read-only SQL** — a single `SELECT`/`WITH` statement per request,
+- optionally **unified views** that union the exported history with the live PostgreSQL tail so
+  every table reads from genesis to the chain tip.
+
+The same engine backs the REST endpoints and the MCP tools (`analytics-list-tables`,
+`analytics-describe-table`, `analytics-execute-sql`); anything described here applies to both.
+
+## Enabling
+
+```properties
+# Analytics export must be running in this process (it owns the DuckLake catalog)
+yaci.store.analytics.enabled=true
+yaci.store.analytics.storage.type=ducklake
+
+# Query layer (off by default)
+yaci.store.analytics.query.enabled=true
+
+# REST endpoints (off by default; the MCP tools work without it)
+yaci.store.analytics.query.rest-api-enabled=true
+
+# Optional: union historical data with live PostgreSQL (off by default)
+#yaci.store.analytics.query.live-data-enabled=true
+```
+
+<Callout type="warning">
+The REST endpoints — in particular `POST /api/v1/analytics/query/sql` — are **unauthenticated**.
+Only enable `rest-api-enabled` on networks you control, or put the node behind an authenticating
+proxy. The engine is sandboxed (see [Security](#security)) but ad-hoc SQL still consumes CPU and
+memory on the node.
+</Callout>
+
+## Endpoints
+
+All endpoints live under `/api/v1/analytics/query` and are documented in Swagger UI under the
+**Analytics APIs** definition (`http://localhost:8080/swagger-ui/index.html`, definition dropdown top
+right; raw spec at `/v3/api-docs/analytics`).
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/schema` | All tables with description, row count, partitioning, date range, `dataScope`, data freshness (`dataAsOf`), query hints |
+| GET | `/schema/{table}` | Columns and types of one table plus table-specific hints |
+| GET | `/blocks/epoch-stats?startEpoch=&endEpoch=` | Block count, transactions, fees, avg block size, unique pools per epoch |
+| GET | `/blocks/pool-production?poolId=&startEpoch=&endEpoch=` | Blocks produced by one pool per epoch (`poolId` = 56-hex pool id hash as stored in `block.slot_leader`) |
+| GET | `/transactions/epoch-stats?startEpoch=&endEpoch=` | Transaction count, fees, valid/invalid per epoch |
+| GET | `/transactions/block-stats?startEpoch=&endEpoch=&minTxCount=` | Per-block transaction statistics |
+| GET | `/transactions/fee-distribution?startEpoch=&endEpoch=` | Fee percentiles per epoch |
+| GET | `/transactions/count[?startDate=&endDate=]` | Transaction count overall or for an inclusive day range (`yyyy-MM-dd`) |
+| POST | `/sql` | Ad-hoc read-only SQL: `{"sql": "SELECT ...", "maxRows": 100}` (`maxRows` optional) |
+
+The recommended flow — for people and agents alike — is `GET /schema` → `GET /schema/{table}` →
+`POST /sql`. Table names mirror the yaci-store PostgreSQL tables (`block`, `transaction`,
+`address_utxo`, `tx_input`, `epoch_stake`, ...), singular.
+
+```bash
+# What is available?
+curl -s http://localhost:8080/api/v1/analytics/query/schema | jq '.tables[].name'
+
+# Columns of one table
+curl -s http://localhost:8080/api/v1/analytics/query/schema/transaction | jq '.columns'
+
+# Ad-hoc SQL (-D - prints the response headers, see "Row limits")
+curl -s -D - -X POST http://localhost:8080/api/v1/analytics/query/sql \
+  -H 'Content-Type: application/json' \
+  -d '{"sql": "SELECT epoch, count(*) AS blocks FROM block WHERE epoch >= 500 GROUP BY epoch ORDER BY epoch"}'
+```
+
+Malformed requests, rejected SQL and failing SQL all return `400` with a reason in the same shape
+(`{"error": "Blocked SQL token 'SHOW' is not allowed in ad-hoc queries"}`,
+`{"error": "Query execution failed. Check query syntax and filters."}`).
+Each query has a timeout (`yaci.store.analytics.duckdb.reader.query-timeout-seconds`, default 30 s);
+a query that exceeds it is cancelled and reported as `400`.
+
+### Row limits
+
+`POST /sql` returns at most `maxRows` rows — **100 by default**
+(`yaci.store.analytics.query.default-max-rows`), at most the server's hard limit
+(`yaci.store.analytics.query.max-rows`, **10,000** by default and also the built-in ceiling — the
+property can only lower it). The limit is applied the way SQL front-ends such as Superset or the
+DuckDB UI do it — the statement runs as `SELECT * FROM (<your sql>) AS q LIMIT maxRows+1` — so
+DuckDB stops producing rows at the cap instead of materializing everything, and an inner
+`ORDER BY`/`LIMIT` keeps its meaning (`ORDER BY fee DESC` becomes a top-N; an inner `LIMIT 500`
+without `maxRows` is still cut to 100). Two response headers on every successful response tell
+you what happened:
+
+- `X-Analytics-Row-Limit: 100` — the limit that was applied,
+- `X-Analytics-Truncated: true` — more rows existed than were returned; add a filter, aggregate,
+  or ask for a larger `maxRows`.
+
+They are exposed to cross-origin browser clients (`Access-Control-Expose-Headers`), and
+`GET /schema` repeats the effective limits in `queryHints.row_limit`.
+
+The limit bounds the *output*, not the work: a plain scan (`SELECT * FROM transaction`) returns
+in milliseconds, but a `GROUP BY`, `DISTINCT`, an `ORDER BY` without an inner `LIMIT` or a join
+that must read the whole table still does — filter on the partition column for that. Two details
+of the wrapping: duplicate column labels are suffixed (`hash`, `hash_1`), and the pre-built
+endpoints and the MCP tools use the hard limit.
+
+### Writing good queries
+
+- **Filter on the partition column** (`date` for daily tables, `epoch` for epoch tables); the
+  engine prunes files by partition, so `WHERE date BETWEEN ...` or `WHERE epoch = ...` is the
+  difference between milliseconds and a full scan of a table with hundreds of millions of rows.
+- DuckDB SQL is PostgreSQL-compatible: CTEs (including `WITH RECURSIVE`), window functions,
+  `QUALIFY`, list/struct functions and `PERCENTILE_CONT` all work.
+- `DATE`, `TIME` and `TIMESTAMP` values are returned as ISO-8601 strings (`2026-08-19`,
+  `2026-08-19T00:10:25Z` — timestamps with time zone normalized to UTC); binary values as Base64.
+- `address_utxo` is exported **flattened**: one row per (output, asset unit). Every output has
+  exactly one `asset_unit = 'lovelace'` row; other assets are extra rows with `policy_id`,
+  `asset_name`, `quantity`.
+- The unspent outputs of an address are the outputs that have no matching spend:
+
+  ```sql
+  SELECT u.asset_unit, sum(u.quantity) AS qty, count(*) AS utxo_rows
+  FROM address_utxo u
+  WHERE u.owner_addr = 'addr...'
+    AND NOT EXISTS (SELECT 1 FROM tx_input i
+                    WHERE i.tx_hash = u.tx_hash AND i.output_index = u.output_index)
+  GROUP BY 1
+  ```
+  Only do this on tables with the same `dataScope` (see below); for a hot "balance now" lookup the
+  PostgreSQL-backed address APIs / `analytics-address-balance` tool remain the right choice.
+
+## Data freshness and unified views
+
+By default every table is **historical**: it contains the exported data as of the last completed
+export (`dataAsOf` in `/schema`; the export pipeline stays `buffer-days` behind the finalized tip, i.e. a UTC day is exported ~13 h after it ends on mainnet).
+
+With `yaci.store.analytics.query.live-data-enabled=true` the query layer attaches your PostgreSQL
+database read-only (`postgres_scanner`, alias `pg_live`, per-statement
+`postgres-statement-timeout-seconds`) and builds a **unified view** per eligible table:
+
+```sql
+CREATE VIEW transaction AS
+  SELECT * FROM parquet_transaction
+    WHERE slot BETWEEN :range_start AND :range_end                        -- exported data
+  UNION ALL
+  SELECT ... FROM pg_live.<schema>.transaction
+    WHERE slot < :range_start OR slot > :range_end;                       -- PostgreSQL data
+```
+
+- The exported range is the first *contiguous* run of completed export partitions. Data inside the
+  range comes from Parquet/DuckLake; data on either side comes from PostgreSQL. This also supports
+  an admin backfill that starts after genesis without incorrectly assuming the earlier history was
+  exported.
+- The two halves are **disjoint by construction** (split on the partition key), so no
+  deduplication is needed and results reconcile with PostgreSQL row for row.
+- `/schema` reports `liveDataActive` and a `dataScope` per table: `historical+live` (reaches the
+  chain tip) or `historical` (exported data only). `/schema/{table}` carries the same field.
+- The boundary and any renamed columns are declared by each table's exporter
+  (`TableExporter.getFederationBoundaryColumn()` / `getSourceColumnMappings()` — read-only
+  metadata, the export itself is unaffected). Tables without a boundary column, tables whose
+  exported columns cannot be matched to PostgreSQL, and tables listed in
+  `yaci.store.analytics.query.live-data-excluded-tables` stay historical.
+- Direct access to `pg_live` from ad-hoc SQL is blocked; the live data is only reachable through
+  the unified views.
+
+### How the exported range is calculated
+
+The range endpoints are not stored as separate values in the Parquet files or DuckLake catalog.
+The persistent source of truth is the `analytics_export_state` table in PostgreSQL. Each successful
+partition has a `COMPLETED` record such as `epoch=450` or `date=2026-08-24`.
+
+For each table, the query layer:
+
+1. reads its `COMPLETED` partition values,
+2. parses and sorts them according to the exporter's partition strategy,
+3. starts at the earliest completed partition, and
+4. walks forward until the first gap.
+
+For example, completed epochs `400, 401, 402, 404, 405` produce the range `400–402`. Epochs
+`404–405` are not used by the unified view until epoch `403` completes; PostgreSQL serves everything
+outside `400–402`.
+
+For an `EPOCH` table, the range contains the first and last epoch and their corresponding slots.
+The start slot is the first slot of the first epoch. The inclusive end slot is the first slot of
+the following epoch minus one.
+
+For a `DAILY` table, completed `date=...` values are walked in UTC-day order. The start slot is the
+slot at the beginning of the first day, and the inclusive end slot is the slot at the beginning of
+the day after the last completed day minus one. Cardano era information is used for both conversions,
+including the special handling needed for the genesis day.
+
+The calculated range is cached in memory and the historical and unified views are rebuilt every
+5 minutes. Consequently, a newly completed or reset partition is reflected on the next successful
+refresh, rather than immediately.
+
+### Gaps, refill, and PostgreSQL pruning
+
+If a middle partition is reset, the range ends immediately before that gap on the next refresh.
+PostgreSQL then serves the gap and all later data. If the first partition is reset, the range starts
+at the next completed partition instead. Once the reset partition is completed again, the range is
+recalculated from the earliest completed partition and can include the full contiguous run again.
+
+<Callout type="warning">
+The admin state-reset endpoint only removes the export-state record; it does not remove existing
+DuckLake data. The current writer is append-only, so resetting and re-exporting an existing
+partition without separately replacing its old data can produce duplicate rows.
+</Callout>
+
+PostgreSQL pruning must use the same contiguous exported range as its safety boundary. Never prune
+an isolated completed partition beyond a gap: the unified view deliberately does not read that
+partition from Parquet/DuckLake yet. When the exported range starts at the history/retention origin,
+PostgreSQL can safely prune through the inclusive range end and retain only the live tail.
+
+After PostgreSQL history has been pruned, repairing a partition inside the exported range requires
+extra care. If the old exported data is removed before its replacement is committed, neither layer
+can serve that partition during the repair. Prefer an atomic replace (prepare the replacement, then
+commit/swap it and update export state) to avoid an availability gap.
+
+<Callout type="info">
+For epoch-level tables (`epoch`, `gov_action_proposal_status`, `committee_state`, ...) the current
+epoch's rows come live from PostgreSQL and may still change until the epoch closes. This is intended
+("live"), but different from the frozen export.
+</Callout>
+
+**When to enable it**: for agents/MCP and ad-hoc analysis that must include the most recent day,
+and for consistent cross-table joins (e.g. unspent outputs). It adds read load on the sync
+database only for the live tail; keep it off if the sync database has no headroom, or exclude
+heavy tables with `live-data-excluded-tables`.
+
+## Security
+
+Defense in depth, in this order:
+
+1. **Engine sandbox** — after start-up the DuckDB instance is locked down: file access limited to the
+   analytics export directory (`allowed_directories`), external access (network, other files,
+   `ATTACH`) disabled, extension loading disabled, configuration locked. Ad-hoc SQL cannot undo this.
+2. **SQL validator** — a single `SELECT`/`WITH` statement per request; DDL/DML, multiple statements,
+   `COPY`/`EXPORT`, extension management, file/URL literals, catalog/metadata functions
+   (`duckdb_*`, `pragma_*`, `SHOW`, `DESCRIBE`, `SUMMARIZE`, `information_schema`) and the attached
+   PostgreSQL alias are rejected with `400`. Double-quoted identifiers that merely spell a keyword
+   (`"set"`, `"show"`) are allowed.
+3. **Limits** — per-query timeout (enforced for the whole execution — the engine deliberately
+   uses non-streaming JDBC result sets, whose cancel timer would otherwise stop at the execute
+   phase), the row limits above, concurrent readers bounded by
+   `yaci.store.analytics.duckdb.reader.maximum-pool-size`, `memory-limit`/`threads` per instance,
+   and — with federation — a PostgreSQL `statement_timeout` on every scanner connection.
+4. **No credentials in logs or responses** — connection failures are logged with `password=***`;
+   callers get generic error messages.
+
+## How it works (for operators)
+
+```
+PostgreSQL ──(exporters, writer connection)──▶ DuckLake catalog + Parquet files   analytics-store
+                                                        │
+                       committed file list (via the writer connection, every 5 min)
+                                                        ▼
+                    sandboxed DuckDB engine ── views ── REST /api/v1/analytics/query/*   analytics-query
+                    (parallel duplicate() readers)   └── MCP tools                       mcp-server
+                                          ▲
+              optional: pg_live (postgres_scanner, READ_ONLY) for unified views
+```
+
+- The query engine **never opens the DuckLake catalog** itself: DuckDB allows one instance per
+  process to hold a catalog file, and the export writer owns it. The engine asks the writer's
+  connection for the list of *committed* data files and builds its views over exactly those files
+  (absolute paths inside the sandbox). In-flight or aborted export files are therefore never
+  visible.
+- Views are refreshed every 5 minutes (new partitions, advanced cutoffs). If an export is holding
+  the writer connection at that moment the refresh is skipped and retried next time.
+- The catalog file is also locked at the OS level while yaci-store runs (DuckDB-file catalog type):
+  external tools cannot `ATTACH` it concurrently, but can read the Parquet files directly with
+  `read_parquet('<export-path>/main/<table>/**/*.parquet', hive_partitioning=true)` — see
+  [Querying Data](/docs/v2/analytics/querying-data).
+- Everything the engine needs is inside `analytics-query`; `analytics-store` is write-only apart
+  from the catalog metadata it hands out. The MCP server depends on `analytics-query`.
+
+## Configuration
+
+| Property | Default | Description |
+|---|---|---|
+| `yaci.store.analytics.query.enabled` | `false` | Enable the query layer (engine, views, MCP tools) |
+| `yaci.store.analytics.query.rest-api-enabled` | `false` | Register the REST endpoints under `/api/v1/analytics/query/*` (unauthenticated — opt in deliberately) |
+| `yaci.store.analytics.query.live-data-enabled` | `false` | Build unified views (exported data ∪ live PostgreSQL) |
+| `yaci.store.analytics.query.live-data-excluded-tables` | _(empty)_ | Tables that stay historical even with live data enabled |
+| `yaci.store.analytics.query.postgres-statement-timeout-seconds` | `30` | `statement_timeout` applied to every PostgreSQL scanner connection used by unified views |
+| `yaci.store.analytics.query.default-max-rows` | `100` | Rows returned by `POST /sql` when the request has no `maxRows` (at most `max-rows`) |
+| `yaci.store.analytics.query.max-rows` | `10000` | Hard limit for rows per query (ad-hoc SQL, pre-built endpoints, MCP tools); 10,000 is also the built-in ceiling — the property can only lower it |
+| `yaci.store.analytics.duckdb.reader.maximum-pool-size` | CPU cores | Max concurrent queries on the engine |
+| `yaci.store.analytics.duckdb.reader.query-timeout-seconds` | `30` | Per-query timeout (REST endpoints always use it) |
+| `yaci.store.analytics.query.max-timeout-seconds` | `300` | Longest per-call timeout a trusted caller (the MCP `analytics-execute-sql` tool's `timeoutSeconds`) may request; never below the default |
+| `yaci.store.analytics.duckdb.memory-limit` | _(DuckDB default)_ | Memory limit per DuckDB instance (writer and query engine each) |
+| `yaci.store.analytics.duckdb.threads` | CPU cores | DuckDB threads per instance |

@@ -18,6 +18,7 @@ public class AdaPotJob {
     private Integer epoch;
     private Long slot;
     private Long block;
+    private String blockHash;
     private AdaPotJobType type;
     private AdaPotJobStatus status;
     private Long totalTime;

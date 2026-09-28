@@ -65,6 +65,7 @@ public class MetadataProcessor {
                         TxMetadataLabel txMetadataLabel = TxMetadataLabel.builder()
                                 .slot(eventMetadata.getSlot())
                                 .txHash(txAuxData.getTxHash())
+                                .txIndex(txAuxData.getTxIndex())
                                 .blockNumber(eventMetadata.getBlock())
                                 .blockTime(eventMetadata.getBlockTime())
                                 .label(fieldName)

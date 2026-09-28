@@ -87,6 +87,35 @@ class CommitteeVotingEvaluatorTest {
     }
 
     @Test
+    void evaluate_usesExactRationalComparisonAtThresholdBoundary() {
+        ConstitutionCommittee committee = ConstitutionCommittee.builder()
+                .state(ConstitutionCommitteeState.NORMAL)
+                .threshold(new UnitInterval(BigInteger.valueOf(6667), BigInteger.valueOf(10000)))
+                .members(List.of(
+                        member("cold1", "hot1"),
+                        member("cold2", "hot2"),
+                        member("cold3", "hot3")))
+                .build();
+
+        VotingData votingData = VotingData.builder()
+                .committeeVotes(VotingData.CommitteeVotes.builder()
+                        .votes(Map.of(
+                                "hot1", Vote.YES,
+                                "hot2", Vote.YES,
+                                "hot3", Vote.NO))
+                        .build())
+                .build();
+
+        VotingEvaluationContext context = VotingEvaluationContext.builder()
+                .committee(committee)
+                .build();
+
+        VotingStatus result = evaluator.evaluate(votingData, context);
+
+        assertThat(result).isEqualTo(VotingStatus.NOT_PASS_THRESHOLD);
+    }
+
+    @Test
     void evaluate_returnsNotPassThreshold_whenCommitteeStateIsNormal_andMinorityVotesYes() {
         ConstitutionCommittee committee = ConstitutionCommittee.builder()
                 .state(ConstitutionCommitteeState.NORMAL)

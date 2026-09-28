@@ -20,7 +20,8 @@ import static org.springframework.test.context.jdbc.Sql.ExecutionPhase.BEFORE_TE
 @Sql(
         scripts = {
                 "classpath:db/store/h2/V0_300_1__init.sql",
-                "classpath:db/store/h2/V0_300_3__add_transaction_cbor_table.sql"
+                "classpath:db/store/h2/V0_300_3__add_transaction_cbor_table.sql",
+                "classpath:db/store/h2/V0_300_4__add_tx_index_to_withdrawal.sql"
         },
         executionPhase = BEFORE_TEST_CLASS
 )

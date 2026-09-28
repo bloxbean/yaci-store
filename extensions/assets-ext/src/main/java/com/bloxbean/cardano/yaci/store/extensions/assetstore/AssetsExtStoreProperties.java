@@ -6,9 +6,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.ArrayList;
-import java.util.List;
-
 /**
  * Plain properties POJO for the assets-ext extension module.
  * <p>
@@ -25,9 +22,6 @@ public class AssetsExtStoreProperties {
 
     @Builder.Default
     private Cip26 cip26 = new Cip26();
-
-    @Builder.Default
-    private Cip113 cip113 = new Cip113();
 
     @Builder.Default
     private String defaultQueryPriority = "CIP_68,CIP_26";
@@ -61,22 +55,5 @@ public class AssetsExtStoreProperties {
 
         @Builder.Default
         private boolean forceClone = false;
-    }
-
-    @Data
-    @AllArgsConstructor
-    @NoArgsConstructor
-    @Builder
-    public static class Cip113 {
-        // Disabled by default — CIP-113 isn't officially live on mainnet yet.
-        // When false, Cip113Configuration skips loading the per-network policy
-        // ID file at all (no misleading "policy IDs resolved" log line, and
-        // Cip113Configuration.isEnabled() correctly reports false to the
-        // storage reader).
-        @Builder.Default
-        private boolean enabled = false;
-
-        @Builder.Default
-        private List<String> registryNftPolicyIds = new ArrayList<>();
     }
 }
