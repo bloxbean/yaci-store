@@ -271,7 +271,7 @@ PostgreSQL ──(exporters, writer connection)──▶ DuckLake catalog + Parq
 - The catalog file is also locked at the OS level while yaci-store runs (DuckDB-file catalog type):
   external tools cannot `ATTACH` it concurrently, but can read the Parquet files directly with
   `read_parquet('<export-path>/main/<table>/**/*.parquet', hive_partitioning=true)` — see
-  [Querying Data](/docs/v2/analytics/querying-data).
+  [Querying Data](/docs/v3/analytics/querying-data).
 - Everything the engine needs is inside `analytics-query`; `analytics-store` is write-only apart
   from the catalog metadata it hands out. The MCP server depends on `analytics-query`.
 
