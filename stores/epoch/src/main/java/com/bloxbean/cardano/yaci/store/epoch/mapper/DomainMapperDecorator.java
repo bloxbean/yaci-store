@@ -133,7 +133,11 @@ public class DomainMapperDecorator implements DomainMapper {
         protocolParamsDto.setPriceMem(safeRatio(protocolParams.getPriceMem()));
         protocolParamsDto.setPriceStep(safeRatio(protocolParams.getPriceStep()));
 
-        //To align with Blockfrost, which returns these legacy params for every era
+        //Blockfrost compatibility: Blockfrost's /epochs/{number}/parameters returns these legacy (pre-Babbage) params
+        //for every era instead of omitting them, e.g. for a Conway epoch: "decentralisation_param": 0,
+        //"min_utxo": "4310", "coins_per_utxo_word": "4310" (same value as coins_per_utxo_size).
+        //Some clients read them unconditionally, e.g. PyCardano's BlockFrostChainContext fails if they are missing.
+        //Values that are actually set for the era (e.g. min_utxo in Shelley) are kept as is.
         if (protocolParamsDto.getDecentralisationParam() == null)
             protocolParamsDto.setDecentralisationParam(BigDecimal.ZERO);
         if (protocolParamsDto.getCoinsPerUtxoSize() != null) {
