@@ -39,12 +39,15 @@ public class ProtocolParamsDto {
     private BigDecimal a0;
     private BigDecimal rho;
     private BigDecimal tau;
+    //Blockfrost compatibility: defaults to 0 when not set (see DomainMapperDecorator), as Blockfrost returns it for every era
     private BigDecimal decentralisationParam;
-    //Always included (null when not set) to align with Blockfrost
+    //Blockfrost compatibility: Blockfrost always includes extra_entropy (null when not set) and some clients
+    //(e.g. PyCardano) fail if the field is missing, so it is excluded from the class level NON_NULL
     @JsonInclude(JsonInclude.Include.ALWAYS)
     private String extraEntropy;
     private Integer protocolMajorVer;
     private Integer protocolMinorVer;
+    //Blockfrost compatibility: defaults to coins_per_utxo_size when not set (see DomainMapperDecorator)
     private String minUtxo;
     private String minPoolCost;
     private String nonce;
@@ -66,6 +69,7 @@ public class ProtocolParamsDto {
     //Cost per UTxO word for Alonzo.
     //Cost per UTxO byte for Babbage and later.
     private String coinsPerUtxoSize;
+    //Blockfrost compatibility: defaults to coins_per_utxo_size when not set (see DomainMapperDecorator)
     @Deprecated
     private String coinsPerUtxoWord;
 
@@ -82,6 +86,7 @@ public class ProtocolParamsDto {
     private BigDecimal dvtCommitteeNoConfidence;
     private BigDecimal dvtUpdateToConstitution;
     private BigDecimal dvtHardForkInitiation;
+    //Blockfrost compatibility: Blockfrost field names (dvt_p_p_*). The default snake case naming would give dvt_pp*
     @JsonProperty("dvt_p_p_network_group")
     private BigDecimal dvtPPNetworkGroup;
     @JsonProperty("dvt_p_p_economic_group")
@@ -92,7 +97,9 @@ public class ProtocolParamsDto {
     private BigDecimal dvtPPGovGroup;
     private BigDecimal dvtTreasuryWithdrawal;
 
-    //Serialized as strings to align with Blockfrost
+    //Blockfrost compatibility: Blockfrost returns these as strings (like key_deposit and pool_deposit), and clients
+    //that validate the response against Blockfrost's schema (e.g. Evolution SDK) reject numbers. The Java types are
+    //unchanged so existing library users are not affected.
     @JsonSerialize(using = ToStringSerializer.class)
     private Integer committeeMinSize;
     @JsonSerialize(using = ToStringSerializer.class)
