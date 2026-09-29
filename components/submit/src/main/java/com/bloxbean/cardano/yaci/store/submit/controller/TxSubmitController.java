@@ -31,7 +31,7 @@ public class TxSubmitController {
         if (log.isDebugEnabled())
             log.debug("Submitting tx to : " + submitApiUrl);
 
-        return invokeSubmitApiUrl(txBytes, true);
+        return invokeSubmitApiUrl(txBytes);
 
     }
 
@@ -40,10 +40,10 @@ public class TxSubmitController {
         if (log.isDebugEnabled())
             log.debug("Submitting tx to : " + submitApiUrl);
         byte[] txBytes = HexUtil.decodeHexString(txBytesHex);
-            return invokeSubmitApiUrl(txBytes, false);
+            return invokeSubmitApiUrl(txBytes);
     }
 
-    ResponseEntity<?> invokeSubmitApiUrl(byte[] cborTx, boolean blockfrostStatus) {
+    ResponseEntity<?> invokeSubmitApiUrl(byte[] cborTx) {
         HttpHeaders headers = new HttpHeaders();
         headers.set("Content-Type", "application/cbor");
 
@@ -54,10 +54,9 @@ public class TxSubmitController {
             ResponseEntity<String> responseEntity = restTemplate
                     .exchange(submitApiUrl, HttpMethod.POST, entity, String.class);
 
-            //cardano-submit-api returns 202 Accepted. The Blockfrost compatible application/cbor endpoint returns
-            //200 OK like Blockfrost, as some clients (e.g. blockfrost-python / PyCardano) treat any other status as a
-            //failure. The text/plain (hex) endpoint keeps 202, which existing clients (e.g. MeshJS YaciProvider) expect.
-            if (blockfrostStatus && responseEntity.getStatusCode().is2xxSuccessful()) {
+            //cardano-submit-api returns 202 Accepted. Return 200 OK like Blockfrost, as some clients
+            //(e.g. blockfrost-python / PyCardano) treat any other status as a failure
+            if (responseEntity.getStatusCode().is2xxSuccessful()) {
                 return ResponseEntity.ok()
                         .contentType(MediaType.APPLICATION_JSON)
                         .body(responseEntity.getBody());

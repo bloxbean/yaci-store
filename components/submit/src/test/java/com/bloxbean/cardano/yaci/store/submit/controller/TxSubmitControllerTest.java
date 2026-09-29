@@ -48,7 +48,7 @@ class TxSubmitControllerTest {
     }
 
     @Test
-    void hexSubmission_keeps202FromSubmitApi() {
+    void hexSubmission_returns200WithTxHash() {
         submitApi.expect(requestTo(SUBMIT_API_URL))
                 .andRespond(withStatus(HttpStatus.ACCEPTED)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -56,7 +56,7 @@ class TxSubmitControllerTest {
 
         var response = controller.submitTx("84");
 
-        assertThat(response.getStatusCode().value()).isEqualTo(202);
+        assertThat(response.getStatusCode().value()).isEqualTo(200);
         assertThat(response.getBody()).isEqualTo("\"" + TX_HASH + "\"");
     }
 
