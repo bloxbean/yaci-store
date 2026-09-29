@@ -83,12 +83,17 @@ export function ModernVersionSelector() {
       pathWithoutVersion = '';
     }
 
-    // Define sections that don't exist in V1
+    // Sections missing from older versions: open the target version's overview instead
     const v2OnlySections = ['/plugins', '/ledger-state-mismatches'];
+    const v3OnlySections = ['/blockfrost', '/analytics'];
+    const isInSection = (sections: string[]) =>
+      sections.some(section => pathWithoutVersion === section || pathWithoutVersion.startsWith(`${section}/`));
 
-    // If switching to V1 and current path is in a V2-only section, redirect to overview
-    if (version.value === 'v1' && v2OnlySections.some(section => pathWithoutVersion.startsWith(section))) {
-      router.push('/docs/v1/introduction/overview');
+    if (
+      (version.value === 'v1' && isInSection([...v2OnlySections, ...v3OnlySections])) ||
+      (version.value === 'v2' && isInSection(v3OnlySections))
+    ) {
+      router.push(`/docs/${version.value}/introduction/overview`);
       setIsOpen(false);
       return;
     }
