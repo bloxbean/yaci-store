@@ -321,10 +321,13 @@ class Cip68DatumParserTest {
         }
 
         @Test
-        void shouldCountCodePointsNotUtf16Units() throws Exception {
-            // 255 emoji = 510 UTF-16 units but 255 characters, which fits VARCHAR(255)
-            assertThat(parse("name", "🚀".repeat(255)))
-                    .hasValueSatisfying(m -> assertThat(m.name()).isNotNull());
+        void shouldCountUtf16UnitsNotCodePoints() throws Exception {
+            // 128 emoji = 128 code points but 256 UTF-16 units, which H2 rejects for VARCHAR(255)
+            assertThat(parse("name", "🚀".repeat(128)))
+                    .hasValueSatisfying(m -> assertThat(m.name()).isNull());
+            // 127 emoji = 254 UTF-16 units: fits on every database
+            assertThat(parse("name", "🚀".repeat(127)))
+                    .hasValueSatisfying(m -> assertThat(m.name()).hasSize(254));
         }
 
         @Test
