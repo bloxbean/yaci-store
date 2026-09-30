@@ -53,6 +53,7 @@ public class StakeRegistrationExporter extends AbstractTableExporter {
                     sr.cred_type,
                     sr.type,
                     sr.address,
+                    sr.deposit,
                     sr.epoch,
                     sr.slot,
                     sr.block_hash,

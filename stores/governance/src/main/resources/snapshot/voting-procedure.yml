@@ -1,0 +1,37 @@
+snapshot-table:
+  id: voting-procedure
+  spec-version: 1
+  module: governance
+  kind: CHAIN_DATA
+  restore: IMPORT
+
+  source:
+    exporter-id: voting_procedure
+    ducklake-relation: voting_procedure
+    partition:
+      strategy: DAILY
+      column: block_time
+
+  consistency:
+    cutoff:
+      type: SLOT_LTE
+      column: slot
+
+  import:
+    target-table: voting_procedure
+    mode: MAPPED
+    columns:
+      id:
+        converter: "uuid-v5:tx_hash,idx"
+      block_time:
+        source: block_time
+        converter: "timestamp-to-epoch-seconds"
+    ignore-source-columns: [date]
+    use-target-defaults: [update_datetime]
+    batch-boundary: FILE_SET
+    batch-size: 32
+
+  validation:
+    key: [tx_hash, voter_hash, voter_type, gov_action_tx_hash, gov_action_index]
+    bounds: [slot, epoch]
+    required-columns: [tx_hash, voter_hash, voter_type, gov_action_tx_hash, gov_action_index]

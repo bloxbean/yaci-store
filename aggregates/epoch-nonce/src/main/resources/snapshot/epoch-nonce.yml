@@ -1,0 +1,11 @@
+snapshot-table:
+  id: epoch-nonce
+  spec-version: 1
+  module: epoch-nonce
+  kind: DERIVED_DATA
+  restore: NOT_RESTORED
+  reason: >-
+    the epoch nonce aggregate has no analytics export
+
+  import:
+    target-table: epoch_nonce
