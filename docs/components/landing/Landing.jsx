@@ -51,6 +51,7 @@ const DOCS = {
   blockfrost: "/docs/v3/blockfrost/overview",
   analytics: "/docs/v3/analytics/overview",
   queryApi: "/docs/v3/analytics/query-api",
+  mcp: "/docs/v3/analytics/mcp-server",
   plugins: "/docs/v2/plugins/write-first-plugin",
   stores: "/docs/v2/stores/overview",
   adminUi: "/docs/v2/admin-ui/overview",
@@ -361,7 +362,7 @@ function Features() {
             badge="v3"
             title="Ready for AI agents"
             text="Built-in MCP tools let an agent discover tables, read schemas and run read-only SQL over your analytics data."
-            link={{ href: DOCS.queryApi, label: "Query API & MCP" }}
+            link={{ href: DOCS.mcp, label: "Set up the MCP server" }}
             delay="0.06s"
           >
             <McpChat />

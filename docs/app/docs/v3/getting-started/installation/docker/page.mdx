@@ -152,6 +152,18 @@ SPRING_PROFILES_ACTIVE=ledger-state,analytics
 
 For storage mode selection, configuration options, custom exporters, and querying exported data, see the [Analytics Store](/docs/v3/analytics/overview) documentation.
 
+## Enable MCP Server Profile
+
+*Available in 3.x only (3.0.0-beta and later). Not included in 2.0.x releases.*
+
+To let AI agents query the analytics data over the Model Context Protocol, add the `mcp` profile next to `analytics` in `config/env`:
+
+```env
+SPRING_PROFILES_ACTIVE=analytics,mcp
+```
+
+The MCP endpoint is then available at `http://localhost:8080/mcp`. It is unauthenticated, so expose it only to trusted clients. For client setup, unified views and the available tools, see [MCP Server](/docs/v3/analytics/mcp-server).
+
 ## PostgreSQL Configuration for Ledger-State (Optional but Recommended)
 
 For optimal performance when running ledger-state calculation, especially on mainnet, you should tune your PostgreSQL configuration. While the default configuration will work, sync time will be significantly longer without these optimizations.
