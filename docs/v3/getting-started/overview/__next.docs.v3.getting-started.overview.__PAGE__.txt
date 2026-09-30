@@ -1,0 +1,72 @@
+1:"$Sreact.fragment"
+2:I[55169,["/_next/static/chunks/0g65zv~fun4x7.js","/_next/static/chunks/08omew7ogcv6y.js","/_next/static/chunks/02w1z8hfmb_58.js","/_next/static/chunks/02ofz3_qnmc73.js","/_next/static/chunks/0ys803ddim5c..js","/_next/static/chunks/12~p3wzl5d~a6.js","/_next/static/chunks/00x5458w2hpnq.js"],"TOCProvider"]
+3:I[769,["/_next/static/chunks/0g65zv~fun4x7.js","/_next/static/chunks/08omew7ogcv6y.js","/_next/static/chunks/02w1z8hfmb_58.js","/_next/static/chunks/02ofz3_qnmc73.js","/_next/static/chunks/0ys803ddim5c..js","/_next/static/chunks/12~p3wzl5d~a6.js","/_next/static/chunks/00x5458w2hpnq.js"],"Sidebar"]
+4:I[47486,["/_next/static/chunks/0g65zv~fun4x7.js","/_next/static/chunks/08omew7ogcv6y.js","/_next/static/chunks/02w1z8hfmb_58.js","/_next/static/chunks/02ofz3_qnmc73.js","/_next/static/chunks/0ys803ddim5c..js","/_next/static/chunks/12~p3wzl5d~a6.js","/_next/static/chunks/00x5458w2hpnq.js"],"ClientWrapper"]
+19:I[63894,["/_next/static/chunks/0g65zv~fun4x7.js","/_next/static/chunks/08omew7ogcv6y.js","/_next/static/chunks/02w1z8hfmb_58.js","/_next/static/chunks/02ofz3_qnmc73.js","/_next/static/chunks/0ys803ddim5c..js","/_next/static/chunks/12~p3wzl5d~a6.js","/_next/static/chunks/00x5458w2hpnq.js"],"HeadingAnchor"]
+1a:I[97367,["/_next/static/chunks/0g65zv~fun4x7.js","/_next/static/chunks/08omew7ogcv6y.js"],"OutletBoundary"]
+1b:"$Sreact.suspense"
+5:T6eb,import { Callout } from 'nextra/components'
+
+# Getting Started with Yaci Store
+
+This is the **latest release of Yaci Store with ledger-state support**. Yaci Store can now **calculate and derive ledger state**—such as **rewards**, **ADAPot**, and **governance state**—from **on-chain data**.
+
+Unlike DB Sync, which receives ledger events directly from a local Cardano Node (both implemented in Haskell), **Yaci Store independently computes all required ledger state from the on-chain data itself.**
+
+---
+
+## Status of Ledger State Data Accuracy
+
+Ledger State calculations include:
+- Epoch Stake and Rewards
+- ADAPot values
+- Governance State (dRep distribution, Proposal Status, dRep Status)
+
+### Reward Calculation and ADAPot Status
+
+ADAPot values match across all 3 public networks:
+- **Mainnet**: Verified through epoch 637
+- **Preprod**: Verified through epoch 295
+- **Preview**: Verified through epoch 1329
+
+We will update this section with any discrepancies for future mismatches.
+
+### Governance State Data
+
+Governance action proposal statuses match across all 3 public networks:
+- **Mainnet**: Verified through epoch 637
+- **Preprod**: Verified through epoch 295
+- **Preview**: Verified through epoch 1329
+
+As of version 2.0.1, all previously known mismatches in dRep distribution and DRep Expiry Epoch have been resolved.
+
+## Out-of-the-Box Applications
+
+### 1. **Yaci Store App**
+- The **default indexer application**, includes all modules.
+- **Ledger-state calculation is disabled by default** but can be enabled via profile.
+
+### 2. **Yaci Store Admin CLI App**
+- CLI tool to **apply optional indexes after sync is complete**.
+- Optional indexes improve API query performance and are not applied during initial sync.
+- Supports rollback to a previous epoch0:{"rsc":["$","$1","c",{"children":[["$","div",null,{"className":"x:mx-auto x:flex x:max-w-(--nextra-content-width)","children":["$","$L2",null,{"value":[{"value":"Status of Ledger State Data Accuracy","id":"status-of-ledger-state-data-accuracy","depth":2},{"value":"Reward Calculation and ADAPot Status","id":"reward-calculation-and-adapot-status","depth":3},{"value":"Governance State Data","id":"governance-state-data","depth":3},{"value":"Out-of-the-Box Applications","id":"out-of-the-box-applications","depth":2},{"value":[["$","$1",".0",{"children":["1. ",["$","strong",".1",{"children":"Yaci Store App"}]]}]],"id":"1-yaci-store-app","depth":3},{"value":[["$","$1",".0",{"children":["2. ",["$","strong",".1",{"children":"Yaci Store Admin CLI App"}]]}]],"id":"2-yaci-store-admin-cli-app","depth":3}],"children":[["$","$L3",null,{}],["$","$L4",null,{"metadata":{"title":"Getting Started with Yaci Store","filePath":"app/docs/v3/getting-started/overview/page.mdx","timestamp":1790760378000},"sourceCode":"$5","children":[["$","div",null,{"id":"nextra-skip-nav"}],["$","main",null,{"data-pagefind-body":true,"children":[["$","h1",null,{"className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-bold x:mt-2 x:text-4xl","children":["Getting Started with Yaci Store","$undefined"]}],"\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["This is the ",["$","strong",null,{"children":"latest release of Yaci Store with ledger-state support"}],". Yaci Store can now ",["$","strong",null,{"children":"calculate and derive ledger state"}],"—such as ",["$","strong",null,{"children":"rewards"}],", ",["$","strong",null,{"children":"ADAPot"}],", and ",["$","strong",null,{"children":"governance state"}],"—from ",["$","strong",null,{"children":"on-chain data"}],"."]}],"\n",["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":["Unlike DB Sync, which receives ledger events directly from a local Cardano Node (both implemented in Haskell), ","$L6"]}],"\n","$L7","\n","$L8","\n","$L9","\n","$La","\n","$Lb","\n","$Lc","\n","$Ld","\n","$Le","\n","$Lf","\n","$L10","\n","$L11","\n","$L12","\n","$L13","\n","$L14","\n","$L15","\n","$L16","\n","$L17"]}]]}]]}]}],null,"$L18"]}],"isPartial":false,"staleTime":300,"varyParams":null,"buildId":"QMNk0vIudbISQBDrCH0Ms"}
+6:["$","strong",null,{"children":"Yaci Store independently computes all required ledger state from the on-chain data itself."}]
+7:["$","hr",null,{"className":"x:my-[2em] nextra-border"}]
+8:["$","h2",null,{"id":"status-of-ledger-state-data-accuracy","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["Status of Ledger State Data Accuracy",["$","$L19",null,{"id":"status-of-ledger-state-data-accuracy"}]]}]
+9:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"Ledger State calculations include:"}]
+a:["$","ul",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-disc x:ms-[1.5em]","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":"Epoch Stake and Rewards"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"ADAPot values"}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"Governance State (dRep distribution, Proposal Status, dRep Status)"}],"\n"]}]
+b:["$","h3",null,{"id":"reward-calculation-and-adapot-status","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["Reward Calculation and ADAPot Status",["$","$L19",null,{"id":"reward-calculation-and-adapot-status"}]]}]
+c:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"ADAPot values match across all 3 public networks:"}]
+d:["$","ul",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-disc x:ms-[1.5em]","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Mainnet"}],": Verified through epoch 637"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Preprod"}],": Verified through epoch 295"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Preview"}],": Verified through epoch 1329"]}],"\n"]}]
+e:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"We will update this section with any discrepancies for future mismatches."}]
+f:["$","h3",null,{"id":"governance-state-data","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":["Governance State Data",["$","$L19",null,{"id":"governance-state-data"}]]}]
+10:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"Governance action proposal statuses match across all 3 public networks:"}]
+11:["$","ul",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-disc x:ms-[1.5em]","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Mainnet"}],": Verified through epoch 637"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Preprod"}],": Verified through epoch 295"]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Preview"}],": Verified through epoch 1329"]}],"\n"]}]
+12:["$","p",null,{"className":"x:not-first:mt-[1.25em] x:leading-7","children":"As of version 2.0.1, all previously known mismatches in dRep distribution and DRep Expiry Epoch have been resolved."}]
+13:["$","h2",null,{"id":"out-of-the-box-applications","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-10 x:border-b x:pb-1 x:text-3xl nextra-border","children":["Out-of-the-Box Applications",["$","$L19",null,{"id":"out-of-the-box-applications"}]]}]
+14:["$","h3",null,{"id":"1-yaci-store-app","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":[["1. ",["$","strong",null,{"children":"Yaci Store App"}]],["$","$L19",null,{"id":"1-yaci-store-app"}]]}]
+15:["$","ul",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-disc x:ms-[1.5em]","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":["The ",["$","strong",null,{"children":"default indexer application"}],", includes all modules."]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":[["$","strong",null,{"children":"Ledger-state calculation is disabled by default"}]," but can be enabled via profile."]}],"\n"]}]
+16:["$","h3",null,{"id":"2-yaci-store-admin-cli-app","className":"x:tracking-tight x:text-slate-900 x:dark:text-slate-100 x:font-semibold x:target:animate-[fade-in_1.5s] x:mt-8 x:text-2xl","children":[["2. ",["$","strong",null,{"children":"Yaci Store Admin CLI App"}]],["$","$L19",null,{"id":"2-yaci-store-admin-cli-app"}]]}]
+17:["$","ul",null,{"className":"x:[:is(ol,ul)_&]:my-[.75em] x:not-first:mt-[1.25em] x:list-disc x:ms-[1.5em]","children":["\n",["$","li",null,{"className":"x:my-[.5em]","children":["CLI tool to ",["$","strong",null,{"children":"apply optional indexes after sync is complete"}],"."]}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"Optional indexes improve API query performance and are not applied during initial sync."}],"\n",["$","li",null,{"className":"x:my-[.5em]","children":"Supports rollback to a previous epoch"}],"\n"]}]
+18:["$","$L1a",null,{"children":["$","$1b",null,{"name":"Next.MetadataOutlet","children":"$@1c"}]}]
+1c:null
