@@ -80,17 +80,19 @@ public class Cip68DatumParser {
             return Optional.empty();
         }
 
-        // version is required and stored as a long: reject rather than let longValue() wrap it
-        if (version.getValue().bitLength() >= Long.SIZE) {
-            log.warn("Ignoring CIP-68 datum with out-of-range version {}", version.getValue());
+        // version is required and stored as a long, but a datum integer is unbounded: reject values
+        // that don't fit rather than let longValue() silently wrap them (2^64 + 1 would become 1)
+        BigInteger versionValue = version.getValue();
+        if (versionValue.bitLength() >= Long.SIZE) {
+            log.warn("Ignoring CIP-68 datum with out-of-range version {}", versionValue);
             return Optional.empty();
         }
 
-        return Optional.of(new DatumParts(properties, version));
+        return Optional.of(new DatumParts(properties, versionValue.longValue()));
     }
 
     /** Build the typed {@link ParsedCip68Datum} from the unwrapped (Map, version) pair. */
-    private ParsedCip68Datum buildParsedDatum(MapPlutusData properties, BigIntPlutusData version) {
+    private ParsedCip68Datum buildParsedDatum(MapPlutusData properties, long version) {
         return new ParsedCip68Datum(
                 getDecimalsProperty(properties).orElse(null),
                 getStringProperty(DESCRIPTION, properties).orElse(null),
@@ -98,7 +100,7 @@ public class Cip68DatumParser {
                 getBoundedStringProperty(NAME, properties, Cip68Metadata.NAME_MAX_LENGTH).orElse(null),
                 getBoundedStringProperty(TICKER, properties, Cip68Metadata.TICKER_MAX_LENGTH).orElse(null),
                 getBoundedStringProperty(URL, properties, Cip68Metadata.URL_MAX_LENGTH).orElse(null),
-                version.getValue().longValue(),
+                version,
                 getStringOrChunkedProperty(IMAGE, properties).orElse(null),
                 getBoundedStringProperty(MEDIA_TYPE, properties, Cip68Metadata.MEDIA_TYPE_MAX_LENGTH).orElse(null),
                 buildPropertiesJson(properties));
@@ -129,8 +131,8 @@ public class Cip68DatumParser {
         return json;
     }
 
-    /** Internal record for the unwrapped CIP-68 envelope ((properties Map, version BigInt)). */
-    private record DatumParts(MapPlutusData properties, BigIntPlutusData version) {}
+    /** Internal record for the unwrapped CIP-68 envelope (properties Map, range-checked version). */
+    private record DatumParts(MapPlutusData properties, long version) {}
 
     private Optional<String> getStringProperty(String propertyName, MapPlutusData mapPlutusData) {
         PlutusData property = mapPlutusData.getMap().get(BytesPlutusData.of(propertyName));
