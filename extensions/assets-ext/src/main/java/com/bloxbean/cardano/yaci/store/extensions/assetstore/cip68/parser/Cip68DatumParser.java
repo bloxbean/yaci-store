@@ -2,9 +2,12 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.parser;
 
 import com.bloxbean.cardano.client.plutus.spec.*;
 import com.bloxbean.cardano.client.util.HexUtil;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.AssetType;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Constants;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.ParsedCip68Datum;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.Cip68Metadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.util.TokenDecimals;
+import jakarta.annotation.Nullable;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -34,6 +37,10 @@ public class Cip68DatumParser {
     public static final String MEDIA_TYPE  = "mediaType";
     public static final String FILES       = "files";
 
+    /** CIP-68 version 4 wraps the metadata in a CIP-25 style map: {"721": {policy_id: {asset_name: metadata}}}. */
+    private static final BytesPlutusData NESTED_MAP_KEY = BytesPlutusData.of("721");
+    private static final long NESTED_MAP_MIN_VERSION = 4;
+
     /** Set of keys we promote to typed columns; everything else goes into the JSONB additional_properties. */
     private static final Set<String> TYPED_KEYS = Set.of(
             DECIMALS, DESCRIPTION, LOGO, NAME, TICKER, URL, IMAGE, MEDIA_TYPE, FILES);
@@ -46,13 +53,22 @@ public class Cip68DatumParser {
      * arbitrary additional properties) into the JSONB-bound {@code properties} map.
      */
     public Optional<ParsedCip68Datum> parse(String inlineDatum) {
+        return parse(inlineDatum, null);
+    }
+
+    /**
+     * Same as {@link #parse(String)}, but resolves a version 4 nested-map datum to the entry for
+     * {@code referenceNft}. Without it, a nested map is only resolved when it has a single entry.
+     */
+    public Optional<ParsedCip68Datum> parse(String inlineDatum, @Nullable AssetType referenceNft) {
         if (inlineDatum == null || inlineDatum.isBlank()) {
             return Optional.empty();
         }
 
         try {
             return extractDatumProperties(inlineDatum)
-                    .map(parts -> buildParsedDatum(parts.properties(), parts.version()));
+                    .flatMap(parts -> resolveMetadata(parts, referenceNft)
+                            .map(metadata -> buildParsedDatum(metadata, parts.version())));
         } catch (StackOverflowError e) {
             // TODO: temporary workaround. Remove once cardano-client-lib decodes CBOR without
             //  recursion (bloxbean/cardano-client-lib#681).
@@ -102,6 +118,37 @@ public class Cip68DatumParser {
         }
 
         return Optional.of(new DatumParts(properties, versionValue.longValue()));
+    }
+
+    /**
+     * Returns the metadata map to read fields from. Versions 1–3 carry it directly; version 4 nests it
+     * under {@code "721" -> policy_id -> asset_name} (asset name without the label prefix, both as raw
+     * bytes). A version 4 datum without the {@code "721"} key is read directly, as before.
+     */
+    private Optional<MapPlutusData> resolveMetadata(DatumParts parts, @Nullable AssetType referenceNft) {
+        MapPlutusData properties = parts.properties();
+        if (parts.version() < NESTED_MAP_MIN_VERSION
+                || !(properties.getMap().get(NESTED_MAP_KEY) instanceof MapPlutusData byPolicy)) {
+            return Optional.of(properties);
+        }
+
+        if (referenceNft == null) {
+            // No asset context: only an unambiguous single entry can be resolved
+            return singleValue(byPolicy)
+                    .flatMap(Cip68DatumParser::singleValue);
+        }
+
+        String assetNameWithoutLabel = referenceNft.assetName().substring(Cip68Constants.REFERENCE_TOKEN_PREFIX.length());
+        return asMap(byPolicy.getMap().get(BytesPlutusData.of(HexUtil.decodeHexString(referenceNft.policyId()))))
+                .flatMap(byAsset -> asMap(byAsset.getMap().get(BytesPlutusData.of(HexUtil.decodeHexString(assetNameWithoutLabel)))));
+    }
+
+    private static Optional<MapPlutusData> singleValue(MapPlutusData map) {
+        return map.getMap().size() == 1 ? asMap(map.getMap().values().iterator().next()) : Optional.empty();
+    }
+
+    private static Optional<MapPlutusData> asMap(@Nullable PlutusData data) {
+        return data instanceof MapPlutusData map ? Optional.of(map) : Optional.empty();
     }
 
     /** Build the typed {@link ParsedCip68Datum} from the unwrapped (Map, version) pair. */
