@@ -148,11 +148,16 @@ public class Cip68DatumParser {
      * Reads a string property bound for a fixed-width column. Longer values are dropped, since an
      * oversized value would fail the insert and stop the sync; for the required {@code name} that
      * means the datum is then skipped by {@code Cip68TokenService.isValidMetadata}.
-     * Length is counted in code points, matching how VARCHAR(n) counts characters.
+     * <p>
+     * Length is counted in UTF-16 units ({@link String#length()}), not code points: H2 counts
+     * {@code VARCHAR(n)} that way, so 255 emoji (510 units) overflow a {@code VARCHAR(255)} there.
+     * Postgres and MySQL count code points, which is never more than UTF-16 units, so this bound
+     * is safe on every supported database, at the cost of rejecting some long non-BMP names that
+     * Postgres alone could have stored.
      */
     private Optional<String> getBoundedStringProperty(String propertyName, MapPlutusData mapPlutusData, int maxLength) {
         return getStringProperty(propertyName, mapPlutusData).filter(value -> {
-            int length = value.codePointCount(0, value.length());
+            int length = value.length();
             if (length > maxLength) {
                 log.warn("Ignoring CIP-68 '{}' of {} characters (max {})", propertyName, length, maxLength);
                 return false;
