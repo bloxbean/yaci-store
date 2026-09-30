@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.parser;
 import com.bloxbean.cardano.client.common.cbor.CborSerializationUtil;
 import com.bloxbean.cardano.client.plutus.spec.*;
 import com.bloxbean.cardano.client.util.HexUtil;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.AssetType;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.ParsedCip68Datum;
 import org.junit.jupiter.api.BeforeEach;
@@ -342,6 +343,87 @@ class Cip68DatumParserTest {
             assertThat(parse("ticker", "TT", BigInteger.valueOf(Long.MAX_VALUE)))
                     .hasValueSatisfying(m -> assertThat(m.version()).isEqualTo(Long.MAX_VALUE));
             assertThat(parse("ticker", "TT", BigInteger.TWO.pow(63))).isEmpty();
+        }
+    }
+
+    @Nested
+    class NestedMapFormat {
+
+        private static final String POLICY_ID = "aabbccdd11223344aabbccdd11223344aabbccdd11223344aabbccdd";
+        private static final String OTHER_POLICY_ID = "11223344aabbccdd11223344aabbccdd11223344aabbccdd11223344";
+        private static final String ASSET_NAME_HEX = HexUtil.encodeHexString("Token".getBytes());
+        private static final AssetType REFERENCE_NFT = new AssetType(POLICY_ID, "000643b0" + ASSET_NAME_HEX);
+
+        private static MapPlutusData metadata(String name) {
+            MapPlutusData metadata = new MapPlutusData();
+            metadata.put(BytesPlutusData.of("name"), BytesPlutusData.of(name));
+            metadata.put(BytesPlutusData.of("description"), BytesPlutusData.of("Desc"));
+            return metadata;
+        }
+
+        /** {"721": {policy_id: {asset_name: metadata}}} with raw-byte policy and asset keys, per CIP-68 version 4. */
+        private static MapPlutusData nested(String policyId, String assetNameHex, MapPlutusData metadata) {
+            MapPlutusData byAsset = new MapPlutusData();
+            byAsset.put(BytesPlutusData.of(HexUtil.decodeHexString(assetNameHex)), metadata);
+            MapPlutusData byPolicy = new MapPlutusData();
+            byPolicy.put(BytesPlutusData.of(HexUtil.decodeHexString(policyId)), byAsset);
+            MapPlutusData root = new MapPlutusData();
+            root.put(BytesPlutusData.of("721"), byPolicy);
+            return root;
+        }
+
+        private static String datum(MapPlutusData properties, long version) throws Exception {
+            ConstrPlutusData datum = ConstrPlutusData.of(0, properties, BigIntPlutusData.of(version));
+            return HexUtil.encodeHexString(CborSerializationUtil.serialize(datum.serialize()));
+        }
+
+        @Test
+        void shouldResolveVersion4NestedMapForReferenceNft() throws Exception {
+            String datum = datum(nested(POLICY_ID, ASSET_NAME_HEX, metadata("Nested")), 4);
+
+            assertThat(parser.parse(datum, REFERENCE_NFT)).hasValueSatisfying(m -> {
+                assertThat(m.name()).isEqualTo("Nested");
+                assertThat(m.description()).isEqualTo("Desc");
+                assertThat(m.version()).isEqualTo(4L);
+                assertThat(m.properties()).isNull(); // the "721" wrapper is not leaked as an additional property
+            });
+        }
+
+        @Test
+        void shouldPickTheEntryForThisReferenceNftAmongSeveral() throws Exception {
+            MapPlutusData root = nested(POLICY_ID, ASSET_NAME_HEX, metadata("Mine"));
+            MapPlutusData byPolicy = (MapPlutusData) root.getMap().get(BytesPlutusData.of("721"));
+            MapPlutusData byAsset = (MapPlutusData) byPolicy.getMap().get(BytesPlutusData.of(HexUtil.decodeHexString(POLICY_ID)));
+            byAsset.put(BytesPlutusData.of("Other".getBytes()), metadata("Other"));
+
+            assertThat(parser.parse(datum(root, 4), REFERENCE_NFT))
+                    .hasValueSatisfying(m -> assertThat(m.name()).isEqualTo("Mine"));
+        }
+
+        @Test
+        void shouldReturnEmptyWhenNestedMapHasNoEntryForReferenceNft() throws Exception {
+            String datum = datum(nested(OTHER_POLICY_ID, ASSET_NAME_HEX, metadata("Foreign")), 4);
+
+            assertThat(parser.parse(datum, REFERENCE_NFT)).isEmpty();
+        }
+
+        @Test
+        void shouldResolveSingleEntryWithoutAssetContext() throws Exception {
+            String datum = datum(nested(POLICY_ID, ASSET_NAME_HEX, metadata("Only")), 4);
+
+            assertThat(parser.parse(datum)).hasValueSatisfying(m -> assertThat(m.name()).isEqualTo("Only"));
+        }
+
+        @Test
+        void shouldReadVersion3DatumDirectlyEvenWithA721Key() throws Exception {
+            // Before version 4 a "721" key is just an additional property, not a wrapper
+            MapPlutusData properties = metadata("Direct");
+            properties.put(BytesPlutusData.of("721"), BytesPlutusData.of("x"));
+
+            assertThat(parser.parse(datum(properties, 3), REFERENCE_NFT)).hasValueSatisfying(m -> {
+                assertThat(m.name()).isEqualTo("Direct");
+                assertThat(m.properties()).containsKey("additional_properties");
+            });
         }
     }
 
