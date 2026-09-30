@@ -1,0 +1,16 @@
+{
+  "network": null,
+  "adastat_base_url": null,
+  "adastat_timeout": 20,
+  "adastat_retries": 3,
+  "adastat_delay": 1.1,
+  "store_url": "postgresql://localhost:5432/yaci_store",
+  "store_user": "yaci",
+  "store_password": "change-me",
+  "store_schema": "yaci_store",
+  "reports_dir": "./reports",
+  "logs_dir": "./logs",
+  "quiet": false,
+  "max_mismatches": 0,
+  "fail_on_inconclusive": false
+}
