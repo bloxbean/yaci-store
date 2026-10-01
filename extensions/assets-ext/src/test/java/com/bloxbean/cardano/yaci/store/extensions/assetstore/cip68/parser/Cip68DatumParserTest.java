@@ -345,6 +345,27 @@ class Cip68DatumParserTest {
     }
 
     @Nested
+    class ChunkedLogo {
+
+        @Test
+        void shouldJoinLogoGivenAsListOfChunks() throws Exception {
+            // CIP-68 FT: logo is a uri = bounded_bytes / [* bounded_bytes]
+            String first = "data:image/png;base64,";
+            String second = "iVBORw0KGgo=";
+            ListPlutusData chunks = ListPlutusData.of(BytesPlutusData.of(first), BytesPlutusData.of(second));
+
+            MapPlutusData properties = new MapPlutusData();
+            properties.put(BytesPlutusData.of("name"), BytesPlutusData.of("Token"));
+            properties.put(BytesPlutusData.of("description"), BytesPlutusData.of("Desc"));
+            properties.put(BytesPlutusData.of("logo"), chunks);
+            ConstrPlutusData datum = ConstrPlutusData.of(0, properties, BigIntPlutusData.of(1));
+
+            assertThat(parser.parse(HexUtil.encodeHexString(CborSerializationUtil.serialize(datum.serialize()))))
+                    .hasValueSatisfying(m -> assertThat(m.logo()).isEqualTo(first + second));
+        }
+    }
+
+    @Nested
     class ParseInvalidDatum {
 
         @Test
