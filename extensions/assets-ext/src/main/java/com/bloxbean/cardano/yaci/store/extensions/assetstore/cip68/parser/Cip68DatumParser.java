@@ -100,7 +100,7 @@ public class Cip68DatumParser {
         return new ParsedCip68Datum(
                 getDecimalsProperty(properties).orElse(null),
                 getStringProperty(DESCRIPTION, properties).orElse(null),
-                getStringProperty(LOGO, properties).orElse(null),
+                getStringOrChunkedProperty(LOGO, properties).orElse(null),
                 getBoundedStringProperty(NAME, properties, Cip68Metadata.NAME_MAX_LENGTH).orElse(null),
                 getBoundedStringProperty(TICKER, properties, Cip68Metadata.TICKER_MAX_LENGTH).orElse(null),
                 getBoundedStringProperty(URL, properties, Cip68Metadata.URL_MAX_LENGTH).orElse(null),
@@ -169,7 +169,8 @@ public class Cip68DatumParser {
     }
 
     /**
-     * CIP-25 convention (inherited by CIP-68 NFTs): if a string value exceeds 64 bytes
+     * CIP-25 convention, inherited by CIP-68 NFT {@code image} and the FT {@code logo} (both a
+     * CIP-68 {@code uri = bounded_bytes / [* bounded_bytes]}): if a string value exceeds 64 bytes
      * the issuer may split it into a list of byte-string chunks. This helper joins them
      * back together. Falls back to {@link #getStringProperty} for the simple-string case.
      */
