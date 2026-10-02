@@ -15,6 +15,7 @@ import com.bloxbean.cardano.yaci.core.model.PlutusScriptType;
 import com.bloxbean.cardano.yaci.core.util.CborSerializationUtil;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
+import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.script.domain.Script;
 import com.bloxbean.cardano.yaci.store.script.domain.ScriptType;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -33,7 +34,8 @@ public class ScriptUtil {
             com.bloxbean.cardano.client.transaction.spec.script.NativeScript nativeScript1
                     = com.bloxbean.cardano.client.transaction.spec.script.NativeScript.deserializeJson(nativeScript.getContent());
             return HexUtil.encodeHexString(nativeScript1.getScriptHash());
-        } catch (Exception e) {
+        } catch (Exception | StackOverflowError e) {
+            //StackOverflowError: deeply nested native script, CCL json/cbor processing is recursive
             throw new IllegalStateException(e);
         }
     }
@@ -163,6 +165,10 @@ public class ScriptUtil {
     public static String getDatumHash(Datum datum) {
         if (datum == null) return null;
 
+        //Yaci provides the datum hash (from the original datum bytes when available)
+        if (!StringUtil.isEmpty(datum.getHash()))
+            return datum.getHash();
+
         return getDatumHash(datum.getCbor());
     }
 
@@ -175,6 +181,10 @@ public class ScriptUtil {
             return plutusData.getDatumHash();
         } catch (Exception e) {
             log.error("Unable to deserialize and calculate datumhash for : " + datumCbor, e);
+            return null;
+        } catch (StackOverflowError e) {
+            //Deeply nested datum, CCL PlutusData deserialization is recursive
+            log.error("Unable to calculate datumhash for deeply nested datum. Datum cbor length: {}", datumCbor.length());
             return null;
         }
     }

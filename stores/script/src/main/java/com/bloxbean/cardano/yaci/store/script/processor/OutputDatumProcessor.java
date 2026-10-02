@@ -73,8 +73,10 @@ public class OutputDatumProcessor {
 
         Collection<Datum> datumList = datumHashToDatumMap.values();
         //Filter out datum with datum value
+        //Skip datum without hash (e.g. hash calculation failed for a deeply nested datum). hash is the primary key
         datumList = datumList.stream()
                 .filter(datum -> !StringUtil.isEmpty(datum.getDatum()))
+                .filter(datum -> !StringUtil.isEmpty(datum.getHash()))
                 .toList();
 
         if (datumList.size() > 0) {
