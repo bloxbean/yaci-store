@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigInteger;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -223,6 +224,181 @@ class Cip68DatumParserTest {
 
             assertThat(result).isPresent();
             assertThat(result.get().properties()).isNull();
+        }
+    }
+
+    @Nested
+    class OutOfRangeDecimals {
+
+        private Optional<ParsedCip68Datum> parseWithDecimals(BigInteger decimals) throws Exception {
+            MapPlutusData properties = new MapPlutusData();
+            properties.put(BytesPlutusData.of("name"), BytesPlutusData.of("Token"));
+            properties.put(BytesPlutusData.of("description"), BytesPlutusData.of("Desc"));
+            properties.put(BytesPlutusData.of("decimals"), BigIntPlutusData.of(decimals));
+
+            ConstrPlutusData datum = ConstrPlutusData.of(0, properties, BigIntPlutusData.of(1));
+
+            return parser.parse(HexUtil.encodeHexString(CborSerializationUtil.serialize(datum.serialize())));
+        }
+
+        @Test
+        void shouldKeepDecimalsAtUpperBound() throws Exception {
+            assertThat(parseWithDecimals(BigInteger.valueOf(255)))
+                    .hasValueSatisfying(m -> assertThat(m.decimals()).isEqualTo(255L));
+        }
+
+        @Test
+        void shouldDropDecimalsAboveUpperBoundButKeepMetadata() throws Exception {
+            assertThat(parseWithDecimals(BigInteger.valueOf(256))).hasValueSatisfying(m -> {
+                assertThat(m.name()).isEqualTo("Token");
+                assertThat(m.decimals()).isNull();
+            });
+        }
+
+        @Test
+        void shouldDropDecimalsBeyondIntRange() throws Exception {
+            assertThat(parseWithDecimals(BigInteger.TWO.pow(40)))
+                    .hasValueSatisfying(m -> assertThat(m.decimals()).isNull());
+        }
+
+        @Test
+        void shouldDropDecimalsThatWouldWrapWhenNarrowedToLong() throws Exception {
+            // 2^64 + 3: longValue() gives 3, which would otherwise look valid.
+            assertThat(parseWithDecimals(BigInteger.TWO.pow(64).add(BigInteger.valueOf(3))))
+                    .hasValueSatisfying(m -> assertThat(m.decimals()).isNull());
+        }
+
+        @Test
+        void shouldDropNegativeDecimals() throws Exception {
+            assertThat(parseWithDecimals(BigInteger.valueOf(-1)))
+                    .hasValueSatisfying(m -> assertThat(m.decimals()).isNull());
+        }
+    }
+
+    @Nested
+    class OversizedValues {
+
+        private Optional<ParsedCip68Datum> parse(String key, String value, BigInteger version) throws Exception {
+            MapPlutusData properties = new MapPlutusData();
+            properties.put(BytesPlutusData.of("name"), BytesPlutusData.of("Token"));
+            properties.put(BytesPlutusData.of("description"), BytesPlutusData.of("Desc"));
+            properties.put(BytesPlutusData.of(key), BytesPlutusData.of(value));
+
+            ConstrPlutusData datum = ConstrPlutusData.of(0, properties, BigIntPlutusData.of(version));
+
+            return parser.parse(HexUtil.encodeHexString(CborSerializationUtil.serialize(datum.serialize())));
+        }
+
+        private Optional<ParsedCip68Datum> parse(String key, String value) throws Exception {
+            return parse(key, value, BigInteger.ONE);
+        }
+
+        @Test
+        void shouldKeepStringsAtColumnWidth() throws Exception {
+            assertThat(parse("ticker", "T".repeat(32)))
+                    .hasValueSatisfying(m -> assertThat(m.ticker()).hasSize(32));
+            assertThat(parse("url", "u".repeat(250)))
+                    .hasValueSatisfying(m -> assertThat(m.url()).hasSize(250));
+            assertThat(parse("mediaType", "m".repeat(255)))
+                    .hasValueSatisfying(m -> assertThat(m.mediaType()).hasSize(255));
+        }
+
+        @Test
+        void shouldDropStringsWiderThanColumnButKeepMetadata() throws Exception {
+            assertThat(parse("ticker", "T".repeat(33))).hasValueSatisfying(m -> {
+                assertThat(m.ticker()).isNull();
+                assertThat(m.name()).isEqualTo("Token");
+            });
+            assertThat(parse("url", "u".repeat(251)))
+                    .hasValueSatisfying(m -> assertThat(m.url()).isNull());
+            assertThat(parse("mediaType", "m".repeat(256)))
+                    .hasValueSatisfying(m -> assertThat(m.mediaType()).isNull());
+        }
+
+        @Test
+        void shouldDropOversizedNameSoDatumFailsRequiredFieldCheck() throws Exception {
+            assertThat(parse("name", "N".repeat(256)))
+                    .hasValueSatisfying(m -> assertThat(m.name()).isNull());
+        }
+
+        @Test
+        void shouldCountUtf16UnitsNotCodePoints() throws Exception {
+            // 128 emoji = 128 code points but 256 UTF-16 units, which H2 rejects for VARCHAR(255)
+            assertThat(parse("name", "🚀".repeat(128)))
+                    .hasValueSatisfying(m -> assertThat(m.name()).isNull());
+            // 127 emoji = 254 UTF-16 units: fits on every database
+            assertThat(parse("name", "🚀".repeat(127)))
+                    .hasValueSatisfying(m -> assertThat(m.name()).hasSize(254));
+        }
+
+        @Test
+        void shouldRejectDatumWhoseVersionWouldWrapWhenNarrowedToLong() throws Exception {
+            // 2^64 + 1: longValue() gives 1, which would otherwise look like a valid version
+            assertThat(parse("ticker", "TT", BigInteger.TWO.pow(64).add(BigInteger.ONE))).isEmpty();
+        }
+
+        @Test
+        void shouldAcceptVersionUpToLongMaxAndRejectBeyond() throws Exception {
+            assertThat(parse("ticker", "TT", BigInteger.valueOf(Long.MAX_VALUE)))
+                    .hasValueSatisfying(m -> assertThat(m.version()).isEqualTo(Long.MAX_VALUE));
+            assertThat(parse("ticker", "TT", BigInteger.TWO.pow(63))).isEmpty();
+        }
+    }
+
+    @Nested
+    class ChunkedLogo {
+
+        @Test
+        void shouldJoinLogoGivenAsListOfChunks() throws Exception {
+            // CIP-68 FT: logo is a uri = bounded_bytes / [* bounded_bytes]
+            String first = "data:image/png;base64,";
+            String second = "iVBORw0KGgo=";
+            ListPlutusData chunks = ListPlutusData.of(BytesPlutusData.of(first), BytesPlutusData.of(second));
+
+            MapPlutusData properties = new MapPlutusData();
+            properties.put(BytesPlutusData.of("name"), BytesPlutusData.of("Token"));
+            properties.put(BytesPlutusData.of("description"), BytesPlutusData.of("Desc"));
+            properties.put(BytesPlutusData.of("logo"), chunks);
+            ConstrPlutusData datum = ConstrPlutusData.of(0, properties, BigIntPlutusData.of(1));
+
+            assertThat(parser.parse(HexUtil.encodeHexString(CborSerializationUtil.serialize(datum.serialize()))))
+                    .hasValueSatisfying(m -> assertThat(m.logo()).isEqualTo(first + second));
+        }
+    }
+
+    @Nested
+    class DeeplyNestedDatum {
+
+        /** {@code depth} nested single-element lists around 0, built as raw CBOR so building it doesn't recurse. */
+        private String nestedDatumHex(int depth) {
+            return "81".repeat(depth) + "00";
+        }
+
+        /** Parses on a 1 MB stack, the default on Linux x86_64, and returns the result or what was thrown. */
+        private Object parseOnDefaultLinuxStack(String datumHex) throws InterruptedException {
+            AtomicReference<Object> outcome = new AtomicReference<>();
+            Thread thread = new Thread(null, () -> {
+                try {
+                    outcome.set(parser.parse(datumHex));
+                } catch (Throwable t) {
+                    outcome.set(t);
+                }
+            }, "deep-datum", 1024 * 1024);
+            thread.start();
+            thread.join();
+            return outcome.get();
+        }
+
+        @Test
+        void shouldSkipDatumNestedTooDeeplyToDecode() throws Exception {
+            // 5,000 levels overflows the current decoder on a 1 MB stack; 16,000 is about the most a
+            // 16 KB transaction can carry. This stays valid once the decoder is stack-safe
+            // (cardano-client-lib#681): the datum isn't a CIP-68 constructor, so it is skipped either way.
+            for (int depth : new int[]{5_000, 16_000}) {
+                assertThat(parseOnDefaultLinuxStack(nestedDatumHex(depth)))
+                        .as("depth %d", depth)
+                        .isEqualTo(Optional.empty());
+            }
         }
     }
 
