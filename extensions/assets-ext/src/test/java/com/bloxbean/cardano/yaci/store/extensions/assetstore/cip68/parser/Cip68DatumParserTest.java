@@ -11,6 +11,8 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigInteger;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -481,6 +483,87 @@ class Cip68DatumParserTest {
                         .as("depth %d", depth)
                         .isEqualTo(Optional.empty());
             }
+        }
+    }
+
+    @Nested
+    class AdditionalPropertyValues {
+
+        /** Preprod NFT from bloxbean/yaci-store#1159: {@code contractData} is a Plutus constructor. */
+        private static final String NFT_WITH_CONSTRUCTOR_PROPERTY =
+                "d87982a3446e616d65464e465420233145696d616765404c636f6e747261637444617461d879860181581cdc9acfee35"
+                + "243d123e8f10bc58692a6bc5aa3135c7eafc2aac9daafcd87a80581c9abc17656a6d1c24688292777c18c1ce599845a5"
+                + "88f4d893c1884da2d87a80d87a8001";
+
+        /** Preprod fungible token (Wrapped pUSDC): {@code seed} is a constructor, {@code oracles} are key hashes. */
+        private static final String FT_WITH_CONSTRUCTOR_PROPERTY =
+                "d8799fae46737570706c791a1a449c8b44747970654c5772617070656441737365744576656e75654845746865726575"
+                + "6d46706f6c696379582a3078413062383639393163363231386233366331643139443461326539456230634533363036"
+                + "65423438476163636f756e74582a30783732423530393631423237343734624433363241436346393638616630316633"
+                + "6338323863336432467469636b6572457055534443446e616d654d577261707065642070555344434b64657363726970"
+                + "74696f6e582057726170706564207055534443206f70657261746564206279205042472e696f48646563696d616c7306"
+                + "4375726c4e68747470733a2f2f7062672e696f446c6f676f582868747470733a2f2f70726570726f642e706267746f6b"
+                + "656e2e696f2f7277612d6c6f676f2e706e674671756f72756d02476f7261636c65739f581c80edfa909a3d40a54fca4c"
+                + "3ee852c7ba2a79391738911dc363580dc2581cab25d3b9476a3e3343a2f353b08b40913c573de7d286ef37ac4013e058"
+                + "1c7bd1ebc8230f961193fb772204542e85425af4f7a8f36acb5543da08ff4473656564d8799fd8799f582042f5390b27"
+                + "9a4b49d56fe594b2d5eaf02e8e387fa1612f87bafd2feed7c836afff02ff01d87980ff";
+
+        @SuppressWarnings("unchecked")
+        private static Map<String, Object> additionalProperties(ParsedCip68Datum datum) {
+            return (Map<String, Object>) datum.properties().get("additional_properties");
+        }
+
+        private static Map<String, Object> constructor(long alternative, Object... fields) {
+            return Map.of("constructor", alternative, "fields", List.of(fields));
+        }
+
+        @Test
+        void shouldKeepMetadataWhenAPropertyIsAConstructor() {
+            assertThat(parser.parse(NFT_WITH_CONSTRUCTOR_PROPERTY)).hasValueSatisfying(m -> {
+                assertThat(m.name()).isEqualTo("NFT #1");
+                assertThat(additionalProperties(m).get("contractData")).isEqualTo(constructor(0,
+                        BigInteger.ONE,
+                        List.of("dc9acfee35243d123e8f10bc58692a6bc5aa3135c7eafc2aac9daafc"),
+                        constructor(1),
+                        "9abc17656a6d1c24688292777c18c1ce599845a588f4d893c1884da2",
+                        constructor(1),
+                        constructor(1)));
+            });
+        }
+
+        @Test
+        void shouldKeepFungibleTokenMetadataWhenAPropertyIsAConstructor() {
+            assertThat(parser.parse(FT_WITH_CONSTRUCTOR_PROPERTY)).hasValueSatisfying(m -> {
+                assertThat(m.name()).isEqualTo("Wrapped pUSDC");
+                assertThat(m.ticker()).isEqualTo("pUSDC");
+                assertThat(m.decimals()).isEqualTo(6L);
+
+                Map<String, Object> additional = additionalProperties(m);
+                assertThat(additional.get("seed")).isEqualTo(constructor(0,
+                        constructor(0, "42f5390b279a4b49d56fe594b2d5eaf02e8e387fa1612f87bafd2feed7c836af"),
+                        BigInteger.TWO));
+                assertThat(additional.get("oracles")).isEqualTo(List.of(
+                        "80edfa909a3d40a54fca4c3ee852c7ba2a79391738911dc363580dc2",
+                        "ab25d3b9476a3e3343a2f353b08b40913c573de7d286ef37ac4013e0",
+                        "7bd1ebc8230f961193fb772204542e85425af4f7a8f36acb5543da08"));
+                assertThat(additional.get("venue")).isEqualTo("Ethereum");
+            });
+        }
+
+        @Test
+        void shouldStoreUtf8BytesAsTextAndOtherBytesAsHex() throws Exception {
+            MapPlutusData properties = new MapPlutusData();
+            properties.put(BytesPlutusData.of("name"), BytesPlutusData.of("Token"));
+            properties.put(BytesPlutusData.of("description"), BytesPlutusData.of("Desc"));
+            properties.put(BytesPlutusData.of("label"), BytesPlutusData.of("caf\u00e9"));
+            properties.put(BytesPlutusData.of("hash"), BytesPlutusData.of(new byte[]{(byte) 0xff, 0x00, (byte) 0xc3}));
+            ConstrPlutusData datum = ConstrPlutusData.of(0, properties, BigIntPlutusData.of(1));
+
+            assertThat(parser.parse(HexUtil.encodeHexString(CborSerializationUtil.serialize(datum.serialize()))))
+                    .hasValueSatisfying(m -> {
+                        assertThat(additionalProperties(m).get("label")).isEqualTo("caf\u00e9");
+                        assertThat(additionalProperties(m).get("hash")).isEqualTo("ff00c3");
+                    });
         }
     }
 
