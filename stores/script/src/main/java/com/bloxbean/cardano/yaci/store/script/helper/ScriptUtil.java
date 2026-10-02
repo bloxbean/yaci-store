@@ -15,6 +15,7 @@ import com.bloxbean.cardano.yaci.core.model.PlutusScriptType;
 import com.bloxbean.cardano.yaci.core.util.CborSerializationUtil;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
+import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.script.domain.Script;
 import com.bloxbean.cardano.yaci.store.script.domain.ScriptType;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -28,12 +29,22 @@ import java.util.List;
 @Slf4j
 public class ScriptUtil {
 
+    /**
+     * Calculate the native script hash using CCL.
+     * <p>
+     * A deeply nested native script is reported as {@link IllegalStateException} instead of {@link StackOverflowError}.
+     * Callers on the sync path must catch it, otherwise the sync stops.
+     * TODO: Revisit once Yaci provides the native script hash (bloxbean/yaci#191)
+     *
+     * @throws IllegalStateException if the hash can't be calculated
+     */
     public static String getNativeScriptHash(NativeScript nativeScript) {
         try {
             com.bloxbean.cardano.client.transaction.spec.script.NativeScript nativeScript1
                     = com.bloxbean.cardano.client.transaction.spec.script.NativeScript.deserializeJson(nativeScript.getContent());
             return HexUtil.encodeHexString(nativeScript1.getScriptHash());
-        } catch (Exception e) {
+        } catch (Exception | StackOverflowError e) {
+            //StackOverflowError: deeply nested native script, CCL json/cbor processing is recursive
             throw new IllegalStateException(e);
         }
     }
@@ -96,6 +107,15 @@ public class ScriptUtil {
      * @return PlutusV1Script or PlutusV2Script
      */
     public static com.bloxbean.cardano.client.plutus.spec.PlutusScript deserializeScriptRef(byte[] serializedPlutusScript) {
+        try {
+            return deserializePlutusScriptRef(serializedPlutusScript);
+        } catch (StackOverflowError e) {
+            //Deeply nested script ref, CCL cbor decoding is recursive
+            throw new CborRuntimeException("PlutusScript deserialization failed. Script ref is too deeply nested");
+        }
+    }
+
+    private static com.bloxbean.cardano.client.plutus.spec.PlutusScript deserializePlutusScriptRef(byte[] serializedPlutusScript) {
         Array plutusScriptArray = (Array) com.bloxbean.cardano.client.common.cbor.CborSerializationUtil.deserialize(serializedPlutusScript);
         List<DataItem> dataItemList = plutusScriptArray.getDataItems();
         if (dataItemList == null || dataItemList.size() == 0) {
@@ -163,6 +183,10 @@ public class ScriptUtil {
     public static String getDatumHash(Datum datum) {
         if (datum == null) return null;
 
+        //Yaci provides the datum hash (from the original datum bytes when available)
+        if (!StringUtil.isEmpty(datum.getHash()))
+            return datum.getHash();
+
         return getDatumHash(datum.getCbor());
     }
 
@@ -175,6 +199,10 @@ public class ScriptUtil {
             return plutusData.getDatumHash();
         } catch (Exception e) {
             log.error("Unable to deserialize and calculate datumhash for : " + datumCbor, e);
+            return null;
+        } catch (StackOverflowError e) {
+            //Deeply nested datum, CCL PlutusData deserialization is recursive
+            log.error("Unable to calculate datumhash for deeply nested datum. Datum cbor length: {}", datumCbor.length());
             return null;
         }
     }

@@ -25,10 +25,25 @@ public class ScriptReferenceUtil {
      * Serialized bytes is a Cbor Array follows cardano-cli format. This is a fallback method if the standard deserialization is
      * not successful.
      * The serializedPlutusScript parameter contains both type and script body.
+     * <p>
+     * A deeply nested native script is reported as {@link CborRuntimeException} instead of {@link StackOverflowError}.
+     * Callers on the sync path must catch it, otherwise the sync stops.
+     * TODO: Revisit once CCL provides stack-safe decoding (cardano-client-lib#681)
+     *
      * @param serializedScriptRef
      * @return PlutusV1Script or PlutusV2Script or PlutusV3Script
+     * @throws CborRuntimeException if the script ref is invalid or too deeply nested
      */
     public static Script deserializeScriptRef(byte[] serializedScriptRef) {
+        try {
+            return deserialize(serializedScriptRef);
+        } catch (StackOverflowError e) {
+            //Deeply nested native script, CCL cbor decoding is recursive
+            throw new CborRuntimeException("Script deserialization failed. Script ref is too deeply nested");
+        }
+    }
+
+    private static Script deserialize(byte[] serializedScriptRef) {
         Array scriptArray = (Array) com.bloxbean.cardano.client.common.cbor.CborSerializationUtil.deserialize(serializedScriptRef);
         List<DataItem> dataItemList = scriptArray.getDataItems();
         if (dataItemList == null || dataItemList.size() == 0) {
@@ -59,11 +74,22 @@ public class ScriptReferenceUtil {
 
     /**
      * Get the script hash from the script reference bytes
+     * <p>
+     * A deeply nested native script is reported as {@link CborRuntimeException} instead of {@link StackOverflowError}.
+     * Callers on the sync path must catch it, otherwise the sync stops.
+     * TODO: Revisit once CCL provides stack-safe decoding (cardano-client-lib#681)
+     *
      * @param scriptRefBytes
      * @return script hash
+     * @throws CborRuntimeException if the script ref is invalid or too deeply nested
      */
     public static String getReferenceScriptHash(byte[] scriptRefBytes) throws CborSerializationException {
         Script script = deserializeScriptRef(scriptRefBytes);
-        return HexUtil.encodeHexString(script.getScriptHash());
+        try {
+            return HexUtil.encodeHexString(script.getScriptHash());
+        } catch (StackOverflowError e) {
+            //Deeply nested native script, CCL cbor serialization is recursive
+            throw new CborRuntimeException("Unable to calculate script hash. Script ref is too deeply nested");
+        }
     }
 }
