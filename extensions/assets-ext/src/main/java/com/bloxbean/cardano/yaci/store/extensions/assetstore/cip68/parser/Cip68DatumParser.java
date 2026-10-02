@@ -53,6 +53,15 @@ public class Cip68DatumParser {
         try {
             return extractDatumProperties(inlineDatum)
                     .map(parts -> buildParsedDatum(parts.properties(), parts.version()));
+        } catch (StackOverflowError e) {
+            // TODO: temporary workaround. Remove once cardano-client-lib decodes CBOR without
+            //  recursion (bloxbean/cardano-client-lib#681).
+            // The CBOR decoder recurses once per nesting level, and the ledger bounds a datum only by
+            // transaction size, so a valid on-chain datum can be nested deeper than the stack allows.
+            // StackOverflowError is an Error, not an Exception, so it needs its own catch: skip the
+            // datum like any other undecodable one.
+            log.warn("Skipping CIP-68 datum nested too deeply to decode ({} bytes)", inlineDatum.length() / 2);
+            return Optional.empty();
         } catch (Exception e) {
             log.warn("Unexpected error while parsing CIP-68 datum: {}", inlineDatum, e);
             return Optional.empty();
