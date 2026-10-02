@@ -29,6 +29,15 @@ public class ScriptReferenceUtil {
      * @return PlutusV1Script or PlutusV2Script or PlutusV3Script
      */
     public static Script deserializeScriptRef(byte[] serializedScriptRef) {
+        try {
+            return deserialize(serializedScriptRef);
+        } catch (StackOverflowError e) {
+            //Deeply nested native script, CCL cbor decoding is recursive
+            throw new CborRuntimeException("Script deserialization failed. Script ref is too deeply nested");
+        }
+    }
+
+    private static Script deserialize(byte[] serializedScriptRef) {
         Array scriptArray = (Array) com.bloxbean.cardano.client.common.cbor.CborSerializationUtil.deserialize(serializedScriptRef);
         List<DataItem> dataItemList = scriptArray.getDataItems();
         if (dataItemList == null || dataItemList.size() == 0) {
@@ -64,6 +73,11 @@ public class ScriptReferenceUtil {
      */
     public static String getReferenceScriptHash(byte[] scriptRefBytes) throws CborSerializationException {
         Script script = deserializeScriptRef(scriptRefBytes);
-        return HexUtil.encodeHexString(script.getScriptHash());
+        try {
+            return HexUtil.encodeHexString(script.getScriptHash());
+        } catch (StackOverflowError e) {
+            //Deeply nested native script, CCL cbor serialization is recursive
+            throw new CborRuntimeException("Unable to calculate script hash. Script ref is too deeply nested");
+        }
     }
 }

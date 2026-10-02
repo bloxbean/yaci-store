@@ -57,15 +57,16 @@ public class ScriptRefProcessor {
                         String content;
 
                         if (scriptType == ScriptType.NATIVE_SCRIPT) {
-                            NativeScript nativeScript = NativeScript.builder()
-                                    .type(script.getScriptType())
-                                    .content(JsonUtil.getJson(script))
-                                    .build();
-
-                            content = JsonUtil.getJson(nativeScript);
+                            //StackOverflowError: deeply nested native script, json conversion falls back to recursive toString()
                             try {
+                                NativeScript nativeScript = NativeScript.builder()
+                                        .type(script.getScriptType())
+                                        .content(JsonUtil.getJson(script))
+                                        .build();
+
+                                content = JsonUtil.getJson(nativeScript);
                                 scriptHash = ScriptUtil.getNativeScriptHash(nativeScript);
-                            } catch (Exception e) {
+                            } catch (Exception | StackOverflowError e) {
                                 log.error("Error getting native script hash, Block hash: " + transactionEvent.getMetadata().getBlockHash(), e);
                                 return null;
                             }

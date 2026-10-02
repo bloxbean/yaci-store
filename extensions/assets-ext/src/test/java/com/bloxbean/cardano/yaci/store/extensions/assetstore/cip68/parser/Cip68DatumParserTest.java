@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigInteger;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -311,6 +312,26 @@ class Cip68DatumParserTest {
             Optional<ParsedCip68Datum> result = parser.parse(hexDatum);
 
             assertThat(result).isEmpty();
+        }
+
+        @Test
+        void shouldReturnEmptyWhenDatumIsDeeplyNested() throws Exception {
+            // Constr 0 [{"name": [[[ ... [0] ... ]]]}, 1]
+            String hexDatum = "d8799f" + "a1" + "446e616d65" + "81".repeat(100_000) + "00" + "01" + "ff";
+
+            // Small stack so that the recursive CCL deserialization overflows deterministically
+            AtomicReference<Object> result = new AtomicReference<>();
+            Thread thread = new Thread(null, () -> {
+                try {
+                    result.set(parser.parse(hexDatum));
+                } catch (Throwable t) {
+                    result.set(t);
+                }
+            }, "small-stack", 256 * 1024);
+            thread.start();
+            thread.join();
+
+            assertThat(result.get()).isEqualTo(Optional.empty());
         }
     }
 
