@@ -1,8 +1,11 @@
 package com.bloxbean.cardano.yaci.store.script.helper;
 
+import com.bloxbean.cardano.client.exception.CborRuntimeException;
 import com.bloxbean.cardano.client.plutus.spec.PlutusData;
 import com.bloxbean.cardano.yaci.core.model.Datum;
 import com.bloxbean.cardano.yaci.core.model.NativeScript;
+import com.bloxbean.cardano.yaci.core.model.PlutusScript;
+import com.bloxbean.cardano.yaci.core.model.PlutusScriptType;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import org.junit.jupiter.api.Test;
 
@@ -67,6 +70,41 @@ class ScriptUtilTest {
 
         assertThatThrownBy(() -> runWithSmallStack(() -> ScriptUtil.getNativeScriptHash(nativeScript)))
                 .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void deserializeScriptRef_whenPlutusScriptRefIsValid_shouldReturnScript() throws Exception {
+        // [2, h'480100002221200101'] (PlutusV2 always-succeeds, cardano-cli cborHex 49480100002221200101)
+        String scriptRef = "820249480100002221200101";
+
+        PlutusScript plutusScript = runWithSmallStack(() -> ScriptUtil.deserializeScriptRef(scriptRef));
+
+        assertThat(plutusScript.getType()).isEqualTo(PlutusScriptType.PlutusScriptV2);
+        assertThat(ScriptUtil.getPlutusScriptHash(plutusScript)).isEqualTo("3a888d65f16790950a72daee1f63aa05add6d268434107cfa5b67712");
+    }
+
+    @Test
+    void deserializeScriptRef_whenScriptRefIsDeeplyNested_shouldThrowCborRuntimeException() {
+        byte[] scriptRef = HexUtil.decodeHexString(deeplyNestedNativeScriptRef(DEEP_NESTING));
+
+        assertThatThrownBy(() -> runWithSmallStack(() -> ScriptUtil.deserializeScriptRef(scriptRef)))
+                .isInstanceOf(CborRuntimeException.class);
+    }
+
+    @Test
+    void deserializeScriptRef_whenHexScriptRefIsDeeplyNested_shouldReturnNull() throws Exception {
+        String scriptRef = deeplyNestedNativeScriptRef(DEEP_NESTING);
+
+        PlutusScript plutusScript = runWithSmallStack(() -> ScriptUtil.deserializeScriptRef(scriptRef));
+
+        assertThat(plutusScript).isNull();
+    }
+
+    /**
+     * [0, ScriptAll[ScriptAll[ ... [ScriptPubkey] ... ]]], ScriptAll = [1, [scripts]]
+     */
+    private static String deeplyNestedNativeScriptRef(int depth) {
+        return "8200" + "820181".repeat(depth) + "8200581cad7a7b87959173fc9eac9a85891cc93892f800dd45c0544128228884";
     }
 
     /**
