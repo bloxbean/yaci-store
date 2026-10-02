@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigInteger;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -362,6 +363,42 @@ class Cip68DatumParserTest {
 
             assertThat(parser.parse(HexUtil.encodeHexString(CborSerializationUtil.serialize(datum.serialize()))))
                     .hasValueSatisfying(m -> assertThat(m.logo()).isEqualTo(first + second));
+        }
+    }
+
+    @Nested
+    class DeeplyNestedDatum {
+
+        /** {@code depth} nested single-element lists around 0, built as raw CBOR so building it doesn't recurse. */
+        private String nestedDatumHex(int depth) {
+            return "81".repeat(depth) + "00";
+        }
+
+        /** Parses on a 1 MB stack, the default on Linux x86_64, and returns the result or what was thrown. */
+        private Object parseOnDefaultLinuxStack(String datumHex) throws InterruptedException {
+            AtomicReference<Object> outcome = new AtomicReference<>();
+            Thread thread = new Thread(null, () -> {
+                try {
+                    outcome.set(parser.parse(datumHex));
+                } catch (Throwable t) {
+                    outcome.set(t);
+                }
+            }, "deep-datum", 1024 * 1024);
+            thread.start();
+            thread.join();
+            return outcome.get();
+        }
+
+        @Test
+        void shouldSkipDatumNestedTooDeeplyToDecode() throws Exception {
+            // 5,000 levels overflows the current decoder on a 1 MB stack; 16,000 is about the most a
+            // 16 KB transaction can carry. This stays valid once the decoder is stack-safe
+            // (cardano-client-lib#681): the datum isn't a CIP-68 constructor, so it is skipped either way.
+            for (int depth : new int[]{5_000, 16_000}) {
+                assertThat(parseOnDefaultLinuxStack(nestedDatumHex(depth)))
+                        .as("depth %d", depth)
+                        .isEqualTo(Optional.empty());
+            }
         }
     }
 
