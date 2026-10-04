@@ -2,11 +2,17 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.parser;
 
 import com.bloxbean.cardano.client.plutus.spec.*;
 import com.bloxbean.cardano.client.util.HexUtil;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.AssetType;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Constants;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.ParsedCip68Datum;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.Cip68Metadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.util.TokenDecimals;
+import jakarta.annotation.Nullable;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -31,6 +37,10 @@ public class Cip68DatumParser {
     public static final String MEDIA_TYPE  = "mediaType";
     public static final String FILES       = "files";
 
+    /** CIP-68 version 4 wraps the metadata in a CIP-25 style map: {"721": {policy_id: {asset_name: metadata}}}. */
+    private static final BytesPlutusData NESTED_MAP_KEY = BytesPlutusData.of("721");
+    private static final long NESTED_MAP_MIN_VERSION = 4;
+
     /** Set of keys we promote to typed columns; everything else goes into the JSONB additional_properties. */
     private static final Set<String> TYPED_KEYS = Set.of(
             DECIMALS, DESCRIPTION, LOGO, NAME, TICKER, URL, IMAGE, MEDIA_TYPE, FILES);
@@ -43,13 +53,31 @@ public class Cip68DatumParser {
      * arbitrary additional properties) into the JSONB-bound {@code properties} map.
      */
     public Optional<ParsedCip68Datum> parse(String inlineDatum) {
+        return parse(inlineDatum, null);
+    }
+
+    /**
+     * Same as {@link #parse(String)}, but resolves a version 4 nested-map datum to the entry for
+     * {@code referenceNft}. Without it, a nested map is only resolved when it has a single entry.
+     */
+    public Optional<ParsedCip68Datum> parse(String inlineDatum, @Nullable AssetType referenceNft) {
         if (inlineDatum == null || inlineDatum.isBlank()) {
             return Optional.empty();
         }
 
         try {
             return extractDatumProperties(inlineDatum)
-                    .map(parts -> buildParsedDatum(parts.properties(), parts.version()));
+                    .flatMap(parts -> resolveMetadata(parts, referenceNft)
+                            .map(metadata -> buildParsedDatum(metadata, parts.version())));
+        } catch (StackOverflowError e) {
+            // TODO: temporary workaround. Remove once cardano-client-lib decodes CBOR without
+            //  recursion (bloxbean/cardano-client-lib#681).
+            // The CBOR decoder recurses once per nesting level, and the ledger bounds a datum only by
+            // transaction size, so a valid on-chain datum can be nested deeper than the stack allows.
+            // StackOverflowError is an Error, not an Exception, so it needs its own catch: skip the
+            // datum like any other undecodable one.
+            log.warn("Skipping CIP-68 datum nested too deeply to decode ({} bytes)", inlineDatum.length() / 2);
+            return Optional.empty();
         } catch (Exception e) {
             log.warn("Unexpected error while parsing CIP-68 datum: {}", inlineDatum, e);
             return Optional.empty();
@@ -77,21 +105,60 @@ public class Cip68DatumParser {
             return Optional.empty();
         }
 
-        return Optional.of(new DatumParts(properties, version));
+        // version is required and stored as a long, but a datum integer is unbounded: reject values
+        // that don't fit rather than let longValue() silently wrap them (2^64 + 1 would become 1)
+        BigInteger versionValue = version.getValue();
+        if (versionValue.bitLength() >= Long.SIZE) {
+            log.warn("Ignoring CIP-68 datum with out-of-range version {}", versionValue);
+            return Optional.empty();
+        }
+
+        return Optional.of(new DatumParts(properties, versionValue.longValue()));
+    }
+
+    /**
+     * Returns the metadata map to read fields from. Versions 1–3 carry it directly; version 4 nests it
+     * under {@code "721" -> policy_id -> asset_name} (asset name without the label prefix, both as raw
+     * bytes). A version 4 datum without the {@code "721"} key is read directly, as before.
+     */
+    private Optional<MapPlutusData> resolveMetadata(DatumParts parts, @Nullable AssetType referenceNft) {
+        MapPlutusData properties = parts.properties();
+        if (parts.version() < NESTED_MAP_MIN_VERSION
+                || !(properties.getMap().get(NESTED_MAP_KEY) instanceof MapPlutusData byPolicy)) {
+            return Optional.of(properties);
+        }
+
+        if (referenceNft == null) {
+            // No asset context: only an unambiguous single entry can be resolved
+            return singleValue(byPolicy)
+                    .flatMap(Cip68DatumParser::singleValue);
+        }
+
+        String assetNameWithoutLabel = referenceNft.assetName().substring(Cip68Constants.REFERENCE_TOKEN_PREFIX.length());
+        return asMap(byPolicy.getMap().get(BytesPlutusData.of(HexUtil.decodeHexString(referenceNft.policyId()))))
+                .flatMap(byAsset -> asMap(byAsset.getMap().get(BytesPlutusData.of(HexUtil.decodeHexString(assetNameWithoutLabel)))));
+    }
+
+    private static Optional<MapPlutusData> singleValue(MapPlutusData map) {
+        return map.getMap().size() == 1 ? asMap(map.getMap().values().iterator().next()) : Optional.empty();
+    }
+
+    private static Optional<MapPlutusData> asMap(@Nullable PlutusData data) {
+        return data instanceof MapPlutusData map ? Optional.of(map) : Optional.empty();
     }
 
     /** Build the typed {@link ParsedCip68Datum} from the unwrapped (Map, version) pair. */
-    private ParsedCip68Datum buildParsedDatum(MapPlutusData properties, BigIntPlutusData version) {
+    private ParsedCip68Datum buildParsedDatum(MapPlutusData properties, long version) {
         return new ParsedCip68Datum(
-                getNumericProperty(DECIMALS, properties).orElse(null),
+                getDecimalsProperty(properties).orElse(null),
                 getStringProperty(DESCRIPTION, properties).orElse(null),
-                getStringProperty(LOGO, properties).orElse(null),
-                getStringProperty(NAME, properties).orElse(null),
-                getStringProperty(TICKER, properties).orElse(null),
-                getStringProperty(URL, properties).orElse(null),
-                version.getValue().longValue(),
+                getStringOrChunkedProperty(LOGO, properties).orElse(null),
+                getBoundedStringProperty(NAME, properties, Cip68Metadata.NAME_MAX_LENGTH).orElse(null),
+                getBoundedStringProperty(TICKER, properties, Cip68Metadata.TICKER_MAX_LENGTH).orElse(null),
+                getBoundedStringProperty(URL, properties, Cip68Metadata.URL_MAX_LENGTH).orElse(null),
+                version,
                 getStringOrChunkedProperty(IMAGE, properties).orElse(null),
-                getStringProperty(MEDIA_TYPE, properties).orElse(null),
+                getBoundedStringProperty(MEDIA_TYPE, properties, Cip68Metadata.MEDIA_TYPE_MAX_LENGTH).orElse(null),
                 buildPropertiesJson(properties));
     }
 
@@ -105,7 +172,7 @@ public class Cip68DatumParser {
         Map<String, Object> additional = parseAdditionalProperties(properties);
 
         boolean hasFiles = files != null && !files.isEmpty();
-        boolean hasAdditional = additional != null && !additional.isEmpty();
+        boolean hasAdditional = !additional.isEmpty();
         if (!hasFiles && !hasAdditional) {
             return null;
         }
@@ -120,8 +187,8 @@ public class Cip68DatumParser {
         return json;
     }
 
-    /** Internal record for the unwrapped CIP-68 envelope ((properties Map, version BigInt)). */
-    private record DatumParts(MapPlutusData properties, BigIntPlutusData version) {}
+    /** Internal record for the unwrapped CIP-68 envelope (properties Map, range-checked version). */
+    private record DatumParts(MapPlutusData properties, long version) {}
 
     private Optional<String> getStringProperty(String propertyName, MapPlutusData mapPlutusData) {
         PlutusData property = mapPlutusData.getMap().get(BytesPlutusData.of(propertyName));
@@ -132,12 +199,36 @@ public class Cip68DatumParser {
     }
 
     /**
-     * CIP-25 convention (inherited by CIP-68 NFTs): if a string value exceeds 64 bytes
+     * Reads a string property bound for a fixed-width column. Longer values are dropped, since an
+     * oversized value would fail the insert and stop the sync; for the required {@code name} that
+     * means the datum is then skipped by {@code Cip68TokenService.isValidMetadata}.
+     * <p>
+     * Length is counted in UTF-16 units ({@link String#length()}), not code points: H2 counts
+     * {@code VARCHAR(n)} that way, so 255 emoji (510 units) overflow a {@code VARCHAR(255)} there.
+     * Postgres and MySQL count code points, which is never more than UTF-16 units, so this bound
+     * is safe on every supported database, at the cost of rejecting some long non-BMP names that
+     * Postgres alone could have stored.
+     */
+    private Optional<String> getBoundedStringProperty(String propertyName, MapPlutusData mapPlutusData, int maxLength) {
+        return getStringProperty(propertyName, mapPlutusData).filter(value -> {
+            int length = value.length();
+            if (length > maxLength) {
+                log.warn("Ignoring CIP-68 '{}' of {} characters (max {})", propertyName, length, maxLength);
+                return false;
+            }
+            return true;
+        });
+    }
+
+    /**
+     * CIP-25 convention, inherited by CIP-68 NFT {@code image} and the FT {@code logo} (both a
+     * CIP-68 {@code uri = bounded_bytes / [* bounded_bytes]}): if a string value exceeds 64 bytes
      * the issuer may split it into a list of byte-string chunks. This helper joins them
      * back together. Falls back to {@link #getStringProperty} for the simple-string case.
      */
     private Optional<String> getStringOrChunkedProperty(String propertyName, MapPlutusData mapPlutusData) {
         PlutusData property = mapPlutusData.getMap().get(BytesPlutusData.of(propertyName));
+
         return switch (property) {
             case BytesPlutusData bytes -> Optional.of(bytesToString(bytes.getValue()));
             case ListPlutusData list -> {
@@ -153,12 +244,26 @@ public class Cip68DatumParser {
         };
     }
 
-    private Optional<Long> getNumericProperty(String propertyName, MapPlutusData mapPlutusData) {
-        PlutusData property = mapPlutusData.getMap().get(BytesPlutusData.of(propertyName));
-        return switch (property) {
-            case BigIntPlutusData bigInt -> Optional.of(bigInt.getValue().longValue());
-            case null, default -> Optional.empty();
-        };
+    /**
+     * Reads {@code decimals} from the datum. The value is an unbounded on-chain integer, so values that
+     * don't fit in a {@code long} are rejected before narrowing: {@code longValue()} alone would
+     * silently wrap values above {@code 2^63} into a plausible-looking number. An out-of-range value
+     * is dropped (the rest of the metadata is kept) rather than stored.
+     */
+    private Optional<Long> getDecimalsProperty(MapPlutusData mapPlutusData) {
+        PlutusData property = mapPlutusData.getMap().get(BytesPlutusData.of(DECIMALS));
+        if (!(property instanceof BigIntPlutusData bigInt)) {
+            return Optional.empty();
+        }
+
+        BigInteger value = bigInt.getValue();
+        // bitLength guard first: longValue() is only exact when the value fits in a long
+        if (value.bitLength() >= Long.SIZE || !TokenDecimals.isInRange(value.longValue())) {
+            log.warn("Ignoring out-of-range CIP-68 decimals {} (allowed {})", value, TokenDecimals.RANGE);
+            return Optional.empty();
+        }
+
+        return Optional.of(value.longValue());
     }
 
     /**

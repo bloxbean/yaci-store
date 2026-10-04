@@ -50,11 +50,11 @@ public class Cip68Processor {
 
             for (AddressUtxo output : txIo.getOutputs()) {
                 cip68TokenService.extractReferenceNft(output).ifPresent(refNftAmt -> {
-                    cip68DatumParser.parse(output.getInlineDatum()).ifPresent(parsed -> {
+                    AssetType refNftAssetType = AssetType.fromUnit(refNftAmt.getUnit());
+                    cip68DatumParser.parse(output.getInlineDatum(), refNftAssetType).ifPresent(parsed -> {
                         if (!cip68TokenService.isValidMetadata(parsed)) {
                             return;
                         }
-                        AssetType refNftAssetType = AssetType.fromUnit(refNftAmt.getUnit());
                         int label = deriveLabel(refNftAssetType, coMintedPrefixesInTx);
                         entities.add(buildCip68Metadata(
                                 parsed, refNftAssetType, output.getInlineDatum(), slot,

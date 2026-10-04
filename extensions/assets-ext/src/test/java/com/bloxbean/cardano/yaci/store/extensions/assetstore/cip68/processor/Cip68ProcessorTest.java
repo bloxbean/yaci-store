@@ -72,7 +72,7 @@ class Cip68ProcessorTest {
                     .build();
 
             when(cip68TokenService.extractReferenceNft(utxo)).thenReturn(Optional.of(refNftAmt));
-            when(cip68DatumParser.parse(datum)).thenReturn(Optional.of(metadata));
+            when(cip68DatumParser.parse(eq(datum), any())).thenReturn(Optional.of(metadata));
             when(cip68TokenService.isValidMetadata(metadata)).thenReturn(true);
 
             processor.processTransaction(buildEvent(100L, utxo));
@@ -132,7 +132,7 @@ class Cip68ProcessorTest {
                     .build();
 
             when(cip68TokenService.extractReferenceNft(utxo)).thenReturn(Optional.of(refNftAmt));
-            when(cip68DatumParser.parse(datum)).thenReturn(Optional.empty());
+            when(cip68DatumParser.parse(eq(datum), any())).thenReturn(Optional.empty());
 
             processor.processTransaction(buildEvent(100L, utxo));
 
@@ -158,7 +158,7 @@ class Cip68ProcessorTest {
                     .build();
 
             when(cip68TokenService.extractReferenceNft(utxo)).thenReturn(Optional.of(refNftAmt));
-            when(cip68DatumParser.parse(datum)).thenReturn(Optional.of(metadata));
+            when(cip68DatumParser.parse(eq(datum), any())).thenReturn(Optional.of(metadata));
             when(cip68TokenService.isValidMetadata(metadata)).thenReturn(false);
 
             processor.processTransaction(buildEvent(100L, utxo));
@@ -204,7 +204,7 @@ class Cip68ProcessorTest {
                     .txHash(TX_HASH).inlineDatum(datum).amounts(List.of(refNftAmt)).build();
 
             when(cip68TokenService.extractReferenceNft(refNftUtxo)).thenReturn(Optional.of(refNftAmt));
-            when(cip68DatumParser.parse(datum)).thenReturn(Optional.of(metadata));
+            when(cip68DatumParser.parse(eq(datum), any())).thenReturn(Optional.of(metadata));
             when(cip68TokenService.isValidMetadata(metadata)).thenReturn(true);
 
             processor.processTransaction(buildEvent(100L, List.of(refNftUtxo)));
@@ -233,7 +233,7 @@ class Cip68ProcessorTest {
 
             when(cip68TokenService.extractReferenceNft(refNftUtxo)).thenReturn(Optional.of(refNftAmt));
             when(cip68TokenService.extractReferenceNft(userTokenUtxo)).thenReturn(Optional.empty());
-            when(cip68DatumParser.parse(datum)).thenReturn(Optional.of(metadata));
+            when(cip68DatumParser.parse(eq(datum), any())).thenReturn(Optional.of(metadata));
             when(cip68TokenService.isValidMetadata(metadata)).thenReturn(true);
 
             // Both outputs in the same tx — that's how cross-output detection sees them.
