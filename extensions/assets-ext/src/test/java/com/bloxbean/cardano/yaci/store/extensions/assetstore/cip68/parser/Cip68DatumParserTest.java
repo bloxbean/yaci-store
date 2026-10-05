@@ -508,6 +508,36 @@ class Cip68DatumParserTest {
                 + "1c7bd1ebc8230f961193fb772204542e85425af4f7a8f36acb5543da08ff4473656564d8799fd8799f582042f5390b27"
                 + "9a4b49d56fe594b2d5eaf02e8e387fa1612f87bafd2feed7c836afff02ff01d87980ff";
 
+        /**
+         * Mainnet "PBG Token Voucher" datums that {@code main} dropped (the same NullPointerException as
+         * #1159): {@code owner} is a constructor. Three picked at random from the 434 distinct datums seen
+         * in a full mainnet sync, keyed by hex with the expected name.
+         */
+        private static final Map<String, String> MAINNET_VOUCHERS_WITH_CONSTRUCTOR_OWNER = Map.of(
+                "d8799fa9456f776e6572d8799fd8799f581c3e8242c26c999d22ecfc760cdc7a34508637c4351b3187ee20eb77ebffd8"
+                + "7a80ff45646174756d0046746f6b656e731a001cf2c046706572696f64034570726963659f1b0000023fff1df4ed1b00"
+                + "000005242abee5ff446e616d655450424720546f6b656e20566f75636865722038394b6465736372697074696f6e5821"
+                + "5375636365737320666565207265696d62757273656d656e7420766f75636865724375726c5768747470733a2f2f7062"
+                + "672e696f2f766f75636865727345696d616765582568747470733a2f2f746f6b656e2e7062672e696f2f766f75636865"
+                + "722d6c6f676f2e706e6701d87980ff",
+                "PBG Token Voucher 89",
+                "d8799fa9456f776e6572d8799fd8799f581c90c98fa2c409dcaf2cec7770e8a614df2322fb08c545ddae0b285209ffd8"
+                + "799fd8799fd8799f581cebffd86359482e97a1d7755cdae86739ffcafa6033713b735c4f4031ffffffff45646174756d"
+                + "0046746f6b656e731b00000001ea0659e846706572696f64014570726963659f1b00000001c09103241a04748ab2ff44"
+                + "6e616d655350424720546f6b656e20566f756368657220394b6465736372697074696f6e582153756363657373206665"
+                + "65207265696d62757273656d656e7420766f75636865724375726c5768747470733a2f2f7062672e696f2f766f756368"
+                + "65727345696d616765582568747470733a2f2f746f6b656e2e7062672e696f2f766f75636865722d6c6f676f2e706e67"
+                + "01d87980ff",
+                "PBG Token Voucher 9",
+                "d8799fa9456f776e6572d8799fd8799f581ce29e15bf7d0deaabdb963a1f9ffc9adc661dbf6889ae73a17ae39843ffd8"
+                + "799fd8799fd8799f581c8b4e2900167bf48e98803bb0ed0cd7c2f6b699a08716e8a520b507f9ffffffff45646174756d"
+                + "0046746f6b656e731a00b1505246706572696f64044570726963659f1b0000029ff9d4b0d31b00000005d2138378ff44"
+                + "6e616d655550424720546f6b656e20566f7563686572203132384b6465736372697074696f6e58215375636365737320"
+                + "666565207265696d62757273656d656e7420766f75636865724375726c5768747470733a2f2f7062672e696f2f766f75"
+                + "636865727345696d616765582568747470733a2f2f746f6b656e2e7062672e696f2f766f75636865722d6c6f676f2e70"
+                + "6e6701d87980ff",
+                "PBG Token Voucher 128");
+
         @SuppressWarnings("unchecked")
         private static Map<String, Object> additionalProperties(ParsedCip68Datum datum) {
             return (Map<String, Object>) datum.properties().get("additional_properties");
@@ -548,6 +578,19 @@ class Cip68DatumParserTest {
                         "7bd1ebc8230f961193fb772204542e85425af4f7a8f36acb5543da08"));
                 assertThat(additional.get("venue")).isEqualTo("Ethereum");
             });
+        }
+
+        @Test
+        void shouldKeepMetadataOfMainnetDatumsWithAConstructorOwner() {
+            MAINNET_VOUCHERS_WITH_CONSTRUCTOR_OWNER.forEach((datum, name) ->
+                    assertThat(parser.parse(datum)).as(name).hasValueSatisfying(m -> {
+                        assertThat(m.name()).isEqualTo(name);
+                        assertThat(m.version()).isEqualTo(1L);
+                        assertThat(m.url()).isEqualTo("https://pbg.io/vouchers");
+                        assertThat(additionalProperties(m)).containsKeys("owner", "datum", "tokens", "period", "price");
+                        assertThat(additionalProperties(m).get("owner"))
+                                .isInstanceOfSatisfying(Map.class, owner -> assertThat(owner.keySet()).containsExactlyInAnyOrder("constructor", "fields"));
+                    }));
         }
 
         @Test
