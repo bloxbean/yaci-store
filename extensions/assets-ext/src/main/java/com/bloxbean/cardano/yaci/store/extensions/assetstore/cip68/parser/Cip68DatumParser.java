@@ -79,7 +79,10 @@ public class Cip68DatumParser {
             log.warn("Skipping CIP-68 datum nested too deeply to decode ({} bytes)", inlineDatum.length() / 2);
             return Optional.empty();
         } catch (Exception e) {
-            log.warn("Unexpected error while parsing CIP-68 datum: {}", inlineDatum, e);
+            // One line at WARN with the datum for reproduction; the stack trace is DEBUG only, since a
+            // sync can hit this for many datums
+            log.warn("Unexpected error while parsing CIP-68 datum ({}): {}", e, inlineDatum);
+            log.debug("Stack trace for the CIP-68 datum parse failure", e);
             return Optional.empty();
         }
     }
@@ -306,20 +309,29 @@ public class Cip68DatumParser {
      */
     private Map<String, Object> parseAdditionalProperties(MapPlutusData properties) {
         Map<String, Object> result = new LinkedHashMap<>();
-        properties.getMap().entrySet().stream()
-                .filter(e -> e.getKey() instanceof BytesPlutusData)
-                .map(e -> Map.entry(
-                        bytesToString(((BytesPlutusData) e.getKey()).getValue()),
-                        unwrapPlutusValue(e.getValue())))
-                .filter(e -> !TYPED_KEYS.contains(e.getKey()) && e.getValue() != null)
-                .forEach(e -> result.put(e.getKey(), e.getValue()));
+        for (Map.Entry<PlutusData, PlutusData> entry : properties.getMap().entrySet()) {
+            if (!(entry.getKey() instanceof BytesPlutusData keyBytes)) {
+                continue;
+            }
+            String key = bytesToString(keyBytes.getValue());
+            if (TYPED_KEYS.contains(key)) {
+                continue;
+            }
+            // A value with no JSON form (a Plutus constructor) is left out on its own: dropping the
+            // whole datum for one unrepresentable property would lose the rest of its metadata
+            Object value = unwrapPlutusValue(entry.getValue());
+            if (value != null) {
+                result.put(key, value);
+            }
+        }
         return result;
     }
 
     /**
      * Unwrap a Plutus value into a Java type suitable for JSONB serialization. Recurses
-     * into maps and lists. Bytes become strings (UTF-8 with null bytes stripped); ints
-     * become Long; constructors are flattened to their field list with the alt index.
+     * into maps and lists. Bytes become strings (UTF-8 with null bytes stripped) and ints
+     * become BigInteger. Anything else, notably a Plutus constructor, has no JSON form and
+     * returns {@code null}; callers leave such a value out.
      */
     private Object unwrapPlutusValue(PlutusData data) {
         return switch (data) {
