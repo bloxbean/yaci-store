@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.parser;
 
 import com.bloxbean.cardano.client.plutus.spec.*;
 import com.bloxbean.cardano.client.util.HexUtil;
+import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.AssetType;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Constants;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.ParsedCip68Datum;
@@ -13,9 +14,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.math.BigInteger;
-import java.nio.ByteBuffer;
-import java.nio.charset.CharacterCodingException;
-import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -378,15 +376,6 @@ public class Cip68DatumParser {
      * stripped from text, as in {@link #bytesToString}.
      */
     private static String bytesToText(byte[] bytes) {
-        try {
-            return StandardCharsets.UTF_8.newDecoder()
-                    .onMalformedInput(CodingErrorAction.REPORT)
-                    .onUnmappableCharacter(CodingErrorAction.REPORT)
-                    .decode(ByteBuffer.wrap(bytes))
-                    .toString()
-                    .replace("\0", "");
-        } catch (CharacterCodingException e) {
-            return HexUtil.encodeHexString(bytes);
-        }
+        return StringUtil.isValidUTF8(bytes) ? bytesToString(bytes) : HexUtil.encodeHexString(bytes);
     }
 }
