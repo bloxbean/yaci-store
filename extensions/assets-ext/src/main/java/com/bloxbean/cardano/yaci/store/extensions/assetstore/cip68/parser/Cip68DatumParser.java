@@ -319,11 +319,8 @@ public class Cip68DatumParser {
                 continue;
             }
             String key = bytesToText(keyBytes.getValue());
-            if (TYPED_KEYS.contains(key)) {
-                continue;
-            }
             // Check before storing: an unsupported value must drop only this property, not the datum
-            Object value = unwrapPlutusValue(e.getValue());
+            Object value = TYPED_KEYS.contains(key) ? null : unwrapPlutusValue(e.getValue());
             if (value != null) {
                 result.put(key, value);
             }
