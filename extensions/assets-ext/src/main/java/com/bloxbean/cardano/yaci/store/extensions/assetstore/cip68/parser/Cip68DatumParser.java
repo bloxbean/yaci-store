@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.parser;
 
 import com.bloxbean.cardano.client.plutus.spec.*;
 import com.bloxbean.cardano.client.util.HexUtil;
+import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.AssetType;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Constants;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.ParsedCip68Datum;
@@ -79,7 +80,10 @@ public class Cip68DatumParser {
             log.warn("Skipping CIP-68 datum nested too deeply to decode ({} bytes)", inlineDatum.length() / 2);
             return Optional.empty();
         } catch (Exception e) {
-            log.warn("Unexpected error while parsing CIP-68 datum: {}", inlineDatum, e);
+            // One line per failure, with the datum for reproduction; the stack trace only at DEBUG,
+            // so a run of unparseable datums doesn't flood the sync log.
+            log.warn("Skipping unparseable CIP-68 datum ({}): {}", e, inlineDatum);
+            log.debug("CIP-68 datum parse failure", e);
             return Optional.empty();
         }
     }
@@ -286,7 +290,7 @@ public class Cip68DatumParser {
                 if (!(e.getKey() instanceof BytesPlutusData keyBytes)) {
                     continue;
                 }
-                String key = bytesToString(keyBytes.getValue());
+                String key = bytesToText(keyBytes.getValue());
                 Object value = unwrapPlutusValue(e.getValue());
                 if (value != null) {
                     file.put(key, value);
@@ -306,24 +310,29 @@ public class Cip68DatumParser {
      */
     private Map<String, Object> parseAdditionalProperties(MapPlutusData properties) {
         Map<String, Object> result = new LinkedHashMap<>();
-        properties.getMap().entrySet().stream()
-                .filter(e -> e.getKey() instanceof BytesPlutusData)
-                .map(e -> Map.entry(
-                        bytesToString(((BytesPlutusData) e.getKey()).getValue()),
-                        unwrapPlutusValue(e.getValue())))
-                .filter(e -> !TYPED_KEYS.contains(e.getKey()) && e.getValue() != null)
-                .forEach(e -> result.put(e.getKey(), e.getValue()));
+        for (Map.Entry<PlutusData, PlutusData> e : properties.getMap().entrySet()) {
+            if (!(e.getKey() instanceof BytesPlutusData keyBytes)) {
+                continue;
+            }
+            String key = bytesToText(keyBytes.getValue());
+            // Check before storing: an unsupported value must drop only this property, not the datum
+            Object value = TYPED_KEYS.contains(key) ? null : unwrapPlutusValue(e.getValue());
+            if (value != null) {
+                result.put(key, value);
+            }
+        }
         return result;
     }
 
     /**
-     * Unwrap a Plutus value into a Java type suitable for JSONB serialization. Recurses
-     * into maps and lists. Bytes become strings (UTF-8 with null bytes stripped); ints
-     * become Long; constructors are flattened to their field list with the alt index.
+     * Unwrap a Plutus value into a Java type suitable for JSONB serialization. Recurses into maps,
+     * lists and constructors. Bytes become text via {@link #bytesToText}; ints become
+     * {@link BigInteger}; a constructor becomes {@code {"constructor": <alternative>, "fields": [...]}},
+     * the field names cardano-cli uses for Plutus data in its detailed JSON schema.
      */
     private Object unwrapPlutusValue(PlutusData data) {
         return switch (data) {
-            case BytesPlutusData b   -> bytesToString(b.getValue());
+            case BytesPlutusData b   -> bytesToText(b.getValue());
             case BigIntPlutusData i  -> i.getValue();
             case ListPlutusData list -> {
                 List<Object> items = new ArrayList<>();
@@ -338,8 +347,15 @@ public class Cip68DatumParser {
                 for (Map.Entry<PlutusData, PlutusData> entry : map.getMap().entrySet()) {
                     if (!(entry.getKey() instanceof BytesPlutusData kb)) continue;
                     Object u = unwrapPlutusValue(entry.getValue());
-                    if (u != null) out.put(bytesToString(kb.getValue()), u);
+                    if (u != null) out.put(bytesToText(kb.getValue()), u);
                 }
+                yield out;
+            }
+            case ConstrPlutusData constr -> {
+                Object fields = unwrapPlutusValue(constr.getData());
+                Map<String, Object> out = new LinkedHashMap<>();
+                out.put("constructor", constr.getAlternative());
+                out.put("fields", fields != null ? fields : List.of());
                 yield out;
             }
             case null -> null;
@@ -349,5 +365,14 @@ public class Cip68DatumParser {
 
     private static String bytesToString(byte[] bytes) {
         return new String(bytes, StandardCharsets.UTF_8).replace("\0", "");
+    }
+
+    /**
+     * Bytes as text the way CIP-68 says to convert metadata to JSON: UTF-8 when the bytes are valid
+     * UTF-8, hex otherwise (hashes, key hashes and other binary values). Null characters are
+     * stripped from text, as in {@link #bytesToString}.
+     */
+    private static String bytesToText(byte[] bytes) {
+        return StringUtil.isValidUTF8(bytes) ? bytesToString(bytes) : HexUtil.encodeHexString(bytes);
     }
 }
