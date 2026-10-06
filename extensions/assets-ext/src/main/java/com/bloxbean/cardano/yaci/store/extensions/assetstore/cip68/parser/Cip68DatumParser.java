@@ -85,10 +85,6 @@ public class Cip68DatumParser {
             log.warn("Skipping unparseable CIP-68 datum ({}): {}", e, inlineDatum);
             log.debug("CIP-68 datum parse failure", e);
             return Optional.empty();
-        } catch (StackOverflowError e) {
-            //Deeply nested datum, CCL PlutusData deserialization is recursive
-            log.warn("Unable to parse deeply nested CIP-68 datum. Datum cbor length: {}", inlineDatum.length());
-            return Optional.empty();
         }
     }
 
