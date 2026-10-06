@@ -836,7 +836,10 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
                         .and(TX_INPUT.OUTPUT_INDEX.eq(ADDRESS_UTXO.OUTPUT_INDEX)))
                 .join(TRANSACTION).on(TRANSACTION.TX_HASH.eq(TX_INPUT.SPENT_TX_HASH))
                 .where(ADDRESS_UTXO.OWNER_STAKE_ADDR.eq(stakeAddress))
-                .and(TX_INPUT.SPENT_TX_HASH.in(txHashes))
+                // Filter on TRANSACTION and correlate SPENT_AT_BLOCK so tx_input is probed via
+                // its (spent_at_block, spent_tx_hash) index instead of scanning on the second column.
+                .and(TRANSACTION.TX_HASH.in(txHashes))
+                .and(TX_INPUT.SPENT_AT_BLOCK.eq(TRANSACTION.BLOCK))
                 .fetch(rec -> new AccountTransactionCandidate(
                         rec.get(ADDRESS_UTXO.OWNER_ADDR),
                         rec.get(spentTxHashField),
