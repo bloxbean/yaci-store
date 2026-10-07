@@ -184,41 +184,48 @@ datum cannot reach 64 KiB. It is there so the module does not rely on that param
 
 The other bounds did not trigger on a full mainnet or preprod sync.
 
-### 7. Only the versions CIP-68 defines are read (#1232)
+### 7. The layout comes from the structure, and every version is indexed (#1232)
 
-The version is the second element of the datum and must be an integer. CIP-68 defines versions 1 to 4, and the
-module reads only those, for every label. A datum with another version is **not indexed**, and one WARN names the
-policy, the asset name and the version.
+The version is the second element of the datum and must be an integer. How a datum is read does **not** depend on
+it. The CIP tells direct metadata from the nested format by the `"721"` key (step 4 of "Retrieve metadata as 3rd
+party": "direct metadata (map without "721" key) or nested map format (map with "721" key)"), so the module does the
+same: nested if the metadata map has the `"721"` key with a map as its value, flat otherwise. With a nested datum
+the entry for the reference NFT is used (without a reference NFT only if it is the single entry), and an entry that
+cannot be resolved skips the datum.
 
-The CIP does not require this. Its generic definition says `version = int`, no sentence says that other versions
-are invalid, and its "Extending & Modifying" section expects new versions to be added. Rejecting is this module's
-policy. *Why:* nothing says how a datum with version 0 or 100 is laid out, and before this decision a version of 4
-or above was tried as the nested format first, so a stray value could be read as something it is not. Rejecting
-makes the gap visible in the log instead of guessing.
+**Every version that fits a `long` is indexed**, and the version is stored as written. CIP-68 defines versions 1 to
+4. A datum with another version is read like any other, by its structure, and one WARN names the policy, the asset
+name and the version, so a new version, or a datum written with a wrong one, is noticed. A version that does not fit
+a `long` is rejected before it can be narrowed (decision 6).
 
-*One set for every label.* The 444 definition in the CIP says `3 / 4`, but that contradicts the CIP's own
-changelog (version 2 added the RFT) and mainnet, where all 18 RFTs use version 1. A set per label would reject
-every RFT.
+The CIP does not require a version check. Its generic definition says `version = int`, no sentence says other
+versions are invalid, and its "Extending & Modifying" section expects new versions to be added. So there is no list to
+maintain. (The 444 definition says `3 / 4`, which contradicts the CIP's own changelog, where version 2 added the RFT,
+and mainnet, where all 18 RFTs use version 1, so a list per label would not have worked.)
 
-Version 4 is read as the nested format `{"721": {policy: {asset name: metadata}}}` if the `"721"` key is present
-(the entry for the reference NFT is used; without a reference NFT only if it is the single entry), and as a flat
-map if the key is absent. A nested entry that cannot be resolved skips the datum.
+*Why not the version.* Before this decision a datum was nested only if its version was 4 or above, which is a rule
+the CIP does not state: a nested datum with a lower version was read as flat, and an unknown version of 4 or more was
+tried as nested first.
 
-*Effect on mainnet.* Two reference NFTs have a datum with a version outside 1 to 4; every other token is at
-version 1, 2 or 3.
+*Effect on mainnet.* Two reference NFTs have a datum with a version outside 1 to 4; every other token is at version
+1, 2 or 3. Both datums are plain flat metadata maps, so reading them by their structure gives the right fields.
 
-- `HOSKY 10K NFT 0002` (version 100) is a test token. Its first datum was replaced about 44,700 slots later by a
-  valid version 1 datum, and the token was burned, so rejecting the first datum loses nothing.
-- `Greenland Reserve Coin` (version 0) is **a live fungible token that is no longer indexed on the CIP-68 side**: its reference NFT has
-  supply 1, the user token has a supply of 3,000,000,000,000 units, and both of its datums declare version 0. It was
-  updated twice and still declares 0, and nothing has touched it since. It is also in the CIP-26 registry, so the
-  API still serves it from there, with the registry's name (`GNRC`, not `Greenland Reserve Coin`) and its logo. This
-  was weighed and accepted.
+- `HOSKY 10K NFT 0002` (version 100) is a test token. Its version 100 datum was replaced about 44,700 slots later by a
+  valid version 1 datum, and the token was burned.
+- `Greenland Reserve Coin` (version 0) is a live fungible token: its reference NFT has supply 1, the user token has a
+  supply of 3,000,000,000,000 units, and both of its datums declare version 0. It stays indexed with its CIP-68
+  values (it is also in the CIP-26 registry).
 
-*Considered and rejected:* keeping any version and reading every one except 4 as a flat map. That would keep
-Greenland Reserve Coin and needs no change when the CIP adds a version, but it indexes data the module cannot
-vouch for. *Trade-off:* the allowed set must be updated whenever the CIP adds a version, and until then a datum with
-the new version is rejected (with a WARN).
+None of the 28,957 mainnet rows has a `"721"` key as an additional property, so reading by structure changes how no
+existing token is read.
+
+*Considered and tried, then reversed:* rejecting every version outside 1 to 4 with a warning. That would have
+dropped Greenland Reserve Coin, a live token whose layout is plain, for no gain, and it needed a list to maintain.
+
+*Trade-offs.* A future version with a genuinely different layout would be read as flat or nested by its shape,
+possibly wrongly; the warning is what makes that visible. A version 1 to 3 datum with a `"721"` key is now read as
+nested, as step 4 says. A flat map with an additional property named `"721"` that holds a map would be misread as
+nested. Neither exists on mainnet.
 
 ### 8. Text is text when it is UTF-8, hex when it is not; what cannot be represented is left out (#1159, #1226)
 
@@ -282,9 +289,9 @@ fields of one response can come from two sources, and `show_cips_details` is the
 - How often does an output hold several reference NFTs, and does any real nested datum exist on-chain?
   The nested case is covered by synthetic datums only. For a flat datum with several reference NFTs only the
   first is indexed; is that the right choice?
-- Is a datum with version 0, like Greenland Reserve Coin, meant to work? That is a question for the CIP, which does
-  not say. The CIP's own 444 definition (`3 / 4`) also contradicts its changelog; neither is raised in the CIPs
-  repository yet.
+- Should the CIP say what a consumer does with a version it does not define, and fix its 444 definition (`3 / 4`),
+  which contradicts its changelog and mainnet? The module reads such datums by their structure and warns; neither
+  point is raised in the CIPs repository yet.
 - How good is the datum-shape inference for a reference NFT with no paired token, and is an exact
   cross-transaction lookup worth its cost? Not measured.
 - A size bound for `description`, which is still unbounded `TEXT`.
@@ -295,6 +302,6 @@ fields of one response can come from two sources, and `show_cips_details` is the
 
 - #1159, #1185, #1202, #1208, #1209: parser hardening, version 4, constructor values
 - #1221, #1222, #1225, #1226, #1227, #1228, #1231, #1232, PR #1220: required fields per label, label pairing and
-  inference, text and hex, size cap, skip warnings, lenient image, several reference NFTs in one output, the version allow-list
+  inference, text and hex, size cap, skip warnings, lenient image, several reference NFTs in one output, the layout by structure
 - cardano-foundation/cf-token-metadata-registry#104: backport of these fixes
 - `Cip68Processor`, `Cip68DatumParser`, `Cip68TokenService`, `TokenQueryService`
