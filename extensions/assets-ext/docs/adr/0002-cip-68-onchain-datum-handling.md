@@ -4,8 +4,8 @@
 
 Proposed
 
-The behaviour in decisions 1 to 9 is implemented in PR #1220 (draft, not merged at the time of writing;
-issues #1221, #1222, #1225, #1226, #1227, #1228, #1231, #1232 and #1233). Decision 10 describes behaviour that is on
+The behaviour in decisions 1 to 9 is implemented in PR #1220 (open, not merged at the time of writing;
+issues #1221, #1222, #1225, #1226, #1227, #1228, #1231, #1232, #1233, #1234 and #1235). Decision 10 describes behaviour that is on
 `main`.
 
 ## Date
@@ -26,7 +26,7 @@ CIP-68. CIP-26 is covered in [ADR 0001](0001-cip-26-offchain-registry-ingestion.
 
 The general rule the module follows: **be strict about safety and about what the CIP requires, lenient
 about the rest.** A value that could break an insert, exhaust the stack or wrap a number is rejected or
-dropped. A datum that lacks a field the CIP requires for its label, or whose `image` is not a URI the
+dropped. A datum that lacks a field the CIP requires for its label, or whose `image` (or, for a fungible token, `logo`) is not a URI the
 CIP allows, is not indexed, because wallets and explorers follow the CIP and could not show it either.
 A value that is merely unusual, in a field the CIP does not constrain, is stored as written, because a
 stored value can be filtered later while a dropped one needs a resync to recover.
@@ -142,10 +142,10 @@ CIP-26 supplies it. How many such tokens exist on-chain has not been measured. N
 without a description, which the spec allows. Before #1221 the same rule was applied to every label and
 valid NFTs were dropped silently; on mainnet at least 203 datums were affected (a lower bound).
 
-### 4. `image` is required for 222 and 444, with a URI scheme the CIP allows: strict, drop and warn
+### 4. `image` (222, 444) and `logo` (333) must be URIs with a scheme the CIP allows: strict, drop and warn (#1221, #1234)
 
-CIP-68 requires `image` for 222 and 444, and says its URI scheme must be one of `https`, `ipfs`, `ar` or
-`data`. The module enforces both:
+CIP-68 requires `image` for 222 and 444, and says the URI scheme of `image` and of the 333 `logo` must be one
+of `https`, `ipfs`, `ar` or `data`. The module enforces both:
 
 - A 222 or 444 token with no image, or an empty or blank one, **is not indexed**, and a WARN names the
   policy, the asset name, the label and the reason ("it has no image").
@@ -153,22 +153,28 @@ CIP-68 requires `image` for 222 and 444, and says its URI scheme must be one of 
   without regard to case, and something must follow the colon) **is not indexed**, and the WARN gives the
   reason and the value (cut at 60 characters). That covers `iagon://` and free text.
 - The check runs on the joined value of a chunked image (decision 5), after the size cap (decision 6).
-- A 333 token has no `image`, and its optional `logo` is **not checked**: it is stored as written.
-  The CIP gives `logo` the same URI schemes; enforcing them would drop a whole fungible token for an
-  optional field, and no such case has been measured.
+- A 333 token has no `image`. Its `logo` is optional, so a missing, empty or blank one is fine; one that is
+  present and not a URI with one of those schemes **is not indexed**, with a WARN that gives the reason and
+  the value. The `logo` of a 222 or 444 token is not checked.
 
 *Why:* clients that follow the CIP cannot discover or show a token whose image they cannot read, so
 indexing it would only produce rows no consumer can use. If a project wants its scheme (Iagon's
 `iagon://`) accepted, the way is the CIP process; a proposal to add `iagon` and to make `image` optional
-for some uses is open as cardano-foundation/CIPs#1288 (draft), and when the CIP changes, so does this rule.
+for some uses is open as cardano-foundation/CIPs#1288, and when the CIP changes, so does this rule.
 
-*Cost:* on an earlier mainnet index, this rule would remove 12 NFTs whose datum has
+*Cost of the `logo` rule:* it drops a whole fungible token over an optional field, among them a token whose
+logo is a raw base64 string (the form the CIP-26 registry uses, which CIP-68 excludes: `logo` "needs to be a
+valid URI and not a plain bytestring"). Such a token is served from CIP-26 if the registry has it. How many
+mainnet 333 tokens are affected has not been measured.
+
+*Cost of the `image` rule:* on an earlier mainnet index, this rule would remove 12 NFTs whose datum has
 `mediaType: image/svg+xml` and an empty `image` (the "DID registration" sensor tokens) and 9 more whose image
 is not a spec URI (6 `iagon://` wine NFTs and 3 free-text values). They are real tokens, no longer in the
 table, and a dropped token needs a resync to come back if the rule is relaxed. The count was taken before
 the rule existed and has not been re-measured with it.
 
-*Considered and tried, then reversed:* indexing such tokens with a WARN and storing the image as written.
+*Considered and tried, then reversed:* indexing such tokens with a WARN and storing the image as written
+(and, for the `logo`, storing it as written without a check).
 That kept every token, but the table then held images no client can open, and it left the module more
 permissive than the CIP it implements.
 
@@ -284,10 +290,15 @@ decision 4. It would remove working tokens, among them the wrapped assets the AP
 reads (the API does not expose `properties`). *Considered and rejected:* keeping the constructor in our JSON form,
 which is harmless but keeps a format of ours and logs nothing.
 
-*Trade-offs:* the dropped property is gone from `properties`, though recoverable from the datum. Map entries
-whose key is not a byte string are still left out, although the CDDL allows any metadata as a key; that is an open
-question. How the CIP could define a JSON form, or move such data to `extra`, is being discussed in
+*Trade-offs:* the dropped property is gone from `properties`, though recoverable from the datum. How the CIP could define a JSON form, or move such data to `extra`, is being discussed in
 cardano-foundation/CIPs#1289; this rule follows the CIP as it is and changes if the CIP does.
+
+**Map keys (#1235).** The CDDL allows any metadata as a map key, and JSON needs text keys. A byte string key is
+text or hex as above; an **integer key is kept as its decimal string** (`7` becomes `"7"`, bignums too), which is
+what Lucid and Blockfrost do; a list, map or constructor key has no text form, so that entry is left out with a
+WARN. When a byte string key and an integer key read the same (`"1"` and `1`) the byte string key stays and a WARN
+says so, whatever order the map is iterated in. This applies to additional properties, nested maps and `files`
+entries. *Trade-off:* `7` and `"7"` can no longer be told apart in `properties`.
 
 *Trade-offs:* a string such as `deadbeef` can be text or hex, and the reader cannot tell. The API returns
 the hex string for the few tokens whose text field is not UTF-8, where it used to return garbled text.
@@ -301,7 +312,7 @@ be kept with replacement characters.
   and the stack trace is logged at DEBUG only, because a sync can hit many.
 - A datum that parses but is skipped because it breaks a requirement of its label (no `name`, no
   `description` on a fungible token, no `image` or an image with a scheme the CIP does not allow on a 222 or
-  444 token) is one WARN line with the policy, the asset name, the label and the reason.
+  444 token, a `logo` with such a scheme on a 333 token) is one WARN line with the policy, the asset name, the label and the reason.
 - An output with a flat datum and several reference NFTs is one WARN line with the number found and the one
   that was indexed (decision 1).
 - A datum that does not have the CIP-68 shape at all (not a constructor, no metadata map, no integer
@@ -343,19 +354,15 @@ fields of one response can come from two sources, and `show_cips_details` is the
   point is raised in the CIPs repository yet.
 - How good is the datum-shape inference for a reference NFT with no paired token, and is an exact
   cross-transaction lookup worth its cost? Not measured.
-- Whether the `logo` of a 333 token should get the same scheme check as `image`, and whether an invalid
-  one should drop the token or only the logo.
-- How many tokens the strict `image` rule removes in total, which a resync with it will show.
+- How many tokens the strict `image` and `logo` rules remove in total, which a resync with them will show.
 - A size bound for `description`, which is still unbounded `TEXT`.
 - A counter or health indicator for skipped datums, instead of only log lines.
-- Map keys that are not byte strings: the CDDL allows them (and Lucid and Blockfrost keep integer keys), the module
-  leaves them out.
 - Whether a relabel or backfill job is wanted after a label fix, instead of a resync.
 
 ## References
 
 - #1159, #1185, #1202, #1208, #1209, #1233: parser hardening, version 4, constructor values (stored in #1209, dropped with a WARN in #1233)
-- #1221, #1222, #1225, #1226, #1227, #1228, #1231, #1232, #1233, PR #1220: required fields per label, label pairing and
+- #1221, #1222, #1225, #1226, #1227, #1228, #1231, #1232, #1233, #1234, #1235, PR #1220: required fields per label, label pairing and
   inference, text and hex, size cap, skip warnings, strict image, several reference NFTs in one output, the layout by structure
 - cardano-foundation/cf-token-metadata-registry#104: backport of these fixes
 - `Cip68Processor`, `Cip68DatumParser`, `Cip68TokenService`, `TokenQueryService`
