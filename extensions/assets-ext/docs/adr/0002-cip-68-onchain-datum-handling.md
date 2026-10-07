@@ -51,8 +51,9 @@ is 222, then 333, then 444. If none is paired, the label is 333.
 The earlier rule took the prefixes of every asset in the transaction, whatever its policy or name, with
 222 winning. A transaction that also contained any unrelated 222 NFT then labelled every reference
 NFT in it 222. On mainnet, FLDT, KWIC and Shards (each minted next to its own 333 token) and Wrapped
-SILVER and Wrapped pUSDC were stored as 222 for that reason, and 77 tokens whose latest row is 222 or
-444 carry fungible-token fields.
+SILVER and Wrapped pUSDC were stored as 222 for that reason, and 68 tokens whose latest row is 222 or
+444 carry fungible-token fields (77 if tokens that a later update relabelled 333 are counted). 357
+reference NFTs have rows with more than one label over their history.
 
 *Why this and not the datum shape:* the pairing is how CIP-68 defines the relation, it is available in
 the same transaction, and it does not guess. *Trade-offs and known gaps:*
@@ -95,8 +96,8 @@ The module follows neither strictly:
   and free text are kept.
 
 *Considered and rejected:* enforcing the spec. On mainnet that would remove 12 genuine NFTs whose datum
-has `mediaType: image/svg+xml` and an empty `image` (the "DID registration" sensor tokens) and 10 more
-whose image is not a spec URI (`iagon://` wine NFTs and a few free-text values), for no benefit to any
+has `mediaType: image/svg+xml` and an empty `image` (the "DID registration" sensor tokens) and 9 more
+whose image is not a spec URI (6 `iagon://` wine NFTs and 3 free-text values), for no benefit to any
 consumer: NFT images are not exposed by the API today. `iagon://` support is to be proposed to the CIP
 separately; until then it is accepted like any other value. *Trade-off:* the table can hold images that
 no client can open, and nothing is validated.
@@ -109,8 +110,8 @@ joins the chunks for `logo` and `image`. Elements that are not byte strings are 
 typed fields (`name`, `description`, `ticker`, `url`) are plain `bounded_bytes` in the CIP and are not
 joined.
 
-On mainnet, 240 fungible tokens (181 with 2 chunks, 42 with 3, 14 with 4, 3 with 21) store their logo
-this way. The CF token metadata registry does not read them and returns no logo (see
+On preprod, 240 of the 1,968 fungible tokens (181 with 2 chunks, 42 with 3, 14 with 4, 3 with 21) store
+their logo this way (not measured on mainnet). The CF token metadata registry does not read them and returns no logo (see
 cardano-foundation/cf-token-metadata-registry#104).
 
 ### 6. Untrusted values are bounded; the rest of the datum is kept where possible
