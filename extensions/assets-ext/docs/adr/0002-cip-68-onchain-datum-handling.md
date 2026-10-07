@@ -28,7 +28,7 @@ The general rule the module follows: **be strict about safety and about what the
 about the rest.** A value that could break an insert, exhaust the stack or wrap a number is rejected or
 dropped. A datum that lacks a field the CIP requires for its label, or whose `image` (or, for a fungible token, `logo`) is not a URI the
 CIP allows, is not indexed, because wallets and explorers follow the CIP and could not show it either.
-A value that is merely unusual, in a field the CIP does not constrain, is stored as written, because a
+A datum whose version is not one the CIP defines is not indexed either. A value that is merely unusual, in a field the CIP does not constrain, is stored as written, because a
 stored value can be filtered later, while a dropped one is gone from the table until the datum is processed again.
 
 ## Decisions
@@ -219,48 +219,50 @@ datum cannot reach 64 KiB. It is there so the module does not rely on that param
 
 The other bounds did not trigger on a full mainnet or preprod sync.
 
-### 7. The layout comes from the structure, and every version is indexed (#1232)
+### 7. The layout comes from the structure; only versions 1 to 4 are indexed (#1232)
 
-The version is the second element of the datum and must be an integer. How a datum is read does **not** depend on
-it. The CIP tells direct metadata from the nested format by the `"721"` key (step 4 of "Retrieve metadata as 3rd
-party": "direct metadata (map without "721" key) or nested map format (map with "721" key)"), so the module does the
-same: nested if the metadata map has the `"721"` key with a map as its value, flat otherwise. With a nested datum
-the entry for the reference NFT is used (without a reference NFT only if it is the single entry), and an entry that
-cannot be resolved skips the datum.
+The version is the second element of the datum and must be an integer. CIP-68 defines versions 1 to 4: its CDDL
+lists them (`version = 1 / 2 / 3 / 4`) and says a change that is not backwards-compatible adds a new version.
 
-**Every version that fits a `long` is indexed**, and the version is stored as written. CIP-68 defines versions 1 to
-4. A datum with another version is read like any other, by its structure, and one WARN names the policy, the asset
-name and the version, so a new version, or a datum written with a wrong one, is noticed. A version that does not fit
-a `long` is rejected before it can be narrowed (decision 6).
+**A datum with any other version is not indexed.** One WARN (`Skipping CIP-68 datum of <policy>/<asset>: version <n>
+is not one CIP-68 defines (1 to 4)`) names the token and the version, and the datum is counted in the skipped metric
+with the reason `invalid_version` (label `unknown`, since the label is derived later). A version that does not fit a
+`long` is rejected before it can be narrowed (decision 6). The allowed set is one range, 1 to 4, for every label: the
+444 definition says `3 / 4`, which contradicts the CIP's own changelog, where version 2 added the RFT, and mainnet,
+where all 18 RFTs use version 1, so a set per label would drop real tokens.
 
-The CIP does not require a version check. Its generic definition says `version = int`, no sentence says other
-versions are invalid, and its "Extending & Modifying" section expects new versions to be added. So there is no list to
-maintain. (The 444 definition says `3 / 4`, which contradicts the CIP's own changelog, where version 2 added the RFT,
-and mainnet, where all 18 RFTs use version 1, so a list per label would not have worked.)
+*Why strict:* the layout of a version the CIP has not defined is a guess, and the module implements CIP-68 as it is
+written, the same stance as for `image` (decision 4): if a project wants a new version, the way is the CIP process,
+and the module adds it when the CIP does. *Considered and tried, then reversed, in both directions:* the first
+version of this rule rejected versions outside 1 to 4; it was replaced by reading such datums by their structure with
+a WARN, because the CIP never says to reject them and a live token would have been dropped; and then it was made
+strict again, on the argument above.
 
-*Why not the version.* Before this decision a datum was nested only if its version was 4 or above, which is a rule
-the CIP does not state: a nested datum with a lower version was read as flat, and an unknown version of 4 or more was
-tried as nested first.
+**How a datum of version 1 to 4 is read does not depend on the version.** The CIP tells direct metadata from the
+nested format by the `"721"` key (step 4 of "Retrieve metadata as 3rd party": "direct metadata (map without "721"
+key) or nested map format (map with "721" key)"), so the module does the same: nested if the metadata map has the
+`"721"` key with a map as its value, flat otherwise. With a nested datum the entry for the reference NFT is used
+(without a reference NFT only if it is the single entry), and an entry that cannot be resolved skips the datum. Before
+this decision a datum was nested only if its version was 4 or above, a rule the CIP does not state.
 
 *Effect on mainnet.* Two reference NFTs have a datum with a version outside 1 to 4; every other token is at version
-1, 2 or 3. Both datums are plain flat metadata maps, so reading them by their structure gives the right fields.
+1, 2 or 3. Both datums are plain flat metadata maps, and **both are no longer indexed**:
 
-- `HOSKY 10K NFT 0002` (version 100) is a test token. Its version 100 datum was replaced about 44,700 slots later by a
-  valid version 1 datum, and the token was burned.
+- `HOSKY 10K NFT 0002` (version 100) is a test token. Its version 100 datum was replaced about 44,700 slots later by
+  a valid version 1 datum, which is indexed, and the token was burned. Nothing is lost.
 - `Greenland Reserve Coin` (version 0) is a live fungible token: its reference NFT has supply 1, the user token has a
-  supply of 3,000,000,000,000 units, and both of its datums declare version 0. It stays indexed with its CIP-68
-  values (it is also in the CIP-26 registry).
+  supply of 3,000,000,000,000 units, and both of its datums declare version 0. It disappears from the CIP-68 side of
+  the API. It is also in the CIP-26 registry, so the API still serves it from there (name, ticker, decimals and logo
+  from the registry; any field that only CIP-68 has is lost).
 
 None of the 28,957 mainnet rows has a `"721"` key as an additional property, so reading by structure changes how no
 existing token is read.
 
-*Considered and tried, then reversed:* rejecting every version outside 1 to 4 with a warning. That would have
-dropped Greenland Reserve Coin, a live token whose layout is plain, for no gain, and it needed a list to maintain.
-
-*Trade-offs.* A future version with a genuinely different layout would be read as flat or nested by its shape,
-possibly wrongly; the warning is what makes that visible. A version 1 to 3 datum with a `"721"` key is now read as
-nested, as step 4 says. A flat map with an additional property named `"721"` that holds a map would be misread as
-nested. Neither exists on mainnet.
+*Trade-offs.* The allowed range is a constant in the parser. When the CIP adds a version (a version 5 has been
+suggested in the discussion of cardano-foundation/CIPs#1288 and #1289), tokens of that version are not indexed until
+the range is changed and the index is rebuilt; the WARN and the `invalid_version` counter make the drop visible. A
+version 1 to 3 datum with a `"721"` key is read as nested, as step 4 says. A flat map with an additional property named
+`"721"` that holds a map would be misread as nested. Neither exists on mainnet.
 
 ### 8. Text is text when it is UTF-8, hex when it is not; a property that holds a constructor is dropped (#1159, #1226, #1233)
 
@@ -325,7 +327,7 @@ be kept with replacement characters.
 **Metrics (#1237).** The totals are also Micrometer counters, read from `/actuator/prometheus`:
 `yaci.store.assets.cip68.datums.indexed` (tag `label`: 222, 333, 444),
 `yaci.store.assets.cip68.datums.skipped` (tags `label` and `reason`: `no_name`, `no_description`, `no_image`,
-`bad_image_scheme`, `bad_logo_scheme`, or `parse_failure` with label `unknown`) and
+`bad_image_scheme`, `bad_logo_scheme`, or `parse_failure` and `invalid_version`, both with label `unknown`) and
 `yaci.store.assets.cip68.properties.dropped` (tag `kind`: `constructor`, `key_unsupported`, `key_collision`). The
 tags have a small fixed set of values. They are registered with the CIP-68 processor and need no property; without a
 `MeterRegistry` bean they go to a private registry and nothing is exposed. The WARN lines stay as the per-token
@@ -336,7 +338,7 @@ some bad tokens, so a health indicator on skips would be permanently degraded or
 stays for "is the sync running" (`assetStoreOffchainSync` does that for CIP-26). *Trade-offs:* the counters start at
 zero on every restart and count datums processed, so a block replayed after a chain rollback is counted again; they
 suit `rate()` and `increase()` (for example over a resync), not a historical total. Other drops (an out-of-range
-`decimals`, a value over its column width, a `logo` or `image` over 64 KiB, an undefined version) and CIP-26 are not
+`decimals`, a value over its column width, a `logo` or `image` over 64 KiB) and CIP-26 are not
 counted yet.
 
 ### 10. Read model
@@ -369,9 +371,9 @@ Decisions that are still open:
 - One label per row, although the CIP allows several user tokens for one reference NFT: is the 222, 333, 444
   tie-break enough, or should the table record every matching label? It stays as it is until the number of such
   tokens is known (see below).
-- Should the CIP say what a consumer does with a version it does not define, and fix its 444 definition (`3 / 4`),
-  which contradicts its changelog and mainnet? The module reads such datums by their structure and warns; neither
-  point is raised in the CIPs repository yet.
+- Should the CIP fix its 444 definition (`3 / 4`), which contradicts its changelog and mainnet, and say whether a
+  consumer should ignore a datum whose version it does not know? The module ignores it and warns; neither point is
+  raised in the CIPs repository yet.
 - Whether the `description` should get a size bound; it is still unbounded `TEXT`.
 
 Not measured yet (a full mainnet index with the current rules will answer them; none of them is a design
