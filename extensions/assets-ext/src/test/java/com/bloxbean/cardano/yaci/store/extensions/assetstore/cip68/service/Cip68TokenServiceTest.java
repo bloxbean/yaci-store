@@ -313,11 +313,38 @@ class Cip68TokenServiceTest {
             assertThat(reason).contains("iagon://").hasSizeLessThan(250);
         }
 
-        @Test
-        void aFungibleTokensLogoIsNotChecked() {
-            ParsedCip68Datum ft = new ParsedCip68Datum(null, "desc", "iagon://logo", "name", null, null, 1L, null, null, null);
+        private ParsedCip68Datum ft(String logo) {
+            return new ParsedCip68Datum(null, "desc", logo, "name", null, null, 1L, null, null, null);
+        }
 
-            assertThat(service.isValidMetadata(ft, Cip68Constants.LABEL_FT)).isTrue();
+        @Test
+        void fungibleTokenWithoutALogoIsValid() {
+            assertThat(service.isValidMetadata(ft(null), Cip68Constants.LABEL_FT)).isTrue();
+            assertThat(service.isValidMetadata(ft(""), Cip68Constants.LABEL_FT)).isTrue();
+            assertThat(service.isValidMetadata(ft("  "), Cip68Constants.LABEL_FT)).isTrue();
+        }
+
+        @Test
+        void fungibleTokenLogoWithAnAllowedSchemeIsValid() {
+            for (String logo : new String[]{"https://example.com/l.png", "ipfs://Qm", "ar://tx", "data:image/png;base64,AAAA", "IPFS://Qm"}) {
+                assertThat(service.isValidMetadata(ft(logo), Cip68Constants.LABEL_FT)).as(logo).isTrue();
+            }
+        }
+
+        @Test
+        void fungibleTokenLogoWithAnotherSchemeIsInvalid() {
+            for (String logo : new String[]{"iagon://6911e6dd275fee62fb8917ba", "http://example.com/l.png", "iVBORw0KGgoAAAANSUhEUgAA", "logo here"}) {
+                assertThat(service.invalidReason(ft(logo), Cip68Constants.LABEL_FT))
+                        .as(logo).hasValueSatisfying(r -> assertThat(r).contains("logo").contains("not a URI").contains("https, ipfs, ar, data"));
+            }
+        }
+
+        @Test
+        void aLogoIsNotCheckedOnNftsAndRfts() {
+            ParsedCip68Datum nft = new ParsedCip68Datum(null, null, "iagon://logo", "name", null, null, 1L, "ipfs://Qm", null, null);
+
+            assertThat(service.isValidMetadata(nft, Cip68Constants.LABEL_NFT)).isTrue();
+            assertThat(service.isValidMetadata(nft, Cip68Constants.LABEL_RFT)).isTrue();
         }
 
         @Test

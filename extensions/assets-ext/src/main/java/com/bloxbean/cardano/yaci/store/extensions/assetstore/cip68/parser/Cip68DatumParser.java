@@ -295,7 +295,7 @@ public class Cip68DatumParser {
      * <p>
      * The value is capped at {@value #URI_MAX_BYTES} bytes (the CIP-26 logo has the same limit): an
      * over-long value is dropped with a warning and the rest of the datum is kept. The scheme is not
-     * checked here; {@code Cip68TokenService#invalidReason} checks the image of a 222 or 444 token.
+     * checked here; {@code Cip68TokenService#invalidReason} checks the image of a 222 or 444 token and the logo of a 333 token.
      */
     private Optional<String> getStringOrChunkedProperty(String propertyName, MapPlutusData mapPlutusData) {
         PlutusData property = mapPlutusData.getMap().get(BytesPlutusData.of(propertyName));
@@ -364,17 +364,18 @@ public class Cip68DatumParser {
                 continue;
             }
             Map<String, Object> file = new LinkedHashMap<>();
-            for (Map.Entry<PlutusData, PlutusData> e : fileMap.getMap().entrySet()) {
-                if (!(e.getKey() instanceof BytesPlutusData keyBytes)) {
+            for (Map.Entry<PlutusData, PlutusData> e : byteStringKeysFirst(fileMap)) {
+                String key = keyText(e.getKey());
+                if (key == null) {
+                    warnKeyLeftOut("files[]", e.getKey(), referenceNft);
                     continue;
                 }
-                String key = bytesToText(keyBytes.getValue());
                 if (dropsConstructorProperty("files[]." + key, e.getValue(), referenceNft)) {
                     continue;
                 }
                 Object value = unwrapPlutusValue(e.getValue());
                 if (value != null) {
-                    file.put(key, value);
+                    putFirst(file, key, value, referenceNft);
                 }
             }
             if (!file.isEmpty()) {
@@ -391,21 +392,73 @@ public class Cip68DatumParser {
      */
     private Map<String, Object> parseAdditionalProperties(MapPlutusData properties, @Nullable AssetType referenceNft) {
         Map<String, Object> result = new LinkedHashMap<>();
-        for (Map.Entry<PlutusData, PlutusData> e : properties.getMap().entrySet()) {
-            if (!(e.getKey() instanceof BytesPlutusData keyBytes)) {
+        for (Map.Entry<PlutusData, PlutusData> e : byteStringKeysFirst(properties)) {
+            String key = keyText(e.getKey());
+            if (key == null) {
+                warnKeyLeftOut("additional property", e.getKey(), referenceNft);
                 continue;
             }
-            String key = bytesToText(keyBytes.getValue());
             if (TYPED_KEYS.contains(key) || dropsConstructorProperty(key, e.getValue(), referenceNft)) {
                 continue;
             }
             // Check before storing: an unsupported value must drop only this property, not the datum
             Object value = unwrapPlutusValue(e.getValue());
             if (value != null) {
-                result.put(key, value);
+                putFirst(result, key, value, referenceNft);
             }
         }
         return result;
+    }
+
+    /**
+     * The text of a map key. The CIP-68 definition allows any metadata as a key ({@code { * metadata => metadata }}),
+     * and JSON needs text keys, so a byte string key is read as text or hex (like any byte string) and an integer key
+     * as its decimal string, which is what Lucid and Blockfrost do. A list, map or constructor key has no sensible text
+     * form: {@code null}, and the entry is left out.
+     */
+    private static String keyText(PlutusData key) {
+        return switch (key) {
+            case BytesPlutusData bytes -> bytesToText(bytes.getValue());
+            case BigIntPlutusData integer -> integer.getValue().toString();
+            case null, default -> null;
+        };
+    }
+
+    private static void warnKeyLeftOut(String where, PlutusData key, @Nullable AssetType referenceNft) {
+        String kind = switch (key) {
+            case ListPlutusData ignored -> "list";
+            case MapPlutusData ignored -> "map";
+            case ConstrPlutusData ignored -> "constructor";
+            case null, default -> "unsupported";
+        };
+        if (referenceNft != null) {
+            log.warn("CIP-68 datum of {}/{}: leaving out a {} entry whose key is a {}, which has no text form",
+                    referenceNft.policyId(), referenceNft.assetName(), where, kind);
+        } else {
+            log.warn("CIP-68 datum: leaving out a {} entry whose key is a {}, which has no text form", where, kind);
+        }
+    }
+
+    /**
+     * The entries of a map with the byte string keys first, so that when a byte string key and an integer key read the
+     * same ({@code "1"} and {@code 1}) the byte string key is the one that stays, whatever order the map iterates in.
+     */
+    private static List<Map.Entry<PlutusData, PlutusData>> byteStringKeysFirst(MapPlutusData map) {
+        return map.getMap().entrySet().stream()
+                .sorted(java.util.Comparator.comparingInt(e -> e.getKey() instanceof BytesPlutusData ? 0 : 1))
+                .toList();
+    }
+
+    /** Two keys that read the same (the byte string "1" and the integer 1): the byte string key stays. */
+    private static void putFirst(Map<String, Object> target, String key, Object value, @Nullable AssetType referenceNft) {
+        if (target.putIfAbsent(key, value) != null) {
+            if (referenceNft != null) {
+                log.warn("CIP-68 datum of {}/{}: two keys read as '{}', keeping the byte string key",
+                        referenceNft.policyId(), referenceNft.assetName(), key.length() <= 60 ? key : key.substring(0, 60) + "...");
+            } else {
+                log.warn("CIP-68 datum: two keys read as '{}', keeping the byte string key", key.length() <= 60 ? key : key.substring(0, 60) + "...");
+            }
+        }
     }
 
     /**
@@ -463,10 +516,11 @@ public class Cip68DatumParser {
             }
             case MapPlutusData map -> {
                 Map<String, Object> out = new LinkedHashMap<>();
-                for (Map.Entry<PlutusData, PlutusData> entry : map.getMap().entrySet()) {
-                    if (!(entry.getKey() instanceof BytesPlutusData kb)) continue;
+                for (Map.Entry<PlutusData, PlutusData> entry : byteStringKeysFirst(map)) {
+                    String key = keyText(entry.getKey());
+                    if (key == null) continue;
                     Object u = unwrapPlutusValue(entry.getValue());
-                    if (u != null) out.put(bytesToText(kb.getValue()), u);
+                    if (u != null) out.putIfAbsent(key, u);
                 }
                 yield out;
             }
