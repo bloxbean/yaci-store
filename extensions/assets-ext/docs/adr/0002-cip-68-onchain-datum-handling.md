@@ -5,7 +5,7 @@
 Proposed
 
 The behaviour in decisions 1 to 9 is implemented in PR #1220 (draft, not merged at the time of writing;
-issues #1221, #1222, #1225, #1226, #1227, #1228, #1231 and #1232). Decision 10 describes behaviour that is on
+issues #1221, #1222, #1225, #1226, #1227, #1228, #1231, #1232 and #1233). Decision 10 describes behaviour that is on
 `main`.
 
 ## Date
@@ -58,6 +58,16 @@ rollback slot.
 
 *Trade-off:* the table grows with updates. In exchange, a rollback needs no reconstruction and the
 history of a token is queryable.
+
+**Chain rollbacks.** Cardano can roll back a few blocks near the tip. `Cip68RollbackProcessor` listens for the
+store's `RollbackEvent` and, in one transaction, deletes every row with a slot **greater than** the rollback
+slot (a single bulk `DELETE`, which stays cheap for a deep rollback thanks to the index on `slot`). Rows at the
+rollback slot stay, because that block stays on the chain. The row that was the previous datum then becomes the
+latest again, a token created after the rollback point disappears, and when the new fork replays the blocks the
+processor stores them again under the same key, with no duplicate. It is active together with the CIP-68
+indexing (`store.assets.ext.cip68.enabled`), so one cannot be on without the other. The behaviour is pinned by
+`Cip68RollbackProcessorH2IT` against the real table definition. It has not been exercised on a live chain yet:
+a sync from genesis rarely meets a rollback.
 
 ### 2. The label comes from the paired user token, and from the datum when there is none (#1222, #1225)
 

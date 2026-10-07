@@ -48,6 +48,9 @@ wrong repository. *Trade-off:* a network with a registry we do not know about ne
   without tracking.
 - The job is not scheduled in read-only mode: it would otherwise clone and write on a timer.
 
+**Chain rollbacks do not apply.** The registry is read from Git, not from the chain, and a row has no slot or
+block, so there is nothing to undo when the chain rolls back. (CIP-68 is different, see ADR 0002 decision 1.)
+
 *Why:* the registry is large (about 8,000 files on mainnet) and changes slowly, so re-reading all
 of it every hour is wasteful. *Trade-off:* a Git clone needs network access and disk, and the
 sync state lives in the database next to the data.
@@ -129,6 +132,9 @@ CF registry's V1 API cannot be reproduced from it.
 
 ## Open questions
 
+- What happens if the registry's history is rewritten (a force push), so that the stored commit no longer
+  exists? The job falls back to a full sync when HEAD cannot be determined, but this case has not been
+  checked.
 - A known registry mistake (such as the USDM entry above) cannot be fixed on our side without
   overriding the registry; today the answer is to fix it upstream.
 - Whether a failed validation should be counted and exposed (for example through the health
