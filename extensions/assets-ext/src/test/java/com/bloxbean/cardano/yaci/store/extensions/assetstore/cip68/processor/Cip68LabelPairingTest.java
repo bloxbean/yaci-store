@@ -1,5 +1,11 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.processor;
 
+import com.bloxbean.cardano.client.common.cbor.CborSerializationUtil;
+import com.bloxbean.cardano.client.plutus.spec.BigIntPlutusData;
+import com.bloxbean.cardano.client.plutus.spec.BytesPlutusData;
+import com.bloxbean.cardano.client.plutus.spec.ConstrPlutusData;
+import com.bloxbean.cardano.client.plutus.spec.MapPlutusData;
+import com.bloxbean.cardano.client.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
@@ -68,6 +74,9 @@ class Cip68LabelPairingTest {
                     + "6564d8799fd8799f582003b800a23d58fea5c1239871d7e956ac18c773622787486e8c44d1dac75cb88fff04ff01d879"
                     + "80ff";
 
+    /** A datum for the 222 and 444 tests: those labels need an image, which the real FLDT datum (a 333 token with a logo) does not have. */
+    private static final String IMAGE_DATUM = datum("name", "FLDT", "image", "ipfs://Qm");
+
     private Cip68MetadataRepository repository;
     private Cip68Processor processor;
 
@@ -110,7 +119,7 @@ class Cip68LabelPairingTest {
 
     @Test
     void labelsAsNftWhenTheNftUserTokenIsPaired() {
-        assertThat(labelOf(FLDT_POLICY, FLDT_BASE, FLDT_DATUM, List.of(FLDT_POLICY + NFT + FLDT_BASE)))
+        assertThat(labelOf(FLDT_POLICY, FLDT_BASE, IMAGE_DATUM, List.of(FLDT_POLICY + NFT + FLDT_BASE)))
                 .isEqualTo(Cip68Constants.LABEL_NFT);
     }
 
@@ -119,7 +128,7 @@ class Cip68LabelPairingTest {
         List<String> others = new ArrayList<>(unrelatedNfts(OTHER_POLICY, 3));
         others.add(FLDT_POLICY + RFT + FLDT_BASE);
 
-        assertThat(labelOf(FLDT_POLICY, FLDT_BASE, FLDT_DATUM, others)).isEqualTo(Cip68Constants.LABEL_RFT);
+        assertThat(labelOf(FLDT_POLICY, FLDT_BASE, IMAGE_DATUM, others)).isEqualTo(Cip68Constants.LABEL_RFT);
     }
 
     @Test
@@ -127,14 +136,14 @@ class Cip68LabelPairingTest {
         // Both a 222 and a 333 token with the same policy and base name: the existing order is kept
         List<String> others = List.of(FLDT_POLICY + FT + FLDT_BASE, FLDT_POLICY + NFT + FLDT_BASE);
 
-        assertThat(labelOf(FLDT_POLICY, FLDT_BASE, FLDT_DATUM, others)).isEqualTo(Cip68Constants.LABEL_NFT);
+        assertThat(labelOf(FLDT_POLICY, FLDT_BASE, IMAGE_DATUM, others)).isEqualTo(Cip68Constants.LABEL_NFT);
     }
 
     @Test
     void matchesUnitsRegardlessOfHexCase() {
         List<String> others = List.of((FLDT_POLICY + NFT + FLDT_BASE).toUpperCase());
 
-        assertThat(labelOf(FLDT_POLICY, FLDT_BASE, FLDT_DATUM, others)).isEqualTo(Cip68Constants.LABEL_NFT);
+        assertThat(labelOf(FLDT_POLICY, FLDT_BASE, IMAGE_DATUM, others)).isEqualTo(Cip68Constants.LABEL_NFT);
     }
 
     /** Runs a transaction with the reference NFT (carrying the datum) plus one output per other unit. */
@@ -163,6 +172,19 @@ class Cip68LabelPairingTest {
     /** Distinct 222 NFTs of one policy, like a collection minted in the same transaction. */
     private static List<String> unrelatedNfts(String policy, int count) {
         return IntStream.range(0, count).mapToObj(i -> policy + NFT + "6e66742e%02x".formatted(i)).toList();
+    }
+
+    private static String datum(String... keyValues) {
+        MapPlutusData properties = new MapPlutusData();
+        for (int i = 0; i < keyValues.length; i += 2) {
+            properties.put(BytesPlutusData.of(keyValues[i]), BytesPlutusData.of(keyValues[i + 1]));
+        }
+        try {
+            return HexUtil.encodeHexString(CborSerializationUtil.serialize(
+                    ConstrPlutusData.of(0, properties, BigIntPlutusData.of(1)).serialize()));
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     private static Amt amount(String unit) {

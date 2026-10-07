@@ -94,13 +94,23 @@ class Cip68OrphanLabelTest {
     }
 
     @Test
-    void realNftDatumWithoutDescriptionIsAnNftAndIsKept() {
-        Optional<Cip68Metadata> saved = index(NFT_NO_DESCRIPTION, POLICY, BASE, null);
+    void nftWithoutDescriptionIsAnNftAndIsKept() {
+        Optional<Cip68Metadata> saved = index(datum(text("name", "NFT #1"), text("image", "ipfs://Qm")), POLICY, BASE, null);
 
         assertThat(saved).get().satisfies(row -> {
             assertThat(row.getLabel()).isEqualTo(Cip68Constants.LABEL_NFT);
             assertThat(row.getDescription()).isNull();
         });
+    }
+
+    @Test
+    void realNftDatumWithAnEmptyImageIsDroppedAndWarns() {
+        // the datum of #1159 has `image` as an empty byte string; CIP-68 requires an image for an NFT
+        Optional<Cip68Metadata> saved = index(NFT_NO_DESCRIPTION, POLICY, BASE, null);
+
+        assertThat(saved).isEmpty();
+        assertThat(warnings()).singleElement().satisfies(w -> assertThat(w)
+                .contains("Skipping CIP-68 datum").contains("(label 222)").contains("no image"));
     }
 
     @Test
@@ -112,20 +122,23 @@ class Cip68OrphanLabelTest {
     }
 
     @Test
-    void filesAloneMakeAnNft() {
+    void filesAloneMakeAnNftThatIsDroppedWithoutAnImage() {
         MapPlutusData file = new MapPlutusData();
         file.put(BytesPlutusData.of("src"), BytesPlutusData.of("ipfs://Qm"));
         Optional<Cip68Metadata> saved = index(datum(text("name", "Files"), entry("files", ListPlutusData.of(file))),
                 POLICY, BASE, null);
 
-        assertThat(saved).get().extracting(Cip68Metadata::getLabel).isEqualTo(Cip68Constants.LABEL_NFT);
+        // inferred as 222, which CIP-68 requires an image for
+        assertThat(saved).isEmpty();
+        assertThat(warnings()).singleElement().satisfies(w -> assertThat(w).contains("(label 222)").contains("no image"));
     }
 
     @Test
-    void mediaTypeAloneMakesAnNft() {
+    void mediaTypeAloneMakesAnNftThatIsDroppedWithoutAnImage() {
         Optional<Cip68Metadata> saved = index(datum(text("name", "Typed"), text("mediaType", "image/png")), POLICY, BASE, null);
 
-        assertThat(saved).get().extracting(Cip68Metadata::getLabel).isEqualTo(Cip68Constants.LABEL_NFT);
+        assertThat(saved).isEmpty();
+        assertThat(warnings()).singleElement().satisfies(w -> assertThat(w).contains("(label 222)").contains("no image"));
     }
 
     @Test
@@ -157,7 +170,7 @@ class Cip68OrphanLabelTest {
     void aPairedUserTokenWinsOverTheDatumShape() {
         // a fungible-shaped datum, but its own 222 token is in the transaction: the pairing decides
         Optional<Cip68Metadata> saved = index(
-                datum(text("name", "Paired"), text("description", "d"), text("ticker", "PRD")),
+                datum(text("name", "Paired"), text("description", "d"), text("ticker", "PRD"), text("image", "ipfs://Qm")),
                 POLICY, BASE, Cip68Constants.NFT_TOKEN_PREFIX);
 
         assertThat(saved).get().extracting(Cip68Metadata::getLabel).isEqualTo(Cip68Constants.LABEL_NFT);

@@ -73,7 +73,6 @@ class Cip68ProcessorTest {
 
             when(cip68TokenService.extractReferenceNfts(utxo)).thenReturn(List.of(refNftAmt));
             when(cip68DatumParser.parse(eq(datum), any())).thenReturn(Optional.of(metadata));
-            when(cip68TokenService.isValidMetadata(metadata, Cip68Constants.LABEL_FT)).thenReturn(true);
 
             processor.processTransaction(buildEvent(100L, utxo));
 
@@ -159,7 +158,7 @@ class Cip68ProcessorTest {
 
             when(cip68TokenService.extractReferenceNfts(utxo)).thenReturn(List.of(refNftAmt));
             when(cip68DatumParser.parse(eq(datum), any())).thenReturn(Optional.of(metadata));
-            when(cip68TokenService.isValidMetadata(metadata, Cip68Constants.LABEL_FT)).thenReturn(false);
+            when(cip68TokenService.invalidReason(metadata, Cip68Constants.LABEL_FT)).thenReturn(Optional.of("it has no name"));
 
             processor.processTransaction(buildEvent(100L, utxo));
 
@@ -205,7 +204,6 @@ class Cip68ProcessorTest {
 
             when(cip68TokenService.extractReferenceNfts(refNftUtxo)).thenReturn(List.of(refNftAmt));
             when(cip68DatumParser.parse(eq(datum), any())).thenReturn(Optional.of(metadata));
-            when(cip68TokenService.isValidMetadata(metadata, Cip68Constants.LABEL_FT)).thenReturn(true);
 
             processor.processTransaction(buildEvent(100L, List.of(refNftUtxo)));
 
@@ -234,7 +232,6 @@ class Cip68ProcessorTest {
             when(cip68TokenService.extractReferenceNfts(refNftUtxo)).thenReturn(List.of(refNftAmt));
             when(cip68TokenService.extractReferenceNfts(userTokenUtxo)).thenReturn(List.of());
             when(cip68DatumParser.parse(eq(datum), any())).thenReturn(Optional.of(metadata));
-            when(cip68TokenService.isValidMetadata(metadata, expectedLabel)).thenReturn(true);
 
             // Both outputs in the same tx — that's how cross-output detection sees them.
             processor.processTransaction(buildEvent(100L, List.of(refNftUtxo, userTokenUtxo)));

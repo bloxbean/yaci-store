@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -54,11 +55,11 @@ public class Cip68Processor {
                     cip68DatumParser.parse(output.getInlineDatum(), refNftAssetType).ifPresent(parsed -> {
                         // The label comes first: which fields a datum must have depends on it
                         int label = deriveLabel(refNftAssetType, assetUnitsInTx, parsed);
-                        if (!cip68TokenService.isValidMetadata(parsed, label)) {
-                            warnSkipped(parsed, refNftAssetType, label);
+                        Optional<String> invalid = cip68TokenService.invalidReason(parsed, label);
+                        if (invalid.isPresent()) {
+                            warnSkipped(refNftAssetType, label, invalid.get());
                             return;
                         }
-                        warnIfImageMissing(parsed, refNftAssetType, label);
                         entities.add(buildCip68Metadata(
                                 parsed, refNftAssetType, output.getInlineDatum(), slot,
                                 output.getTxHash(), output.getTxIndex(), label));
@@ -160,26 +161,10 @@ public class Cip68Processor {
         return List.of(refNfts.getFirst());
     }
 
-    /** A datum that is not indexed because a required field is missing leaves a trace, not a silent gap. */
-    private void warnSkipped(ParsedCip68Datum parsed, AssetType refNftAssetType, int label) {
-        String reason = parsed.name() == null
-                ? "it has no name"
-                : "it has no description, which CIP-68 requires for a fungible token (label " + Cip68Constants.LABEL_FT + ")";
+    /** A datum that is not indexed because it breaks what CIP-68 requires leaves a trace, not a silent gap. */
+    private void warnSkipped(AssetType refNftAssetType, int label, String reason) {
         log.warn("Skipping CIP-68 datum of {}/{} (label {}): {}",
                 refNftAssetType.policyId(), refNftAssetType.assetName(), label, reason);
-    }
-
-    /**
-     * CIP-68 requires {@code image} for 222 NFTs and 444 RFTs. The datum is lenient on purpose: a token
-     * without one is indexed anyway, since some live NFTs have none (or an empty one) and dropping them
-     * would hide real tokens. The gap is only reported, once per datum processed.
-     */
-    private void warnIfImageMissing(ParsedCip68Datum parsed, AssetType refNftAssetType, int label) {
-        boolean imageRequired = label == Cip68Constants.LABEL_NFT || label == Cip68Constants.LABEL_RFT;
-        if (imageRequired && (parsed.image() == null || parsed.image().isBlank())) {
-            log.warn("CIP-68 {} token {}/{} has no image, which CIP-68 requires for this label; indexing it anyway",
-                    label, refNftAssetType.policyId(), refNftAssetType.assetName());
-        }
     }
 
     private Cip68Metadata buildCip68Metadata(ParsedCip68Datum parsed,

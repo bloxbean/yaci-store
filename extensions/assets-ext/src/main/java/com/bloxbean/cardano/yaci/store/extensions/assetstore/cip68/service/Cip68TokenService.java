@@ -17,6 +17,7 @@ import java.math.BigInteger;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Constants.*;
@@ -30,27 +31,61 @@ public class Cip68TokenService {
 
     private final Cip68MetadataRepository metadataReferenceNftRepository;
 
+    /** URI schemes CIP-68 allows for {@code image} and {@code logo}: https, ipfs, ar (Arweave) and data (on-chain). */
+    private static final Pattern ALLOWED_URI_SCHEME = Pattern.compile("^(https|ipfs|ar|data):.+", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+
     /**
      * Validate a CIP-68 datum against the fields its label requires.
-     * <p>
-     * CIP-68's metadata definitions require {@code name} for every user-token label, but
-     * {@code description} only for the 333 fungible token: for the 222 NFT and the 444 RFT it is
-     * declared as {@code ? description}, so a datum without one is valid and is kept.
-     * <p>
-     * The spec also requires {@code image} for 222 and 444. That is deliberately not enforced here:
-     * parsing is lenient, so a token without an image is kept (the processor logs a warning), and the
-     * image or logo value, including its URI scheme, is stored as written and never validated.
      *
      * @param parsed the parsed datum
      * @param label  the user-token label the datum belongs to: {@code 222} (NFT), {@code 333} (FT) or
      *               {@code 444} (RFT)
-     * @return true if the metadata has the fields CIP-68 requires for that label
+     * @return true if {@link #invalidReason} finds nothing wrong
      */
     public boolean isValidMetadata(ParsedCip68Datum parsed, int label) {
+        return invalidReason(parsed, label).isEmpty();
+    }
+
+    /**
+     * Says why a CIP-68 datum is not indexed, or an empty result when it is valid. Parsing is strict about
+     * what CIP-68 requires for the label:
+     * <ul>
+     *   <li>{@code name} for every label;</li>
+     *   <li>{@code description} only for the 333 fungible token (for 222 and 444 it is {@code ? description});</li>
+     *   <li>{@code image} for the 222 NFT and the 444 RFT, as a URI whose scheme is one of
+     *       {@code https}, {@code ipfs}, {@code ar} or {@code data}. A missing or empty image, or another
+     *       scheme (for example {@code iagon://}, or free text), is not indexed: wallets and explorers
+     *       follow the CIP and could not show such a token.</li>
+     * </ul>
+     * The 333 {@code logo} is optional and is stored as written.
+     *
+     * @param parsed the parsed datum
+     * @param label  the user-token label the datum belongs to
+     * @return the reason the datum is rejected, empty if it is valid
+     */
+    public Optional<String> invalidReason(ParsedCip68Datum parsed, int label) {
         if (parsed.name() == null) {
-            return false;
+            return Optional.of("it has no name");
         }
-        return label != LABEL_FT || parsed.description() != null;
+        if (label == LABEL_FT) {
+            return parsed.description() == null
+                    ? Optional.of("it has no description, which CIP-68 requires for a fungible token (label " + LABEL_FT + ")")
+                    : Optional.empty();
+        }
+        String image = parsed.image();
+        if (image == null || image.isBlank()) {
+            return Optional.of("it has no image, which CIP-68 requires for label " + label);
+        }
+        if (!ALLOWED_URI_SCHEME.matcher(image).matches()) {
+            return Optional.of("its image '" + abbreviate(image) + "' is not a URI with one of the schemes CIP-68 allows "
+                    + "(https, ipfs, ar, data)");
+        }
+        return Optional.empty();
+    }
+
+    private static String abbreviate(String value) {
+        String oneLine = value.replaceAll("\\s+", " ");
+        return oneLine.length() <= 60 ? oneLine : oneLine.substring(0, 60) + "...";
     }
 
     /**
