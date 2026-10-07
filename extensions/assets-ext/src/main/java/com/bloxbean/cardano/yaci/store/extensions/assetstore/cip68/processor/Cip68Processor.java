@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.processor;
 
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
+import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.AssetType;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Constants;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.ParsedCip68Datum;
@@ -48,7 +49,7 @@ public class Cip68Processor {
             Set<String> assetUnitsInTx = collectAssetUnits(txIo);
 
             for (AddressUtxo output : txIo.getOutputs()) {
-                cip68TokenService.extractReferenceNft(output).ifPresent(refNftAmt -> {
+                for (Amt refNftAmt : referenceNftsToIndex(output)) {
                     AssetType refNftAssetType = AssetType.fromUnit(refNftAmt.getUnit());
                     cip68DatumParser.parse(output.getInlineDatum(), refNftAssetType).ifPresent(parsed -> {
                         // The label comes first: which fields a datum must have depends on it
@@ -62,7 +63,7 @@ public class Cip68Processor {
                                 parsed, refNftAssetType, output.getInlineDatum(), slot,
                                 output.getTxHash(), output.getTxIndex(), label));
                     });
-                });
+                }
             }
         }
 
@@ -140,6 +141,23 @@ public class Cip68Processor {
 
     private static String normalize(String unit) {
         return unit.toLowerCase(Locale.ROOT);
+    }
+
+    /**
+     * The reference NFTs of an output whose datum should be indexed. An output with one reference NFT is the
+     * normal case. With several, a nested (version 4) datum carries the metadata of each, so all of them are
+     * indexed, each resolved to its own entry. A flat datum describes a single token and cannot be tied to
+     * any of several, so only the first is indexed and the rest are reported, not skipped silently.
+     */
+    private List<Amt> referenceNftsToIndex(AddressUtxo output) {
+        List<Amt> refNfts = cip68TokenService.extractReferenceNfts(output);
+        if (refNfts.size() <= 1 || cip68DatumParser.hasNestedMetadata(output.getInlineDatum())) {
+            return refNfts;
+        }
+        log.warn("Output {}#{} holds {} reference NFTs with a flat CIP-68 datum, which describes one token; "
+                        + "indexing only {} and ignoring the other {}",
+                output.getTxHash(), output.getOutputIndex(), refNfts.size(), refNfts.getFirst().getUnit(), refNfts.size() - 1);
+        return List.of(refNfts.getFirst());
     }
 
     /** A datum that is not indexed because a required field is missing leaves a trace, not a silent gap. */

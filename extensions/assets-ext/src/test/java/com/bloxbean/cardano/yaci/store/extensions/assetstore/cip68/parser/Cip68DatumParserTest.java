@@ -380,6 +380,34 @@ class Cip68DatumParserTest {
         }
 
         @Test
+        void shouldReportANestedDatumAsNested() throws Exception {
+            String hex = datum(nested(POLICY_ID, ASSET_NAME_HEX, metadata("Nested")), 4);
+
+            assertThat(parser.hasNestedMetadata(hex)).isTrue();
+        }
+
+        @Test
+        void shouldNotReportAFlatDatumAsNested() throws Exception {
+            assertThat(parser.hasNestedMetadata(datum(metadata("Flat"), 1))).isFalse();
+            // version 4 without the "721" key is read as a flat map
+            assertThat(parser.hasNestedMetadata(datum(metadata("Flat v4"), 4))).isFalse();
+        }
+
+        @Test
+        void shouldNotReportA721KeyBelowVersion4AsNested() throws Exception {
+            // the nested format is only read from version 4 on
+            assertThat(parser.hasNestedMetadata(datum(nested(POLICY_ID, ASSET_NAME_HEX, metadata("Old")), 3))).isFalse();
+        }
+
+        @Test
+        void shouldNotReportAnythingThatIsNotACip68DatumAsNested() {
+            assertThat(parser.hasNestedMetadata(null)).isFalse();
+            assertThat(parser.hasNestedMetadata("")).isFalse();
+            assertThat(parser.hasNestedMetadata("not-hex")).isFalse();
+            assertThat(parser.hasNestedMetadata("d8799f00ff")).isFalse();
+        }
+
+        @Test
         void shouldResolveVersion4NestedMapForReferenceNft() throws Exception {
             String datum = datum(nested(POLICY_ID, ASSET_NAME_HEX, metadata("Nested")), 4);
 

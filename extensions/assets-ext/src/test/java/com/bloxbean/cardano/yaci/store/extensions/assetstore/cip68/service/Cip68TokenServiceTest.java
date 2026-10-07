@@ -186,6 +186,43 @@ class Cip68TokenServiceTest {
     }
 
     @Nested
+    @DisplayName("extractReferenceNfts")
+    class ExtractReferenceNfts {
+
+        private AddressUtxo utxoWith(Amt... amounts) {
+            return AddressUtxo.builder().amounts(List.of(amounts)).build();
+        }
+
+        private Amt amt(String assetNameHex, long quantity) {
+            return Amt.builder().unit(POLICY_ID + assetNameHex).quantity(BigInteger.valueOf(quantity)).build();
+        }
+
+        @Test
+        void returnsEveryReferenceNftInTheOutputInOrder() {
+            Amt first = amt("000643b001", 1);
+            Amt second = amt("000643b002", 1);
+            Amt third = amt("000643b003", 1);
+
+            assertThat(service.extractReferenceNfts(utxoWith(first, amt("000de14001", 1), second, third)))
+                    .containsExactly(first, second, third);
+        }
+
+        @Test
+        void ignoresAssetsThatAreNotReferenceNfts() {
+            // a user token, and a reference-NFT-looking asset with quantity 2
+            assertThat(service.extractReferenceNfts(utxoWith(amt("000de14001", 1), amt("000643b001", 2)))).isEmpty();
+        }
+
+        @Test
+        void returnsOneForTheUsualOutput() {
+            Amt only = amt("000643b001", 1);
+
+            assertThat(service.extractReferenceNfts(utxoWith(only))).containsExactly(only);
+            assertThat(service.extractReferenceNft(utxoWith(only))).contains(only);
+        }
+    }
+
+    @Nested
     @DisplayName("isValidMetadata")
     class IsValidMetadata {
 
