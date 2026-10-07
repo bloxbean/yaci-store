@@ -70,15 +70,30 @@ public class Cip68Processor {
                 for (Amt refNftAmt : referenceNftsToIndex(output)) {
                     AssetType refNftAssetType = AssetType.fromUnit(refNftAmt.getUnit());
                     cip68DatumParser.parse(output.getInlineDatum(), refNftAssetType).ifPresent(parsed -> {
-                        // The label comes first: which fields a datum must have depends on it
-                        int label = deriveLabel(refNftAssetType, assetUnitsInTx, parsed);
-                        Optional<DatumRejection> rejection = cip68TokenService.rejection(parsed, label);
-                        if (rejection.isPresent()) {
-                            warnSkipped(refNftAssetType, label, rejection.get().message());
-                            metrics.skipped(label, rejection.get().reason());
-                            return;
+                        // The labels come first: which fields a datum must have depends on them. A reference NFT
+                        // can have user tokens of several labels (the CIP allows it), and then the datum has to
+                        // satisfy the requirements of every one of them.
+                        List<Integer> labels = deriveLabels(refNftAssetType, assetUnitsInTx, parsed);
+                        int label = labels.getFirst();
+                        boolean multiLabel = labels.size() > 1;
+                        for (int candidate : labels) {
+                            Optional<DatumRejection> rejection = cip68TokenService.rejection(parsed, candidate);
+                            if (rejection.isPresent()) {
+                                warnSkipped(refNftAssetType, labels, candidate, rejection.get().message());
+                                metrics.skipped(candidate, rejection.get().reason());
+                                if (multiLabel) {
+                                    metrics.multiLabel(labels, Cip68Metrics.SKIPPED_OUTCOME);
+                                }
+                                return;
+                            }
                         }
                         metrics.indexed(label);
+                        if (multiLabel) {
+                            metrics.multiLabel(labels, Cip68Metrics.INDEXED_OUTCOME);
+                            log.info("CIP-68 reference NFT {}/{} has user tokens for labels {}; the datum satisfies all of them, "
+                                            + "stored with label {}",
+                                    refNftAssetType.policyId(), refNftAssetType.assetName(), labels, label);
+                        }
                         entities.add(buildCip68Metadata(
                                 parsed, refNftAssetType, output.getInlineDatum(), slot,
                                 output.getTxHash(), output.getTxIndex(), label));
@@ -93,7 +108,7 @@ public class Cip68Processor {
     }
 
     /**
-     * Determine the CIP-68 user-token label from the user token paired with the reference NFT.
+     * Determine the CIP-68 user-token labels from the user tokens paired with the reference NFT.
      * <p>
      * CIP-68 pairs the two by policy and base name: the reference NFT is {@code 000643b0 + base},
      * its user token is a label prefix ({@code 000de140} / {@code 0014df10} / {@code 001bc280}) plus
@@ -101,27 +116,32 @@ public class Cip68Processor {
      * or with another base name, that merely sits in the same transaction says nothing about this
      * reference NFT: a transaction can mint several unrelated CIP-68 tokens.
      * <p>
-     * If the transaction has a 222 and a 333 (or 444) token paired with the reference NFT, 222 wins,
-     * then 333, then 444. If none is paired (an orphan reference NFT, or its user token was minted in
-     * another transaction), the label is inferred from the shape of the datum, see
-     * {@link #inferLabelFromDatum}.
+     * The CIP allows several user tokens for one reference NFT, so a transaction can pair it with a 222 and a 333
+     * (or 444) token. Every paired label is returned, in the order 222, 333, 444: the first is the label the row
+     * is stored with, and the datum has to satisfy the requirements of all of them. If none is paired (an orphan
+     * reference NFT, or its user token was minted in another transaction), the label is inferred from the shape of
+     * the datum, see {@link #inferLabelFromDatum}, and it is the only one.
      */
-    private int deriveLabel(AssetType refNftAssetType, Set<String> assetUnitsInTx, ParsedCip68Datum parsed) {
+    private List<Integer> deriveLabels(AssetType refNftAssetType, Set<String> assetUnitsInTx, ParsedCip68Datum parsed) {
         String baseName = refNftAssetType.assetName().substring(Cip68Constants.REFERENCE_TOKEN_PREFIX.length());
 
+        List<Integer> labels = new ArrayList<>();
         if (hasPairedUserToken(assetUnitsInTx, refNftAssetType, Cip68Constants.NFT_TOKEN_PREFIX, baseName)) {
-            return Cip68Constants.LABEL_NFT;
+            labels.add(Cip68Constants.LABEL_NFT);
         }
         if (hasPairedUserToken(assetUnitsInTx, refNftAssetType, Cip68Constants.FUNGIBLE_TOKEN_PREFIX, baseName)) {
-            return Cip68Constants.LABEL_FT;
+            labels.add(Cip68Constants.LABEL_FT);
         }
         if (hasPairedUserToken(assetUnitsInTx, refNftAssetType, Cip68Constants.RICH_FUNGIBLE_TOKEN_PREFIX, baseName)) {
-            return Cip68Constants.LABEL_RFT;
+            labels.add(Cip68Constants.LABEL_RFT);
+        }
+        if (!labels.isEmpty()) {
+            return labels;
         }
         int inferred = inferLabelFromDatum(parsed);
         log.debug("No CIP-68 user token paired with reference NFT {}/{} in this tx; label {} inferred from the datum",
                 refNftAssetType.policyId(), refNftAssetType.assetName(), inferred);
-        return inferred;
+        return List.of(inferred);
     }
 
     /**
@@ -181,10 +201,18 @@ public class Cip68Processor {
         return refNfts;
     }
 
-    /** A datum that is not indexed because it breaks what CIP-68 requires leaves a trace, not a silent gap. */
-    private void warnSkipped(AssetType refNftAssetType, int label, String reason) {
-        log.warn("Skipping CIP-68 datum of {}/{} (label {}): {}",
-                refNftAssetType.policyId(), refNftAssetType.assetName(), label, reason);
+    /**
+     * A datum that is not indexed because it breaks what CIP-68 requires leaves a trace, not a silent gap. With
+     * several labels, the warning also says which of them the datum fails.
+     */
+    private void warnSkipped(AssetType refNftAssetType, List<Integer> labels, int failedLabel, String reason) {
+        if (labels.size() == 1) {
+            log.warn("Skipping CIP-68 datum of {}/{} (label {}): {}",
+                    refNftAssetType.policyId(), refNftAssetType.assetName(), failedLabel, reason);
+        } else {
+            log.warn("Skipping CIP-68 datum of {}/{} (labels {}): it is not valid as label {}, because {}",
+                    refNftAssetType.policyId(), refNftAssetType.assetName(), labels, failedLabel, reason);
+        }
     }
 
     private Cip68Metadata buildCip68Metadata(ParsedCip68Datum parsed,

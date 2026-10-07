@@ -75,7 +75,7 @@ class Cip68LabelPairingTest {
                     + "80ff";
 
     /** A datum for the 222 and 444 tests: those labels need an image, which the real FLDT datum (a 333 token with a logo) does not have. */
-    private static final String IMAGE_DATUM = datum("name", "FLDT", "image", "ipfs://Qm");
+    private static final String IMAGE_DATUM = datum("name", "FLDT", "description", "A token", "image", "ipfs://Qm");
 
     private Cip68MetadataRepository repository;
     private Cip68Processor processor;
@@ -133,7 +133,8 @@ class Cip68LabelPairingTest {
 
     @Test
     void prefersNftOverFtWhenBothArePaired() {
-        // Both a 222 and a 333 token with the same policy and base name: the existing order is kept
+        // Both a 222 and a 333 token with the same policy and base name: the row is stored with the first label, 222 (the
+        // datum has a name, a description and an image, so it satisfies both; Cip68MultiLabelTest covers the ones that do not)
         List<String> others = List.of(FLDT_POLICY + FT + FLDT_BASE, FLDT_POLICY + NFT + FLDT_BASE);
 
         assertThat(labelOf(FLDT_POLICY, FLDT_BASE, IMAGE_DATUM, others)).isEqualTo(Cip68Constants.LABEL_NFT);
