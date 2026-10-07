@@ -5,7 +5,7 @@
 Proposed
 
 The behaviour in decisions 1 to 9 is implemented in PR #1220 (open, not merged at the time of writing;
-issues #1221, #1222, #1225, #1226, #1227, #1228, #1231, #1232, #1233, #1234, #1235, #1236 and #1237). Decision 10 describes behaviour that is on
+issues #1221, #1222, #1225, #1226, #1227, #1228, #1231, #1232, #1233, #1234, #1235, #1236, #1237 and #1238). Decision 10 describes behaviour that is on
 `main`.
 
 ## Date
@@ -73,19 +73,21 @@ indexing (`store.assets.ext.cip68.enabled`), so one cannot be on without the oth
 `Cip68RollbackProcessorH2IT` against the real table definition. It has not been exercised on a live chain yet:
 a sync from genesis rarely meets a rollback.
 
-### 2. The label comes from the paired user token, and from the datum when there is none (#1222, #1225)
+### 2. The label comes from the paired user tokens, and from the datum when there is none (#1222, #1225, #1238)
 
 The label (222 NFT, 333 FT, 444 RFT) is not in the datum. It is read from the user token minted with
 the reference NFT: the asset in the same transaction with **the same policy and the same base name**
-(reference NFT `000643b0 + base`, user token `<label prefix> + base`). If several are paired, the order
-is 222, then 333, then 444.
+(reference NFT `000643b0 + base`, user token `<label prefix> + base`). If several are paired, the row is
+stored with the first of them in the order 222, 333, 444, **and the datum has to satisfy the requirements of every
+paired label** (see below).
 
 Two remarks in the CIP's "Constraints and conditions" shape this rule. The user token does **not** have to
 be minted in the same transaction as the reference NFT, so looking inside one transaction is a heuristic,
 not the CIP's definition (hence the inference below). And there **may be several user tokens for one
 reference NFT**, for example a 222 and a 333 with the same name, so one metadata record can legitimately
-serve more than one token type. The table holds one label per row, so when several are paired the order
-above is a tie-break forced by the model: it does not claim that one of them is the "right" label.
+serve more than one token type. The table holds one label per row, so the stored label is the first in the
+order above, a choice forced by the model that does not claim one of them is the "right" label; what is checked
+is not limited to it.
 
 The earlier rule took the prefixes of every asset in the transaction, whatever its policy or name, with
 222 winning. A transaction that also contained any unrelated 222 NFT then labelled every reference
@@ -118,11 +120,17 @@ NFT. It was not done. *Trade-offs and known gaps:*
 
 - The inference can be wrong for a datum that mixes both kinds of fields. How many reference NFTs have no
   paired token, and how many the guess would label differently from their real user token, is not measured.
-- With several paired user tokens (USDCx/USDrf LP has both a 222 and a 333 on-chain), one label has to be
-  chosen although the CIP allows all of them. 222 wins because that is the order the code already had, and
-  it only matters for the required-field check (decision 3: a description is required with 333, not with
-  222). It does not change what the API serves for a fungible subject. Recording every matching label
-  instead of one would remove the tie-break; that is not done.
+- With several paired user tokens (USDCx/USDrf LP has both a 222 and a 333 on-chain), the row keeps one label,
+  but the datum is validated against **all** of them (#1238): it needs a `name`, a `description` if 333 is among
+  them, and an `image` with an allowed scheme if 222 or 444 is, and the `logo` check of 333. A datum that fails any
+  of them is not indexed, with a WARN that lists the labels and says which one it fails, because the metadata
+  is shared by every token of that reference NFT and each of them is a token of its class. Before, only the
+  first label was checked, so a datum without a description was indexed although it is also a fungible token,
+  and one without an image was dropped although it was valid as a fungible token. *Cost:* some tokens that were
+  indexed are now dropped (valid for one label and not for another). A multi-label token is logged at INFO when
+  it is indexed, and counted in `yaci.store.assets.cip68.datums.multi_label{labels,outcome}` (decision 9).
+  *Considered and not done:* recording every label (a `labels` column or a row per label): nothing reads it
+  today, and a row per label would duplicate the datum; it can be added later with a resync.
 - The opposite error (an NFT stored as 333) was possible before and is not measured.
 - Rows already stored keep their label until their datum is processed again.
 
@@ -328,6 +336,8 @@ be kept with replacement characters.
 `yaci.store.assets.cip68.datums.indexed` (tag `label`: 222, 333, 444),
 `yaci.store.assets.cip68.datums.skipped` (tags `label` and `reason`: `no_name`, `no_description`, `no_image`,
 `bad_image_scheme`, `bad_logo_scheme`, or `parse_failure` and `invalid_version`, both with label `unknown`) and
+`yaci.store.assets.cip68.datums.multi_label` (tags `labels`, for example `222+333`, and `outcome`: `indexed` or
+`skipped`; reference NFTs paired with user tokens of several labels) and
 `yaci.store.assets.cip68.properties.dropped` (tag `kind`: `constructor`, `key_unsupported`, `key_collision`). The
 tags have a small fixed set of values. They are registered with the CIP-68 processor and need no property; without a
 `MeterRegistry` bean they go to a private registry and nothing is exposed. The WARN lines stay as the per-token
@@ -368,9 +378,9 @@ fields of one response can come from two sources, and `show_cips_details` is the
 
 Decisions that are still open:
 
-- One label per row, although the CIP allows several user tokens for one reference NFT: is the 222, 333, 444
-  tie-break enough, or should the table record every matching label? It stays as it is until the number of such
-  tokens is known (see below).
+- One label per row, although the CIP allows several user tokens for one reference NFT: should the table record
+  every matching label (a consumer that asks for the NFTs or the fungible tokens would need it)? Nothing reads the
+  label today; the number of such tokens (below) will show whether it matters.
 - Should the CIP fix its 444 definition (`3 / 4`), which contradicts its changelog and mainnet, and say whether a
   consumer should ignore a datum whose version it does not know? The module ignores it and warns; neither point is
   raised in the CIPs repository yet.
@@ -391,7 +401,7 @@ question until then):
 ## References
 
 - #1159, #1185, #1202, #1208, #1209, #1233: parser hardening, version 4, constructor values (stored in #1209, dropped with a WARN in #1233)
-- #1221, #1222, #1225, #1226, #1227, #1228, #1231, #1232, #1233, #1234, #1235, #1236, #1237, PR #1220: required fields per label, label pairing and
+- #1221, #1222, #1225, #1226, #1227, #1228, #1231, #1232, #1233, #1234, #1235, #1236, #1237, #1238, PR #1220: required fields per label, label pairing and
   inference, text and hex, size cap, skip warnings, strict image, several reference NFTs in one output, the layout by structure
 - cardano-foundation/cf-token-metadata-registry#104: backport of these fixes
 - `Cip68Processor`, `Cip68DatumParser`, `Cip68TokenService`, `TokenQueryService`
