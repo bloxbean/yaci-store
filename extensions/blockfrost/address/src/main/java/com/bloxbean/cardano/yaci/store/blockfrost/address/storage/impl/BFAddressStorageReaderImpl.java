@@ -46,6 +46,11 @@ import static com.bloxbean.cardano.yaci.store.common.Constants.QUERY_TIMEOUT_SEC
 public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
     private final DSLContext dsl;
 
+    @Override
+    public boolean addressExists(String address) {
+        return dsl.fetchExists(ADDRESS_UTXO, addressCondition(address, ADDRESS_UTXO.OWNER_ADDR, ADDRESS_UTXO.OWNER_ADDR_FULL));
+    }
+
     /**
      * Find transaction hashes for an address with pagination and ordering.
      *

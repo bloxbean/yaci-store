@@ -4,6 +4,7 @@ import com.bloxbean.cardano.client.address.Address;
 import com.bloxbean.cardano.client.address.AddressProvider;
 import com.bloxbean.cardano.client.address.AddressType;
 import com.bloxbean.cardano.client.address.CredentialType;
+import com.bloxbean.cardano.client.address.util.AddressUtil;
 import com.bloxbean.cardano.yaci.store.account.AccountStoreProperties;
 import com.bloxbean.cardano.yaci.store.blockfrost.address.dto.BFAddressDTO;
 import com.bloxbean.cardano.yaci.store.blockfrost.address.dto.BFAddressTotalDTO;
@@ -18,7 +19,9 @@ import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorageReader;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigInteger;
 import java.util.Collections;
@@ -46,6 +49,7 @@ public class BFAddressService {
     }
 
     public BFAddressDTO getAddressInfo(String address) {
+        requireAddress(address);
         Map<String, BigInteger> amountMap = isCurrentBalanceEnabled()
                 ? bfAddressStorageReader.findCurrentAddressBalanceByUnit(address)
                 : bfAddressStorageReader.findUnspentAddressBalanceByUnit(address);
@@ -94,6 +98,7 @@ public class BFAddressService {
     }
 
     public List<BFAddressUtxoDTO> getAddressUtxos(@NonNull String address, int page, int count, Order order) {
+        requireAddress(address);
         // Served by the blockfrost reader (not the utxo store) so UTXOs come back in Blockfrost-compatible
         // on-chain order (slot, tx_index, output_index); the utxo store cannot reference transaction.tx_index.
         List<AddressUtxo> addressUtxos = bfAddressStorageReader.findAddressUtxos(address, page, count, order);
@@ -104,6 +109,7 @@ public class BFAddressService {
     }
 
     public List<BFAddressUtxoDTO> getAddressUtxosForAsset(@NonNull String address, @NonNull String asset, int page, int count, Order order) {
+        requireAddress(address);
         // See getAddressUtxos: routed through the blockfrost reader for Blockfrost-compatible on-chain ordering.
         List<AddressUtxo> addressUtxos = bfAddressStorageReader.findAddressUtxosForAsset(address, asset, page, count, order);
 
@@ -114,14 +120,17 @@ public class BFAddressService {
 
     public List<BFAddressTransactionDTO> getAddressTransactions(@NonNull String address, int page, int count, Order order,
                                                                 String from, String to) {
+        requireAddress(address);
         return bfAddressStorageReader.findAddressTransactions(address, page, count, order, from, to);
     }
 
     public List<String> getAddressTxs(@NonNull String address, int page, int count, Order order) {
+        requireAddress(address);
         return bfAddressStorageReader.findTxHashesByAddress(address, page, count, order);
     }
 
     public BFAddressTotalDTO getAddressTotal(@NonNull String address) {
+        requireAddress(address);
         return bfAddressStorageReader.getAddressTotal(address)
                 .map(total -> toAddressTotalDto(address, total))
                 .orElseGet(() -> emptyAddressTotal(address));
@@ -146,6 +155,25 @@ public class BFAddressService {
                 .sentSum(Collections.emptyList())
                 .txCount(0L)
                 .build();
+    }
+
+    private void requireAddress(String address) {
+        if (!isValidAddress(address)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Invalid address for this network or malformed address format.");
+        }
+        if (!bfAddressStorageReader.addressExists(address)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "The requested component has not been found.");
+        }
+    }
+
+    // AddressUtil.isValidAddress lets Base58/Bech32 decoding exceptions escape for malformed input.
+    private boolean isValidAddress(String address) {
+        try {
+            return AddressUtil.isValidAddress(address);
+        } catch (RuntimeException e) {
+            return false;
+        }
     }
 
     private boolean isCurrentBalanceEnabled() {
