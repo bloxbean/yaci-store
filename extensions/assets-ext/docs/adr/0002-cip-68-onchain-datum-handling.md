@@ -24,10 +24,12 @@ The module therefore has to decide, field by field, when to be strict (drop the 
 and when to be lenient (keep it, and say so). This ADR records those decisions. It does not restate
 CIP-68. CIP-26 is covered in [ADR 0001](0001-cip-26-offchain-registry-ingestion.md).
 
-The general rule the module follows: **be strict about safety, lenient about content.** A value that
-could break an insert, exhaust the stack or wrap a number is rejected or dropped. A value that is
-merely unusual or not spec-compliant is stored as written, because dropping it hides a real token and
-a stored value can be filtered later while a dropped one needs a resync to recover.
+The general rule the module follows: **be strict about safety and about what the CIP requires, lenient
+about the rest.** A value that could break an insert, exhaust the stack or wrap a number is rejected or
+dropped. A datum that lacks a field the CIP requires for its label, or whose `image` is not a URI the
+CIP allows, is not indexed, because wallets and explorers follow the CIP and could not show it either.
+A value that is merely unusual, in a field the CIP does not constrain, is stored as written, because a
+stored value can be filtered later while a dropped one needs a resync to recover.
 
 ## Decisions
 
@@ -114,12 +116,12 @@ What the label does and does not decide: it chooses the required fields (decisio
 row belongs to (the API reads fungible tokens only, see decision 10). It does **not** change what the
 API returns for a fungible subject, which reads the latest row of the reference NFT whatever its label.
 
-### 3. Required fields per label: strict for fungible tokens, lenient for NFTs and RFTs (#1221)
+### 3. Required fields per label (#1221)
 
 | Label | Required to index | Spec |
 |---|---|---|
 | 333 FT | `name` and `description` | both required |
-| 222 NFT, 444 RFT | `name` | `description` is optional, `image` is required |
+| 222 NFT, 444 RFT | `name` and `image` (decision 4) | `description` is optional, `image` is required |
 
 The processor derives the label first and then validates, because the check depends on it.
 
@@ -130,22 +132,35 @@ CIP-26 supplies it. How many such tokens exist on-chain has not been measured. N
 without a description, which the spec allows. Before #1221 the same rule was applied to every label and
 valid NFTs were dropped silently; on mainnet at least 203 datums were affected (a lower bound).
 
-### 4. `image` is lenient: index, warn, do not validate
+### 4. `image` is required for 222 and 444, with a URI scheme the CIP allows: strict, drop and warn
 
-CIP-68 requires `image` for 222 and 444, and lists `https`, `ipfs`, `ar` and `data` as URI schemes.
-The module follows neither strictly:
+CIP-68 requires `image` for 222 and 444, and says its URI scheme must be one of `https`, `ipfs`, `ar` or
+`data`. The module enforces both:
 
-- A 222 or 444 token with no image, or an empty one, **is indexed, with a WARN** naming the policy and
-  asset. A 333 token is not checked, it uses `logo`.
-- `image` and `logo` are stored **as written**. The URI scheme is never validated, so `iagon://` URIs
-  and free text are kept.
+- A 222 or 444 token with no image, or an empty or blank one, **is not indexed**, and a WARN names the
+  policy, the asset name, the label and the reason ("it has no image").
+- A 222 or 444 token whose image is not a URI with one of those four schemes (the scheme is compared
+  without regard to case, and something must follow the colon) **is not indexed**, and the WARN gives the
+  reason and the value (cut at 60 characters). That covers `iagon://` and free text.
+- The check runs on the joined value of a chunked image (decision 5), after the size cap (decision 6).
+- A 333 token has no `image`, and its optional `logo` is **not checked**: it is stored as written.
+  The CIP gives `logo` the same URI schemes; enforcing them would drop a whole fungible token for an
+  optional field, and no such case has been measured.
 
-*Considered and rejected:* enforcing the spec. On mainnet that would remove 12 genuine NFTs whose datum
-has `mediaType: image/svg+xml` and an empty `image` (the "DID registration" sensor tokens) and 9 more
-whose image is not a spec URI (6 `iagon://` wine NFTs and 3 free-text values), for no benefit to any
-consumer: NFT images are not exposed by the API today. A proposal to add `iagon` to the CIP, and to make `image` optional, is open as
-cardano-foundation/CIPs#1288 (draft); until it is settled `iagon://` is accepted like any other value. *Trade-off:* the table can hold images that
-no client can open, and nothing is validated.
+*Why:* clients that follow the CIP cannot discover or show a token whose image they cannot read, so
+indexing it would only produce rows no consumer can use. If a project wants its scheme (Iagon's
+`iagon://`) accepted, the way is the CIP process; a proposal to add `iagon` and to make `image` optional
+for some uses is open as cardano-foundation/CIPs#1288 (draft), and when the CIP changes, so does this rule.
+
+*Cost:* on an earlier mainnet index, this rule would remove 12 NFTs whose datum has
+`mediaType: image/svg+xml` and an empty `image` (the "DID registration" sensor tokens) and 9 more whose image
+is not a spec URI (6 `iagon://` wine NFTs and 3 free-text values). They are real tokens, no longer in the
+table, and a dropped token needs a resync to come back if the rule is relaxed. The count was taken before
+the rule existed and has not been re-measured with it.
+
+*Considered and tried, then reversed:* indexing such tokens with a WARN and storing the image as written.
+That kept every token, but the table then held images no client can open, and it left the module more
+permissive than the CIP it implements.
 
 ### 5. A logo or image given as a list of chunks is joined as bytes (#1226)
 
@@ -253,8 +268,9 @@ be kept with replacement characters.
 
 - A parse failure is one WARN line with the exception and the datum hex, so the case can be reproduced,
   and the stack trace is logged at DEBUG only, because a sync can hit many.
-- A datum that parses but is skipped for a missing required field (no `name`, or no `description` on a
-  fungible token) is one WARN line with the policy, the asset name, the label and the reason.
+- A datum that parses but is skipped because it breaks a requirement of its label (no `name`, no
+  `description` on a fungible token, no `image` or an image with a scheme the CIP does not allow on a 222 or
+  444 token) is one WARN line with the policy, the asset name, the label and the reason.
 - An output with a flat datum and several reference NFTs is one WARN line with the number found and the one
   that was indexed (decision 1).
 - A datum that does not have the CIP-68 shape at all (not a constructor, no metadata map, no integer
@@ -275,8 +291,10 @@ fields of one response can come from two sources, and `show_cips_details` is the
 
 ## Consequences
 
-- Every skip caused by a missing required field, a parse failure or an over-limit value leaves a WARN.
+- Every skip caused by a missing or invalid required field, a parse failure or an over-limit value leaves a WARN.
   Only a datum that does not have the CIP-68 shape is silent.
+- NFTs and RFTs without an acceptable image are not in the table at all; tokens that use another scheme
+  (`iagon://`) appear only after the CIP allows it and the index is rebuilt.
 - Because NFTs and RFTs are stored without being served, their rules can change later without a
   breaking API change.
 - Anything corrected in a rule needs a resync from before the affected slots to take effect on old rows.
@@ -294,6 +312,9 @@ fields of one response can come from two sources, and `show_cips_details` is the
   point is raised in the CIPs repository yet.
 - How good is the datum-shape inference for a reference NFT with no paired token, and is an exact
   cross-transaction lookup worth its cost? Not measured.
+- Whether the `logo` of a 333 token should get the same scheme check as `image`, and whether an invalid
+  one should drop the token or only the logo.
+- How many tokens the strict `image` rule removes in total, which a resync with it will show.
 - A size bound for `description`, which is still unbounded `TEXT`.
 - A counter or health indicator for skipped datums, instead of only log lines.
 - Whether a relabel or backfill job is wanted after a label fix, instead of a resync.
@@ -302,6 +323,6 @@ fields of one response can come from two sources, and `show_cips_details` is the
 
 - #1159, #1185, #1202, #1208, #1209: parser hardening, version 4, constructor values
 - #1221, #1222, #1225, #1226, #1227, #1228, #1231, #1232, PR #1220: required fields per label, label pairing and
-  inference, text and hex, size cap, skip warnings, lenient image, several reference NFTs in one output, the layout by structure
+  inference, text and hex, size cap, skip warnings, strict image, several reference NFTs in one output, the layout by structure
 - cardano-foundation/cf-token-metadata-registry#104: backport of these fixes
 - `Cip68Processor`, `Cip68DatumParser`, `Cip68TokenService`, `TokenQueryService`
