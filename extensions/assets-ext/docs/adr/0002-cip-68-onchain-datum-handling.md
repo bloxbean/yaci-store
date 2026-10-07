@@ -143,8 +143,8 @@ The module follows neither strictly:
 *Considered and rejected:* enforcing the spec. On mainnet that would remove 12 genuine NFTs whose datum
 has `mediaType: image/svg+xml` and an empty `image` (the "DID registration" sensor tokens) and 9 more
 whose image is not a spec URI (6 `iagon://` wine NFTs and 3 free-text values), for no benefit to any
-consumer: NFT images are not exposed by the API today. `iagon://` support is to be proposed to the CIP
-separately; until then it is accepted like any other value. *Trade-off:* the table can hold images that
+consumer: NFT images are not exposed by the API today. A proposal to add `iagon` to the CIP, and to make `image` optional, is open as
+cardano-foundation/CIPs#1288 (draft); until it is settled `iagon://` is accepted like any other value. *Trade-off:* the table can hold images that
 no client can open, and nothing is validated.
 
 ### 5. A logo or image given as a list of chunks is joined as bytes (#1226)
