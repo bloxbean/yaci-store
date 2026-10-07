@@ -42,8 +42,8 @@ public class Cip68TokenService {
      * image or logo value, including its URI scheme, is stored as written and never validated.
      *
      * @param parsed the parsed datum
-     * @param label  the user-token label the datum belongs to ({@link Cip68Constants#LABEL_NFT},
-     *               {@link Cip68Constants#LABEL_FT} or {@link Cip68Constants#LABEL_RFT})
+     * @param label  the user-token label the datum belongs to: {@code 222} (NFT), {@code 333} (FT) or
+     *               {@code 444} (RFT)
      * @return true if the metadata has the fields CIP-68 requires for that label
      */
     public boolean isValidMetadata(ParsedCip68Datum parsed, int label) {
