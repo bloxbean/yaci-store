@@ -209,9 +209,11 @@ version 1, 2 or 3.
 
 - `HOSKY 10K NFT 0002` (version 100) is a test token. Its first datum was replaced about 44,700 slots later by a
   valid version 1 datum, and the token was burned, so rejecting the first datum loses nothing.
-- `Greenland Reserve Coin` (version 0) is **a live fungible token that is no longer indexed**: its reference NFT has
+- `Greenland Reserve Coin` (version 0) is **a live fungible token that is no longer indexed on the CIP-68 side**: its reference NFT has
   supply 1, the user token has a supply of 3,000,000,000,000 units, and both of its datums declare version 0. It was
-  updated twice and still declares 0, and nothing has touched it since. This was weighed and accepted.
+  updated twice and still declares 0, and nothing has touched it since. It is also in the CIP-26 registry, so the
+  API still serves it from there, with the registry's name (`GNRC`, not `Greenland Reserve Coin`) and its logo. This
+  was weighed and accepted.
 
 *Considered and rejected:* keeping any version and reading every one except 4 as a flat map. That would keep
 Greenland Reserve Coin and needs no change when the CIP adds a version, but it indexes data the module cannot
