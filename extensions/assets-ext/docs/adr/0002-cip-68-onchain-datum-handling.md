@@ -223,7 +223,13 @@ temporary workaround until the decoder stops recursing (cardano-client-lib#681).
 The `logo` and `image` limit is the one the CIP-26 logo already has; the CIP-68 spec gives none. It cannot
 trigger on current data: the ledger limits a transaction to `maxTxSize` (16,384 bytes at epoch 660), so a
 datum cannot reach 64 KiB. It is there so the module does not rely on that parameter staying where it is.
-`description` is `TEXT` and still has no size bound.
+**`description` has no bound of its own, on purpose.** The CIP defines it as `bounded_bytes` and gives no maximum
+length (`bounded_bytes` is how Plutus Data writes a byte string, chunked in pieces of at most 64 bytes; a longer
+description is a chunked byte string and the decoder joins the chunks, as it does for FLDT). The only limit is the
+one on the whole datum: it is inline in a transaction, so `maxTxSize` (16,384 bytes at epoch 660) caps it. It is
+stored as `TEXT`, which holds that without risk, so a limit of our own would invent a rule the CIP does not have.
+(CIP-26 limits `description` to 500 characters; CIP-68 has no equivalent.) If `maxTxSize` is raised a long
+description still fits `TEXT`.
 
 The other bounds did not trigger on a full mainnet or preprod sync.
 
@@ -384,7 +390,6 @@ Decisions that are still open:
 - Should the CIP fix its 444 definition (`3 / 4`), which contradicts its changelog and mainnet, and say whether a
   consumer should ignore a datum whose version it does not know? The module ignores it and warns; neither point is
   raised in the CIPs repository yet.
-- Whether the `description` should get a size bound; it is still unbounded `TEXT`.
 
 Not measured yet (a full mainnet index with the current rules will answer them; none of them is a design
 question until then):
