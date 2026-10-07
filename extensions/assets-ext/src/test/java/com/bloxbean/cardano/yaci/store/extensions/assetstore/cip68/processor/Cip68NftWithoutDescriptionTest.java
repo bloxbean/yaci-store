@@ -109,13 +109,14 @@ class Cip68NftWithoutDescriptionTest {
     }
 
     @Test
-    void stillSkipsReferenceNftWithoutCoMintedUserToken() {
-        // No co-minted user token: the label falls back to 333, which requires a description
+    void savesAnNftShapedReferenceNftWithoutCoMintedUserTokenAsNft() {
+        // No user token in the transaction: the label is inferred from the datum. This one has an image and
+        // no ticker or logo, so it is an NFT, and an NFT does not need a description (before: 333, dropped)
         String datum = NFT_DATUMS_WITHOUT_DESCRIPTION.keySet().iterator().next();
 
         processor.processTransaction(event(datum, null));
 
-        verify(repository, never()).saveAll(any());
+        assertThat(savedRow().getLabel()).isEqualTo(Cip68Constants.LABEL_NFT);
     }
 
     private Cip68Metadata savedRow() {
