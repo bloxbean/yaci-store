@@ -343,20 +343,30 @@ fields of one response can come from two sources, and `show_cips_details` is the
 
 ## Open questions
 
-- One label per row, although the CIP allows several user tokens for one reference NFT: is the 222, 333,
-  444 tie-break enough, or should the table record every matching label? How common the case is has not
-  been measured.
-- How often does an output hold several reference NFTs, and does any real nested datum exist on-chain?
-  The nested case is covered by synthetic datums only. For a flat datum with several reference NFTs only the
-  first is indexed; is that the right choice?
+Decisions that are still open:
+
+- One label per row, although the CIP allows several user tokens for one reference NFT: is the 222, 333, 444
+  tie-break enough, or should the table record every matching label? It stays as it is until the number of such
+  tokens is known (see below).
+- For a flat datum with several reference NFTs only the first is indexed. Is that the right choice, or should none
+  be, or all?
 - Should the CIP say what a consumer does with a version it does not define, and fix its 444 definition (`3 / 4`),
   which contradicts its changelog and mainnet? The module reads such datums by their structure and warns; neither
   point is raised in the CIPs repository yet.
-- How good is the datum-shape inference for a reference NFT with no paired token, and is an exact
-  cross-transaction lookup worth its cost? Not measured.
-- How many tokens the strict `image` and `logo` rules remove in total, which a resync with them will show.
-- A size bound for `description`, which is still unbounded `TEXT`.
-- A counter or health indicator for skipped datums, instead of only log lines.
+- Whether the `description` should get a size bound; it is still unbounded `TEXT`.
+- Whether skipped datums should be counted and exposed (a counter or a health indicator) instead of only logged.
+
+Not measured yet (a full mainnet index with the current rules will answer them; none of them is a design
+question until then):
+
+- How many tokens the strict `image` and `logo` rules remove in total, and how many 333 tokens have a logo that
+  is not a URI (a raw base64 string, for example).
+- How many outputs hold several reference NFTs, and whether any real nested datum exists on-chain. The nested case
+  is covered by synthetic datums only.
+- How many tokens have several user tokens for one reference NFT.
+- How good the datum-shape inference is for a reference NFT with no paired token, and whether an exact
+  cross-transaction lookup is worth its cost.
+- How many of the 203 `contractData` NFT datums survive the `image` rule.
 
 ## References
 

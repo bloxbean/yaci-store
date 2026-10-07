@@ -132,9 +132,12 @@ CF registry's V1 API cannot be reproduced from it.
 
 ## Open questions
 
-- What happens if the registry's history is rewritten (a force push), so that the stored commit no longer
-  exists? The job falls back to a full sync when HEAD cannot be determined, but this case has not been
-  checked.
+- **Known gap: a rewritten registry history is not handled.** Read from the code, not run: each sync pulls with rebase
+  and, if that fails, clones again. An incremental sync then diffs the stored commit against HEAD. If the stored
+  commit no longer exists (a force push, then a fresh clone), the diff is empty, a WARN says the hashes could not
+  be resolved, and, because nothing failed, the stored commit is advanced to HEAD. The changes made by the rewrite
+  are then never applied until a full sync. The obvious fix is to fall back to a full sync (which also removes the
+  subjects that are gone) when either commit does not resolve. It is not done.
 - A known registry mistake (such as the USDM entry above) cannot be fixed on our side without
   overriding the registry; today the answer is to fix it upstream.
 - Whether a failed validation should be counted and exposed (for example through the health
