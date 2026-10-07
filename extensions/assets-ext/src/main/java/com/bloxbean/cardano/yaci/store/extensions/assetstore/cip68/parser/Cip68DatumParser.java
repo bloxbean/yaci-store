@@ -43,15 +43,14 @@ public class Cip68DatumParser {
 
     /** CIP-68 version 4 wraps the metadata in a CIP-25 style map: {"721": {policy_id: {asset_name: metadata}}}. */
     private static final BytesPlutusData NESTED_MAP_KEY = BytesPlutusData.of("721");
-    private static final long NESTED_MAP_MIN_VERSION = 4;
-
     /**
-     * The datum versions CIP-68 defines. The same set applies to every label: the 444 definition in the CIP
-     * says 3 and 4, but it contradicts the changelog (version 2 added the RFT) and every RFT on mainnet uses 1.
-     * A datum with another version is not indexed. Update the upper bound when the CIP adds a version.
+     * The datum versions CIP-68 defines. They are informational: how a datum is read does not depend on its
+     * version but on its structure (see {@link #isNested}), as the CIP's retrieval steps say. A datum with another
+     * version is still read and indexed, and a warning is logged so a new version is noticed. Update the upper bound
+     * when the CIP adds a version.
      */
-    static final long MIN_SUPPORTED_VERSION = 1;
-    static final long MAX_SUPPORTED_VERSION = 4;
+    static final long MIN_DEFINED_VERSION = 1;
+    static final long MAX_DEFINED_VERSION = 4;
 
     /** Set of keys we promote to typed columns; everything else goes into the JSONB additional_properties. */
     private static final Set<String> TYPED_KEYS = Set.of(
@@ -79,7 +78,7 @@ public class Cip68DatumParser {
 
         try {
             return extractDatumProperties(inlineDatum)
-                    .filter(parts -> isSupportedVersion(parts, referenceNft))
+                    .map(parts -> warnIfVersionNotDefined(parts, referenceNft))
                     .flatMap(parts -> resolveMetadata(parts, referenceNft)
                             .map(metadata -> buildParsedDatum(metadata, parts.version())));
         } catch (StackOverflowError e) {
@@ -156,33 +155,38 @@ public class Cip68DatumParser {
     }
 
     /**
-     * A datum whose version is not one CIP-68 defines (1 to 4) is rejected with a warning that names the token,
-     * since the module cannot know how to read it. Not a parse failure: the datum decoded fine.
+     * A datum whose version is not one CIP-68 defines (1 to 4) is read like any other, by its structure, and a
+     * warning names the token. Not a failure: the datum decoded fine, and on mainnet the two such datums are plain
+     * flat metadata maps. The version is stored as written.
      */
-    private static boolean isSupportedVersion(DatumParts parts, @Nullable AssetType referenceNft) {
+    private static DatumParts warnIfVersionNotDefined(DatumParts parts, @Nullable AssetType referenceNft) {
         long version = parts.version();
-        if (version >= MIN_SUPPORTED_VERSION && version <= MAX_SUPPORTED_VERSION) {
-            return true;
+        if (version >= MIN_DEFINED_VERSION && version <= MAX_DEFINED_VERSION) {
+            return parts;
         }
         if (referenceNft != null) {
-            log.warn("Ignoring CIP-68 datum of {}/{} with unsupported version {} (CIP-68 defines {} to {})",
-                    referenceNft.policyId(), referenceNft.assetName(), version, MIN_SUPPORTED_VERSION, MAX_SUPPORTED_VERSION);
+            log.warn("CIP-68 datum of {}/{} has version {}, which CIP-68 does not define ({} to {}); reading it by its structure",
+                    referenceNft.policyId(), referenceNft.assetName(), version, MIN_DEFINED_VERSION, MAX_DEFINED_VERSION);
         } else {
-            log.warn("Ignoring CIP-68 datum with unsupported version {} (CIP-68 defines {} to {})",
-                    version, MIN_SUPPORTED_VERSION, MAX_SUPPORTED_VERSION);
+            log.warn("CIP-68 datum has version {}, which CIP-68 does not define ({} to {}); reading it by its structure",
+                    version, MIN_DEFINED_VERSION, MAX_DEFINED_VERSION);
         }
-        return false;
+        return parts;
     }
 
-    /** Version 4 or above, with the {@code "721"} key: the metadata of several assets can be in this one datum. */
+    /**
+     * Whether the metadata map is the nested format: it has the {@code "721"} key, whose value is a map. This is the
+     * test in step 4 of the CIP's retrieval steps ("direct metadata (map without "721" key) or nested map format
+     * (map with "721" key)"), and it does not depend on the version. A flat map with an additional property named
+     * {@code "721"} that holds a map would be misread; none exists on mainnet.
+     */
     private static boolean isNested(DatumParts parts) {
-        return parts.version() >= NESTED_MAP_MIN_VERSION
-                && parts.properties().getMap().get(NESTED_MAP_KEY) instanceof MapPlutusData;
+        return parts.properties().getMap().get(NESTED_MAP_KEY) instanceof MapPlutusData;
     }
 
     /**
      * Whether the datum is in the nested format, which can carry the metadata of several reference NFTs.
-     * A flat datum (versions 1 to 3, or version 4 without {@code "721"}) describes one token. Anything that is
+     * A flat datum (a map without {@code "721"}) describes one token. Anything that is
      * not a CIP-68 datum, or cannot be decoded, is not nested.
      */
     public boolean hasNestedMetadata(@Nullable String inlineDatum) {
@@ -190,10 +194,7 @@ public class Cip68DatumParser {
             return false;
         }
         try {
-            return extractDatumProperties(inlineDatum)
-                    .filter(parts -> parts.version() >= MIN_SUPPORTED_VERSION && parts.version() <= MAX_SUPPORTED_VERSION)
-                    .map(Cip68DatumParser::isNested)
-                    .orElse(false);
+            return extractDatumProperties(inlineDatum).map(Cip68DatumParser::isNested).orElse(false);
         } catch (Exception | StackOverflowError e) {
             return false;
         }
