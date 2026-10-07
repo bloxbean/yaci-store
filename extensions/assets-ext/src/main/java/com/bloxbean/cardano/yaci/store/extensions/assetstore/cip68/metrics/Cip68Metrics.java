@@ -13,8 +13,9 @@ import org.springframework.stereotype.Component;
  * <ul>
  *   <li>{@value #INDEXED}: datums stored, tagged {@code label} (222, 333, 444).</li>
  *   <li>{@value #SKIPPED}: datums not stored, tagged {@code label} and {@code reason} (a
- *       {@link DatumRejection.Reason}, or {@code parse_failure} for a datum that could not be decoded; the label is
- *       {@code unknown} then).</li>
+ *       {@link DatumRejection.Reason}, {@code parse_failure} for a datum that could not be decoded, or
+ *       {@code invalid_version} for a version CIP-68 does not define; the label is {@code unknown} for these two,
+ *       since it is derived later).</li>
  *   <li>{@value #DROPPED_PROPERTIES}: properties left out of a stored datum, tagged {@code kind}
  *       ({@code constructor}, {@code key_unsupported}, {@code key_collision}).</li>
  * </ul>
@@ -29,6 +30,7 @@ public class Cip68Metrics {
     public static final String DROPPED_PROPERTIES = "yaci.store.assets.cip68.properties.dropped";
 
     public static final String PARSE_FAILURE = "parse_failure";
+    public static final String INVALID_VERSION = "invalid_version";
 
     private final MeterRegistry registry;
 
@@ -56,6 +58,10 @@ public class Cip68Metrics {
 
     public void parseFailure() {
         registry.counter(SKIPPED, "label", "unknown", "reason", PARSE_FAILURE).increment();
+    }
+
+    public void invalidVersion() {
+        registry.counter(SKIPPED, "label", "unknown", "reason", INVALID_VERSION).increment();
     }
 
     public void propertyDropped(String kind) {

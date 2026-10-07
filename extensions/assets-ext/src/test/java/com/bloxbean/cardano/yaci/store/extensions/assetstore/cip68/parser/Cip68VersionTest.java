@@ -12,6 +12,9 @@ import com.bloxbean.cardano.client.plutus.spec.MapPlutusData;
 import com.bloxbean.cardano.client.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.AssetType;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.ParsedCip68Datum;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.metrics.Cip68Metrics;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,10 +27,10 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * CIP-68 defines datum versions 1 to 4, but how a datum is read does not depend on its version: the CIP's retrieval
- * steps tell direct from nested metadata by the "721" key. A datum with another version is read and indexed like any
- * other, by its structure, and one warning names the token. The two real datums are the only ones on mainnet that were
- * not version 1, 2 or 3, and both are plain flat metadata maps.
+ * CIP-68 defines datum versions 1 to 4. A datum with another version is not indexed: one warning names the token and
+ * the version, and the datum is counted as skipped with the reason {@code invalid_version}. For versions 1 to 4 the
+ * layout still comes from the structure, as the CIP's retrieval steps say: a "721" key means nested metadata. The two
+ * real datums are the only ones on mainnet that were not version 1, 2 or 3, and both are plain flat metadata maps.
  */
 class Cip68VersionTest {
 
@@ -54,12 +57,14 @@ class Cip68VersionTest {
                     + "37ffbdfdbb07d3d34bff54671c00935128da06966bc033810103ffff";
 
     private Cip68DatumParser parser;
+    private MeterRegistry registry;
     private ListAppender<ILoggingEvent> logs;
     private Logger parserLogger;
 
     @BeforeEach
     void setUp() {
-        parser = new Cip68DatumParser();
+        registry = new SimpleMeterRegistry();
+        parser = new Cip68DatumParser(new Cip68Metrics(registry));
         parserLogger = (Logger) LoggerFactory.getLogger(Cip68DatumParser.class);
         logs = new ListAppender<>();
         logs.start();
@@ -83,60 +88,60 @@ class Cip68VersionTest {
     }
 
     @Test
-    void indexesVersionsTheCipDoesNotDefineWithOneWarningEach() throws Exception {
+    void rejectsVersionsTheCipDoesNotDefineWithOneWarningEach() throws Exception {
         for (long version : new long[]{0, 5, 100, -1, Long.MAX_VALUE}) {
             logs.list.clear();
 
-            Optional<ParsedCip68Datum> parsed = parser.parse(datum(version), REF);
+            assertThat(parser.parse(datum(version), REF)).as("version %d", version).isEmpty();
 
-            assertThat(parsed).as("version %d", version).isPresent();
-            assertThat(parsed.get().version()).as("version %d", version).isEqualTo(version);
-            assertThat(parsed.get().name()).isEqualTo("Token");
             assertThat(warnings()).as("version %d", version).singleElement().satisfies(w -> assertThat(w)
-                    .contains("version " + version).contains(POLICY).contains(REF.assetName())
-                    .contains("does not define (1 to 4)").contains("by its structure"));
+                    .contains("Skipping CIP-68 datum").contains("version " + version).contains(POLICY).contains(REF.assetName())
+                    .contains("is not one CIP-68 defines (1 to 4)"));
         }
+        assertThat(invalidVersions()).isEqualTo(5);
     }
 
     @Test
     void namesNoTokenWhenThereIsNoReferenceNft() throws Exception {
-        assertThat(parser.parse(datum(7))).isPresent();
+        assertThat(parser.parse(datum(7))).isEmpty();
 
         assertThat(warnings()).singleElement().satisfies(w -> assertThat(w).contains("version 7"));
     }
 
     @Test
-    void readsTheRealMainnetVersion100DatumByItsStructure() {
+    void doesNotCountTheVersionsItAccepts() throws Exception {
+        for (long version = 1; version <= 4; version++) {
+            parser.parse(datum(version), REF);
+        }
+
+        assertThat(invalidVersions()).isZero();
+    }
+
+    @Test
+    void rejectsTheRealMainnetVersion100Datum() {
+        // a test mint, replaced about 44,700 slots later by a valid version 1 datum and then burned
         AssetType ref = new AssetType(HOSKY_VERSION_100_POLICY, HOSKY_VERSION_100_ASSET);
 
-        ParsedCip68Datum parsed = parser.parse(HOSKY_VERSION_100_DATUM, ref).orElseThrow();
+        assertThat(parser.parse(HOSKY_VERSION_100_DATUM, ref)).isEmpty();
 
-        assertThat(parsed.version()).isEqualTo(100L);
-        assertThat(parsed.name()).isEqualTo("HOSKY 10K NFT 0002");
-        assertThat(parsed.description()).isEqualTo("This is a reference token for CIP-68.");
-        assertThat(parsed.image()).isEqualTo("ipfs://QmfRvX7ZA3FsCjoXWYfBXGSHFW6ARYaaux6GT3WtqLEX6g");
         assertThat(warnings()).singleElement().satisfies(w -> assertThat(w)
                 .contains("version 100").contains(HOSKY_VERSION_100_POLICY).contains(HOSKY_VERSION_100_ASSET));
     }
 
     @Test
-    void readsTheRealMainnetVersion0DatumByItsStructure() {
+    void rejectsTheRealMainnetVersion0Datum() {
+        // Greenland Reserve Coin, a live fungible token; it is served from CIP-26 instead
         AssetType ref = new AssetType(GNRC_VERSION_0_POLICY, GNRC_VERSION_0_ASSET);
 
-        ParsedCip68Datum parsed = parser.parse(GNRC_VERSION_0_DATUM, ref).orElseThrow();
+        assertThat(parser.parse(GNRC_VERSION_0_DATUM, ref)).isEmpty();
 
-        assertThat(parsed.version()).isZero();
-        assertThat(parsed.name()).isEqualTo("Greenland Reserve Coin");
-        assertThat(parsed.ticker()).isEqualTo("GNRC");
-        assertThat(parsed.decimals()).isEqualTo(6L);
-        assertThat(parsed.url()).isEqualTo("https://www.the-mint.com/compliance");
         assertThat(warnings()).singleElement().satisfies(w -> assertThat(w)
                 .contains("version 0").contains(GNRC_VERSION_0_POLICY));
     }
 
     @Test
-    void readsANestedDatumAsNestedWhateverItsVersion() throws Exception {
-        for (long version : new long[]{3, 5}) {
+    void readsANestedDatumAsNestedForTheVersionsItAccepts() throws Exception {
+        for (long version : new long[]{1, 3, 4}) {
             String hex = nestedDatum(version);
 
             assertThat(parser.hasNestedMetadata(hex)).as("version %d", version).isTrue();
@@ -145,10 +150,21 @@ class Cip68VersionTest {
     }
 
     @Test
+    void rejectsANestedDatumOfAVersionTheCipDoesNotDefine() throws Exception {
+        assertThat(parser.parse(nestedDatum(5), REF)).isEmpty();
+        assertThat(warnings()).singleElement().satisfies(w -> assertThat(w).contains("version 5"));
+    }
+
+    @Test
     void readsAVersion4DatumWithoutTheNestedKeyAsFlat() throws Exception {
         assertThat(parser.hasNestedMetadata(datum(4))).isFalse();
         assertThat(parser.parse(datum(4), REF).orElseThrow().name()).isEqualTo("Token");
         assertThat(warnings()).isEmpty();
+    }
+
+    private double invalidVersions() {
+        var counter = registry.find(Cip68Metrics.SKIPPED).tag("label", "unknown").tag("reason", "invalid_version").counter();
+        return counter == null ? 0 : counter.count();
     }
 
     private List<String> warnings() {

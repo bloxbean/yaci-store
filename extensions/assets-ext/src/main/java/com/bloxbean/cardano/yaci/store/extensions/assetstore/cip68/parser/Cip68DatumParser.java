@@ -90,7 +90,7 @@ public class Cip68DatumParser {
 
         try {
             return extractDatumProperties(inlineDatum)
-                    .map(parts -> warnIfVersionNotDefined(parts, referenceNft))
+                    .filter(parts -> isDefinedVersion(parts, referenceNft))
                     .flatMap(parts -> resolveMetadata(parts, referenceNft)
                             .map(metadata -> buildParsedDatum(metadata, parts.version(), referenceNft)));
         } catch (StackOverflowError e) {
@@ -169,23 +169,28 @@ public class Cip68DatumParser {
     }
 
     /**
-     * A datum whose version is not one CIP-68 defines (1 to 4) is read like any other, by its structure, and a
-     * warning names the token. Not a failure: the datum decoded fine, and on mainnet the two such datums are plain
-     * flat metadata maps. The version is stored as written.
+     * CIP-68 defines versions 1 to 4 (its CDDL lists them, and says a change that is not backwards-compatible adds a
+     * new version). A datum with another version is not indexed: the layout of a version the CIP does not define is
+     * a guess, and a new version is added here when the CIP adds it. One warning names the token and the version, and
+     * the datum is counted as skipped with the reason {@code invalid_version}. The layout of versions 1 to 4 still
+     * comes from the structure (the {@code "721"} key), not from the version.
+     *
+     * @return true if the version is one CIP-68 defines
      */
-    private static DatumParts warnIfVersionNotDefined(DatumParts parts, @Nullable AssetType referenceNft) {
+    private boolean isDefinedVersion(DatumParts parts, @Nullable AssetType referenceNft) {
         long version = parts.version();
         if (version >= MIN_DEFINED_VERSION && version <= MAX_DEFINED_VERSION) {
-            return parts;
+            return true;
         }
         if (referenceNft != null) {
-            log.warn("CIP-68 datum of {}/{} has version {}, which CIP-68 does not define ({} to {}); reading it by its structure",
+            log.warn("Skipping CIP-68 datum of {}/{}: version {} is not one CIP-68 defines ({} to {})",
                     referenceNft.policyId(), referenceNft.assetName(), version, MIN_DEFINED_VERSION, MAX_DEFINED_VERSION);
         } else {
-            log.warn("CIP-68 datum has version {}, which CIP-68 does not define ({} to {}); reading it by its structure",
+            log.warn("Skipping CIP-68 datum: version {} is not one CIP-68 defines ({} to {})",
                     version, MIN_DEFINED_VERSION, MAX_DEFINED_VERSION);
         }
-        return parts;
+        metrics.invalidVersion();
+        return false;
     }
 
     /**
