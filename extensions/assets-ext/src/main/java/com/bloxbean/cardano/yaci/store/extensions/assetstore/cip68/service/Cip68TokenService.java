@@ -31,13 +31,25 @@ public class Cip68TokenService {
     private final Cip68MetadataRepository metadataReferenceNftRepository;
 
     /**
-     * Validate a CIP-68 datum. Per spec, name and description are the required fields
-     * for any of the user-token labels (222 NFT / 333 FT / 444 RFT).
+     * Validate a CIP-68 datum against the fields its label requires.
+     * <p>
+     * CIP-68's metadata definitions require {@code name} for every user-token label, but
+     * {@code description} only for the 333 fungible token: for the 222 NFT and the 444 RFT it is
+     * declared as {@code ? description}, so a datum without one is valid and is kept.
+     * <p>
+     * The spec also requires {@code image} for 222 and 444. That is deliberately not enforced:
+     * some already-indexed NFTs have no image, and dropping them now would remove stored tokens.
      *
-     * @return true if the metadata satisfies CIP-68's required-field constraint
+     * @param parsed the parsed datum
+     * @param label  the user-token label the datum belongs to ({@link Cip68Constants#LABEL_NFT},
+     *               {@link Cip68Constants#LABEL_FT} or {@link Cip68Constants#LABEL_RFT})
+     * @return true if the metadata has the fields CIP-68 requires for that label
      */
-    public boolean isValidMetadata(ParsedCip68Datum parsed) {
-        return parsed.name() != null && parsed.description() != null;
+    public boolean isValidMetadata(ParsedCip68Datum parsed, int label) {
+        if (parsed.name() == null) {
+            return false;
+        }
+        return label != LABEL_FT || parsed.description() != null;
     }
 
     /**

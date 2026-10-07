@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.AssetType;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Constants;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.ParsedCip68Datum;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.Cip68Metadata;
@@ -188,22 +189,50 @@ class Cip68TokenServiceTest {
     @DisplayName("isValidMetadata")
     class IsValidMetadata {
 
-        @Test
-        void validWhenNameAndDescriptionPresent() {
-            ParsedCip68Datum m = new ParsedCip68Datum(null, "desc", null, "name", null, null, null, null, null, null);
-            assertThat(service.isValidMetadata(m)).isTrue();
+        private ParsedCip68Datum datum(String name, String description, String image) {
+            return new ParsedCip68Datum(null, description, null, name, null, null, 1L, image, null, null);
         }
 
         @Test
-        void invalidWhenNameMissing() {
-            ParsedCip68Datum m = new ParsedCip68Datum(null, "desc", null, null, null, null, null, null, null, null);
-            assertThat(service.isValidMetadata(m)).isFalse();
+        void fungibleTokenNeedsNameAndDescription() {
+            assertThat(service.isValidMetadata(datum("name", "desc", null), Cip68Constants.LABEL_FT)).isTrue();
         }
 
         @Test
-        void invalidWhenDescriptionMissing() {
-            ParsedCip68Datum m = new ParsedCip68Datum(null, null, null, "name", null, null, null, null, null, null);
-            assertThat(service.isValidMetadata(m)).isFalse();
+        void fungibleTokenWithoutDescriptionIsInvalid() {
+            // 333: CIP-68 declares `description : bounded_bytes`, without a `?`
+            assertThat(service.isValidMetadata(datum("name", null, null), Cip68Constants.LABEL_FT)).isFalse();
+        }
+
+        @Test
+        void nftWithoutDescriptionIsValid() {
+            // 222: CIP-68 declares `? description : bounded_bytes`
+            assertThat(service.isValidMetadata(datum("name", null, "ipfs://Qm"), Cip68Constants.LABEL_NFT)).isTrue();
+        }
+
+        @Test
+        void richFungibleTokenWithoutDescriptionIsValid() {
+            // 444: `? description : bounded_bytes` too
+            assertThat(service.isValidMetadata(datum("name", null, "ipfs://Qm"), Cip68Constants.LABEL_RFT)).isTrue();
+        }
+
+        @Test
+        void nftWithDescriptionIsStillValid() {
+            assertThat(service.isValidMetadata(datum("name", "desc", "ipfs://Qm"), Cip68Constants.LABEL_NFT)).isTrue();
+        }
+
+        @Test
+        void nftWithoutImageIsStillAccepted() {
+            // The spec requires `image` for 222/444, but already-indexed NFTs lack one; not enforced
+            assertThat(service.isValidMetadata(datum("name", "desc", null), Cip68Constants.LABEL_NFT)).isTrue();
+        }
+
+        @Test
+        void nameIsRequiredForEveryLabel() {
+            for (int label : new int[]{Cip68Constants.LABEL_NFT, Cip68Constants.LABEL_FT, Cip68Constants.LABEL_RFT}) {
+                assertThat(service.isValidMetadata(datum(null, "desc", "ipfs://Qm"), label))
+                        .as("label %d without name", label).isFalse();
+            }
         }
     }
 
