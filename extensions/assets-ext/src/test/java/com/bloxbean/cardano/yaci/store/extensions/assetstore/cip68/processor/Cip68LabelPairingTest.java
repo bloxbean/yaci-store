@@ -57,9 +57,9 @@ class Cip68LabelPairingTest {
                     + "464c44544777656273697465581868747470733a2f2f666c756964746f6b656e732e636f6d2f0101ff";
 
     // Real reference-NFT datum of Wrapped SILVER, policy 2ac6f76eb65b4aeb17e4acd333dbade3ea71172a32d69da43a639d42, asset name 000643b053494c564552
-    private static final String SILVER_POLICY = "2ac6f76eb65b4aeb17e4acd333dbade3ea71172a32d69da43a639d42";
-    private static final String SILVER_BASE = "53494c564552";
-    private static final String SILVER_DATUM =
+    static final String SILVER_POLICY = "2ac6f76eb65b4aeb17e4acd333dbade3ea71172a32d69da43a639d42";
+    static final String SILVER_BASE = "53494c564552";
+    static final String SILVER_DATUM =
             "d8799fab46737570706c790044747970655153656c665265706f727465644173736574456f776e6572581c0e20e50c17"
                     + "1c50d2bd604ba3ef24f6019233a6e79b84c7d4e11bab0f4561737365744953494c564552204f5a467469636b65724653"
                     + "494c564552446e616d654e577261707065642053494c5645524b6465736372697074696f6e5821577261707065642053"

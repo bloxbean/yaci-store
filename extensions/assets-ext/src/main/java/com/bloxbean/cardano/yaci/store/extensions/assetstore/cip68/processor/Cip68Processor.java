@@ -52,8 +52,9 @@ public class Cip68Processor {
                     AssetType refNftAssetType = AssetType.fromUnit(refNftAmt.getUnit());
                     cip68DatumParser.parse(output.getInlineDatum(), refNftAssetType).ifPresent(parsed -> {
                         // The label comes first: which fields a datum must have depends on it
-                        int label = deriveLabel(refNftAssetType, assetUnitsInTx);
+                        int label = deriveLabel(refNftAssetType, assetUnitsInTx, parsed);
                         if (!cip68TokenService.isValidMetadata(parsed, label)) {
+                            warnSkipped(parsed, refNftAssetType, label);
                             return;
                         }
                         warnIfImageMissing(parsed, refNftAssetType, label);
@@ -81,9 +82,10 @@ public class Cip68Processor {
      * <p>
      * If the transaction has a 222 and a 333 (or 444) token paired with the reference NFT, 222 wins,
      * then 333, then 444. If none is paired (an orphan reference NFT, or its user token was minted in
-     * another transaction), the label falls back to {@link Cip68Constants#LABEL_FT}.
+     * another transaction), the label is inferred from the shape of the datum, see
+     * {@link #inferLabelFromDatum}.
      */
-    private int deriveLabel(AssetType refNftAssetType, Set<String> assetUnitsInTx) {
+    private int deriveLabel(AssetType refNftAssetType, Set<String> assetUnitsInTx, ParsedCip68Datum parsed) {
         String baseName = refNftAssetType.assetName().substring(Cip68Constants.REFERENCE_TOKEN_PREFIX.length());
 
         if (hasPairedUserToken(assetUnitsInTx, refNftAssetType, Cip68Constants.NFT_TOKEN_PREFIX, baseName)) {
@@ -95,10 +97,31 @@ public class Cip68Processor {
         if (hasPairedUserToken(assetUnitsInTx, refNftAssetType, Cip68Constants.RICH_FUNGIBLE_TOKEN_PREFIX, baseName)) {
             return Cip68Constants.LABEL_RFT;
         }
-        // Orphan reference NFT (no paired user token in this tx) or non-standard mint.
-        // Default to FT: the historical behaviour and the most common case in practice.
-        log.debug("No CIP-68 user token paired with reference NFT {}/{} in this tx; defaulting label to FT (333)",
-                refNftAssetType.policyId(), refNftAssetType.assetName());
+        int inferred = inferLabelFromDatum(parsed);
+        log.debug("No CIP-68 user token paired with reference NFT {}/{} in this tx; label {} inferred from the datum",
+                refNftAssetType.policyId(), refNftAssetType.assetName(), inferred);
+        return inferred;
+    }
+
+    /**
+     * Label of a reference NFT whose user token is not in the same transaction, guessed from which fields
+     * the datum carries. It is a heuristic, used only when the exact pairing is not available.
+     * <ul>
+     *   <li>{@code ticker} or {@code logo}, which only the fungible token defines: 333.</li>
+     *   <li>{@code image}, {@code mediaType} or {@code files}, the NFT and RFT fields: 444 when
+     *       {@code decimals} is also present (the RFT has it, the NFT does not), otherwise 222.</li>
+     *   <li>Neither: 333, the historical default.</li>
+     * </ul>
+     * {@code decimals} alone does not decide, since both the fungible token and the RFT define it.
+     */
+    private static int inferLabelFromDatum(ParsedCip68Datum parsed) {
+        if (parsed.ticker() != null || parsed.logo() != null) {
+            return Cip68Constants.LABEL_FT;
+        }
+        boolean hasFiles = parsed.properties() != null && parsed.properties().containsKey("files");
+        if (parsed.image() != null || parsed.mediaType() != null || hasFiles) {
+            return parsed.decimals() != null ? Cip68Constants.LABEL_RFT : Cip68Constants.LABEL_NFT;
+        }
         return Cip68Constants.LABEL_FT;
     }
 
@@ -117,6 +140,15 @@ public class Cip68Processor {
 
     private static String normalize(String unit) {
         return unit.toLowerCase(Locale.ROOT);
+    }
+
+    /** A datum that is not indexed because a required field is missing leaves a trace, not a silent gap. */
+    private void warnSkipped(ParsedCip68Datum parsed, AssetType refNftAssetType, int label) {
+        String reason = parsed.name() == null
+                ? "it has no name"
+                : "it has no description, which CIP-68 requires for a fungible token (label " + Cip68Constants.LABEL_FT + ")";
+        log.warn("Skipping CIP-68 datum of {}/{} (label {}): {}",
+                refNftAssetType.policyId(), refNftAssetType.assetName(), label, reason);
     }
 
     /**

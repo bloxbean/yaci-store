@@ -38,6 +38,9 @@ public class Cip68DatumParser {
     public static final String MEDIA_TYPE  = "mediaType";
     public static final String FILES       = "files";
 
+    /** Largest {@code logo} or {@code image} accepted, in bytes. Same limit as the CIP-26 logo. */
+    public static final int URI_MAX_BYTES = 64 * 1024;
+
     /** CIP-68 version 4 wraps the metadata in a CIP-25 style map: {"721": {policy_id: {asset_name: metadata}}}. */
     private static final BytesPlutusData NESTED_MAP_KEY = BytesPlutusData.of("721");
     private static final long NESTED_MAP_MIN_VERSION = 4;
@@ -194,10 +197,15 @@ public class Cip68DatumParser {
     /** Internal record for the unwrapped CIP-68 envelope (properties Map, range-checked version). */
     private record DatumParts(MapPlutusData properties, long version) {}
 
+    /**
+     * Reads a text property. CIP-68 says text is UTF-8, so valid UTF-8 is stored as text. Bytes that are
+     * not valid UTF-8 are stored as hex, the same rule as for additional properties, instead of being
+     * decoded with replacement characters, which would lose the original bytes.
+     */
     private Optional<String> getStringProperty(String propertyName, MapPlutusData mapPlutusData) {
         PlutusData property = mapPlutusData.getMap().get(BytesPlutusData.of(propertyName));
         return switch (property) {
-            case BytesPlutusData bytes -> Optional.of(bytesToString(bytes.getValue()));
+            case BytesPlutusData bytes -> Optional.of(bytesToText(bytes.getValue()));
             case null, default -> Optional.empty();
         };
     }
@@ -225,27 +233,43 @@ public class Cip68DatumParser {
     }
 
     /**
-     * CIP-25 convention, inherited by CIP-68 NFT {@code image} and the FT {@code logo} (both a
-     * CIP-68 {@code uri = bounded_bytes / [* bounded_bytes]}): if a string value exceeds 64 bytes
-     * the issuer may split it into a list of byte-string chunks. This helper joins them
-     * back together. Falls back to {@link #getStringProperty} for the simple-string case.
+     * Reads a CIP-68 {@code uri} ({@code uri = bounded_bytes / [* bounded_bytes]}), used for the NFT
+     * {@code image} and the FT {@code logo}: a value longer than 64 bytes, the most a Plutus byte string
+     * holds, is split into a list of byte-string chunks, and this joins them back together. The chunks are
+     * joined as bytes and decoded once, so a multi-byte character cut by a chunk boundary survives.
+     * Elements of the list that are not byte strings are ignored.
+     * <p>
+     * The value is capped at {@value #URI_MAX_BYTES} bytes (the CIP-26 logo has the same limit): an
+     * over-long value is dropped with a warning and the rest of the datum is kept. The scheme is not
+     * validated; the value is stored as written.
      */
     private Optional<String> getStringOrChunkedProperty(String propertyName, MapPlutusData mapPlutusData) {
         PlutusData property = mapPlutusData.getMap().get(BytesPlutusData.of(propertyName));
 
-        return switch (property) {
-            case BytesPlutusData bytes -> Optional.of(bytesToString(bytes.getValue()));
-            case ListPlutusData list -> {
-                StringBuilder sb = new StringBuilder();
-                for (PlutusData chunk : list.getPlutusDataList()) {
-                    if (chunk instanceof BytesPlutusData b) {
-                        sb.append(bytesToString(b.getValue()));
-                    }
-                }
-                yield sb.isEmpty() ? Optional.empty() : Optional.of(sb.toString());
-            }
-            case null, default -> Optional.empty();
+        byte[] value = switch (property) {
+            case BytesPlutusData bytes -> bytes.getValue();
+            case ListPlutusData list -> joinChunks(list);
+            case null, default -> null;
         };
+        if (value == null) {
+            return Optional.empty();
+        }
+        if (value.length > URI_MAX_BYTES) {
+            log.warn("Ignoring CIP-68 '{}' of {} bytes (max {})", propertyName, value.length, URI_MAX_BYTES);
+            return Optional.empty();
+        }
+        // a single byte string keeps an empty value ("" is what some NFTs declare); an empty list is nothing
+        return property instanceof ListPlutusData && value.length == 0 ? Optional.empty() : Optional.of(bytesToText(value));
+    }
+
+    private static byte[] joinChunks(ListPlutusData list) {
+        java.io.ByteArrayOutputStream joined = new java.io.ByteArrayOutputStream();
+        for (PlutusData chunk : list.getPlutusDataList()) {
+            if (chunk instanceof BytesPlutusData b) {
+                joined.writeBytes(b.getValue());
+            }
+        }
+        return joined.toByteArray();
     }
 
     /**
