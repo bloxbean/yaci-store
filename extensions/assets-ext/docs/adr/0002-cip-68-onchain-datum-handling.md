@@ -5,7 +5,7 @@
 Proposed
 
 The behaviour in decisions 1 to 9 is implemented in PR #1220 (open, not merged at the time of writing;
-issues #1221, #1222, #1225, #1226, #1227, #1228, #1231, #1232, #1233, #1234, #1235 and #1236). Decision 10 describes behaviour that is on
+issues #1221, #1222, #1225, #1226, #1227, #1228, #1231, #1232, #1233, #1234, #1235, #1236 and #1237). Decision 10 describes behaviour that is on
 `main`.
 
 ## Date
@@ -310,7 +310,7 @@ Hex is twice as long as the bytes, so a non-UTF-8 `name` of more than 127 bytes 
 16, a `url` of more than 125) now exceeds the length bound of decision 6 and is dropped, where it used to
 be kept with replacement characters.
 
-### 9. A datum that is not indexed is reported (#1159, #1228)
+### 9. A datum that is not indexed is reported, in the log and in metrics (#1159, #1228, #1237)
 
 - A parse failure is one WARN line with the exception and the datum hex, so the case can be reproduced,
   and the stack trace is logged at DEBUG only, because a sync can hit many.
@@ -321,6 +321,23 @@ be kept with replacement characters.
   (decision 1).
 - A datum that does not have the CIP-68 shape at all (not a constructor, no metadata map, no integer
   version) is **not** logged: reference NFT outputs can carry arbitrary datums, and it would be noise.
+
+**Metrics (#1237).** The totals are also Micrometer counters, read from `/actuator/prometheus`:
+`yaci.store.assets.cip68.datums.indexed` (tag `label`: 222, 333, 444),
+`yaci.store.assets.cip68.datums.skipped` (tags `label` and `reason`: `no_name`, `no_description`, `no_image`,
+`bad_image_scheme`, `bad_logo_scheme`, or `parse_failure` with label `unknown`) and
+`yaci.store.assets.cip68.properties.dropped` (tag `kind`: `constructor`, `key_unsupported`, `key_collision`). The
+tags have a small fixed set of values. They are registered with the CIP-68 processor and need no property; without a
+`MeterRegistry` bean they go to a private registry and nothing is exposed. The WARN lines stay as the per-token
+audit trail.
+
+*Why metrics and not a health indicator:* a skipped datum is not a failing service, and mainnet will always have
+some bad tokens, so a health indicator on skips would be permanently degraded or need an arbitrary threshold. Health
+stays for "is the sync running" (`assetStoreOffchainSync` does that for CIP-26). *Trade-offs:* the counters start at
+zero on every restart and count datums processed, so a block replayed after a chain rollback is counted again; they
+suit `rate()` and `increase()` (for example over a resync), not a historical total. Other drops (an out-of-range
+`decimals`, a value over its column width, a `logo` or `image` over 64 KiB, an undefined version) and CIP-26 are not
+counted yet.
 
 ### 10. Read model
 
@@ -356,7 +373,6 @@ Decisions that are still open:
   which contradicts its changelog and mainnet? The module reads such datums by their structure and warns; neither
   point is raised in the CIPs repository yet.
 - Whether the `description` should get a size bound; it is still unbounded `TEXT`.
-- Whether skipped datums should be counted and exposed (a counter or a health indicator) instead of only logged.
 
 Not measured yet (a full mainnet index with the current rules will answer them; none of them is a design
 question until then):
@@ -373,7 +389,7 @@ question until then):
 ## References
 
 - #1159, #1185, #1202, #1208, #1209, #1233: parser hardening, version 4, constructor values (stored in #1209, dropped with a WARN in #1233)
-- #1221, #1222, #1225, #1226, #1227, #1228, #1231, #1232, #1233, #1234, #1235, #1236, PR #1220: required fields per label, label pairing and
+- #1221, #1222, #1225, #1226, #1227, #1228, #1231, #1232, #1233, #1234, #1235, #1236, #1237, PR #1220: required fields per label, label pairing and
   inference, text and hex, size cap, skip warnings, strict image, several reference NFTs in one output, the layout by structure
 - cardano-foundation/cf-token-metadata-registry#104: backport of these fixes
 - `Cip68Processor`, `Cip68DatumParser`, `Cip68TokenService`, `TokenQueryService`
