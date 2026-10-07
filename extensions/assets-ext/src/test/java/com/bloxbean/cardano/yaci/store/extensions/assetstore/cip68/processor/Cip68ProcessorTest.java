@@ -71,7 +71,7 @@ class Cip68ProcessorTest {
                     .amounts(List.of(refNftAmt))
                     .build();
 
-            when(cip68TokenService.extractReferenceNft(utxo)).thenReturn(Optional.of(refNftAmt));
+            when(cip68TokenService.extractReferenceNfts(utxo)).thenReturn(List.of(refNftAmt));
             when(cip68DatumParser.parse(eq(datum), any())).thenReturn(Optional.of(metadata));
             when(cip68TokenService.isValidMetadata(metadata, Cip68Constants.LABEL_FT)).thenReturn(true);
 
@@ -109,7 +109,7 @@ class Cip68ProcessorTest {
                             .build()))
                     .build();
 
-            when(cip68TokenService.extractReferenceNft(utxo)).thenReturn(Optional.empty());
+            when(cip68TokenService.extractReferenceNfts(utxo)).thenReturn(List.of());
 
             processor.processTransaction(buildEvent(100L, utxo));
 
@@ -131,7 +131,7 @@ class Cip68ProcessorTest {
                     .amounts(List.of(refNftAmt))
                     .build();
 
-            when(cip68TokenService.extractReferenceNft(utxo)).thenReturn(Optional.of(refNftAmt));
+            when(cip68TokenService.extractReferenceNfts(utxo)).thenReturn(List.of(refNftAmt));
             when(cip68DatumParser.parse(eq(datum), any())).thenReturn(Optional.empty());
 
             processor.processTransaction(buildEvent(100L, utxo));
@@ -157,7 +157,7 @@ class Cip68ProcessorTest {
                     .amounts(List.of(refNftAmt))
                     .build();
 
-            when(cip68TokenService.extractReferenceNft(utxo)).thenReturn(Optional.of(refNftAmt));
+            when(cip68TokenService.extractReferenceNfts(utxo)).thenReturn(List.of(refNftAmt));
             when(cip68DatumParser.parse(eq(datum), any())).thenReturn(Optional.of(metadata));
             when(cip68TokenService.isValidMetadata(metadata, Cip68Constants.LABEL_FT)).thenReturn(false);
 
@@ -203,7 +203,7 @@ class Cip68ProcessorTest {
             AddressUtxo refNftUtxo = AddressUtxo.builder()
                     .txHash(TX_HASH).inlineDatum(datum).amounts(List.of(refNftAmt)).build();
 
-            when(cip68TokenService.extractReferenceNft(refNftUtxo)).thenReturn(Optional.of(refNftAmt));
+            when(cip68TokenService.extractReferenceNfts(refNftUtxo)).thenReturn(List.of(refNftAmt));
             when(cip68DatumParser.parse(eq(datum), any())).thenReturn(Optional.of(metadata));
             when(cip68TokenService.isValidMetadata(metadata, Cip68Constants.LABEL_FT)).thenReturn(true);
 
@@ -231,8 +231,8 @@ class Cip68ProcessorTest {
             AddressUtxo userTokenUtxo = AddressUtxo.builder()
                     .txHash(TX_HASH).amounts(List.of(userTokenAmt)).build();
 
-            when(cip68TokenService.extractReferenceNft(refNftUtxo)).thenReturn(Optional.of(refNftAmt));
-            when(cip68TokenService.extractReferenceNft(userTokenUtxo)).thenReturn(Optional.empty());
+            when(cip68TokenService.extractReferenceNfts(refNftUtxo)).thenReturn(List.of(refNftAmt));
+            when(cip68TokenService.extractReferenceNfts(userTokenUtxo)).thenReturn(List.of());
             when(cip68DatumParser.parse(eq(datum), any())).thenReturn(Optional.of(metadata));
             when(cip68TokenService.isValidMetadata(metadata, expectedLabel)).thenReturn(true);
 

@@ -130,10 +130,10 @@ public class Cip68DatumParser {
      */
     private Optional<MapPlutusData> resolveMetadata(DatumParts parts, @Nullable AssetType referenceNft) {
         MapPlutusData properties = parts.properties();
-        if (parts.version() < NESTED_MAP_MIN_VERSION
-                || !(properties.getMap().get(NESTED_MAP_KEY) instanceof MapPlutusData byPolicy)) {
+        if (!isNested(parts)) {
             return Optional.of(properties);
         }
+        MapPlutusData byPolicy = (MapPlutusData) properties.getMap().get(NESTED_MAP_KEY);
 
         if (referenceNft == null) {
             // No asset context: only an unambiguous single entry can be resolved
@@ -144,6 +144,28 @@ public class Cip68DatumParser {
         String assetNameWithoutLabel = referenceNft.assetName().substring(Cip68Constants.REFERENCE_TOKEN_PREFIX.length());
         return asMap(byPolicy.getMap().get(BytesPlutusData.of(HexUtil.decodeHexString(referenceNft.policyId()))))
                 .flatMap(byAsset -> asMap(byAsset.getMap().get(BytesPlutusData.of(HexUtil.decodeHexString(assetNameWithoutLabel)))));
+    }
+
+    /** Version 4 or above, with the {@code "721"} key: the metadata of several assets can be in this one datum. */
+    private static boolean isNested(DatumParts parts) {
+        return parts.version() >= NESTED_MAP_MIN_VERSION
+                && parts.properties().getMap().get(NESTED_MAP_KEY) instanceof MapPlutusData;
+    }
+
+    /**
+     * Whether the datum is in the nested format, which can carry the metadata of several reference NFTs.
+     * A flat datum (versions 1 to 3, or version 4 without {@code "721"}) describes one token. Anything that is
+     * not a CIP-68 datum, or cannot be decoded, is not nested.
+     */
+    public boolean hasNestedMetadata(@Nullable String inlineDatum) {
+        if (inlineDatum == null || inlineDatum.isBlank()) {
+            return false;
+        }
+        try {
+            return extractDatumProperties(inlineDatum).map(Cip68DatumParser::isNested).orElse(false);
+        } catch (Exception | StackOverflowError e) {
+            return false;
+        }
     }
 
     private static Optional<MapPlutusData> singleValue(MapPlutusData map) {
