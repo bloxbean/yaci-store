@@ -24,8 +24,10 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * CIP-68 defines datum versions 1 to 4. A datum with another version is not indexed, for every label, and one
- * warning names the token. The two real datums are the only ones on mainnet that were not version 1, 2 or 3.
+ * CIP-68 defines datum versions 1 to 4, but how a datum is read does not depend on its version: the CIP's retrieval
+ * steps tell direct from nested metadata by the "721" key. A datum with another version is read and indexed like any
+ * other, by its structure, and one warning names the token. The two real datums are the only ones on mainnet that were
+ * not version 1, 2 or 3, and both are plain flat metadata maps.
  */
 class Cip68VersionTest {
 
@@ -81,59 +83,91 @@ class Cip68VersionTest {
     }
 
     @Test
-    void rejectsVersionsOutsideTheDefinedRangeWithOneWarningEach() throws Exception {
+    void indexesVersionsTheCipDoesNotDefineWithOneWarningEach() throws Exception {
         for (long version : new long[]{0, 5, 100, -1, Long.MAX_VALUE}) {
             logs.list.clear();
 
-            assertThat(parser.parse(datum(version), REF)).as("version %d", version).isEmpty();
+            Optional<ParsedCip68Datum> parsed = parser.parse(datum(version), REF);
 
+            assertThat(parsed).as("version %d", version).isPresent();
+            assertThat(parsed.get().version()).as("version %d", version).isEqualTo(version);
+            assertThat(parsed.get().name()).isEqualTo("Token");
             assertThat(warnings()).as("version %d", version).singleElement().satisfies(w -> assertThat(w)
-                    .contains("unsupported version " + version).contains(POLICY).contains(REF.assetName())
-                    .contains("defines 1 to 4"));
+                    .contains("version " + version).contains(POLICY).contains(REF.assetName())
+                    .contains("does not define (1 to 4)").contains("by its structure"));
         }
     }
 
     @Test
     void namesNoTokenWhenThereIsNoReferenceNft() throws Exception {
-        assertThat(parser.parse(datum(7))).isEmpty();
+        assertThat(parser.parse(datum(7))).isPresent();
 
-        assertThat(warnings()).singleElement().satisfies(w -> assertThat(w).contains("unsupported version 7"));
+        assertThat(warnings()).singleElement().satisfies(w -> assertThat(w).contains("version 7"));
     }
 
     @Test
-    void rejectsTheRealMainnetVersion100Datum() {
+    void readsTheRealMainnetVersion100DatumByItsStructure() {
         AssetType ref = new AssetType(HOSKY_VERSION_100_POLICY, HOSKY_VERSION_100_ASSET);
 
-        assertThat(parser.parse(HOSKY_VERSION_100_DATUM, ref)).isEmpty();
+        ParsedCip68Datum parsed = parser.parse(HOSKY_VERSION_100_DATUM, ref).orElseThrow();
 
+        assertThat(parsed.version()).isEqualTo(100L);
+        assertThat(parsed.name()).isEqualTo("HOSKY 10K NFT 0002");
+        assertThat(parsed.description()).isEqualTo("This is a reference token for CIP-68.");
+        assertThat(parsed.image()).isEqualTo("ipfs://QmfRvX7ZA3FsCjoXWYfBXGSHFW6ARYaaux6GT3WtqLEX6g");
         assertThat(warnings()).singleElement().satisfies(w -> assertThat(w)
-                .contains("unsupported version 100").contains(HOSKY_VERSION_100_POLICY).contains(HOSKY_VERSION_100_ASSET));
+                .contains("version 100").contains(HOSKY_VERSION_100_POLICY).contains(HOSKY_VERSION_100_ASSET));
     }
 
     @Test
-    void rejectsTheRealMainnetVersion0Datum() {
+    void readsTheRealMainnetVersion0DatumByItsStructure() {
         AssetType ref = new AssetType(GNRC_VERSION_0_POLICY, GNRC_VERSION_0_ASSET);
 
-        assertThat(parser.parse(GNRC_VERSION_0_DATUM, ref)).isEmpty();
+        ParsedCip68Datum parsed = parser.parse(GNRC_VERSION_0_DATUM, ref).orElseThrow();
 
+        assertThat(parsed.version()).isZero();
+        assertThat(parsed.name()).isEqualTo("Greenland Reserve Coin");
+        assertThat(parsed.ticker()).isEqualTo("GNRC");
+        assertThat(parsed.decimals()).isEqualTo(6L);
+        assertThat(parsed.url()).isEqualTo("https://www.the-mint.com/compliance");
         assertThat(warnings()).singleElement().satisfies(w -> assertThat(w)
-                .contains("unsupported version 0").contains(GNRC_VERSION_0_POLICY));
+                .contains("version 0").contains(GNRC_VERSION_0_POLICY));
     }
 
     @Test
-    void doesNotReadAnUnsupportedVersionAsNested() throws Exception {
-        // a nested map under a version above 4 is not a nested datum: nothing is read from it
-        MapPlutusData nested = new MapPlutusData();
-        nested.put(BytesPlutusData.of("721"), new MapPlutusData());
-        String hex = HexUtil.encodeHexString(CborSerializationUtil.serialize(
-                ConstrPlutusData.of(0, nested, BigIntPlutusData.of(5)).serialize()));
+    void readsANestedDatumAsNestedWhateverItsVersion() throws Exception {
+        for (long version : new long[]{3, 5}) {
+            String hex = nestedDatum(version);
 
-        assertThat(parser.hasNestedMetadata(hex)).isFalse();
+            assertThat(parser.hasNestedMetadata(hex)).as("version %d", version).isTrue();
+            assertThat(parser.parse(hex, REF).orElseThrow().name()).as("version %d", version).isEqualTo("Nested");
+        }
+    }
+
+    @Test
+    void readsAVersion4DatumWithoutTheNestedKeyAsFlat() throws Exception {
+        assertThat(parser.hasNestedMetadata(datum(4))).isFalse();
+        assertThat(parser.parse(datum(4), REF).orElseThrow().name()).isEqualTo("Token");
         assertThat(warnings()).isEmpty();
     }
 
     private List<String> warnings() {
         return logs.list.stream().filter(e -> e.getLevel() == Level.WARN).map(ILoggingEvent::getFormattedMessage).toList();
+    }
+
+    /** {"721": {policy: {asset name without label: metadata}}} for REF, with the given version. */
+    private static String nestedDatum(long version) throws Exception {
+        MapPlutusData metadata = new MapPlutusData();
+        metadata.put(BytesPlutusData.of("name"), BytesPlutusData.of("Nested"));
+        metadata.put(BytesPlutusData.of("description"), BytesPlutusData.of("Desc"));
+        MapPlutusData byAsset = new MapPlutusData();
+        byAsset.put(BytesPlutusData.of(HexUtil.decodeHexString(REF.assetName().substring(8))), metadata);
+        MapPlutusData byPolicy = new MapPlutusData();
+        byPolicy.put(BytesPlutusData.of(HexUtil.decodeHexString(POLICY)), byAsset);
+        MapPlutusData root = new MapPlutusData();
+        root.put(BytesPlutusData.of("721"), byPolicy);
+        return HexUtil.encodeHexString(CborSerializationUtil.serialize(
+                ConstrPlutusData.of(0, root, BigIntPlutusData.of(version)).serialize()));
     }
 
     /** A flat datum with a name and a description and the given version. */
