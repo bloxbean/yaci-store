@@ -4,8 +4,8 @@
 
 Proposed
 
-The behaviour in decisions 2 to 6, 8 and 9 is implemented in PR #1220 (draft, not merged at the time of
-writing; issues #1221, #1222, #1225, #1226, #1227 and #1228). Decisions 1, 7 and 10 describe behaviour
+The behaviour in decisions 1 to 6, 8 and 9 is implemented in PR #1220 (draft, not merged at the time of
+writing; issues #1221, #1222, #1225, #1226, #1227, #1228 and #1231). Decisions 7 and 10 describe behaviour
 that is on `main`.
 
 ## Date
@@ -33,9 +33,24 @@ a stored value can be filtered later while a dropped one needs a resync to recov
 
 ### 1. What is indexed, and how history is kept
 
-A reference NFT is an output holding exactly one unit of an asset whose name starts with `000643b0`
-and an inline datum. Each such output becomes a row in `cip68_metadata`. The key includes `tx_hash`,
-so every metadata update is a new row and the table keeps the full history. The latest row for a
+A reference NFT is an asset with quantity one whose name starts with `000643b0`, in an output that has an
+inline datum. Each reference NFT of such an output becomes a row in `cip68_metadata`. Every output of every
+transaction is read, so a transaction that mints many tokens is indexed completely when each reference NFT
+has its own output, which is the usual pattern.
+
+An output can also hold **several reference NFTs** (#1231). The version 4 nested format exists for that: its
+rationale says the metadata "can consolidate across multiple reference tokens" to reduce the minimum ADA of
+large collections. The CIP does not spell out the layout, so this follows from the rationale. The module
+handles it by the datum format:
+
+- **Nested datum** (version 4 or above, with the `"721"` key): every reference NFT of the output is
+  indexed, each resolved to its own entry in the map. A reference NFT with no entry is not indexed.
+- **Flat datum** (versions 1 to 3, or version 4 without `"721"`): it describes one token and cannot be
+  tied to any of several, so only the first reference NFT of the output is indexed and a WARN reports the
+  rest. Indexing all of them with the same metadata would give wrong metadata to the others, and indexing
+  none would hide a token. "First" is the first asset in the output's list, which is arbitrary.
+
+The key includes `tx_hash`, so every metadata update is a new row and the table keeps the full history. The latest row for a
 reference NFT is the one with the highest `(slot, tx_index)`. A rollback deletes the rows after the
 rollback slot.
 
@@ -207,6 +222,8 @@ be kept with replacement characters.
   and the stack trace is logged at DEBUG only, because a sync can hit many.
 - A datum that parses but is skipped for a missing required field (no `name`, or no `description` on a
   fungible token) is one WARN line with the policy, the asset name, the label and the reason.
+- An output with a flat datum and several reference NFTs is one WARN line with the number found and the one
+  that was indexed (decision 1).
 - A datum that does not have the CIP-68 shape at all (not a constructor, no metadata map, no integer
   version) is **not** logged: reference NFT outputs can carry arbitrary datums, and it would be noise.
 
@@ -236,6 +253,9 @@ fields of one response can come from two sources, and `show_cips_details` is the
 - One label per row, although the CIP allows several user tokens for one reference NFT: is the 222, 333,
   444 tie-break enough, or should the table record every matching label? How common the case is has not
   been measured.
+- How often does an output hold several reference NFTs, and does any real nested datum exist on-chain?
+  The nested case is covered by synthetic datums only. For a flat datum with several reference NFTs only the
+  first is indexed; is that the right choice?
 - How good is the datum-shape inference for a reference NFT with no paired token, and is an exact
   cross-transaction lookup worth its cost? Not measured.
 - A size bound for `description`, which is still unbounded `TEXT`.
@@ -245,7 +265,7 @@ fields of one response can come from two sources, and `show_cips_details` is the
 ## References
 
 - #1159, #1185, #1202, #1208, #1209: parser hardening, version 4, constructor values
-- #1221, #1222, #1225, #1226, #1227, #1228, PR #1220: required fields per label, label pairing and
-  inference, text and hex, size cap, skip warnings, lenient image
+- #1221, #1222, #1225, #1226, #1227, #1228, #1231, PR #1220: required fields per label, label pairing and
+  inference, text and hex, size cap, skip warnings, lenient image, several reference NFTs in one output
 - cardano-foundation/cf-token-metadata-registry#104: backport of these fixes
 - `Cip68Processor`, `Cip68DatumParser`, `Cip68TokenService`, `TokenQueryService`
