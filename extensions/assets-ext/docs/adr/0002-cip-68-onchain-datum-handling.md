@@ -5,7 +5,7 @@
 Proposed
 
 The behaviour in decisions 1 to 9 is implemented in PR #1220 (open, not merged at the time of writing;
-issues #1221, #1222, #1225, #1226, #1227, #1228, #1231, #1232, #1233, #1234 and #1235). Decision 10 describes behaviour that is on
+issues #1221, #1222, #1225, #1226, #1227, #1228, #1231, #1232, #1233, #1234, #1235 and #1236). Decision 10 describes behaviour that is on
 `main`.
 
 ## Date
@@ -47,10 +47,14 @@ handles it by the datum format:
 
 - **Nested datum** (version 4 or above, with the `"721"` key): every reference NFT of the output is
   indexed, each resolved to its own entry in the map. A reference NFT with no entry is not indexed.
-- **Flat datum** (versions 1 to 3, or version 4 without `"721"`): it describes one token and cannot be
-  tied to any of several, so only the first reference NFT of the output is indexed and a WARN reports the
-  rest. Indexing all of them with the same metadata would give wrong metadata to the others, and indexing
-  none would hide a token. "First" is the first asset in the output's list, which is arbitrary.
+- **Flat datum** (versions 1 to 3, or version 4 without `"721"`) (#1236): **every reference NFT of the output is
+  indexed with that datum**, and one WARN names the output, the count and the units. The CIP's retrieval steps
+  find the output the reference NFT is locked in and read its datum, whatever else the output holds, and only the
+  nested map selects an entry, so a flat datum is the metadata of each reference NFT in the output.
+  *Trade-off:* some of those tokens may have been given metadata that is not theirs, which is what any client
+  following the CIP shows for them too; the WARN lists them. *Considered and rejected:* indexing none, which hides
+  every token of the output and treats as an error a case the CIP does not call one; and indexing only the first,
+  which was arbitrary (the first asset in the output's list) and matches neither the CIP nor a strict reading.
 
 The key includes `tx_hash`, so every metadata update is a new row and the table keeps the full history. The latest row for a
 reference NFT is the one with the highest `(slot, tx_index)`. A rollback deletes the rows after the
@@ -313,8 +317,8 @@ be kept with replacement characters.
 - A datum that parses but is skipped because it breaks a requirement of its label (no `name`, no
   `description` on a fungible token, no `image` or an image with a scheme the CIP does not allow on a 222 or
   444 token, a `logo` with such a scheme on a 333 token) is one WARN line with the policy, the asset name, the label and the reason.
-- An output with a flat datum and several reference NFTs is one WARN line with the number found and the one
-  that was indexed (decision 1).
+- An output with a flat datum and several reference NFTs is one WARN line with the number found and their units
+  (decision 1).
 - A datum that does not have the CIP-68 shape at all (not a constructor, no metadata map, no integer
   version) is **not** logged: reference NFT outputs can carry arbitrary datums, and it would be noise.
 
@@ -348,8 +352,6 @@ Decisions that are still open:
 - One label per row, although the CIP allows several user tokens for one reference NFT: is the 222, 333, 444
   tie-break enough, or should the table record every matching label? It stays as it is until the number of such
   tokens is known (see below).
-- For a flat datum with several reference NFTs only the first is indexed. Is that the right choice, or should none
-  be, or all?
 - Should the CIP say what a consumer does with a version it does not define, and fix its 444 definition (`3 / 4`),
   which contradicts its changelog and mainnet? The module reads such datums by their structure and warns; neither
   point is raised in the CIPs repository yet.
@@ -371,7 +373,7 @@ question until then):
 ## References
 
 - #1159, #1185, #1202, #1208, #1209, #1233: parser hardening, version 4, constructor values (stored in #1209, dropped with a WARN in #1233)
-- #1221, #1222, #1225, #1226, #1227, #1228, #1231, #1232, #1233, #1234, #1235, PR #1220: required fields per label, label pairing and
+- #1221, #1222, #1225, #1226, #1227, #1228, #1231, #1232, #1233, #1234, #1235, #1236, PR #1220: required fields per label, label pairing and
   inference, text and hex, size cap, skip warnings, strict image, several reference NFTs in one output, the layout by structure
 - cardano-foundation/cf-token-metadata-registry#104: backport of these fixes
 - `Cip68Processor`, `Cip68DatumParser`, `Cip68TokenService`, `TokenQueryService`
