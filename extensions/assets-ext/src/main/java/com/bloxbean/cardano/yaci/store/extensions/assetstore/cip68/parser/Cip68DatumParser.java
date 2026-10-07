@@ -3,14 +3,15 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.parser;
 import com.bloxbean.cardano.client.plutus.spec.*;
 import com.bloxbean.cardano.client.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.metrics.Cip68Metrics;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.AssetType;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Constants;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.ParsedCip68Datum;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.Cip68Metadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.util.TokenDecimals;
 import jakarta.annotation.Nullable;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.math.BigInteger;
@@ -23,9 +24,20 @@ import java.util.Optional;
 import java.util.Set;
 
 @Component
-@RequiredArgsConstructor
 @Slf4j
 public class Cip68DatumParser {
+
+    private final Cip68Metrics metrics;
+
+    @Autowired
+    public Cip68DatumParser(Cip68Metrics metrics) {
+        this.metrics = metrics;
+    }
+
+    /** Without metrics that anyone reads (tests). */
+    public Cip68DatumParser() {
+        this(Cip68Metrics.noop());
+    }
 
     // Well-known CIP-68 keys that map to typed columns on cip68_metadata.
     public static final String DECIMALS    = "decimals";
@@ -89,12 +101,14 @@ public class Cip68DatumParser {
             // StackOverflowError is an Error, not an Exception, so it needs its own catch: skip the
             // datum like any other undecodable one.
             log.warn("Skipping CIP-68 datum nested too deeply to decode ({} bytes)", inlineDatum.length() / 2);
+            metrics.parseFailure();
             return Optional.empty();
         } catch (Exception e) {
             // One line per failure, with the datum for reproduction; the stack trace only at DEBUG,
             // so a run of unparseable datums doesn't flood the sync log.
             log.warn("Skipping unparseable CIP-68 datum ({}): {}", e, inlineDatum);
             log.debug("CIP-68 datum parse failure", e);
+            metrics.parseFailure();
             return Optional.empty();
         }
     }
@@ -424,7 +438,8 @@ public class Cip68DatumParser {
         };
     }
 
-    private static void warnKeyLeftOut(String where, PlutusData key, @Nullable AssetType referenceNft) {
+    private void warnKeyLeftOut(String where, PlutusData key, @Nullable AssetType referenceNft) {
+        metrics.propertyDropped("key_unsupported");
         String kind = switch (key) {
             case ListPlutusData ignored -> "list";
             case MapPlutusData ignored -> "map";
@@ -450,8 +465,9 @@ public class Cip68DatumParser {
     }
 
     /** Two keys that read the same (the byte string "1" and the integer 1): the byte string key stays. */
-    private static void putFirst(Map<String, Object> target, String key, Object value, @Nullable AssetType referenceNft) {
+    private void putFirst(Map<String, Object> target, String key, Object value, @Nullable AssetType referenceNft) {
         if (target.putIfAbsent(key, value) != null) {
+            metrics.propertyDropped("key_collision");
             if (referenceNft != null) {
                 log.warn("CIP-68 datum of {}/{}: two keys read as '{}', keeping the byte string key",
                         referenceNft.policyId(), referenceNft.assetName(), key.length() <= 60 ? key : key.substring(0, 60) + "...");
@@ -470,10 +486,11 @@ public class Cip68DatumParser {
      *
      * @return true if the property was dropped
      */
-    private static boolean dropsConstructorProperty(String key, PlutusData value, @Nullable AssetType referenceNft) {
+    private boolean dropsConstructorProperty(String key, PlutusData value, @Nullable AssetType referenceNft) {
         if (!containsConstructor(value)) {
             return false;
         }
+        metrics.propertyDropped("constructor");
         String shortKey = key.length() <= 60 ? key : key.substring(0, 60) + "...";
         if (referenceNft != null) {
             log.warn("CIP-68 datum of {}/{}: dropping property '{}' and keeping the rest, because its value holds a Plutus "

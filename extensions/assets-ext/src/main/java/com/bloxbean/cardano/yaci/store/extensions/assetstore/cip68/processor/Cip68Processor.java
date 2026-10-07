@@ -3,7 +3,9 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.processor;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.AssetType;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.metrics.Cip68Metrics;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Constants;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.DatumRejection;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.ParsedCip68Datum;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.parser.Cip68DatumParser;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service.Cip68TokenService;
@@ -11,8 +13,8 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.repository.Cip68MetadataRepository;
 import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxoEvent;
 import com.bloxbean.cardano.yaci.store.utxo.domain.TxInputOutput;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
@@ -27,7 +29,6 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 @Component
-@RequiredArgsConstructor
 @Slf4j
 @ConditionalOnProperty(name = "store.assets.ext.cip68.enabled", havingValue = "true", matchIfMissing = true)
 public class Cip68Processor {
@@ -35,6 +36,22 @@ public class Cip68Processor {
     private final Cip68TokenService cip68TokenService;
     private final Cip68DatumParser cip68DatumParser;
     private final Cip68MetadataRepository cip68MetadataRepository;
+    private final Cip68Metrics metrics;
+
+    @Autowired
+    public Cip68Processor(Cip68TokenService cip68TokenService, Cip68DatumParser cip68DatumParser,
+                          Cip68MetadataRepository cip68MetadataRepository, Cip68Metrics metrics) {
+        this.cip68TokenService = cip68TokenService;
+        this.cip68DatumParser = cip68DatumParser;
+        this.cip68MetadataRepository = cip68MetadataRepository;
+        this.metrics = metrics;
+    }
+
+    /** Without metrics that anyone reads (tests). */
+    public Cip68Processor(Cip68TokenService cip68TokenService, Cip68DatumParser cip68DatumParser,
+                          Cip68MetadataRepository cip68MetadataRepository) {
+        this(cip68TokenService, cip68DatumParser, cip68MetadataRepository, Cip68Metrics.noop());
+    }
 
     @EventListener
     @Transactional
@@ -55,11 +72,13 @@ public class Cip68Processor {
                     cip68DatumParser.parse(output.getInlineDatum(), refNftAssetType).ifPresent(parsed -> {
                         // The label comes first: which fields a datum must have depends on it
                         int label = deriveLabel(refNftAssetType, assetUnitsInTx, parsed);
-                        Optional<String> invalid = cip68TokenService.invalidReason(parsed, label);
-                        if (invalid.isPresent()) {
-                            warnSkipped(refNftAssetType, label, invalid.get());
+                        Optional<DatumRejection> rejection = cip68TokenService.rejection(parsed, label);
+                        if (rejection.isPresent()) {
+                            warnSkipped(refNftAssetType, label, rejection.get().message());
+                            metrics.skipped(label, rejection.get().reason());
                             return;
                         }
+                        metrics.indexed(label);
                         entities.add(buildCip68Metadata(
                                 parsed, refNftAssetType, output.getInlineDatum(), slot,
                                 output.getTxHash(), output.getTxIndex(), label));
