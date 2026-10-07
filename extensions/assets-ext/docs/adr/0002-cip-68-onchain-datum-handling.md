@@ -29,7 +29,7 @@ about the rest.** A value that could break an insert, exhaust the stack or wrap 
 dropped. A datum that lacks a field the CIP requires for its label, or whose `image` (or, for a fungible token, `logo`) is not a URI the
 CIP allows, is not indexed, because wallets and explorers follow the CIP and could not show it either.
 A value that is merely unusual, in a field the CIP does not constrain, is stored as written, because a
-stored value can be filtered later while a dropped one needs a resync to recover.
+stored value can be filtered later, while a dropped one is gone from the table until the datum is processed again.
 
 ## Decisions
 
@@ -170,7 +170,7 @@ mainnet 333 tokens are affected has not been measured.
 *Cost of the `image` rule:* on an earlier mainnet index, this rule would remove 12 NFTs whose datum has
 `mediaType: image/svg+xml` and an empty `image` (the "DID registration" sensor tokens) and 9 more whose image
 is not a spec URI (6 `iagon://` wine NFTs and 3 free-text values). They are real tokens, no longer in the
-table, and a dropped token needs a resync to come back if the rule is relaxed. The count was taken before
+table, and a dropped token comes back only when its datum is processed again (a resync), which is cheap today because the module has no known users yet. The count was taken before
 the rule existed and has not been re-measured with it.
 
 *Considered and tried, then reversed:* indexing such tokens with a WARN and storing the image as written
@@ -339,7 +339,7 @@ fields of one response can come from two sources, and `show_cips_details` is the
   (`iagon://`) appear only after the CIP allows it and the index is rebuilt.
 - Because NFTs and RFTs are stored without being served, their rules can change later without a
   breaking API change.
-- Anything corrected in a rule needs a resync from before the affected slots to take effect on old rows.
+- Anything corrected in a rule needs a resync from before the affected slots to take effect on old rows. That is accepted: the module has no known users yet, so a resync is the way to apply a rule change, and no migration or backfill is planned. This should be revisited once the module is in use.
 
 ## Open questions
 
@@ -357,7 +357,6 @@ fields of one response can come from two sources, and `show_cips_details` is the
 - How many tokens the strict `image` and `logo` rules remove in total, which a resync with them will show.
 - A size bound for `description`, which is still unbounded `TEXT`.
 - A counter or health indicator for skipped datums, instead of only log lines.
-- Whether a relabel or backfill job is wanted after a label fix, instead of a resync.
 
 ## References
 
