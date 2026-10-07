@@ -80,7 +80,7 @@ public class Cip68DatumParser {
             return extractDatumProperties(inlineDatum)
                     .map(parts -> warnIfVersionNotDefined(parts, referenceNft))
                     .flatMap(parts -> resolveMetadata(parts, referenceNft)
-                            .map(metadata -> buildParsedDatum(metadata, parts.version())));
+                            .map(metadata -> buildParsedDatum(metadata, parts.version(), referenceNft)));
         } catch (StackOverflowError e) {
             // TODO: temporary workaround. Remove once cardano-client-lib decodes CBOR without
             //  recursion (bloxbean/cardano-client-lib#681).
@@ -209,7 +209,7 @@ public class Cip68DatumParser {
     }
 
     /** Build the typed {@link ParsedCip68Datum} from the unwrapped (Map, version) pair. */
-    private ParsedCip68Datum buildParsedDatum(MapPlutusData properties, long version) {
+    private ParsedCip68Datum buildParsedDatum(MapPlutusData properties, long version, @Nullable AssetType referenceNft) {
         return new ParsedCip68Datum(
                 getDecimalsProperty(properties).orElse(null),
                 getStringProperty(DESCRIPTION, properties).orElse(null),
@@ -220,7 +220,7 @@ public class Cip68DatumParser {
                 version,
                 getStringOrChunkedProperty(IMAGE, properties).orElse(null),
                 getBoundedStringProperty(MEDIA_TYPE, properties, Cip68Metadata.MEDIA_TYPE_MAX_LENGTH).orElse(null),
-                buildPropertiesJson(properties));
+                buildPropertiesJson(properties, referenceNft));
     }
 
     /**
@@ -228,9 +228,9 @@ public class Cip68DatumParser {
      * {@code properties} column. Returns {@code null} if neither part is populated, so
      * pure FT rows don't materialise an empty wrapper.
      */
-    private Map<String, Object> buildPropertiesJson(MapPlutusData properties) {
-        List<Map<String, Object>> files = parseFiles(properties);
-        Map<String, Object> additional = parseAdditionalProperties(properties);
+    private Map<String, Object> buildPropertiesJson(MapPlutusData properties, @Nullable AssetType referenceNft) {
+        List<Map<String, Object>> files = parseFiles(properties, referenceNft);
+        Map<String, Object> additional = parseAdditionalProperties(properties, referenceNft);
 
         boolean hasFiles = files != null && !files.isEmpty();
         boolean hasAdditional = !additional.isEmpty();
@@ -353,7 +353,7 @@ public class Cip68DatumParser {
      * Each element is a {@code Map<String, Object>} with keys {@code name}, {@code mediaType},
      * {@code src} where present. Unknown keys inside a file entry are preserved verbatim.
      */
-    private List<Map<String, Object>> parseFiles(MapPlutusData properties) {
+    private List<Map<String, Object>> parseFiles(MapPlutusData properties, @Nullable AssetType referenceNft) {
         PlutusData filesProp = properties.getMap().get(BytesPlutusData.of(FILES));
         if (!(filesProp instanceof ListPlutusData filesList)) {
             return null;
@@ -369,6 +369,9 @@ public class Cip68DatumParser {
                     continue;
                 }
                 String key = bytesToText(keyBytes.getValue());
+                if (dropsConstructorProperty("files[]." + key, e.getValue(), referenceNft)) {
+                    continue;
+                }
                 Object value = unwrapPlutusValue(e.getValue());
                 if (value != null) {
                     file.put(key, value);
@@ -386,15 +389,18 @@ public class Cip68DatumParser {
      * or {@code files}. These project-specific properties (attributes, traits, royalties...)
      * go into {@code properties.additional_properties} for downstream consumers.
      */
-    private Map<String, Object> parseAdditionalProperties(MapPlutusData properties) {
+    private Map<String, Object> parseAdditionalProperties(MapPlutusData properties, @Nullable AssetType referenceNft) {
         Map<String, Object> result = new LinkedHashMap<>();
         for (Map.Entry<PlutusData, PlutusData> e : properties.getMap().entrySet()) {
             if (!(e.getKey() instanceof BytesPlutusData keyBytes)) {
                 continue;
             }
             String key = bytesToText(keyBytes.getValue());
+            if (TYPED_KEYS.contains(key) || dropsConstructorProperty(key, e.getValue(), referenceNft)) {
+                continue;
+            }
             // Check before storing: an unsupported value must drop only this property, not the datum
-            Object value = TYPED_KEYS.contains(key) ? null : unwrapPlutusValue(e.getValue());
+            Object value = unwrapPlutusValue(e.getValue());
             if (value != null) {
                 result.put(key, value);
             }
@@ -403,10 +409,45 @@ public class Cip68DatumParser {
     }
 
     /**
-     * Unwrap a Plutus value into a Java type suitable for JSONB serialization. Recurses into maps,
-     * lists and constructors. Bytes become text via {@link #bytesToText}; ints become
-     * {@link BigInteger}; a constructor becomes {@code {"constructor": <alternative>, "fields": [...]}},
-     * the field names cardano-cli uses for Plutus data in its detailed JSON schema.
+     * The generic CIP-68 definition allows a metadata value to be a map, a list, an integer or a byte string, and
+     * Plutus data of any kind only in {@code extra}. A property whose value holds a constructor, however deep, is
+     * therefore not valid metadata: it is dropped with a warning, and the rest of the datum, and the token, are
+     * kept. (Before, the constructor was stored as {@code {"constructor": n, "fields": [...]}}, a form the CIP does
+     * not define.)
+     *
+     * @return true if the property was dropped
+     */
+    private static boolean dropsConstructorProperty(String key, PlutusData value, @Nullable AssetType referenceNft) {
+        if (!containsConstructor(value)) {
+            return false;
+        }
+        String shortKey = key.length() <= 60 ? key : key.substring(0, 60) + "...";
+        if (referenceNft != null) {
+            log.warn("CIP-68 datum of {}/{}: dropping property '{}' and keeping the rest, because its value holds a Plutus "
+                            + "constructor, which CIP-68 metadata does not allow",
+                    referenceNft.policyId(), referenceNft.assetName(), shortKey);
+        } else {
+            log.warn("CIP-68 datum: dropping property '{}' and keeping the rest, because its value holds a Plutus "
+                    + "constructor, which CIP-68 metadata does not allow", shortKey);
+        }
+        return true;
+    }
+
+    private static boolean containsConstructor(@Nullable PlutusData data) {
+        return switch (data) {
+            case ConstrPlutusData ignored -> true;
+            case ListPlutusData list -> list.getPlutusDataList().stream().anyMatch(Cip68DatumParser::containsConstructor);
+            case MapPlutusData map -> map.getMap().entrySet().stream()
+                    .anyMatch(e -> containsConstructor(e.getKey()) || containsConstructor(e.getValue()));
+            case null, default -> false;
+        };
+    }
+
+    /**
+     * Unwrap a Plutus value into a Java type suitable for JSONB serialization. Recurses into maps
+     * and lists. Bytes become text via {@link #bytesToText}; ints become {@link BigInteger}. A constructor
+     * has no place in CIP-68 metadata, so it never gets here: {@link #dropsConstructorProperty} drops the
+     * property that holds one before the value is converted.
      */
     private Object unwrapPlutusValue(PlutusData data) {
         return switch (data) {
@@ -427,13 +468,6 @@ public class Cip68DatumParser {
                     Object u = unwrapPlutusValue(entry.getValue());
                     if (u != null) out.put(bytesToText(kb.getValue()), u);
                 }
-                yield out;
-            }
-            case ConstrPlutusData constr -> {
-                Object fields = unwrapPlutusValue(constr.getData());
-                Map<String, Object> out = new LinkedHashMap<>();
-                out.put("constructor", constr.getAlternative());
-                out.put("fields", fields != null ? fields : List.of());
                 yield out;
             }
             case null -> null;
