@@ -4,8 +4,9 @@
 
 Proposed
 
-Decisions 2, 3 and 4 are implemented in PR #1220 (draft, not merged at the time of writing; issues
-#1221 and #1222). Everything else describes behaviour that is on `main`.
+The behaviour in decisions 2 to 6, 8 and 9 is implemented in PR #1220 (draft, not merged at the time of
+writing; issues #1221, #1222, #1225, #1226, #1227 and #1228). Decisions 1, 7 and 10 describe behaviour
+that is on `main`.
 
 ## Date
 
@@ -41,12 +42,12 @@ rollback slot.
 *Trade-off:* the table grows with updates. In exchange, a rollback needs no reconstruction and the
 history of a token is queryable.
 
-### 2. The label comes from the user token paired with the reference NFT (#1222, in #1220)
+### 2. The label comes from the paired user token, and from the datum when there is none (#1222, #1225)
 
 The label (222 NFT, 333 FT, 444 RFT) is not in the datum. It is read from the user token minted with
 the reference NFT: the asset in the same transaction with **the same policy and the same base name**
 (reference NFT `000643b0 + base`, user token `<label prefix> + base`). If several are paired, the order
-is 222, then 333, then 444. If none is paired, the label is 333.
+is 222, then 333, then 444.
 
 The earlier rule took the prefixes of every asset in the transaction, whatever its policy or name, with
 222 winning. A transaction that also contained any unrelated 222 NFT then labelled every reference
@@ -55,13 +56,32 @@ SILVER and Wrapped pUSDC were stored as 222 for that reason, and 68 tokens whose
 444 carry fungible-token fields (77 if tokens that a later update relabelled 333 are counted). 357
 reference NFTs have rows with more than one label over their history.
 
-*Why this and not the datum shape:* the pairing is how CIP-68 defines the relation, it is available in
-the same transaction, and it does not guess. *Trade-offs and known gaps:*
+**When no user token is paired** (it was minted in another transaction), the label is **inferred from the
+fields the datum carries**:
 
-- The fallback to 333 is wrong for an NFT whose user token is minted in a **different** transaction.
-  Such an NFT is labelled 333 and then needs a description (decision 3). Not measured.
-- With both a 222 and a 333 paired, 222 wins (USDCx/USDrf LP has both on-chain). Nobody has decided
-  that this is right; it keeps the previous order.
+| Datum has | Label |
+|---|---|
+| `ticker` or `logo` (only the fungible token defines them) | 333 |
+| `image`, `mediaType` or `files`, and `decimals` | 444 |
+| `image`, `mediaType` or `files`, no `decimals` | 222 |
+| none of these | 333 |
+
+`decimals` alone does not decide, since the fungible token and the RFT both define it. A paired user token
+always wins over this guess.
+
+*Why pair first, and guess only as a fallback:* the pairing is how CIP-68 defines the relation and it does
+not guess; the datum shape is a heuristic and is used only when the pairing is not available. Before the
+inference, such a reference NFT was labelled 333. That is right for a fungible token (Wrapped SILVER) and
+wrong for an NFT, and 333 requires a description, so a description-less NFT minted that way was dropped.
+
+*Why infer and not look the user token up across transactions:* the lookup is exact but needs a UTxO or
+asset lookup at indexing time, which depends on other stores being enabled and costs a query per reference
+NFT. It was not done. *Trade-offs and known gaps:*
+
+- The inference can be wrong for a datum that mixes both kinds of fields. How many reference NFTs have no
+  paired token, and how many the guess would label differently from their real user token, is not measured.
+- With both a 222 and a 333 paired, 222 wins (USDCx/USDrf LP has both on-chain). Nobody has decided that
+  this is right; it keeps the previous order.
 - The opposite error (an NFT stored as 333) was possible before and is not measured.
 - Rows already stored keep their label until their datum is processed again.
 
@@ -69,7 +89,7 @@ What the label does and does not decide: it chooses the required fields (decisio
 row belongs to (the API reads fungible tokens only, see decision 10). It does **not** change what the
 API returns for a fungible subject, which reads the latest row of the reference NFT whatever its label.
 
-### 3. Required fields per label: strict for fungible tokens, lenient for NFTs and RFTs (#1221, in #1220)
+### 3. Required fields per label: strict for fungible tokens, lenient for NFTs and RFTs (#1221)
 
 | Label | Required to index | Spec |
 |---|---|---|
@@ -81,11 +101,11 @@ The processor derives the label first and then validates, because the check depe
 A fungible-token datum without a description is **not indexed**. This is a deliberate choice: fungible
 metadata without a description has little to show, the spec requires it, and the read path requires
 a description in the merged result (decision 10), so a CIP-68 row without one would only be useful if
-CIP-26 supplies it. How many such tokens exist on-chain has not been measured. NFTs and RFTs are kept without a description, which the spec
-allows. Before #1221 the same rule was applied to every label and valid NFTs were dropped silently;
-on mainnet at least 203 datums were affected (a lower bound).
+CIP-26 supplies it. How many such tokens exist on-chain has not been measured. NFTs and RFTs are kept
+without a description, which the spec allows. Before #1221 the same rule was applied to every label and
+valid NFTs were dropped silently; on mainnet at least 203 datums were affected (a lower bound).
 
-### 4. `image` is lenient: index, warn, do not validate (in #1220)
+### 4. `image` is lenient: index, warn, do not validate
 
 CIP-68 requires `image` for 222 and 444, and lists `https`, `ipfs`, `ar` and `data` as URI schemes.
 The module follows neither strictly:
@@ -102,25 +122,27 @@ consumer: NFT images are not exposed by the API today. `iagon://` support is to 
 separately; until then it is accepted like any other value. *Trade-off:* the table can hold images that
 no client can open, and nothing is validated.
 
-### 5. A logo or image given as a list of chunks is joined
+### 5. A logo or image given as a list of chunks is joined as bytes (#1226)
 
 A Plutus byte string is at most 64 bytes, so a longer URI (a `data:` URI, a long URL) can only be stored
 as a list of byte strings. The CIP defines this as `uri = bounded_bytes / [* bounded_bytes]`. The module
-joins the chunks for `logo` and `image`. Elements that are not byte strings are ignored. The other
-typed fields (`name`, `description`, `ticker`, `url`) are plain `bounded_bytes` in the CIP and are not
-joined.
+joins the chunks for `logo` and `image`. The chunks are joined as **bytes** and decoded once, so a
+multi-byte character cut by a chunk boundary survives (decoding each chunk on its own corrupted it).
+Elements that are not byte strings are ignored. The other typed fields (`name`, `description`, `ticker`,
+`url`) are plain `bounded_bytes` in the CIP and are not joined.
 
 On preprod, 240 of the 1,968 fungible tokens (181 with 2 chunks, 42 with 3, 14 with 4, 3 with 21) store
-their logo this way (not measured on mainnet). The CF token metadata registry does not read them and returns no logo (see
-cardano-foundation/cf-token-metadata-registry#104).
+their logo this way (not measured on mainnet). The CF token metadata registry does not read them and
+returns no logo (see cardano-foundation/cf-token-metadata-registry#104).
 
-### 6. Untrusted values are bounded; the rest of the datum is kept where possible
+### 6. Untrusted values are bounded; the rest of the datum is kept where possible (#1185, #1227)
 
 | Input | Rule | Effect |
 |---|---|---|
 | `version` | must fit in a `long` | the datum is skipped, with a WARN |
 | `decimals` | must be in [0, 255] and fit in a `long` | the value is dropped, the datum is kept |
 | `name`, `ticker`, `url`, `mediaType` | at most 255, 32, 250 and 255 characters, counted in UTF-16 units | the value is dropped; a dropped `name` skips the datum (decision 3) |
+| `logo`, `image` | at most 64 KiB, measured on the joined bytes | the value is dropped with a WARN, the datum is kept |
 | nesting depth | the CBOR decoder recurses; a `StackOverflowError` is caught | the datum is skipped, with a WARN |
 
 *Why:* a datum integer is unbounded, so narrowing it can wrap a large value into a plausible one; an
@@ -130,10 +152,12 @@ in UTF-16 units because H2 counts that way, and the bound must be safe on every 
 *Trade-off:* a long non-BMP name that PostgreSQL alone could store is rejected. The depth guard is a
 temporary workaround until the decoder stops recursing (cardano-client-lib#681).
 
-These bounds did not trigger on a full mainnet or preprod sync.
+The `logo` and `image` limit is the one the CIP-26 logo already has; the CIP-68 spec gives none. It cannot
+trigger on current data: the ledger limits a transaction to `maxTxSize` (16,384 bytes at epoch 660), so a
+datum cannot reach 64 KiB. It is there so the module does not rely on that parameter staying where it is.
+`description` is `TEXT` and still has no size bound.
 
-`description`, `logo` and `image` are `TEXT` and have no size bound in this module (the CIP-26 path does
-cap its logo at 64 KiB). That is an open question.
+The other bounds did not trigger on a full mainnet or preprod sync.
 
 ### 7. The version is stored as written, with no allow-list
 
@@ -147,22 +171,34 @@ is absent the map is read as a flat one. A nested entry that cannot be resolved 
 appears. *Trade-off:* an unknown version above 4 whose map happens to contain `"721"` is read as nested.
 Nothing like that has been seen on mainnet; preprod has 59 version-4 rows, one of them nested.
 
-### 8. Additional properties are stored, what cannot be represented is left out (#1159)
+### 8. Text is text when it is UTF-8, hex when it is not; what cannot be represented is left out (#1159, #1226)
 
-Keys other than the typed ones go to the `properties` column (`files` and `additional_properties`).
-In it, a Plutus constructor is stored as `{"constructor": n, "fields": [...]}`, and a byte string is
-stored as text if it is valid UTF-8 and as hex otherwise, because Plutus has one byte-string type for
-text and binary data alike. A value with no JSON form is left out on its own, not the whole datum: one
-unrepresentable property used to drop a token entirely (448 warnings for 434 distinct datums on a
-mainnet sync of the earlier code). *Trade-off:* a string such as `deadbeef` can be text or hex, and the reader cannot tell. The
-typed fields are still decoded as UTF-8 with replacement characters, so on-chain bytes that are not
-UTF-8 show up as `U+FFFD` (97 rows on a preprod sync, about 0.4%; not
-measured on mainnet); that is a known gap.
+CIP-68 says text is UTF-8, and Plutus has one byte-string type for text and binary data alike. Every text
+value (the typed fields `name`, `description`, `ticker`, `url`, `mediaType`, `logo` and `image`, and the
+values in additional properties) is stored as text if the bytes are valid UTF-8, and as **hex** otherwise.
+Null characters are stripped from text. Before #1226 the typed fields were decoded with replacement
+characters, so bytes that are not UTF-8 became `U+FFFD` and were lost (97 rows on a preprod sync, about
+0.4%; not measured on mainnet).
 
-### 9. A datum that cannot be indexed is skipped and reported once
+Keys other than the typed ones go to the `properties` column (`files` and `additional_properties`). In it,
+a Plutus constructor is stored as `{"constructor": n, "fields": [...]}`. A value with no JSON form is left
+out on its own, not the whole datum: one unrepresentable property used to drop a token entirely (448
+warnings for 434 distinct datums on a mainnet sync of the earlier code).
 
-A parse failure is one WARN line with the exception and the datum hex, so the case can be reproduced,
-and the stack trace is logged at DEBUG only, because a sync can hit many.
+*Trade-offs:* a string such as `deadbeef` can be text or hex, and the reader cannot tell. The API returns
+the hex string for the few tokens whose text field is not UTF-8, where it used to return garbled text.
+Hex is twice as long as the bytes, so a non-UTF-8 `name` of more than 127 bytes (or a `ticker` of more than
+16, a `url` of more than 125) now exceeds the length bound of decision 6 and is dropped, where it used to
+be kept with replacement characters.
+
+### 9. A datum that is not indexed is reported (#1159, #1228)
+
+- A parse failure is one WARN line with the exception and the datum hex, so the case can be reproduced,
+  and the stack trace is logged at DEBUG only, because a sync can hit many.
+- A datum that parses but is skipped for a missing required field (no `name`, or no `description` on a
+  fungible token) is one WARN line with the policy, the asset name, the label and the reason.
+- A datum that does not have the CIP-68 shape at all (not a constructor, no metadata map, no integer
+  version) is **not** logged: reference NFT outputs can carry arbitrary datums, and it would be noise.
 
 ### 10. Read model
 
@@ -179,26 +215,25 @@ fields of one response can come from two sources, and `show_cips_details` is the
 
 ## Consequences
 
-- Most skips are visible as a WARN. The exceptions are silent: a datum skipped because `name` is missing,
-  or because `description` is missing on a fungible token, leaves no log line.
+- Every skip caused by a missing required field, a parse failure or an over-limit value leaves a WARN.
+  Only a datum that does not have the CIP-68 shape is silent.
 - Because NFTs and RFTs are stored without being served, their rules can change later without a
   breaking API change.
 - Anything corrected in a rule needs a resync from before the affected slots to take effect on old rows.
 
 ## Open questions
 
-- Orphan reference NFTs (user token in another transaction): look it up across transactions, or infer
-  the label from the datum shape? (decision 2)
 - Both 222 and 333 paired under one policy and name: is 222 first the right order?
-- A size cap for `logo` and `image`, as the CIP-26 path has?
-- A warning, or a counter, for a fungible-token datum skipped for a missing description.
-- Typed text fields: keep the lossy UTF-8 decoding, or store hex for bytes that are not text, as is
-  done for additional properties?
+- How good is the datum-shape inference for a reference NFT with no paired token, and is an exact
+  cross-transaction lookup worth its cost? Not measured.
+- A size bound for `description`, which is still unbounded `TEXT`.
+- A counter or health indicator for skipped datums, instead of only log lines.
 - Whether a relabel or backfill job is wanted after a label fix, instead of a resync.
 
 ## References
 
 - #1159, #1185, #1202, #1208, #1209: parser hardening, version 4, constructor values
-- #1221, #1222, PR #1220: required fields per label, label pairing, lenient image
+- #1221, #1222, #1225, #1226, #1227, #1228, PR #1220: required fields per label, label pairing and
+  inference, text and hex, size cap, skip warnings, lenient image
 - cardano-foundation/cf-token-metadata-registry#104: backport of these fixes
 - `Cip68Processor`, `Cip68DatumParser`, `Cip68TokenService`, `TokenQueryService`
