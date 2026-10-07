@@ -164,6 +164,21 @@ class Cip68DatumParserTextTest {
         assertThat(warnings()).hasSize(2).allSatisfy(w -> assertThat(w).contains("Ignoring CIP-68").contains("max 65536"));
     }
 
+    @Test
+    void appliesTheLimitToASingleByteStringToo() throws Exception {
+        // not a list of chunks: one byte string over the limit (the CBOR encoder splits it on the wire)
+        byte[] big = new byte[Cip68DatumParser.URI_MAX_BYTES + 1];
+        Arrays.fill(big, (byte) 'a');
+        MapPlutusData properties = props("name", "n");
+        properties.put(BytesPlutusData.of("image"), BytesPlutusData.of(big));
+
+        ParsedCip68Datum parsed = parse(properties).orElseThrow();
+
+        assertThat(parsed.image()).isNull();
+        assertThat(parsed.name()).isEqualTo("n");
+        assertThat(warnings()).singleElement().satisfies(w -> assertThat(w).contains("'image'").contains("65537 bytes"));
+    }
+
     // ---------- helpers ----------
 
     private List<String> warnings() {
