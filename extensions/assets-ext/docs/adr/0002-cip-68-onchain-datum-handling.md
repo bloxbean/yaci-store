@@ -242,7 +242,7 @@ possibly wrongly; the warning is what makes that visible. A version 1 to 3 datum
 nested, as step 4 says. A flat map with an additional property named `"721"` that holds a map would be misread as
 nested. Neither exists on mainnet.
 
-### 8. Text is text when it is UTF-8, hex when it is not; what cannot be represented is left out (#1159, #1226)
+### 8. Text is text when it is UTF-8, hex when it is not; a property that holds a constructor is dropped (#1159, #1226, #1233)
 
 CIP-68 says text is UTF-8, and Plutus has one byte-string type for text and binary data alike. Its retrieval
 steps say to "encode all string entries to UTF-8 if possible, otherwise leave them in hex"; the module follows
@@ -253,10 +253,31 @@ Null characters are stripped from text. Before #1226 the typed fields were decod
 characters, so bytes that are not UTF-8 became `U+FFFD` and were lost (97 rows on a preprod sync, about
 0.4%; not measured on mainnet).
 
-Keys other than the typed ones go to the `properties` column (`files` and `additional_properties`). In it,
-a Plutus constructor is stored as `{"constructor": n, "fields": [...]}`. A value with no JSON form is left
-out on its own, not the whole datum: one unrepresentable property used to drop a token entirely (448
-warnings for 434 distinct datums on a mainnet sync of the earlier code).
+Keys other than the typed ones go to the `properties` column (`files` and `additional_properties`).
+The generic CIP-68 definition allows a metadata value to be a map, a list, an integer or a byte string, and
+Plutus data of any kind only in `extra`. **A property whose value holds a constructor, however deep (inside a
+list or a map too), is not valid metadata: it is dropped, the token is kept, and one WARN per property names
+the policy, the asset name and the property** (cut at 60 characters). The same applies to a property of a
+`files` entry. The rest of the datum, and the token, are indexed as usual. The full datum stays in
+`cip68_metadata.datum`, so the dropped value can be recovered.
+
+This is a bounded change of an earlier choice. #1209 fixed #1159 (a constructor made the parser throw and
+dropped the whole token: 448 warnings for 434 distinct datums on a mainnet sync of the earlier code) by storing
+a constructor as `{"constructor": n, "fields": [...]}`. That form is not defined by the CIP, whose step 5 of the
+retrieval steps covers strings only, so no other consumer reads it the same way, and nothing was logged.
+On mainnet 142 indexed tokens under 11 policies are affected (132 PBG voucher tokens with `owner`, 8 wrapped
+assets with `seed`, two with `contractData` and `isDyn`), and a further 203 datums of NFT collections, counted from
+the datums, carry `contractData`.
+
+*Considered and rejected:* dropping the whole token, the strictest reading of the CIP and consistent with
+decision 4. It would remove working tokens, among them the wrapped assets the API serves, over a field no client
+reads (the API does not expose `properties`). *Considered and rejected:* keeping the constructor in our JSON form,
+which is harmless but keeps a format of ours and logs nothing.
+
+*Trade-offs:* the dropped property is gone from `properties`, though recoverable from the datum. Map entries
+whose key is not a byte string are still left out, although the CDDL allows any metadata as a key; that is an open
+question. How the CIP could define a JSON form, or move such data to `extra`, is being discussed in
+cardano-foundation/CIPs#1289; this rule follows the CIP as it is and changes if the CIP does.
 
 *Trade-offs:* a string such as `deadbeef` can be text or hex, and the reader cannot tell. The API returns
 the hex string for the few tokens whose text field is not UTF-8, where it used to return garbled text.
@@ -317,12 +338,14 @@ fields of one response can come from two sources, and `show_cips_details` is the
 - How many tokens the strict `image` rule removes in total, which a resync with it will show.
 - A size bound for `description`, which is still unbounded `TEXT`.
 - A counter or health indicator for skipped datums, instead of only log lines.
+- Map keys that are not byte strings: the CDDL allows them (and Lucid and Blockfrost keep integer keys), the module
+  leaves them out.
 - Whether a relabel or backfill job is wanted after a label fix, instead of a resync.
 
 ## References
 
-- #1159, #1185, #1202, #1208, #1209: parser hardening, version 4, constructor values
-- #1221, #1222, #1225, #1226, #1227, #1228, #1231, #1232, PR #1220: required fields per label, label pairing and
+- #1159, #1185, #1202, #1208, #1209, #1233: parser hardening, version 4, constructor values (stored in #1209, dropped with a WARN in #1233)
+- #1221, #1222, #1225, #1226, #1227, #1228, #1231, #1232, #1233, PR #1220: required fields per label, label pairing and
   inference, text and hex, size cap, skip warnings, strict image, several reference NFTs in one output, the layout by structure
 - cardano-foundation/cf-token-metadata-registry#104: backport of these fixes
 - `Cip68Processor`, `Cip68DatumParser`, `Cip68TokenService`, `TokenQueryService`
