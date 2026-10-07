@@ -1,0 +1,192 @@
+package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.processor;
+
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
+import com.bloxbean.cardano.client.common.cbor.CborSerializationUtil;
+import com.bloxbean.cardano.client.plutus.spec.BigIntPlutusData;
+import com.bloxbean.cardano.client.plutus.spec.BytesPlutusData;
+import com.bloxbean.cardano.client.plutus.spec.ConstrPlutusData;
+import com.bloxbean.cardano.client.plutus.spec.MapPlutusData;
+import com.bloxbean.cardano.client.util.HexUtil;
+import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
+import com.bloxbean.cardano.yaci.store.common.domain.Amt;
+import com.bloxbean.cardano.yaci.store.events.EventMetadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Constants;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.parser.Cip68DatumParser;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service.Cip68TokenService;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.Cip68Metadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.repository.Cip68MetadataRepository;
+import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxoEvent;
+import com.bloxbean.cardano.yaci.store.utxo.domain.TxInputOutput;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.slf4j.LoggerFactory;
+
+import java.math.BigInteger;
+import java.util.ArrayList;
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+
+/**
+ * CIP-68 requires {@code image} for the 222 NFT and the 444 RFT. Parsing is lenient anyway: a token without
+ * one is indexed and a warning is logged, and the image or logo value is stored exactly as written, whatever
+ * its URI scheme (live tokens use {@code iagon://} and even free text, which the spec does not list).
+ * <p>
+ * Runs the real parser, token service and processor; only the repository is mocked.
+ */
+class Cip68LenientImageTest {
+
+    private static final String POLICY = "aabbccdd11223344aabbccdd11223344aabbccdd11223344aabbccdd";
+    private static final String BASE = "4e4654";
+    private static final String TX_HASH = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
+
+    /** Real mainnet reference-NFT datum of a "DID registration" sensor NFT: {@code mediaType} is image/svg+xml, but {@code image} is an empty byte string. */
+    private static final String DID_SENSOR_POLICY = "2578304f310696dbc7892dea72cd5396cfd44a1e9a34cc7a2d410b43";
+    private static final String DID_SENSOR_BASE = "323261663965313338366333366461616338636334313935";
+    private static final String DID_SENSOR_DATUM =
+            "d8799fbf4b6465736372697074696f6e583244494420726567697374726174696f6e20e28094206169722073656e736f"
+                    + "7220727069352d72656d6f74652d30312d61697248646576696365496452727069352d72656d6f74652d30312d616972"
+                    + "4364696458236469643a6d616c616d613a32326166396531333836633336646161633863633431393545696d61676540"
+                    + "436c61745133322e3733313031343037373235353937436c6e67522d39362e3636383339393438373531313238496d65"
+                    + "646961547970654d696d6167652f7376672b786d6c446e616d6558183232616639653133383663333664616163386363"
+                    + "343139354870726f746f636f6c506d616c616d612d6f7261636c652d76314c7265676973746572656441745818323032"
+                    + "362d30372d31325430313a30383a35372e3331365a4f73657276696365456e64706f696e74583c68747470733a2f2f61"
+                    + "70692e64616777656c6c6465762e636f6d2f73656e736f72732f6c61746573742f727069352d72656d6f74652d30312d"
+                    + "6169724f736574746c656d656e74436f756e744130467374617475734a72656769737465726564447479706543616972"
+                    + "ff03d8799fa0581c000643b0323261663965313338366333366461616338636334313935ffff";
+
+    private Cip68MetadataRepository repository;
+    private Cip68Processor processor;
+    private ListAppender<ILoggingEvent> logs;
+    private Logger processorLogger;
+
+    @BeforeEach
+    void setUp() {
+        repository = mock(Cip68MetadataRepository.class);
+        processor = new Cip68Processor(new Cip68TokenService(repository), new Cip68DatumParser(), repository);
+        processorLogger = (Logger) LoggerFactory.getLogger(Cip68Processor.class);
+        logs = new ListAppender<>();
+        logs.start();
+        processorLogger.addAppender(logs);
+    }
+
+    @AfterEach
+    void tearDown() {
+        processorLogger.detachAppender(logs);
+    }
+
+    @Test
+    void indexesTheRealSensorNftWithAnEmptyImageAndWarns() {
+        Cip68Metadata saved = index(DID_SENSOR_DATUM, DID_SENSOR_POLICY, DID_SENSOR_BASE, Cip68Constants.NFT_TOKEN_PREFIX);
+
+        assertThat(saved.getLabel()).isEqualTo(Cip68Constants.LABEL_NFT);
+        assertThat(saved.getImage()).isEmpty();
+        assertThat(saved.getMediaType()).isEqualTo("image/svg+xml");
+        assertThat(warnings()).singleElement().satisfies(w -> {
+            assertThat(w).contains("no image").contains(DID_SENSOR_POLICY).contains("000643b0" + DID_SENSOR_BASE);
+        });
+    }
+
+    @Test
+    void indexesAnNftWithoutAnImageKeyAndWarns() {
+        Cip68Metadata saved = index(datum("name", "Plain NFT"), POLICY, BASE, Cip68Constants.NFT_TOKEN_PREFIX);
+
+        assertThat(saved.getLabel()).isEqualTo(Cip68Constants.LABEL_NFT);
+        assertThat(saved.getImage()).isNull();
+        assertThat(warnings()).singleElement().satisfies(w -> assertThat(w).contains("no image"));
+    }
+
+    @Test
+    void indexesAnRftWithoutAnImageAndWarns() {
+        Cip68Metadata saved = index(datum("name", "Rich token"), POLICY, BASE, Cip68Constants.RICH_FUNGIBLE_TOKEN_PREFIX);
+
+        assertThat(saved.getLabel()).isEqualTo(Cip68Constants.LABEL_RFT);
+        assertThat(warnings()).singleElement().satisfies(w -> assertThat(w).contains("no image"));
+    }
+
+    @Test
+    void doesNotWarnForAFungibleTokenWithoutAnImage() {
+        // 333 uses logo, not image
+        Cip68Metadata saved = index(datum("name", "Coin", "description", "A coin"), POLICY, BASE, Cip68Constants.FUNGIBLE_TOKEN_PREFIX);
+
+        assertThat(saved.getLabel()).isEqualTo(Cip68Constants.LABEL_FT);
+        assertThat(warnings()).isEmpty();
+    }
+
+    @Test
+    void storesAnIagonImageAsWrittenWithoutWarning() {
+        String image = "iagon://675816de7e3fc1.26175981_ReserveChardonnayPG";
+
+        Cip68Metadata saved = index(datum("name", "Wine", "image", image), POLICY, BASE, Cip68Constants.NFT_TOKEN_PREFIX);
+
+        assertThat(saved.getImage()).isEqualTo(image);
+        assertThat(warnings()).isEmpty();
+    }
+
+    @Test
+    void storesFreeTextAsTheImageWithoutValidatingIt() {
+        // seen on mainnet: an image that is not a URI at all
+        Cip68Metadata saved = index(datum("name", "Odd", "image", "image IPFS here"), POLICY, BASE, Cip68Constants.NFT_TOKEN_PREFIX);
+
+        assertThat(saved.getImage()).isEqualTo("image IPFS here");
+        assertThat(warnings()).isEmpty();
+    }
+
+    @Test
+    void storesAnIagonLogoAsWrittenForAFungibleToken() {
+        String logo = "iagon://6911e6dd275fee62fb8917ba";
+
+        Cip68Metadata saved = index(datum("name", "Coin", "description", "A coin", "logo", logo), POLICY, BASE, Cip68Constants.FUNGIBLE_TOKEN_PREFIX);
+
+        assertThat(saved.getLogo()).isEqualTo(logo);
+    }
+
+    private List<String> warnings() {
+        return logs.list.stream().filter(e -> e.getLevel() == Level.WARN).map(ILoggingEvent::getFormattedMessage).toList();
+    }
+
+    /** Indexes one transaction (reference NFT with the datum, plus its paired user token) and returns the saved row. */
+    private Cip68Metadata index(String datum, String policy, String base, String userTokenPrefix) {
+        AddressUtxo refNft = AddressUtxo.builder().txHash(TX_HASH).txIndex(0).inlineDatum(datum)
+                .amounts(List.of(amount(policy + Cip68Constants.REFERENCE_TOKEN_PREFIX + base))).build();
+        AddressUtxo userToken = AddressUtxo.builder().txHash(TX_HASH).txIndex(1)
+                .amounts(List.of(amount(policy + userTokenPrefix + base))).build();
+        processor.processTransaction(AddressUtxoEvent.builder()
+                .metadata(EventMetadata.builder().slot(100L).build())
+                .txInputOutputs(List.of(TxInputOutput.builder().outputs(List.of(refNft, userToken)).build()))
+                .build());
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Iterable<Cip68Metadata>> captor = ArgumentCaptor.forClass(Iterable.class);
+        verify(repository).saveAll(captor.capture());
+        List<Cip68Metadata> rows = new ArrayList<>();
+        captor.getValue().forEach(rows::add);
+        assertThat(rows).hasSize(1);
+        return rows.getFirst();
+    }
+
+    /** A CIP-68 datum with the given text properties (key, value, key, value, ...) and version 1. */
+    private static String datum(String... keyValues) {
+        MapPlutusData properties = new MapPlutusData();
+        for (int i = 0; i < keyValues.length; i += 2) {
+            properties.put(BytesPlutusData.of(keyValues[i]), BytesPlutusData.of(keyValues[i + 1]));
+        }
+        ConstrPlutusData datum = ConstrPlutusData.of(0, properties, BigIntPlutusData.of(1));
+        try {
+            return HexUtil.encodeHexString(CborSerializationUtil.serialize(datum.serialize()));
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private static Amt amount(String unit) {
+        return Amt.builder().unit(unit).quantity(BigInteger.ONE).build();
+    }
+}

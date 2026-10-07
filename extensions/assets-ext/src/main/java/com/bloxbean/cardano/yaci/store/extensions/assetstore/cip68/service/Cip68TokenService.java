@@ -37,8 +37,9 @@ public class Cip68TokenService {
      * {@code description} only for the 333 fungible token: for the 222 NFT and the 444 RFT it is
      * declared as {@code ? description}, so a datum without one is valid and is kept.
      * <p>
-     * The spec also requires {@code image} for 222 and 444. That is deliberately not enforced:
-     * some already-indexed NFTs have no image, and dropping them now would remove stored tokens.
+     * The spec also requires {@code image} for 222 and 444. That is deliberately not enforced here:
+     * parsing is lenient, so a token without an image is kept (the processor logs a warning), and the
+     * image or logo value, including its URI scheme, is stored as written and never validated.
      *
      * @param parsed the parsed datum
      * @param label  the user-token label the datum belongs to ({@link Cip68Constants#LABEL_NFT},
