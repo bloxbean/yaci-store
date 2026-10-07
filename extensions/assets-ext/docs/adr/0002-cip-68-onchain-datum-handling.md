@@ -49,6 +49,13 @@ the reference NFT: the asset in the same transaction with **the same policy and 
 (reference NFT `000643b0 + base`, user token `<label prefix> + base`). If several are paired, the order
 is 222, then 333, then 444.
 
+Two remarks in the CIP's "Constraints and conditions" shape this rule. The user token does **not** have to
+be minted in the same transaction as the reference NFT, so looking inside one transaction is a heuristic,
+not the CIP's definition (hence the inference below). And there **may be several user tokens for one
+reference NFT**, for example a 222 and a 333 with the same name, so one metadata record can legitimately
+serve more than one token type. The table holds one label per row, so when several are paired the order
+above is a tie-break forced by the model: it does not claim that one of them is the "right" label.
+
 The earlier rule took the prefixes of every asset in the transaction, whatever its policy or name, with
 222 winning. A transaction that also contained any unrelated 222 NFT then labelled every reference
 NFT in it 222. On mainnet, FLDT, KWIC and Shards (each minted next to its own 333 token) and Wrapped
@@ -80,8 +87,11 @@ NFT. It was not done. *Trade-offs and known gaps:*
 
 - The inference can be wrong for a datum that mixes both kinds of fields. How many reference NFTs have no
   paired token, and how many the guess would label differently from their real user token, is not measured.
-- With both a 222 and a 333 paired, 222 wins (USDCx/USDrf LP has both on-chain). Nobody has decided that
-  this is right; it keeps the previous order.
+- With several paired user tokens (USDCx/USDrf LP has both a 222 and a 333 on-chain), one label has to be
+  chosen although the CIP allows all of them. 222 wins because that is the order the code already had, and
+  it only matters for the required-field check (decision 3: a description is required with 333, not with
+  222). It does not change what the API serves for a fungible subject. Recording every matching label
+  instead of one would remove the tie-break; that is not done.
 - The opposite error (an NFT stored as 333) was possible before and is not measured.
 - Rows already stored keep their label until their datum is processed again.
 
@@ -223,7 +233,9 @@ fields of one response can come from two sources, and `show_cips_details` is the
 
 ## Open questions
 
-- Both 222 and 333 paired under one policy and name: is 222 first the right order?
+- One label per row, although the CIP allows several user tokens for one reference NFT: is the 222, 333,
+  444 tie-break enough, or should the table record every matching label? How common the case is has not
+  been measured.
 - How good is the datum-shape inference for a reference NFT with no paired token, and is an exact
   cross-transaction lookup worth its cost? Not measured.
 - A size bound for `description`, which is still unbounded `TEXT`.
