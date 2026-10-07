@@ -145,20 +145,21 @@ public class Cip68Processor {
     }
 
     /**
-     * The reference NFTs of an output whose datum should be indexed. An output with one reference NFT is the
-     * normal case. With several, a nested (version 4) datum carries the metadata of each, so all of them are
-     * indexed, each resolved to its own entry. A flat datum describes a single token and cannot be tied to
-     * any of several, so only the first is indexed and the rest are reported, not skipped silently.
+     * The reference NFTs of an output whose datum should be indexed: all of them. An output with one reference NFT
+     * is the normal case. With several, a nested (version 4) datum carries the metadata of each, each resolved to its
+     * own entry. A flat datum has no entry per token, but the CIP's retrieval steps look up the output of the
+     * reference NFT and read its datum, whatever else the output holds, so a flat datum is the metadata of every
+     * reference NFT in the output. They are all indexed with it, and one warning lists them so the case can be audited.
      */
     private List<Amt> referenceNftsToIndex(AddressUtxo output) {
         List<Amt> refNfts = cip68TokenService.extractReferenceNfts(output);
-        if (refNfts.size() <= 1 || cip68DatumParser.hasNestedMetadata(output.getInlineDatum())) {
-            return refNfts;
+        if (refNfts.size() > 1 && !cip68DatumParser.hasNestedMetadata(output.getInlineDatum())) {
+            log.warn("Output {}#{} holds {} reference NFTs with a flat CIP-68 datum; CIP-68 gives a flat datum to every "
+                            + "reference NFT in the output, so indexing it for all of them: {}",
+                    output.getTxHash(), output.getOutputIndex(), refNfts.size(),
+                    refNfts.stream().map(Amt::getUnit).collect(Collectors.joining(", ")));
         }
-        log.warn("Output {}#{} holds {} reference NFTs with a flat CIP-68 datum, which describes one token; "
-                        + "indexing only {} and ignoring the other {}",
-                output.getTxHash(), output.getOutputIndex(), refNfts.size(), refNfts.getFirst().getUnit(), refNfts.size() - 1);
-        return List.of(refNfts.getFirst());
+        return refNfts;
     }
 
     /** A datum that is not indexed because it breaks what CIP-68 requires leaves a trace, not a silent gap. */
