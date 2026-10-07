@@ -52,10 +52,11 @@ public class Cip68Processor {
                 cip68TokenService.extractReferenceNft(output).ifPresent(refNftAmt -> {
                     AssetType refNftAssetType = AssetType.fromUnit(refNftAmt.getUnit());
                     cip68DatumParser.parse(output.getInlineDatum(), refNftAssetType).ifPresent(parsed -> {
-                        if (!cip68TokenService.isValidMetadata(parsed)) {
+                        // The label comes first: which fields a datum must have depends on it
+                        int label = deriveLabel(refNftAssetType, coMintedPrefixesInTx);
+                        if (!cip68TokenService.isValidMetadata(parsed, label)) {
                             return;
                         }
-                        int label = deriveLabel(refNftAssetType, coMintedPrefixesInTx);
                         entities.add(buildCip68Metadata(
                                 parsed, refNftAssetType, output.getInlineDatum(), slot,
                                 output.getTxHash(), output.getTxIndex(), label));
