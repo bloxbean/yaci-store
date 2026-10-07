@@ -37,13 +37,8 @@ class Cip68NftWithoutDescriptionTest {
     private static final String BASE_NAME = "4e4654";
     private static final String TX_HASH = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
 
-    /** Datum from bloxbean/yaci-store#1159, and two picked at random from the mainnet datums that lack one. */
+    /** Two picked at random from the mainnet datums that have an image but no description. */
     private static final Map<String, String> NFT_DATUMS_WITHOUT_DESCRIPTION = Map.of(
-            "d87982a3446e616d65464e465420233145696d616765404c636f6e747261637444617461d879860181581cdc9acfee35"
-                    + "243d123e8f10bc58692a6bc5aa3135c7eafc2aac9daafcd87a80581c9abc17656a6d1c24688292777c18c1ce599845a5"
-                    + "88f4d893c1884da2d87a80d87a8001",
-            "NFT #1",
-
             "d87982a6446e616d65581854686520666f72676f7474656e20736f63696574792023364566696c657381a34373726358"
                     + "35697066733a2f2f516d54676d553238664156685a77556f66754545744e5666317150675779514b6d46345431397359"
                     + "4c4c67646157446e616d65581854686520666f72676f7474656e20736f6369657479202336496d656469615479706549"
@@ -62,6 +57,12 @@ class Cip68NftWithoutDescriptionTest {
                     + "536e536f56543933326432516973367741473853634676376d69425a39446e616d6550526f626f204c6c616d61202333"
                     + "34333401ff",
             "Robo Llama #3434");
+
+    /** Datum from bloxbean/yaci-store#1159: no description, and `image` is an empty byte string. */
+    private static final String NFT_NO_DESCRIPTION_EMPTY_IMAGE =
+            "d87982a3446e616d65464e465420233145696d616765404c636f6e747261637444617461d879860181581cdc9acfee35"
+                    + "243d123e8f10bc58692a6bc5aa3135c7eafc2aac9daafcd87a80581c9abc17656a6d1c24688292777c18c1ce599845a5"
+                    + "88f4d893c1884da2d87a80d87a8001";
 
     private Cip68MetadataRepository repository;
     private Cip68Processor processor;
@@ -85,6 +86,14 @@ class Cip68NftWithoutDescriptionTest {
             assertThat(saved.getDescription()).as(name).isNull();
             assertThat(saved.getDatum()).as(name).isEqualTo(datum);
         });
+    }
+
+    @Test
+    void dropsAnNftWhoseImageIsEmpty() {
+        // no description is fine for an NFT, but CIP-68 requires an image and this datum's is empty
+        processor.processTransaction(event(NFT_NO_DESCRIPTION_EMPTY_IMAGE, "000de140"));
+
+        verify(repository, never()).saveAll(any());
     }
 
     @Test

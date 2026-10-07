@@ -295,7 +295,7 @@ public class Cip68DatumParser {
      * <p>
      * The value is capped at {@value #URI_MAX_BYTES} bytes (the CIP-26 logo has the same limit): an
      * over-long value is dropped with a warning and the rest of the datum is kept. The scheme is not
-     * validated; the value is stored as written.
+     * checked here; {@code Cip68TokenService#invalidReason} checks the image of a 222 or 444 token.
      */
     private Optional<String> getStringOrChunkedProperty(String propertyName, MapPlutusData mapPlutusData) {
         PlutusData property = mapPlutusData.getMap().get(BytesPlutusData.of(propertyName));

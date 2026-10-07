@@ -259,9 +259,65 @@ class Cip68TokenServiceTest {
         }
 
         @Test
-        void nftWithoutImageIsStillAccepted() {
-            // The spec requires `image` for 222/444, but already-indexed NFTs lack one; not enforced
-            assertThat(service.isValidMetadata(datum("name", "desc", null), Cip68Constants.LABEL_NFT)).isTrue();
+        void nftWithoutImageIsInvalid() {
+            // CIP-68 requires `image` for 222
+            assertThat(service.isValidMetadata(datum("name", "desc", null), Cip68Constants.LABEL_NFT)).isFalse();
+            assertThat(service.invalidReason(datum("name", "desc", null), Cip68Constants.LABEL_NFT))
+                    .hasValueSatisfying(r -> assertThat(r).contains("no image").contains("222"));
+        }
+
+        @Test
+        void rftWithoutImageIsInvalid() {
+            // ... and for 444
+            assertThat(service.invalidReason(datum("name", "desc", null), Cip68Constants.LABEL_RFT))
+                    .hasValueSatisfying(r -> assertThat(r).contains("no image").contains("444"));
+        }
+
+        @Test
+        void emptyOrBlankImageIsInvalid() {
+            assertThat(service.isValidMetadata(datum("name", "desc", ""), Cip68Constants.LABEL_NFT)).isFalse();
+            assertThat(service.isValidMetadata(datum("name", "desc", "  "), Cip68Constants.LABEL_RFT)).isFalse();
+        }
+
+        @Test
+        void fungibleTokenNeedsNoImage() {
+            // 333 has `logo`, which is optional
+            assertThat(service.isValidMetadata(datum("name", "desc", null), Cip68Constants.LABEL_FT)).isTrue();
+        }
+
+        @Test
+        void imageSchemesCip68AllowAreValid() {
+            for (String image : new String[]{"https://example.com/a.png", "ipfs://Qm", "ar://abc", "data:image/png;base64,AAAA",
+                    "IPFS://Qm", "HTTPS://example.com/a.png"}) {
+                assertThat(service.isValidMetadata(datum("name", null, image), Cip68Constants.LABEL_NFT))
+                        .as(image).isTrue();
+                assertThat(service.isValidMetadata(datum("name", null, image), Cip68Constants.LABEL_RFT))
+                        .as(image).isTrue();
+            }
+        }
+
+        @Test
+        void imageWithAnotherSchemeIsInvalid() {
+            for (String image : new String[]{"iagon://675816de7e3fc1.26175981_Wine", "http://example.com/a.png", "ftp://x/y",
+                    "image IPFS here", "Qm123", "ipfs:", "ipfs"}) {
+                assertThat(service.invalidReason(datum("name", "desc", image), Cip68Constants.LABEL_NFT))
+                        .as(image).hasValueSatisfying(r -> assertThat(r).contains("not a URI").contains("https, ipfs, ar, data"));
+            }
+        }
+
+        @Test
+        void aLongInvalidImageIsAbbreviatedInTheReason() {
+            String reason = service.invalidReason(datum("name", "desc", "iagon://" + "x".repeat(500)), Cip68Constants.LABEL_NFT)
+                    .orElseThrow();
+
+            assertThat(reason).contains("iagon://").hasSizeLessThan(250);
+        }
+
+        @Test
+        void aFungibleTokensLogoIsNotChecked() {
+            ParsedCip68Datum ft = new ParsedCip68Datum(null, "desc", "iagon://logo", "name", null, null, 1L, null, null, null);
+
+            assertThat(service.isValidMetadata(ft, Cip68Constants.LABEL_FT)).isTrue();
         }
 
         @Test

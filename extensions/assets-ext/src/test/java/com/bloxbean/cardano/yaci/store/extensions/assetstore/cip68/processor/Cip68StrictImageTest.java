@@ -8,6 +8,7 @@ import com.bloxbean.cardano.client.common.cbor.CborSerializationUtil;
 import com.bloxbean.cardano.client.plutus.spec.BigIntPlutusData;
 import com.bloxbean.cardano.client.plutus.spec.BytesPlutusData;
 import com.bloxbean.cardano.client.plutus.spec.ConstrPlutusData;
+import com.bloxbean.cardano.client.plutus.spec.ListPlutusData;
 import com.bloxbean.cardano.client.plutus.spec.MapPlutusData;
 import com.bloxbean.cardano.client.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
@@ -29,19 +30,24 @@ import org.slf4j.LoggerFactory;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 /**
- * CIP-68 requires {@code image} for the 222 NFT and the 444 RFT. Parsing is lenient anyway: a token without
- * one is indexed and a warning is logged, and the image or logo value is stored exactly as written, whatever
- * its URI scheme (live tokens use {@code iagon://} and even free text, which the spec does not list).
+ * CIP-68 requires {@code image} for the 222 NFT and the 444 RFT, as a URI with one of the schemes {@code https},
+ * {@code ipfs}, {@code ar} or {@code data}. Parsing is strict about it: a token without an image, or with an
+ * image of another scheme (live tokens use {@code iagon://}, and even free text), is not indexed and a warning
+ * says which token was dropped and why. The 333 fungible token has no {@code image}, and its optional
+ * {@code logo} is stored as written.
  * <p>
  * Runs the real parser, token service and processor; only the repository is mocked.
  */
-class Cip68LenientImageTest {
+class Cip68StrictImageTest {
 
     private static final String POLICY = "aabbccdd11223344aabbccdd11223344aabbccdd11223344aabbccdd";
     private static final String BASE = "4e4654";
@@ -83,77 +89,98 @@ class Cip68LenientImageTest {
     }
 
     @Test
-    void indexesTheRealSensorNftWithAnEmptyImageAndWarns() {
-        Cip68Metadata saved = index(DID_SENSOR_DATUM, DID_SENSOR_POLICY, DID_SENSOR_BASE, Cip68Constants.NFT_TOKEN_PREFIX);
+    void dropsTheRealSensorNftWithAnEmptyImageAndWarns() {
+        assertThat(index(DID_SENSOR_DATUM, DID_SENSOR_POLICY, DID_SENSOR_BASE, Cip68Constants.NFT_TOKEN_PREFIX)).isEmpty();
 
-        assertThat(saved.getLabel()).isEqualTo(Cip68Constants.LABEL_NFT);
-        assertThat(saved.getImage()).isEmpty();
-        assertThat(saved.getMediaType()).isEqualTo("image/svg+xml");
-        assertThat(warnings()).singleElement().satisfies(w -> {
-            assertThat(w).contains("no image").contains(DID_SENSOR_POLICY).contains("000643b0" + DID_SENSOR_BASE);
-        });
+        assertThat(warnings()).singleElement().satisfies(w -> assertThat(w)
+                .contains("Skipping CIP-68 datum").contains(DID_SENSOR_POLICY).contains("000643b0" + DID_SENSOR_BASE)
+                .contains("(label 222)").contains("no image"));
     }
 
     @Test
-    void indexesAnNftWithoutAnImageKeyAndWarns() {
-        Cip68Metadata saved = index(datum("name", "Plain NFT"), POLICY, BASE, Cip68Constants.NFT_TOKEN_PREFIX);
+    void dropsAnNftWithoutAnImageKeyAndWarns() {
+        assertThat(index(datum("name", "Plain NFT"), POLICY, BASE, Cip68Constants.NFT_TOKEN_PREFIX)).isEmpty();
 
-        assertThat(saved.getLabel()).isEqualTo(Cip68Constants.LABEL_NFT);
-        assertThat(saved.getImage()).isNull();
-        assertThat(warnings()).singleElement().satisfies(w -> assertThat(w).contains("no image"));
+        assertThat(warnings()).singleElement().satisfies(w -> assertThat(w).contains("no image").contains("(label 222)"));
     }
 
     @Test
-    void indexesAnRftWithoutAnImageAndWarns() {
-        Cip68Metadata saved = index(datum("name", "Rich token"), POLICY, BASE, Cip68Constants.RICH_FUNGIBLE_TOKEN_PREFIX);
+    void dropsAnRftWithoutAnImageAndWarns() {
+        assertThat(index(datum("name", "Rich token"), POLICY, BASE, Cip68Constants.RICH_FUNGIBLE_TOKEN_PREFIX)).isEmpty();
 
-        assertThat(saved.getLabel()).isEqualTo(Cip68Constants.LABEL_RFT);
-        assertThat(warnings()).singleElement().satisfies(w -> assertThat(w).contains("no image"));
+        assertThat(warnings()).singleElement().satisfies(w -> assertThat(w).contains("no image").contains("(label 444)"));
     }
 
     @Test
-    void doesNotWarnForAFungibleTokenWithoutAnImage() {
+    void keepsAFungibleTokenWithoutAnImageWithoutWarning() {
         // 333 uses logo, not image
-        Cip68Metadata saved = index(datum("name", "Coin", "description", "A coin"), POLICY, BASE, Cip68Constants.FUNGIBLE_TOKEN_PREFIX);
+        Optional<Cip68Metadata> saved = index(datum("name", "Coin", "description", "A coin"), POLICY, BASE, Cip68Constants.FUNGIBLE_TOKEN_PREFIX);
 
-        assertThat(saved.getLabel()).isEqualTo(Cip68Constants.LABEL_FT);
+        assertThat(saved).get().extracting(Cip68Metadata::getLabel).isEqualTo(Cip68Constants.LABEL_FT);
         assertThat(warnings()).isEmpty();
     }
 
     @Test
-    void storesAnIagonImageAsWrittenWithoutWarning() {
+    void dropsAnIagonImageAndSaysWhy() {
+        // live mainnet wine NFTs; wallets follow the CIP and cannot show iagon://, so Iagon would have to take it to the CIP
         String image = "iagon://675816de7e3fc1.26175981_ReserveChardonnayPG";
 
-        Cip68Metadata saved = index(datum("name", "Wine", "image", image), POLICY, BASE, Cip68Constants.NFT_TOKEN_PREFIX);
+        assertThat(index(datum("name", "Wine", "image", image), POLICY, BASE, Cip68Constants.NFT_TOKEN_PREFIX)).isEmpty();
 
-        assertThat(saved.getImage()).isEqualTo(image);
+        assertThat(warnings()).singleElement().satisfies(w -> assertThat(w)
+                .contains("Skipping CIP-68 datum").contains(POLICY).contains("(label 222)")
+                .contains(image).contains("not a URI with one of the schemes CIP-68 allows (https, ipfs, ar, data)"));
+    }
+
+    @Test
+    void dropsFreeTextImageAndSaysWhy() {
+        // seen on mainnet: an image that is not a URI at all
+        assertThat(index(datum("name", "Odd", "image", "image IPFS here"), POLICY, BASE, Cip68Constants.NFT_TOKEN_PREFIX)).isEmpty();
+
+        assertThat(warnings()).singleElement().satisfies(w -> assertThat(w).contains("image IPFS here").contains("not a URI"));
+    }
+
+    @Test
+    void keepsImagesWithAnAllowedScheme() {
+        for (String image : List.of("https://example.com/a.png", "ipfs://QmHash", "ar://txid", "data:image/svg+xml;base64,AAAA")) {
+            org.mockito.Mockito.clearInvocations(repository);
+
+            Optional<Cip68Metadata> saved = index(datum("name", "Ok", "image", image), POLICY, BASE, Cip68Constants.NFT_TOKEN_PREFIX);
+
+            assertThat(saved).as(image).get().extracting(Cip68Metadata::getImage).isEqualTo(image);
+        }
         assertThat(warnings()).isEmpty();
     }
 
     @Test
-    void storesFreeTextAsTheImageWithoutValidatingIt() {
-        // seen on mainnet: an image that is not a URI at all
-        Cip68Metadata saved = index(datum("name", "Odd", "image", "image IPFS here"), POLICY, BASE, Cip68Constants.NFT_TOKEN_PREFIX);
+    void keepsAChunkedIpfsImage() {
+        // an image longer than 64 bytes is a list of chunks; the joined value is what is checked
+        String image = "ipfs://" + "Q".repeat(80);
+        MapPlutusData properties = new MapPlutusData();
+        properties.put(BytesPlutusData.of("name"), BytesPlutusData.of("Long"));
+        properties.put(BytesPlutusData.of("image"), ListPlutusData.of(
+                BytesPlutusData.of(image.substring(0, 50)), BytesPlutusData.of(image.substring(50))));
 
-        assertThat(saved.getImage()).isEqualTo("image IPFS here");
-        assertThat(warnings()).isEmpty();
+        Optional<Cip68Metadata> saved = index(datum(properties), POLICY, BASE, Cip68Constants.NFT_TOKEN_PREFIX);
+
+        assertThat(saved).get().extracting(Cip68Metadata::getImage).isEqualTo(image);
     }
 
     @Test
     void storesAnIagonLogoAsWrittenForAFungibleToken() {
         String logo = "iagon://6911e6dd275fee62fb8917ba";
 
-        Cip68Metadata saved = index(datum("name", "Coin", "description", "A coin", "logo", logo), POLICY, BASE, Cip68Constants.FUNGIBLE_TOKEN_PREFIX);
+        Optional<Cip68Metadata> saved = index(datum("name", "Coin", "description", "A coin", "logo", logo), POLICY, BASE, Cip68Constants.FUNGIBLE_TOKEN_PREFIX);
 
-        assertThat(saved.getLogo()).isEqualTo(logo);
+        assertThat(saved).get().extracting(Cip68Metadata::getLogo).isEqualTo(logo);
     }
 
     private List<String> warnings() {
         return logs.list.stream().filter(e -> e.getLevel() == Level.WARN).map(ILoggingEvent::getFormattedMessage).toList();
     }
 
-    /** Indexes one transaction (reference NFT with the datum, plus its paired user token) and returns the saved row. */
-    private Cip68Metadata index(String datum, String policy, String base, String userTokenPrefix) {
+    /** Indexes one transaction (reference NFT with the datum, plus its paired user token) and returns the saved row, if any. */
+    private Optional<Cip68Metadata> index(String datum, String policy, String base, String userTokenPrefix) {
         AddressUtxo refNft = AddressUtxo.builder().txHash(TX_HASH).txIndex(0).inlineDatum(datum)
                 .amounts(List.of(amount(policy + Cip68Constants.REFERENCE_TOKEN_PREFIX + base))).build();
         AddressUtxo userToken = AddressUtxo.builder().txHash(TX_HASH).txIndex(1)
@@ -165,11 +192,16 @@ class Cip68LenientImageTest {
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Iterable<Cip68Metadata>> captor = ArgumentCaptor.forClass(Iterable.class);
-        verify(repository).saveAll(captor.capture());
+        try {
+            verify(repository).saveAll(captor.capture());
+        } catch (AssertionError notSaved) {
+            verify(repository, never()).saveAll(any());
+            return Optional.empty();
+        }
         List<Cip68Metadata> rows = new ArrayList<>();
         captor.getValue().forEach(rows::add);
         assertThat(rows).hasSize(1);
-        return rows.getFirst();
+        return Optional.of(rows.getFirst());
     }
 
     /** A CIP-68 datum with the given text properties (key, value, key, value, ...) and version 1. */
@@ -178,6 +210,10 @@ class Cip68LenientImageTest {
         for (int i = 0; i < keyValues.length; i += 2) {
             properties.put(BytesPlutusData.of(keyValues[i]), BytesPlutusData.of(keyValues[i + 1]));
         }
+        return datum(properties);
+    }
+
+    private static String datum(MapPlutusData properties) {
         ConstrPlutusData datum = ConstrPlutusData.of(0, properties, BigIntPlutusData.of(1));
         try {
             return HexUtil.encodeHexString(CborSerializationUtil.serialize(datum.serialize()));
