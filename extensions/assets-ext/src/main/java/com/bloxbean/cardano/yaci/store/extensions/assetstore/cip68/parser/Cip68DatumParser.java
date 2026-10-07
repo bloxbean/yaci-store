@@ -379,26 +379,11 @@ public class Cip68DatumParser {
         }
         List<Map<String, Object>> result = new ArrayList<>();
         for (PlutusData item : filesList.getPlutusDataList()) {
-            if (!(item instanceof MapPlutusData fileMap)) {
-                continue;
-            }
-            Map<String, Object> file = new LinkedHashMap<>();
-            for (Map.Entry<PlutusData, PlutusData> e : byteStringKeysFirst(fileMap)) {
-                String key = keyText(e.getKey());
-                if (key == null) {
-                    warnKeyLeftOut("files[]", e.getKey(), referenceNft);
-                    continue;
+            if (item instanceof MapPlutusData fileMap) {
+                Map<String, Object> file = readEntries(fileMap, "files[]", false, referenceNft);
+                if (!file.isEmpty()) {
+                    result.add(file);
                 }
-                if (dropsConstructorProperty("files[]." + key, e.getValue(), referenceNft)) {
-                    continue;
-                }
-                Object value = unwrapPlutusValue(e.getValue());
-                if (value != null) {
-                    putFirst(file, key, value, referenceNft);
-                }
-            }
-            if (!file.isEmpty()) {
-                result.add(file);
             }
         }
         return result;
@@ -410,23 +395,38 @@ public class Cip68DatumParser {
      * go into {@code properties.additional_properties} for downstream consumers.
      */
     private Map<String, Object> parseAdditionalProperties(MapPlutusData properties, @Nullable AssetType referenceNft) {
+        return readEntries(properties, "additional property", true, referenceNft);
+    }
+
+    /**
+     * Converts the entries of a metadata map to JSON-ready values, keyed by the text of the key. {@code where} names
+     * the map in warnings ({@code files[]} entries are reported as {@code files[].<key>}); {@code skipTypedKeys} leaves
+     * out the keys that have a typed column.
+     */
+    private Map<String, Object> readEntries(MapPlutusData map, String where, boolean skipTypedKeys, @Nullable AssetType referenceNft) {
         Map<String, Object> result = new LinkedHashMap<>();
-        for (Map.Entry<PlutusData, PlutusData> e : byteStringKeysFirst(properties)) {
-            String key = keyText(e.getKey());
-            if (key == null) {
-                warnKeyLeftOut("additional property", e.getKey(), referenceNft);
-                continue;
-            }
-            if (TYPED_KEYS.contains(key) || dropsConstructorProperty(key, e.getValue(), referenceNft)) {
-                continue;
-            }
-            // Check before storing: an unsupported value must drop only this property, not the datum
-            Object value = unwrapPlutusValue(e.getValue());
-            if (value != null) {
-                putFirst(result, key, value, referenceNft);
-            }
+        for (Map.Entry<PlutusData, PlutusData> e : byteStringKeysFirst(map)) {
+            readEntry(result, e, where, skipTypedKeys, referenceNft);
         }
         return result;
+    }
+
+    private void readEntry(Map<String, Object> result, Map.Entry<PlutusData, PlutusData> entry, String where,
+                           boolean skipTypedKeys, @Nullable AssetType referenceNft) {
+        String key = keyText(entry.getKey());
+        if (key == null) {
+            warnKeyLeftOut(where, entry.getKey(), referenceNft);
+            return;
+        }
+        String reportedKey = skipTypedKeys ? key : where + "." + key;
+        if ((skipTypedKeys && TYPED_KEYS.contains(key)) || dropsConstructorProperty(reportedKey, entry.getValue(), referenceNft)) {
+            return;
+        }
+        // Check before storing: an unsupported value must drop only this property, not the datum
+        Object value = unwrapPlutusValue(entry.getValue());
+        if (value != null) {
+            putFirst(result, key, value, referenceNft);
+        }
     }
 
     /**
