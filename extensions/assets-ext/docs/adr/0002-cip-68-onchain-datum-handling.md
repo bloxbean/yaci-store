@@ -198,7 +198,9 @@ Nothing like that has been seen on mainnet; preprod has 59 version-4 rows, one o
 
 ### 8. Text is text when it is UTF-8, hex when it is not; what cannot be represented is left out (#1159, #1226)
 
-CIP-68 says text is UTF-8, and Plutus has one byte-string type for text and binary data alike. Every text
+CIP-68 says text is UTF-8, and Plutus has one byte-string type for text and binary data alike. Its retrieval
+steps say to "encode all string entries to UTF-8 if possible, otherwise leave them in hex"; the module follows
+that rule, and before #1226 the typed fields did not. Every text
 value (the typed fields `name`, `description`, `ticker`, `url`, `mediaType`, `logo` and `image`, and the
 values in additional properties) is stored as text if the bytes are valid UTF-8, and as **hex** otherwise.
 Null characters are stripped from text. Before #1226 the typed fields were decoded with replacement
