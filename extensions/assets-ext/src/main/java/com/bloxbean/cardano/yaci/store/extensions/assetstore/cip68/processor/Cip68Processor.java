@@ -1,7 +1,6 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.processor;
 
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
-import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.AssetType;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Constants;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.ParsedCip68Datum;
@@ -21,7 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
+import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -42,18 +41,18 @@ public class Cip68Processor {
 
         // Iterate per-transaction so we keep the transaction's full output set in context.
         // Label classification needs to look at the OTHER outputs in the same tx to find
-        // the co-minted user token (000de140 / 0014df10 / 001bc280); a flat-map across
-        // all txs would lose that boundary.
+        // the co-minted user token (000de140 / 0014df10 / 001bc280) paired with the reference
+        // NFT; a flat-map across all txs would lose that boundary.
         List<Cip68Metadata> entities = new ArrayList<>();
         for (TxInputOutput txIo : addressUtxoEvent.getTxInputOutputs()) {
-            Set<String> coMintedPrefixesInTx = collectCoMintedPrefixes(txIo);
+            Set<String> assetUnitsInTx = collectAssetUnits(txIo);
 
             for (AddressUtxo output : txIo.getOutputs()) {
                 cip68TokenService.extractReferenceNft(output).ifPresent(refNftAmt -> {
                     AssetType refNftAssetType = AssetType.fromUnit(refNftAmt.getUnit());
                     cip68DatumParser.parse(output.getInlineDatum(), refNftAssetType).ifPresent(parsed -> {
                         // The label comes first: which fields a datum must have depends on it
-                        int label = deriveLabel(refNftAssetType, coMintedPrefixesInTx);
+                        int label = deriveLabel(refNftAssetType, assetUnitsInTx);
                         if (!cip68TokenService.isValidMetadata(parsed, label)) {
                             return;
                         }
@@ -71,62 +70,52 @@ public class Cip68Processor {
     }
 
     /**
-     * Determine the CIP-68 user-token label by looking at the co-minted user token
-     * present in the same transaction. CIP-68 always co-mints the reference NFT (label 100)
-     * with one of the user-token prefixes — this method picks which one.
+     * Determine the CIP-68 user-token label from the user token paired with the reference NFT.
      * <p>
-     * If no co-minted user token is found at the same policy ID with a recognised CIP-68
-     * prefix, falls back to {@link Cip68Constants#LABEL_FT}. This matches the prior
-     * default-to-FT behaviour for orphan reference NFTs and odd one-off mints that don't
-     * follow the standard pattern.
+     * CIP-68 pairs the two by policy and base name: the reference NFT is {@code 000643b0 + base},
+     * its user token is a label prefix ({@code 000de140} / {@code 0014df10} / {@code 001bc280}) plus
+     * the same base, under the same policy. Only that pair counts. A user token of another policy,
+     * or with another base name, that merely sits in the same transaction says nothing about this
+     * reference NFT: a transaction can mint several unrelated CIP-68 tokens.
+     * <p>
+     * If the transaction has a 222 and a 333 (or 444) token paired with the reference NFT, 222 wins,
+     * then 333, then 444. If none is paired (an orphan reference NFT, or its user token was minted in
+     * another transaction), the label falls back to {@link Cip68Constants#LABEL_FT}.
      */
-    private int deriveLabel(AssetType refNftAssetType, Set<String> coMintedPrefixes) {
-        if (coMintedPrefixes.contains(Cip68Constants.NFT_TOKEN_PREFIX)) {
+    private int deriveLabel(AssetType refNftAssetType, Set<String> assetUnitsInTx) {
+        String baseName = refNftAssetType.assetName().substring(Cip68Constants.REFERENCE_TOKEN_PREFIX.length());
+
+        if (hasPairedUserToken(assetUnitsInTx, refNftAssetType, Cip68Constants.NFT_TOKEN_PREFIX, baseName)) {
             return Cip68Constants.LABEL_NFT;
         }
-        if (coMintedPrefixes.contains(Cip68Constants.FUNGIBLE_TOKEN_PREFIX)) {
+        if (hasPairedUserToken(assetUnitsInTx, refNftAssetType, Cip68Constants.FUNGIBLE_TOKEN_PREFIX, baseName)) {
             return Cip68Constants.LABEL_FT;
         }
-        if (coMintedPrefixes.contains(Cip68Constants.RICH_FUNGIBLE_TOKEN_PREFIX)) {
+        if (hasPairedUserToken(assetUnitsInTx, refNftAssetType, Cip68Constants.RICH_FUNGIBLE_TOKEN_PREFIX, baseName)) {
             return Cip68Constants.LABEL_RFT;
         }
-        // Orphan reference NFT (no co-minted user token in this tx) or non-standard mint.
-        // Default to FT — the historical behaviour and the most common case in practice.
-        log.debug("No CIP-68 user-token prefix co-minted with reference NFT {}/{}; defaulting label to FT (333)",
+        // Orphan reference NFT (no paired user token in this tx) or non-standard mint.
+        // Default to FT: the historical behaviour and the most common case in practice.
+        log.debug("No CIP-68 user token paired with reference NFT {}/{} in this tx; defaulting label to FT (333)",
                 refNftAssetType.policyId(), refNftAssetType.assetName());
         return Cip68Constants.LABEL_FT;
     }
 
-    /**
-     * Walk the transaction's full output set and collect every CIP-68 user-token prefix
-     * (000de140 / 0014df10 / 001bc280) appearing at any policy ID. We only need the
-     * SET of prefixes, not which policy they belong to, because in practice CIP-68
-     * mints are 1:1 — one reference NFT + one user token at the same base name. The
-     * presence of an NFT-prefix token anywhere in the tx is a reliable signal that
-     * the ref NFT was minted alongside an NFT, not a FT.
-     */
-    private Set<String> collectCoMintedPrefixes(TxInputOutput txIo) {
+    private static boolean hasPairedUserToken(Set<String> assetUnitsInTx, AssetType refNftAssetType,
+                                              String userTokenPrefix, String baseName) {
+        return assetUnitsInTx.contains(normalize(refNftAssetType.policyId() + userTokenPrefix + baseName));
+    }
+
+    /** Every asset unit (policy id + asset name) in the transaction's outputs, normalised for comparison. */
+    private Set<String> collectAssetUnits(TxInputOutput txIo) {
         return txIo.getOutputs().stream()
                 .flatMap(o -> o.getAmounts().stream())
-                .map(this::extractCip68UserTokenPrefix)
-                .filter(Objects::nonNull)
+                .map(amt -> normalize(AssetType.fromUnit(amt.getUnit()).toUnit()))
                 .collect(Collectors.toSet());
     }
 
-    /** Returns the 4-byte CIP-68 user-token prefix if the asset matches one, else null. */
-    private String extractCip68UserTokenPrefix(Amt amt) {
-        AssetType at = AssetType.fromUnit(amt.getUnit());
-        String assetName = at.assetName();
-        if (assetName == null || assetName.length() < 8) {
-            return null;
-        }
-        String prefix = assetName.substring(0, 8);
-        if (Cip68Constants.NFT_TOKEN_PREFIX.equals(prefix)
-                || Cip68Constants.FUNGIBLE_TOKEN_PREFIX.equals(prefix)
-                || Cip68Constants.RICH_FUNGIBLE_TOKEN_PREFIX.equals(prefix)) {
-            return prefix;
-        }
-        return null;
+    private static String normalize(String unit) {
+        return unit.toLowerCase(Locale.ROOT);
     }
 
     private Cip68Metadata buildCip68Metadata(ParsedCip68Datum parsed,
