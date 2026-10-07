@@ -56,6 +56,7 @@ public class Cip68Processor {
                         if (!cip68TokenService.isValidMetadata(parsed, label)) {
                             return;
                         }
+                        warnIfImageMissing(parsed, refNftAssetType, label);
                         entities.add(buildCip68Metadata(
                                 parsed, refNftAssetType, output.getInlineDatum(), slot,
                                 output.getTxHash(), output.getTxIndex(), label));
@@ -116,6 +117,19 @@ public class Cip68Processor {
 
     private static String normalize(String unit) {
         return unit.toLowerCase(Locale.ROOT);
+    }
+
+    /**
+     * CIP-68 requires {@code image} for 222 NFTs and 444 RFTs. The datum is lenient on purpose: a token
+     * without one is indexed anyway, since some live NFTs have none (or an empty one) and dropping them
+     * would hide real tokens. The gap is only reported, once per datum processed.
+     */
+    private void warnIfImageMissing(ParsedCip68Datum parsed, AssetType refNftAssetType, int label) {
+        boolean imageRequired = label == Cip68Constants.LABEL_NFT || label == Cip68Constants.LABEL_RFT;
+        if (imageRequired && (parsed.image() == null || parsed.image().isBlank())) {
+            log.warn("CIP-68 {} token {}/{} has no image, which CIP-68 requires for this label; indexing it anyway",
+                    label, refNftAssetType.policyId(), refNftAssetType.assetName());
+        }
     }
 
     private Cip68Metadata buildCip68Metadata(ParsedCip68Datum parsed,
