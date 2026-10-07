@@ -52,12 +52,13 @@ public class Cip68TokenService {
      * <ul>
      *   <li>{@code name} for every label;</li>
      *   <li>{@code description} only for the 333 fungible token (for 222 and 444 it is {@code ? description});</li>
+     *   <li>for the 333 fungible token, the optional {@code logo}, when it is present, as a URI with one of the same
+     *       schemes (a missing or empty logo is fine);</li>
      *   <li>{@code image} for the 222 NFT and the 444 RFT, as a URI whose scheme is one of
      *       {@code https}, {@code ipfs}, {@code ar} or {@code data}. A missing or empty image, or another
      *       scheme (for example {@code iagon://}, or free text), is not indexed: wallets and explorers
      *       follow the CIP and could not show such a token.</li>
      * </ul>
-     * The 333 {@code logo} is optional and is stored as written.
      *
      * @param parsed the parsed datum
      * @param label  the user-token label the datum belongs to
@@ -68,9 +69,15 @@ public class Cip68TokenService {
             return Optional.of("it has no name");
         }
         if (label == LABEL_FT) {
-            return parsed.description() == null
-                    ? Optional.of("it has no description, which CIP-68 requires for a fungible token (label " + LABEL_FT + ")")
-                    : Optional.empty();
+            if (parsed.description() == null) {
+                return Optional.of("it has no description, which CIP-68 requires for a fungible token (label " + LABEL_FT + ")");
+            }
+            String logo = parsed.logo();
+            if (logo != null && !logo.isBlank() && !ALLOWED_URI_SCHEME.matcher(logo).matches()) {
+                return Optional.of("its logo '" + abbreviate(logo) + "' is not a URI with one of the schemes CIP-68 allows "
+                        + "(https, ipfs, ar, data)");
+            }
+            return Optional.empty();
         }
         String image = parsed.image();
         if (image == null || image.isBlank()) {
