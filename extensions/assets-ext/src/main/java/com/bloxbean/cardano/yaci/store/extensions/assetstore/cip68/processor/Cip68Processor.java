@@ -68,36 +68,7 @@ public class Cip68Processor {
 
             for (AddressUtxo output : txIo.getOutputs()) {
                 for (Amt refNftAmt : referenceNftsToIndex(output)) {
-                    AssetType refNftAssetType = AssetType.fromUnit(refNftAmt.getUnit());
-                    cip68DatumParser.parse(output.getInlineDatum(), refNftAssetType).ifPresent(parsed -> {
-                        // The labels come first: which fields a datum must have depends on them. A reference NFT
-                        // can have user tokens of several labels (the CIP allows it), and then the datum has to
-                        // satisfy the requirements of every one of them.
-                        List<Integer> labels = deriveLabels(refNftAssetType, assetUnitsInTx, parsed);
-                        int label = labels.getFirst();
-                        boolean multiLabel = labels.size() > 1;
-                        for (int candidate : labels) {
-                            Optional<DatumRejection> rejection = cip68TokenService.rejection(parsed, candidate);
-                            if (rejection.isPresent()) {
-                                warnSkipped(refNftAssetType, labels, candidate, rejection.get().message());
-                                metrics.skipped(candidate, rejection.get().reason());
-                                if (multiLabel) {
-                                    metrics.multiLabel(labels, Cip68Metrics.SKIPPED_OUTCOME);
-                                }
-                                return;
-                            }
-                        }
-                        metrics.indexed(label);
-                        if (multiLabel) {
-                            metrics.multiLabel(labels, Cip68Metrics.INDEXED_OUTCOME);
-                            log.info("CIP-68 reference NFT {}/{} has user tokens for labels {}; the datum satisfies all of them, "
-                                            + "stored with label {}",
-                                    refNftAssetType.policyId(), refNftAssetType.assetName(), labels, label);
-                        }
-                        entities.add(buildCip68Metadata(
-                                parsed, refNftAssetType, output.getInlineDatum(), slot,
-                                output.getTxHash(), output.getTxIndex(), label));
-                    });
+                    toEntity(output, AssetType.fromUnit(refNftAmt.getUnit()), assetUnitsInTx, slot).ifPresent(entities::add);
                 }
             }
         }
@@ -105,6 +76,48 @@ public class Cip68Processor {
         if (!entities.isEmpty()) {
             cip68MetadataRepository.saveAll(entities);
         }
+    }
+
+    /** The row for one reference NFT of an output, or empty if its datum cannot be parsed or is not valid for its labels. */
+    private Optional<Cip68Metadata> toEntity(AddressUtxo output, AssetType refNft, Set<String> assetUnitsInTx, Long slot) {
+        return cip68DatumParser.parse(output.getInlineDatum(), refNft).flatMap(parsed -> {
+            // The labels come first: which fields a datum must have depends on them. A reference NFT can have user
+            // tokens of several labels (the CIP allows it), and then the datum has to satisfy the requirements of
+            // every one of them.
+            List<Integer> labels = deriveLabels(refNft, assetUnitsInTx, parsed);
+            if (!satisfiesEveryLabel(parsed, refNft, labels)) {
+                return Optional.empty();
+            }
+            int label = labels.getFirst();
+            metrics.datumIndexed(label);
+            if (labels.size() > 1) {
+                metrics.multiLabel(labels, Cip68Metrics.INDEXED_OUTCOME);
+                log.info("CIP-68 reference NFT {}/{} has user tokens for labels {}; the datum satisfies all of them, "
+                                + "stored with label {}",
+                        refNft.policyId(), refNft.assetName(), labels, label);
+            }
+            return Optional.of(buildCip68Metadata(parsed, refNft, output.getInlineDatum(), slot,
+                    output.getTxHash(), output.getTxIndex(), label));
+        });
+    }
+
+    /**
+     * Checks the datum against the requirements of each label in turn. The first label it fails gives the warning
+     * and the metric, and the datum is not indexed.
+     */
+    private boolean satisfiesEveryLabel(ParsedCip68Datum parsed, AssetType refNft, List<Integer> labels) {
+        for (int candidate : labels) {
+            Optional<DatumRejection> rejection = cip68TokenService.rejection(parsed, candidate);
+            if (rejection.isPresent()) {
+                warnSkipped(refNft, labels, candidate, rejection.get().message());
+                metrics.datumSkipped(candidate, rejection.get().reason());
+                if (labels.size() > 1) {
+                    metrics.multiLabel(labels, Cip68Metrics.SKIPPED_OUTCOME);
+                }
+                return false;
+            }
+        }
+        return true;
     }
 
     /**

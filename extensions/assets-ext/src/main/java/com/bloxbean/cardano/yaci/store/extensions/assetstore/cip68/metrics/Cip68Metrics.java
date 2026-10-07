@@ -38,6 +38,10 @@ public class Cip68Metrics {
     public static final String INDEXED_OUTCOME = "indexed";
     public static final String SKIPPED_OUTCOME = "skipped";
 
+    private static final String LABEL_TAG = "label";
+    private static final String REASON_TAG = "reason";
+    private static final String UNKNOWN_LABEL = "unknown";
+
     public static final String PARSE_FAILURE = "parse_failure";
     public static final String INVALID_VERSION = "invalid_version";
 
@@ -57,20 +61,20 @@ public class Cip68Metrics {
         return new Cip68Metrics(new SimpleMeterRegistry());
     }
 
-    public void indexed(int label) {
-        registry.counter(INDEXED, "label", String.valueOf(label)).increment();
+    public void datumIndexed(int label) {
+        registry.counter(INDEXED, LABEL_TAG, String.valueOf(label)).increment();
     }
 
-    public void skipped(int label, DatumRejection.Reason reason) {
-        registry.counter(SKIPPED, "label", String.valueOf(label), "reason", reason.tag()).increment();
+    public void datumSkipped(int label, DatumRejection.Reason reason) {
+        registry.counter(SKIPPED, LABEL_TAG, String.valueOf(label), REASON_TAG, reason.tag()).increment();
     }
 
     public void parseFailure() {
-        registry.counter(SKIPPED, "label", "unknown", "reason", PARSE_FAILURE).increment();
+        registry.counter(SKIPPED, LABEL_TAG, UNKNOWN_LABEL, REASON_TAG, PARSE_FAILURE).increment();
     }
 
     public void invalidVersion() {
-        registry.counter(SKIPPED, "label", "unknown", "reason", INVALID_VERSION).increment();
+        registry.counter(SKIPPED, LABEL_TAG, UNKNOWN_LABEL, REASON_TAG, INVALID_VERSION).increment();
     }
 
     /** A reference NFT with user tokens of several labels, tagged {@code labels} (for example {@code 222+333}) and {@code outcome}. */
