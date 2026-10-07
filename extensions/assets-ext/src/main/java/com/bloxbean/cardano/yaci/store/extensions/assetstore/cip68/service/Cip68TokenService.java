@@ -4,6 +4,7 @@ import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.AssetType;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.DatumRejection;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.ParsedCip68Datum;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.parser.Cip68DatumParser;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.Cip68Metadata;
@@ -65,27 +66,43 @@ public class Cip68TokenService {
      * @return the reason the datum is rejected, empty if it is valid
      */
     public Optional<String> invalidReason(ParsedCip68Datum parsed, int label) {
+        return rejection(parsed, label).map(DatumRejection::message);
+    }
+
+    /**
+     * Same check as {@link #invalidReason}, with a machine-readable reason next to the message (used for the
+     * skipped-datum counter).
+     *
+     * @param parsed the parsed datum
+     * @param label  the user-token label the datum belongs to
+     * @return why the datum is rejected, empty if it is valid
+     */
+    public Optional<DatumRejection> rejection(ParsedCip68Datum parsed, int label) {
         if (parsed.name() == null) {
-            return Optional.of("it has no name");
+            return Optional.of(new DatumRejection(DatumRejection.Reason.NO_NAME, "it has no name"));
         }
         if (label == LABEL_FT) {
             if (parsed.description() == null) {
-                return Optional.of("it has no description, which CIP-68 requires for a fungible token (label " + LABEL_FT + ")");
+                return Optional.of(new DatumRejection(DatumRejection.Reason.NO_DESCRIPTION,
+                        "it has no description, which CIP-68 requires for a fungible token (label " + LABEL_FT + ")"));
             }
             String logo = parsed.logo();
             if (logo != null && !logo.isBlank() && !ALLOWED_URI_SCHEME.matcher(logo).matches()) {
-                return Optional.of("its logo '" + abbreviate(logo) + "' is not a URI with one of the schemes CIP-68 allows "
-                        + "(https, ipfs, ar, data)");
+                return Optional.of(new DatumRejection(DatumRejection.Reason.BAD_LOGO_SCHEME,
+                        "its logo '" + abbreviate(logo) + "' is not a URI with one of the schemes CIP-68 allows "
+                                + "(https, ipfs, ar, data)"));
             }
             return Optional.empty();
         }
         String image = parsed.image();
         if (image == null || image.isBlank()) {
-            return Optional.of("it has no image, which CIP-68 requires for label " + label);
+            return Optional.of(new DatumRejection(DatumRejection.Reason.NO_IMAGE,
+                    "it has no image, which CIP-68 requires for label " + label));
         }
         if (!ALLOWED_URI_SCHEME.matcher(image).matches()) {
-            return Optional.of("its image '" + abbreviate(image) + "' is not a URI with one of the schemes CIP-68 allows "
-                    + "(https, ipfs, ar, data)");
+            return Optional.of(new DatumRejection(DatumRejection.Reason.BAD_IMAGE_SCHEME,
+                    "its image '" + abbreviate(image) + "' is not a URI with one of the schemes CIP-68 allows "
+                            + "(https, ipfs, ar, data)"));
         }
         return Optional.empty();
     }
