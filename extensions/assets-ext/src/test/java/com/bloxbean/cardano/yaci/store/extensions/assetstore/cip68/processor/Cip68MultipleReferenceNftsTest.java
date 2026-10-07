@@ -42,8 +42,8 @@ import static org.mockito.Mockito.verify;
  * <ul>
  *   <li>One reference NFT per output (the usual pattern, each with its own datum): every token is indexed.</li>
  *   <li>Several reference NFTs in one output: a nested (version 4) datum carries the metadata of each, so each is
- *       indexed with its own entry. A flat datum describes one token and cannot be tied to any of several, so only
- *       the first is indexed and the others are reported in a warning.</li>
+ *       indexed with its own entry. A flat datum is the metadata of every reference NFT in the output, as the CIP's
+ *       retrieval steps read it, so all of them are indexed with it and one warning lists them.</li>
  * </ul>
  * Runs the real parser, token service and processor with the log captured; only the repository is mocked.
  */
@@ -125,19 +125,20 @@ class Cip68MultipleReferenceNftsTest {
     }
 
     @Test
-    void indexesOnlyTheFirstReferenceNftOfAFlatDatumAndWarns() {
-        // a flat datum describes one token: with two reference NFTs it cannot be tied to either of them
+    void indexesEveryReferenceNftOfAFlatDatumWithTheSameMetadataAndWarns() {
+        // the CIP's retrieval steps read the datum of the output the reference NFT is in, whatever else it holds
         String datum = flatDatum(nft("Flat token"));
 
         List<Cip68Metadata> rows = index(output(datum, refUnit(A), refUnit(B)));
 
-        assertThat(rows).singleElement().satisfies(row -> {
-            assertThat(row.getAssetName()).isEqualTo(REF + A);
+        assertThat(rows).extracting(Cip68Metadata::getAssetName).containsExactlyInAnyOrder(REF + A, REF + B);
+        assertThat(rows).allSatisfy(row -> {
             assertThat(row.getName()).isEqualTo("Flat token");
+            assertThat(row.getDatum()).isEqualTo(datum);
         });
         assertThat(warnings()).singleElement().satisfies(w -> assertThat(w)
                 .contains("holds 2 reference NFTs").contains("flat CIP-68 datum")
-                .contains(POLICY + REF + A).contains("ignoring the other 1"));
+                .contains(POLICY + REF + A).contains(POLICY + REF + B).contains("indexing it for all of them"));
     }
 
     @Test
@@ -146,7 +147,7 @@ class Cip68MultipleReferenceNftsTest {
 
         List<Cip68Metadata> rows = index(output(datum(flat, 4), refUnit(A), refUnit(B)));
 
-        assertThat(rows).singleElement().extracting(Cip68Metadata::getAssetName).isEqualTo(REF + A);
+        assertThat(rows).extracting(Cip68Metadata::getAssetName).containsExactlyInAnyOrder(REF + A, REF + B);
         assertThat(warnings()).hasSize(1);
     }
 
