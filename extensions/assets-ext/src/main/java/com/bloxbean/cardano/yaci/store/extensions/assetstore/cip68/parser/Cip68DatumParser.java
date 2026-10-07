@@ -45,6 +45,14 @@ public class Cip68DatumParser {
     private static final BytesPlutusData NESTED_MAP_KEY = BytesPlutusData.of("721");
     private static final long NESTED_MAP_MIN_VERSION = 4;
 
+    /**
+     * The datum versions CIP-68 defines. The same set applies to every label: the 444 definition in the CIP
+     * says 3 and 4, but it contradicts the changelog (version 2 added the RFT) and every RFT on mainnet uses 1.
+     * A datum with another version is not indexed. Update the upper bound when the CIP adds a version.
+     */
+    static final long MIN_SUPPORTED_VERSION = 1;
+    static final long MAX_SUPPORTED_VERSION = 4;
+
     /** Set of keys we promote to typed columns; everything else goes into the JSONB additional_properties. */
     private static final Set<String> TYPED_KEYS = Set.of(
             DECIMALS, DESCRIPTION, LOGO, NAME, TICKER, URL, IMAGE, MEDIA_TYPE, FILES);
@@ -71,6 +79,7 @@ public class Cip68DatumParser {
 
         try {
             return extractDatumProperties(inlineDatum)
+                    .filter(parts -> isSupportedVersion(parts, referenceNft))
                     .flatMap(parts -> resolveMetadata(parts, referenceNft)
                             .map(metadata -> buildParsedDatum(metadata, parts.version())));
         } catch (StackOverflowError e) {
@@ -146,6 +155,25 @@ public class Cip68DatumParser {
                 .flatMap(byAsset -> asMap(byAsset.getMap().get(BytesPlutusData.of(HexUtil.decodeHexString(assetNameWithoutLabel)))));
     }
 
+    /**
+     * A datum whose version is not one CIP-68 defines (1 to 4) is rejected with a warning that names the token,
+     * since the module cannot know how to read it. Not a parse failure: the datum decoded fine.
+     */
+    private static boolean isSupportedVersion(DatumParts parts, @Nullable AssetType referenceNft) {
+        long version = parts.version();
+        if (version >= MIN_SUPPORTED_VERSION && version <= MAX_SUPPORTED_VERSION) {
+            return true;
+        }
+        if (referenceNft != null) {
+            log.warn("Ignoring CIP-68 datum of {}/{} with unsupported version {} (CIP-68 defines {} to {})",
+                    referenceNft.policyId(), referenceNft.assetName(), version, MIN_SUPPORTED_VERSION, MAX_SUPPORTED_VERSION);
+        } else {
+            log.warn("Ignoring CIP-68 datum with unsupported version {} (CIP-68 defines {} to {})",
+                    version, MIN_SUPPORTED_VERSION, MAX_SUPPORTED_VERSION);
+        }
+        return false;
+    }
+
     /** Version 4 or above, with the {@code "721"} key: the metadata of several assets can be in this one datum. */
     private static boolean isNested(DatumParts parts) {
         return parts.version() >= NESTED_MAP_MIN_VERSION
@@ -162,7 +190,10 @@ public class Cip68DatumParser {
             return false;
         }
         try {
-            return extractDatumProperties(inlineDatum).map(Cip68DatumParser::isNested).orElse(false);
+            return extractDatumProperties(inlineDatum)
+                    .filter(parts -> parts.version() >= MIN_SUPPORTED_VERSION && parts.version() <= MAX_SUPPORTED_VERSION)
+                    .map(Cip68DatumParser::isNested)
+                    .orElse(false);
         } catch (Exception | StackOverflowError e) {
             return false;
         }

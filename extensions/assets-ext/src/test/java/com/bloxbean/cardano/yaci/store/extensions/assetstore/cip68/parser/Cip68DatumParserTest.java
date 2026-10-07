@@ -341,9 +341,11 @@ class Cip68DatumParserTest {
         }
 
         @Test
-        void shouldAcceptVersionUpToLongMaxAndRejectBeyond() throws Exception {
-            assertThat(parse("ticker", "TT", BigInteger.valueOf(Long.MAX_VALUE)))
-                    .hasValueSatisfying(m -> assertThat(m.version()).isEqualTo(Long.MAX_VALUE));
+        void shouldKeepVersion4AndRejectAnyHigherVersion() throws Exception {
+            // 4 is the highest version CIP-68 defines; a value that fits a long but is not defined is rejected too
+            assertThat(parse("ticker", "TT", BigInteger.valueOf(4))).isPresent();
+            assertThat(parse("ticker", "TT", BigInteger.valueOf(Long.MAX_VALUE))).isEmpty();
+            // and one that does not fit a long is rejected before it can be narrowed
             assertThat(parse("ticker", "TT", BigInteger.TWO.pow(63))).isEmpty();
         }
     }
