@@ -11,6 +11,8 @@ import java.util.Map;
 import java.math.BigInteger;
 
 public interface BFAddressStorageReader {
+    boolean addressExists(String address);
+
     List<String> findTxHashesByAddress(String address, int page, int count, Order order);
 
     List<BFAddressTransactionDTO> findAddressTransactions(String address, int page, int count, Order order, String from, String to);
