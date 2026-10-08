@@ -265,9 +265,10 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
      * <p>{@code epoch_stake} is range-partitioned on {@code epoch}, so a filter on
      * {@code address} and {@code active_epoch} alone prunes nothing: Postgres plans and probes
      * every epoch partition (about 1,445 on preview), which is seconds on a fresh connection
-     * and holds thousands of locks (#1200). Snapshots are written with
-     * {@code active_epoch = epoch + 2} and genesis rows with {@code active_epoch <= epoch + 1},
-     * so {@code active_epoch >= N} implies {@code epoch >= N - 2}. Adding that bound on the
+     * and holds thousands of locks (#1200). Both writers store {@code active_epoch = epoch + 2}:
+     * {@code StakeSnapshotService} binds {@code activeEpoch = epoch + 2}, and
+     * {@code GenesisPoolProcessor} writes {@code epoch = E - 1, activeEpoch = E + 1}. So
+     * {@code active_epoch >= N} implies {@code epoch >= N - 2}. Adding that bound on the
      * partition key leaves the result unchanged and lets the planner keep only the newest
      * partitions.
      */
