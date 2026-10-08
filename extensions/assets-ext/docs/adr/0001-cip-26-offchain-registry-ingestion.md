@@ -77,17 +77,21 @@ An entry is stored only if all of these hold. Each rejection is a WARN with the 
 - **The filename is the subject.** The file `<subject>.json` must contain that same `subject`.
   Otherwise the file is skipped. Preprod's registry has 5,008 such files (about 90% of it), mostly
   copies of one test token under padded filenames; mainnet has none.
-- **The CIP-26 rules**, checked by the shared `cf-tokens-cip26` library: `name` and `description`
-  are required, length limits apply, the subject is 56 to 120 hex characters (an even count).
+- **The rules of the shared `cf-tokens-cip26` library**, which is the registry's validator: `name` and
+  `description` are required, length limits apply, the subject is 56 to 120 hex characters (an even count).
+  Note that CIP-26 itself requires only the `subject`: its JSON schema lists `subject` as the one required
+  property, and `name` (at most 50 characters), `description` (at most 500), `ticker`, `decimals`, `url` and
+  `logo` are well-known properties whose values must be well-formed if present. The requirement of `name` and
+  `description` comes from the library and the registry, not from the CIP text.
 - **`decimals` is in [0, 255]** (`TokenDecimals`). The library only checks `>= 0` and does so on an
   `int`, so the module range-checks the stored `long` first; otherwise 4294967301 would pass as 5.
 - **`name` and `description` are both required.** This is the one place where the module is
   deliberately strict and has no leniency: a token without either has nothing useful to show and is
   not indexed. The API enforces the same on what it returns (see ADR 0002).
 
-*Why strict here:* the registry is curated input that anyone can submit to, the CIP is explicit, and
-the library already rejects it, so being lenient would mean overriding the standard's own
-validator. *Trade-off:* a valid-looking entry with a typo in its subject is simply absent. On preprod
+*Why strict here:* the registry is curated input that anyone can submit to, and the shared library
+the registry itself uses already rejects an entry without them, so being lenient would mean overriding the
+registry's own validator. (The CIP does not require them; the rule is the registry's, and we follow it.) *Trade-off:* a valid-looking entry with a typo in its subject is simply absent. On preprod
 that is correct (a "Diffusion" entry with a dropped hex digit is rejected while the correct entry
 is stored), but it also means a registry mistake can hide a token: the only registry entry for the preprod
 USDM token under policy `d8906ca5…` has the policy id pasted twice (128 characters) and is not
