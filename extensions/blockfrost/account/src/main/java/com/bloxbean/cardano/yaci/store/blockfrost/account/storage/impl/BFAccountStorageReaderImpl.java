@@ -248,8 +248,7 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
                     && dsl.fetchExists(
                     dsl.selectOne()
                             .from(EPOCH_STAKE)
-                            .where(EPOCH_STAKE.ADDRESS.eq(stakeAddress))
-                            .and(EPOCH_STAKE.ACTIVE_EPOCH.ge(activeEpoch))
+                            .where(activeEpochStakeCondition(stakeAddress, activeEpoch))
             );
         } catch (DataAccessException e) {
             log.warn("Could not fetch active epoch stake for {}: {}", stakeAddress, e.getMessage());
@@ -258,6 +257,24 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
 
         return Optional.of(new AccountInfo(stakeAddress, active, registered, activeEpoch,
                 totalControlled, rewardsSum, withdrawalsSum, reservesSum, treasurySum, poolId, drepId));
+    }
+
+    /**
+     * Rows of {@code epoch_stake} that make {@code stakeAddress} active from {@code activeEpoch} on.
+     *
+     * <p>{@code epoch_stake} is range-partitioned on {@code epoch}, so a filter on
+     * {@code address} and {@code active_epoch} alone prunes nothing: Postgres plans and probes
+     * every epoch partition (about 1,445 on preview), which is seconds on a fresh connection
+     * and holds thousands of locks (#1200). Snapshots are written with
+     * {@code active_epoch = epoch + 2} and genesis rows with {@code active_epoch <= epoch + 1},
+     * so {@code active_epoch >= N} implies {@code epoch >= N - 2}. Adding that bound on the
+     * partition key leaves the result unchanged and lets the planner keep only the newest
+     * partitions.
+     */
+    static Condition activeEpochStakeCondition(String stakeAddress, int activeEpoch) {
+        return EPOCH_STAKE.ADDRESS.eq(stakeAddress)
+                .and(EPOCH_STAKE.ACTIVE_EPOCH.ge(activeEpoch))
+                .and(EPOCH_STAKE.EPOCH.ge(Math.max(activeEpoch - 2, 0)));
     }
 
     @Override
