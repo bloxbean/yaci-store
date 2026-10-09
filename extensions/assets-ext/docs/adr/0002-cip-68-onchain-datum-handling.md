@@ -186,7 +186,8 @@ module (an out-of-range `decimals`, an over-long `ticker`, a constructor propert
 have no logo although the datum had one. The logo that is dropped is often a raw base64 string or a bare IPFS hash,
 which CIP-68 excludes (`logo` "needs to be a valid URI and not a plain bytestring"), so no CIP-68 client could
 show it. A full mainnet index with the earlier, stricter rule (the token dropped) found 260 datums of 217 fungible
-tokens with such a logo; with this rule they are indexed instead.
+tokens with such a logo (216 a bare IPFS CID, `Qm...` or `baf...`; one a raw base64 PNG); with this rule they are
+indexed instead.
 
 *Cost of the `image` rule:* on an earlier mainnet index, this rule would remove 12 NFTs whose datum has
 `mediaType: image/svg+xml` and an empty `image` (the "DID registration" sensor tokens) and 9 more whose image
