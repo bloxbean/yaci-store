@@ -35,7 +35,7 @@ class UtxoBatchLoaderIT {
             st.execute("CREATE SCHEMA " + schema);
             try {
                 st.execute("CREATE TABLE " + schema + ".address_utxo (tx_hash text, output_index smallint,"
-                        + " amounts jsonb, inline_datum text, lovelace_amount bigint, block bigint, slot bigint,"
+                        + " amounts jsonb, inline_datum text, lovelace_amount bigint, block bigint, slot bigint, tx_index int,"
                         + " PRIMARY KEY(tx_hash, output_index))");
                 new ImportJournal(pg, schema).createIfAbsent();
                 var files = fixture();
@@ -125,7 +125,7 @@ class UtxoBatchLoaderIT {
                         + " repeat(md5(n::VARCHAR),16) AS inline_datum, NULL::VARCHAR AS data_hash,"
                         + " NULL::VARCHAR AS script_ref, NULL::VARCHAR AS reference_script_hash,"
                         + " false AS is_collateral_return, 0 AS epoch, n::BIGINT AS slot,"
-                        + " 'blockhash' AS block_hash, to_timestamp(n) AS block_time"
+                        + " 'blockhash' AS block_hash, to_timestamp(n) AS block_time, (n % 7)::INTEGER AS tx_index"
                         + " FROM range(" + (OUTPUTS + 10) + ") t(n), range(" + (part * 2) + "," + (part * 2 + 2)
                         + ") assets(a)) TO '" + root.resolve(name) + "' (FORMAT PARQUET)");
                 files.add(file(name, (OUTPUTS + 10L) * 2));

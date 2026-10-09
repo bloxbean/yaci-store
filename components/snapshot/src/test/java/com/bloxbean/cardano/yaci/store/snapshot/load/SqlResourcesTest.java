@@ -75,7 +75,7 @@ class SqlResourcesTest {
 
     @Test
     void builtInAddressUtxoTransformIsPresentAndReadOnly() {
-        String sql = SqlResources.read("classpath:/snapshot/sql/address_utxo_v1.sql");
+        String sql = SqlResources.read("classpath:/snapshot/sql/address_utxo_v2.sql");
         assertThat(sql).contains("json_group_array").contains("${dep.block}").contains("${cutSlot}");
     }
 }

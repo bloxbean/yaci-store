@@ -23,8 +23,8 @@ final class UtxoBatchLoader {
 
     static boolean supports(SnapshotTableSpec spec) {
         return spec.id().equals("address-utxo") && spec.importSpec().mode() == ImportMode.SQL
-                && spec.importSpec().transformVersion() == 2
-                && "classpath:/snapshot/sql/address_utxo_v1.sql".equals(spec.importSpec().selectResource());
+                && spec.importSpec().transformVersion() == 3
+                && "classpath:/snapshot/sql/address_utxo_v2.sql".equals(spec.importSpec().selectResource());
     }
 
     static long load(TableLoader loader, DuckPgSession session, ImportBatch batch, ColumnPlan plan,

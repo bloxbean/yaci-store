@@ -2,7 +2,8 @@
 --
 -- The analytics view explodes the JSONB `amounts` array into one row per asset, so this transform
 -- regroups by (tx_hash, output_index), rebuilds `amounts`, derives `lovelace_amount`, and recovers
--- the block number by joining the block export on block_hash.
+-- the block number by joining the block export on block_hash. v2 carries tx_index, which every
+-- asset row of an output shares.
 --
 -- The lovelace entry is emitted first and the remaining assets follow in unit order, matching the
 -- operational writer, so a re-import produces byte-identical JSON.
@@ -36,6 +37,7 @@ grouped AS (
         any_value(slot)                     AS slot,
         any_value(block_hash)               AS block_hash,
         any_value(block_time)               AS block_time,
+        any_value(tx_index)                 AS tx_index,
         sum(CASE WHEN asset_unit = 'lovelace' THEN quantity ELSE 0 END) AS lovelace_amount,
         -- list(... ORDER BY ...) is a real aggregate, so the element order is deterministic;
         -- json_group_array is a macro and cannot take an ORDER BY.
@@ -82,6 +84,7 @@ SELECT
     g.reference_script_hash                  AS reference_script_hash,
     g.is_collateral_return                   AS is_collateral_return,
     b.number                                 AS block,
-    CAST(epoch(g.block_time) AS BIGINT)      AS block_time
+    CAST(epoch(g.block_time) AS BIGINT)      AS block_time,
+    g.tx_index                               AS tx_index
 FROM grouped g
 LEFT JOIN blocks b ON b.hash = g.block_hash

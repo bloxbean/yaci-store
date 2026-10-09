@@ -28,7 +28,7 @@ class DependencyNarrowingTest {
         SnapshotTableSpec spec = new SnapshotTableSpec("address-utxo", 1, "utxo", TableKind.CHAIN_DATA,
                 RestoreMode.IMPORT, null, null, null,
                 new SnapshotTableSpec.Import("address_utxo", ImportMode.SQL, Map.of(), List.of(), List.of(),
-                        "classpath:/snapshot/sql/address_utxo_v1.sql", 1, List.of("block"),
+                        "classpath:/snapshot/sql/address_utxo_v2.sql", 1, List.of("block"),
                         BatchBoundary.WHOLE_PARTITION, 1, null, null),
                 new SnapshotTableSpec.Validation(List.of("tx_hash"), List.of(), List.of(), List.of()),
                 Map.of(), null, "digest", "test");

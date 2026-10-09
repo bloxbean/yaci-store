@@ -71,6 +71,7 @@ create table address_utxo
     block                 bigint,
     block_time            bigint,
     update_datetime       timestamp,
+    tx_index              integer,
     primary key (output_index, tx_hash)
 );
 

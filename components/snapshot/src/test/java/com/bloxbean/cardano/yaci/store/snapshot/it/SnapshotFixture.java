@@ -139,7 +139,7 @@ final class SnapshotFixture {
                     "inline_datum", "varchar", "data_hash", "varchar", "script_ref", "varchar",
                     "reference_script_hash", "varchar", "is_collateral_return", "boolean",
                     "epoch", "int32", "slot", "int64", "block_hash", "varchar",
-                    "block_time", "timestamptz", "date", "date");
+                    "block_time", "timestamptz", "tx_index", "int32", "date", "date");
             case "adapot" -> ordered("epoch", "int32", "slot", "int64",
                     "deposits_stake", "decimal(38,0)", "fees", "decimal(38,0)", "utxo", "decimal(38,0)",
                     "treasury", "decimal(38,0)", "reserves", "decimal(38,0)", "circulation", "decimal(38,0)",
@@ -313,6 +313,7 @@ final class SnapshotFixture {
                     + " CAST(n * 20 AS BIGINT) AS slot,"
                     + " printf('%064x', n + 1) AS block_hash,"
                     + " to_timestamp(1700000000 + n * 20) AS block_time,"
+                    + " CAST(n % 3 AS INTEGER) AS tx_index,"
                     + " CAST(to_timestamp(1700000000 + n * 20) AS DATE) AS date"
                     // 'tok' is a named asset; the two 'pol...' units share a policy and differ in
                     // asset-name length, and one has an empty name, which is what the analytics view

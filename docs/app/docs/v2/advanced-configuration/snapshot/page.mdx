@@ -495,7 +495,7 @@ target table, beside its migrations:
 ```text
 stores/blocks/src/main/resources/snapshot/block.yml
 stores/utxo/src/main/resources/snapshot/address-utxo.yml
-stores/utxo/src/main/resources/snapshot/sql/address_utxo_v1.sql
+stores/utxo/src/main/resources/snapshot/sql/address_utxo_v2.sql
 aggregates/adapot/src/main/resources/snapshot/reward.yml
 ```
 
@@ -598,7 +598,7 @@ snapshot reproduces byte-identical ids.
 
 ```yaml
     mode: SQL
-    select-resource: classpath:/snapshot/sql/address_utxo_v1.sql
+    select-resource: classpath:/snapshot/sql/address_utxo_v2.sql
     transform-version: 1
     dependencies: [block]
     batch-boundary: WHOLE_PARTITION
@@ -657,6 +657,14 @@ Do not add `deposit` to `use-target-defaults`: that would silently discard ledge
 Refresh the `stake_registration` relation and its export state using the widening procedure below,
 then let analytics backfill it from retained PostgreSQL history and generate a new snapshot.
 The `stake_address_balance_snapshot` relation does not need to be rebuilt for this change.
+</Callout>
+
+<Callout type="warning">
+**Older UTxO, withdrawal and metadata exports must also be refreshed.** The `address_utxo`,
+`withdrawal` and `transaction_metadata` exports now carry `tx_index`, the transaction's position in
+its block, and their snapshot specs (version 2) require it. Refresh those three relations and their
+export state using the widening procedure below. The source database must already hold `tx_index`
+for its history; a schema migrated in place from a release without it has NULLs and must be resynced.
 </Callout>
 
 ### Widening an exporter
