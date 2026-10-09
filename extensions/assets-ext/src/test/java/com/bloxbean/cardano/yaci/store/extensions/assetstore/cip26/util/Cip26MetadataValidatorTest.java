@@ -116,6 +116,21 @@ class Cip26MetadataValidatorTest {
         }
 
         @Test
+        void rejectsDecimalsAboveMax() {
+            Cip26Metadata m = metadata(VALID_SUBJECT, "Token", "Description");
+            m.setDecimals(256L);
+            assertThat(validator.validate(m)).isFalse();
+        }
+
+        @Test
+        void rejectsDecimalsThatWouldWrapWhenNarrowedToInt() {
+            // 2^32 + 5: narrowing to int gives 5, which the upstream library would accept.
+            Cip26Metadata m = metadata(VALID_SUBJECT, "Token", "Description");
+            m.setDecimals(4_294_967_301L);
+            assertThat(validator.validate(m)).isFalse();
+        }
+
+        @Test
         void rejectsDescriptionExceedingMaxLength() {
             // CIP-26 description: max 500 chars per spec; cf-tokens-cip26 enforces this
             // via its MAX_DESCRIPTION_LENGTH constant in MetadataValidationRules.
