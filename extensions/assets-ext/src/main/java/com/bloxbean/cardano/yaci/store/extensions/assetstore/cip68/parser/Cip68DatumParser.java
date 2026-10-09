@@ -6,6 +6,7 @@ import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.metrics.Cip68Metrics;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.AssetType;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Constants;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Uri;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.ParsedCip68Datum;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.Cip68Metadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.util.TokenDecimals;
@@ -371,11 +372,22 @@ public class Cip68DatumParser {
      * Walk the {@code files} key (if present) and return a list of file descriptors.
      * Each element is a {@code Map<String, Object>} with keys {@code name}, {@code mediaType},
      * {@code src} where present. Unknown keys inside a file entry are preserved verbatim.
+     * <p>
+     * {@code files} is optional, so one that breaks the CIP-68 definition is left out as a whole, with a warning, and
+     * the rest of the datum is kept: every entry has to be a map with a {@code mediaType} byte string and a
+     * {@code src} that is a URI with one of the allowed schemes.
      */
     private List<Map<String, Object>> parseFiles(MapPlutusData properties, @Nullable AssetType referenceNft) {
         PlutusData filesProp = properties.getMap().get(BytesPlutusData.of(FILES));
         if (!(filesProp instanceof ListPlutusData filesList)) {
             return null;
+        }
+        for (PlutusData item : filesList.getPlutusDataList()) {
+            Optional<String> invalid = invalidFileReason(item);
+            if (invalid.isPresent()) {
+                warnFilesDropped(invalid.get(), referenceNft);
+                return null;
+            }
         }
         List<Map<String, Object>> result = new ArrayList<>();
         for (PlutusData item : filesList.getPlutusDataList()) {
@@ -387,6 +399,36 @@ public class Cip68DatumParser {
             }
         }
         return result;
+    }
+
+    /** Why an entry of {@code files} breaks {@code files_details} of the CIP-68 definition, or empty if it does not. */
+    private Optional<String> invalidFileReason(PlutusData item) {
+        if (!(item instanceof MapPlutusData file)) {
+            return Optional.of("an entry of 'files' is not a map");
+        }
+        if (!(file.getMap().get(BytesPlutusData.of(MEDIA_TYPE)) instanceof BytesPlutusData)) {
+            return Optional.of("an entry of 'files' has no mediaType");
+        }
+        Optional<String> src = getStringOrChunkedProperty("src", file);
+        if (src.isEmpty() || src.get().isBlank()) {
+            return Optional.of("an entry of 'files' has no usable src");
+        }
+        if (!Cip68Uri.hasAllowedScheme(src.get())) {
+            String shown = src.get().length() <= 60 ? src.get() : src.get().substring(0, 60) + "...";
+            return Optional.of("the src '" + shown + "' of an entry of 'files' is not a URI with one of the schemes CIP-68 allows ("
+                    + Cip68Uri.ALLOWED_SCHEMES + ")");
+        }
+        return Optional.empty();
+    }
+
+    private void warnFilesDropped(String reason, @Nullable AssetType referenceNft) {
+        metrics.propertyDropped(Cip68Metrics.INVALID_FILES);
+        if (referenceNft != null) {
+            log.warn("CIP-68 datum of {}/{}: dropping property 'files' and keeping the rest, because {}",
+                    referenceNft.policyId(), referenceNft.assetName(), reason);
+        } else {
+            log.warn("CIP-68 datum: dropping property 'files' and keeping the rest, because {}", reason);
+        }
     }
 
     /**

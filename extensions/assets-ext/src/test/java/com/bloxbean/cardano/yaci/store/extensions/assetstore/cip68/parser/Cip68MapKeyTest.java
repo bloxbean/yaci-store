@@ -77,6 +77,7 @@ class Cip68MapKeyTest {
     @Test
     void anIntegerKeyInAFileEntryIsKept() {
         MapPlutusData file = new MapPlutusData();
+        file.put(BytesPlutusData.of("mediaType"), BytesPlutusData.of("image/png"));
         file.put(BytesPlutusData.of("src"), BytesPlutusData.of("ipfs://Qm"));
         file.put(BigIntPlutusData.of(9), BytesPlutusData.of("nine"));
         MapPlutusData props = name();
