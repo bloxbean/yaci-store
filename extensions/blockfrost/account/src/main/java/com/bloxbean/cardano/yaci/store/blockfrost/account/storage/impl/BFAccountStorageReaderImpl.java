@@ -268,14 +268,15 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
      * and holds thousands of locks (#1200). Both writers store {@code active_epoch = epoch + 2}:
      * {@code StakeSnapshotService} binds {@code activeEpoch = epoch + 2}, and
      * {@code GenesisPoolProcessor} writes {@code epoch = E - 1, activeEpoch = E + 1}. So
-     * {@code active_epoch >= N} implies {@code epoch >= N - 2}. Adding that bound on the
-     * partition key leaves the result unchanged and lets the planner keep only the newest
-     * partitions.
+     * {@code active_epoch >= N} is the same filter as {@code epoch >= N - 2}, and stating it on
+     * the partition key lets the planner keep only the newest partitions.
+     *
+     * <p>The bound is not clamped at zero: on a devnet that starts at epoch 0, the genesis
+     * delegators' rows carry {@code epoch = -1}, and {@code epoch >= 0} would skip them.
      */
     static Condition activeEpochStakeCondition(String stakeAddress, int activeEpoch) {
         return EPOCH_STAKE.ADDRESS.eq(stakeAddress)
-                .and(EPOCH_STAKE.ACTIVE_EPOCH.ge(activeEpoch))
-                .and(EPOCH_STAKE.EPOCH.ge(Math.max(activeEpoch - 2, 0)));
+                .and(EPOCH_STAKE.EPOCH.ge(activeEpoch - 2));
     }
 
     @Override
