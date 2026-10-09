@@ -669,10 +669,11 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
     }
 
     /**
-     * Mirrors Blockfrost ({@code accounts_stake_address_transactions.sql} in blockfrost-backend-ryo):
-     * one row per (transaction, address of the account), built from the outputs the transaction
-     * created (received side) and the outputs it spent (sent side). Rows are ordered by the position
-     * of the transaction, then by the position of the earliest matching output, and paged directly.
+     * Returns the transactions of a stake address the way Blockfrost's
+     * {@code /accounts/{stake_address}/transactions} does: one row per (transaction, address of the
+     * account), built from the outputs the transaction created (received side) and the outputs it
+     * spent (sent side). Rows are ordered by the position of the transaction, then by the position of
+     * the earliest matching output, and paged directly.
      */
     @Override
     public List<AccountTransaction> findTransactions(String stakeAddress, int page, int count, Order order, String from, String to) {
