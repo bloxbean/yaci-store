@@ -10,8 +10,7 @@ public record DatumRejection(Reason reason, String message) {
         NO_NAME,
         NO_DESCRIPTION,
         NO_IMAGE,
-        BAD_IMAGE_SCHEME,
-        BAD_LOGO_SCHEME;
+        BAD_IMAGE_SCHEME;
 
         /** The value of the {@code reason} tag, for example {@code no_image}. */
         public String tag() {

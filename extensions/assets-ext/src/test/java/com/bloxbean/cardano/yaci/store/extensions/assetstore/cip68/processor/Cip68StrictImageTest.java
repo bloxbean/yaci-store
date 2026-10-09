@@ -42,8 +42,8 @@ import static org.mockito.Mockito.verify;
  * CIP-68 requires {@code image} for the 222 NFT and the 444 RFT, as a URI with one of the schemes {@code https},
  * {@code ipfs}, {@code ar} or {@code data}. Parsing is strict about it: a token without an image, or with an
  * image of another scheme (live tokens use {@code iagon://}, and even free text), is not indexed and a warning
- * says which token was dropped and why. The 333 fungible token has no {@code image}; its optional {@code logo},
- * when present, must have one of the same schemes, otherwise the token is not indexed either.
+ * says which token was dropped and why. The 333 fungible token has no {@code image}; its {@code logo} is optional,
+ * so one that is not a URI with one of the same schemes is left out with a warning and the token is still indexed.
  * <p>
  * Runs the real parser, token service and processor; only the repository is mocked.
  */
@@ -167,13 +167,27 @@ class Cip68StrictImageTest {
     }
 
     @Test
-    void dropsAFungibleTokenWhoseLogoHasASchemeCip68DoesNotAllow() {
-        String logo = "iagon://6911e6dd275fee62fb8917ba";
+    void keepsAFungibleTokenWhoseLogoHasAnotherSchemeButLeavesTheLogoOut() {
+        assertLogoLeftOut("iagon://6911e6dd275fee62fb8917ba");
+    }
 
-        assertThat(index(datum("name", "Coin", "description", "A coin", "logo", logo), POLICY, BASE, Cip68Constants.FUNGIBLE_TOKEN_PREFIX)).isEmpty();
+    @Test
+    void keepsAFungibleTokenWhoseLogoIsABareIpfsHashButLeavesTheLogoOut() {
+        assertLogoLeftOut("QmZPgijpUjVjHbwJyTWW76nBrRzeMescSk4VUeL1ahbs8j");
+    }
 
+    private void assertLogoLeftOut(String logo) {
+        Optional<Cip68Metadata> saved = index(datum("name", "Coin", "description", "A coin", "logo", logo),
+                POLICY, BASE, Cip68Constants.FUNGIBLE_TOKEN_PREFIX);
+
+        assertThat(saved).get().satisfies(row -> {
+            assertThat(row.getLogo()).isNull();
+            assertThat(row.getName()).isEqualTo("Coin");
+            assertThat(row.getDescription()).isEqualTo("A coin");
+            assertThat(row.getLabel()).isEqualTo(Cip68Constants.LABEL_FT);
+        });
         assertThat(warnings()).singleElement().satisfies(w -> assertThat(w)
-                .contains("Skipping CIP-68 datum").contains("(label 333)").contains("its logo '" + logo + "'").contains("not a URI"));
+                .contains("dropping the logo and keeping the rest").contains("its logo '" + logo + "'").contains("not a URI"));
     }
 
     @Test

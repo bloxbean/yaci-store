@@ -88,6 +88,7 @@ public class Cip68Processor {
             if (!satisfiesEveryLabel(parsed, refNft, labels)) {
                 return Optional.empty();
             }
+            ParsedCip68Datum stored = withoutInvalidLogo(parsed, refNft);
             int label = labels.getFirst();
             metrics.datumIndexed(label);
             if (labels.size() > 1) {
@@ -96,9 +97,24 @@ public class Cip68Processor {
                                 + "stored with label {}",
                         refNft.policyId(), refNft.assetName(), labels, label);
             }
-            return Optional.of(buildCip68Metadata(parsed, refNft, output.getInlineDatum(), slot,
+            return Optional.of(buildCip68Metadata(stored, refNft, output.getInlineDatum(), slot,
                     output.getTxHash(), output.getTxIndex(), label));
         });
+    }
+
+    /**
+     * The logo is optional, so a bad one costs only the logo: it is left out with a warning and the rest of the datum
+     * is indexed.
+     */
+    private ParsedCip68Datum withoutInvalidLogo(ParsedCip68Datum parsed, AssetType refNft) {
+        Optional<String> reason = cip68TokenService.invalidLogoReason(parsed);
+        if (reason.isEmpty()) {
+            return parsed;
+        }
+        log.warn("CIP-68 datum of {}/{}: dropping the logo and keeping the rest, because {}",
+                refNft.policyId(), refNft.assetName(), reason.get());
+        metrics.propertyDropped(Cip68Metrics.BAD_LOGO_SCHEME);
+        return parsed.withoutLogo();
     }
 
     /**

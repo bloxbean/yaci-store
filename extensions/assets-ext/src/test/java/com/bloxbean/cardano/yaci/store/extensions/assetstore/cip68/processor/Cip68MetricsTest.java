@@ -68,14 +68,21 @@ class Cip68MetricsTest {
         process(Cip68Constants.NFT_TOKEN_PREFIX, text("name", "N"));
         process(Cip68Constants.NFT_TOKEN_PREFIX, text("name", "N"), text("image", "iagon://x"));
         process(Cip68Constants.FUNGIBLE_TOKEN_PREFIX, text("name", "C"));
-        process(Cip68Constants.FUNGIBLE_TOKEN_PREFIX, text("name", "C"), text("description", "d"), text("logo", "iagon://logo"));
 
         assertThat(skipped(222, "no_name")).isEqualTo(1);
         assertThat(skipped(222, "no_image")).isEqualTo(1);
         assertThat(skipped(222, "bad_image_scheme")).isEqualTo(1);
         assertThat(skipped(333, "no_description")).isEqualTo(1);
-        assertThat(skipped(333, "bad_logo_scheme")).isEqualTo(1);
         assertThat(registry.find(Cip68Metrics.INDEXED).counters()).isEmpty();
+    }
+
+    @Test
+    void countsABadLogoAsADroppedPropertyAndStillIndexesTheToken() {
+        process(Cip68Constants.FUNGIBLE_TOKEN_PREFIX, text("name", "C"), text("description", "d"), text("logo", "iagon://logo"));
+
+        assertThat(dropped("bad_logo_scheme")).isEqualTo(1);
+        assertThat(indexed(333)).isEqualTo(1);
+        assertThat(registry.find(Cip68Metrics.SKIPPED).counters()).isEmpty();
     }
 
     @Test
