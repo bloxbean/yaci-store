@@ -53,13 +53,12 @@ public class Cip68TokenService {
      * <ul>
      *   <li>{@code name} for every label;</li>
      *   <li>{@code description} only for the 333 fungible token (for 222 and 444 it is {@code ? description});</li>
-     *   <li>for the 333 fungible token, the optional {@code logo}, when it is present, as a URI with one of the same
-     *       schemes (a missing or empty logo is fine);</li>
      *   <li>{@code image} for the 222 NFT and the 444 RFT, as a URI whose scheme is one of
      *       {@code https}, {@code ipfs}, {@code ar} or {@code data}. A missing or empty image, or another
      *       scheme (for example {@code iagon://}, or free text), is not indexed: wallets and explorers
      *       follow the CIP and could not show such a token.</li>
      * </ul>
+     * The optional fields do not reject the datum: see {@link #invalidLogoReason}.
      *
      * @param parsed the parsed datum
      * @param label  the user-token label the datum belongs to
@@ -86,12 +85,6 @@ public class Cip68TokenService {
                 return Optional.of(new DatumRejection(DatumRejection.Reason.NO_DESCRIPTION,
                         "it has no description, which CIP-68 requires for a fungible token (label " + LABEL_FT + ")"));
             }
-            String logo = parsed.logo();
-            if (logo != null && !logo.isBlank() && !ALLOWED_URI_SCHEME.matcher(logo).matches()) {
-                return Optional.of(new DatumRejection(DatumRejection.Reason.BAD_LOGO_SCHEME,
-                        "its logo '" + abbreviate(logo) + "' is not a URI with one of the schemes CIP-68 allows "
-                                + "(https, ipfs, ar, data)"));
-            }
             return Optional.empty();
         }
         String image = parsed.image();
@@ -105,6 +98,24 @@ public class Cip68TokenService {
                             + "(https, ipfs, ar, data)"));
         }
         return Optional.empty();
+    }
+
+    /**
+     * Says why the {@code logo} of a datum cannot be stored, or an empty result when there is no logo or it is fine.
+     * The logo is optional, so a bad one does not reject the datum: it is left out and the rest is indexed. CIP-68
+     * defines it as a URI whose scheme is one of {@code https}, {@code ipfs}, {@code ar} or {@code data}, so a bare
+     * IPFS hash, or any other scheme, is not accepted.
+     *
+     * @param parsed the parsed datum
+     * @return the reason the logo is left out, empty if there is none or it is valid
+     */
+    public Optional<String> invalidLogoReason(ParsedCip68Datum parsed) {
+        String logo = parsed.logo();
+        if (logo == null || logo.isBlank() || ALLOWED_URI_SCHEME.matcher(logo).matches()) {
+            return Optional.empty();
+        }
+        return Optional.of("its logo '" + abbreviate(logo) + "' is not a URI with one of the schemes CIP-68 allows "
+                + "(https, ipfs, ar, data)");
     }
 
     private static String abbreviate(String value) {

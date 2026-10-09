@@ -117,12 +117,15 @@ class Cip68MultiLabelTest {
     }
 
     @Test
-    void checksTheFungibleLogoWhenTheTokenIsAlsoAnNft() {
+    void aBadFungibleLogoDoesNotRejectATokenThatIsAlsoAnNft() {
         Optional<Cip68Metadata> saved = index(
                 datum("name", "LP", "description", "d", "image", "ipfs://Qm", "logo", "iagon://logo"), NFT, FT);
 
-        assertThat(saved).isEmpty();
-        assertThat(skipped(333, "bad_logo_scheme")).isEqualTo(1);
+        assertThat(saved).get().satisfies(row -> {
+            assertThat(row.getLabel()).isEqualTo(Cip68Constants.LABEL_NFT);
+            assertThat(row.getLogo()).isNull();
+        });
+        assertThat(multiLabel("222+333", "indexed")).isEqualTo(1);
     }
 
     @Test

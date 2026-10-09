@@ -332,10 +332,18 @@ class Cip68TokenServiceTest {
         }
 
         @Test
-        void fungibleTokenLogoWithAnotherSchemeIsInvalid() {
+        void fungibleTokenLogoWithAnotherSchemeDoesNotRejectTheDatumButIsReported() {
             for (String logo : new String[]{"iagon://6911e6dd275fee62fb8917ba", "http://example.com/l.png", "iVBORw0KGgoAAAANSUhEUgAA", "logo here"}) {
-                assertThat(service.invalidReason(ft(logo), Cip68Constants.LABEL_FT))
+                assertThat(service.invalidReason(ft(logo), Cip68Constants.LABEL_FT)).as(logo).isEmpty();
+                assertThat(service.invalidLogoReason(ft(logo)))
                         .as(logo).hasValueSatisfying(r -> assertThat(r).contains("logo").contains("not a URI").contains("https, ipfs, ar, data"));
+            }
+        }
+
+        @Test
+        void aMissingBlankOrAllowedLogoHasNothingToReport() {
+            for (String logo : new String[]{null, "", "  ", "https://example.com/l.png", "ipfs://Qm", "ar://tx", "data:image/png;base64,AAAA", "IPFS://Qm"}) {
+                assertThat(service.invalidLogoReason(ft(logo))).as(String.valueOf(logo)).isEmpty();
             }
         }
 
