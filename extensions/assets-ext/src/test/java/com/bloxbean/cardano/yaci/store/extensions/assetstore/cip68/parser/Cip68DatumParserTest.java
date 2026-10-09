@@ -341,9 +341,16 @@ class Cip68DatumParserTest {
         }
 
         @Test
-        void shouldAcceptVersionUpToLongMaxAndRejectBeyond() throws Exception {
-            assertThat(parse("ticker", "TT", BigInteger.valueOf(Long.MAX_VALUE)))
-                    .hasValueSatisfying(m -> assertThat(m.version()).isEqualTo(Long.MAX_VALUE));
+        void shouldOnlyAcceptTheVersionsCip68Defines() throws Exception {
+            for (long version = 1; version <= 4; version++) {
+                final long v = version;
+                assertThat(parse("ticker", "TT", BigInteger.valueOf(v)))
+                        .hasValueSatisfying(m -> assertThat(m.version()).isEqualTo(v));
+            }
+            // anything else is not indexed, whether it fits a long or not
+            assertThat(parse("ticker", "TT", BigInteger.ZERO)).isEmpty();
+            assertThat(parse("ticker", "TT", BigInteger.valueOf(5))).isEmpty();
+            assertThat(parse("ticker", "TT", BigInteger.valueOf(Long.MAX_VALUE))).isEmpty();
             assertThat(parse("ticker", "TT", BigInteger.TWO.pow(63))).isEmpty();
         }
     }
@@ -377,6 +384,37 @@ class Cip68DatumParserTest {
         private static String datum(MapPlutusData properties, long version) throws Exception {
             ConstrPlutusData datum = ConstrPlutusData.of(0, properties, BigIntPlutusData.of(version));
             return HexUtil.encodeHexString(CborSerializationUtil.serialize(datum.serialize()));
+        }
+
+        @Test
+        void shouldReportANestedDatumAsNested() throws Exception {
+            String hex = datum(nested(POLICY_ID, ASSET_NAME_HEX, metadata("Nested")), 4);
+
+            assertThat(parser.hasNestedMetadata(hex)).isTrue();
+        }
+
+        @Test
+        void shouldNotReportAFlatDatumAsNested() throws Exception {
+            assertThat(parser.hasNestedMetadata(datum(metadata("Flat"), 1))).isFalse();
+            // version 4 without the "721" key is read as a flat map
+            assertThat(parser.hasNestedMetadata(datum(metadata("Flat v4"), 4))).isFalse();
+        }
+
+        @Test
+        void shouldReportA721KeyAsNestedWhateverTheVersion() throws Exception {
+            // the CIP's step 4 tells nested from direct metadata by the "721" key, not by the version
+            for (long version : new long[]{1, 3, 4, 5, 100}) {
+                assertThat(parser.hasNestedMetadata(datum(nested(POLICY_ID, ASSET_NAME_HEX, metadata("Any")), version)))
+                        .as("version %d", version).isTrue();
+            }
+        }
+
+        @Test
+        void shouldNotReportAnythingThatIsNotACip68DatumAsNested() {
+            assertThat(parser.hasNestedMetadata(null)).isFalse();
+            assertThat(parser.hasNestedMetadata("")).isFalse();
+            assertThat(parser.hasNestedMetadata("not-hex")).isFalse();
+            assertThat(parser.hasNestedMetadata("d8799f00ff")).isFalse();
         }
 
         @Test
@@ -543,35 +581,24 @@ class Cip68DatumParserTest {
             return (Map<String, Object>) datum.properties().get("additional_properties");
         }
 
-        private static Map<String, Object> constructor(long alternative, Object... fields) {
-            return Map.of("constructor", alternative, "fields", List.of(fields));
-        }
-
         @Test
-        void shouldKeepMetadataWhenAPropertyIsAConstructor() {
+        void shouldKeepTheTokenAndDropThePropertyWhenItIsAConstructor() {
             assertThat(parser.parse(NFT_WITH_CONSTRUCTOR_PROPERTY)).hasValueSatisfying(m -> {
                 assertThat(m.name()).isEqualTo("NFT #1");
-                assertThat(additionalProperties(m).get("contractData")).isEqualTo(constructor(0,
-                        BigInteger.ONE,
-                        List.of("dc9acfee35243d123e8f10bc58692a6bc5aa3135c7eafc2aac9daafc"),
-                        constructor(1),
-                        "9abc17656a6d1c24688292777c18c1ce599845a588f4d893c1884da2",
-                        constructor(1),
-                        constructor(1)));
+                // contractData was the only additional property
+                assertThat(m.properties()).isNull();
             });
         }
 
         @Test
-        void shouldKeepFungibleTokenMetadataWhenAPropertyIsAConstructor() {
+        void shouldKeepFungibleTokenMetadataAndDropOnlyTheConstructorProperty() {
             assertThat(parser.parse(FT_WITH_CONSTRUCTOR_PROPERTY)).hasValueSatisfying(m -> {
                 assertThat(m.name()).isEqualTo("Wrapped pUSDC");
                 assertThat(m.ticker()).isEqualTo("pUSDC");
                 assertThat(m.decimals()).isEqualTo(6L);
 
                 Map<String, Object> additional = additionalProperties(m);
-                assertThat(additional.get("seed")).isEqualTo(constructor(0,
-                        constructor(0, "42f5390b279a4b49d56fe594b2d5eaf02e8e387fa1612f87bafd2feed7c836af"),
-                        BigInteger.TWO));
+                assertThat(additional).doesNotContainKey("seed");
                 assertThat(additional.get("oracles")).isEqualTo(List.of(
                         "80edfa909a3d40a54fca4c3ee852c7ba2a79391738911dc363580dc2",
                         "ab25d3b9476a3e3343a2f353b08b40913c573de7d286ef37ac4013e0",
@@ -581,15 +608,14 @@ class Cip68DatumParserTest {
         }
 
         @Test
-        void shouldKeepMetadataOfMainnetDatumsWithAConstructorOwner() {
+        void shouldKeepMainnetVouchersAndDropTheirConstructorOwner() {
             MAINNET_VOUCHERS_WITH_CONSTRUCTOR_OWNER.forEach((datum, name) ->
                     assertThat(parser.parse(datum)).as(name).hasValueSatisfying(m -> {
                         assertThat(m.name()).isEqualTo(name);
                         assertThat(m.version()).isEqualTo(1L);
                         assertThat(m.url()).isEqualTo("https://pbg.io/vouchers");
-                        assertThat(additionalProperties(m)).containsKeys("owner", "datum", "tokens", "period", "price");
-                        assertThat(additionalProperties(m).get("owner"))
-                                .isInstanceOfSatisfying(Map.class, owner -> assertThat(owner.keySet()).containsExactlyInAnyOrder("constructor", "fields"));
+                        assertThat(additionalProperties(m)).containsKeys("datum", "tokens", "period", "price")
+                                .doesNotContainKey("owner");
                     }));
         }
 
