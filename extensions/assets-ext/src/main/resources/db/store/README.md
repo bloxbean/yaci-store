@@ -87,7 +87,7 @@ row stored under label=222). Read-path queries must **not** filter by label — 
 | `media_type` | `VARCHAR(255)` | MIME type of the image. |
 | `version` | `BIGINT` NOT NULL | CIP-68 schema version, typically 1. |
 | `datum` | `TEXT` (PG/H2) / `LONGTEXT` (MySQL) NOT NULL | Full CBOR hex of the inline datum, kept for re-parse / audit. |
-| `properties` | `JSONB` (PG) / `JSON` (MySQL) / `TEXT` (H2) | Catch-all: `files[]` (array of `{name, mediaType, src}`) + collection-specific traits. |
+| `properties` | `JSONB` (PG) / `JSON` (MySQL) / `TEXT` (H2) | Catch-all: `files[]` (array of `{name, mediaType, src}`) + collection-specific traits. A property is left out, and the rest of the datum is indexed, when its value holds a Plutus constructor or is nested deeper than 100 levels (Jackson cannot write a JSON document nested deeper than 1000), and `files` is left out as a whole when an entry breaks the CIP-68 definition. The full datum stays in `datum`. |
 | `last_synced_at` | `TIMESTAMP` | |
 
 Indexes: `idx_cip68_metadata_slot`, `idx_cip68_metadata_label`. See

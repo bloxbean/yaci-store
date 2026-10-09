@@ -3,14 +3,16 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.parser;
 import com.bloxbean.cardano.client.plutus.spec.*;
 import com.bloxbean.cardano.client.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.metrics.Cip68Metrics;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.AssetType;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Constants;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Uri;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.ParsedCip68Datum;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.Cip68Metadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.util.TokenDecimals;
 import jakarta.annotation.Nullable;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.math.BigInteger;
@@ -23,9 +25,20 @@ import java.util.Optional;
 import java.util.Set;
 
 @Component
-@RequiredArgsConstructor
 @Slf4j
 public class Cip68DatumParser {
+
+    private final Cip68Metrics metrics;
+
+    @Autowired
+    public Cip68DatumParser(Cip68Metrics metrics) {
+        this.metrics = metrics;
+    }
+
+    /** Without metrics that anyone reads (tests). */
+    public Cip68DatumParser() {
+        this(Cip68Metrics.noop());
+    }
 
     // Well-known CIP-68 keys that map to typed columns on cip68_metadata.
     public static final String DECIMALS    = "decimals";
@@ -38,9 +51,27 @@ public class Cip68DatumParser {
     public static final String MEDIA_TYPE  = "mediaType";
     public static final String FILES       = "files";
 
+    /** Largest {@code logo} or {@code image} accepted, in bytes. Same limit as the CIP-26 logo. */
+    public static final int URI_MAX_BYTES = 64 * 1024;
+
+    /**
+     * Deepest nesting allowed in the value of an additional property (a list inside a list counts as two levels). The
+     * value goes to a JSON column, and Jackson refuses to write or read a document nested deeper than 1000 levels, so
+     * a deeper value would fail the insert and stop the sync. Real metadata nests a few levels; the datum is untrusted
+     * and only the transaction size bounds how deep it can be.
+     */
+    public static final int MAX_PROPERTY_DEPTH = 100;
+
     /** CIP-68 version 4 wraps the metadata in a CIP-25 style map: {"721": {policy_id: {asset_name: metadata}}}. */
     private static final BytesPlutusData NESTED_MAP_KEY = BytesPlutusData.of("721");
-    private static final long NESTED_MAP_MIN_VERSION = 4;
+    /**
+     * The datum versions CIP-68 defines. They are informational: how a datum is read does not depend on its
+     * version but on its structure (see {@link #isNested}), as the CIP's retrieval steps say. A datum with another
+     * version is still read and indexed, and a warning is logged so a new version is noticed. Update the upper bound
+     * when the CIP adds a version.
+     */
+    static final long MIN_DEFINED_VERSION = 1;
+    static final long MAX_DEFINED_VERSION = 4;
 
     /** Set of keys we promote to typed columns; everything else goes into the JSONB additional_properties. */
     private static final Set<String> TYPED_KEYS = Set.of(
@@ -68,8 +99,9 @@ public class Cip68DatumParser {
 
         try {
             return extractDatumProperties(inlineDatum)
+                    .filter(parts -> isDefinedVersion(parts, referenceNft))
                     .flatMap(parts -> resolveMetadata(parts, referenceNft)
-                            .map(metadata -> buildParsedDatum(metadata, parts.version())));
+                            .map(metadata -> buildParsedDatum(metadata, parts.version(), referenceNft)));
         } catch (StackOverflowError e) {
             // TODO: temporary workaround. Remove once cardano-client-lib decodes CBOR without
             //  recursion (bloxbean/cardano-client-lib#681).
@@ -78,12 +110,14 @@ public class Cip68DatumParser {
             // StackOverflowError is an Error, not an Exception, so it needs its own catch: skip the
             // datum like any other undecodable one.
             log.warn("Skipping CIP-68 datum nested too deeply to decode ({} bytes)", inlineDatum.length() / 2);
+            metrics.parseFailure();
             return Optional.empty();
         } catch (Exception e) {
             // One line per failure, with the datum for reproduction; the stack trace only at DEBUG,
             // so a run of unparseable datums doesn't flood the sync log.
             log.warn("Skipping unparseable CIP-68 datum ({}): {}", e, inlineDatum);
             log.debug("CIP-68 datum parse failure", e);
+            metrics.parseFailure();
             return Optional.empty();
         }
     }
@@ -127,10 +161,10 @@ public class Cip68DatumParser {
      */
     private Optional<MapPlutusData> resolveMetadata(DatumParts parts, @Nullable AssetType referenceNft) {
         MapPlutusData properties = parts.properties();
-        if (parts.version() < NESTED_MAP_MIN_VERSION
-                || !(properties.getMap().get(NESTED_MAP_KEY) instanceof MapPlutusData byPolicy)) {
+        if (!isNested(parts)) {
             return Optional.of(properties);
         }
+        MapPlutusData byPolicy = (MapPlutusData) properties.getMap().get(NESTED_MAP_KEY);
 
         if (referenceNft == null) {
             // No asset context: only an unambiguous single entry can be resolved
@@ -143,6 +177,57 @@ public class Cip68DatumParser {
                 .flatMap(byAsset -> asMap(byAsset.getMap().get(BytesPlutusData.of(HexUtil.decodeHexString(assetNameWithoutLabel)))));
     }
 
+    /**
+     * CIP-68 defines versions 1 to 4 (its CDDL lists them, and says a change that is not backwards-compatible adds a
+     * new version). A datum with another version is not indexed: the layout of a version the CIP does not define is
+     * a guess, and a new version is added here when the CIP adds it. One warning names the token and the version, and
+     * the datum is counted as skipped with the reason {@code invalid_version}. The layout of versions 1 to 4 still
+     * comes from the structure (the {@code "721"} key), not from the version.
+     *
+     * @return true if the version is one CIP-68 defines
+     */
+    private boolean isDefinedVersion(DatumParts parts, @Nullable AssetType referenceNft) {
+        long version = parts.version();
+        if (version >= MIN_DEFINED_VERSION && version <= MAX_DEFINED_VERSION) {
+            return true;
+        }
+        if (referenceNft != null) {
+            log.warn("Skipping CIP-68 datum of {}/{}: version {} is not one CIP-68 defines ({} to {})",
+                    referenceNft.policyId(), referenceNft.assetName(), version, MIN_DEFINED_VERSION, MAX_DEFINED_VERSION);
+        } else {
+            log.warn("Skipping CIP-68 datum: version {} is not one CIP-68 defines ({} to {})",
+                    version, MIN_DEFINED_VERSION, MAX_DEFINED_VERSION);
+        }
+        metrics.invalidVersion();
+        return false;
+    }
+
+    /**
+     * Whether the metadata map is the nested format: it has the {@code "721"} key, whose value is a map. This is the
+     * test in step 4 of the CIP's retrieval steps ("direct metadata (map without "721" key) or nested map format
+     * (map with "721" key)"), and it does not depend on the version. A flat map with an additional property named
+     * {@code "721"} that holds a map would be misread; none exists on mainnet.
+     */
+    private static boolean isNested(DatumParts parts) {
+        return parts.properties().getMap().get(NESTED_MAP_KEY) instanceof MapPlutusData;
+    }
+
+    /**
+     * Whether the datum is in the nested format, which can carry the metadata of several reference NFTs.
+     * A flat datum (a map without {@code "721"}) describes one token. Anything that is
+     * not a CIP-68 datum, or cannot be decoded, is not nested.
+     */
+    public boolean hasNestedMetadata(@Nullable String inlineDatum) {
+        if (inlineDatum == null || inlineDatum.isBlank()) {
+            return false;
+        }
+        try {
+            return extractDatumProperties(inlineDatum).map(Cip68DatumParser::isNested).orElse(false);
+        } catch (Exception | StackOverflowError e) {
+            return false;
+        }
+    }
+
     private static Optional<MapPlutusData> singleValue(MapPlutusData map) {
         return map.getMap().size() == 1 ? asMap(map.getMap().values().iterator().next()) : Optional.empty();
     }
@@ -152,7 +237,7 @@ public class Cip68DatumParser {
     }
 
     /** Build the typed {@link ParsedCip68Datum} from the unwrapped (Map, version) pair. */
-    private ParsedCip68Datum buildParsedDatum(MapPlutusData properties, long version) {
+    private ParsedCip68Datum buildParsedDatum(MapPlutusData properties, long version, @Nullable AssetType referenceNft) {
         return new ParsedCip68Datum(
                 getDecimalsProperty(properties).orElse(null),
                 getStringProperty(DESCRIPTION, properties).orElse(null),
@@ -163,7 +248,7 @@ public class Cip68DatumParser {
                 version,
                 getStringOrChunkedProperty(IMAGE, properties).orElse(null),
                 getBoundedStringProperty(MEDIA_TYPE, properties, Cip68Metadata.MEDIA_TYPE_MAX_LENGTH).orElse(null),
-                buildPropertiesJson(properties));
+                buildPropertiesJson(properties, referenceNft));
     }
 
     /**
@@ -171,9 +256,9 @@ public class Cip68DatumParser {
      * {@code properties} column. Returns {@code null} if neither part is populated, so
      * pure FT rows don't materialise an empty wrapper.
      */
-    private Map<String, Object> buildPropertiesJson(MapPlutusData properties) {
-        List<Map<String, Object>> files = parseFiles(properties);
-        Map<String, Object> additional = parseAdditionalProperties(properties);
+    private Map<String, Object> buildPropertiesJson(MapPlutusData properties, @Nullable AssetType referenceNft) {
+        List<Map<String, Object>> files = parseFiles(properties, referenceNft);
+        Map<String, Object> additional = parseAdditionalProperties(properties, referenceNft);
 
         boolean hasFiles = files != null && !files.isEmpty();
         boolean hasAdditional = !additional.isEmpty();
@@ -194,10 +279,15 @@ public class Cip68DatumParser {
     /** Internal record for the unwrapped CIP-68 envelope (properties Map, range-checked version). */
     private record DatumParts(MapPlutusData properties, long version) {}
 
+    /**
+     * Reads a text property. CIP-68 says text is UTF-8, so valid UTF-8 is stored as text. Bytes that are
+     * not valid UTF-8 are stored as hex, the same rule as for additional properties, instead of being
+     * decoded with replacement characters, which would lose the original bytes.
+     */
     private Optional<String> getStringProperty(String propertyName, MapPlutusData mapPlutusData) {
         PlutusData property = mapPlutusData.getMap().get(BytesPlutusData.of(propertyName));
         return switch (property) {
-            case BytesPlutusData bytes -> Optional.of(bytesToString(bytes.getValue()));
+            case BytesPlutusData bytes -> Optional.of(bytesToText(bytes.getValue()));
             case null, default -> Optional.empty();
         };
     }
@@ -225,27 +315,43 @@ public class Cip68DatumParser {
     }
 
     /**
-     * CIP-25 convention, inherited by CIP-68 NFT {@code image} and the FT {@code logo} (both a
-     * CIP-68 {@code uri = bounded_bytes / [* bounded_bytes]}): if a string value exceeds 64 bytes
-     * the issuer may split it into a list of byte-string chunks. This helper joins them
-     * back together. Falls back to {@link #getStringProperty} for the simple-string case.
+     * Reads a CIP-68 {@code uri} ({@code uri = bounded_bytes / [* bounded_bytes]}), used for the NFT
+     * {@code image} and the FT {@code logo}: a value longer than 64 bytes, the most a Plutus byte string
+     * holds, is split into a list of byte-string chunks, and this joins them back together. The chunks are
+     * joined as bytes and decoded once, so a multi-byte character cut by a chunk boundary survives.
+     * Elements of the list that are not byte strings are ignored.
+     * <p>
+     * The value is capped at {@value #URI_MAX_BYTES} bytes (the CIP-26 logo has the same limit): an
+     * over-long value is dropped with a warning and the rest of the datum is kept. The scheme is not
+     * checked here; {@code Cip68TokenService#invalidReason} checks the image of a 222 or 444 token and the logo of a 333 token.
      */
     private Optional<String> getStringOrChunkedProperty(String propertyName, MapPlutusData mapPlutusData) {
         PlutusData property = mapPlutusData.getMap().get(BytesPlutusData.of(propertyName));
 
-        return switch (property) {
-            case BytesPlutusData bytes -> Optional.of(bytesToString(bytes.getValue()));
-            case ListPlutusData list -> {
-                StringBuilder sb = new StringBuilder();
-                for (PlutusData chunk : list.getPlutusDataList()) {
-                    if (chunk instanceof BytesPlutusData b) {
-                        sb.append(bytesToString(b.getValue()));
-                    }
-                }
-                yield sb.isEmpty() ? Optional.empty() : Optional.of(sb.toString());
-            }
-            case null, default -> Optional.empty();
+        byte[] value = switch (property) {
+            case BytesPlutusData bytes -> bytes.getValue();
+            case ListPlutusData list -> joinChunks(list);
+            case null, default -> null;
         };
+        if (value == null) {
+            return Optional.empty();
+        }
+        if (value.length > URI_MAX_BYTES) {
+            log.warn("Ignoring CIP-68 '{}' of {} bytes (max {})", propertyName, value.length, URI_MAX_BYTES);
+            return Optional.empty();
+        }
+        // a single byte string keeps an empty value ("" is what some NFTs declare); an empty list is nothing
+        return property instanceof ListPlutusData && value.length == 0 ? Optional.empty() : Optional.of(bytesToText(value));
+    }
+
+    private static byte[] joinChunks(ListPlutusData list) {
+        java.io.ByteArrayOutputStream joined = new java.io.ByteArrayOutputStream();
+        for (PlutusData chunk : list.getPlutusDataList()) {
+            if (chunk instanceof BytesPlutusData b) {
+                joined.writeBytes(b.getValue());
+            }
+        }
+        return joined.toByteArray();
     }
 
     /**
@@ -274,33 +380,63 @@ public class Cip68DatumParser {
      * Walk the {@code files} key (if present) and return a list of file descriptors.
      * Each element is a {@code Map<String, Object>} with keys {@code name}, {@code mediaType},
      * {@code src} where present. Unknown keys inside a file entry are preserved verbatim.
+     * <p>
+     * {@code files} is optional, so one that breaks the CIP-68 definition is left out as a whole, with a warning, and
+     * the rest of the datum is kept: every entry has to be a map with a {@code mediaType} byte string and a
+     * {@code src} that is a URI with one of the allowed schemes.
      */
-    private List<Map<String, Object>> parseFiles(MapPlutusData properties) {
+    private List<Map<String, Object>> parseFiles(MapPlutusData properties, @Nullable AssetType referenceNft) {
         PlutusData filesProp = properties.getMap().get(BytesPlutusData.of(FILES));
         if (!(filesProp instanceof ListPlutusData filesList)) {
             return null;
         }
+        for (PlutusData item : filesList.getPlutusDataList()) {
+            Optional<String> invalid = invalidFileReason(item);
+            if (invalid.isPresent()) {
+                warnFilesDropped(invalid.get(), referenceNft);
+                return null;
+            }
+        }
         List<Map<String, Object>> result = new ArrayList<>();
         for (PlutusData item : filesList.getPlutusDataList()) {
-            if (!(item instanceof MapPlutusData fileMap)) {
-                continue;
-            }
-            Map<String, Object> file = new LinkedHashMap<>();
-            for (Map.Entry<PlutusData, PlutusData> e : fileMap.getMap().entrySet()) {
-                if (!(e.getKey() instanceof BytesPlutusData keyBytes)) {
-                    continue;
+            if (item instanceof MapPlutusData fileMap) {
+                Map<String, Object> file = readEntries(fileMap, "files[]", false, referenceNft);
+                if (!file.isEmpty()) {
+                    result.add(file);
                 }
-                String key = bytesToText(keyBytes.getValue());
-                Object value = unwrapPlutusValue(e.getValue());
-                if (value != null) {
-                    file.put(key, value);
-                }
-            }
-            if (!file.isEmpty()) {
-                result.add(file);
             }
         }
         return result;
+    }
+
+    /** Why an entry of {@code files} breaks {@code files_details} of the CIP-68 definition, or empty if it does not. */
+    private Optional<String> invalidFileReason(PlutusData item) {
+        if (!(item instanceof MapPlutusData file)) {
+            return Optional.of("an entry of 'files' is not a map");
+        }
+        if (!(file.getMap().get(BytesPlutusData.of(MEDIA_TYPE)) instanceof BytesPlutusData)) {
+            return Optional.of("an entry of 'files' has no mediaType");
+        }
+        Optional<String> src = getStringOrChunkedProperty("src", file);
+        if (src.isEmpty() || src.get().isBlank()) {
+            return Optional.of("an entry of 'files' has no usable src");
+        }
+        if (!Cip68Uri.hasAllowedScheme(src.get())) {
+            String shown = src.get().length() <= 60 ? src.get() : src.get().substring(0, 60) + "...";
+            return Optional.of("the src '" + shown + "' of an entry of 'files' is not a URI with one of the schemes CIP-68 allows ("
+                    + Cip68Uri.ALLOWED_SCHEMES + ")");
+        }
+        return Optional.empty();
+    }
+
+    private void warnFilesDropped(String reason, @Nullable AssetType referenceNft) {
+        metrics.propertyDropped(Cip68Metrics.INVALID_FILES);
+        if (referenceNft != null) {
+            log.warn("CIP-68 datum of {}/{}: dropping property 'files' and keeping the rest, because {}",
+                    referenceNft.policyId(), referenceNft.assetName(), reason);
+        } else {
+            log.warn("CIP-68 datum: dropping property 'files' and keeping the rest, because {}", reason);
+        }
     }
 
     /**
@@ -308,27 +444,181 @@ public class Cip68DatumParser {
      * or {@code files}. These project-specific properties (attributes, traits, royalties...)
      * go into {@code properties.additional_properties} for downstream consumers.
      */
-    private Map<String, Object> parseAdditionalProperties(MapPlutusData properties) {
+    private Map<String, Object> parseAdditionalProperties(MapPlutusData properties, @Nullable AssetType referenceNft) {
+        return readEntries(properties, "additional property", true, referenceNft);
+    }
+
+    /**
+     * Converts the entries of a metadata map to JSON-ready values, keyed by the text of the key. {@code where} names
+     * the map in warnings ({@code files[]} entries are reported as {@code files[].<key>}); {@code skipTypedKeys} leaves
+     * out the keys that have a typed column.
+     */
+    private Map<String, Object> readEntries(MapPlutusData map, String where, boolean skipTypedKeys, @Nullable AssetType referenceNft) {
         Map<String, Object> result = new LinkedHashMap<>();
-        for (Map.Entry<PlutusData, PlutusData> e : properties.getMap().entrySet()) {
-            if (!(e.getKey() instanceof BytesPlutusData keyBytes)) {
-                continue;
-            }
-            String key = bytesToText(keyBytes.getValue());
-            // Check before storing: an unsupported value must drop only this property, not the datum
-            Object value = TYPED_KEYS.contains(key) ? null : unwrapPlutusValue(e.getValue());
-            if (value != null) {
-                result.put(key, value);
-            }
+        for (Map.Entry<PlutusData, PlutusData> e : byteStringKeysFirst(map)) {
+            readEntry(result, e, where, skipTypedKeys, referenceNft);
         }
         return result;
     }
 
+    private void readEntry(Map<String, Object> result, Map.Entry<PlutusData, PlutusData> entry, String where,
+                           boolean skipTypedKeys, @Nullable AssetType referenceNft) {
+        String key = keyText(entry.getKey());
+        if (key == null) {
+            warnKeyLeftOut(where, entry.getKey(), referenceNft);
+            return;
+        }
+        String reportedKey = skipTypedKeys ? key : where + "." + key;
+        if (skipTypedKeys && TYPED_KEYS.contains(key)) {
+            return;
+        }
+        // the depth check comes first: it is bounded, while the constructor check recurses as deep as the value goes
+        if (dropsTooDeepProperty(reportedKey, entry.getValue(), referenceNft) || dropsConstructorProperty(reportedKey, entry.getValue(), referenceNft)) {
+            return;
+        }
+        // Check before storing: an unsupported value must drop only this property, not the datum
+        Object value = unwrapPlutusValue(entry.getValue());
+        if (value != null) {
+            putFirst(result, key, value, referenceNft);
+        }
+    }
+
     /**
-     * Unwrap a Plutus value into a Java type suitable for JSONB serialization. Recurses into maps,
-     * lists and constructors. Bytes become text via {@link #bytesToText}; ints become
-     * {@link BigInteger}; a constructor becomes {@code {"constructor": <alternative>, "fields": [...]}},
-     * the field names cardano-cli uses for Plutus data in its detailed JSON schema.
+     * The text of a map key. The CIP-68 definition allows any metadata as a key ({@code { * metadata => metadata }}),
+     * and JSON needs text keys, so a byte string key is read as text or hex (like any byte string) and an integer key
+     * as its decimal string, which is what Lucid and Blockfrost do. A list, map or constructor key has no sensible text
+     * form: {@code null}, and the entry is left out.
+     */
+    private static String keyText(PlutusData key) {
+        return switch (key) {
+            case BytesPlutusData bytes -> bytesToText(bytes.getValue());
+            case BigIntPlutusData integer -> integer.getValue().toString();
+            case null, default -> null;
+        };
+    }
+
+    private void warnKeyLeftOut(String where, PlutusData key, @Nullable AssetType referenceNft) {
+        metrics.propertyDropped("key_unsupported");
+        String kind = switch (key) {
+            case ListPlutusData ignored -> "list";
+            case MapPlutusData ignored -> "map";
+            case ConstrPlutusData ignored -> "constructor";
+            case null, default -> "unsupported";
+        };
+        if (referenceNft != null) {
+            log.warn("CIP-68 datum of {}/{}: leaving out a {} entry whose key is a {}, which has no text form",
+                    referenceNft.policyId(), referenceNft.assetName(), where, kind);
+        } else {
+            log.warn("CIP-68 datum: leaving out a {} entry whose key is a {}, which has no text form", where, kind);
+        }
+    }
+
+    /**
+     * The entries of a map with the byte string keys first, so that when a byte string key and an integer key read the
+     * same ({@code "1"} and {@code 1}) the byte string key is the one that stays, whatever order the map iterates in.
+     */
+    private static List<Map.Entry<PlutusData, PlutusData>> byteStringKeysFirst(MapPlutusData map) {
+        return map.getMap().entrySet().stream()
+                .sorted(java.util.Comparator.comparingInt(e -> e.getKey() instanceof BytesPlutusData ? 0 : 1))
+                .toList();
+    }
+
+    /** Two keys that read the same (the byte string "1" and the integer 1): the byte string key stays. */
+    private void putFirst(Map<String, Object> target, String key, Object value, @Nullable AssetType referenceNft) {
+        if (target.putIfAbsent(key, value) != null) {
+            metrics.propertyDropped("key_collision");
+            if (referenceNft != null) {
+                log.warn("CIP-68 datum of {}/{}: two keys read as '{}', keeping the byte string key",
+                        referenceNft.policyId(), referenceNft.assetName(), key.length() <= 60 ? key : key.substring(0, 60) + "...");
+            } else {
+                log.warn("CIP-68 datum: two keys read as '{}', keeping the byte string key", key.length() <= 60 ? key : key.substring(0, 60) + "...");
+            }
+        }
+    }
+
+    /**
+     * The generic CIP-68 definition allows a metadata value to be a map, a list, an integer or a byte string, and
+     * Plutus data of any kind only in {@code extra}. A property whose value holds a constructor, however deep, is
+     * therefore not valid metadata: it is dropped with a warning, and the rest of the datum, and the token, are
+     * kept. (Before, the constructor was stored as {@code {"constructor": n, "fields": [...]}}, a form the CIP does
+     * not define.)
+     *
+     * @return true if the property was dropped
+     */
+    private boolean dropsConstructorProperty(String key, PlutusData value, @Nullable AssetType referenceNft) {
+        if (!containsConstructor(value)) {
+            return false;
+        }
+        metrics.propertyDropped("constructor");
+        String shortKey = key.length() <= 60 ? key : key.substring(0, 60) + "...";
+        if (referenceNft != null) {
+            log.warn("CIP-68 datum of {}/{}: dropping property '{}' and keeping the rest, because its value holds a Plutus "
+                            + "constructor, which CIP-68 metadata does not allow",
+                    referenceNft.policyId(), referenceNft.assetName(), shortKey);
+        } else {
+            log.warn("CIP-68 datum: dropping property '{}' and keeping the rest, because its value holds a Plutus "
+                    + "constructor, which CIP-68 metadata does not allow", shortKey);
+        }
+        return true;
+    }
+
+    /**
+     * Drops a property whose value is nested deeper than {@link #MAX_PROPERTY_DEPTH}, with a warning and a count; the
+     * rest of the datum is kept.
+     */
+    private boolean dropsTooDeepProperty(String key, PlutusData value, @Nullable AssetType referenceNft) {
+        if (!isNestedDeeperThan(value, MAX_PROPERTY_DEPTH)) {
+            return false;
+        }
+        metrics.propertyDropped(Cip68Metrics.TOO_DEEP);
+        String shortKey = key.length() <= 60 ? key : key.substring(0, 60) + "...";
+        if (referenceNft != null) {
+            log.warn("CIP-68 datum of {}/{}: dropping property '{}' and keeping the rest, because its value is nested "
+                            + "deeper than {} levels",
+                    referenceNft.policyId(), referenceNft.assetName(), shortKey, MAX_PROPERTY_DEPTH);
+        } else {
+            log.warn("CIP-68 datum: dropping property '{}' and keeping the rest, because its value is nested deeper "
+                    + "than {} levels", shortKey, MAX_PROPERTY_DEPTH);
+        }
+        return true;
+    }
+
+    /** True if the value has more than {@code levels} levels of lists, maps and constructors. Stops at {@code levels}, so it never recurses deeper than that. */
+    private static boolean isNestedDeeperThan(@Nullable PlutusData data, int levels) {
+        List<PlutusData> children = switch (data) {
+            case ListPlutusData list -> list.getPlutusDataList();
+            case MapPlutusData map -> {
+                List<PlutusData> all = new ArrayList<>();
+                map.getMap().forEach((k, v) -> {
+                    all.add(k);
+                    all.add(v);
+                });
+                yield all;
+            }
+            case ConstrPlutusData constr -> constr.getData().getPlutusDataList();
+            case null, default -> null;
+        };
+        if (children == null) {
+            return false;
+        }
+        return levels == 0 || children.stream().anyMatch(child -> isNestedDeeperThan(child, levels - 1));
+    }
+
+    private static boolean containsConstructor(@Nullable PlutusData data) {
+        return switch (data) {
+            case ConstrPlutusData ignored -> true;
+            case ListPlutusData list -> list.getPlutusDataList().stream().anyMatch(Cip68DatumParser::containsConstructor);
+            case MapPlutusData map -> map.getMap().entrySet().stream()
+                    .anyMatch(e -> containsConstructor(e.getKey()) || containsConstructor(e.getValue()));
+            case null, default -> false;
+        };
+    }
+
+    /**
+     * Unwrap a Plutus value into a Java type suitable for JSONB serialization. Recurses into maps
+     * and lists. Bytes become text via {@link #bytesToText}; ints become {@link BigInteger}. A constructor
+     * has no place in CIP-68 metadata, so it never gets here: {@link #dropsConstructorProperty} drops the
+     * property that holds one before the value is converted.
      */
     private Object unwrapPlutusValue(PlutusData data) {
         return switch (data) {
@@ -344,18 +634,12 @@ public class Cip68DatumParser {
             }
             case MapPlutusData map -> {
                 Map<String, Object> out = new LinkedHashMap<>();
-                for (Map.Entry<PlutusData, PlutusData> entry : map.getMap().entrySet()) {
-                    if (!(entry.getKey() instanceof BytesPlutusData kb)) continue;
+                for (Map.Entry<PlutusData, PlutusData> entry : byteStringKeysFirst(map)) {
+                    String key = keyText(entry.getKey());
+                    if (key == null) continue;
                     Object u = unwrapPlutusValue(entry.getValue());
-                    if (u != null) out.put(bytesToText(kb.getValue()), u);
+                    if (u != null) out.putIfAbsent(key, u);
                 }
-                yield out;
-            }
-            case ConstrPlutusData constr -> {
-                Object fields = unwrapPlutusValue(constr.getData());
-                Map<String, Object> out = new LinkedHashMap<>();
-                out.put("constructor", constr.getAlternative());
-                out.put("fields", fields != null ? fields : List.of());
                 yield out;
             }
             case null -> null;
