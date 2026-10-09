@@ -12,7 +12,7 @@ import java.util.List;
  *
  * <p>The identity is content-addressed: it is derived from the snapshot id, the table, the transform
  * version and the sorted digests of the batch's input files. Resume requires the original manifest
- * and specification (including its batch size); only worker concurrency may be changed.
+ * and specification (including its batch size); worker concurrency and execution memory limits may be changed.
  */
 public record ImportBatch(String batchId,
                           SnapshotTableSpec spec,

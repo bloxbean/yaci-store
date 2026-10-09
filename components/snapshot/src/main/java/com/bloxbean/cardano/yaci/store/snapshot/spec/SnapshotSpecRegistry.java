@@ -18,6 +18,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Stream;
 
@@ -30,6 +31,8 @@ import java.util.stream.Stream;
  * are executable, so a downloaded archive must not be able to introduce or replace one.
  */
 public class SnapshotSpecRegistry {
+    private Set<String> selectedIds;
+
 
     private static final Logger log = LoggerFactory.getLogger(SnapshotSpecRegistry.class);
     public static final String INDEX_RESOURCE = "/snapshot/specs.index";
@@ -163,19 +166,60 @@ public class SnapshotSpecRegistry {
 
     /** Specs in deterministic id order. */
     public List<SnapshotTableSpec> all() {
-        return new ArrayList<>(byId.values());
+        return byId.values().stream().filter(s -> isSelected(s.id())).toList();
     }
 
     /** Specs whose data is packaged into a snapshot, in dependency-safe load order. */
     public List<SnapshotTableSpec> importedTables() {
-        List<SnapshotTableSpec> imported = byId.values().stream()
+        List<SnapshotTableSpec> imported = all().stream()
                 .filter(s -> s.restore() == RestoreMode.IMPORT)
                 .toList();
         return orderByDependencies(imported);
     }
 
     public List<SnapshotTableSpec> handlerTables() {
-        return byId.values().stream().filter(s -> s.restore() == RestoreMode.HANDLER).toList();
+        return all().stream().filter(s -> s.restore() == RestoreMode.HANDLER).toList();
+    }
+
+    public List<SnapshotTableSpec> knownTables() { return new ArrayList<>(byId.values()); }
+
+    public boolean isScoped() { return selectedIds != null; }
+
+    public boolean isSelected(String id) { return selectedIds == null || selectedIds.contains(id); }
+
+    /** Retain knowledge of skipped tables, but load and validate only the selected modules. */
+    public SnapshotSpecRegistry selectModules(Set<String> modules) {
+        SnapshotSpecRegistry selected = new SnapshotSpecRegistry();
+        byId.values().forEach(s -> selected.register(s, isBuiltIn(s)));
+        selected.selectedIds = byId.values().stream().filter(s -> modules.contains(s.module()))
+                .map(SnapshotTableSpec::id).collect(java.util.stream.Collectors.toSet());
+        for (SnapshotTableSpec spec : selected.all()) {
+            for (String dependency : spec.importSpec().dependencies()) {
+                if (!selected.isSelected(dependency)) {
+                    throw new SpecException("Enabled specification '" + spec.id()
+                            + "' requires disabled specification '" + dependency + "'");
+                }
+            }
+        }
+        for (String required : List.of("block", "cursor", "era")) {
+            if (byId.containsKey(required) && !selected.isSelected(required)) {
+                throw new SpecException("Snapshot resume requires specification '" + required + "'");
+            }
+        }
+        return selected;
+    }
+
+    public List<String> selectedLimitations(List<String> limitations) {
+        if (!isScoped()) return limitations;
+        return limitations.stream().filter(limitation -> knownTables().stream()
+                .filter(s -> limitation.startsWith(s.targetTable() + ":") || limitation.startsWith(s.targetTable() + "."))
+                .findFirst().map(s -> isSelected(s.id())).orElse(true)).toList();
+    }
+
+    public String scopeDigest() {
+        String ids = all().stream().map(s -> s.id() + "=" + s.digest())
+                .collect(java.util.stream.Collectors.joining("\n"));
+        return com.bloxbean.cardano.yaci.store.snapshot.util.Digests.sha256Hex(ids);
     }
 
     public Optional<SnapshotTableSpec> byId(String id) {

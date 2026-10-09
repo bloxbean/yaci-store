@@ -5,6 +5,8 @@ import com.bloxbean.cardano.yaci.store.snapshot.load.ImportOptions;
 import com.bloxbean.cardano.yaci.store.snapshot.load.PgSchema;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.SnapshotSpecRegistry;
 import lombok.RequiredArgsConstructor;
+import com.bloxbean.cardano.yaci.store.common.config.StoreModuleConfig;
+import com.bloxbean.cardano.yaci.store.common.config.SchemaProfile;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
@@ -95,14 +97,37 @@ public class SnapshotCliSupport {
 
     /** Modules considered enabled, recorded in the manifest as the snapshot's profile. */
     public List<String> enabledModules() {
-        List<String> modules = new ArrayList<>();
-        for (String m : List.of("blocks", "utxo", "transaction", "script", "metadata", "assets",
-                "epoch", "staking", "mir", "governance", "epoch-aggr", "adapot", "governance-aggr")) {
-            if (!"false".equalsIgnoreCase(environment.getProperty("store." + m + ".enabled", "true"))) {
-                modules.add(m);
+        return StoreModuleConfig.configured(environment).entrySet().stream()
+                .filter(Map.Entry::getValue).map(Map.Entry::getKey).sorted().toList();
+    }
+
+    /** Use the consuming application's recorded classpath and effective flags, not CLI dependencies. */
+    public SnapshotSpecRegistry importRegistry(String specFile, boolean allowCustomSpecs) throws SQLException {
+        SnapshotSpecRegistry registry = registry(specFile, allowCustomSpecs);
+        try (Connection conn = connect()) {
+            Map<String, Boolean> profile = SchemaProfile.read(conn, schema());
+            if (profile.isEmpty()) {
+                throw new IllegalStateException("Target schema has no store profile. Run the consuming application once "
+                        + "with store.schema-only=true and the intended store flags, then retry import.");
             }
+            for (var module : StoreModuleConfig.MODULES.entrySet()) {
+                String property = module.getValue().property();
+                if (property != null && environment.containsProperty(property)
+                        && !environment.getProperty(property, Boolean.class).equals(profile.get(module.getKey()))) {
+                    throw new IllegalStateException("Configured " + property + " differs from the target schema-only profile. "
+                            + "Use the same application configuration for initialization and import.");
+                }
+            }
+            // Custom snapshot modules need an explicit enabled flag and existing target tables.
+            for (var spec : registry.all()) {
+                if (!StoreModuleConfig.MODULES.containsKey(spec.module())) {
+                    profile = new LinkedHashMap<>(profile);
+                    profile.put(spec.module(), environment.getProperty("store." + spec.module() + ".enabled", Boolean.class, false));
+                }
+            }
+            return registry.selectModules(profile.entrySet().stream().filter(Map.Entry::getValue)
+                    .map(Map.Entry::getKey).collect(java.util.stream.Collectors.toSet()));
         }
-        return modules;
     }
 
     public Map<String, String> pruningSettings() {
@@ -134,11 +159,13 @@ public class SnapshotCliSupport {
                                        boolean unsigned) throws SQLException {
         String schemaFingerprint;
         String flywayFingerprint;
+        Map<String, String> tableSchemaFingerprints;
         Map<String, Map<String, Long>> completedPartitions = new LinkedHashMap<>();
         try (Connection conn = connect()) {
             PgSchema pgs = new PgSchema(conn, schema());
             schemaFingerprint = pgs.fingerprint();
             flywayFingerprint = pgs.flywayFingerprint();
+            tableSchemaFingerprints = pgs.tableFingerprints();
             String stateTable = com.bloxbean.cardano.yaci.store.snapshot.util.Identifiers.quote(schema())
                     + ".analytics_export_state";
             try (var st = conn.createStatement();
@@ -157,7 +184,7 @@ public class SnapshotCliSupport {
                 network(), protocolMagic(), null,
                 parseSize(partSize), targetEpoch, minConfirmations, allowIncomplete, unsigned,
                 yaciStoreVersion(), enabledModules(), pruningSettings(),
-                schemaFingerprint, flywayFingerprint, completedPartitions);
+                schemaFingerprint, flywayFingerprint, completedPartitions, tableSchemaFingerprints);
     }
 
     public ImportOptions importOptions(String manifest, String workDir, int workers, String memoryLimit,

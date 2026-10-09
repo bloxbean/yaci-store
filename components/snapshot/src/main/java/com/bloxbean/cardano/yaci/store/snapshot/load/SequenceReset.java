@@ -35,12 +35,17 @@ public class SequenceReset {
      * @return sequence name to the value it was set to
      */
     public Map<String, Long> resetAll() throws SQLException {
+        return resetTables(null);
+    }
+
+    public Map<String, Long> resetTables(java.util.Set<String> selectedTables) throws SQLException {
         Map<String, Long> result = new LinkedHashMap<>();
         Map<String, String[]> sequences = new PgSchema(conn, schema).sequences();
 
         for (Map.Entry<String, String[]> e : sequences.entrySet()) {
             String sequence = e.getKey();
             String table = e.getValue()[0];
+            if (selectedTables != null && !selectedTables.contains(table)) continue;
             String column = e.getValue()[1];
             Identifiers.requireSqlIdentifier(sequence, "sequence");
             Identifiers.requireSqlIdentifier(table, "table");

@@ -34,7 +34,18 @@ public record ExportOptions(Path dataDir,
                             Map<String, String> pruningSettings,
                             String schemaFingerprint,
                             String flywayFingerprint,
-                            Map<String, Map<String, Long>> completedPartitions) {
+                            Map<String, Map<String, Long>> completedPartitions,
+                            Map<String, String> tableSchemaFingerprints) {
+
+    public ExportOptions(Path dataDir, Path workDir, Path outputDir, String network, long protocolMagic,
+                         String genesisHash, long partSizeBytes, int targetEpoch, long minConfirmations,
+                         boolean allowIncomplete, boolean unsigned, String yaciStoreVersion,
+                         List<String> modules, Map<String, String> pruningSettings, String schemaFingerprint,
+                         String flywayFingerprint, Map<String, Map<String, Long>> completedPartitions) {
+        this(dataDir, workDir, outputDir, network, protocolMagic, genesisHash, partSizeBytes, targetEpoch,
+                minConfirmations, allowIncomplete, unsigned, yaciStoreVersion, modules, pruningSettings,
+                schemaFingerprint, flywayFingerprint, completedPartitions, Map.of());
+    }
 
     public static final long DEFAULT_MIN_CONFIRMATIONS = 2160;
 }

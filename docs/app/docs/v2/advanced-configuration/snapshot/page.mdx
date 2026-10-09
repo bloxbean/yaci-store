@@ -15,8 +15,8 @@ unsigned and retain the [declared limitations](#known-limitations).
 ## Prerequisites and starting the CLI
 
 Use the same build for the source exporter, target Yaci Store, and admin CLI. The initial format
-requires PostgreSQL and a complete migrated Yaci Store schema; selective module restores are not
-supported. Keep a separate source and disposable target configuration for qualification.
+requires PostgreSQL and a migrated target schema. Import supports a subset of stores, selected
+from the target application’s enabled modules. Keep a separate source and disposable target configuration for qualification.
 
 From a source checkout, build with Java 21:
 
@@ -247,15 +247,51 @@ listed by the snapshot component), which are recreated by aggregate jobs and abs
 schema. Other table-definition differences still block import. Snapshots produced before this
 correction must be regenerated; do not edit the manifest fingerprint by hand.
 
-The target must be created by **the same Yaci Store release named in the manifest**, with the same
-enabled modules, and must be empty:
+Use **the same Yaci Store release named in the manifest** to initialize an empty target. Run your
+actual application, including an application that uses Yaci Store as a library, with its intended
+profiles and store flags. For example, select a separate PostgreSQL schema in `target.properties`:
 
 ```properties
-store.sync-auto-start=false
+spring.datasource.url=jdbc:postgresql://localhost:5432/yaci?currentSchema=snapshot_test
+spring.flyway.schemas=snapshot_test
+spring.flyway.default-schema=snapshot_test
 ```
 
-Start the application once with that setting so Flyway creates the exact schema, then stop it. Yaci
-Store must not be running against the schema while the import runs.
+Supply your usual datasource credentials, network settings, and `store.*.enabled` flags in that
+file, then run:
+
+```bash
+java -jar /path/to/your-yaci-store-app.jar --spring.config.additional-location=file:/path/to/target.properties --store.schema-only=true
+```
+
+This mode runs the application's existing Flyway migrations, records its installed and enabled
+stores, closes the migration context, and exits successfully. It exits with a nonzero code on
+failure. It automatically suppresses sync, store jobs, and the normal application context, even
+when `store.sync-auto-start=true`. Flyway creates the configured schema; manual `CREATE SCHEMA`
+is unnecessary when the database user has permission. Custom Flyway locations remain supported.
+
+For Docker Compose, use a one-off container with the target configuration mounted:
+
+```bash
+docker compose run --rm <service> --store.schema-only=true
+```
+
+Flyway may create tables for disabled stores because it discovers migrations on the classpath.
+The target-local `_yaci_store_schema_profile` table records the import scope; table existence does
+not select stores. The admin CLI reads this record. If the CLI explicitly configures a store flag
+that disagrees with it, import stops with a configuration error. Use the same target configuration
+and profiles for the application and CLI. An existing empty, migrated target can run schema-only
+mode once to create this record without recreating its tables.
+
+Only enabled stores are restored and validated. Required dependencies must also be enabled;
+block, cursor, and era state are required to resume sync. Disabled stores' chain tables must stay
+empty. New manifests carry per-table schema fingerprints, allowing a smaller target application
+to import without matching unrelated source tables or Flyway history. Older manifests without
+these fingerprints require the whole schema fingerprint to match; otherwise regenerate the
+snapshot. Custom application tables still need explicit snapshot specifications.
+
+Keep Yaci Store stopped during import. Remove `store.schema-only=true` (or set it to false) before
+starting normal sync after validation. The admin CLI itself does not run migrations.
 
 Do not run `apply-indexes` first. The base tables, primary keys and unique constraints created by
 Flyway are required; the optional read indexes from `index.yml` and `extra-index.yml` are applied
@@ -274,11 +310,13 @@ snapshot import --manifest <manifest> --work-dir /path/to/work --dry-run --allow
 ```
 
 Import refuses to run unless the archive verifies, the network and protocol magic match the
-configured instance, the schema and Flyway fingerprints match, every locally installed specification
-matches the manifest's version and digest, every table in the target schema has a classification,
+configured instance, selected tables have matching schema fingerprints and specification versions
+and digests, every table in the target schema has a classification,
 and the schema is either empty or holds a matching incomplete import journal.
 
-A network mismatch is never overridable.
+A network mismatch is never overridable. Preflight reports selected and skipped tables. The import
+scope is saved in the journal and cannot change on resume or validation. All archive parts and
+files are still verified and extracted, so a scoped restore needs space for the full archive.
 
 ### 4. Import
 
@@ -286,15 +324,15 @@ A network mismatch is never overridable.
 snapshot import --manifest <manifest> \
                 --work-dir /path/to/work \
                 --allow-unsigned \
-                --workers 4 \
-                --memory-limit 4GB \
+                --workers 1 \
+                --memory-limit 1GB \
                 --min-free-disk-gb 20
 ```
 
 | Option | Default | Purpose |
 |---|---|---|
-| `--workers` | `4` | Bounded worker count; each gets its own connection, memory limit, spill directory and transaction |
-| `--memory-limit` | `4GB` | Per-worker DuckDB memory limit |
+| `--workers` | `1` | Bounded worker count; each gets its own connection, memory limit, spill directory and transaction |
+| `--memory-limit` | `1GB` | Per-worker DuckDB memory limit |
 | `--min-free-disk-gb` | `20` | Minimum free space required at `--work-dir` during preflight |
 | `--keep-extracted` | `false` | Keep extracted Parquet after a successful import |
 | `--dry-run` | `false` | Preflight only; write nothing |
@@ -319,7 +357,7 @@ Four levels are defined; the first three are offline and must all pass before sy
 
 1. **Artifact** — explicit unsigned acknowledgement, part digests, ZIP traversal/duplicate/size
    protections, exact required part set, per-file digest after extraction.
-2. **Schema and load** — schema and Flyway fingerprints, per-table row counts after cutoff, tables
+2. **Schema and load** — selected table fingerprints, per-table row counts after cutoff, tables
    that must be empty really are, required non-null column values, sequence values, and a journal
    matching the exact manifest.
 3. **Semantic** — the manifest point equals the last imported block *and* the final cursor, the
@@ -354,6 +392,27 @@ Index creation is **not** part of snapshot import. The importer never creates, d
 rebuilds an admin-managed index; if some already exist it warns that loading will be slower and
 leaves them alone. Index build time is reported by the normal admin CLI workflow and is measured
 separately from the heap load.
+
+### UTxO import memory
+
+The flattened UTxO export has one row per asset. Import reconstructs each output's amounts using
+an ordered list aggregate, whose intermediate state cannot always spill to disk. Workers now
+split each existing UTxO batch into execution slices by a hash of `(tx_hash, output_index)` before
+aggregation. All assets of an output stay together, even across Parquet files. The number of
+slices is estimated from the input size and the worker's memory budget. A DuckDB out-of-memory
+failure rolls back the batch and retries with twice as many slices.
+
+This trades repeated Parquet scans for a smaller aggregation working set. Larger `--memory-limit`
+values allow fewer slices and potentially faster loading. `--workers` controls how many batches
+run concurrently; the memory limit applies separately to each worker. For a smaller machine,
+the defaults are `--workers 1 --memory-limit 1GB`, leaving RAM for Java, PostgreSQL and the operating
+system. Scanning, joining and one output's assets must still fit; arbitrarily small limits are
+not supported. A synthetic multiasset integration test covers a 128 MB DuckDB budget, which is
+not a total-machine RAM requirement.
+
+Execution slices do not change the specification, manifest, or persisted batch IDs. The entire
+original batch and its journal entry commit together. Existing imports can resume with the new
+CLI and a different memory limit without regenerating the snapshot or clearing data.
 
 ## Resuming an interrupted import
 

@@ -78,6 +78,72 @@ class SnapshotImportIT {
         }
     }
 
+    private SnapshotFixture.Built fixtureWithTableSchemas() throws Exception {
+        var built = fixture();
+        var m = built.manifest();
+        try (var conn = PostgresSupport.connect()) {
+            var manifest = new SnapshotManifest(m.formatVersion(), m.snapshotId(), m.createdAt(), m.producer(),
+                    m.yaciStoreVersion(), m.specFormatVersion(), m.duckdbVersion(), m.ducklakeFormatVersion(),
+                    m.point(), m.genesisHash(), m.modules(), m.pruningSettings(), m.schemaFingerprint(),
+                    m.flywayFingerprint(), m.tables(), m.parts(), m.declaredLossy(),
+                    new PgSchema(conn, schema).tableFingerprints());
+            new ManifestCodec().writeAtomically(manifest, built.manifestPath());
+            return new SnapshotFixture.Built(built.archiveDir(), built.manifestPath(), manifest);
+        }
+    }
+
+    @Test
+    void scopedRestoreLoadsOnlyEnabledStoresIntoSmallerSchemaAndValidates() throws Exception {
+        var built = fixtureWithTableSchemas();
+        var selected = registry.selectModules(java.util.Set.of("core", "blocks"));
+        try (var conn = PostgresSupport.connect(); var st = conn.createStatement()) {
+            st.execute("DROP TABLE " + schema + ".address_utxo");
+            st.execute("DROP TABLE " + schema + ".adapot");
+            st.execute("DROP TABLE " + schema + ".epoch");
+        }
+        var importer = new SnapshotImporter(selected);
+        assertThat(importer.preflight(options(built.manifestPath(), 1)).blockers()).isEmpty();
+        importer.importSnapshot(options(built.manifestPath(), 1), null);
+        try (var conn = PostgresSupport.connect()) {
+            assertThat(count(conn, "block")).isEqualTo(SnapshotFixture.POINT_BLOCK + 1);
+            for (var report : new SnapshotValidator(selected).validateAll(conn, schema, built.manifest(), 1, 10)) {
+                assertThat(report.passed()).withFailMessage(report.toString()).isTrue();
+            }
+        }
+    }
+
+    @Test
+    void scopedRestoreRejectsMissingEnabledTableAndChangedTargetDefinition() throws Exception {
+        var built = fixtureWithTableSchemas();
+        var importer = new SnapshotImporter(registry.selectModules(java.util.Set.of("core", "blocks")));
+        try (var conn = PostgresSupport.connect(); var st = conn.createStatement()) {
+            st.execute("ALTER TABLE " + schema + ".block ADD COLUMN unexpected INTEGER");
+            assertThat(importer.preflight(options(built.manifestPath(), 1)).blockers())
+                    .anyMatch(p -> p.contains("selected table 'block'"));
+            st.execute("DROP TABLE " + schema + ".block");
+            assertThat(importer.preflight(options(built.manifestPath(), 1)).blockers())
+                    .anyMatch(p -> p.contains("missing target table 'block'"));
+        }
+    }
+
+    @Test
+    void scopedRestoreLeavesDisabledTablesEmptyAndRejectsScopeChangeOnResume() throws Exception {
+        var built = fixtureWithTableSchemas();
+        var selected = registry.selectModules(java.util.Set.of("core", "blocks"));
+        assertThatThrownBy(() -> new SnapshotImporter(selected).importSnapshot(options(built.manifestPath(), 1), p -> {
+            if (p.startsWith("block +")) throw new IllegalStateException("interrupt scoped import");
+        })).hasMessageContaining("interrupt scoped import");
+        var changed = registry.selectModules(java.util.Set.of("core", "blocks", "utxo"));
+        assertThat(new SnapshotImporter(changed).preflight(options(built.manifestPath(), 1)).blockers())
+                .anyMatch(p -> p.contains("Import scope does not match"));
+        new SnapshotImporter(selected).importSnapshot(options(built.manifestPath(), 1), null);
+        try (var conn = PostgresSupport.connect()) {
+            assertThat(count(conn, "address_utxo")).isZero();
+            assertThat(count(conn, "adapot")).isZero();
+            assertThat(new SnapshotValidator(changed).validateLoad(conn, schema, built.manifest()).passed()).isFalse();
+        }
+    }
+
     private ImportOptions options(Path manifest, int workers) {
         return new ImportOptions(manifest, manifest.getParent(), root.resolve("work"),
                 PostgresSupport.schemaUrl(), PostgresSupport.user(), PostgresSupport.password(),

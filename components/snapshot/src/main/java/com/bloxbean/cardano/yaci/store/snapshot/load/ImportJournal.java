@@ -63,10 +63,12 @@ public class ImportJournal {
                     + " point_block bigint,"
                     + " point_hash varchar(64),"
                     + " schema_fingerprint varchar(64),"
+                    + " scope_digest varchar(64),"
                     + " status varchar(20) NOT NULL,"
                     + " started_at timestamp NOT NULL DEFAULT now(),"
                     + " updated_at timestamp NOT NULL DEFAULT now(),"
                     + " message text)");
+            st.execute("ALTER TABLE " + q(RUN_TABLE) + " ADD COLUMN IF NOT EXISTS scope_digest varchar(64)");
         }
     }
 
@@ -84,30 +86,43 @@ public class ImportJournal {
 
     public record Run(String snapshotId, String manifestDigest, String network, long protocolMagic,
                       int pointEpoch, long pointSlot, long pointBlock, String pointHash,
-                      String schemaFingerprint, String status, String message) {}
+                      String schemaFingerprint, String status, String message, String scopeDigest) {
+        public Run(String snapshotId, String manifestDigest, String network, long protocolMagic,
+                   int pointEpoch, long pointSlot, long pointBlock, String pointHash,
+                   String schemaFingerprint, String status, String message) {
+            this(snapshotId, manifestDigest, network, protocolMagic, pointEpoch, pointSlot, pointBlock,
+                    pointHash, schemaFingerprint, status, message, null);
+        }
+    }
 
     public Optional<Run> currentRun() throws SQLException {
         if (!exists()) {
             return Optional.empty();
         }
+        boolean hasScope;
+        try (var ps = conn.prepareStatement("SELECT 1 FROM information_schema.columns WHERE table_schema=? AND table_name=? AND column_name='scope_digest'")) {
+            ps.setString(1, schema); ps.setString(2, RUN_TABLE);
+            try (var rs = ps.executeQuery()) { hasScope = rs.next(); }
+        }
         try (Statement st = conn.createStatement();
              ResultSet rs = st.executeQuery("SELECT snapshot_id, manifest_digest, network, protocol_magic,"
-                     + " point_epoch, point_slot, point_block, point_hash, schema_fingerprint, status, message"
+                     + " point_epoch, point_slot, point_block, point_hash, schema_fingerprint, status, message,"
+                     + (hasScope ? "scope_digest" : "NULL AS scope_digest")
                      + " FROM " + q(RUN_TABLE) + " ORDER BY started_at DESC LIMIT 1")) {
             if (!rs.next()) {
                 return Optional.empty();
             }
             return Optional.of(new Run(rs.getString(1), rs.getString(2), rs.getString(3), rs.getLong(4),
                     rs.getInt(5), rs.getLong(6), rs.getLong(7), rs.getString(8), rs.getString(9),
-                    rs.getString(10), rs.getString(11)));
+                    rs.getString(10), rs.getString(11), rs.getString(12)));
         }
     }
 
     public void startRun(Run run) throws SQLException {
         String sql = "INSERT INTO " + q(RUN_TABLE) + " (snapshot_id, manifest_digest, network,"
                 + " protocol_magic, point_epoch, point_slot, point_block, point_hash,"
-                + " schema_fingerprint, status)"
-                + " VALUES (?,?,?,?,?,?,?,?,?,?)"
+                + " schema_fingerprint, status, scope_digest)"
+                + " VALUES (?,?,?,?,?,?,?,?,?,?,?)"
                 + " ON CONFLICT (snapshot_id) DO UPDATE SET status = EXCLUDED.status, updated_at = now()";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, run.snapshotId());
@@ -120,6 +135,7 @@ public class ImportJournal {
             ps.setString(8, run.pointHash());
             ps.setString(9, run.schemaFingerprint());
             ps.setString(10, run.status());
+            ps.setString(11, run.scopeDigest());
             ps.executeUpdate();
         }
     }

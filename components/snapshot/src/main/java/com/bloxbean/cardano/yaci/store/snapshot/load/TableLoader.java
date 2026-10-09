@@ -44,8 +44,19 @@ public class TableLoader {
     /** The SELECT a batch reads from, before the target column list is applied. */
     public String sourceSelect(SnapshotTableSpec spec, ImportBatch batch, long cutSlot, int completedEpoch,
                                Map<String, List<SnapshotManifest.FileEntry>> dependencyFiles) {
+        return sourceSelect(spec, batch, cutSlot, completedEpoch, dependencyFiles, null);
+    }
+
+    String sourceSelect(SnapshotTableSpec spec, ImportBatch batch, long cutSlot, int completedEpoch,
+                        Map<String, List<SnapshotManifest.FileEntry>> dependencyFiles, String sourceFilter) {
         if (spec.importSpec().mode() == ImportMode.SQL) {
             String sql = SqlResources.read(spec.importSpec().selectResource());
+            if (sourceFilter != null) {
+                // Apply before grouping. Filtering the grouped result would not reduce its memory.
+                String scan = "read_parquet(${files})";
+                if (!sql.contains(scan)) throw new IllegalArgumentException("Transform has no source scan");
+                sql = sql.replace(scan, "(SELECT * FROM " + scan + " WHERE " + sourceFilter + ")");
+            }
             Map<String, String> params = new LinkedHashMap<>();
             params.put("files", parquetList(batch.files()));
             params.put("cutSlot", Long.toString(cutSlot));
@@ -157,17 +168,24 @@ public class TableLoader {
      */
     public long loadBatch(DuckPgSession session, ImportBatch batch, ColumnPlan plan, String select,
                           String snapshotId, String schema) throws SQLException {
+        return loadBatch(session, batch, plan, List.of(select), snapshotId, schema);
+    }
+
+    /** All execution slices retain the original batch's single transaction and journal identity. */
+    long loadBatch(DuckPgSession session, ImportBatch batch, ColumnPlan plan, Iterable<String> selects,
+                   String snapshotId, String schema) throws SQLException {
         String target = session.qualify(batch.spec().targetTable());
         String journal = ImportJournal.qualifiedBatchTable(DuckPgSession.PG_ALIAS, schema);
 
-        String insert = "INSERT INTO " + target + " (" + plan.targetColumnList() + ") "
-                + "SELECT " + plan.selectList() + " FROM " + select + " AS src";
-
-        long rows;
+        long rows = 0;
         session.exec("BEGIN TRANSACTION");
         try {
-            try (Statement st = session.connection().createStatement()) {
-                rows = st.executeLargeUpdate(insert);
+            for (String select : selects) {
+                String insert = "INSERT INTO " + target + " (" + plan.targetColumnList() + ") "
+                        + "SELECT " + plan.selectList() + " FROM " + select + " AS src";
+                try (Statement st = session.connection().createStatement()) {
+                    rows += st.executeLargeUpdate(insert);
+                }
             }
             String record = "INSERT INTO " + journal
                     + " (snapshot_id, batch_id, spec_id, target_table, row_count) VALUES ("
@@ -181,8 +199,9 @@ public class TableLoader {
         } catch (SQLException e) {
             try {
                 session.exec("ROLLBACK");
-            } catch (SQLException ignored) {
-                // The transaction is already gone; the original failure is the useful one.
+            } catch (SQLException rollbackFailure) {
+                // Never retry on a connection whose transaction state is uncertain.
+                e.addSuppressed(rollbackFailure);
             }
             throw e;
         }

@@ -50,18 +50,12 @@ public class SnapshotValidator {
         }
         PgSchema pgs = new PgSchema(pg, schema);
 
-        String fingerprint = pgs.fingerprint();
-        b.check("schema-fingerprint",
-                manifest.schemaFingerprint() == null || manifest.schemaFingerprint().equals(fingerprint),
-                manifest.schemaFingerprint() == null ? "not recorded in manifest" : fingerprint);
-        b.check("flyway-fingerprint",
-                manifest.flywayFingerprint() == null
-                        || manifest.flywayFingerprint().equals(pgs.flywayFingerprint()),
-                manifest.flywayFingerprint() == null ? "not recorded in manifest" : "matches");
+        var compatibility = com.bloxbean.cardano.yaci.store.snapshot.load.SchemaCompatibility.check(pgs, manifest, registry);
+        b.check("schema-fingerprint", compatibility.isEmpty(), String.join("; ", compatibility));
 
         for (SnapshotManifest.TableManifest t : manifest.tables()) {
             SnapshotTableSpec spec = registry.byId(t.specId()).orElse(null);
-            if (spec == null || spec.restore() != RestoreMode.IMPORT) {
+            if (spec == null || !registry.isSelected(spec.id()) || spec.restore() != RestoreMode.IMPORT) {
                 continue;
             }
             if (!pgs.tableExists(t.targetTable())) {
@@ -91,6 +85,13 @@ public class SnapshotValidator {
             }
         }
 
+        for (var spec : registry.knownTables()) {
+            if (!registry.isSelected(spec.id()) && spec.restore() == RestoreMode.IMPORT && pgs.tableExists(spec.targetTable())) {
+                long rows = count(pg, schema, spec.targetTable());
+                b.check("disabled-empty:" + spec.targetTable(), rows == 0, rows + " rows in a disabled store");
+            }
+        }
+
         // Tables the specification says must stay empty really are empty.
         for (SnapshotTableSpec spec : registry.all()) {
             if (spec.restore() != RestoreMode.EMPTY_EXPECTED && spec.restore() != RestoreMode.NOT_RESTORED) {
@@ -107,6 +108,7 @@ public class SnapshotValidator {
         for (Map.Entry<String, String[]> e : sequences.entrySet()) {
             String seq = e.getKey();
             String table = e.getValue()[0];
+            if (registry.isScoped() && registry.byTarget(table).filter(s -> registry.isSelected(s.id())).isEmpty()) continue;
             String column = e.getValue()[1];
             long last = scalar(pg, "SELECT last_value FROM " + Identifiers.quote(schema) + "."
                     + Identifiers.quote(seq));
@@ -119,6 +121,8 @@ public class SnapshotValidator {
         ImportJournal journal = new ImportJournal(pg, schema);
         if (journal.exists()) {
             ImportJournal.Run run = journal.currentRun().orElse(null);
+            b.check("import-scope", run != null && (!(registry.isScoped() || run.scopeDigest() != null)
+                    || registry.scopeDigest().equals(run.scopeDigest())), "enabled stores must match the original import");
             b.check("import-journal", run != null && run.manifestDigest().equals(
                     new ManifestCodec().digest(manifest)),
                     "journal must match the exact manifest being validated");
@@ -220,18 +224,21 @@ public class SnapshotValidator {
 
         // The account balance watermark gates AccountBalanceProcessor, which in turn feeds the
         // AdaPot stake snapshot. At block 0 it reports a multi-million block gap and skips.
-        if (pgs.tableExists("account_config")) {
+        if (registry.byTarget("account_config").filter(s -> registry.isSelected(s.id())).isPresent() && pgs.tableExists("account_config")) {
             long watermark = scalar(pg, "SELECT COALESCE(max(block), -1) FROM " + qt(schema, "account_config")
                     + " WHERE config_id = 'last_account_balance_processed_block'");
             b.check("account-balance-watermark", watermark == point.blockNumber(),
                     "watermark block " + watermark + ", snapshot point " + point.blockNumber());
         }
 
-        validateAddressUtxo(pg, schema, b);
+        if (registry.byTarget("address_utxo").filter(s -> registry.isSelected(s.id())).isPresent())
+            validateAddressUtxo(pg, schema, b);
 
-        long epochMax = scalar(pg, "SELECT COALESCE(max(number), -1) FROM " + qt(schema, "epoch"));
-        b.check("epoch-aggregate-at-point", epochMax <= point.epoch(),
-                "max(epoch.number)=" + epochMax + ", point epoch=" + point.epoch());
+        if (registry.byTarget("epoch").filter(s -> registry.isSelected(s.id())).isPresent()) {
+            long epochMax = scalar(pg, "SELECT COALESCE(max(number), -1) FROM " + qt(schema, "epoch"));
+            b.check("epoch-aggregate-at-point", epochMax <= point.epoch(),
+                    "max(epoch.number)=" + epochMax + ", point epoch=" + point.epoch());
+        }
 
         return b.build();
     }

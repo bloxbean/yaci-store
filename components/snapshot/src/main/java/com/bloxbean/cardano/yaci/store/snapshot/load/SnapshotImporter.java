@@ -96,19 +96,19 @@ public class SnapshotImporter {
         ImportJournal.Run existing = null;
         try (Connection pg = connect(options)) {
             PgSchema schema = new PgSchema(pg, options.schema());
-            String fingerprint = schema.fingerprint();
-            if (manifest.schemaFingerprint() != null && !manifest.schemaFingerprint().equals(fingerprint)) {
-                blockers.add("Target schema fingerprint does not match the snapshot. Create the schema "
-                        + "with the Yaci Store release named in the manifest ("
-                        + manifest.yaciStoreVersion() + ") using store.sync-auto-start=false.");
-            }
-            if (manifest.flywayFingerprint() != null
-                    && !manifest.flywayFingerprint().equals(schema.flywayFingerprint())) {
-                blockers.add("Applied Flyway migrations do not match the snapshot's release");
+            blockers.addAll(SchemaCompatibility.check(schema, manifest, registry));
+            if (registry.isScoped()) {
+                warnings.add("Selected tables: " + registry.all().stream().map(SnapshotTableSpec::targetTable).toList());
+                warnings.add("Skipped tables: " + registry.knownTables().stream()
+                        .filter(s -> !registry.isSelected(s.id())).map(SnapshotTableSpec::targetTable).toList());
             }
 
             ImportJournal journal = new ImportJournal(pg, options.schema());
             existing = journal.currentRun().orElse(null);
+            if (existing != null && (registry.isScoped() || existing.scopeDigest() != null)
+                    && !registry.scopeDigest().equals(existing.scopeDigest())) {
+                blockers.add("Import scope does not match the journal. Resume with the original enabled stores and specifications.");
+            }
             if (existing != null && !existing.manifestDigest().equals(new ManifestCodec().digest(manifest))) {
                 blockers.add("Import journal manifest digest does not match this manifest. "
                         + "Resume requires the exact original manifest.");
@@ -134,7 +134,8 @@ public class SnapshotImporter {
             }
 
             for (String table : schema.baseTables()) {
-                if (table.equals("flyway_schema_history") || table.startsWith("_yaci_snapshot_import")) {
+                if (table.equals("flyway_schema_history") || table.equals("_yaci_store_schema_profile")
+                        || table.startsWith("_yaci_snapshot_import")) {
                     continue;
                 }
                 if (registry.byTarget(table).isEmpty()) {
@@ -151,8 +152,8 @@ public class SnapshotImporter {
         if (!verified.ok()) {
             verified.problems().forEach(p -> blockers.add("Archive: " + p));
         }
-        if (!manifest.declaredLossy().isEmpty()) {
-            warnings.add("This snapshot has " + manifest.declaredLossy().size()
+        if (!registry.selectedLimitations(manifest.declaredLossy()).isEmpty()) {
+            warnings.add("This snapshot has " + registry.selectedLimitations(manifest.declaredLossy()).size()
                     + " declared limitation(s); the restored database is not an exact copy.");
         }
 
@@ -180,7 +181,7 @@ public class SnapshotImporter {
         List<String> problems = new ArrayList<>();
         for (SnapshotManifest.TableManifest t : manifest.tables()) {
             SnapshotTableSpec spec = registry.byId(t.specId()).orElse(null);
-            if (spec == null || spec.restore() != RestoreMode.IMPORT
+            if (spec == null || !registry.isSelected(spec.id()) || spec.restore() != RestoreMode.IMPORT
                     || spec.importSpec().mode() == com.bloxbean.cardano.yaci.store.snapshot.spec.ImportMode.SQL
                     || t.sourceColumns() == null || t.sourceColumns().isEmpty()) {
                 continue;
@@ -214,6 +215,10 @@ public class SnapshotImporter {
             // Recheck database state after acquiring the lock: another importer may have finished
             // since preflight. Resume is bound to the entire manifest.
             ImportJournal.Run current = new ImportJournal(pg, options.schema()).currentRun().orElse(null);
+            if (current != null && (registry.isScoped() || current.scopeDigest() != null)
+                    && !registry.scopeDigest().equals(current.scopeDigest())) {
+                throw new IllegalStateException("Import scope does not match the journal");
+            }
             if (current != null && !current.manifestDigest().equals(new ManifestCodec().digest(manifest))) {
                 throw new IllegalStateException("Import journal manifest digest does not match this manifest");
             }
@@ -242,7 +247,7 @@ public class SnapshotImporter {
                     new ManifestCodec().digest(manifest), manifest.point().network(),
                     manifest.point().protocolMagic(), manifest.point().epoch(), manifest.point().slot(),
                     manifest.point().blockNumber(), manifest.point().blockHash(),
-                    schema.fingerprint(), ImportJournal.STATUS_LOADING, null));
+                    schema.fingerprint(), ImportJournal.STATUS_LOADING, null, registry.scopeDigest()));
 
             int partitionsCreated = prepareTargetPartitions(pg, options, manifest);
 
@@ -252,7 +257,8 @@ public class SnapshotImporter {
 
             long t3 = System.currentTimeMillis();
             List<String> handlerResults = runHandlers(pg, options, manifest);
-            Map<String, Long> sequences = new SequenceReset(pg, options.schema()).resetAll();
+            Map<String, Long> sequences = new SequenceReset(pg, options.schema()).resetTables(registry.isScoped()
+                    ? registry.all().stream().map(SnapshotTableSpec::targetTable).collect(java.util.stream.Collectors.toSet()) : null);
             long controlMillis = System.currentTimeMillis() - t3;
 
             journal.setStatus(manifest.snapshotId(), ImportJournal.STATUS_VALIDATING,
@@ -265,7 +271,7 @@ public class SnapshotImporter {
             return new ImportReport(manifest.snapshotId(), ImportJournal.STATUS_VALIDATING,
                     loaded.planned, loaded.skipped, loaded.executed, loaded.rows,
                     journal.rowsPerTable(manifest.snapshotId()), handlerResults, sequences,
-                    partitionsCreated, manifest.declaredLossy(), warnings,
+                    partitionsCreated, registry.selectedLimitations(manifest.declaredLossy()), warnings,
                     verifyMillis, extractMillis, loadMillis, controlMillis);
         }
     }
@@ -386,8 +392,11 @@ public class SnapshotImporter {
                                         manifest.point().slot(), manifest.point().epoch(), dependencyFiles);
                                 ColumnPlan plan = loader.planFor(session, spec, select, target,
                                         declaredColumns.get(spec.id()));
-                                long n = loader.loadBatch(session, batch, plan, select,
-                                        manifest.snapshotId(), options.schema());
+                                long n = UtxoBatchLoader.supports(spec)
+                                        ? UtxoBatchLoader.load(loader, session, batch, plan, manifest,
+                                                dependencyFiles, options.schema())
+                                        : loader.loadBatch(session, batch, plan, select,
+                                                manifest.snapshotId(), options.schema());
                                 rows.addAndGet(n);
                                 executed.incrementAndGet();
                                 if (progress != null) {
@@ -517,7 +526,8 @@ public class SnapshotImporter {
     private List<String> nonEmptyChainTables(Connection pg, String schema) throws SQLException {
         List<String> out = new ArrayList<>();
         PgSchema s = new PgSchema(pg, schema);
-        for (SnapshotTableSpec spec : registry.importedTables()) {
+        for (SnapshotTableSpec spec : registry.knownTables()) {
+            if (spec.restore() != RestoreMode.IMPORT) continue;
             if (!s.tableExists(spec.targetTable())) {
                 continue;
             }

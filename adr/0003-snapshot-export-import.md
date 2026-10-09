@@ -751,11 +751,15 @@ snapshot validate --manifest <manifest> [--online]
 The target schema must first be created by the matching Yaci Store release with:
 
 ```properties
-store.sync-auto-start=false
+store.schema-only=true
 ```
 
-This allows Flyway to create the exact enabled-module schema without starting
-chain sync. The Yaci Store application must then be stopped while import runs.
+This one-shot mode runs the consuming application’s existing Flyway migrations in a minimal
+context and exits before normal beans, sync, or jobs start. Its target-local
+`_yaci_store_schema_profile` records installed modules and effective enabled flags using shared
+store defaults. Flyway can create disabled-module tables; table existence does not select import
+scope. The CLI uses the recorded profile and rejects conflicting explicit flags. The application
+must remain stopped while import runs, and schema-only mode must be removed before normal startup.
 The initial importer accepts only PostgreSQL.
 
 Import refuses to run unless:
@@ -878,7 +882,7 @@ Validation has four levels. All offline levels must pass before sync is enabled.
 
 ### 2. Schema and load validation
 
-- exact Flyway and schema fingerprints;
+- matching schema fingerprints for selected tables (legacy manifests require the whole schema);
 - expected table and column inventory;
 - per-table row counts after cutoff;
 - min/max slot, block, epoch, and time bounds;
@@ -929,7 +933,11 @@ Only after this gate passes is the import status changed from `VALIDATING` to
 ## Compatibility Policy
 
 The initial importer requires an exact snapshot format, exact local table
-specification versions and digests, and an exact target schema fingerprint. The
+specification versions and digests for selected stores, and exact per-table schema fingerprints
+for that scope. Disabled stores are skipped; selected dependencies and block/cursor/era state are
+required. The journal binds resume and validation to the selected specification digest. Older
+manifests without per-table fingerprints require the whole schema fingerprint to match. All
+archive files are verified even for a subset restore. The
 recommended operational sequence is:
 
 1. create and import using the Yaci Store release named in the manifest;
@@ -1149,3 +1157,14 @@ epoch-aligned restart point. Indexes will continue to be applied later through
 the existing admin CLI command. The current preprod export
 and PoC are appropriate inputs for implementation and qualification, not yet a
 snapshot that should be distributed to users as production-ready.
+
+### Bounded UTxO aggregation memory
+
+UTxO import retains its original committed batches and manifest contract, but filters the flattened
+input into disjoint hash buckets on `(tx_hash, output_index)` before the ordered list aggregate.
+A conservative estimate based on input rows, bytes, and the per-worker memory limit chooses the
+initial bucket count. Only a DuckDB out-of-memory error with successful rollback triggers a retry
+with more buckets. All bucket inserts and the original completion record share one transaction.
+This preserves old resume IDs, full-output grouping, and deterministic amounts while allowing
+lower memory at the cost of repeated scans. Larger memory budgets reduce scan repetition. Scanner,
+join, and individual-output memory remain a lower bound; the retry count is bounded.

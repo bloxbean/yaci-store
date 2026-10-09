@@ -236,7 +236,7 @@ public class SnapshotExporter {
                     options.flywayFingerprint(),
                     tableManifests,
                     parts,
-                    report.declaredLossy());
+                    report.declaredLossy(), options.tableSchemaFingerprints());
 
             // Re-read every part before publishing the manifest.
             ArchiveVerifier.Result verified =

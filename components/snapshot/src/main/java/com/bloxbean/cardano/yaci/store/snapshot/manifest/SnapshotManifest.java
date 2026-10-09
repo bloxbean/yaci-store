@@ -28,8 +28,20 @@ public record SnapshotManifest(
         List<TableManifest> tables,
         List<PartManifest> parts,
         /** Non-empty means the snapshot is knowingly not an exact database copy. */
-        List<String> declaredLossy
+        List<String> declaredLossy,
+        Map<String, String> tableSchemaFingerprints
 ) {
+
+    public SnapshotManifest(int formatVersion, String snapshotId, String createdAt, String producer,
+                            String yaciStoreVersion, String specFormatVersion, String duckdbVersion,
+                            String ducklakeFormatVersion, ConsistencyPoint point, String genesisHash,
+                            List<String> modules, Map<String, String> pruningSettings, String schemaFingerprint,
+                            String flywayFingerprint, List<TableManifest> tables, List<PartManifest> parts,
+                            List<String> declaredLossy) {
+        this(formatVersion, snapshotId, createdAt, producer, yaciStoreVersion, specFormatVersion,
+                duckdbVersion, ducklakeFormatVersion, point, genesisHash, modules, pruningSettings,
+                schemaFingerprint, flywayFingerprint, tables, parts, declaredLossy, Map.of());
+    }
 
     public TableManifest table(String specId) {
         return tables.stream().filter(t -> t.specId().equals(specId)).findFirst().orElse(null);

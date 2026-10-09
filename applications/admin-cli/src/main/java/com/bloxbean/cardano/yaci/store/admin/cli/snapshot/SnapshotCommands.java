@@ -130,9 +130,9 @@ public class SnapshotCommands {
                     SnapshotCliSupport.humanBytes(result.bytesWritten()));
             writeLn("  Manifest      : %s", result.manifestPath().getFileName());
             writeLn("  Duration      : %s", SnapshotCliSupport.humanMillis(result.millis()));
-            if (!m.declaredLossy().isEmpty()) {
-                writeLn(warn("Declared limitations (%d):", m.declaredLossy().size()));
-                m.declaredLossy().forEach(l -> writeLn("    - %s", l));
+            if (!registry.selectedLimitations(m.declaredLossy()).isEmpty()) {
+                writeLn(warn("Declared limitations (%d):", registry.selectedLimitations(m.declaredLossy()).size()));
+                registry.selectedLimitations(m.declaredLossy()).forEach(l -> writeLn("    - %s", l));
             }
         } catch (Exception e) {
             writeLn(error("snapshot export failed: %s", e.getMessage()));
@@ -176,8 +176,8 @@ public class SnapshotCommands {
             @Option(longNames = "work-dir", required = true,
                     description = "Directory for extracted Parquet and per-worker DuckDB spill files")
             String workDir,
-            @Option(longNames = "workers", defaultValue = "4", description = "Bounded worker count") int workers,
-            @Option(longNames = "memory-limit", defaultValue = "4GB", description = "Per-worker DuckDB memory limit")
+            @Option(longNames = "workers", defaultValue = "1", description = "Bounded worker count") int workers,
+            @Option(longNames = "memory-limit", defaultValue = ImportOptions.DEFAULT_MEMORY_LIMIT, description = "Per-worker DuckDB memory limit")
             String memoryLimit,
             @Option(longNames = "min-free-disk-gb", defaultValue = "20",
                     description = "Minimum free space required in the work directory at preflight")
@@ -197,7 +197,7 @@ public class SnapshotCommands {
             boolean dryRun) {
         try {
             SnapshotCliSupport.ensureDirectory(Path.of(workDir));
-            SnapshotSpecRegistry registry = support.registry(specFile, allowCustomSpecs);
+            SnapshotSpecRegistry registry = support.importRegistry(specFile, allowCustomSpecs);
             ImportOptions options = support.importOptions(manifest, workDir, workers, memoryLimit,
                     minFreeDiskGb, allowUnsigned, specFile, allowCustomSpecs, keepExtracted);
             SnapshotImporter importer = new SnapshotImporter(registry);
@@ -274,7 +274,7 @@ public class SnapshotCommands {
             boolean markReady) {
         try {
             SnapshotManifest m = new ManifestCodec().read(Path.of(manifest).toAbsolutePath().normalize());
-            SnapshotSpecRegistry registry = support.registry(specFile, allowCustomSpecs);
+            SnapshotSpecRegistry registry = support.importRegistry(specFile, allowCustomSpecs);
             SnapshotValidator validator = new SnapshotValidator(registry);
 
             boolean allPassed = true;
@@ -295,10 +295,10 @@ public class SnapshotCommands {
 
                 if (allPassed) {
                     writeLn(success("All offline validation levels passed."));
-                    if (!m.declaredLossy().isEmpty()) {
+                    if (!registry.selectedLimitations(m.declaredLossy()).isEmpty()) {
                         writeLn(warn("The snapshot declares %d limitation(s); this database is not an "
-                                + "exact copy of the source:", m.declaredLossy().size()));
-                        m.declaredLossy().forEach(l -> writeLn("    - %s", l));
+                                + "exact copy of the source:", registry.selectedLimitations(m.declaredLossy()).size()));
+                        registry.selectedLimitations(m.declaredLossy()).forEach(l -> writeLn("    - %s", l));
                     }
                     writeLn(info("Remaining application-acceptance steps:"));
                     SnapshotValidator.applicationAcceptanceChecklist()

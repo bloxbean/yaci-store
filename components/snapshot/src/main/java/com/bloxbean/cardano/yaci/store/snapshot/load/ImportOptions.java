@@ -36,7 +36,7 @@ public record ImportOptions(Path manifestPath,
                             boolean keepExtracted,
                             boolean skipExtraction) {
 
-    public static final int DEFAULT_WORKERS = 4;
-    public static final String DEFAULT_MEMORY_LIMIT = "4GB";
+    public static final int DEFAULT_WORKERS = 1;
+    public static final String DEFAULT_MEMORY_LIMIT = "1GB";
     public static final long DEFAULT_MIN_FREE_DISK_GB = 20;
 }

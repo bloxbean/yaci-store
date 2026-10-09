@@ -16,7 +16,7 @@ public final class DuckDb {
     }
 
     /**
-     * @param memoryLimit e.g. {@code "4GB"}; DuckDB spills beyond this
+     * @param memoryLimit e.g. {@code "4GB"}; spillable operators can use disk, but some aggregates cannot
      * @param tempDir     per-worker spill directory, so parallel workers never share scratch space
      */
     public static Connection open(String memoryLimit, Path tempDir, int threads) throws SQLException {

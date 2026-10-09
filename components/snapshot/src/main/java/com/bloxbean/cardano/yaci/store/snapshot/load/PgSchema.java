@@ -144,6 +144,7 @@ public class PgSchema {
                 WHERE n.nspname = ?
                   AND c.relkind IN ('r','p')
                   AND c.relname <> 'flyway_schema_history'
+                  AND c.relname <> '_yaci_store_schema_profile'
                   AND c.relname NOT LIKE '\\_yaci\\_snapshot\\_import%'
                   AND NOT EXISTS (SELECT 1 FROM pg_inherits i WHERE i.inhrelid = c.oid)
                 ORDER BY c.relname, a.attname
@@ -161,6 +162,27 @@ public class PgSchema {
             }
         }
         return Digests.sha256Hex(sb.toString());
+    }
+
+    /** Per-table compatibility for restoring a subset into a smaller application schema. */
+    public String tableFingerprint(String name) throws SQLException {
+        TargetTable target = table(name);
+        StringBuilder shape = new StringBuilder();
+        new TreeMap<>(target.columns()).forEach((column, type) -> shape.append(column).append(':')
+                .append(type).append(':').append(target.nullable().get(column)).append('\n'));
+        shape.append("primary-key:").append(target.primaryKey()).append("\npartitioned:").append(target.partitioned());
+        return Digests.sha256Hex(shape.toString());
+    }
+
+    public Map<String, String> tableFingerprints() throws SQLException {
+        Map<String, String> result = new TreeMap<>();
+        for (String table : baseTables()) {
+            if (!table.equals("flyway_schema_history") && !table.startsWith("_yaci_snapshot_import")
+                    && !table.equals("_yaci_store_schema_profile") && !REWARD_WORK_TABLES.contains(table)) {
+                result.put(table, tableFingerprint(table));
+            }
+        }
+        return result;
     }
 
     /** Fingerprint of the applied Flyway history, so release mismatch is detected explicitly. */

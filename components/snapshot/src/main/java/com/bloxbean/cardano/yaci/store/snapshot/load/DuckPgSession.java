@@ -17,7 +17,7 @@ import java.util.Map;
  * A worker's DuckDB connection with the target PostgreSQL database attached.
  *
  * <p>Each worker gets its own connection, memory limit, spill directory and PostgreSQL transaction,
- * so one worker can never exhaust another's resources or hold another's locks.
+ * so spill files and transactions are isolated. Total memory still scales with worker count.
  *
  * <p>The attached database exposes every schema of the target server, so all generated SQL is
  * schema-qualified and the schema name is identifier-validated before it reaches a statement.

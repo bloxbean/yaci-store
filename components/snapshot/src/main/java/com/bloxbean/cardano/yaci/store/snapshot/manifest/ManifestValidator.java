@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
-/** The initial restore format requires the complete, locally installed specification set. */
+/** Validate all archive structure and require compatible specifications for every selected table. */
 public final class ManifestValidator {
     private final SnapshotSpecRegistry registry;
 
@@ -37,18 +37,20 @@ public final class ManifestValidator {
                 problems.add("Duplicate manifest specification '" + t.specId() + "'");
             }
             SnapshotTableSpec spec = registry.byId(t.specId()).orElse(null);
-            if (spec == null) {
+            if (spec == null && !registry.isScoped()) {
                 problems.add("Snapshot references specification '" + t.specId() + "' not installed locally");
                 continue;
             }
-            if (spec.specVersion() != t.specVersion()) {
-                problems.add("Specification '" + t.specId() + "' version does not match the local specification");
-            } else if (!Objects.equals(spec.digest(), t.specDigest())) {
-                problems.add("Specification '" + t.specId() + "' has digest different from the local specification");
-            }
-            if (!Objects.equals(spec.targetTable(), t.targetTable())
-                    || !spec.restore().name().equals(t.restore())) {
-                problems.add("Specification '" + t.specId() + "' target or restore classification does not match");
+            if (registry.isSelected(t.specId()) && spec != null) {
+                if (spec.specVersion() != t.specVersion()) {
+                    problems.add("Specification '" + t.specId() + "' version does not match the local specification");
+                } else if (!Objects.equals(spec.digest(), t.specDigest())) {
+                    problems.add("Specification '" + t.specId() + "' has digest different from the local specification");
+                }
+                if (!Objects.equals(spec.targetTable(), t.targetTable())
+                        || !spec.restore().name().equals(t.restore())) {
+                    problems.add("Specification '" + t.specId() + "' target or restore classification does not match");
+                }
             }
             if (t.files() == null || t.rowCount() < 0 || (t.rowCount() > 0 && t.files().isEmpty())) {
                 problems.add("Specification '" + t.specId() + "' has invalid row count or file list");

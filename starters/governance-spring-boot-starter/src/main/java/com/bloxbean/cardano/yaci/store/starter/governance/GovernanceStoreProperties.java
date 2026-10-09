@@ -14,7 +14,7 @@ public class GovernanceStoreProperties {
     @Setter
     public static final class Governance {
 
-        private boolean enabled = true;
+        private boolean enabled = com.bloxbean.cardano.yaci.store.common.config.StoreModuleConfig.defaultEnabled("governance");
         private boolean apiEnabled = true;
         private Endpoints endpoints = new Endpoints();
 
