@@ -4,6 +4,7 @@ import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.AssetType;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Uri;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.DatumRejection;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.ParsedCip68Datum;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.parser.Cip68DatumParser;
@@ -18,7 +19,6 @@ import java.math.BigInteger;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Constants.*;
@@ -31,9 +31,6 @@ public class Cip68TokenService {
     private static final String VERSION = "version";
 
     private final Cip68MetadataRepository metadataReferenceNftRepository;
-
-    /** URI schemes CIP-68 allows for {@code image} and {@code logo}: https, ipfs, ar (Arweave) and data (on-chain). */
-    private static final Pattern ALLOWED_URI_SCHEME = Pattern.compile("^(https|ipfs|ar|data):.+", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
 
     /**
      * Validate a CIP-68 datum against the fields its label requires.
@@ -92,7 +89,7 @@ public class Cip68TokenService {
             return Optional.of(new DatumRejection(DatumRejection.Reason.NO_IMAGE,
                     "it has no image, which CIP-68 requires for label " + label));
         }
-        if (!ALLOWED_URI_SCHEME.matcher(image).matches()) {
+        if (!Cip68Uri.hasAllowedScheme(image)) {
             return Optional.of(new DatumRejection(DatumRejection.Reason.BAD_IMAGE_SCHEME,
                     "its image '" + abbreviate(image) + "' is not a URI with one of the schemes CIP-68 allows "
                             + "(https, ipfs, ar, data)"));
@@ -111,7 +108,7 @@ public class Cip68TokenService {
      */
     public Optional<String> invalidLogoReason(ParsedCip68Datum parsed) {
         String logo = parsed.logo();
-        if (logo == null || logo.isBlank() || ALLOWED_URI_SCHEME.matcher(logo).matches()) {
+        if (logo == null || logo.isBlank() || Cip68Uri.hasAllowedScheme(logo)) {
             return Optional.empty();
         }
         return Optional.of("its logo '" + abbreviate(logo) + "' is not a URI with one of the schemes CIP-68 allows "

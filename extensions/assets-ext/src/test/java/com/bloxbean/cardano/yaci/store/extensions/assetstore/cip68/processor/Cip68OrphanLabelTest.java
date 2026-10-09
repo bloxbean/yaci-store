@@ -124,6 +124,7 @@ class Cip68OrphanLabelTest {
     @Test
     void filesAloneMakeAnNftThatIsDroppedWithoutAnImage() {
         MapPlutusData file = new MapPlutusData();
+        file.put(BytesPlutusData.of("mediaType"), BytesPlutusData.of("image/png"));
         file.put(BytesPlutusData.of("src"), BytesPlutusData.of("ipfs://Qm"));
         Optional<Cip68Metadata> saved = index(datum(text("name", "Files"), entry("files", ListPlutusData.of(file))),
                 POLICY, BASE, null);
