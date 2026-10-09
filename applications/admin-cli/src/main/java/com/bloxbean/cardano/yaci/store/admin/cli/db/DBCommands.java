@@ -11,6 +11,7 @@ import com.bloxbean.cardano.yaci.store.dbutils.index.service.RollbackService;
 import com.bloxbean.cardano.yaci.store.dbutils.index.util.DatabaseUtils;
 import com.bloxbean.cardano.yaci.store.dbutils.index.util.IndexLoader;
 import com.bloxbean.cardano.yaci.store.dbutils.index.util.RollbackLoader;
+import com.bloxbean.cardano.yaci.store.dbutils.utxo.UnspentUtxoBackfillService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -36,6 +37,7 @@ public class DBCommands {
     private final IndexService indexService;
     private final RollbackService rollbackService;
     private final DatabaseUtils databaseUtils;
+    private final UnspentUtxoBackfillService unspentUtxoBackfillService;
 
     @Value("${store.admin-cli.db.rollback.rollback-files:rollback.yml}")
     private String rollbackFiles;
@@ -156,6 +158,30 @@ public class DBCommands {
         if (!result.getSecond().isEmpty()) {
             log.warn(">> Failed to apply these indexes : " + result.getSecond());
         }
+    }
+
+    @Command(description = "Fill address_utxo_unspent for a store synced before store.utxo.unspent-table-enabled was turned on")
+    public void backfillUnspentUtxos(
+            @Option(longNames = "from-slot", defaultValue = "0", description = "First slot to copy (to resume an interrupted fill)") long fromSlot,
+            @Option(longNames = "chunk-slots", defaultValue = "43200", description = "Slots copied per transaction") long chunkSlots) {
+        if (!databaseUtils.tableExists("address_utxo_unspent")) {
+            writeLn(error("Table address_utxo_unspent not found. Start the store once with this version so its migration runs."));
+            return;
+        }
+
+        long tip = unspentUtxoBackfillService.tipSlot();
+        if (tip < 0) {
+            writeLn(warn("address_utxo is empty, nothing to backfill"));
+            return;
+        }
+
+        writeLn(info("Copying unspent outputs from slot %d to %d, %d slots per transaction ...", fromSlot, tip, chunkSlots));
+        writeLn(info("store.utxo.unspent-table-enabled must already be on, so blocks after slot %d are kept by the store itself.", tip));
+        long copied = unspentUtxoBackfillService.backfill(fromSlot, tip, chunkSlots);
+        int removed = unspentUtxoBackfillService.reconcileSpentAfter(tip);
+
+        writeLn(success("Copied %d rows; removed %d spent while the fill ran.", copied, removed));
+        writeLn(info("address_utxo_unspent is complete. Reads can now use it: store.utxo.unspent-table-read-enabled=true"));
     }
 
     @Command(description = "List missing read indexes")

@@ -264,6 +264,25 @@ store.utxo.pruning-safe-blocks=2160
 store.utxo.pruning-batch-size=3000
 ```
 
+#### Unspent UTxO Table
+
+`address_utxo` keeps every output ever created, and a spend is a row in `tx_input`. A query for an address's or an asset's current outputs therefore reads its whole history and drops the spent rows. The optional `address_utxo_unspent` table holds only the outputs that are not spent yet, so those queries cost the size of the unspent set instead.
+
+```properties
+# Keep address_utxo_unspent up to date at every commit (default false)
+store.utxo.unspent-table-enabled=true
+# Serve the unspent-output queries (utxo API, Blockfrost /assets/{asset}/addresses) from it (default false)
+store.utxo.unspent-table-read-enabled=true
+```
+
+On a new store, enable both before the first sync. On a store that is already synced:
+
+1. Set `store.utxo.unspent-table-enabled=true` and restart, so new blocks are kept from then on.
+2. Run `backfill-unspent-utxos` in the admin CLI. It copies the unspent outputs up to the current tip and then removes any that were spent while it ran. It can be stopped and resumed with `--from-slot`.
+3. Set `store.utxo.unspent-table-read-enabled=true` and restart.
+
+The table's read indexes are optional, like those of `address_utxo`: they are in `index.yml`, `extra-index.yml` (GIN on `amounts`) and `blockfrost-index.yml`. UTxO pruning does not affect the table.
+
 #### Transaction Pruning
 
 ```properties
