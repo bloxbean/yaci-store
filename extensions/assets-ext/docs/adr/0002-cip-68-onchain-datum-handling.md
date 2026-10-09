@@ -24,12 +24,22 @@ The module therefore has to decide, field by field, when to be strict (drop the 
 and when to be lenient (keep it, and say so). This ADR records those decisions. It does not restate
 CIP-68. CIP-26 is covered in [ADR 0001](0001-cip-26-offchain-registry-ingestion.md).
 
-The general rule the module follows: **be strict about safety and about what the CIP requires, lenient
-about the rest.** A value that could break an insert, exhaust the stack or wrap a number is rejected or
-dropped. A datum that lacks a field the CIP requires for its label, or whose required `image` is not a URI the
-CIP allows, is not indexed, because wallets and explorers follow the CIP and could not show it either.
-A datum whose version is not one the CIP defines is not indexed either. An optional field that is invalid (a fungible token's `logo` that is not a URI the CIP allows) is dropped and the rest of the datum is indexed. A value that is merely unusual, in a field the CIP does not constrain, is stored as written, because a
-stored value can be filtered later, while a dropped one is gone from the table until the datum is processed again.
+The general rule the module follows, the same for fungible tokens, NFTs and RFTs:
+
+- **A mandatory property that violates the CIP: the whole token is not indexed**, with a WARN that says why.
+- **An optional property that violates the CIP: only that property is dropped**, the token is indexed, with a WARN
+  and a count.
+
+"Mandatory" and "optional" are the ones in the CIP-68 definition of the label (decision 3): `name` and `description`
+for 333, `name` and `image` for 222 and 444, everything else optional. "Violates" means the value is missing, has
+the wrong type, or is not what the CIP defines for it (a `uri` with another scheme than `https`, `ipfs`, `ar` or
+`data`). The datum's `version` is also required and must be one the CIP defines (decision 7).
+
+Two things the rule does not cover. A value that could break an insert, exhaust the stack or wrap a number is
+rejected or dropped whatever the field (decision 6): when it is a mandatory property (a `name` over the column
+width), the token is not indexed, as the rule says. And a value that is merely unusual, in a field the CIP does not
+constrain (an additional property), is stored as written, because a stored value can be filtered later, while a
+dropped one is gone from the table until the datum is processed again.
 
 ## Decisions
 
@@ -147,6 +157,17 @@ API returns for a fungible subject, which reads the latest row of the reference 
 
 The processor derives the label first and then validates, because the check depends on it.
 
+Everything else is optional, and a value that violates the CIP is dropped on its own, the token kept:
+
+| Optional property | Violation | Decision |
+|---|---|---|
+| `logo` (333) | not a `uri` with an allowed scheme (a bare IPFS hash, `iagon://`), or over 64 KiB | 4, 6 |
+| `files` (222, 444) | an entry that is not a map, has no `mediaType` or no `src`, or whose `src` is not a `uri` with an allowed scheme: the whole `files` property is dropped | 4 |
+| `decimals` | out of range, or not an integer | 6 |
+| `ticker`, `url`, `mediaType` | over the column width | 6 |
+| `description` (222, 444) | not a byte string | none |
+| additional properties | a constructor anywhere in the value, a key with no text form | 8 |
+
 A fungible-token datum without a description is **not indexed**. This is a deliberate choice: fungible
 metadata without a description has little to show, the spec requires it, and the read path requires
 a description in the merged result (decision 10), so a CIP-68 row without one would only be useful if
@@ -195,6 +216,16 @@ is not a spec URI (6 `iagon://` wine NFTs and 3 free-text values). They are real
 table, and a dropped token comes back only when its datum is processed again (a resync), which is cheap today because the module has no known users yet. The count was taken before
 the rule existed and has not been re-measured with it.
 
+- **`files` (222, 444) is optional (`? files : [* files_details]`), and each entry needs a `mediaType` and a `src`
+  that is a `uri`.** If any entry breaks that (not a map, no `mediaType`, no `src`, an empty `src`, a `src` that
+  is not a URI with one of the four schemes, a bare IPFS hash for example) the **whole `files` property is dropped**
+  and the token is indexed without it, with one WARN that names the reason and the value, and the counter
+  `properties.dropped{kind="invalid_files"}`. The valid entries of such a list are dropped too: the rule drops a
+  property, not part of one, and a half-listed set of files would suggest the token has no others. A `src` given as a
+  list of chunks is joined and checked as one value. On the mainnet index built with the earlier rule (no check),
+  about 100 of 71,915 tokens with `files` have an entry like that (34 with an empty `src`, 12 with no `mediaType`,
+  2 with no `src`, the rest a bare IPFS hash), all 222.
+
 *Considered and tried, then reversed:* indexing such tokens with a WARN and storing the image as written. That
 kept every token, but the table then held images no client can open, and it left the module more permissive than
 the CIP it implements. For the `logo` two other options were tried: storing it as written without a check, and
@@ -223,6 +254,7 @@ returns no logo (see cardano-foundation/cf-token-metadata-registry#104).
 | `name`, `ticker`, `url`, `mediaType` | at most 255, 32, 250 and 255 characters, counted in UTF-16 units | the value is dropped; a dropped `name` skips the datum (decision 3) |
 | `logo`, `image` | at most 64 KiB, measured on the joined bytes | the value is dropped with a WARN, the datum is kept |
 | `logo` | a URI with scheme `https`, `ipfs`, `ar` or `data` (decision 4) | the value is dropped with a WARN, the datum is kept |
+| `files` | every entry has a `mediaType` and a `src` that is such a URI (decision 4) | the whole `files` property is dropped with a WARN, the datum is kept |
 | nesting depth | the CBOR decoder recurses; a `StackOverflowError` is caught | the datum is skipped, with a WARN |
 
 *Why:* a datum integer is unbounded, so narrowing it can wrap a large value into a plausible one; an
@@ -346,7 +378,7 @@ be kept with replacement characters.
   `description` on a fungible token, no `image` or an image with a scheme the CIP does not allow on a 222 or
   444 token) is one WARN line with the policy, the asset name, the label and the reason.
 - A datum that is indexed but loses a property (a constructor value, a key that cannot be stored, a `logo` with a scheme
-  the CIP does not allow) is one WARN line per property, with the policy, the asset name and the reason.
+  the CIP does not allow, an invalid `files`) is one WARN line per property, with the policy, the asset name and the reason.
 - An output with a flat datum and several reference NFTs is one WARN line with the number found and their units
   (decision 1).
 - A datum that does not have the CIP-68 shape at all (not a constructor, no metadata map, no integer
@@ -358,7 +390,7 @@ be kept with replacement characters.
 `bad_image_scheme`, or `parse_failure` and `invalid_version`, both with label `unknown`) and
 `yaci.store.assets.cip68.datums.multi_label` (tags `labels`, for example `222+333`, and `outcome`: `indexed` or
 `skipped`; reference NFTs paired with user tokens of several labels) and
-`yaci.store.assets.cip68.properties.dropped` (tag `kind`: `constructor`, `key_unsupported`, `key_collision`, `bad_logo_scheme`). The
+`yaci.store.assets.cip68.properties.dropped` (tag `kind`: `constructor`, `key_unsupported`, `key_collision`, `bad_logo_scheme`, `invalid_files`). The
 tags have a small fixed set of values. They are registered with the CIP-68 processor and need no property; without a
 `MeterRegistry` bean they go to a private registry and nothing is exposed. The WARN lines stay as the per-token
 audit trail.
@@ -388,6 +420,9 @@ fields of one response can come from two sources, and `show_cips_details` is the
 
 - Every skip caused by a missing or invalid required field, a parse failure or an over-limit value leaves a WARN.
   Only a datum that does not have the CIP-68 shape is silent.
+- A token can be indexed with fewer properties than its datum has: an optional property that breaks the CIP (a bad
+  `logo`, an invalid `files`, a constructor value) is dropped and the token kept. The datum hex stays in
+  `cip68_metadata.datum`, so the dropped value can be recovered.
 - NFTs and RFTs without an acceptable image are not in the table at all; tokens that use another scheme
   (`iagon://`) appear only after the CIP allows it and the index is rebuilt.
 - Because NFTs and RFTs are stored without being served, their rules can change later without a
