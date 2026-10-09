@@ -9,7 +9,9 @@ import com.bloxbean.cardano.yaci.store.blockfrost.asset.storage.impl.model.BFPol
 import com.bloxbean.cardano.yaci.store.blockfrost.common.util.AmountsJsonUtil;
 import com.bloxbean.cardano.yaci.store.blockfrost.common.util.BlockfrostDialectUtil;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
-import lombok.RequiredArgsConstructor;
+import com.bloxbean.cardano.yaci.store.utxo.UtxoStoreProperties;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import lombok.extern.slf4j.Slf4j;
 import org.jooq.Condition;
 import org.jooq.DSLContext;
@@ -38,10 +40,27 @@ import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.ADDRESS_UTXO;
 import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.TX_INPUT;
 
 @Component
-@RequiredArgsConstructor
 @Slf4j
 public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
     private final DSLContext dsl;
+
+    /**
+     * Read current holdings from address_utxo_unspent instead of anti-joining address_utxo with
+     * tx_input ({@code store.utxo.unspent-table-read-enabled}).
+     */
+    private final boolean readUnspentTable;
+
+    @Autowired
+    public BFAssetStorageReaderImpl(DSLContext dsl, ObjectProvider<UtxoStoreProperties> utxoStoreProperties) {
+        this(dsl, Optional.ofNullable(utxoStoreProperties.getIfAvailable())
+                .map(UtxoStoreProperties::isUnspentTableReadEnabled)
+                .orElse(false));
+    }
+
+    BFAssetStorageReaderImpl(DSLContext dsl, boolean readUnspentTable) {
+        this.dsl = dsl;
+        this.readUnspentTable = readUnspentTable;
+    }
 
     /**
      * Returns one page of the asset list, each unit with its first-mint tx and total quantity.
@@ -344,7 +363,9 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
      * all of its current UTXOs. The returned {@code firstSeenSlot} is the selected ordering slot: earliest for
      * asc, but latest for desc.
      *
-     * <p>This still scans and aggregates every holder UTXO, so it's slow on units with many holders.
+     * <p>Without address_utxo_unspent this reads every output that ever held the unit and drops the
+     * spent ones; with it ({@code store.utxo.unspent-table-read-enabled}) it reads only the current
+     * outputs. Either way it aggregates every current holder UTXO before paging.
      */
     private List<BFAssetAddress> findAssetAddressesPostgres(String unit, int page, int count, Order order) {
         int offset = Math.max(page, 0) * count;
@@ -367,13 +388,10 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
                                    where elem->>'unit' = {2}
                                    limit 1
                                ) as quantity
-                        from address_utxo au
+                        from %2$s au
                         join transaction t on t.tx_hash = au.tx_hash
                         where au.amounts @> {3}::jsonb
-                          and not exists (
-                              select 1 from tx_input ti
-                              where ti.tx_hash = au.tx_hash and ti.output_index = au.output_index
-                          )
+                          %3$s
                     ),
                     /* DISTINCT ON keeps one correlated ordering key per holder. In asc it is the earliest UTXO;
                        in desc it is the latest. tx_index and output_index resolve rows sharing a slot. */
@@ -398,7 +416,15 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
                     offset {0} rows fetch next {1} rows only
                 ) as asset_addresses
                 """.formatted(
-                        dir // %1$s: reuse the same asc/desc direction at every ordering level
+                        dir, // %1$s: reuse the same asc/desc direction at every ordering level
+                        // %2$s / %3$s: the current outputs. address_utxo_unspent holds exactly those, so
+                        // the anti-join over the unit's whole history is only needed without it.
+                        readUnspentTable ? "address_utxo_unspent" : "address_utxo",
+                        readUnspentTable ? "" : """
+                                and not exists (
+                                      select 1 from tx_input ti
+                                      where ti.tx_hash = au.tx_hash and ti.output_index = au.output_index
+                                  )"""
                 ),
                 DSL.inline(offset), // {0}: number of fully aggregated holders to skip (page * count)
                 DSL.inline(count),  // {1}: maximum number of holders in the requested page
