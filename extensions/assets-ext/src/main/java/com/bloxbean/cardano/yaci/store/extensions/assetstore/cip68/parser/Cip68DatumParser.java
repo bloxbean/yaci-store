@@ -54,6 +54,14 @@ public class Cip68DatumParser {
     /** Largest {@code logo} or {@code image} accepted, in bytes. Same limit as the CIP-26 logo. */
     public static final int URI_MAX_BYTES = 64 * 1024;
 
+    /**
+     * Deepest nesting allowed in the value of an additional property (a list inside a list counts as two levels). The
+     * value goes to a JSON column, and Jackson refuses to write or read a document nested deeper than 1000 levels, so
+     * a deeper value would fail the insert and stop the sync. Real metadata nests a few levels; the datum is untrusted
+     * and only the transaction size bounds how deep it can be.
+     */
+    public static final int MAX_PROPERTY_DEPTH = 100;
+
     /** CIP-68 version 4 wraps the metadata in a CIP-25 style map: {"721": {policy_id: {asset_name: metadata}}}. */
     private static final BytesPlutusData NESTED_MAP_KEY = BytesPlutusData.of("721");
     /**
@@ -461,7 +469,11 @@ public class Cip68DatumParser {
             return;
         }
         String reportedKey = skipTypedKeys ? key : where + "." + key;
-        if ((skipTypedKeys && TYPED_KEYS.contains(key)) || dropsConstructorProperty(reportedKey, entry.getValue(), referenceNft)) {
+        if (skipTypedKeys && TYPED_KEYS.contains(key)) {
+            return;
+        }
+        // the depth check comes first: it is bounded, while the constructor check recurses as deep as the value goes
+        if (dropsTooDeepProperty(reportedKey, entry.getValue(), referenceNft) || dropsConstructorProperty(reportedKey, entry.getValue(), referenceNft)) {
             return;
         }
         // Check before storing: an unsupported value must drop only this property, not the datum
@@ -548,6 +560,48 @@ public class Cip68DatumParser {
                     + "constructor, which CIP-68 metadata does not allow", shortKey);
         }
         return true;
+    }
+
+    /**
+     * Drops a property whose value is nested deeper than {@link #MAX_PROPERTY_DEPTH}, with a warning and a count; the
+     * rest of the datum is kept.
+     */
+    private boolean dropsTooDeepProperty(String key, PlutusData value, @Nullable AssetType referenceNft) {
+        if (!isNestedDeeperThan(value, MAX_PROPERTY_DEPTH)) {
+            return false;
+        }
+        metrics.propertyDropped(Cip68Metrics.TOO_DEEP);
+        String shortKey = key.length() <= 60 ? key : key.substring(0, 60) + "...";
+        if (referenceNft != null) {
+            log.warn("CIP-68 datum of {}/{}: dropping property '{}' and keeping the rest, because its value is nested "
+                            + "deeper than {} levels",
+                    referenceNft.policyId(), referenceNft.assetName(), shortKey, MAX_PROPERTY_DEPTH);
+        } else {
+            log.warn("CIP-68 datum: dropping property '{}' and keeping the rest, because its value is nested deeper "
+                    + "than {} levels", shortKey, MAX_PROPERTY_DEPTH);
+        }
+        return true;
+    }
+
+    /** True if the value has more than {@code levels} levels of lists, maps and constructors. Stops at {@code levels}, so it never recurses deeper than that. */
+    private static boolean isNestedDeeperThan(@Nullable PlutusData data, int levels) {
+        List<PlutusData> children = switch (data) {
+            case ListPlutusData list -> list.getPlutusDataList();
+            case MapPlutusData map -> {
+                List<PlutusData> all = new ArrayList<>();
+                map.getMap().forEach((k, v) -> {
+                    all.add(k);
+                    all.add(v);
+                });
+                yield all;
+            }
+            case ConstrPlutusData constr -> constr.getData().getPlutusDataList();
+            case null, default -> null;
+        };
+        if (children == null) {
+            return false;
+        }
+        return levels == 0 || children.stream().anyMatch(child -> isNestedDeeperThan(child, levels - 1));
     }
 
     private static boolean containsConstructor(@Nullable PlutusData data) {
