@@ -248,8 +248,7 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
                     && dsl.fetchExists(
                     dsl.selectOne()
                             .from(EPOCH_STAKE)
-                            .where(EPOCH_STAKE.ADDRESS.eq(stakeAddress))
-                            .and(EPOCH_STAKE.ACTIVE_EPOCH.ge(activeEpoch))
+                            .where(activeEpochStakeCondition(stakeAddress, activeEpoch))
             );
         } catch (DataAccessException e) {
             log.warn("Could not fetch active epoch stake for {}: {}", stakeAddress, e.getMessage());
@@ -258,6 +257,26 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
 
         return Optional.of(new AccountInfo(stakeAddress, active, registered, activeEpoch,
                 totalControlled, rewardsSum, withdrawalsSum, reservesSum, treasurySum, poolId, drepId));
+    }
+
+    /**
+     * Rows of {@code epoch_stake} that make {@code stakeAddress} active from {@code activeEpoch} on.
+     *
+     * <p>{@code epoch_stake} is range-partitioned on {@code epoch}, so a filter on
+     * {@code address} and {@code active_epoch} alone prunes nothing: Postgres plans and probes
+     * every epoch partition (about 1,445 on preview), which is seconds on a fresh connection
+     * and holds thousands of locks (#1200). Both writers store {@code active_epoch = epoch + 2}:
+     * {@code StakeSnapshotService} binds {@code activeEpoch = epoch + 2}, and
+     * {@code GenesisPoolProcessor} writes {@code epoch = E - 1, activeEpoch = E + 1}. So
+     * {@code active_epoch >= N} is the same filter as {@code epoch >= N - 2}, and stating it on
+     * the partition key lets the planner keep only the newest partitions.
+     *
+     * <p>The bound is not clamped at zero: on a devnet that starts at epoch 0, the genesis
+     * delegators' rows carry {@code epoch = -1}, and {@code epoch >= 0} would skip them.
+     */
+    static Condition activeEpochStakeCondition(String stakeAddress, int activeEpoch) {
+        return EPOCH_STAKE.ADDRESS.eq(stakeAddress)
+                .and(EPOCH_STAKE.EPOCH.ge(activeEpoch - 2));
     }
 
     @Override
