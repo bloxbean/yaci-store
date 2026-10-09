@@ -22,7 +22,7 @@ import java.util.stream.Collectors;
  *   <li>{@value #MULTI_LABEL}: reference NFTs that have user tokens of several labels, tagged {@code labels}
  *       (for example {@code 222+333}) and {@code outcome} ({@code indexed} or {@code skipped}).</li>
  *   <li>{@value #DROPPED_PROPERTIES}: properties left out of a stored datum, tagged {@code kind}
- *       ({@code constructor}, {@code key_unsupported}, {@code key_collision}, {@code bad_logo_scheme}, {@code invalid_files}).</li>
+ *       ({@code constructor}, {@code key_unsupported}, {@code key_collision}, {@code bad_logo_scheme}, {@code invalid_files}, {@code too_deep}).</li>
  * </ul>
  * The counters count datums processed: they start at zero on every restart, and a block replayed after a chain
  * rollback is counted again.
@@ -50,6 +50,9 @@ public class Cip68Metrics {
 
     /** The {@code kind} of a {@code files} property that is left out because an entry of it breaks the CIP-68 definition. */
     public static final String INVALID_FILES = "invalid_files";
+
+    /** The {@code kind} of a property that is left out because its value is nested deeper than the parser allows. */
+    public static final String TOO_DEEP = "too_deep";
 
     private final MeterRegistry registry;
 
