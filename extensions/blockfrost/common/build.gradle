@@ -2,6 +2,7 @@ import org.gradle.api.publish.maven.MavenPublication
 
 dependencies {
 	implementation 'org.jooq:jooq'
+	implementation 'org.springframework:spring-tx'
 	implementation 'org.springframework.boot:spring-boot-starter-web'
 }
 
