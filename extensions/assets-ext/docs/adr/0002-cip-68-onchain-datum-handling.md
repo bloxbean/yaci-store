@@ -166,7 +166,7 @@ Everything else is optional, and a value that violates the CIP is dropped on its
 | `decimals` | out of range, or not an integer | 6 |
 | `ticker`, `url`, `mediaType` | over the column width | 6 |
 | `description` (222, 444) | not a byte string | none |
-| additional properties | a constructor anywhere in the value, a key with no text form | 8 |
+| additional properties | a constructor anywhere in the value, a key with no text form (decision 8), a value nested deeper than 100 levels (decision 6) | 6, 8 |
 
 A fungible-token datum without a description is **not indexed**. This is a deliberate choice: fungible
 metadata without a description has little to show, the spec requires it, and the read path requires
@@ -255,7 +255,8 @@ returns no logo (see cardano-foundation/cf-token-metadata-registry#104).
 | `logo`, `image` | at most 64 KiB, measured on the joined bytes | the value is dropped with a WARN, the datum is kept |
 | `logo` | a URI with scheme `https`, `ipfs`, `ar` or `data` (decision 4) | the value is dropped with a WARN, the datum is kept |
 | `files` | every entry has a `mediaType` and a `src` that is such a URI (decision 4) | the whole `files` property is dropped with a WARN, the datum is kept |
-| nesting depth | the CBOR decoder recurses; a `StackOverflowError` is caught | the datum is skipped, with a WARN |
+| nesting depth of the datum | the CBOR decoder recurses; a `StackOverflowError` is caught | the datum is skipped, with a WARN |
+| nesting depth of an additional property (#1240) | at most 100 levels of lists, maps and constructors | the property is dropped with a WARN and `properties.dropped{kind="too_deep"}`, the datum is kept |
 
 *Why:* a datum integer is unbounded, so narrowing it can wrap a large value into a plausible one; an
 over-long value would fail the insert and stop the sync; a deeply nested datum would crash the
@@ -263,6 +264,15 @@ processor, and a valid on-chain datum can be nested deeper than the stack allows
 in UTF-16 units because H2 counts that way, and the bound must be safe on every supported database.
 *Trade-off:* a long non-BMP name that PostgreSQL alone could store is rejected. The depth guard is a
 temporary workaround until the decoder stops recursing (cardano-client-lib#681).
+
+The 100-level limit on a property value is separate from the datum depth. The value goes to a JSON column, and Jackson
+refuses to write or read a document nested deeper than 1000 levels. Before the limit, a datum with a property nested
+1100 levels (about 1 KB of datum, so anyone can mint one) failed on flush inside the block transaction and stopped the
+sync (#1240). 100 is far above anything real, and far below 1000 even with the levels the parser wraps around the
+value (`properties`, `additional_properties` or `files`, the entry). The check is bounded, so it runs before the
+constructor check, which recurses as deep as the value goes. The key is dropped, not kept with a `null`: the API does not
+expose `properties`, and the datum hex stays in `cip68_metadata.datum`. Isolating any other failure of the listener from
+the sync is a separate change (#1243).
 
 The `logo` and `image` limit is the one the CIP-26 logo already has; the CIP-68 spec gives none. It cannot
 trigger on current data: the ledger limits a transaction to `maxTxSize` (16,384 bytes at epoch 660), so a
@@ -390,7 +400,7 @@ be kept with replacement characters.
 `bad_image_scheme`, or `parse_failure` and `invalid_version`, both with label `unknown`) and
 `yaci.store.assets.cip68.datums.multi_label` (tags `labels`, for example `222+333`, and `outcome`: `indexed` or
 `skipped`; reference NFTs paired with user tokens of several labels) and
-`yaci.store.assets.cip68.properties.dropped` (tag `kind`: `constructor`, `key_unsupported`, `key_collision`, `bad_logo_scheme`, `invalid_files`). The
+`yaci.store.assets.cip68.properties.dropped` (tag `kind`: `constructor`, `key_unsupported`, `key_collision`, `bad_logo_scheme`, `invalid_files`, `too_deep`). The
 tags have a small fixed set of values. They are registered with the CIP-68 processor and need no property; without a
 `MeterRegistry` bean they go to a private registry and nothing is exposed. The WARN lines stay as the per-token
 audit trail.
