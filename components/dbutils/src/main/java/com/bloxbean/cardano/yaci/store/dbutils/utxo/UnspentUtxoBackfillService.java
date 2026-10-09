@@ -2,7 +2,7 @@ package com.bloxbean.cardano.yaci.store.dbutils.utxo;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 
 /**
  * One-time fill of {@code address_utxo_unspent} for a store that was synced before
@@ -20,7 +20,7 @@ import org.springframework.stereotype.Component;
  * </ol>
  * Every statement is idempotent, so the fill can be stopped and resumed.
  */
-@Component
+@Service
 @Slf4j
 public class UnspentUtxoBackfillService {
 

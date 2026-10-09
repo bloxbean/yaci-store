@@ -5,7 +5,7 @@ import org.jooq.DSLContext;
 import org.jooq.Field;
 import org.jooq.Record;
 import org.jooq.SelectFieldOrAsterisk;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -41,7 +41,7 @@ import static org.jooq.impl.DSL.selectOne;
  * values written at commit time too (pointer-address stake fields, set in
  * {@code UtxoProcessor.handleCommit}, which is ordered before this).
  */
-@Component
+@Service
 @Slf4j
 public class UnspentUtxoTableService {
 
