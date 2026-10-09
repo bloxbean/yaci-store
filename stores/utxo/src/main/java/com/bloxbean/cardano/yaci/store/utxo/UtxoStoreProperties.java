@@ -39,4 +39,10 @@ public class UtxoStoreProperties {
      */
     @Builder.Default
     private boolean unspentTableEnabled = false;
+
+    /**
+     * Serve the unspent-output queries from address_utxo_unspent (see UnspentTableUtxoStorageReader).
+     */
+    @Builder.Default
+    private boolean unspentTableReadEnabled = false;
 }

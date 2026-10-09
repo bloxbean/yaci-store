@@ -46,6 +46,13 @@ public class UtxoStoreAutoConfigProperties {
          * store needs a one-time backfill (admin-cli backfill-unspent-utxos).
          */
         private boolean unspentTableEnabled = false;
+
+        /**
+         * Serve the unspent-output queries (by address, payment credential, stake address, asset)
+         * from address_utxo_unspent. Turn it on only once the table is complete: maintained since
+         * the start of the sync, or backfilled and reconciled.
+         */
+        private boolean unspentTableReadEnabled = false;
     }
 
     @Getter

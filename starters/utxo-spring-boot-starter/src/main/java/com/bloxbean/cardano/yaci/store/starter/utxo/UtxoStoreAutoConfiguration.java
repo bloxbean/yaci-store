@@ -33,6 +33,7 @@ public class UtxoStoreAutoConfiguration {
         utxoStoreProperties.setPruningSafeBlocks(properties.getUtxo().getPruningSafeBlocks());
         utxoStoreProperties.setContentAwareRollback(properties.getUtxo().isContentAwareRollback());
         utxoStoreProperties.setUnspentTableEnabled(properties.getUtxo().isUnspentTableEnabled());
+        utxoStoreProperties.setUnspentTableReadEnabled(properties.getUtxo().isUnspentTableReadEnabled());
 
         return utxoStoreProperties;
     }
