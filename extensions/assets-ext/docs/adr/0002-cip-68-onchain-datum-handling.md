@@ -26,9 +26,9 @@ CIP-68. CIP-26 is covered in [ADR 0001](0001-cip-26-offchain-registry-ingestion.
 
 The general rule the module follows: **be strict about safety and about what the CIP requires, lenient
 about the rest.** A value that could break an insert, exhaust the stack or wrap a number is rejected or
-dropped. A datum that lacks a field the CIP requires for its label, or whose `image` (or, for a fungible token, `logo`) is not a URI the
+dropped. A datum that lacks a field the CIP requires for its label, or whose required `image` is not a URI the
 CIP allows, is not indexed, because wallets and explorers follow the CIP and could not show it either.
-A datum whose version is not one the CIP defines is not indexed either. A value that is merely unusual, in a field the CIP does not constrain, is stored as written, because a
+A datum whose version is not one the CIP defines is not indexed either. An optional field that is invalid (a fungible token's `logo` that is not a URI the CIP allows) is dropped and the rest of the datum is indexed. A value that is merely unusual, in a field the CIP does not constrain, is stored as written, because a
 stored value can be filtered later, while a dropped one is gone from the table until the datum is processed again.
 
 ## Decisions
@@ -122,7 +122,7 @@ NFT. It was not done. *Trade-offs and known gaps:*
   paired token, and how many the guess would label differently from their real user token, is not measured.
 - With several paired user tokens (USDCx/USDrf LP has both a 222 and a 333 on-chain), the row keeps one label,
   but the datum is validated against **all** of them (#1238): it needs a `name`, a `description` if 333 is among
-  them, and an `image` with an allowed scheme if 222 or 444 is, and the `logo` check of 333. A datum that fails any
+  them, and an `image` with an allowed scheme if 222 or 444 is. A datum that fails any
   of them is not indexed, with a WARN that lists the labels and says which one it fails, because the metadata
   is shared by every token of that reference NFT and each of them is a token of its class. Before, only the
   first label was checked, so a datum without a description was indexed although it is also a fungible token,
@@ -154,10 +154,11 @@ CIP-26 supplies it. How many such tokens exist on-chain has not been measured. N
 without a description, which the spec allows. Before #1221 the same rule was applied to every label and
 valid NFTs were dropped silently; on mainnet at least 203 datums were affected (a lower bound).
 
-### 4. `image` (222, 444) and `logo` (333) must be URIs with a scheme the CIP allows: strict, drop and warn (#1221, #1234)
+### 4. `image` (222, 444) must be a URI with a scheme the CIP allows: strict, drop and warn; a bad `logo` (333) is dropped alone (#1221, #1234)
 
 CIP-68 requires `image` for 222 and 444, and says the URI scheme of `image` and of the 333 `logo` must be one
-of `https`, `ipfs`, `ar` or `data`. The module enforces both:
+of `https`, `ipfs`, `ar` or `data`. The module enforces both, but differently, because `image` is required and
+`logo` is not:
 
 - A 222 or 444 token with no image, or an empty or blank one, **is not indexed**, and a WARN names the
   policy, the asset name, the label and the reason ("it has no image").
@@ -165,19 +166,27 @@ of `https`, `ipfs`, `ar` or `data`. The module enforces both:
   without regard to case, and something must follow the colon) **is not indexed**, and the WARN gives the
   reason and the value (cut at 60 characters). That covers `iagon://` and free text.
 - The check runs on the joined value of a chunked image (decision 5), after the size cap (decision 6).
-- A 333 token has no `image`. Its `logo` is optional, so a missing, empty or blank one is fine; one that is
-  present and not a URI with one of those schemes **is not indexed**, with a WARN that gives the reason and
-  the value. The `logo` of a 222 or 444 token is not checked.
+- A 333 token has no `image`. Its `logo` is optional (`? logo: uri`), so a missing, empty or blank one is fine.
+  One that is present and not a URI with one of those schemes (a bare IPFS hash such as `Qm...` instead of
+  `ipfs://Qm...`, or `iagon://`) is **dropped, and the token is indexed without it**. A WARN names the policy, the
+  asset name and the value ("dropping the logo and keeping the rest"), and the counter
+  `properties.dropped{kind="bad_logo_scheme"}` goes up. The module does not try to repair the value (adding
+  `ipfs://` would be a guess). The check runs on the datum of any label, after the label and the required fields
+  have been validated, so a bad logo never makes a datum invalid for any label, including the 333 of a multi-label
+  token (decision 2).
 
 *Why:* clients that follow the CIP cannot discover or show a token whose image they cannot read, so
 indexing it would only produce rows no consumer can use. If a project wants its scheme (Iagon's
 `iagon://`) accepted, the way is the CIP process; a proposal to add `iagon` and to make `image` optional
 for some uses is open as cardano-foundation/CIPs#1288, and when the CIP changes, so does this rule.
 
-*Cost of the `logo` rule:* it drops a whole fungible token over an optional field, among them a token whose
-logo is a raw base64 string (the form the CIP-26 registry uses, which CIP-68 excludes: `logo` "needs to be a
-valid URI and not a plain bytestring"). Such a token is served from CIP-26 if the registry has it. How many
-mainnet 333 tokens are affected has not been measured.
+*Why the `logo` does not drop the token:* a bad optional field should cost that field, not the required ones
+(`name`, `description`) and the other optional ones (`decimals`, `ticker`). This is the rule everywhere else in the
+module (an out-of-range `decimals`, an over-long `ticker`, a constructor property). *What it costs:* a stored token can
+have no logo although the datum had one. The logo that is dropped is often a raw base64 string or a bare IPFS hash,
+which CIP-68 excludes (`logo` "needs to be a valid URI and not a plain bytestring"), so no CIP-68 client could
+show it. A full mainnet index with the earlier, stricter rule (the token dropped) found 260 datums of 217 fungible
+tokens with such a logo; with this rule they are indexed instead.
 
 *Cost of the `image` rule:* on an earlier mainnet index, this rule would remove 12 NFTs whose datum has
 `mediaType: image/svg+xml` and an empty `image` (the "DID registration" sensor tokens) and 9 more whose image
@@ -185,10 +194,11 @@ is not a spec URI (6 `iagon://` wine NFTs and 3 free-text values). They are real
 table, and a dropped token comes back only when its datum is processed again (a resync), which is cheap today because the module has no known users yet. The count was taken before
 the rule existed and has not been re-measured with it.
 
-*Considered and tried, then reversed:* indexing such tokens with a WARN and storing the image as written
-(and, for the `logo`, storing it as written without a check).
-That kept every token, but the table then held images no client can open, and it left the module more
-permissive than the CIP it implements.
+*Considered and tried, then reversed:* indexing such tokens with a WARN and storing the image as written. That
+kept every token, but the table then held images no client can open, and it left the module more permissive than
+the CIP it implements. For the `logo` two other options were tried: storing it as written without a check, and
+dropping the whole token (the second was implemented first and reversed after the mainnet run showed 217 tokens
+lost for an optional field).
 
 ### 5. A logo or image given as a list of chunks is joined as bytes (#1226)
 
@@ -211,6 +221,7 @@ returns no logo (see cardano-foundation/cf-token-metadata-registry#104).
 | `decimals` | must be in [0, 255] and fit in a `long` | the value is dropped, the datum is kept |
 | `name`, `ticker`, `url`, `mediaType` | at most 255, 32, 250 and 255 characters, counted in UTF-16 units | the value is dropped; a dropped `name` skips the datum (decision 3) |
 | `logo`, `image` | at most 64 KiB, measured on the joined bytes | the value is dropped with a WARN, the datum is kept |
+| `logo` | a URI with scheme `https`, `ipfs`, `ar` or `data` (decision 4) | the value is dropped with a WARN, the datum is kept |
 | nesting depth | the CBOR decoder recurses; a `StackOverflowError` is caught | the datum is skipped, with a WARN |
 
 *Why:* a datum integer is unbounded, so narrowing it can wrap a large value into a plausible one; an
@@ -332,7 +343,9 @@ be kept with replacement characters.
   and the stack trace is logged at DEBUG only, because a sync can hit many.
 - A datum that parses but is skipped because it breaks a requirement of its label (no `name`, no
   `description` on a fungible token, no `image` or an image with a scheme the CIP does not allow on a 222 or
-  444 token, a `logo` with such a scheme on a 333 token) is one WARN line with the policy, the asset name, the label and the reason.
+  444 token) is one WARN line with the policy, the asset name, the label and the reason.
+- A datum that is indexed but loses a property (a constructor value, a key that cannot be stored, a `logo` with a scheme
+  the CIP does not allow) is one WARN line per property, with the policy, the asset name and the reason.
 - An output with a flat datum and several reference NFTs is one WARN line with the number found and their units
   (decision 1).
 - A datum that does not have the CIP-68 shape at all (not a constructor, no metadata map, no integer
@@ -341,10 +354,10 @@ be kept with replacement characters.
 **Metrics (#1237).** The totals are also Micrometer counters, read from `/actuator/prometheus`:
 `yaci.store.assets.cip68.datums.indexed` (tag `label`: 222, 333, 444),
 `yaci.store.assets.cip68.datums.skipped` (tags `label` and `reason`: `no_name`, `no_description`, `no_image`,
-`bad_image_scheme`, `bad_logo_scheme`, or `parse_failure` and `invalid_version`, both with label `unknown`) and
+`bad_image_scheme`, or `parse_failure` and `invalid_version`, both with label `unknown`) and
 `yaci.store.assets.cip68.datums.multi_label` (tags `labels`, for example `222+333`, and `outcome`: `indexed` or
 `skipped`; reference NFTs paired with user tokens of several labels) and
-`yaci.store.assets.cip68.properties.dropped` (tag `kind`: `constructor`, `key_unsupported`, `key_collision`). The
+`yaci.store.assets.cip68.properties.dropped` (tag `kind`: `constructor`, `key_unsupported`, `key_collision`, `bad_logo_scheme`). The
 tags have a small fixed set of values. They are registered with the CIP-68 processor and need no property; without a
 `MeterRegistry` bean they go to a private registry and nothing is exposed. The WARN lines stay as the per-token
 audit trail.
@@ -394,8 +407,8 @@ Decisions that are still open:
 Not measured yet (a full mainnet index with the current rules will answer them; none of them is a design
 question until then):
 
-- How many tokens the strict `image` and `logo` rules remove in total, and how many 333 tokens have a logo that
-  is not a URI (a raw base64 string, for example).
+- How many tokens the strict `image` rule removes in total on a current index (a full mainnet index with the earlier
+  `logo` rule showed 217 fungible tokens with a bad logo; they are now kept without it).
 - How many outputs hold several reference NFTs, and whether any real nested datum exists on-chain. The nested case
   is covered by synthetic datums only.
 - How many tokens have several user tokens for one reference NFT.
