@@ -194,7 +194,10 @@ public class SnapshotCommands {
             boolean keepExtracted,
             @Option(longNames = "dry-run", defaultValue = "false",
                     description = "Run preflight checks only; write nothing")
-            boolean dryRun) {
+            boolean dryRun,
+            @Option(longNames = "validate", defaultValue = "false",
+                    description = "After the import, run 'snapshot validate --mark-ready' in the same command")
+            boolean validate) {
         try {
             SnapshotCliSupport.ensureDirectory(Path.of(workDir));
             SnapshotSpecRegistry registry = support.importRegistry(specFile, allowCustomSpecs);
@@ -221,7 +224,18 @@ public class SnapshotCommands {
                 }
             });
             printImportReport(report);
-            writeLn(info("Next: run 'snapshot validate --manifest %s', then 'apply-indexes'.", manifest));
+            if (!validate) {
+                writeLn(info("Next: run 'snapshot validate --manifest %s', then 'apply-indexes'.", manifest));
+                return;
+            }
+            if (!ImportJournal.STATUS_VALIDATING.equals(report.status())) {
+                writeLn(error("Import ended with status %s; skipping validation.", report.status()));
+                return;
+            }
+            SnapshotManifest m = new ManifestCodec().read(Path.of(manifest).toAbsolutePath().normalize());
+            if (runValidation(m, registry, true)) {
+                writeLn(info("Next (optional): run 'apply-indexes'."));
+            }
         } catch (Exception e) {
             writeLn(error("snapshot import failed: %s", e.getMessage()));
             log.debug("import failed", e);
@@ -274,49 +288,62 @@ public class SnapshotCommands {
             boolean markReady) {
         try {
             SnapshotManifest m = new ManifestCodec().read(Path.of(manifest).toAbsolutePath().normalize());
-            SnapshotSpecRegistry registry = support.importRegistry(specFile, allowCustomSpecs);
-            SnapshotValidator validator = new SnapshotValidator(registry);
-
-            boolean allPassed = true;
-            try (Connection conn = support.connect()) {
-                List<ValidationReport> reports = validator.validateAll(conn, support.schema(), m,
-                        support.eventPublisherId(), support.cursorBlocksToKeep());
-                for (ValidationReport report : reports) {
-                    writeLn(info("Level: %s", report.level()));
-                    for (ValidationReport.Check c : report.checks()) {
-                        if (c.passed()) {
-                            writeLn("    [ok]   %-34s %s", c.name(), c.detail());
-                        } else {
-                            writeLn(error("    [FAIL] %-34s %s", c.name(), c.detail()));
-                        }
-                    }
-                    allPassed &= report.passed();
-                }
-
-                if (allPassed) {
-                    writeLn(success("All offline validation levels passed."));
-                    if (!registry.selectedLimitations(m.declaredLossy()).isEmpty()) {
-                        writeLn(warn("The snapshot declares %d limitation(s); this database is not an "
-                                + "exact copy of the source:", registry.selectedLimitations(m.declaredLossy()).size()));
-                        registry.selectedLimitations(m.declaredLossy()).forEach(l -> writeLn("    - %s", l));
-                    }
-                    writeLn(info("Remaining application-acceptance steps:"));
-                    SnapshotValidator.applicationAcceptanceChecklist()
-                            .forEach(step -> writeLn("    - %s", step));
-                    if (markReady) {
-                        ImportJournal journal = new ImportJournal(conn, support.schema());
-                        journal.setStatus(m.snapshotId(), ImportJournal.STATUS_READY, "validated");
-                        journal.drop();
-                        writeLn(success("Import marked READY and the temporary journal removed."));
-                    }
-                } else {
-                    writeLn(error("Validation failed. The database must not be treated as ready."));
-                }
-            }
+            runValidation(m, support.importRegistry(specFile, allowCustomSpecs), markReady);
         } catch (Exception e) {
             writeLn(error("snapshot validate failed: %s", e.getMessage()));
             log.debug("validate failed", e);
         }
+    }
+
+    // ---------------------------------------------------------------- validation
+
+    /**
+     * Runs every offline validation level and, when all pass and {@code markReady} is set, marks the
+     * import READY and drops the journal.
+     *
+     * @return true when every level passed
+     */
+    private boolean runValidation(SnapshotManifest m, SnapshotSpecRegistry registry, boolean markReady)
+            throws Exception {
+        SnapshotValidator validator = new SnapshotValidator(registry);
+
+        boolean allPassed = true;
+        try (Connection conn = support.connect()) {
+            List<ValidationReport> reports = validator.validateAll(conn, support.schema(), m,
+                    support.eventPublisherId(), support.cursorBlocksToKeep());
+            for (ValidationReport report : reports) {
+                writeLn(info("Level: %s", report.level()));
+                for (ValidationReport.Check c : report.checks()) {
+                    if (c.passed()) {
+                        writeLn("    [ok]   %-34s %s", c.name(), c.detail());
+                    } else {
+                        writeLn(error("    [FAIL] %-34s %s", c.name(), c.detail()));
+                    }
+                }
+                allPassed &= report.passed();
+            }
+
+            if (allPassed) {
+                writeLn(success("All offline validation levels passed."));
+                if (!registry.selectedLimitations(m.declaredLossy()).isEmpty()) {
+                    writeLn(warn("The snapshot declares %d limitation(s); this database is not an "
+                            + "exact copy of the source:", registry.selectedLimitations(m.declaredLossy()).size()));
+                    registry.selectedLimitations(m.declaredLossy()).forEach(l -> writeLn("    - %s", l));
+                }
+                writeLn(info("Remaining application-acceptance steps:"));
+                SnapshotValidator.applicationAcceptanceChecklist()
+                        .forEach(step -> writeLn("    - %s", step));
+                if (markReady) {
+                    ImportJournal journal = new ImportJournal(conn, support.schema());
+                    journal.setStatus(m.snapshotId(), ImportJournal.STATUS_READY, "validated");
+                    journal.drop();
+                    writeLn(success("Import marked READY and the temporary journal removed."));
+                }
+            } else {
+                writeLn(error("Validation failed. The database must not be treated as ready."));
+            }
+        }
+        return allPassed;
     }
 
     // ---------------------------------------------------------------- output

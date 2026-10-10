@@ -342,6 +342,7 @@ snapshot import --manifest <manifest> \
 | `--min-free-disk-gb` | `20` | Minimum free space required at `--work-dir` during preflight |
 | `--keep-extracted` | `false` | Keep extracted Parquet after a successful import |
 | `--dry-run` | `false` | Preflight only; write nothing |
+| `--validate` | `false` | After a successful import, run `snapshot validate --mark-ready` in the same command |
 
 <Callout type="warning">
 `--min-free-disk-gb` checks the **work directory** before loading; it is not a continuous disk-space
@@ -386,6 +387,10 @@ On offline validation success, this marks the import `READY` and drops its tempo
 It does not certify application acceptance. Run it before syncing: after new blocks arrive, the
 database is intentionally beyond the manifest's point and its original row counts. Preserve the
 validation output for the acceptance record.
+
+`snapshot import --validate` does the same in one command: after the import finishes, it runs every
+offline level and, if all pass, marks the import `READY`. If validation fails, the import is left in
+`VALIDATING`; fix the cause and rerun `snapshot validate`.
 
 ### 6. Apply indexes
 
