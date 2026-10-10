@@ -439,32 +439,27 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
     }
 
     private void rollbackForAddressUnits(String address, List<String> units, Long slot) {
-        // Table aliases
-        var ab = ADDRESS_BALANCE.as("ab");
+        var ab = ADDRESS_BALANCE;
         var abc = ADDRESS_BALANCE_CURRENT;
-        var ranked = name("ranked");
-        var latest = name("latest_balances");
 
-        // Step 1: CTE for latest balances with row_number()
-        var latestBalancesQuery = dsl
-                .select()
-                .from(
-                        select(ab.fields())
-                                .select(rowNumber().over()
-                                        .partitionBy(ab.ADDRESS, ab.UNIT)
-                                        .orderBy(ab.SLOT.desc())
-                                        .as("rn"))
-                                .from(ab)
-                                .where(ab.ADDRESS.eq(address))
-                                .and(ab.UNIT.in(units))
-                                .and(ab.SLOT.le(slot))
-                                .asTable(ranked)
-                )
-                .where(field("rn", Integer.class).eq(1));
-                //.asTable(latest);
-
-        Table<Record> latestTable = latestBalancesQuery.asTable(latest);
-        CommonTableExpression<?> latestBalancesCte = name("latest_balances").as(latestBalancesQuery);
+        // Step 1: the latest balance row at or before the rollback slot, one unit at a time. Each lookup is a
+        // backward scan of the (address, unit, slot) primary key that stops at its first row. A row_number()
+        // window over (address, unit) has to read the unit's whole balance history first: on mainnet that is
+        // hundreds of thousands of rows for a busy script address (20 units: 193 s against 43 ms this way),
+        // and the indexer stops writing blocks until every chain rollback has finished it.
+        List<Record> latestBalances = new ArrayList<>();
+        for (String unit : units) {
+            dsl.select(ab.ADDRESS, ab.UNIT, ab.QUANTITY, ab.ADDR_FULL, ab.SLOT, ab.BLOCK, ab.BLOCK_TIME, ab.EPOCH,
+                            ab.UPDATE_DATETIME)
+                    .from(ab)
+                    .where(ab.ADDRESS.eq(address))
+                    .and(ab.UNIT.eq(unit))
+                    .and(ab.SLOT.le(slot))
+                    .orderBy(ab.SLOT.desc())
+                    .limit(1)
+                    .fetchOptional()
+                    .ifPresent(latestBalances::add);
+        }
 
         // Step 2: Delete existing entries
         dsl.deleteFrom(abc)
@@ -472,34 +467,19 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
                 .and(abc.UNIT.in(units))
                 .execute();
 
-        // Step 3: Upsert back into current balance table
-        dsl.with(latestBalancesCte)
-                .insertInto(abc)
-                .columns(
-                        abc.ADDRESS,
-                        abc.UNIT,
-                        abc.QUANTITY,
-                        abc.ADDR_FULL,
-                        abc.SLOT,
-                        abc.BLOCK,
-                        abc.BLOCK_TIME,
-                        abc.EPOCH,
-                        abc.UPDATE_DATETIME
-                )
-                .select(
-                        select(
-                                latestTable.field("address", String.class),
-                                latestTable.field("unit", String.class),
-                                latestTable.field("quantity", BigInteger.class),
-                                latestTable.field("addr_full", String.class),
-                                latestTable.field("slot", Long.class),
-                                latestTable.field("block", Long.class),
-                                latestTable.field("block_time", Long.class),
-                                latestTable.field("epoch", Integer.class),
-                                latestTable.field("update_datetime", LocalDateTime.class)
-                        ).from(latest)
-                )
-                .execute();
+        if (latestBalances.isEmpty())
+            return;
+
+        // Step 3: Insert the latest balances back into the current balance table
+        var insert = dsl.insertInto(abc,
+                abc.ADDRESS, abc.UNIT, abc.QUANTITY, abc.ADDR_FULL, abc.SLOT, abc.BLOCK, abc.BLOCK_TIME, abc.EPOCH,
+                abc.UPDATE_DATETIME);
+        for (Record balance : latestBalances) {
+            insert = insert.values(balance.get(ab.ADDRESS), balance.get(ab.UNIT), balance.get(ab.QUANTITY),
+                    balance.get(ab.ADDR_FULL), balance.get(ab.SLOT), balance.get(ab.BLOCK), balance.get(ab.BLOCK_TIME),
+                    balance.get(ab.EPOCH), balance.get(ab.UPDATE_DATETIME));
+        }
+        insert.execute();
     }
 
     @Transactional
@@ -513,63 +493,41 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
     }
 
     private void rollbackForStakeAddresses(List<String> addresses, Long slot) {
-        var sab = STAKE_ADDRESS_BALANCE.as("sab");
+        var sab = STAKE_ADDRESS_BALANCE;
         var sabc = STAKE_ADDRESS_BALANCE_CURRENT;
-        var ranked = name("ranked");
-        var latest = name("latest_balances");
 
-        // Step 1: Build CTE for latest balances
-        var latestBalancesQuery = dsl
-                .select()
-                .from(
-                        select(sab.fields())
-                                .select(
-                                        rowNumber().over()
-                                                .partitionBy(sab.ADDRESS)
-                                                .orderBy(sab.SLOT.desc())
-                                                .as("rn")
-                                )
-                                .from(sab)
-                                .where(sab.ADDRESS.in(addresses))
-                                .and(sab.SLOT.le(slot))
-                                .asTable(ranked)
-                )
-                .where(field("rn", Integer.class).eq(1));
-                //.asTable(latest);
-
-        Table<Record> latestTable = latestBalancesQuery.asTable(latest);
-        CommonTableExpression<?> latestBalancesCte = name("latest_balances").as(latestBalancesQuery);
-
+        // Step 1: the latest balance row at or before the rollback slot, one address at a time: a backward scan
+        // of the (address, slot) primary key that stops at its first row, instead of a row_number() window that
+        // reads each address's whole balance history (see rollbackForAddressUnits).
+        List<Record> latestBalances = new ArrayList<>();
+        for (String address : addresses) {
+            dsl.select(sab.ADDRESS, sab.QUANTITY, sab.SLOT, sab.BLOCK, sab.BLOCK_TIME, sab.EPOCH, sab.UPDATE_DATETIME)
+                    .from(sab)
+                    .where(sab.ADDRESS.eq(address))
+                    .and(sab.SLOT.le(slot))
+                    .orderBy(sab.SLOT.desc())
+                    .limit(1)
+                    .fetchOptional()
+                    .ifPresent(latestBalances::add);
+        }
 
         // Step 2: Delete old current records for addresses
         dsl.deleteFrom(sabc)
                 .where(sabc.ADDRESS.in(addresses))
                 .execute();
 
-        // Step 3: Insert or update latest balance
-        dsl.with(latestBalancesCte)
-                .insertInto(sabc)
-                .columns(
-                        sabc.ADDRESS,
-                        sabc.QUANTITY,
-                        sabc.SLOT,
-                        sabc.BLOCK,
-                        sabc.BLOCK_TIME,
-                        sabc.EPOCH,
-                        sabc.UPDATE_DATETIME
-                )
-                .select(
-                        select(
-                                latestTable.field("address", String.class),
-                                latestTable.field("quantity", BigInteger.class),
-                                latestTable.field("slot", Long.class),
-                                latestTable.field("block", Long.class),
-                                latestTable.field("block_time", Long.class),
-                                latestTable.field("epoch", Integer.class),
-                                latestTable.field("update_datetime", LocalDateTime.class)
-                        ).from(latest)
-                )
-                .execute();
+        if (latestBalances.isEmpty())
+            return;
+
+        // Step 3: Insert the latest balances back into the current balance table
+        var insert = dsl.insertInto(sabc,
+                sabc.ADDRESS, sabc.QUANTITY, sabc.SLOT, sabc.BLOCK, sabc.BLOCK_TIME, sabc.EPOCH, sabc.UPDATE_DATETIME);
+        for (Record balance : latestBalances) {
+            insert = insert.values(balance.get(sab.ADDRESS), balance.get(sab.QUANTITY), balance.get(sab.SLOT),
+                    balance.get(sab.BLOCK), balance.get(sab.BLOCK_TIME), balance.get(sab.EPOCH),
+                    balance.get(sab.UPDATE_DATETIME));
+        }
+        insert.execute();
     }
 
     @Override
