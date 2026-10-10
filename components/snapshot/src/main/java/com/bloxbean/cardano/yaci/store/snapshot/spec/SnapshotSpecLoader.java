@@ -409,6 +409,22 @@ public class SnapshotSpecLoader {
             }
         }
 
+        // A derived id must be unique wherever the table's key is, or rows that differ only in key
+        // columns outside the hash silently share one id.
+        for (Map.Entry<String, SnapshotTableSpec.Column> e : imp.columns().entrySet()) {
+            String conv = e.getValue().converter();
+            if (conv != null && conv.startsWith("uuid-v5:")) {
+                Set<String> hashed = new TreeSet<>();
+                for (String c : conv.substring("uuid-v5:".length()).split(",")) {
+                    hashed.add(c.trim());
+                }
+                if (!hashed.containsAll(spec.validation().key())) {
+                    throw new SpecException(origin + ": import.columns." + e.getKey() + " derives a uuid-v5 from "
+                            + hashed + ", which does not cover validation.key " + spec.validation().key());
+                }
+            }
+        }
+
         Set<String> dup = new TreeSet<>(imp.ignoreSourceColumns());
         if (dup.size() != imp.ignoreSourceColumns().size()) {
             throw new SpecException(origin + ": duplicate entries in import.ignore-source-columns");

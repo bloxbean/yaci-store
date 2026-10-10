@@ -1,6 +1,6 @@
 snapshot-table:
   id: voting-procedure
-  spec-version: 1
+  spec-version: 2
   module: governance
   kind: CHAIN_DATA
   restore: IMPORT
@@ -22,7 +22,7 @@ snapshot-table:
     mode: MAPPED
     columns:
       id:
-        converter: "uuid-v5:tx_hash,idx"
+        converter: "uuid-v5:tx_hash,voter_type,voter_hash,gov_action_tx_hash,gov_action_index"
       block_time:
         source: block_time
         converter: "timestamp-to-epoch-seconds"

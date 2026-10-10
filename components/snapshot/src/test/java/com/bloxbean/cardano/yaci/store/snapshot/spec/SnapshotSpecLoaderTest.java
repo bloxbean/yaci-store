@@ -234,6 +234,25 @@ class SnapshotSpecLoaderTest {
     }
 
     @Test
+    void uuidV5MustHashEveryValidationKeyColumn() {
+        String partial = MINIMAL.replace("""
+                    vrf_key:
+                        source: vrf_key_hash
+                """, """
+                    vrf_key:
+                        source: vrf_key_hash
+                      id:
+                        converter: "uuid-v5:tx_hash"
+                """);
+        assertThatThrownBy(() -> load(partial))
+                .isInstanceOf(SpecException.class)
+                .hasMessageContaining("does not cover validation.key");
+
+        String full = partial.replace("uuid-v5:tx_hash", "uuid-v5:tx_hash,cert_index");
+        assertThat(load(full).importSpec().columns()).containsKey("id");
+    }
+
+    @Test
     void rejectsIdentifiersThatCouldNotBeQuotedSafely() {
         assertThatThrownBy(() -> load(MINIMAL.replace("ducklake-relation: pool_registration",
                 "ducklake-relation: \"pool; drop table x\"")))
