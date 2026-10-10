@@ -100,7 +100,9 @@ usual source setup; enabling the analytics property alone does not populate hist
 Before inspecting or exporting, backfill daily partitions from the beginning of the chain and
 epoch partitions from the first non-Byron epoch, including empty partitions. Snapshot inspection
 derives this epoch boundary from the exported blocks, matching analytics gap detection.
-Byron epochs do not need epoch-export records. The configured PostgreSQL datasource must be the source
+`epoch` and `epoch_param` hold rows for Byron epochs too, so their partitions are required from
+epoch 0; analytics exports them automatically, and other epoch tables need no Byron records.
+The configured PostgreSQL datasource must be the source
 of the analytics export: its `analytics_export_state` journal provides completion evidence.
 Snapshot inspection compares each required partition's recorded row count with the pinned catalog;
 missing, failed, or mismatched partitions block export.
@@ -130,7 +132,8 @@ placeholders with the first chain date and the last fully exportable day:
 curl -X POST 'http://localhost:8080/api/v1/analytics/admin/export/table/stake_address_balance_snapshot/range?startDate=<FIRST_CHAIN_DATE>&endDate=<LAST_COMPLETED_DATE>'
 ```
 
-Other daily tables use the same endpoint with their exporter name. Epoch tables use:
+Other daily tables use the same endpoint with their exporter name. Epoch tables use the following;
+for `epoch` and `epoch_param`, start at epoch 0:
 
 ```bash
 curl -X POST 'http://localhost:8080/api/v1/analytics/admin/export/table/<TABLE>/epoch-range?startEpoch=<FIRST_NON_BYRON_EPOCH>&endEpoch=<LAST_COMPLETED_EPOCH>'
@@ -291,7 +294,10 @@ these fingerprints require the whole schema fingerprint to match; otherwise rege
 snapshot. Custom application tables still need explicit snapshot specifications.
 
 Keep Yaci Store stopped during import. Remove `store.schema-only=true` (or set it to false) before
-starting normal sync after validation. The admin CLI itself does not run migrations.
+starting normal sync after validation. The admin CLI also runs Flyway at startup, against the
+configured schema and with the migrations on its own classpath. On a target initialized as above
+this finds nothing to apply. Do not use it to initialize a target: it does not record the store
+profile, so import refuses that schema.
 
 Do not run `apply-indexes` first. The base tables, primary keys and unique constraints created by
 Flyway are required; the optional read indexes from `index.yml` and `extra-index.yml` are applied
@@ -662,7 +668,10 @@ The `stake_address_balance_snapshot` relation does not need to be rebuilt for th
 <Callout type="warning">
 **Older UTxO, withdrawal and metadata exports must also be refreshed.** The `address_utxo`,
 `withdrawal` and `transaction_metadata` exports now carry `tx_index`, the transaction's position in
-its block, and their snapshot specs (version 2) require it. Refresh those three relations and their
+its block, and their snapshot specs (version 2) require it. `address_utxo` also carries
+`asset_index`, each asset's position in `amounts`, so a restore keeps the original element order.
+Exports made before this change also lack the Byron `epoch` and `epoch_param` partitions; analytics
+backfills those on its own after the upgrade. Refresh those three relations and their
 export state using the widening procedure below. The source database must already hold `tx_index`
 for its history; a schema migrated in place from a release without it has NULLs and must be resynced.
 </Callout>
