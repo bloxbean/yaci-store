@@ -23,7 +23,7 @@ final class UtxoBatchLoader {
 
     static boolean supports(SnapshotTableSpec spec) {
         return spec.id().equals("address-utxo") && spec.importSpec().mode() == ImportMode.SQL
-                && spec.importSpec().transformVersion() == 3
+                && spec.importSpec().transformVersion() == 4
                 && "classpath:/snapshot/sql/address_utxo_v2.sql".equals(spec.importSpec().selectResource());
     }
 

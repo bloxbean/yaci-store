@@ -3,10 +3,10 @@
 -- The analytics view explodes the JSONB `amounts` array into one row per asset, so this transform
 -- regroups by (tx_hash, output_index), rebuilds `amounts`, derives `lovelace_amount`, and recovers
 -- the block number by joining the block export on block_hash. v2 carries tx_index, which every
--- asset row of an output shares.
---
--- The lovelace entry is emitted first and the remaining assets follow in unit order, matching the
--- operational writer, so a re-import produces byte-identical JSON.
+-- asset row of an output shares, and asset_index, each element's 1-based position in the source
+-- amounts array, so amounts is rebuilt in its original order and a re-import produces
+-- byte-identical JSON. The writer keeps the order of the transaction's CBOR, which is not always
+-- canonical, so it cannot be derived from the units alone.
 --
 -- owner_addr_full is not present in this export and is therefore left to its column default. That
 -- limitation is declared in the specification and recorded in the manifest.
@@ -42,23 +42,18 @@ grouped AS (
         -- list(... ORDER BY ...) is a real aggregate, so the element order is deterministic;
         -- json_group_array is a macro and cannot take an ORDER BY.
         --
-        -- Element order reproduces what the operational writer stores: lovelace first, then the
-        -- canonical CBOR ordering of the multiasset map -- by policy id, then by asset name with
-        -- shorter names before longer ones.
-        --
         -- asset_name is restored to the empty string for an asset that has none: the analytics view
-        -- applies NULLIF(asset_name, ''), so a NULL here means the asset had an empty name. policy_id
-        -- is NULL only for lovelace, which the view maps the same way.
+        -- applies NULLIF(asset_name, ''), so a NULL here means the asset had an empty name. The view
+        -- maps policy_id the same way; lovelace has none, which the genesis UTxO writer (slot -1)
+        -- stores as the empty string and the block writer as null.
         CAST(list(struct_pack(unit := asset_unit,
                               quantity := quantity,
-                              policy_id := policy_id,
+                              policy_id := CASE WHEN asset_unit = 'lovelace' AND slot = -1 THEN ''
+                                                ELSE policy_id END,
                               asset_name := CASE WHEN asset_unit = 'lovelace' THEN asset_name
                                                  WHEN asset_name IS NULL THEN ''
                                                  ELSE asset_name END)
-                  ORDER BY CASE WHEN asset_unit = 'lovelace' THEN 0 ELSE 1 END,
-                           substr(asset_unit, 1, 56),
-                           length(asset_unit),
-                           substr(asset_unit, 57))
+                  ORDER BY asset_index)
              AS JSON) AS amounts
     FROM flattened
     GROUP BY tx_hash, output_index

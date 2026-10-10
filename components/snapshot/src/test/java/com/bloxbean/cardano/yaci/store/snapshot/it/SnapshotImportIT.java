@@ -181,10 +181,10 @@ class SnapshotImportIT {
                     + " WHERE slot = 0")).isEqualTo(4);
             assertThat(scalarString(conn, "SELECT amounts->0->>'unit' FROM " + qt("address_utxo")
                     + " WHERE slot = 0")).isEqualTo("lovelace");
-            // Canonical CBOR order after lovelace: same policy, shorter asset name first.
+            // The source element order is kept, even where it is not canonical (longname before tok).
             assertThat(scalarString(conn, "SELECT string_agg(e->>'asset_name', ',' ORDER BY o) FROM "
                     + qt("address_utxo") + " u, jsonb_array_elements(u.amounts) WITH ORDINALITY t(e, o)"
-                    + " WHERE u.slot = 0")).isEqualTo("lovelace,,tok,longname");
+                    + " WHERE u.slot = 0")).isEqualTo("lovelace,,longname,tok");
             // The analytics view maps an empty asset name to NULL; the transform restores the empty
             // string the operational writer stores.
             assertThat(scalarLong(conn, "SELECT count(*) FROM " + qt("address_utxo") + " u,"

@@ -1,5 +1,6 @@
--- Expose address_utxo.tx_index so the analytics export (and snapshot restore) carries it.
--- CREATE OR REPLACE may only append columns, so tx_index goes last.
+-- Expose address_utxo.tx_index and each asset's position in amounts, so the analytics export
+-- carries both and a snapshot restore can rebuild amounts in its original element order.
+-- CREATE OR REPLACE may only append columns, so they go last.
 CREATE OR REPLACE VIEW address_utxo_flattened AS
 SELECT
     au.tx_hash,
@@ -21,6 +22,7 @@ SELECT
     au.slot,
     au.block_hash,
     au.block_time,
-    au.tx_index
+    au.tx_index,
+    a.asset_index
 FROM address_utxo au
-         CROSS JOIN LATERAL jsonb_array_elements(au.amounts) as elem;
+         CROSS JOIN LATERAL jsonb_array_elements(au.amounts) WITH ORDINALITY AS a(elem, asset_index);
