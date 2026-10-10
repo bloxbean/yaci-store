@@ -36,7 +36,7 @@ public class SnapshotSpecLoader {
             Set.of("id", "spec-version", "module", "kind", "restore", "reason",
                     "source", "consistency", "import", "validation", "lossy", "lossy-note");
     private static final Set<String> SOURCE_KEYS = Set.of("exporter-id", "ducklake-relation", "partition");
-    private static final Set<String> PARTITION_KEYS = Set.of("strategy", "column");
+    private static final Set<String> PARTITION_KEYS = Set.of("strategy", "column", "include-byron-epochs");
     private static final Set<String> CONSISTENCY_KEYS = Set.of("completed-epoch", "cutoff", "coverage");
     private static final Set<String> RULE_KEYS = Set.of("type", "column", "offset");
     private static final Set<String> IMPORT_KEYS =
@@ -141,7 +141,12 @@ public class SnapshotSpecLoader {
             }
             Identifiers.requireSqlIdentifier(column, "source.partition.column");
         }
-        return new SnapshotTableSpec.Source(exporterId, relation, new SnapshotTableSpec.Partition(strategy, column));
+        boolean includeByron = p.has("include-byron-epochs") && p.get("include-byron-epochs").asBoolean();
+        if (includeByron && strategy != PartitionStrategy.EPOCH) {
+            throw new SpecException(origin + ": source.partition.include-byron-epochs requires strategy EPOCH");
+        }
+        return new SnapshotTableSpec.Source(exporterId, relation,
+                new SnapshotTableSpec.Partition(strategy, column, includeByron));
     }
 
     private SnapshotTableSpec.Consistency readConsistency(JsonNode n, String origin) {

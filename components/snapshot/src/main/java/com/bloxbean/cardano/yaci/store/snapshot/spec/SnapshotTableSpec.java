@@ -66,7 +66,15 @@ public record SnapshotTableSpec(
             Partition partition
     ) {}
 
-    public record Partition(PartitionStrategy strategy, String column) {}
+    /**
+     * @param includeByronEpochs EPOCH partitions start at epoch 0 instead of the first non-Byron epoch,
+     *                           for tables that hold rows for Byron epochs
+     */
+    public record Partition(PartitionStrategy strategy, String column, boolean includeByronEpochs) {
+        public Partition(PartitionStrategy strategy, String column) {
+            this(strategy, column, false);
+        }
+    }
 
     /**
      * How the table constrains, and is constrained by, the snapshot consistency point.

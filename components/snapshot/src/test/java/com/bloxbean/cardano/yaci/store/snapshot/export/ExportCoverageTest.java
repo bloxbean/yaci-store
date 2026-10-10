@@ -47,7 +47,7 @@ class ExportCoverageTest {
 
     @Test
     void skipsByronButRequiresTheFirstEligibleEpochAndInteriorEmptyPartitions() {
-        var spec = registry.byId("epoch").orElseThrow();
+        var spec = registry.byId("adapot").orElseThrow();
         assertThat(ExportCoverage.check(spec, List.of(),
                 Map.of("epoch=4", 0L, "epoch=5", 0L, "epoch=6", 0L),
                 start, start, 4, 6, 100)).isEmpty();
@@ -56,6 +56,21 @@ class ExportCoverageTest {
                 .anyMatch(p -> p.contains("epoch=4") && p.contains("epoch=5") && !p.contains("epoch=0"));
         assertThat(ExportCoverage.check(spec, List.of(), Map.of(),
                 start, start, -1, 6, 100)).anyMatch(p -> p.contains("cannot determine"));
+    }
+
+    @Test
+    void tablesWithByronRowsRequireEpochPartitionsFromGenesis() {
+        for (String id : List.of("epoch", "epoch-param")) {
+            var spec = registry.byId(id).orElseThrow();
+            assertThat(ExportCoverage.check(spec, List.of(),
+                    Map.of("epoch=4", 0L, "epoch=5", 0L, "epoch=6", 0L),
+                    start, start, 4, 6, 100))
+                    .anyMatch(p -> p.contains("epoch=0") && p.contains("epoch=3"));
+            assertThat(ExportCoverage.check(spec, List.of(),
+                    Map.of("epoch=0", 0L, "epoch=1", 0L, "epoch=2", 0L, "epoch=3", 0L,
+                            "epoch=4", 0L, "epoch=5", 0L, "epoch=6", 0L),
+                    start, start, 4, 6, 100)).isEmpty();
+        }
     }
 
     @Test

@@ -39,7 +39,8 @@ public final class ExportCoverage {
                     || lastEpoch == Long.MAX_VALUE) {
                 lastEpoch = completedEpoch;
             }
-            for (int epoch = firstNonByronEpoch; epoch <= lastEpoch; epoch++) {
+            int firstEpoch = spec.source().partition().includeByronEpochs() ? 0 : firstNonByronEpoch;
+            for (int epoch = firstEpoch; epoch <= lastEpoch; epoch++) {
                 required.add("epoch=" + epoch);
             }
         } else {

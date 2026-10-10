@@ -1,6 +1,6 @@
 snapshot-table:
   id: epoch
-  spec-version: 1
+  spec-version: 2
   module: epoch-aggr
   kind: DERIVED_DATA
   restore: IMPORT
@@ -10,6 +10,8 @@ snapshot-table:
     ducklake-relation: epoch
     partition:
       strategy: EPOCH
+      # Rows exist for Byron epochs too; require their partitions from epoch 0.
+      include-byron-epochs: true
       column: epoch
 
   consistency:

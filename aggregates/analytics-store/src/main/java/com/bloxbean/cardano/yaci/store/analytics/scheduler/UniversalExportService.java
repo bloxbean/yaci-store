@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.analytics.scheduler;
 
+import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.analytics.exporter.PartitionStrategy;
 import com.bloxbean.cardano.yaci.store.analytics.exporter.PartitionValue;
 import com.bloxbean.cardano.yaci.store.analytics.exporter.TableExporter;
@@ -40,6 +41,7 @@ import java.util.List;
 public class UniversalExportService {
 
     private final TableExporterRegistry registry;
+    private final EraService eraService;
 
     /**
      * Manual export for specific table and partition.
@@ -169,9 +171,13 @@ public class UniversalExportService {
         List<String> enabledEpochTables = registry.getEnabledTablesByStrategy(PartitionStrategy.EPOCH);
         int successCount = 0;
 
+        boolean byronEpoch = eraService.getFirstNonByronEpoch().map(first -> epoch < first).orElse(true);
         for (String tableName : enabledEpochTables) {
             try {
                 TableExporter exporter = registry.getExporter(tableName);
+                if (byronEpoch && !exporter.includesByronEpochs()) {
+                    continue;
+                }
                 boolean success = exporter.exportForPartition(PartitionValue.ofEpoch(epoch));
                 if (success) {
                     successCount++;

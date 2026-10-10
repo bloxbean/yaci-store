@@ -212,19 +212,27 @@ public class GapDetectionService {
      *
      * Checks from the first non-Byron epoch (Shelley start) to the current epoch (inclusive).
      * Each exporter's preExportValidation() decides whether the epoch is ready for export.
-     * Byron epochs are skipped.
+     * Byron epochs are skipped unless the table includes them.
      *
      * @param tableName The table to check for missing epoch exports
      * @return List of epoch numbers that are missing exports, sorted oldest to newest
      */
     public List<Integer> findMissingEpochExports(String tableName) {
+        return findMissingEpochExports(tableName, false);
+    }
+
+    /**
+     * @param includeByronEpochs start at epoch 0 for tables that hold rows for Byron epochs
+     * @see com.bloxbean.cardano.yaci.store.analytics.exporter.TableExporter#includesByronEpochs()
+     */
+    public List<Integer> findMissingEpochExports(String tableName, boolean includeByronEpochs) {
         Optional<Integer> startEpochOpt = eraService.getFirstNonByronEpoch();
         if (startEpochOpt.isEmpty()) {
             log.debug("No non-Byron era found yet, skipping epoch gap detection for {}", tableName);
             return List.of();
         }
 
-        int startEpoch = startEpochOpt.get();
+        int startEpoch = includeByronEpochs ? 0 : startEpochOpt.get();
         Optional<Integer> endEpochOpt = getCurrentEpoch();
         if (endEpochOpt.isEmpty()) {
             log.debug("No epoch available yet, skipping epoch gap detection for {}", tableName);
