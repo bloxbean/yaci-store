@@ -168,4 +168,18 @@ class SnapshotSpecRegistryTest {
                 """.formatted(id, targetTable, targetTable, targetTable));
         return file;
     }
+
+    @Test
+    void exportLeavesOutOnlyTheImportedTablesOfDisabledModules() {
+        SnapshotSpecRegistry all = SnapshotSpecRegistry.builtIn();
+        SnapshotSpecRegistry export = all.withoutImportedTablesOf(java.util.Set.of("assets-ext"));
+
+        assertThat(export.isSelected("cip68-metadata")).isFalse();
+        assertThat(export.importedTables()).noneMatch(s -> s.module().equals("assets-ext"));
+        // registry-sourced extension tables stay classified, so the manifest still lists them
+        assertThat(export.isSelected("cip26-metadata")).isTrue();
+        assertThat(export.isSelected("block")).isTrue();
+
+        assertThat(all.withoutImportedTablesOf(java.util.Set.of("no-such-module"))).isSameAs(all);
+    }
 }

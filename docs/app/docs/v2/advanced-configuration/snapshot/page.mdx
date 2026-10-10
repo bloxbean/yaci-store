@@ -97,6 +97,15 @@ Configure the source for [DuckLake analytics export](/docs/v2/analytics/overview
 ledger-state data required by the snapshot specs. The `ledger-state,analytics` profiles are the
 usual source setup; enabling the analytics property alone does not populate historical data.
 
+Run `snapshot inspect` and `snapshot export` with the source application's own configuration and
+profiles. A snapshot carries the tables of the store modules the source has enabled; the imported
+tables of a disabled module are left out of the manifest, and a target that enables that module is
+refused at import. For example, CIP-68 metadata (`cip68_metadata`) is exported and restored only
+when the source runs the assets extension (`store.assets.ext.enabled=true`, with CIP-68 left on),
+and that extension must be enabled from the start of sync so its history is complete. CIP-26
+registry data is not part of a snapshot; when CIP-26 sync is on, the restored instance runs a full
+registry sync on start-up.
+
 Before inspecting or exporting, backfill daily partitions from the beginning of the chain and
 epoch partitions from the first non-Byron epoch, including empty partitions. Snapshot inspection
 derives this epoch boundary from the exported blocks, matching analytics gap detection.

@@ -193,20 +193,43 @@ public class SnapshotSpecRegistry {
         byId.values().forEach(s -> selected.register(s, isBuiltIn(s)));
         selected.selectedIds = byId.values().stream().filter(s -> modules.contains(s.module()))
                 .map(SnapshotTableSpec::id).collect(java.util.stream.Collectors.toSet());
-        for (SnapshotTableSpec spec : selected.all()) {
+        selected.checkSelection();
+        return selected;
+    }
+
+    /**
+     * For export: leave out the imported tables of modules the source does not run. Their relations
+     * are never written, and the manifest omits them, so a target that enables such a module is
+     * refused at import instead of being given empty history. Other classifications stay selected.
+     */
+    public SnapshotSpecRegistry withoutImportedTablesOf(Set<String> disabledModules) {
+        if (byId.values().stream().noneMatch(s -> s.restore() == RestoreMode.IMPORT
+                && disabledModules.contains(s.module()))) {
+            return this;
+        }
+        SnapshotSpecRegistry selected = new SnapshotSpecRegistry();
+        byId.values().forEach(s -> selected.register(s, isBuiltIn(s)));
+        selected.selectedIds = byId.values().stream()
+                .filter(s -> s.restore() != RestoreMode.IMPORT || !disabledModules.contains(s.module()))
+                .map(SnapshotTableSpec::id).collect(java.util.stream.Collectors.toSet());
+        selected.checkSelection();
+        return selected;
+    }
+
+    private void checkSelection() {
+        for (SnapshotTableSpec spec : all()) {
             for (String dependency : spec.importSpec().dependencies()) {
-                if (!selected.isSelected(dependency)) {
+                if (!isSelected(dependency)) {
                     throw new SpecException("Enabled specification '" + spec.id()
                             + "' requires disabled specification '" + dependency + "'");
                 }
             }
         }
         for (String required : List.of("block", "cursor", "era")) {
-            if (byId.containsKey(required) && !selected.isSelected(required)) {
+            if (byId.containsKey(required) && !isSelected(required)) {
                 throw new SpecException("Snapshot resume requires specification '" + required + "'");
             }
         }
-        return selected;
     }
 
     public List<String> selectedLimitations(List<String> limitations) {

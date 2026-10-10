@@ -67,7 +67,7 @@ public class SnapshotCommands {
             boolean verbose) {
         try {
             SnapshotCliSupport.ensureDirectory(Path.of(workDir));
-            SnapshotSpecRegistry registry = support.registry(specFile, allowCustomSpecs);
+            SnapshotSpecRegistry registry = support.exportRegistry(specFile, allowCustomSpecs);
             ExportOptions options = support.exportOptions(dataDir, workDir, workDir, "8GiB",
                     targetEpoch, minConfirmations, true, true);
             InspectionReport report = new SnapshotExporter(registry).inspect(options);
@@ -107,7 +107,7 @@ public class SnapshotCommands {
         try {
             SnapshotCliSupport.ensureDirectory(Path.of(workDir));
             SnapshotCliSupport.ensureDirectory(Path.of(output));
-            SnapshotSpecRegistry registry = support.registry(specFile, allowCustomSpecs);
+            SnapshotSpecRegistry registry = support.exportRegistry(specFile, allowCustomSpecs);
             ExportOptions options = support.exportOptions(dataDir, output, workDir, partSize,
                     targetEpoch, minConfirmations, allowIncomplete, unsigned);
 

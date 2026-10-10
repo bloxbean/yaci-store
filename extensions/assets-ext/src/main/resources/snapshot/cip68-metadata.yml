@@ -1,12 +1,34 @@
 snapshot-table:
   id: cip68-metadata
-  spec-version: 1
+  spec-version: 2
   module: assets-ext
   kind: EXTENSION_DATA
-  restore: EMPTY_EXPECTED
-  reason: >-
-    assets extension data is fetched from its own registry sources after start-up and is not
-    part of the analytics export
+  restore: IMPORT
+
+  source:
+    exporter-id: cip68_metadata
+    ducklake-relation: cip68_metadata
+    partition:
+      strategy: DAILY
+      column: block_date
+
+  consistency:
+    cutoff:
+      type: SLOT_LTE
+      column: slot
 
   import:
     target-table: cip68_metadata
+    mode: MAPPED
+    columns:
+      properties:
+        source: properties
+        converter: "varchar-to-jsonb"
+    ignore-source-columns: [block_date, date]
+    batch-boundary: FILE_SET
+    batch-size: 64
+
+  validation:
+    key: [policy_id, asset_name, slot, tx_hash]
+    bounds: [slot]
+    required-columns: [policy_id, asset_name, slot, tx_hash, tx_index, label, version, datum]

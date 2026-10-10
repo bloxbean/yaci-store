@@ -130,6 +130,17 @@ public class SnapshotCliSupport {
         }
     }
 
+    /**
+     * Specs for producing a snapshot from this source: the imported tables of store modules the
+     * source has disabled are left out, since it never writes their history.
+     */
+    public SnapshotSpecRegistry exportRegistry(String specFile, boolean allowCustomSpecs) {
+        java.util.Set<String> disabled = StoreModuleConfig.configured(environment).entrySet().stream()
+                .filter(e -> !e.getValue()).map(Map.Entry::getKey)
+                .collect(java.util.stream.Collectors.toSet());
+        return registry(specFile, allowCustomSpecs).withoutImportedTablesOf(disabled);
+    }
+
     public Map<String, String> pruningSettings() {
         Map<String, String> out = new LinkedHashMap<>();
         out.put("store.utxo.pruning-enabled", environment.getProperty("store.utxo.pruning-enabled", "false"));

@@ -214,4 +214,33 @@ class ColumnPlannerTest {
         int i = plan.targetColumns().indexOf("id");
         assertThat(plan.expressions().get(i)).contains("sha1(").contains("'5'");
     }
+
+    @Test
+    void cip68MetadataExportCoversItsTargetTable() {
+        SnapshotTableSpec cip68 = com.bloxbean.cardano.yaci.store.snapshot.spec.SnapshotSpecRegistry.builtIn()
+                .byId("cip68-metadata").orElseThrow();
+        // Column types as DuckLake records them for Cip68MetadataExporter's query
+        Map<String, String> exported = source("policy_id", "varchar", "asset_name", "varchar",
+                "slot", "int64", "tx_hash", "varchar", "tx_index", "int32", "label", "int32",
+                "name", "varchar", "description", "varchar", "ticker", "varchar", "url", "varchar",
+                "decimals", "int64", "logo", "varchar", "image", "varchar", "media_type", "varchar",
+                "version", "int64", "datum", "varchar", "properties", "varchar",
+                "last_synced_at", "timestamp", "block_date", "date", "date", "date");
+        // V0_1700_1__init.sql
+        Map<String, String> columns = source("policy_id", "character varying(56)",
+                "asset_name", "character varying(64)", "slot", "bigint", "tx_hash", "character varying(64)",
+                "tx_index", "integer", "label", "integer", "name", "character varying(255)",
+                "description", "text", "ticker", "character varying(32)", "url", "character varying(250)",
+                "decimals", "bigint", "logo", "text", "image", "text", "media_type", "character varying(255)",
+                "version", "bigint", "datum", "text", "properties", "jsonb",
+                "last_synced_at", "timestamp without time zone");
+        Map<String, Boolean> nullable = new LinkedHashMap<>();
+        columns.keySet().forEach(c -> nullable.put(c, true));
+        TargetTable target = new TargetTable("s", "cip68_metadata", columns, nullable, Map.of(),
+                List.of("policy_id", "asset_name", "slot", "tx_hash"), false);
+
+        ColumnPlan plan = planner.plan(cip68, exported, target);
+
+        assertThat(plan.targetColumns()).containsExactlyInAnyOrderElementsOf(columns.keySet());
+    }
 }
