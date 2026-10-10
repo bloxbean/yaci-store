@@ -232,6 +232,10 @@ public class AdaPotMetricService {
 
                     // Add new gauges and record totalTime into summary
                     newLast20Jobs.forEach(adaPotJob -> {
+                        // Jobs seeded by a snapshot import are COMPLETED but carry no timings.
+                        if (adaPotJob.getTotalTime() == null) {
+                            return;
+                        }
                         int epoch = adaPotJob.getEpoch();
 
                         // Register Gauge if not already present
