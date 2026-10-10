@@ -1,6 +1,6 @@
 snapshot-table:
   id: reward-rest
-  spec-version: 1
+  spec-version: 2
   module: adapot
   kind: DERIVED_DATA
   restore: IMPORT
@@ -13,10 +13,12 @@ snapshot-table:
       column: epoch
 
   consistency:
+    # Rows are written by the AdaPot job of the epoch after earned_epoch (one epoch earlier than
+    # regular rewards), so an earned-epoch offset drops rows the seeded jobs will not recreate.
+    # The slot of the boundary block that wrote them separates imported from replayed rows exactly.
     cutoff:
-      type: EPOCH_LTE_OFFSET
-      column: epoch
-      offset: 2
+      type: SLOT_LTE
+      column: slot
 
   import:
     target-table: reward_rest
