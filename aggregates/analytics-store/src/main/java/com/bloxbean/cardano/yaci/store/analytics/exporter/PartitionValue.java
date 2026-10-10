@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.analytics.exporter;
 
+import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 
 import java.time.LocalDate;
@@ -92,6 +93,15 @@ public sealed interface PartitionValue permits
 
         @Override
         public SlotRange toSlotRange(EraService eraService) {
+            // Byron epochs count Byron slots from 0, and the last one ends where the first
+            // non-Byron era starts; Shelley slot arithmetic would go negative for them.
+            var firstNonByronEpoch = eraService.getFirstNonByronEpoch();
+            if (firstNonByronEpoch.isPresent() && epoch < firstNonByronEpoch.get()) {
+                long byronSlots = eraService.slotsPerEpoch(Era.Byron);
+                return new SlotRange(epoch * byronSlots,
+                        Math.min((epoch + 1) * byronSlots, eraService.getFirstNonByronSlot()));
+            }
+
             // Get the absolute slots for this epoch
             // Note: Cardano epochs are 432,000 slots (5 days)
             long startSlot = eraService.getShelleyAbsoluteSlot(epoch, 0);

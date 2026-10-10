@@ -13,7 +13,7 @@ public class AccountStoreAutoConfigProperties {
     @Getter
     @Setter
     public static final class Account {
-        private boolean enabled = false;
+        private boolean enabled = com.bloxbean.cardano.yaci.store.common.config.StoreModuleConfig.defaultEnabled("account");
         private boolean apiEnabled = false;
 
         private boolean balanceAggregationEnabled = false;

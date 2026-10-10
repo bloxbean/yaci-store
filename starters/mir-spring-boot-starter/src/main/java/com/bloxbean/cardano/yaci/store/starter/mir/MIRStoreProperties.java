@@ -13,7 +13,7 @@ public class MIRStoreProperties {
     @Getter
     @Setter
     public static final class MIR  {
-       private boolean enabled = true;
+       private boolean enabled = com.bloxbean.cardano.yaci.store.common.config.StoreModuleConfig.defaultEnabled("mir");
        private boolean apiEnabled = true;
        private Endpoints endpoints = new Endpoints();
     }

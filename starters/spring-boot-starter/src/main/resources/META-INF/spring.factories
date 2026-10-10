@@ -1,0 +1,2 @@
+org.springframework.boot.env.EnvironmentPostProcessor=\
+com.bloxbean.cardano.yaci.store.starter.core.schema.SchemaOnlyEnvironmentPostProcessor

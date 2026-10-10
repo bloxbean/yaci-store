@@ -1,0 +1,436 @@
+package com.bloxbean.cardano.yaci.store.snapshot.ducklake;
+
+import com.bloxbean.cardano.yaci.store.snapshot.util.Identifiers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.TreeMap;
+
+/**
+ * Read-only view over a DuckLake catalog.
+ *
+ * <p>The catalog is a plain DuckDB database whose {@code ducklake_*} tables are queried directly.
+ * That avoids depending on the {@code ducklake} extension for packaging, keeps the export path
+ * offline, and lets a snapshot pin one catalog version explicitly: every lookup here is evaluated
+ * at a single {@code snapshotId}.
+ *
+ * <p>The catalog file itself is never written to. It is attached {@code READ_ONLY} and, because a
+ * live analytics writer may hold the file lock, callers normally point this at a copy.
+ */
+public class DuckLakeCatalog implements AutoCloseable {
+
+    private static final Logger log = LoggerFactory.getLogger(DuckLakeCatalog.class);
+    private static final String CAT = "snapcat";
+
+    private final Connection conn;
+    private final Path dataDir;
+    private final Map<String, String> relationPrefixes = new java.util.HashMap<>();
+
+    private DuckLakeCatalog(Connection conn, Path dataDir) {
+        this.conn = conn;
+        this.dataDir = dataDir;
+    }
+
+    /**
+     * Attach the original catalog read-only and hold its database lock until packaging finishes.
+     * The analytics writer must be stopped and its connections closed first. Copying only a live
+     * database file loses committed WAL entries and can race with checkpoints.
+     */
+    public static DuckLakeCatalog open(Path dataDir, Path workDir) throws SQLException, IOException {
+        Path catalog = dataDir.resolve("ducklake.catalog.db");
+        if (!Files.isRegularFile(catalog)) {
+            throw new IllegalArgumentException("DuckLake catalog not found: " + catalog);
+        }
+        Files.createDirectories(workDir);
+        Connection conn = DuckDb.open("2GB", workDir, 0);
+        try {
+            DuckDb.exec(conn, "ATTACH '" + catalog.toAbsolutePath().toString().replace("'", "''")
+                    + "' AS " + CAT + " (READ_ONLY)");
+            return new DuckLakeCatalog(conn, dataDir);
+        } catch (SQLException e) {
+            conn.close();
+            throw new SQLException("Cannot open the snapshot catalog read-only. Stop analytics exports "
+                    + "and close the writer before inspecting or exporting a snapshot. " + e.getMessage(), e);
+        }
+    }
+
+    public Path dataDir() {
+        return dataDir;
+    }
+
+    public Connection connection() {
+        return conn;
+    }
+
+    public String duckdbVersion() throws SQLException {
+        return DuckDb.version(conn);
+    }
+
+    public Map<String, String> metadata() throws SQLException {
+        Map<String, String> out = new TreeMap<>();
+        try (Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery("SELECT key, value FROM " + CAT + ".ducklake_metadata WHERE scope IS NULL")) {
+            while (rs.next()) {
+                out.put(rs.getString(1), rs.getString(2));
+            }
+        }
+        return out;
+    }
+
+    /** Newest catalog snapshot id; this is what an export pins. */
+    public long latestSnapshotId() throws SQLException {
+        return DuckDb.queryLong(conn, "SELECT max(snapshot_id) FROM " + CAT + ".ducklake_snapshot", -1);
+    }
+
+    /**
+     * Deletion files break the append-only assumption of the initial snapshot format: a packaged
+     * Parquet file would contain rows the catalog considers deleted. Export must refuse.
+     */
+    public long deleteFileCount(long snapshotId) throws SQLException {
+        return DuckDb.queryLong(conn,
+                "SELECT count(*) FROM " + CAT + ".ducklake_delete_file"
+                        + " WHERE begin_snapshot <= " + snapshotId
+                        + " AND (end_snapshot IS NULL OR end_snapshot > " + snapshotId + ")", 0);
+    }
+
+
+    /**
+     * DuckLake composes a file's location from three relative segments: the data path, the schema's
+     * path and the table's path. Resolving them here keeps every path in this class relative to the
+     * analytics data directory, which is exactly what the archive stores.
+     */
+    String relationPrefix(String relation, long snapshotId) throws SQLException {
+        String cached = relationPrefixes.get(relation);
+        if (cached != null) {
+            return cached;
+        }
+        String sql = "SELECT s.path, s.path_is_relative, t.path, t.path_is_relative"
+                + " FROM " + CAT + ".ducklake_table t"
+                + " JOIN " + CAT + ".ducklake_schema s ON s.schema_id = t.schema_id"
+                + " WHERE t.table_name = " + Identifiers.literal(relation)
+                + "   AND t.begin_snapshot <= " + snapshotId
+                + "   AND (t.end_snapshot IS NULL OR t.end_snapshot > " + snapshotId + ")"
+                + "   AND s.begin_snapshot <= " + snapshotId
+                + "   AND (s.end_snapshot IS NULL OR s.end_snapshot > " + snapshotId + ")"
+                + " LIMIT 1";
+        String prefix = "";
+        try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery(sql)) {
+            if (rs.next()) {
+                String schemaPath = rs.getString(1);
+                boolean schemaRelative = rs.getBoolean(2);
+                String tablePath = rs.getString(3);
+                boolean tableRelative = rs.getBoolean(4);
+                StringBuilder sb = new StringBuilder();
+                if (schemaRelative && schemaPath != null) {
+                    sb.append(schemaPath);
+                }
+                if (tablePath != null) {
+                    if (tableRelative) {
+                        sb.append(tablePath);
+                    } else {
+                        sb.setLength(0);
+                        sb.append(relativize(tablePath));
+                        if (sb.length() > 0 && sb.charAt(sb.length() - 1) != '/') {
+                            sb.append('/');
+                        }
+                    }
+                }
+                prefix = sb.toString();
+            }
+        }
+        relationPrefixes.put(relation, prefix);
+        return prefix;
+    }
+
+    /** Compose one file's path, relative to the analytics data directory. */
+    private String filePath(String prefix, String path, boolean relative) {
+        return relative ? prefix + path : relativize(path);
+    }
+
+    private String relativize(String absolute) {
+        Path p = Path.of(absolute);
+        Path base = dataDir.toAbsolutePath();
+        return p.startsWith(base) ? base.relativize(p).toString() : absolute;
+    }
+
+    public List<String> relations(long snapshotId) throws SQLException {
+        List<String> out = new ArrayList<>();
+        try (Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery("SELECT table_name FROM " + CAT + ".ducklake_table"
+                     + " WHERE begin_snapshot <= " + snapshotId
+                     + " AND (end_snapshot IS NULL OR end_snapshot > " + snapshotId + ")"
+                     + " ORDER BY table_name")) {
+            while (rs.next()) {
+                out.add(rs.getString(1));
+            }
+        }
+        return out;
+    }
+
+    /** Column name to DuckLake type, in declared order. */
+    public Map<String, String> columns(String relation, long snapshotId) throws SQLException {
+        Identifiers.requireSqlIdentifier(relation, "ducklake relation");
+        Map<String, String> out = new LinkedHashMap<>();
+        String sql = "SELECT c.column_name, c.column_type FROM " + CAT + ".ducklake_column c"
+                + " JOIN " + CAT + ".ducklake_table t ON t.table_id = c.table_id"
+                + " WHERE t.table_name = " + Identifiers.literal(relation)
+                + "   AND t.begin_snapshot <= " + snapshotId
+                + "   AND (t.end_snapshot IS NULL OR t.end_snapshot > " + snapshotId + ")"
+                + "   AND c.begin_snapshot <= " + snapshotId
+                + "   AND (c.end_snapshot IS NULL OR c.end_snapshot > " + snapshotId + ")"
+                + " ORDER BY c.column_order";
+        try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery(sql)) {
+            while (rs.next()) {
+                out.put(rs.getString(1), rs.getString(2));
+            }
+        }
+        return out;
+    }
+
+    /** Immutable file set of a relation at the pinned snapshot, ordered for deterministic batching. */
+    public List<DuckLakeFile> files(String relation, long snapshotId) throws SQLException {
+        Identifiers.requireSqlIdentifier(relation, "ducklake relation");
+        List<DuckLakeFile> out = new ArrayList<>();
+        String sql = "SELECT f.path, f.path_is_relative, f.record_count, f.file_size_bytes"
+                + " FROM " + CAT + ".ducklake_data_file f"
+                + " JOIN " + CAT + ".ducklake_table t ON t.table_id = f.table_id"
+                + " WHERE t.table_name = " + Identifiers.literal(relation)
+                + "   AND t.begin_snapshot <= " + snapshotId
+                + "   AND (t.end_snapshot IS NULL OR t.end_snapshot > " + snapshotId + ")"
+                + "   AND f.begin_snapshot <= " + snapshotId
+                + "   AND (f.end_snapshot IS NULL OR f.end_snapshot > " + snapshotId + ")"
+                + " ORDER BY f.path";
+        String prefix = relationPrefix(relation, snapshotId);
+        try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery(sql)) {
+            while (rs.next()) {
+                out.add(new DuckLakeFile(filePath(prefix, rs.getString(1), rs.getBoolean(2)),
+                        rs.getLong(3), rs.getLong(4)));
+            }
+        }
+        return out;
+    }
+
+    /** Epoch exporters start at the first non-Byron epoch, including networks starting after Shelley. */
+    public java.util.OptionalInt firstNonByronEpoch(long snapshotId) throws SQLException {
+        var blocks = files("block", snapshotId);
+        if (blocks.isEmpty()) {
+            return java.util.OptionalInt.empty();
+        }
+        // Read the pinned blocks, not the export journal: its earliest entry may itself be missing.
+        // Byron is era 1. Include epoch zero on networks that start in a later era.
+        String sql = "SELECT min(epoch) FROM read_parquet(" + parquetList(blocks)
+                + ") WHERE era > 1 AND number >= 0";
+        try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery(sql)) {
+            if (rs.next()) {
+                int epoch = rs.getInt(1);
+                if (!rs.wasNull()) {
+                    return java.util.OptionalInt.of(epoch);
+                }
+            }
+        }
+        return java.util.OptionalInt.empty();
+    }
+
+    /** Aggregated min/max of one column across the pinned file set, read from catalog statistics. */
+    public Optional<Bounds> bounds(String relation, String column, long snapshotId) throws SQLException {
+        Identifiers.requireSqlIdentifier(relation, "ducklake relation");
+        Identifiers.requireSqlIdentifier(column, "ducklake column");
+        String sql = "SELECT min(s.min_value), max(s.max_value) FROM " + CAT + ".ducklake_file_column_stats s"
+                + " JOIN " + CAT + ".ducklake_table t ON t.table_id = s.table_id"
+                + " JOIN " + CAT + ".ducklake_column c ON c.table_id = s.table_id AND c.column_id = s.column_id"
+                + " JOIN " + CAT + ".ducklake_data_file f ON f.data_file_id = s.data_file_id"
+                + " WHERE t.table_name = " + Identifiers.literal(relation)
+                + "   AND c.column_name = " + Identifiers.literal(column)
+                + "   AND t.begin_snapshot <= " + snapshotId
+                + "   AND (t.end_snapshot IS NULL OR t.end_snapshot > " + snapshotId + ")"
+                + "   AND c.begin_snapshot <= " + snapshotId
+                + "   AND (c.end_snapshot IS NULL OR c.end_snapshot > " + snapshotId + ")"
+                + "   AND f.begin_snapshot <= " + snapshotId
+                + "   AND (f.end_snapshot IS NULL OR f.end_snapshot > " + snapshotId + ")";
+        try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery(sql)) {
+            if (rs.next()) {
+                String min = rs.getString(1);
+                String max = rs.getString(2);
+                if (min == null && max == null) {
+                    return Optional.empty();
+                }
+                return Optional.of(new Bounds(min, max));
+            }
+        }
+        return Optional.empty();
+    }
+
+    /** Numeric bounds, computed with a numeric cast so string ordering cannot mislead. */
+    public Optional<long[]> numericBounds(String relation, String column, long snapshotId) throws SQLException {
+        Identifiers.requireSqlIdentifier(relation, "ducklake relation");
+        Identifiers.requireSqlIdentifier(column, "ducklake column");
+        String sql = "SELECT min(TRY_CAST(s.min_value AS HUGEINT)), max(TRY_CAST(s.max_value AS HUGEINT))"
+                + " FROM " + CAT + ".ducklake_file_column_stats s"
+                + " JOIN " + CAT + ".ducklake_table t ON t.table_id = s.table_id"
+                + " JOIN " + CAT + ".ducklake_column c ON c.table_id = s.table_id AND c.column_id = s.column_id"
+                + " JOIN " + CAT + ".ducklake_data_file f ON f.data_file_id = s.data_file_id"
+                + " WHERE t.table_name = " + Identifiers.literal(relation)
+                + "   AND c.column_name = " + Identifiers.literal(column)
+                + "   AND t.begin_snapshot <= " + snapshotId
+                + "   AND (t.end_snapshot IS NULL OR t.end_snapshot > " + snapshotId + ")"
+                + "   AND c.begin_snapshot <= " + snapshotId
+                + "   AND (c.end_snapshot IS NULL OR c.end_snapshot > " + snapshotId + ")"
+                + "   AND f.begin_snapshot <= " + snapshotId
+                + "   AND (f.end_snapshot IS NULL OR f.end_snapshot > " + snapshotId + ")";
+        try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery(sql)) {
+            if (rs.next()) {
+                long min = rs.getLong(1);
+                boolean minNull = rs.wasNull();
+                long max = rs.getLong(2);
+                boolean maxNull = rs.wasNull();
+                if (minNull || maxNull) {
+                    return Optional.empty();
+                }
+                return Optional.of(new long[]{min, max});
+            }
+        }
+        return Optional.empty();
+    }
+
+
+    /**
+     * Files whose statistics say {@code column} may contain a value inside {@code [min,max]}.
+     *
+     * <p>Used to avoid scanning the whole relation when only one epoch is of interest: the catalog
+     * already stores per-file min/max, so the point selection reads a handful of Parquet files
+     * rather than every file of the table.
+     */
+    public List<DuckLakeFile> filesOverlapping(String relation, String column, long min, long max, long snapshotId)
+            throws SQLException {
+        Identifiers.requireSqlIdentifier(relation, "ducklake relation");
+        Identifiers.requireSqlIdentifier(column, "ducklake column");
+        List<DuckLakeFile> out = new ArrayList<>();
+        String sql = "SELECT f.path, f.path_is_relative, f.record_count, f.file_size_bytes"
+                + " FROM " + CAT + ".ducklake_data_file f"
+                + " JOIN " + CAT + ".ducklake_table t ON t.table_id = f.table_id"
+                + " JOIN " + CAT + ".ducklake_file_column_stats s ON s.data_file_id = f.data_file_id"
+                + " JOIN " + CAT + ".ducklake_column c ON c.table_id = f.table_id AND c.column_id = s.column_id"
+                + " WHERE t.table_name = " + Identifiers.literal(relation)
+                + "   AND c.column_name = " + Identifiers.literal(column)
+                + "   AND t.begin_snapshot <= " + snapshotId
+                + "   AND (t.end_snapshot IS NULL OR t.end_snapshot > " + snapshotId + ")"
+                + "   AND c.begin_snapshot <= " + snapshotId
+                + "   AND (c.end_snapshot IS NULL OR c.end_snapshot > " + snapshotId + ")"
+                + "   AND f.begin_snapshot <= " + snapshotId
+                + "   AND (f.end_snapshot IS NULL OR f.end_snapshot > " + snapshotId + ")"
+                + "   AND TRY_CAST(s.min_value AS HUGEINT) <= " + max
+                + "   AND TRY_CAST(s.max_value AS HUGEINT) >= " + min
+                + " ORDER BY f.path";
+        String prefix = relationPrefix(relation, snapshotId);
+        try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery(sql)) {
+            while (rs.next()) {
+                out.add(new DuckLakeFile(filePath(prefix, rs.getString(1), rs.getBoolean(2)),
+                        rs.getLong(3), rs.getLong(4)));
+            }
+        }
+        return out;
+    }
+
+    /** Absolute paths for {@code read_parquet}, as a SQL list literal. */
+    public String parquetList(List<DuckLakeFile> files) {
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < files.size(); i++) {
+            if (i > 0) {
+                sb.append(", ");
+            }
+            sb.append(Identifiers.literal(dataDir.resolve(files.get(i).relativePath()).toAbsolutePath().toString()));
+        }
+        return sb.append(']').toString();
+    }
+
+
+    /**
+     * Paths of files whose statistics prove every row is beyond {@code cut} on {@code column}.
+     *
+     * <p>Callers subtract this from the full file set rather than selecting overlapping files
+     * directly, so a file that happens to have no statistics is kept instead of silently dropped.
+     */
+    public java.util.Set<String> filePathsEntirelyAbove(String relation, String column, long cut, long snapshotId)
+            throws SQLException {
+        Identifiers.requireSqlIdentifier(relation, "ducklake relation");
+        Identifiers.requireSqlIdentifier(column, "ducklake column");
+        java.util.Set<String> out = new java.util.HashSet<>();
+        String sql = "SELECT f.path, f.path_is_relative"
+                + " FROM " + CAT + ".ducklake_data_file f"
+                + " JOIN " + CAT + ".ducklake_table t ON t.table_id = f.table_id"
+                + " JOIN " + CAT + ".ducklake_file_column_stats s ON s.data_file_id = f.data_file_id"
+                + " JOIN " + CAT + ".ducklake_column c ON c.table_id = f.table_id AND c.column_id = s.column_id"
+                + " WHERE t.table_name = " + Identifiers.literal(relation)
+                + "   AND c.column_name = " + Identifiers.literal(column)
+                + "   AND t.begin_snapshot <= " + snapshotId
+                + "   AND (t.end_snapshot IS NULL OR t.end_snapshot > " + snapshotId + ")"
+                + "   AND c.begin_snapshot <= " + snapshotId
+                + "   AND (c.end_snapshot IS NULL OR c.end_snapshot > " + snapshotId + ")"
+                + "   AND f.begin_snapshot <= " + snapshotId
+                + "   AND (f.end_snapshot IS NULL OR f.end_snapshot > " + snapshotId + ")"
+                + "   AND TRY_CAST(s.min_value AS HUGEINT) > " + cut;
+        String prefix = relationPrefix(relation, snapshotId);
+        try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery(sql)) {
+            while (rs.next()) {
+                out.add(filePath(prefix, rs.getString(1), rs.getBoolean(2)));
+            }
+        }
+        return out;
+    }
+
+    /**
+     * Paths of files whose statistics prove every row is at or below {@code cut}: their whole
+     * {@code record_count} can be trusted without reading the file.
+     */
+    public Map<String, Long> fileRowCountsEntirelyBelow(String relation, String column, long cut, long snapshotId)
+            throws SQLException {
+        Identifiers.requireSqlIdentifier(relation, "ducklake relation");
+        Identifiers.requireSqlIdentifier(column, "ducklake column");
+        Map<String, Long> out = new java.util.HashMap<>();
+        String sql = "SELECT f.path, f.path_is_relative, f.record_count"
+                + " FROM " + CAT + ".ducklake_data_file f"
+                + " JOIN " + CAT + ".ducklake_table t ON t.table_id = f.table_id"
+                + " JOIN " + CAT + ".ducklake_file_column_stats s ON s.data_file_id = f.data_file_id"
+                + " JOIN " + CAT + ".ducklake_column c ON c.table_id = f.table_id AND c.column_id = s.column_id"
+                + " WHERE t.table_name = " + Identifiers.literal(relation)
+                + "   AND c.column_name = " + Identifiers.literal(column)
+                + "   AND t.begin_snapshot <= " + snapshotId
+                + "   AND (t.end_snapshot IS NULL OR t.end_snapshot > " + snapshotId + ")"
+                + "   AND c.begin_snapshot <= " + snapshotId
+                + "   AND (c.end_snapshot IS NULL OR c.end_snapshot > " + snapshotId + ")"
+                + "   AND f.begin_snapshot <= " + snapshotId
+                + "   AND (f.end_snapshot IS NULL OR f.end_snapshot > " + snapshotId + ")"
+                + "   AND TRY_CAST(s.max_value AS HUGEINT) <= " + cut
+                + "   AND s.null_count = 0";
+        String prefix = relationPrefix(relation, snapshotId);
+        try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery(sql)) {
+            while (rs.next()) {
+                out.put(filePath(prefix, rs.getString(1), rs.getBoolean(2)), rs.getLong(3));
+            }
+        }
+        return out;
+    }
+
+    @Override
+    public void close() {
+        try {
+            conn.close();
+        } catch (SQLException e) {
+            log.debug("Error closing catalog connection", e);
+        }
+    }
+
+    public record Bounds(String min, String max) {}
+}

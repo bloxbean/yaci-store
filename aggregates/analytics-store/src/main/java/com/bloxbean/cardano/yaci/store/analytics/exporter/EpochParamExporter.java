@@ -37,6 +37,11 @@ public class EpochParamExporter extends AbstractTableExporter {
     }
 
     @Override
+    public boolean includesByronEpochs() {
+        return true;
+    }
+
+    @Override
     public PartitionStrategy getPartitionStrategy() {
         return PartitionStrategy.EPOCH;
     }

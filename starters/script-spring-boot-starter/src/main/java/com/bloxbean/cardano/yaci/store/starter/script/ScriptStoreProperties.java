@@ -13,7 +13,7 @@ public class ScriptStoreProperties {
     @Getter
     @Setter
     public static final class Script  {
-       private boolean enabled = true;
+       private boolean enabled = com.bloxbean.cardano.yaci.store.common.config.StoreModuleConfig.defaultEnabled("script");
        private boolean apiEnabled = true;
        private Endpoints endpoints = new Endpoints();
     }

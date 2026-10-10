@@ -12,7 +12,7 @@ public class AssetsExtProperties {
     // Defaults mirror the @ConditionalOnProperty gates so config metadata matches runtime.
     // Blockfrost-extension pattern: the master flag is OFF by default; the sub-flags CIP-26 and
     // CIP-68 default ON, so enabling the master flag alone yields the default behaviour.
-    private boolean enabled = false;
+    private boolean enabled = com.bloxbean.cardano.yaci.store.common.config.StoreModuleConfig.defaultEnabled("assets-ext");
     private Cip26 cip26 = new Cip26();
     private Cip68 cip68 = new Cip68();
     private Query query = new Query();
