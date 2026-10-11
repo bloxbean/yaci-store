@@ -25,7 +25,6 @@ import javax.sql.DataSource;
 import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static com.bloxbean.cardano.yaci.store.account.storage.impl.BalanceRollbackFixtures.*;
@@ -189,7 +188,7 @@ class AccountBalanceRollbackQueryShapeTest {
     }
 
     private static List<String> matching(List<String> statements, Pattern pattern) {
-        return statements.stream().filter(s -> pattern.matcher(s).find()).collect(Collectors.toList());
+        return statements.stream().filter(s -> pattern.matcher(s).find()).toList();
     }
 
     private static void assertNoWindowFunction(List<String> statements) {
