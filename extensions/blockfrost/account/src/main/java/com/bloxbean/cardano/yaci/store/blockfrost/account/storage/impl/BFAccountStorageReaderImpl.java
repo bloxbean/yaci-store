@@ -674,64 +674,138 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
      * account), built from the outputs the transaction created (received side) and the outputs it
      * spent (sent side). Rows are ordered by the position of the transaction, then by the position of
      * the earliest matching output, and paged directly.
+     * <p>
+     * The account's outputs are read once and shared by both sides. The sent side takes its block
+     * from {@code tx_input}, so the transaction's index in its block is only looked up for the rows
+     * that need it: those in the {@code from}/{@code to} boundary blocks, and those in the blocks
+     * of the requested page.
      */
     @Override
     public List<AccountTransaction> findTransactions(String stakeAddress, int page, int count, Order order, String from, String to) {
         BlockRef fromRef = parseBlockRef(from);
         BlockRef toRef = parseBlockRef(to);
 
-        Field<Integer> receivedTxIndex = DSL.coalesce(ADDRESS_UTXO.TX_INDEX, 0);
-        var received = dsl.select(
+        var utxos = DSL.name("account_utxo").as(dsl.select(
                         ADDRESS_UTXO.OWNER_ADDR.as("address"),
                         ADDRESS_UTXO.TX_HASH.as("tx_hash"),
+                        ADDRESS_UTXO.OUTPUT_INDEX.as("output_index"),
                         ADDRESS_UTXO.BLOCK.as("block"),
-                        receivedTxIndex.as("tx_index"),
+                        ADDRESS_UTXO.TX_INDEX.as("tx_index"),
                         ADDRESS_UTXO.BLOCK_TIME.as("block_time"),
                         outputPosition().as("output_position"))
                 .from(ADDRESS_UTXO)
-                .where(ADDRESS_UTXO.OWNER_STAKE_ADDR.eq(stakeAddress))
-                .and(blockRangeCondition(ADDRESS_UTXO.BLOCK, receivedTxIndex, fromRef, toRef));
+                .where(ADDRESS_UTXO.OWNER_STAKE_ADDR.eq(stakeAddress)));
+        Field<String> utxoAddress = utxos.field("address", String.class);
+        Field<String> utxoTxHash = utxos.field("tx_hash", String.class);
+        Field<Long> utxoBlock = utxos.field("block", Long.class);
+        Field<Long> utxoPosition = utxos.field("output_position", Long.class);
 
-        Field<Integer> spentTxIndex = DSL.coalesce(TRANSACTION.TX_INDEX, 0);
-        var spent = dsl.select(
-                        ADDRESS_UTXO.OWNER_ADDR,
+        var received = dsl.select(utxoAddress, utxoTxHash, utxoBlock,
+                        utxos.field("tx_index", Integer.class),
+                        utxos.field("block_time", Long.class),
+                        utxoPosition)
+                .from(utxos)
+                .where(blockRangeCondition(utxoBlock, fromRef, toRef));
+
+        // The sent side's tx index is unknown here (null); it is resolved below where it matters.
+        var spent = dsl.select(utxoAddress,
                         TX_INPUT.SPENT_TX_HASH,
-                        TRANSACTION.BLOCK,
-                        spentTxIndex,
-                        TRANSACTION.BLOCK_TIME,
-                        outputPosition())
-                .from(ADDRESS_UTXO)
-                .join(TX_INPUT).on(TX_INPUT.TX_HASH.eq(ADDRESS_UTXO.TX_HASH)
-                        .and(TX_INPUT.OUTPUT_INDEX.eq(ADDRESS_UTXO.OUTPUT_INDEX)))
-                .join(TRANSACTION).on(TRANSACTION.TX_HASH.eq(TX_INPUT.SPENT_TX_HASH))
-                .where(ADDRESS_UTXO.OWNER_STAKE_ADDR.eq(stakeAddress))
-                .and(blockRangeCondition(TRANSACTION.BLOCK, spentTxIndex, fromRef, toRef));
+                        TX_INPUT.SPENT_AT_BLOCK,
+                        DSL.castNull(Integer.class),
+                        TX_INPUT.SPENT_BLOCK_TIME,
+                        utxoPosition)
+                .from(utxos)
+                .join(TX_INPUT).on(TX_INPUT.TX_HASH.eq(utxoTxHash)
+                        .and(TX_INPUT.OUTPUT_INDEX.eq(utxos.field("output_index", Integer.class))))
+                .where(blockRangeCondition(TX_INPUT.SPENT_AT_BLOCK, fromRef, toRef));
 
-        // Group by (tx, address) only: block/tx index/time come from address_utxo on the received side
-        // and from transaction on the spent side, so they are aggregated rather than grouped on.
+        // Group by (tx, address) only: a group can hold rows from both sides, so block/tx index/time
+        // are aggregated rather than grouped on.
         Table<?> rows = received.unionAll(spent).asTable("account_tx_rows");
-        Field<String> address = rows.field("address", String.class);
-        Field<String> txHash = rows.field("tx_hash", String.class);
-        Field<Long> block = DSL.max(rows.field("block", Long.class));
-        Field<Integer> txIndex = DSL.max(rows.field("tx_index", Integer.class));
-        Field<Long> blockTime = DSL.max(rows.field("block_time", Long.class));
-        Field<Long> firstOutputPosition = DSL.min(rows.field("output_position", Long.class));
-
-        boolean desc = order == Order.desc;
-        return dsl.select(address, txHash, block, txIndex, blockTime)
+        Field<Long> rowsBlock = DSL.max(rows.field("block", Long.class));
+        Field<Integer> rowsTxIndex = DSL.max(rows.field("tx_index", Integer.class));
+        var grouped = dsl.select(
+                        rows.field("address", String.class).as("address"),
+                        rows.field("tx_hash", String.class).as("tx_hash"),
+                        rowsBlock.as("block"),
+                        boundaryTxIndex(rows.field("tx_hash", String.class), rowsBlock, rowsTxIndex, fromRef, toRef)
+                                .as("tx_index"),
+                        DSL.max(rows.field("block_time", Long.class)).as("block_time"),
+                        DSL.min(rows.field("output_position", Long.class)).as("output_position"))
                 .from(rows)
-                .groupBy(address, txHash)
+                .groupBy(rows.field("address"), rows.field("tx_hash"))
+                .asTable("account_tx_grouped");
+        Field<Long> groupedBlock = grouped.field("block", Long.class);
+        var accountTxs = DSL.name("account_tx").as(dsl.select(grouped.fields())
+                .from(grouped)
+                .where(txIndexRangeCondition(groupedBlock, grouped.field("tx_index", Integer.class), fromRef, toRef)));
+
+        Field<String> address = accountTxs.field("address", String.class);
+        Field<String> txHash = accountTxs.field("tx_hash", String.class);
+        Field<Long> block = accountTxs.field("block", Long.class);
+        Field<Long> blockTime = accountTxs.field("block_time", Long.class);
+        Field<Long> firstOutputPosition = accountTxs.field("output_position", Long.class);
+        Field<Integer> txIndex = DSL.coalesce(resolveTxIndex(txHash, accountTxs.field("tx_index", Integer.class)), 0);
+
+        // Order by block alone to find the last block of the page; only rows up to that block need
+        // their tx index to be sorted exactly.
+        boolean desc = order == Order.desc;
+        int offset = Math.max(page, 0) * count;
+        Field<Long> lastPageBlock = DSL.field(dsl.select(block)
+                .from(accountTxs)
+                .orderBy(desc ? block.desc() : block.asc())
+                .limit(1)
+                .offset(offset + count - 1));
+        Condition pageBlocks = desc
+                ? block.ge(DSL.coalesce(lastPageBlock, -1L))
+                : block.le(DSL.coalesce(lastPageBlock, Long.MAX_VALUE));
+
+        return dsl.with(utxos)
+                .with(accountTxs)
+                .select(address, txHash, block, txIndex, blockTime)
+                .from(accountTxs)
+                .where(pageBlocks)
                 .orderBy(desc ? block.desc() : block.asc(),
                         desc ? txIndex.desc() : txIndex.asc(),
                         desc ? firstOutputPosition.desc() : firstOutputPosition.asc())
                 .limit(count)
-                .offset(Math.max(page, 0) * count)
+                .offset(offset)
                 .fetch(rec -> new AccountTransaction(
                         rec.get(address),
                         rec.get(txHash),
                         rec.get(txIndex) != null ? rec.get(txIndex) : 0L,
                         rec.get(block) != null ? rec.get(block) : 0L,
                         rec.get(blockTime) != null ? rec.get(blockTime) : 0L));
+    }
+
+    /**
+     * Index of the transaction in its block, read from {@code transaction} only when it is not
+     * already known. A CASE keeps the lookup lazy: a join would probe {@code transaction} for every row.
+     */
+    private Field<Integer> resolveTxIndex(Field<String> txHash, Field<Integer> txIndex) {
+        return DSL.when(txIndex.isNull(), DSL.field(dsl.select(TRANSACTION.TX_INDEX)
+                        .from(TRANSACTION)
+                        .where(TRANSACTION.TX_HASH.eq(txHash))))
+                .otherwise(txIndex);
+    }
+
+    /**
+     * Resolves the tx index only for the rows in a {@code from}/{@code to} block that names a tx index;
+     * the index range of the other rows is already decided by their block.
+     */
+    private Field<Integer> boundaryTxIndex(Field<String> txHash, Field<Long> block, Field<Integer> txIndex,
+                                           BlockRef from, BlockRef to) {
+        List<Long> boundaryBlocks = new ArrayList<>();
+        if (from != null && from.txIndex() != null) {
+            boundaryBlocks.add(from.block());
+        }
+        if (to != null && to.txIndex() != null) {
+            boundaryBlocks.add(to.block());
+        }
+        if (boundaryBlocks.isEmpty()) {
+            return txIndex;
+        }
+        return DSL.when(block.in(boundaryBlocks), resolveTxIndex(txHash, txIndex)).otherwise(txIndex);
     }
 
     /**
@@ -746,19 +820,31 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
     }
 
     /**
-     * Inclusive "block[:txIndex]" range, as in Blockfrost's from/to parameters.
+     * Inclusive block range of Blockfrost's from/to parameters, ignoring their ":txIndex" part.
      */
-    private Condition blockRangeCondition(Field<Long> block, Field<Integer> txIndex, BlockRef from, BlockRef to) {
+    private Condition blockRangeCondition(Field<Long> block, BlockRef from, BlockRef to) {
         Condition condition = DSL.trueCondition();
         if (from != null) {
-            int fromIndex = from.txIndex() != null ? from.txIndex() : 0;
-            condition = condition.and(block.gt(from.block())
-                    .or(block.eq(from.block()).and(txIndex.ge(fromIndex))));
+            condition = condition.and(block.ge(from.block()));
         }
         if (to != null) {
-            int toIndex = to.txIndex() != null ? to.txIndex() : Integer.MAX_VALUE;
-            condition = condition.and(block.lt(to.block())
-                    .or(block.eq(to.block()).and(txIndex.le(toIndex))));
+            condition = condition.and(block.le(to.block()));
+        }
+        return condition;
+    }
+
+    /**
+     * The ":txIndex" part of Blockfrost's inclusive "block[:txIndex]" from/to parameters, applied to
+     * rows already inside the block range.
+     */
+    private Condition txIndexRangeCondition(Field<Long> block, Field<Integer> txIndex, BlockRef from, BlockRef to) {
+        Field<Integer> index = DSL.coalesce(txIndex, 0);
+        Condition condition = DSL.trueCondition();
+        if (from != null && from.txIndex() != null) {
+            condition = condition.and(block.ne(from.block()).or(index.ge(from.txIndex())));
+        }
+        if (to != null && to.txIndex() != null) {
+            condition = condition.and(block.ne(to.block()).or(index.le(to.txIndex())));
         }
         return condition;
     }
