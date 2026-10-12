@@ -71,6 +71,12 @@ subprojects {
 
     tasks.withType(Javadoc) {
         options.encoding = 'UTF-8'
+        // Keep -javadoc.jar small for Maven Central: -noindex drops the search box, which
+        // also drops the jQuery/search bundle (~70KB) javadoc copies into every module's jar.
+        options.noIndex(true)
+        options.noTree(true)
+        options.noHelp(true)
+        options.noDeprecatedList(true)
     }
 
     task sourceJar(type: Jar) {
