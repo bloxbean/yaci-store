@@ -55,6 +55,11 @@
 
 - table: block
   indexes:
+    # Pool block pages filter by slot_leader, then order and limit by block number.
+    - name: idx_block_slot_leader_number
+      columns:
+        - slot_leader
+        - number
     - name: idx_block_epoch_slot
       columns:
         - epoch
