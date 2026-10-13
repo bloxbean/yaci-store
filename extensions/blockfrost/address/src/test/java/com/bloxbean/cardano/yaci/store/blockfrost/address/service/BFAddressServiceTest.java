@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.blockfrost.address.service;
 
 import com.bloxbean.cardano.yaci.store.account.AccountStoreProperties;
 import com.bloxbean.cardano.yaci.store.blockfrost.address.storage.BFAddressStorageReader;
+import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorageReader;
 import org.junit.jupiter.api.BeforeEach;
@@ -19,9 +20,11 @@ import static org.mockito.Mockito.*;
 class BFAddressServiceTest {
 
     private static final String ADDRESS = "addr_test1vrxyxhvkzfu4j328whrs8n2xwn4aql6tms26kpmtun6hq7qm9u055";
+    private static final String MAINNET_ADDRESS = "addr1qx2fxv2umyhttkxyxp8x0dlpdt3k6cwng5pxj3jhsydzer3n0d3vllmyqwsx5wktcd8cc3sq835lu7drv2xwl2wywfgse35a3x";
     private static final String BYRON_ADDRESS = "Ae2tdPwUPEZFRbyhz3cpfC2CumGzNkFBN2L42rcUc2yjQpEkxDbkPodpMAi";
 
     private BFAddressStorageReader reader;
+    private StoreProperties storeProperties;
     private BFAddressService service;
 
     private final List<Consumer<String>> endpoints = List.of(
@@ -35,13 +38,36 @@ class BFAddressServiceTest {
     @BeforeEach
     void setUp() {
         reader = mock(BFAddressStorageReader.class);
-        service = new BFAddressService(mock(UtxoStorageReader.class), reader, mock(AccountStoreProperties.class));
+        storeProperties = new StoreProperties();
+        service = new BFAddressService(mock(UtxoStorageReader.class), reader, mock(AccountStoreProperties.class), storeProperties);
     }
 
     @Test
     void malformedAddress_returns400WithoutQuerying() {
         endpoints.forEach(endpoint -> assertStatus(() -> endpoint.accept("not_an_address"), HttpStatus.BAD_REQUEST));
         verifyNoInteractions(reader);
+    }
+
+    @Test
+    void mainnetAddressOnTestnet_returns400WithoutQuerying() {
+        endpoints.forEach(endpoint -> assertStatus(() -> endpoint.accept(MAINNET_ADDRESS), HttpStatus.BAD_REQUEST));
+        verifyNoInteractions(reader);
+    }
+
+    @Test
+    void testnetAddressOnMainnet_returns400WithoutQuerying() {
+        storeProperties.setMainnet(true);
+
+        endpoints.forEach(endpoint -> assertStatus(() -> endpoint.accept(ADDRESS), HttpStatus.BAD_REQUEST));
+        verifyNoInteractions(reader);
+    }
+
+    @Test
+    void mainnetAddressOnMainnet_isServed() {
+        storeProperties.setMainnet(true);
+        when(reader.addressExists(MAINNET_ADDRESS)).thenReturn(true);
+
+        assertThat(service.getAddressInfo(MAINNET_ADDRESS).getAddress()).isEqualTo(MAINNET_ADDRESS);
     }
 
     @Test

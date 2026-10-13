@@ -5,6 +5,7 @@ import com.bloxbean.cardano.client.address.AddressProvider;
 import com.bloxbean.cardano.client.address.AddressType;
 import com.bloxbean.cardano.client.address.CredentialType;
 import com.bloxbean.cardano.client.address.util.AddressUtil;
+import com.bloxbean.cardano.client.exception.AddressExcepion;
 import com.bloxbean.cardano.yaci.store.account.AccountStoreProperties;
 import com.bloxbean.cardano.yaci.store.blockfrost.address.dto.BFAddressDTO;
 import com.bloxbean.cardano.yaci.store.blockfrost.address.dto.BFAddressTotalDTO;
@@ -13,6 +14,7 @@ import com.bloxbean.cardano.yaci.store.blockfrost.address.dto.BFAddressUtxoDTO;
 import com.bloxbean.cardano.yaci.store.blockfrost.address.mapper.BFAddressUtxoMapper;
 import com.bloxbean.cardano.yaci.store.blockfrost.address.storage.BFAddressStorageReader;
 import com.bloxbean.cardano.yaci.store.blockfrost.address.storage.impl.model.BFAddressTotal;
+import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Utxo;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
@@ -39,13 +41,16 @@ public class BFAddressService {
     private final UtxoStorageReader utxoStorageReader;
     private final BFAddressStorageReader bfAddressStorageReader;
     private final AccountStoreProperties accountStoreProperties;
+    private final StoreProperties storeProperties;
 
     public BFAddressService(UtxoStorageReader utxoStorageReader,
                             BFAddressStorageReader bfAddressStorageReader,
-                            AccountStoreProperties accountStoreProperties) {
+                            AccountStoreProperties accountStoreProperties,
+                            StoreProperties storeProperties) {
         this.utxoStorageReader = utxoStorageReader;
         this.bfAddressStorageReader = bfAddressStorageReader;
         this.accountStoreProperties = accountStoreProperties;
+        this.storeProperties = storeProperties;
     }
 
     public BFAddressDTO getAddressInfo(String address) {
@@ -170,10 +175,19 @@ public class BFAddressService {
     // AddressUtil.isValidAddress lets Base58/Bech32 decoding exceptions escape for malformed input.
     private boolean isValidAddress(String address) {
         try {
-            return AddressUtil.isValidAddress(address);
-        } catch (RuntimeException e) {
+            return AddressUtil.isValidAddress(address) && isOnConfiguredNetwork(address);
+        } catch (RuntimeException | AddressExcepion e) {
             return false;
         }
+    }
+
+    // Shelley header low nibble is the network id (1 = mainnet); Byron (0x8_) is not checked.
+    private boolean isOnConfiguredNetwork(String address) throws AddressExcepion {
+        int header = AddressUtil.addressToBytes(address)[0] & 0xFF;
+        if ((header >> 4) == 8) {
+            return true;
+        }
+        return ((header & 0x0F) == 1) == storeProperties.isMainnet();
     }
 
     private boolean isCurrentBalanceEnabled() {
