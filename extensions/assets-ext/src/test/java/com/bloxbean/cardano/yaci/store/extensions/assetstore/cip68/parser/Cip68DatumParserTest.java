@@ -3,9 +3,11 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.parser;
 import com.bloxbean.cardano.client.common.cbor.CborSerializationUtil;
 import com.bloxbean.cardano.client.plutus.spec.*;
 import com.bloxbean.cardano.client.util.HexUtil;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.metrics.Cip68Metrics;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.AssetType;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.ParsedCip68Datum;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -372,8 +374,13 @@ class Cip68DatumParserTest {
 
         /** {"721": {policy_id: {asset_name: metadata}}} with raw-byte policy and asset keys, per CIP-68 version 4. */
         private static MapPlutusData nested(String policyId, String assetNameHex, MapPlutusData metadata) {
+            return nestedEntry(policyId, assetNameHex, metadata);
+        }
+
+        /** Same, with any value as the entry, to build an entry that is not a map. */
+        private static MapPlutusData nestedEntry(String policyId, String assetNameHex, PlutusData entry) {
             MapPlutusData byAsset = new MapPlutusData();
-            byAsset.put(BytesPlutusData.of(HexUtil.decodeHexString(assetNameHex)), metadata);
+            byAsset.put(BytesPlutusData.of(HexUtil.decodeHexString(assetNameHex)), entry);
             MapPlutusData byPolicy = new MapPlutusData();
             byPolicy.put(BytesPlutusData.of(HexUtil.decodeHexString(policyId)), byAsset);
             MapPlutusData root = new MapPlutusData();
@@ -445,6 +452,45 @@ class Cip68DatumParserTest {
             String datum = datum(nested(OTHER_POLICY_ID, ASSET_NAME_HEX, metadata("Foreign")), 4);
 
             assertThat(parser.parse(datum, REFERENCE_NFT)).isEmpty();
+        }
+
+        @Test
+        void shouldCountANestedDatumWithoutAUsableEntryAsSkipped() throws Exception {
+            SimpleMeterRegistry registry = new SimpleMeterRegistry();
+            Cip68DatumParser counting = new Cip68DatumParser(new Cip68Metrics(registry));
+
+            // an entry that is there and valid, and a flat datum: neither is counted
+            assertThat(counting.parse(datum(nested(POLICY_ID, ASSET_NAME_HEX, metadata("Mine")), 4), REFERENCE_NFT)).isPresent();
+            assertThat(counting.parse(datum(metadata("Flat"), 4), REFERENCE_NFT)).isPresent();
+            assertThat(noNestedEntryCount(registry)).isZero();
+
+            // another policy
+            assertThat(counting.parse(datum(nested(OTHER_POLICY_ID, ASSET_NAME_HEX, metadata("Foreign")), 4), REFERENCE_NFT)).isEmpty();
+            assertThat(noNestedEntryCount(registry)).isEqualTo(1);
+
+            // the right policy, another asset name
+            assertThat(counting.parse(datum(nested(POLICY_ID, HexUtil.encodeHexString("Other".getBytes()), metadata("Other")), 4),
+                    REFERENCE_NFT)).isEmpty();
+            assertThat(noNestedEntryCount(registry)).isEqualTo(2);
+
+            // an entry that is not a map
+            assertThat(counting.parse(datum(nestedEntry(POLICY_ID, ASSET_NAME_HEX, BytesPlutusData.of("not a map")), 4),
+                    REFERENCE_NFT)).isEmpty();
+            assertThat(noNestedEntryCount(registry)).isEqualTo(3);
+
+            // more than one entry and no token to choose by
+            MapPlutusData root = nested(POLICY_ID, ASSET_NAME_HEX, metadata("A"));
+            MapPlutusData byPolicy = (MapPlutusData) root.getMap().get(BytesPlutusData.of("721"));
+            MapPlutusData byAsset = (MapPlutusData) byPolicy.getMap().get(BytesPlutusData.of(HexUtil.decodeHexString(POLICY_ID)));
+            byAsset.put(BytesPlutusData.of("Other".getBytes()), metadata("B"));
+            assertThat(counting.parse(datum(root, 4))).isEmpty();
+            assertThat(noNestedEntryCount(registry)).isEqualTo(4);
+        }
+
+        private static double noNestedEntryCount(SimpleMeterRegistry registry) {
+            var counter = registry.find(Cip68Metrics.SKIPPED).tag("label", "unknown")
+                    .tag("reason", Cip68Metrics.NO_NESTED_ENTRY).counter();
+            return counter == null ? 0 : counter.count();
         }
 
         @Test

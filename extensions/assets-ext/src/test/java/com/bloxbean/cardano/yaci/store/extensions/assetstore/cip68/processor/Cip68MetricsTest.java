@@ -94,6 +94,26 @@ class Cip68MetricsTest {
     }
 
     @Test
+    void countsANestedDatumWithoutAnEntryForTheTokenAsSkipped() {
+        MapPlutusData entry = new MapPlutusData();
+        entry.put(BytesPlutusData.of("name"), BytesPlutusData.of("N"));
+        entry.put(BytesPlutusData.of("image"), BytesPlutusData.of("ipfs://Qm"));
+        // the only entry is for another asset name than the token's
+        MapPlutusData byAsset = new MapPlutusData();
+        byAsset.put(BytesPlutusData.of("someone-else"), entry);
+        MapPlutusData byPolicy = new MapPlutusData();
+        byPolicy.put(BytesPlutusData.of(HexUtil.decodeHexString(POLICY)), byAsset);
+        MapPlutusData root = new MapPlutusData();
+        root.put(BytesPlutusData.of("721"), byPolicy);
+
+        processor.processTransaction(event(datum(root), Cip68Constants.NFT_TOKEN_PREFIX));
+
+        assertThat(registry.get(Cip68Metrics.SKIPPED).tag("label", "unknown").tag("reason", "no_nested_entry").counter().count())
+                .isEqualTo(1);
+        assertThat(registry.find(Cip68Metrics.INDEXED).counters()).isEmpty();
+    }
+
+    @Test
     void countsDroppedProperties() {
         MapPlutusData nested = new MapPlutusData();
         nested.put(BytesPlutusData.of("k"), ConstrPlutusData.of(0));
