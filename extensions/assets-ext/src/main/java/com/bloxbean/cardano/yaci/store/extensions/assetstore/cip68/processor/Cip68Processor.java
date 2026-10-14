@@ -92,7 +92,7 @@ public class Cip68Processor {
     private Optional<Cip68Metadata> toEntity(AddressUtxo output, AssetType refNft, Set<String> assetUnitsInTx, Long slot,
                                              @Nullable SharedDatum shared) {
         Optional<ParsedCip68Datum> parsedDatum = shared != null
-                ? shared.parsed()
+                ? shared.parsed
                 : cip68DatumParser.parse(output.getInlineDatum(), refNft);
         return parsedDatum.flatMap(parsed -> {
             // The labels come first: which fields a datum must have depends on them. A reference NFT can have user
@@ -149,20 +149,14 @@ public class Cip68Processor {
     private final class SharedDatum {
         private final AddressUtxo output;
         private final int referenceNfts;
-        private Optional<ParsedCip68Datum> parsed;
+        private final Optional<ParsedCip68Datum> parsed;
         private boolean logoReported;
 
         private SharedDatum(AddressUtxo output, int referenceNfts) {
             this.output = output;
             this.referenceNfts = referenceNfts;
-        }
-
-        /** Parsed on first use, without a reference NFT: the datum is not specific to one of them. */
-        private Optional<ParsedCip68Datum> parsed() {
-            if (parsed == null) {
-                parsed = cip68DatumParser.parse(output.getInlineDatum());
-            }
-            return parsed;
+            // Parsed here, once, without a reference NFT: the datum is not specific to one of them.
+            this.parsed = cip68DatumParser.parse(output.getInlineDatum());
         }
     }
 
