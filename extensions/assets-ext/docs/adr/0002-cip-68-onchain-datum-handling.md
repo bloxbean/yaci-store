@@ -83,6 +83,14 @@ indexing (`store.assets.ext.cip68.enabled`), so one cannot be on without the oth
 `Cip68RollbackProcessorH2IT` against the real table definition. It has not been exercised on a live chain yet:
 a sync from genesis rarely meets a rollback.
 
+**Rolling back by hand with the admin CLI.** The `rollback-data` command of the admin CLI does not use the processor. It
+deletes from the tables listed in `components/dbutils/src/main/resources/rollback.yml`, each with its own condition, and
+`cip68_metadata` is listed there with the same rule, `DELETE ... WHERE slot > :slot` (#1132, #1133). The two paths
+therefore agree on the boundary: the row at the rollback slot stays, later rows go. The CLI path depends on that file, so
+a table that is added to this module later and has a `slot` column must be added to `rollback.yml` too, otherwise the
+CLI leaves its rows behind while the runtime rollback removes them. `cip26_metadata` and `cip26_sync_state` are not listed,
+which is correct for the reason in ADR 0001: they come from Git, not from the chain.
+
 ### 2. The label comes from the paired user tokens, and from the datum when there is none (#1222, #1225, #1238)
 
 The label (222 NFT, 333 FT, 444 RFT) is not in the datum. It is read from the user token minted with
@@ -501,5 +509,6 @@ Not measured yet:
 - #1159, #1185, #1202, #1208, #1209, #1233: parser hardening, version 4, constructor values (stored in #1209, dropped with a WARN in #1233)
 - #1221, #1222, #1225, #1226, #1227, #1228, #1231, #1232, #1233, #1234, #1235, #1236, #1237, #1238, PR #1220: required fields per label, label pairing and
   inference, text and hex, size cap, skip warnings, strict image, several reference NFTs in one output, the layout by structure
+- #1132, #1133: the `cip68_metadata` table in the admin CLI rollback configuration (`rollback.yml`)
 - cardano-foundation/cf-token-metadata-registry#104: backport of these fixes
 - `Cip68Processor`, `Cip68DatumParser`, `Cip68TokenService`, `TokenQueryService`
