@@ -211,7 +211,8 @@ for some uses is open as cardano-foundation/CIPs#1288, and when the CIP changes,
 
 *Why the `logo` does not drop the token:* a bad optional field should cost that field, not the required ones
 (`name`, `description`) and the other optional ones (`decimals`, `ticker`). This is the rule everywhere else in the
-module (an out-of-range `decimals`, an over-long `ticker`, a constructor property). *What it costs:* a stored token can
+CIP-68 indexing (an out-of-range `decimals`, an over-long `ticker`, a constructor property). CIP-26 does not follow
+it: the registry's validator rejects a whole entry for a bad optional field, except the logo (ADR 0005). *What it costs:* a stored token can
 have no logo although the datum had one. The logo that is dropped is often a raw base64 string or a bare IPFS hash,
 which CIP-68 excludes (`logo` "needs to be a valid URI and not a plain bytestring"), so no CIP-68 client could
 show it. A full mainnet index with the earlier, stricter rule (the token dropped) found 260 datums of 217 fungible
@@ -441,7 +442,8 @@ counted yet.
   treated as not found.
 
 *Why per field:* a token can have a name on chain and a logo only in the registry. *Trade-off:* the
-fields of one response can come from two sources, and `show_cips_details` is the way to see which.
+fields of one response can come from two sources. Each property in the response names its `source`, and
+`show_cips_details` adds the raw metadata of each source (ADR 0003).
 
 **A rejected update leaves the previous metadata in the API.** The API reads the latest *stored* row (decision 1).
 When a token's datum is skipped (a missing `name` or `description`, an `image` with a scheme the CIP does not allow, a
