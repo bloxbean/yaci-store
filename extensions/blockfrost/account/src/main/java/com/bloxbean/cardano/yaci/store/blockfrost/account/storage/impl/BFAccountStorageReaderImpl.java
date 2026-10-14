@@ -90,125 +90,97 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
         Integer currentCycleCertIndex = registered && lastReg != null ? lastReg.get(STAKE_REGISTRATION.CERT_INDEX) : null;
 
         BigInteger controlledAmount = BigInteger.ZERO;
-        try {
-            Condition unspentUtxo = DSL.notExists(
-                    dsl.selectOne().from(TX_INPUT)
-                            .where(TX_INPUT.TX_HASH.eq(ADDRESS_UTXO.TX_HASH))
-                            .and(TX_INPUT.OUTPUT_INDEX.eq(ADDRESS_UTXO.OUTPUT_INDEX))
-            );
-            var sumRec = dsl.select(DSL.sum(ADDRESS_UTXO.LOVELACE_AMOUNT.cast(BigDecimal.class)))
-                    .from(ADDRESS_UTXO)
-                    .where(ADDRESS_UTXO.OWNER_STAKE_ADDR.eq(stakeAddress))
-                    .and(unspentUtxo)
-                    .fetchOne(0, BigDecimal.class);
-            if (sumRec != null) {
-                controlledAmount = sumRec.toBigInteger();
-            }
-        } catch (DataAccessException e) {
-            log.warn("Could not fetch controlled amount for {}: {}", stakeAddress, e.getMessage());
+        Condition unspentUtxo = DSL.notExists(
+                dsl.selectOne().from(TX_INPUT)
+                        .where(TX_INPUT.TX_HASH.eq(ADDRESS_UTXO.TX_HASH))
+                        .and(TX_INPUT.OUTPUT_INDEX.eq(ADDRESS_UTXO.OUTPUT_INDEX))
+        );
+        var sumRec = dsl.select(DSL.sum(ADDRESS_UTXO.LOVELACE_AMOUNT.cast(BigDecimal.class)))
+                .from(ADDRESS_UTXO)
+                .where(ADDRESS_UTXO.OWNER_STAKE_ADDR.eq(stakeAddress))
+                .and(unspentUtxo)
+                .fetchOne(0, BigDecimal.class);
+        if (sumRec != null) {
+            controlledAmount = sumRec.toBigInteger();
         }
 
         String poolId = null;
-        try {
-            // Pool delegation belongs to the current registration cycle even before it is fully active in the
-            // latest epoch snapshot, so use the registration cycle gate instead of the active flag.
-            if (registered && currentCycleSlot != null) {
-                var delRec = dsl.select(DELEGATION.POOL_ID)
-                        .from(DELEGATION)
-                        .where(DELEGATION.ADDRESS.eq(stakeAddress))
-                        .and(isAtOrAfterCurrentCycle(
-                                DELEGATION.SLOT,
-                                DELEGATION.TX_INDEX,
-                                DELEGATION.CERT_INDEX,
-                                currentCycleSlot,
-                                currentCycleTxIndex,
-                                currentCycleCertIndex))
-                        .orderBy(DELEGATION.SLOT.desc(), DELEGATION.TX_INDEX.desc(), DELEGATION.CERT_INDEX.desc())
-                        .limit(1)
-                        .fetchOne();
-                if (delRec != null) {
-                    poolId = delRec.get(DELEGATION.POOL_ID);
-                }
+        // Pool delegation belongs to the current registration cycle even before it is fully active in the
+        // latest epoch snapshot, so use the registration cycle gate instead of the active flag.
+        if (registered && currentCycleSlot != null) {
+            var delRec = dsl.select(DELEGATION.POOL_ID)
+                    .from(DELEGATION)
+                    .where(DELEGATION.ADDRESS.eq(stakeAddress))
+                    .and(isAtOrAfterCurrentCycle(
+                            DELEGATION.SLOT,
+                            DELEGATION.TX_INDEX,
+                            DELEGATION.CERT_INDEX,
+                            currentCycleSlot,
+                            currentCycleTxIndex,
+                            currentCycleCertIndex))
+                    .orderBy(DELEGATION.SLOT.desc(), DELEGATION.TX_INDEX.desc(), DELEGATION.CERT_INDEX.desc())
+                    .limit(1)
+                    .fetchOne();
+            if (delRec != null) {
+                poolId = delRec.get(DELEGATION.POOL_ID);
             }
-        } catch (DataAccessException e) {
-            log.warn("Could not fetch pool delegation for {}: {}", stakeAddress, e.getMessage());
         }
 
         BigInteger rewardsSum = BigInteger.ZERO;
-        try {
-            // Sum all three reward sources: staking rewards + instant rewards + leftover pool rewards
-            var rewardSum = dsl.select(DSL.sum(REWARD.AMOUNT).cast(BigDecimal.class))
-                    .from(REWARD)
-                    .where(REWARD.ADDRESS.eq(stakeAddress))
-                    .fetchOne(0, BigDecimal.class);
-            if (rewardSum != null) {
-                rewardsSum = rewardSum.toBigInteger();
-            }
-            try {
-                var rewardRestSum = dsl.select(DSL.sum(REWARD_REST.AMOUNT).cast(BigDecimal.class))
-                        .from(REWARD_REST)
-                        .where(REWARD_REST.ADDRESS.eq(stakeAddress))
-                        .fetchOne(0, BigDecimal.class);
-                if (rewardRestSum != null) {
-                    rewardsSum = rewardsSum.add(rewardRestSum.toBigInteger());
-                }
-            } catch (DataAccessException e) {
-                log.warn("Could not fetch reward_rest for {}: {}", stakeAddress, e.getMessage());
-            }
-            try {
-                var instantRewardSum = dsl.select(DSL.sum(INSTANT_REWARD.AMOUNT).cast(BigDecimal.class))
-                        .from(INSTANT_REWARD)
-                        .where(INSTANT_REWARD.ADDRESS.eq(stakeAddress))
-                        .fetchOne(0, BigDecimal.class);
-                if (instantRewardSum != null) {
-                    rewardsSum = rewardsSum.add(instantRewardSum.toBigInteger());
-                }
-            } catch (DataAccessException e) {
-                log.warn("Could not fetch instant_reward for {}: {}", stakeAddress, e.getMessage());
-            }
-        } catch (DataAccessException e) {
-            log.warn("Could not fetch rewards sum for {}: {}", stakeAddress, e.getMessage());
+        // Sum all three reward sources: staking rewards + instant rewards + leftover pool rewards
+        var rewardSum = dsl.select(DSL.sum(REWARD.AMOUNT).cast(BigDecimal.class))
+                .from(REWARD)
+                .where(REWARD.ADDRESS.eq(stakeAddress))
+                .fetchOne(0, BigDecimal.class);
+        if (rewardSum != null) {
+            rewardsSum = rewardSum.toBigInteger();
+        }
+        var rewardRestSum = dsl.select(DSL.sum(REWARD_REST.AMOUNT).cast(BigDecimal.class))
+                .from(REWARD_REST)
+                .where(REWARD_REST.ADDRESS.eq(stakeAddress))
+                .fetchOne(0, BigDecimal.class);
+        if (rewardRestSum != null) {
+            rewardsSum = rewardsSum.add(rewardRestSum.toBigInteger());
+        }
+        var instantRewardSum = dsl.select(DSL.sum(INSTANT_REWARD.AMOUNT).cast(BigDecimal.class))
+                .from(INSTANT_REWARD)
+                .where(INSTANT_REWARD.ADDRESS.eq(stakeAddress))
+                .fetchOne(0, BigDecimal.class);
+        if (instantRewardSum != null) {
+            rewardsSum = rewardsSum.add(instantRewardSum.toBigInteger());
         }
 
         BigInteger withdrawalsSum = BigInteger.ZERO;
-        try {
-            var wdSum = dsl.select(DSL.sum(WITHDRAWAL.AMOUNT).cast(BigDecimal.class))
-                    .from(WITHDRAWAL)
-                    .where(WITHDRAWAL.ADDRESS.eq(stakeAddress))
-                    .fetchOne(0, BigDecimal.class);
-            if (wdSum != null) {
-                withdrawalsSum = wdSum.toBigInteger();
-            }
-        } catch (DataAccessException e) {
-            log.warn("Could not fetch withdrawals sum for {}: {}", stakeAddress, e.getMessage());
+        var wdSum = dsl.select(DSL.sum(WITHDRAWAL.AMOUNT).cast(BigDecimal.class))
+                .from(WITHDRAWAL)
+                .where(WITHDRAWAL.ADDRESS.eq(stakeAddress))
+                .fetchOne(0, BigDecimal.class);
+        if (wdSum != null) {
+            withdrawalsSum = wdSum.toBigInteger();
         }
 
         BigInteger reservesSum = BigInteger.ZERO;
         BigInteger treasurySum = BigInteger.ZERO;
-        try {
-            Table<?> mirTable = DSL.table(DSL.name("mir"));
-            Field<String> mirAddress = DSL.field(DSL.name("mir", "address"), String.class);
-            Field<String> mirPot = DSL.field(DSL.name("mir", "pot"), String.class);
-            Field<BigDecimal> mirAmount = DSL.field(DSL.name("mir", "amount"), BigDecimal.class);
+        Table<?> mirTable = DSL.table(DSL.name("mir"));
+        Field<String> mirAddress = DSL.field(DSL.name("mir", "address"), String.class);
+        Field<String> mirPot = DSL.field(DSL.name("mir", "pot"), String.class);
+        Field<BigDecimal> mirAmount = DSL.field(DSL.name("mir", "amount"), BigDecimal.class);
 
-            var mirResults = dsl.select(mirPot, DSL.sum(mirAmount).as("total"))
-                    .from(mirTable)
-                    .where(mirAddress.eq(stakeAddress))
-                    .groupBy(mirPot)
-                    .fetch();
+        var mirResults = dsl.select(mirPot, DSL.sum(mirAmount).as("total"))
+                .from(mirTable)
+                .where(mirAddress.eq(stakeAddress))
+                .groupBy(mirPot)
+                .fetch();
 
-            for (Record mirRec : mirResults) {
-                String pot = mirRec.get(mirPot);
-                BigDecimal total = mirRec.get("total", BigDecimal.class);
-                if (total == null) continue;
-                if ("RESERVES".equalsIgnoreCase(pot)) {
-                    reservesSum = total.toBigInteger();
-                } else if ("TREASURY".equalsIgnoreCase(pot)) {
-                    treasurySum = total.toBigInteger();
-                }
+        for (Record mirRec : mirResults) {
+            String pot = mirRec.get(mirPot);
+            BigDecimal total = mirRec.get("total", BigDecimal.class);
+            if (total == null) continue;
+            if ("RESERVES".equalsIgnoreCase(pot)) {
+                reservesSum = total.toBigInteger();
+            } else if ("TREASURY".equalsIgnoreCase(pot)) {
+                treasurySum = total.toBigInteger();
             }
-        } catch (DataAccessException e) {
-            log.warn("Could not fetch MIR data for {}: {}", stakeAddress, e.getMessage());
         }
 
         // controlled_amount = spendable UTXOs + unclaimed rewards (rewards - withdrawals)
@@ -217,44 +189,34 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
         BigInteger totalControlled = controlledAmount.add(withdrawable);
 
         String drepId = null;
-        try {
-            // Vote delegation is scoped to the current registration cycle, not to the latest active epoch stake.
-            if (registered && currentCycleSlot != null) {
-                var drepRec = dsl.select(DELEGATION_VOTE.DREP_ID, DELEGATION_VOTE.DREP_TYPE)
-                        .from(DELEGATION_VOTE)
-                        .where(DELEGATION_VOTE.ADDRESS.eq(stakeAddress))
-                        .and(isAtOrAfterCurrentCycle(
-                                DELEGATION_VOTE.SLOT,
-                                DELEGATION_VOTE.TX_INDEX,
-                                DELEGATION_VOTE.CERT_INDEX,
-                                currentCycleSlot,
-                                currentCycleTxIndex,
-                                currentCycleCertIndex))
-                        .orderBy(DELEGATION_VOTE.SLOT.desc(), DELEGATION_VOTE.TX_INDEX.desc(), DELEGATION_VOTE.CERT_INDEX.desc())
-                        .limit(1)
-                        .fetchOne();
-                if (drepRec != null) {
-                    drepId = normalizeDrepId(drepRec.get(DELEGATION_VOTE.DREP_ID), drepRec.get(DELEGATION_VOTE.DREP_TYPE));
-                }
+        // Vote delegation is scoped to the current registration cycle, not to the latest active epoch stake.
+        if (registered && currentCycleSlot != null) {
+            var drepRec = dsl.select(DELEGATION_VOTE.DREP_ID, DELEGATION_VOTE.DREP_TYPE)
+                    .from(DELEGATION_VOTE)
+                    .where(DELEGATION_VOTE.ADDRESS.eq(stakeAddress))
+                    .and(isAtOrAfterCurrentCycle(
+                            DELEGATION_VOTE.SLOT,
+                            DELEGATION_VOTE.TX_INDEX,
+                            DELEGATION_VOTE.CERT_INDEX,
+                            currentCycleSlot,
+                            currentCycleTxIndex,
+                            currentCycleCertIndex))
+                    .orderBy(DELEGATION_VOTE.SLOT.desc(), DELEGATION_VOTE.TX_INDEX.desc(), DELEGATION_VOTE.CERT_INDEX.desc())
+                    .limit(1)
+                    .fetchOne();
+            if (drepRec != null) {
+                drepId = normalizeDrepId(drepRec.get(DELEGATION_VOTE.DREP_ID), drepRec.get(DELEGATION_VOTE.DREP_TYPE));
             }
-        } catch (DataAccessException e) {
-            log.warn("Could not fetch drep delegation for {}: {}", stakeAddress, e.getMessage());
         }
 
-        boolean active = false;
-        try {
-            active = registered
-                    && activeEpoch != null
-                    && dsl.fetchExists(
-                    dsl.selectOne()
-                            .from(EPOCH_STAKE)
-                            .where(EPOCH_STAKE.ADDRESS.eq(stakeAddress))
-                            .and(EPOCH_STAKE.ACTIVE_EPOCH.ge(activeEpoch))
-            );
-        } catch (DataAccessException e) {
-            log.warn("Could not fetch active epoch stake for {}: {}", stakeAddress, e.getMessage());
-            active = registered && poolId != null;
-        }
+        boolean active = registered
+                && activeEpoch != null
+                && dsl.fetchExists(
+                dsl.selectOne()
+                        .from(EPOCH_STAKE)
+                        .where(EPOCH_STAKE.ADDRESS.eq(stakeAddress))
+                        .and(EPOCH_STAKE.ACTIVE_EPOCH.ge(activeEpoch))
+        );
 
         return Optional.of(new AccountInfo(stakeAddress, active, registered, activeEpoch,
                 totalControlled, rewardsSum, withdrawalsSum, reservesSum, treasurySum, poolId, drepId));
@@ -263,44 +225,34 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
     @Override
     public List<AccountReward> findRewards(String stakeAddress, int page, int count, Order order) {
         int offset = Math.max(page, 0) * count;
-        try {
-            SortField<?> orderBy = order == Order.desc ? REWARD.EARNED_EPOCH.desc() : REWARD.EARNED_EPOCH.asc();
-            return dsl.select(REWARD.EARNED_EPOCH, REWARD.AMOUNT, REWARD.POOL_ID, REWARD.TYPE)
-                    .from(REWARD)
-                    .where(REWARD.ADDRESS.eq(stakeAddress))
-                    .orderBy(orderBy)
-                    .limit(count)
-                    .offset(offset)
-                    .fetch(rec -> new AccountReward(
-                            rec.get(REWARD.EARNED_EPOCH),
-                            rec.get(REWARD.AMOUNT),
-                            rec.get(REWARD.POOL_ID),
-                            rec.get(REWARD.TYPE)));
-        } catch (DataAccessException e) {
-            log.warn("Could not fetch rewards for {} (adapot may be disabled): {}", stakeAddress, e.getMessage());
-            return Collections.emptyList();
-        }
+        SortField<?> orderBy = order == Order.desc ? REWARD.EARNED_EPOCH.desc() : REWARD.EARNED_EPOCH.asc();
+        return dsl.select(REWARD.EARNED_EPOCH, REWARD.AMOUNT, REWARD.POOL_ID, REWARD.TYPE)
+                .from(REWARD)
+                .where(REWARD.ADDRESS.eq(stakeAddress))
+                .orderBy(orderBy)
+                .limit(count)
+                .offset(offset)
+                .fetch(rec -> new AccountReward(
+                        rec.get(REWARD.EARNED_EPOCH),
+                        rec.get(REWARD.AMOUNT),
+                        rec.get(REWARD.POOL_ID),
+                        rec.get(REWARD.TYPE)));
     }
 
     @Override
     public List<AccountHistory> findHistory(String stakeAddress, int page, int count, Order order) {
         int offset = Math.max(page, 0) * count;
-        try {
-            SortField<?> orderBy = order == Order.desc ? EPOCH_STAKE.ACTIVE_EPOCH.desc() : EPOCH_STAKE.ACTIVE_EPOCH.asc();
-            return dsl.select(EPOCH_STAKE.ACTIVE_EPOCH, EPOCH_STAKE.AMOUNT, EPOCH_STAKE.POOL_ID)
-                    .from(EPOCH_STAKE)
-                    .where(EPOCH_STAKE.ADDRESS.eq(stakeAddress))
-                    .orderBy(orderBy)
-                    .limit(count)
-                    .offset(offset)
-                    .fetch(rec -> new AccountHistory(
-                            rec.get(EPOCH_STAKE.ACTIVE_EPOCH) != null ? rec.get(EPOCH_STAKE.ACTIVE_EPOCH) : 0,
-                            rec.get(EPOCH_STAKE.AMOUNT),
-                            rec.get(EPOCH_STAKE.POOL_ID)));
-        } catch (DataAccessException e) {
-            log.warn("Could not fetch history for {} (adapot may be disabled): {}", stakeAddress, e.getMessage());
-            return Collections.emptyList();
-        }
+        SortField<?> orderBy = order == Order.desc ? EPOCH_STAKE.ACTIVE_EPOCH.desc() : EPOCH_STAKE.ACTIVE_EPOCH.asc();
+        return dsl.select(EPOCH_STAKE.ACTIVE_EPOCH, EPOCH_STAKE.AMOUNT, EPOCH_STAKE.POOL_ID)
+                .from(EPOCH_STAKE)
+                .where(EPOCH_STAKE.ADDRESS.eq(stakeAddress))
+                .orderBy(orderBy)
+                .limit(count)
+                .offset(offset)
+                .fetch(rec -> new AccountHistory(
+                        rec.get(EPOCH_STAKE.ACTIVE_EPOCH) != null ? rec.get(EPOCH_STAKE.ACTIVE_EPOCH) : 0,
+                        rec.get(EPOCH_STAKE.AMOUNT),
+                        rec.get(EPOCH_STAKE.POOL_ID)));
     }
 
     @Override
