@@ -65,10 +65,10 @@ public class Cip68DatumParser {
     /** CIP-68 version 4 wraps the metadata in a CIP-25 style map: {"721": {policy_id: {asset_name: metadata}}}. */
     private static final BytesPlutusData NESTED_MAP_KEY = BytesPlutusData.of("721");
     /**
-     * The datum versions CIP-68 defines. They are informational: how a datum is read does not depend on its
-     * version but on its structure (see {@link #isNested}), as the CIP's retrieval steps say. A datum with another
-     * version is still read and indexed, and a warning is logged so a new version is noticed. Update the upper bound
-     * when the CIP adds a version.
+     * The datum versions CIP-68 defines. A datum with another version is not indexed: {@link #isDefinedVersion} logs one
+     * warning that names the token and the version and counts the datum as skipped with the reason
+     * {@code invalid_version}. How a datum of version 1 to 4 is read does not depend on the version but on its structure
+     * (see {@link #isNested}), as the CIP's retrieval steps say. Update the upper bound when the CIP adds a version.
      */
     static final long MIN_DEFINED_VERSION = 1;
     static final long MAX_DEFINED_VERSION = 4;
