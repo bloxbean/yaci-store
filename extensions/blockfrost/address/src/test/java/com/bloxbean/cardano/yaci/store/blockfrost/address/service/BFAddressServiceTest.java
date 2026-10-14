@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.blockfrost.address.service;
 
 import com.bloxbean.cardano.yaci.store.account.AccountStoreProperties;
 import com.bloxbean.cardano.yaci.store.blockfrost.address.storage.BFAddressStorageReader;
+import com.bloxbean.cardano.yaci.store.blockfrost.address.storage.impl.model.BFAddressTotal;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorageReader;
@@ -11,6 +12,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -80,6 +82,7 @@ class BFAddressServiceTest {
     @Test
     void usedAddress_isServed() {
         when(reader.addressExists(ADDRESS)).thenReturn(true);
+        when(reader.getAddressTotal(ADDRESS)).thenReturn(new BFAddressTotal(Map.of(), Map.of(), 0L));
 
         endpoints.forEach(endpoint -> endpoint.accept(ADDRESS));
         assertThat(service.getAddressInfo(ADDRESS).getAddress()).isEqualTo(ADDRESS);

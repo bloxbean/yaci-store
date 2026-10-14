@@ -136,9 +136,7 @@ public class BFAddressService {
 
     public BFAddressTotalDTO getAddressTotal(@NonNull String address) {
         requireAddress(address);
-        return bfAddressStorageReader.getAddressTotal(address)
-                .map(total -> toAddressTotalDto(address, total))
-                .orElseGet(() -> emptyAddressTotal(address));
+        return toAddressTotalDto(address, bfAddressStorageReader.getAddressTotal(address));
     }
 
     private BFAddressTotalDTO toAddressTotalDto(String address, BFAddressTotal total) {
@@ -150,15 +148,6 @@ public class BFAddressService {
                 .receivedSum(toAmountList(received))
                 .sentSum(toAmountList(sent))
                 .txCount(total.txCount())
-                .build();
-    }
-
-    private BFAddressTotalDTO emptyAddressTotal(String address) {
-        return BFAddressTotalDTO.builder()
-                .address(address)
-                .receivedSum(Collections.emptyList())
-                .sentSum(Collections.emptyList())
-                .txCount(0L)
                 .build();
     }
 
