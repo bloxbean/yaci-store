@@ -58,11 +58,12 @@ handles it by the datum format:
 - **Nested datum** (version 4 or above, with the `"721"` key): every reference NFT of the output is
   indexed, each resolved to its own entry in the map. A reference NFT with no entry is not indexed.
 - **Flat datum** (versions 1 to 3, or version 4 without `"721"`) (#1236): **every reference NFT of the output is
-  indexed with that datum**, and one WARN names the output, the count and the units. The CIP's retrieval steps
+  indexed with that datum**, and one INFO line names the output, the count and the units (a valid case, so not a
+  warning; see decision 9). The CIP's retrieval steps
   find the output the reference NFT is locked in and read its datum, whatever else the output holds, and only the
   nested map selects an entry, so a flat datum is the metadata of each reference NFT in the output.
   *Trade-off:* some of those tokens may have been given metadata that is not theirs, which is what any client
-  following the CIP shows for them too; the WARN lists them. *Considered and rejected:* indexing none, which hides
+  following the CIP shows for them too; the INFO line lists them. *Considered and rejected:* indexing none, which hides
   every token of the output and treats as an error a case the CIP does not call one; and indexing only the first,
   which was arbitrary (the first asset in the output's list) and matches neither the CIP nor a strict reading.
 
@@ -410,8 +411,15 @@ be kept with replacement characters.
   asset name. It has the CIP-68 shape and is refused, which is why it is reported, unlike a datum with no CIP-68 shape.
 - A datum that is indexed but loses a property (a constructor value, a key that cannot be stored, a `logo` with a scheme
   the CIP does not allow, an invalid `files`) is one WARN line per property, with the policy, the asset name and the reason.
-- An output with a flat datum and several reference NFTs is one WARN line with the number found and their units
-  (decision 1).
+- An output with a flat datum and several reference NFTs is one **INFO** line with the number found and their units
+  (decision 1). It is a valid case that the CIP does not call an error and nothing is lost, and it is common (8,918
+  outputs on mainnet, below), so at WARN it would bury the lines that mean a datum or a property was dropped. What
+  the shared datum loses is still a WARN.
+- A flat datum is parsed once for the whole output, so what it loses is reported **once per output**, not once per
+  reference NFT: one WARN per dropped property, one WARN for a bad `logo` (naming the output and the number of
+  reference NFTs), one for a parse failure or an invalid version, and one count each. The rows, the `indexed` count
+  and the label skips stay per token. Without this a datum that loses a property was counted once for each of its
+  reference NFTs (178 times for the largest output on mainnet), which says nothing about how many datums are bad.
 - A datum that does not have the CIP-68 shape at all (not a constructor, no metadata map, no integer
   version) is **not** logged: reference NFT outputs can carry arbitrary datums, and it would be noise.
 
@@ -425,8 +433,9 @@ A skipped datum writes no row, so it also does not replace the row of an earlier
 `skipped`; reference NFTs paired with user tokens of several labels) and
 `yaci.store.assets.cip68.properties.dropped` (tag `kind`: `constructor`, `key_unsupported`, `key_collision`, `bad_logo_scheme`, `invalid_files`, `too_deep`). The
 tags have a small fixed set of values. They are registered with the CIP-68 processor and need no property; without a
-`MeterRegistry` bean they go to a private registry and nothing is exposed. The WARN lines stay as the per-token
-audit trail.
+`MeterRegistry` bean they go to a private registry and nothing is exposed. The WARN lines stay as the audit trail.
+`indexed` and the label skips count tokens; `properties.dropped`, `parse_failure` and `invalid_version` count datums,
+which for a flat datum shared by several reference NFTs means once per output.
 
 *Why metrics and not a health indicator:* a skipped datum is not a failing service, and mainnet will always have
 some bad tokens, so a health indicator on skips would be permanently degraded or need an arbitrary threshold. Health
@@ -496,8 +505,10 @@ Measured on a full mainnet index built with the current rules (`ebb9daa37`, read
 
 - The strict `image` rule skipped 3,113 tokens (decision 4); the 217 fungible tokens with a bad logo are now kept
   without it.
-- 8,918 outputs hold several reference NFTs with a flat datum: 6,645 hold two, the largest holds 178. Their WARN
-  lines are the biggest source of WARNs in the whole run, so the level of that line is worth a decision of its own.
+- 8,918 outputs hold several reference NFTs with a flat datum: 6,645 hold two, the largest holds 178. That run
+  logged the notice as a WARN, and it was the biggest source of WARNs in the whole run; it is an INFO line now
+  (decision 9). The counters of that run counted what these datums lose once per reference NFT, so they are not
+  comparable with a run of the current code.
 - 10 datums were skipped because their reference NFT is paired with user tokens of labels 222 and 333; none of that kind
   was indexed (the `indexed` outcome never appeared), so the one-label-per-row question above has no live case yet.
 - Of the 175 tokens whose `contractData` property was dropped, 171 are in the table; 4 are not (skipped for another

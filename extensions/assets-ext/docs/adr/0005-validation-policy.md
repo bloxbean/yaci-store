@@ -99,10 +99,6 @@ datum on chain.
 
 ## Open questions
 
-- The notice for a flat datum that several reference NFTs share (ADR 0002 decision 1) is one WARN line per output, and it was
-  the largest single class of WARN lines in the full mainnet run (8,918 outputs, the largest holding 178 reference NFTs).
-  It reports a rule being applied, not data being lost. Should it be an INFO line, or one line per transaction? A level
-  that is too high trains operators to ignore the WARNs that do mean a token was dropped.
 - Whether CIP-26 ever needs Micrometer counters like the CIP-68 ones (ADR 0002 decision 9). It does not today (decision 4),
   because the registry checks entries on GitHub first. It would if rejected entries start to appear in a sync, and
   `perm-skipped` would then have to be split so that validation rejections are not mixed with database errors.
