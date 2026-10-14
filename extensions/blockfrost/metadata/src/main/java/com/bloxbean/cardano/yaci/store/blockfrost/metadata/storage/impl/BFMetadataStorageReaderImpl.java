@@ -73,8 +73,6 @@ public class BFMetadataStorageReaderImpl implements BFMetadataStorageReader {
                 .limit(count)
                 .offset(offset);
 
-        log.debug("[BFMetadataStorageReader] findByLabel SQL: {}", query.getSQL(ParamType.INLINED));
-
         return query.fetch(record -> TxMetadataLabel.builder()
                 .txHash(record.get(TX_HASH))
                 .slot(record.get(SLOT))
