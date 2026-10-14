@@ -17,7 +17,8 @@ import java.util.stream.Collectors;
  *   <li>{@value #INDEXED}: datums stored, tagged {@code label} (222, 333, 444).</li>
  *   <li>{@value #SKIPPED}: datums not stored, tagged {@code label} and {@code reason} (a
  *       {@link DatumRejection.Reason}, {@code parse_failure} for a datum that could not be decoded, or
- *       {@code invalid_version} for a version CIP-68 does not define; the label is {@code unknown} for these two,
+ *       {@code invalid_version} for a version CIP-68 does not define, or {@code no_nested_entry} for a nested
+ *       ({@code "721"}) datum that has no usable entry for the token; the label is {@code unknown} for these three,
  *       since it is derived later).</li>
  *   <li>{@value #MULTI_LABEL}: reference NFTs that have user tokens of several labels, tagged {@code labels}
  *       (for example {@code 222+333}) and {@code outcome} ({@code indexed} or {@code skipped}).</li>
@@ -44,6 +45,7 @@ public class Cip68Metrics {
 
     public static final String PARSE_FAILURE = "parse_failure";
     public static final String INVALID_VERSION = "invalid_version";
+    public static final String NO_NESTED_ENTRY = "no_nested_entry";
 
     /** The {@code kind} of a {@code logo} that is left out because it is not a URI with an allowed scheme. */
     public static final String BAD_LOGO_SCHEME = "bad_logo_scheme";
@@ -84,6 +86,11 @@ public class Cip68Metrics {
 
     public void invalidVersion() {
         registry.counter(SKIPPED, LABEL_TAG, UNKNOWN_LABEL, REASON_TAG, INVALID_VERSION).increment();
+    }
+
+    /** A nested ({@code "721"}) datum that has no usable entry for the token it was read for. */
+    public void noNestedEntry() {
+        registry.counter(SKIPPED, LABEL_TAG, UNKNOWN_LABEL, REASON_TAG, NO_NESTED_ENTRY).increment();
     }
 
     /** A reference NFT with user tokens of several labels, tagged {@code labels} (for example {@code 222+333}) and {@code outcome}. */
