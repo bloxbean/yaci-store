@@ -323,8 +323,11 @@ strict again, on the argument above.
 nested format by the `"721"` key (step 4 of "Retrieve metadata as 3rd party": "direct metadata (map without "721"
 key) or nested map format (map with "721" key)"), so the module does the same: nested if the metadata map has the
 `"721"` key with a map as its value, flat otherwise. With a nested datum the entry for the reference NFT is used
-(without a reference NFT only if it is the single entry), and an entry that cannot be resolved skips the datum. Before
-this decision a datum was nested only if its version was 4 or above, a rule the CIP does not state.
+(without a reference NFT only if it is the single entry). An entry that cannot be resolved (another policy id, another
+asset name, or a value that is not a map) skips the datum for that token, with one WARN and the reason
+`no_nested_entry` (decision 9); in an output with several reference NFTs, each one the datum does not list is skipped
+and reported the same way. Before this decision a datum was nested only if its version was 4 or above, a rule the CIP
+does not state.
 
 *Effect on mainnet.* Six reference NFTs have a datum with a version outside 1 to 4 (7 datums, 3 policies, measured on
 the full index built with the rule); every other token is at version 1, 2 or 3. All are plain flat metadata maps, and
@@ -403,6 +406,8 @@ be kept with replacement characters.
 - A datum that parses but is skipped because it breaks a requirement of its label (no `name`, no
   `description` on a fungible token, no `image` or an image with a scheme the CIP does not allow on a 222 or
   444 token) is one WARN line with the policy, the asset name, the label and the reason.
+- A nested (`"721"`) datum that has no usable entry for the token (decision 7) is one WARN line with the policy and the
+  asset name. It has the CIP-68 shape and is refused, which is why it is reported, unlike a datum with no CIP-68 shape.
 - A datum that is indexed but loses a property (a constructor value, a key that cannot be stored, a `logo` with a scheme
   the CIP does not allow, an invalid `files`) is one WARN line per property, with the policy, the asset name and the reason.
 - An output with a flat datum and several reference NFTs is one WARN line with the number found and their units
@@ -415,7 +420,7 @@ A skipped datum writes no row, so it also does not replace the row of an earlier
 **Metrics (#1237).** The totals are also Micrometer counters, read from `/actuator/prometheus`:
 `yaci.store.assets.cip68.datums.indexed` (tag `label`: 222, 333, 444),
 `yaci.store.assets.cip68.datums.skipped` (tags `label` and `reason`: `no_name`, `no_description`, `no_image`,
-`bad_image_scheme`, or `parse_failure` and `invalid_version`, both with label `unknown`) and
+`bad_image_scheme`, or `parse_failure`, `invalid_version` and `no_nested_entry`, all with label `unknown`) and
 `yaci.store.assets.cip68.datums.multi_label` (tags `labels`, for example `222+333`, and `outcome`: `indexed` or
 `skipped`; reference NFTs paired with user tokens of several labels) and
 `yaci.store.assets.cip68.properties.dropped` (tag `kind`: `constructor`, `key_unsupported`, `key_collision`, `bad_logo_scheme`, `invalid_files`, `too_deep`). The
@@ -447,7 +452,7 @@ fields of one response can come from two sources. Each property in the response 
 
 **A rejected update leaves the previous metadata in the API.** The API reads the latest *stored* row (decision 1).
 When a token's datum is skipped (a missing `name` or `description`, an `image` with a scheme the CIP does not allow, a
-version outside 1 to 4, a label pair that fails validation), nothing is written, so the row of the token's earlier
+version outside 1 to 4, a label pair that fails validation, a nested datum with no entry for the token), nothing is written, so the row of the token's earlier
 datum stays the latest and is returned as if it were current. The only trace of the rejected update is the WARN line
 and the `datums.skipped` counter (decision 9); the API response does not say that a newer datum was refused. The new
 strict rules make this more frequent than before, and it is not specific to one rule: any skip has the same effect.
@@ -500,8 +505,10 @@ Measured on a full mainnet index built with the current rules (`ebb9daa37`, read
 
 Not measured yet:
 
-- Whether any real nested (`"721"`) datum exists on-chain: none of the 250,876 rows has it as an additional property, and
-  the nested case is covered by synthetic datums only.
+- Whether any real nested (`"721"`) datum exists on-chain: none of the 250,876 rows is one (the two datums that contain
+  the bytes `721` are flat, with `Shrine #0721` in the token name), and the nested case is covered by synthetic datums
+  only. That index was built before the `no_nested_entry` WARN and counter existed, so a nested datum with no entry for its
+  token would have been skipped without a trace; the next full index will show whether there are any.
 - How good the datum-shape inference is for a reference NFT with no paired token, and whether an exact
   cross-transaction lookup is worth its cost.
 - How many of the 2,508 tokens that still have an older row (decision 10) have an out-of-date one.
