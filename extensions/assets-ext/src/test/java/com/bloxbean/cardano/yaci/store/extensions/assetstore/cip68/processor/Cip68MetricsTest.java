@@ -114,6 +114,45 @@ class Cip68MetricsTest {
     }
 
     @Test
+    void countsWhatAFlatDatumLosesOnceWhenSeveralReferenceNftsShareIt() {
+        // one flat datum with a bad logo and a constructor property, held by an output with three reference NFTs
+        MapPlutusData props = new MapPlutusData();
+        props.put(BytesPlutusData.of("name"), BytesPlutusData.of("N"));
+        props.put(BytesPlutusData.of("description"), BytesPlutusData.of("d"));
+        props.put(BytesPlutusData.of("logo"), BytesPlutusData.of("QmBareHashWithoutScheme"));
+        props.put(BytesPlutusData.of("k"), ConstrPlutusData.of(0));
+
+        processor.processTransaction(eventWithReferenceNfts(datum(props), "01", "02", "03"));
+
+        // each reference NFT has its own row, so the tokens are counted per token ...
+        assertThat(indexed(333)).isEqualTo(3);
+        // ... but the datum is one, so what it loses is reported once, not three times
+        assertThat(dropped("constructor")).isEqualTo(1);
+        assertThat(dropped("bad_logo_scheme")).isEqualTo(1);
+    }
+
+    @Test
+    void countsWhatTwoOutputsLoseOnceEachWhenEachHoldsOneReferenceNft() {
+        MapPlutusData props = new MapPlutusData();
+        props.put(BytesPlutusData.of("name"), BytesPlutusData.of("N"));
+        props.put(BytesPlutusData.of("description"), BytesPlutusData.of("d"));
+        props.put(BytesPlutusData.of("k"), ConstrPlutusData.of(0));
+
+        processor.processTransaction(eventWithReferenceNfts(datum(props), "01"));
+        processor.processTransaction(eventWithReferenceNfts(datum(props), "02"));
+
+        assertThat(dropped("constructor")).isEqualTo(2);
+    }
+
+    @Test
+    void countsAnUndecodableDatumOnceWhenSeveralReferenceNftsShareIt() {
+        processor.processTransaction(eventWithReferenceNfts("zz-not-hex", "01", "02"));
+
+        assertThat(registry.get(Cip68Metrics.SKIPPED).tag("label", "unknown").tag("reason", "parse_failure").counter().count())
+                .isEqualTo(1);
+    }
+
+    @Test
     void countsDroppedProperties() {
         MapPlutusData nested = new MapPlutusData();
         nested.put(BytesPlutusData.of("k"), ConstrPlutusData.of(0));
@@ -180,6 +219,20 @@ class Cip68MetricsTest {
         return AddressUtxoEvent.builder()
                 .metadata(EventMetadata.builder().slot(100L).build())
                 .txInputOutputs(List.of(TxInputOutput.builder().outputs(List.of(refNft, userToken)).build()))
+                .build();
+    }
+
+    /** One output that holds a reference NFT for each of these base names (hex), all with the same inline datum. */
+    private AddressUtxoEvent eventWithReferenceNfts(String datum, String... baseNames) {
+        List<Amt> amounts = new java.util.ArrayList<>();
+        for (String base : baseNames) {
+            amounts.add(Amt.builder().unit(POLICY + Cip68Constants.REFERENCE_TOKEN_PREFIX + base).quantity(BigInteger.ONE).build());
+        }
+        AddressUtxo output = AddressUtxo.builder().txHash(TX_HASH).txIndex(0).outputIndex(0).inlineDatum(datum)
+                .amounts(amounts).build();
+        return AddressUtxoEvent.builder()
+                .metadata(EventMetadata.builder().slot(100L).build())
+                .txInputOutputs(List.of(TxInputOutput.builder().outputs(List.of(output)).build()))
                 .build();
     }
 
