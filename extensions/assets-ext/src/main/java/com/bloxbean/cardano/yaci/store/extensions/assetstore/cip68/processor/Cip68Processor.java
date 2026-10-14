@@ -13,6 +13,7 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.repository.Cip68MetadataRepository;
 import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxoEvent;
 import com.bloxbean.cardano.yaci.store.utxo.domain.TxInputOutput;
+import jakarta.annotation.Nullable;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -67,8 +68,14 @@ public class Cip68Processor {
             Set<String> assetUnitsInTx = collectAssetUnits(txIo);
 
             for (AddressUtxo output : txIo.getOutputs()) {
-                for (Amt refNftAmt : referenceNftsToIndex(output)) {
-                    toEntity(output, AssetType.fromUnit(refNftAmt.getUnit()), assetUnitsInTx, slot).ifPresent(entities::add);
+                List<Amt> refNfts = cip68TokenService.extractReferenceNfts(output);
+                SharedDatum shared = null;
+                if (refNfts.size() > 1 && !cip68DatumParser.hasNestedMetadata(output.getInlineDatum())) {
+                    logFlatDatumOfSeveralReferenceNfts(output, refNfts);
+                    shared = new SharedDatum(output, refNfts.size());
+                }
+                for (Amt refNftAmt : refNfts) {
+                    toEntity(output, AssetType.fromUnit(refNftAmt.getUnit()), assetUnitsInTx, slot, shared).ifPresent(entities::add);
                 }
             }
         }
@@ -78,9 +85,16 @@ public class Cip68Processor {
         }
     }
 
-    /** The row for one reference NFT of an output, or empty if its datum cannot be parsed or is not valid for its labels. */
-    private Optional<Cip68Metadata> toEntity(AddressUtxo output, AssetType refNft, Set<String> assetUnitsInTx, Long slot) {
-        return cip68DatumParser.parse(output.getInlineDatum(), refNft).flatMap(parsed -> {
+    /**
+     * The row for one reference NFT of an output, or empty if its datum cannot be parsed or is not valid for its labels.
+     * {@code shared} is set when the datum is a flat one that the output's several reference NFTs have in common.
+     */
+    private Optional<Cip68Metadata> toEntity(AddressUtxo output, AssetType refNft, Set<String> assetUnitsInTx, Long slot,
+                                             @Nullable SharedDatum shared) {
+        Optional<ParsedCip68Datum> parsedDatum = shared != null
+                ? shared.parsed()
+                : cip68DatumParser.parse(output.getInlineDatum(), refNft);
+        return parsedDatum.flatMap(parsed -> {
             // The labels come first: which fields a datum must have depends on them. A reference NFT can have user
             // tokens of several labels (the CIP allows it), and then the datum has to satisfy the requirements of
             // every one of them.
@@ -88,7 +102,7 @@ public class Cip68Processor {
             if (!satisfiesEveryLabel(parsed, refNft, labels)) {
                 return Optional.empty();
             }
-            ParsedCip68Datum stored = withoutInvalidLogo(parsed, refNft);
+            ParsedCip68Datum stored = withoutInvalidLogo(parsed, refNft, shared);
             int label = labels.getFirst();
             metrics.datumIndexed(label);
             if (labels.size() > 1) {
@@ -104,17 +118,52 @@ public class Cip68Processor {
 
     /**
      * The logo is optional, so a bad one costs only the logo: it is left out with a warning and the rest of the datum
-     * is indexed.
+     * is indexed. The logo of a datum that several reference NFTs share is left out of each of their rows, but
+     * reported (warning and count) once.
      */
-    private ParsedCip68Datum withoutInvalidLogo(ParsedCip68Datum parsed, AssetType refNft) {
+    private ParsedCip68Datum withoutInvalidLogo(ParsedCip68Datum parsed, AssetType refNft, @Nullable SharedDatum shared) {
         Optional<String> reason = cip68TokenService.invalidLogoReason(parsed);
         if (reason.isEmpty()) {
             return parsed;
         }
-        log.warn("CIP-68 datum of {}/{}: dropping the logo and keeping the rest, because {}",
-                refNft.policyId(), refNft.assetName(), reason.get());
-        metrics.propertyDropped(Cip68Metrics.BAD_LOGO_SCHEME);
+        if (shared == null) {
+            log.warn("CIP-68 datum of {}/{}: dropping the logo and keeping the rest, because {}",
+                    refNft.policyId(), refNft.assetName(), reason.get());
+            metrics.propertyDropped(Cip68Metrics.BAD_LOGO_SCHEME);
+        } else if (!shared.logoReported) {
+            shared.logoReported = true;
+            log.warn("Output {}#{}: dropping the logo of the flat datum shared by its {} reference NFTs and keeping the rest, "
+                            + "because {}",
+                    shared.output.getTxHash(), shared.output.getOutputIndex(), shared.referenceNfts, reason.get());
+            metrics.propertyDropped(Cip68Metrics.BAD_LOGO_SCHEME);
+        }
         return parsed.withoutLogo();
+    }
+
+    /**
+     * The flat datum of an output that holds several reference NFTs. It is the metadata of each of them and is the same
+     * for all, so it is parsed once, and what it loses (a dropped property, an undecodable datum, an undefined version)
+     * is reported once for the output instead of once per reference NFT. The rows, the {@code indexed} count and the
+     * checks against the labels stay per reference NFT, since each has its own row and its own user tokens.
+     */
+    private final class SharedDatum {
+        private final AddressUtxo output;
+        private final int referenceNfts;
+        private Optional<ParsedCip68Datum> parsed;
+        private boolean logoReported;
+
+        private SharedDatum(AddressUtxo output, int referenceNfts) {
+            this.output = output;
+            this.referenceNfts = referenceNfts;
+        }
+
+        /** Parsed on first use, without a reference NFT: the datum is not specific to one of them. */
+        private Optional<ParsedCip68Datum> parsed() {
+            if (parsed == null) {
+                parsed = cip68DatumParser.parse(output.getInlineDatum());
+            }
+            return parsed;
+        }
     }
 
     /**
@@ -213,21 +262,18 @@ public class Cip68Processor {
     }
 
     /**
-     * The reference NFTs of an output whose datum should be indexed: all of them. An output with one reference NFT
-     * is the normal case. With several, a nested (version 4) datum carries the metadata of each, each resolved to its
-     * own entry. A flat datum has no entry per token, but the CIP's retrieval steps look up the output of the
-     * reference NFT and read its datum, whatever else the output holds, so a flat datum is the metadata of every
-     * reference NFT in the output. They are all indexed with it, and one warning lists them so the case can be audited.
+     * All the reference NFTs of an output are indexed. An output with one reference NFT is the normal case. With
+     * several, a nested (version 4) datum carries the metadata of each, each resolved to its own entry. A flat datum has
+     * no entry per token, but the CIP's retrieval steps look up the output of the reference NFT and read its datum,
+     * whatever else the output holds, so a flat datum is the metadata of every reference NFT in the output. They are all
+     * indexed with it, and one info line lists them so the case can be audited. It is a valid case, so it is not a
+     * warning; whatever the shared datum loses is reported as a warning of its own.
      */
-    private List<Amt> referenceNftsToIndex(AddressUtxo output) {
-        List<Amt> refNfts = cip68TokenService.extractReferenceNfts(output);
-        if (refNfts.size() > 1 && !cip68DatumParser.hasNestedMetadata(output.getInlineDatum())) {
-            log.warn("Output {}#{} holds {} reference NFTs with a flat CIP-68 datum; CIP-68 gives a flat datum to every "
-                            + "reference NFT in the output, so indexing it for all of them: {}",
-                    output.getTxHash(), output.getOutputIndex(), refNfts.size(),
-                    refNfts.stream().map(Amt::getUnit).collect(Collectors.joining(", ")));
-        }
-        return refNfts;
+    private void logFlatDatumOfSeveralReferenceNfts(AddressUtxo output, List<Amt> refNfts) {
+        log.info("Output {}#{} holds {} reference NFTs with a flat CIP-68 datum; CIP-68 gives a flat datum to every "
+                        + "reference NFT in the output, so indexing it for all of them: {}",
+                output.getTxHash(), output.getOutputIndex(), refNfts.size(),
+                refNfts.stream().map(Amt::getUnit).collect(Collectors.joining(", ")));
     }
 
     /**

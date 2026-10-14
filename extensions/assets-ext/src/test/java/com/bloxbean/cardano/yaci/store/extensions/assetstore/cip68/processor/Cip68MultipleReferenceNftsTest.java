@@ -43,7 +43,7 @@ import static org.mockito.Mockito.verify;
  *   <li>One reference NFT per output (the usual pattern, each with its own datum): every token is indexed.</li>
  *   <li>Several reference NFTs in one output: a nested (version 4) datum carries the metadata of each, so each is
  *       indexed with its own entry. A flat datum is the metadata of every reference NFT in the output, as the CIP's
- *       retrieval steps read it, so all of them are indexed with it and one warning lists them.</li>
+ *       retrieval steps read it, so all of them are indexed with it and one info line lists them.</li>
  * </ul>
  * Runs the real parser, token service and processor with the log captured; only the repository is mocked.
  */
@@ -125,7 +125,7 @@ class Cip68MultipleReferenceNftsTest {
     }
 
     @Test
-    void indexesEveryReferenceNftOfAFlatDatumWithTheSameMetadataAndWarns() {
+    void indexesEveryReferenceNftOfAFlatDatumWithTheSameMetadataAndLogsIt() {
         // the CIP's retrieval steps read the datum of the output the reference NFT is in, whatever else it holds
         String datum = flatDatum(nft("Flat token"));
 
@@ -136,7 +136,9 @@ class Cip68MultipleReferenceNftsTest {
             assertThat(row.getName()).isEqualTo("Flat token");
             assertThat(row.getDatum()).isEqualTo(datum);
         });
-        assertThat(warnings()).singleElement().satisfies(w -> assertThat(w)
+        // a valid case, so an info line for the audit and not a warning
+        assertThat(warnings()).isEmpty();
+        assertThat(infos()).singleElement().satisfies(w -> assertThat(w)
                 .contains("holds 2 reference NFTs").contains("flat CIP-68 datum")
                 .contains(POLICY + REF + A).contains(POLICY + REF + B).contains("indexing it for all of them"));
     }
@@ -148,7 +150,8 @@ class Cip68MultipleReferenceNftsTest {
         List<Cip68Metadata> rows = index(output(datum(flat, 4), refUnit(A), refUnit(B)));
 
         assertThat(rows).extracting(Cip68Metadata::getAssetName).containsExactlyInAnyOrder(REF + A, REF + B);
-        assertThat(warnings()).hasSize(1);
+        assertThat(warnings()).isEmpty();
+        assertThat(infos()).hasSize(1);
     }
 
     @Test
@@ -178,7 +181,15 @@ class Cip68MultipleReferenceNftsTest {
     // ---------- helpers ----------
 
     private List<String> warnings() {
-        return logs.list.stream().filter(e -> e.getLevel() == Level.WARN).map(ILoggingEvent::getFormattedMessage).toList();
+        return messages(Level.WARN);
+    }
+
+    private List<String> infos() {
+        return messages(Level.INFO);
+    }
+
+    private List<String> messages(Level level) {
+        return logs.list.stream().filter(e -> e.getLevel() == level).map(ILoggingEvent::getFormattedMessage).toList();
     }
 
     private static String refUnit(String baseHex) {
