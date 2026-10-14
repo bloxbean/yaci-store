@@ -210,11 +210,14 @@ show it. A full mainnet index with the earlier, stricter rule (the token dropped
 tokens with such a logo (216 a bare IPFS CID, `Qm...` or `baf...`; one a raw base64 PNG); with this rule they are
 indexed instead.
 
-*Cost of the `image` rule:* on an earlier mainnet index, this rule would remove 12 NFTs whose datum has
-`mediaType: image/svg+xml` and an empty `image` (the "DID registration" sensor tokens) and 9 more whose image
-is not a spec URI (6 `iagon://` wine NFTs and 3 free-text values). They are real tokens, no longer in the
-table, and a dropped token comes back only when its datum is processed again (a resync), which is cheap today because the module has no known users yet. The count was taken before
-the rule existed and has not been re-measured with it.
+*Cost of the `image` rule:* measured on a full mainnet index built with it (build `ebb9daa37`, from genesis to the
+tip, read on 2026-10-14). The rule skipped 4,683 datums of **3,113 distinct tokens from 6 policies**, all label 222.
+One policy accounts for 3,091 of them (a collection whose `image` is a bare IPFS CID, `Qm...`); 3,102 of the 3,113 have
+a bare CID in `image`. The other 11 are 6 `iagon://` wine NFTs, 3 free-text values, `asdas` and one placeholder text.
+Another 100 tokens from 38 policies have no `image` at all (mostly test tokens such as `SecurityTest` and `NFT1`).
+They are real tokens, not indexed from that datum, and a skipped datum is not retried until it is processed again
+(a resync), which is cheap today because the module has no known users yet. 2,508 of the 3,113 tokens still have
+an older row from an earlier datum, which the API then serves (decision 10).
 
 - **`files` (222, 444) is optional (`? files : [* files_details]`), and each entry needs a `mediaType` and a `src`
   that is a `uri`.** If any entry breaks that (not a map, no `mediaType`, no `src`, an empty `src`, a `src` that
@@ -223,8 +226,9 @@ the rule existed and has not been re-measured with it.
   `properties.dropped{kind="invalid_files"}`. The valid entries of such a list are dropped too: the rule drops a
   property, not part of one, and a half-listed set of files would suggest the token has no others. A `src` given as a
   list of chunks is joined and checked as one value. On the mainnet index built with the earlier rule (no check),
-  about 100 of 71,915 tokens with `files` have an entry like that (34 with an empty `src`, 12 with no `mediaType`,
-  2 with no `src`, the rest a bare IPFS hash), all 222.
+  **86 tokens from 16 policies** (89 datums) have an entry like that on the full mainnet index built with the rule: 38 with
+  no usable `src`, 30 with a `src` that is not a URI with an allowed scheme (a bare IPFS hash, for example), 15 with no
+  `mediaType` and 3 with an entry that is not a map. 85 are label 222, one is not stored.
 
 *Considered and tried, then reversed:* indexing such tokens with a WARN and storing the image as written. That
 kept every token, but the table then held images no client can open, and it left the module more permissive than
@@ -313,8 +317,9 @@ key) or nested map format (map with "721" key)"), so the module does the same: n
 (without a reference NFT only if it is the single entry), and an entry that cannot be resolved skips the datum. Before
 this decision a datum was nested only if its version was 4 or above, a rule the CIP does not state.
 
-*Effect on mainnet.* Two reference NFTs have a datum with a version outside 1 to 4; every other token is at version
-1, 2 or 3. Both datums are plain flat metadata maps, and **both are no longer indexed**:
+*Effect on mainnet.* Six reference NFTs have a datum with a version outside 1 to 4 (7 datums, 3 policies, measured on
+the full index built with the rule); every other token is at version 1, 2 or 3. All are plain flat metadata maps, and
+**none is indexed from that datum**:
 
 - `HOSKY 10K NFT 0002` (version 100) is a test token. Its version 100 datum was replaced about 44,700 slots later by
   a valid version 1 datum, which is indexed, and the token was burned. Nothing is lost.
@@ -322,8 +327,10 @@ this decision a datum was nested only if its version was 4 or above, a rule the 
   supply of 3,000,000,000,000 units, and both of its datums declare version 0. It disappears from the CIP-68 side of
   the API. It is also in the CIP-26 registry, so the API still serves it from there (name, ticker, decimals and logo
   from the registry; any field that only CIP-68 has is lost).
+- `SaveCard#1` to `SaveCard#4`, four tokens of one policy, all version 0. They are not in the table and the CIP-26
+  registry has no entry for them, so they are not served at all.
 
-None of the 28,957 mainnet rows has a `"721"` key as an additional property, so reading by structure changes how no
+None of the 250,876 mainnet rows has a `"721"` key as an additional property, so reading by structure changes how no
 existing token is read.
 
 *Trade-offs.* The allowed range is a constant in the parser. When the CIP adds a version (a version 5 has been
@@ -394,6 +401,8 @@ be kept with replacement characters.
 - A datum that does not have the CIP-68 shape at all (not a constructor, no metadata map, no integer
   version) is **not** logged: reference NFT outputs can carry arbitrary datums, and it would be noise.
 
+A skipped datum writes no row, so it also does not replace the row of an earlier datum of the same token (decision 10).
+
 **Metrics (#1237).** The totals are also Micrometer counters, read from `/actuator/prometheus`:
 `yaci.store.assets.cip68.datums.indexed` (tag `label`: 222, 333, 444),
 `yaci.store.assets.cip68.datums.skipped` (tags `label` and `reason`: `no_name`, `no_description`, `no_image`,
@@ -426,6 +435,22 @@ counted yet.
 *Why per field:* a token can have a name on chain and a logo only in the registry. *Trade-off:* the
 fields of one response can come from two sources, and `show_cips_details` is the way to see which.
 
+**A rejected update leaves the previous metadata in the API.** The API reads the latest *stored* row (decision 1).
+When a token's datum is skipped (a missing `name` or `description`, an `image` with a scheme the CIP does not allow, a
+version outside 1 to 4, a label pair that fails validation), nothing is written, so the row of the token's earlier
+datum stays the latest and is returned as if it were current. The only trace of the rejected update is the WARN line
+and the `datums.skipped` counter (decision 9); the API response does not say that a newer datum was refused. The new
+strict rules make this more frequent than before, and it is not specific to one rule: any skip has the same effect.
+*On a full mainnet index:* 2,508 of the 3,113 tokens skipped for a bad `image`, and 75 of 526 skipped for no `name`,
+12 of 464 for no `description`, 6 of 100 for no `image` and 1 of 6 for a version outside 1 to 4, still have a row
+from an earlier datum (it was not checked per token whether that row is out of date). *Why accepted:* the
+alternatives are to delete the earlier rows when a datum is rejected, which makes a token disappear for an error in a
+later update and breaks the rule that the table keeps the full history (decision 1), or to store the rejected datum
+with a flag, which puts rows no client can use in the table. *What a consumer can do:* the datum of each stored row is
+in `cip68_metadata.datum`, and a token whose newest on-chain datum is refused can be found from the WARN lines or from
+`increase(yaci_store_assets_cip68_datums_skipped_total[...])`. This is stated here because it follows from two decisions
+that are each reasonable alone.
+
 ## Consequences
 
 - Every skip caused by a missing or invalid required field, a parse failure or an over-limit value leaves a WARN.
@@ -433,6 +458,8 @@ fields of one response can come from two sources, and `show_cips_details` is the
 - A token can be indexed with fewer properties than its datum has: an optional property that breaks the CIP (a bad
   `logo`, an invalid `files`, a constructor value) is dropped and the token kept. The datum hex stays in
   `cip68_metadata.datum`, so the dropped value can be recovered.
+- A skipped update does not remove the token: the API keeps serving the row of its last accepted datum, and nothing in
+  the response says a newer datum was refused (decision 10).
 - NFTs and RFTs without an acceptable image are not in the table at all; tokens that use another scheme
   (`iagon://`) appear only after the CIP allows it and the index is rebuilt.
 - Because NFTs and RFTs are stored without being served, their rules can change later without a
@@ -450,17 +477,24 @@ Decisions that are still open:
   consumer should ignore a datum whose version it does not know? The module ignores it and warns; neither point is
   raised in the CIPs repository yet.
 
-Not measured yet (a full mainnet index with the current rules will answer them; none of them is a design
-question until then):
+Measured on a full mainnet index built with the current rules (`ebb9daa37`, read on 2026-10-14):
 
-- How many tokens the strict `image` rule removes in total on a current index (a full mainnet index with the earlier
-  `logo` rule showed 217 fungible tokens with a bad logo; they are now kept without it).
-- How many outputs hold several reference NFTs, and whether any real nested datum exists on-chain. The nested case
-  is covered by synthetic datums only.
-- How many tokens have several user tokens for one reference NFT.
+- The strict `image` rule skipped 3,113 tokens (decision 4); the 217 fungible tokens with a bad logo are now kept
+  without it.
+- 8,918 outputs hold several reference NFTs with a flat datum: 6,645 hold two, the largest holds 178. Their WARN
+  lines are the biggest source of WARNs in the whole run, so the level of that line is worth a decision of its own.
+- 10 datums were skipped because their reference NFT is paired with user tokens of labels 222 and 333; none of that kind
+  was indexed (the `indexed` outcome never appeared), so the one-label-per-row question above has no live case yet.
+- Of the 175 tokens whose `contractData` property was dropped, 171 are in the table; 4 are not (skipped for another
+  reason).
+
+Not measured yet:
+
+- Whether any real nested (`"721"`) datum exists on-chain: none of the 250,876 rows has it as an additional property, and
+  the nested case is covered by synthetic datums only.
 - How good the datum-shape inference is for a reference NFT with no paired token, and whether an exact
   cross-transaction lookup is worth its cost.
-- How many of the 203 `contractData` NFT datums survive the `image` rule.
+- How many of the 2,508 tokens that still have an older row (decision 10) have an out-of-date one.
 
 ## References
 
