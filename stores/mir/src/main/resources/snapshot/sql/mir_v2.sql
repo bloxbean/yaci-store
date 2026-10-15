@@ -4,6 +4,9 @@
 -- re-import of the same snapshot reproduces exactly the same ids, and the block number is recovered
 -- by joining the block export on block_hash.
 --
+-- Both id and epoch are cast to the target types. The files sit in hive-style epoch=N directories,
+-- and DuckDB replaces the epoch column with the directory value typed BIGINT.
+--
 -- Parameters: ${files}, ${dep.block}, ${cutSlot}, ${uuidNamespace}
 WITH src AS (
     SELECT * FROM read_parquet(${files}) WHERE slot <= ${cutSlot}
@@ -24,14 +27,14 @@ SELECT
          || '5' || substr(k.h, 14, 3) || '-'
          || substr('89ab', ((position(substr(k.h, 17, 1) IN '0123456789abcdef') - 1) % 4) + 1, 1)
          || substr(k.h, 18, 3) || '-'
-         || substr(k.h, 21, 12) AS VARCHAR) AS id,
+         || substr(k.h, 21, 12) AS UUID) AS id,
     k.tx_hash                           AS tx_hash,
     k.cert_index                        AS cert_index,
     k.pot                               AS pot,
     k.credential                        AS credential,
     k.address                           AS address,
     k.amount                            AS amount,
-    k.epoch                             AS epoch,
+    CAST(k.epoch AS INTEGER)            AS epoch,
     k.slot                              AS slot,
     k.block_hash                        AS block_hash,
     b.number                            AS block,
