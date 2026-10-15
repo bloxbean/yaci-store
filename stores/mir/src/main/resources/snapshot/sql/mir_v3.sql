@@ -1,8 +1,9 @@
 -- The MIR export omits both the operational surrogate id and the block number.
 --
--- The id is derived as a deterministic UUIDv5 over the natural key (tx_hash, cert_index) so a
--- re-import of the same snapshot reproduces exactly the same ids, and the block number is recovered
--- by joining the block export on block_hash.
+-- The id is derived as a deterministic UUIDv5 over the natural key (tx_hash, cert_index, credential)
+-- so a re-import of the same snapshot reproduces exactly the same ids, and the block number is
+-- recovered by joining the block export on block_hash. One MIR certificate pays many credentials
+-- (mainnet: 208,618 rows from 1,062 certificates), so (tx_hash, cert_index) alone is not unique.
 --
 -- Both id and epoch are cast to the target types. The files sit in hive-style epoch=N directories,
 -- and DuckDB replaces the epoch column with the directory value typed BIGINT.
@@ -18,7 +19,8 @@ keyed AS (
     SELECT s.*,
            sha1(from_hex(${uuidNamespace})
                 || CAST(COALESCE(CAST(s.tx_hash AS VARCHAR), '') || chr(31)
-                        || COALESCE(CAST(s.cert_index AS VARCHAR), '') AS BLOB)) AS h
+                        || COALESCE(CAST(s.cert_index AS VARCHAR), '') || chr(31)
+                        || COALESCE(CAST(s.credential AS VARCHAR), '') AS BLOB)) AS h
     FROM src s
 )
 SELECT

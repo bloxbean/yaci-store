@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.snapshot.load;
 
 import com.bloxbean.cardano.yaci.store.snapshot.convert.ConverterRegistry;
+import com.bloxbean.cardano.yaci.store.snapshot.convert.UuidV5Converter;
 import com.bloxbean.cardano.yaci.store.snapshot.ducklake.DuckDb;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.SnapshotSpecRegistry;
 import com.bloxbean.cardano.yaci.store.snapshot.util.Identifiers;
@@ -20,6 +21,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * The mir export lives in hive-style {@code epoch=N} directories, and DuckDB replaces the file's
  * int32 epoch column with the directory value typed BIGINT. The transform must still produce the
  * target types (mainnet failed with id VARCHAR -> uuid and epoch BIGINT -> integer).
+ *
+ * <p>One certificate pays many credentials, so the id must cover the credential too (mainnet failed
+ * with a duplicate mir_pkey: 208,618 rows from 1,062 certificates).
  */
 class MirTransformTypesTest {
 
@@ -41,7 +45,10 @@ class MirTransformTypesTest {
                     SELECT 'aa'::VARCHAR tx_hash, 0::INTEGER cert_index, 'RESERVES'::VARCHAR pot,
                            'cred'::VARCHAR credential, 'stake1x'::VARCHAR address, 5::DECIMAL(38,0) amount,
                            208::INTEGER epoch, 4924900::BIGINT slot, 'bh'::VARCHAR block_hash,
-                           TIMESTAMPTZ '2020-08-08 21:44:51+00' block_time""");
+                           TIMESTAMPTZ '2020-08-08 21:44:51+00' block_time
+                    UNION ALL
+                    SELECT 'aa', 0, 'RESERVES', 'cred2', 'stake1y', 7, 208, 4924900, 'bh',
+                           TIMESTAMPTZ '2020-08-08 21:44:51+00'""");
             Path block = write(duck, "main/block/date=2020-08-08/b.parquet",
                     "SELECT 'bh'::VARCHAR hash, 4500000::BIGINT number");
 
@@ -63,12 +70,18 @@ class MirTransformTypesTest {
             produced.forEach((column, type) -> assertThat(TypeCompatibility.reject(type, TARGET.get(column)))
                     .as("%s: %s -> %s", column, type, TARGET.get(column)).isNull());
 
-            try (ResultSet rs = duck.createStatement().executeQuery("SELECT id, epoch, block FROM (" + sql + ")")) {
-                assertThat(rs.next()).isTrue();
-                assertThat(rs.getObject(1)).isInstanceOf(java.util.UUID.class);
-                assertThat(rs.getInt(2)).isEqualTo(208);
-                assertThat(rs.getLong(3)).isEqualTo(4500000L);
+            Map<String, Object> ids = new LinkedHashMap<>();
+            try (ResultSet rs = duck.createStatement().executeQuery(
+                    "SELECT credential, id, epoch, block FROM (" + sql + ") ORDER BY credential")) {
+                while (rs.next()) {
+                    ids.put(rs.getString(1), rs.getObject(2));
+                    assertThat(rs.getInt(3)).isEqualTo(208);
+                    assertThat(rs.getLong(4)).isEqualTo(4500000L);
+                }
             }
+            assertThat(ids).containsOnlyKeys("cred", "cred2");
+            assertThat(ids.get("cred")).isEqualTo(UuidV5Converter.compute("aa\u001f0\u001fcred"));
+            assertThat(ids.get("cred2")).isEqualTo(UuidV5Converter.compute("aa\u001f0\u001fcred2"));
         }
     }
 
