@@ -22,6 +22,7 @@ import org.jooq.SortField;
 import org.jooq.Table;
 import org.jooq.TableField;
 import org.jooq.impl.DSL;
+import org.jooq.impl.SQLDataType;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -188,8 +189,12 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
     public BFAddressTotal getAddressTotal(String address) {
         Condition condition = addressCondition(address, ADDRESS_UTXO.OWNER_ADDR, ADDRESS_UTXO.OWNER_ADDR_FULL);
 
-        Map<String, BigInteger> receivedMap = fetchAmountSums(condition, false);
-        Map<String, BigInteger> sentMap = fetchAmountSums(condition, true);
+        if (BlockfrostDialectUtil.isPostgres(dsl)) {
+            return fetchAddressTotalPostgres(condition);
+        }
+
+        Map<String, BigInteger> receivedMap = fetchAmountSumsNonPostgres(condition, false);
+        Map<String, BigInteger> sentMap = fetchAmountSumsNonPostgres(condition, true);
 
         Table<?> combinedTx = buildAddressTxTable(address);
         Long txCount = dsl.select(DSL.countDistinct(DSL.field("tx_hash", String.class)))
@@ -230,57 +235,63 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
     }
 
     /**
-     * Aggregate amounts for an address. When {@code spent} is true, sum amounts of spent outputs;
-     * otherwise sum received amounts. Lovelace is sourced from {@code lovelace_amount} to avoid
-     * JSON expansion where possible, and JSON amounts are used for non-lovelace assets.
-     * Non-Postgres dialects (for example H2/MySQL) use the application-side JSON aggregation path.
+     * Compute received/sent totals and the tx count in one statement. The address outputs are
+     * left-joined with {@code tx_input} once into a materialized CTE that every aggregate reads,
+     * so the spent lookup runs once per output instead of once per aggregate.
+     * Lovelace is sourced from {@code lovelace_amount}; JSON is used for non-lovelace assets,
+     * and for lovelace when the scalar amount is missing or zero.
      */
-    private Map<String, BigInteger> fetchAmountSums(Condition addressCondition, boolean spent) {
-        if (BlockfrostDialectUtil.isPostgres(dsl)) {
-            return fetchAmountSumsPostgres(addressCondition, spent);
-        }
-        return fetchAmountSumsNonPostgres(addressCondition, spent);
-    }
+    private BFAddressTotal fetchAddressTotalPostgres(Condition addressCondition) {
+        var baseCte = DSL.name("base").asMaterialized(
+                dsl.select(
+                                ADDRESS_UTXO.TX_HASH.as("tx_hash"),
+                                ADDRESS_UTXO.AMOUNTS.as("amounts"),
+                                ADDRESS_UTXO.LOVELACE_AMOUNT.as("lovelace_amount"),
+                                DSL.field(TX_INPUT.TX_HASH.isNotNull()).as("spent"),
+                                TX_INPUT.SPENT_TX_HASH.as("spent_tx_hash")
+                        )
+                        .from(ADDRESS_UTXO)
+                        .leftJoin(TX_INPUT)
+                        .on(TX_INPUT.TX_HASH.eq(ADDRESS_UTXO.TX_HASH))
+                        .and(TX_INPUT.OUTPUT_INDEX.eq(ADDRESS_UTXO.OUTPUT_INDEX))
+                        .where(addressCondition)
+        );
 
-    private Map<String, BigInteger> fetchAmountSumsPostgres(Condition addressCondition, boolean spent) {
-        Select<?> base = spent
-                ? dsl.select(
-                            ADDRESS_UTXO.TX_HASH.as("tx_hash"),
-                            ADDRESS_UTXO.OUTPUT_INDEX.as("output_index"),
-                            ADDRESS_UTXO.AMOUNTS.as("amounts"),
-                            ADDRESS_UTXO.LOVELACE_AMOUNT.as("lovelace_amount")
-                    )
-                    .from(ADDRESS_UTXO)
-                    .join(TX_INPUT)
-                    .on(TX_INPUT.TX_HASH.eq(ADDRESS_UTXO.TX_HASH))
-                    .and(TX_INPUT.OUTPUT_INDEX.eq(ADDRESS_UTXO.OUTPUT_INDEX))
-                    .where(addressCondition)
-                : dsl.select(
-                            ADDRESS_UTXO.TX_HASH.as("tx_hash"),
-                            ADDRESS_UTXO.OUTPUT_INDEX.as("output_index"),
-                            ADDRESS_UTXO.AMOUNTS.as("amounts"),
-                            ADDRESS_UTXO.LOVELACE_AMOUNT.as("lovelace_amount")
-                    )
-                    .from(ADDRESS_UTXO)
-                    .where(addressCondition);
-
-        Table<?> baseTable = base.asTable("base");
+        Table<?> baseTable = DSL.table(DSL.name("base"));
+        Field<String> txHashField = DSL.field(DSL.name("base", "tx_hash"), String.class);
         Field<?> amountsField = DSL.field(DSL.name("base", "amounts"));
         Field<BigDecimal> lovelaceAmountField = DSL.field(DSL.name("base", "lovelace_amount"), BigDecimal.class);
+        Condition spent = DSL.condition(DSL.field(DSL.name("base", "spent"), Boolean.class));
+        Field<String> spentTxHashField = DSL.field(DSL.name("base", "spent_tx_hash"), String.class);
 
-        Select<Record2<String, BigDecimal>> lovelaceSelect = dsl.select(
-                        DSL.inline("lovelace").as("unit"),
-                        DSL.sum(lovelaceAmountField).cast(BigDecimal.class).as("quantity")
-                )
+        Table<?> txHashes = dsl.select(txHashField.as("tx_hash"))
                 .from(baseTable)
-                .where(lovelaceAmountField.isNotNull());
+                .unionAll(dsl.select(spentTxHashField)
+                        .from(baseTable)
+                        .where(spentTxHashField.isNotNull()))
+                .asTable("tx_hashes");
+        Field<Long> txCountField = DSL.field(
+                        dsl.select(DSL.countDistinct(txHashes.field("tx_hash", String.class))).from(txHashes))
+                .coerce(Long.class);
+
+        Select<Record4<String, BigDecimal, BigDecimal, Long>> lovelaceSelect = dsl.select(
+                        DSL.inline("lovelace").as("unit"),
+                        DSL.sum(lovelaceAmountField).as("received"),
+                        DSL.sum(lovelaceAmountField).filterWhere(spent).as("sent"),
+                        txCountField.as("tx_count")
+                )
+                .from(baseTable);
 
         Table<?> amountTable = DSL.table("jsonb_to_recordset({0}::jsonb) as amt(unit text, quantity numeric)", amountsField);
         Field<String> unitField = DSL.field("amt.unit", String.class);
         Field<BigDecimal> quantityField = DSL.field("amt.quantity", BigDecimal.class);
-        Field<BigDecimal> quantitySum = DSL.sum(quantityField).as("quantity");
 
-        Select<Record2<String, BigDecimal>> assetsSelect = dsl.select(unitField.as("unit"), quantitySum.as("quantity"))
+        Select<Record4<String, BigDecimal, BigDecimal, Long>> assetsSelect = dsl.select(
+                        unitField.as("unit"),
+                        DSL.sum(quantityField).as("received"),
+                        DSL.sum(quantityField).filterWhere(spent).as("sent"),
+                        DSL.inline(null, SQLDataType.BIGINT).as("tx_count")
+                )
                 .from(baseTable)
                 .join(DSL.lateral(amountTable)).on(DSL.trueCondition())
                 .where(amountsField.isNotNull())
@@ -290,21 +301,35 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
                                 .and(unitField.eq("lovelace"))))
                 .groupBy(unitField);
 
-        Table<?> combined = lovelaceSelect.unionAll(assetsSelect).asTable("combined");
-        Field<String> combinedUnit = combined.field("unit", String.class);
-        Field<BigDecimal> combinedQuantity = combined.field("quantity", BigDecimal.class);
-        Field<BigDecimal> combinedSum = DSL.sum(combinedQuantity).as("quantity");
+        Table<?> totals = lovelaceSelect.unionAll(assetsSelect).asTable("totals");
+        Field<String> totalsUnit = totals.field("unit", String.class);
+        Field<BigDecimal> totalsReceived = totals.field("received", BigDecimal.class);
+        Field<BigDecimal> totalsSent = totals.field("sent", BigDecimal.class);
+        Field<Long> totalsTxCount = totals.field("tx_count", Long.class);
 
-        var finalQuery = dsl.select(combinedUnit, combinedSum)
-                .from(combined)
-                .groupBy(combinedUnit)
-                .queryTimeout(QUERY_TIMEOUT_SECONDS);
+        Result<Record4<String, BigDecimal, BigDecimal, Long>> rows = dsl.with(baseCte)
+                .select(totalsUnit, totalsReceived, totalsSent, totalsTxCount)
+                .from(totals)
+                .queryTimeout(QUERY_TIMEOUT_SECONDS)
+                .fetch();
 
-        return finalQuery.fetchMap(combinedUnit, combinedSum)
-                .entrySet()
-                .stream()
-                .filter(entry -> entry.getValue() != null)
-                .collect(HashMap::new, (map, entry) -> map.put(entry.getKey(), entry.getValue().toBigInteger()), HashMap::putAll);
+        // lovelace can appear twice: from lovelace_amount and from JSON when the scalar is missing or zero
+        Map<String, BigInteger> receivedMap = new HashMap<>();
+        Map<String, BigInteger> sentMap = new HashMap<>();
+        long txCount = 0L;
+        for (Record4<String, BigDecimal, BigDecimal, Long> row : rows) {
+            if (row.value2() != null) {
+                receivedMap.merge(row.value1(), row.value2().toBigInteger(), BigInteger::add);
+            }
+            if (row.value3() != null) {
+                sentMap.merge(row.value1(), row.value3().toBigInteger(), BigInteger::add);
+            }
+            if (row.value4() != null) {
+                txCount = row.value4();
+            }
+        }
+
+        return new BFAddressTotal(receivedMap, sentMap, txCount);
     }
 
     private Map<String, BigInteger> fetchAmountSumsNonPostgres(Condition addressCondition, boolean spent) {
