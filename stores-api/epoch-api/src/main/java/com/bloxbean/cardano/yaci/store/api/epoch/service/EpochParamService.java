@@ -7,7 +7,10 @@ import com.bloxbean.cardano.yaci.store.epoch.domain.EpochParam;
 import com.bloxbean.cardano.yaci.store.epoch.dto.ProtocolParamsDto;
 import com.bloxbean.cardano.yaci.store.epoch.mapper.DomainMapper;
 import com.bloxbean.cardano.yaci.store.epoch.storage.EpochParamStorage;
+import com.bloxbean.cardano.yaci.store.epochnonce.domain.EpochNonce;
+import com.bloxbean.cardano.yaci.store.epochnonce.storage.EpochNonceStorageReader;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
 import java.util.Optional;
@@ -18,17 +21,12 @@ public class EpochParamService {
 
     private final EpochParamStorage epochParamStorage;
     private final EraService eraService;
+    // Absent unless store.epoch-nonce.enabled=true; nonce is then left null
+    private final ObjectProvider<EpochNonceStorageReader> epochNonceStorageReader;
     private final DomainMapper mapper = DomainMapper.INSTANCE;
 
     public Optional<ProtocolParamsDto> getLatestProtocolParams() {
-        int epoch = epochParamStorage.getMaxEpoch();
-        return epochParamStorage.getProtocolParams(epoch)
-                .map(EpochParam::getParams)
-                .map(mapper::toProtocolParamsDto)
-                .map(protocolParamsDto -> {
-                    protocolParamsDto.setEpoch(epoch);
-                    return protocolParamsDto;
-                });
+        return getProtocolParams(epochParamStorage.getMaxEpoch());
     }
 
     public Optional<ProtocolParamsDto> getProtocolParams(int epoch) {
@@ -37,8 +35,19 @@ public class EpochParamService {
                 .map(mapper::toProtocolParamsDto)
                 .map(protocolParamsDto -> {
                     protocolParamsDto.setEpoch(epoch);
+                    protocolParamsDto.setNonce(findNonce(epoch));
                     return protocolParamsDto;
                 });
+    }
+
+    private String findNonce(int epoch) {
+        EpochNonceStorageReader reader = epochNonceStorageReader.getIfAvailable();
+        if (reader == null)
+            return null;
+
+        return reader.findByEpoch(epoch)
+                .map(EpochNonce::getNonce)
+                .orElse(null);
     }
 
     public int getLatestEpoch() {
