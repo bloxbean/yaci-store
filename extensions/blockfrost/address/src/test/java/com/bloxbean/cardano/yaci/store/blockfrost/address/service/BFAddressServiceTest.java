@@ -23,6 +23,8 @@ class BFAddressServiceTest {
 
     private static final String ADDRESS = "addr_test1vrxyxhvkzfu4j328whrs8n2xwn4aql6tms26kpmtun6hq7qm9u055";
     private static final String MAINNET_ADDRESS = "addr1qx2fxv2umyhttkxyxp8x0dlpdt3k6cwng5pxj3jhsydzer3n0d3vllmyqwsx5wktcd8cc3sq835lu7drv2xwl2wywfgse35a3x";
+    private static final String STAKE_ADDRESS = "stake1u9ylzsgxaa6xctf4juup682ar3juj85n8tx3hthnljg47zctvm3rc";
+    private static final String STAKE_TEST_ADDRESS = "stake_test1uqfu74w3wh4gfzu8m6e7j987h4lq9r3t7ef5gaw497uu85qsqfy27";
     private static final String BYRON_ADDRESS = "Ae2tdPwUPEZFRbyhz3cpfC2CumGzNkFBN2L42rcUc2yjQpEkxDbkPodpMAi";
 
     private BFAddressStorageReader reader;
@@ -61,6 +63,15 @@ class BFAddressServiceTest {
         storeProperties.setMainnet(true);
 
         endpoints.forEach(endpoint -> assertStatus(() -> endpoint.accept(ADDRESS), HttpStatus.BAD_REQUEST));
+        verifyNoInteractions(reader);
+    }
+
+    @Test
+    void stakeAddress_returns400WithoutQuerying() {
+        endpoints.forEach(endpoint -> assertStatus(() -> endpoint.accept(STAKE_TEST_ADDRESS), HttpStatus.BAD_REQUEST));
+
+        storeProperties.setMainnet(true);
+        endpoints.forEach(endpoint -> assertStatus(() -> endpoint.accept(STAKE_ADDRESS), HttpStatus.BAD_REQUEST));
         verifyNoInteractions(reader);
     }
 

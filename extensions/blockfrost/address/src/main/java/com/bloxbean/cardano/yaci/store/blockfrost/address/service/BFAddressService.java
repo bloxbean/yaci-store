@@ -164,19 +164,21 @@ public class BFAddressService {
     // AddressUtil.isValidAddress lets Base58/Bech32 decoding exceptions escape for malformed input.
     private boolean isValidAddress(String address) {
         try {
-            return AddressUtil.isValidAddress(address) && isOnConfiguredNetwork(address);
+            return AddressUtil.isValidAddress(address) && isPaymentAddressOnConfiguredNetwork(address);
         } catch (RuntimeException | AddressExcepion e) {
             return false;
         }
     }
 
-    // Shelley header low nibble is the network id (1 = mainnet); Byron (0x8_) is not checked.
-    private boolean isOnConfiguredNetwork(String address) throws AddressExcepion {
+    // Shelley header: high nibble is the type (0xE/0xF = stake), low nibble the network id (1 = mainnet).
+    // Byron (0x8_) is not network-checked.
+    private boolean isPaymentAddressOnConfiguredNetwork(String address) throws AddressExcepion {
         int header = AddressUtil.addressToBytes(address)[0] & 0xFF;
-        if ((header >> 4) == 8) {
+        int type = header >> 4;
+        if (type == 8) {
             return true;
         }
-        return ((header & 0x0F) == 1) == storeProperties.isMainnet();
+        return type < 8 && ((header & 0x0F) == 1) == storeProperties.isMainnet();
     }
 
     private boolean isCurrentBalanceEnabled() {
