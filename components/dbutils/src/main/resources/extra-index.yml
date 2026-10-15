@@ -6,3 +6,12 @@
       type: gin
       excludes:
         - mysql
+
+- table: address_utxo_unspent
+  indexes:
+    - name: idx_address_utxo_unspent_amounts
+      columns:
+        - amounts
+      type: gin
+      excludes:
+        - mysql

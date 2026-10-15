@@ -38,6 +38,21 @@ public class UtxoStoreAutoConfigProperties {
          * Enable content aware rollback
          */
         private boolean contentAwareRollback = false;
+
+        /**
+         * Maintain address_utxo_unspent, a copy of the outputs that are not spent yet, at every
+         * commit. Readers that need current outputs then read it instead of anti-joining
+         * address_utxo with tx_input over the whole history. Turning it on for an already synced
+         * store needs a one-time backfill (admin-cli backfill-unspent-utxos).
+         */
+        private boolean unspentTableEnabled = false;
+
+        /**
+         * Serve the unspent-output queries (by address, payment credential, stake address, asset)
+         * from address_utxo_unspent. Turn it on only once the table is complete: maintained since
+         * the start of the sync, or backfilled and reconciled.
+         */
+        private boolean unspentTableReadEnabled = false;
     }
 
     @Getter
