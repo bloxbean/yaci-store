@@ -13,6 +13,8 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.repository.Cip68MetadataRepository;
 import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxoEvent;
 import com.bloxbean.cardano.yaci.store.utxo.domain.TxInputOutput;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.Nullable;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,6 +35,16 @@ import java.util.stream.Collectors;
 @Slf4j
 @ConditionalOnProperty(name = "store.assets.ext.cip68.enabled", havingValue = "true", matchIfMissing = true)
 public class Cip68Processor {
+
+    /**
+     * Used only by {@link #requireSerializableProperties}, to write the {@code properties} JSON once, early, so that a
+     * value Jackson refuses is found while the output is being built. Hibernate does the same write later with its
+     * own default mapper, at flush time inside the block transaction, where an exception stops the whole sync.
+     * A plain {@code new ObjectMapper()} has the same default limits (for example a nesting depth of 1000). Do not
+     * remove it as "unused serialization": see https://github.com/bloxbean/yaci-store/issues/1240 and
+     * https://github.com/bloxbean/yaci-store/issues/1243.
+     */
+    private static final ObjectMapper PROPERTIES_MAPPER = new ObjectMapper();
 
     private final Cip68TokenService cip68TokenService;
     private final Cip68DatumParser cip68DatumParser;
@@ -68,14 +80,10 @@ public class Cip68Processor {
             Set<String> assetUnitsInTx = collectAssetUnits(txIo);
 
             for (AddressUtxo output : txIo.getOutputs()) {
-                List<Amt> refNfts = cip68TokenService.extractReferenceNfts(output);
-                SharedDatum shared = null;
-                if (refNfts.size() > 1 && !cip68DatumParser.hasNestedMetadata(output.getInlineDatum())) {
-                    logFlatDatumOfSeveralReferenceNfts(output, refNfts);
-                    shared = new SharedDatum(output, refNfts.size());
-                }
-                for (Amt refNftAmt : refNfts) {
-                    toEntity(output, AssetType.fromUnit(refNftAmt.getUnit()), assetUnitsInTx, slot, shared).ifPresent(entities::add);
+                try {
+                    indexOutput(output, assetUnitsInTx, slot, entities);
+                } catch (RuntimeException e) {
+                    skipOutput(output, e);
                 }
             }
         }
@@ -83,6 +91,38 @@ public class Cip68Processor {
         if (!entities.isEmpty()) {
             cip68MetadataRepository.saveAll(entities);
         }
+    }
+
+    private void indexOutput(AddressUtxo output, Set<String> assetUnitsInTx, Long slot, List<Cip68Metadata> entities) {
+        List<Amt> refNfts = cip68TokenService.extractReferenceNfts(output);
+        SharedDatum shared = null;
+        if (refNfts.size() > 1 && !cip68DatumParser.hasNestedMetadata(output.getInlineDatum())) {
+            logFlatDatumOfSeveralReferenceNfts(output, refNfts);
+            shared = new SharedDatum(output, refNfts.size());
+        }
+        for (Amt refNftAmt : refNfts) {
+            toEntity(output, AssetType.fromUnit(refNftAmt.getUnit()), assetUnitsInTx, slot, shared).ifPresent(entities::add);
+        }
+    }
+
+    /**
+     * An unexpected exception while indexing an output means the datum is something the parser did not foresee, and
+     * on a public chain anyone can put a datum there. The output is skipped, with a warning and a count, and the sync
+     * goes on: the metadata of a token is not worth stopping the store for. Rows already built for this output are
+     * kept. A failure that only shows at flush or commit, inside the database, is not caught here.
+     * <p>
+     * Why this catch exists: this listener runs inside the block transaction, so any exception stops the whole store
+     * (https://github.com/bloxbean/yaci-store/issues/1243, ADR 0004 in {@code extensions/assets-ext/docs/adr}).
+     * The metadata of a token is the least critical thing the store holds, so a bad datum is skipped and counted as
+     * {@code datums.skipped{reason="processing_failure"}}. That counter is the one to alert on: unlike the other
+     * reasons it means something unexpected, a bug or a new kind of datum.
+     */
+    private void skipOutput(AddressUtxo output, RuntimeException e) {
+        log.warn("Output {}#{}: skipping the CIP-68 datum, indexing it failed unexpectedly ({}: {}); datum {}",
+                output.getTxHash(), output.getOutputIndex(), e.getClass().getSimpleName(), e.getMessage(),
+                output.getInlineDatum());
+        log.debug("Stack trace of the CIP-68 indexing failure of output {}#{}", output.getTxHash(), output.getOutputIndex(), e);
+        metrics.processingFailure();
     }
 
     /**
@@ -104,6 +144,9 @@ public class Cip68Processor {
             }
             ParsedCip68Datum stored = withoutInvalidLogo(parsed, refNft, shared);
             int label = labels.getFirst();
+            Cip68Metadata entity = buildCip68Metadata(stored, refNft, output.getInlineDatum(), slot,
+                    output.getTxHash(), output.getTxIndex(), label);
+            requireSerializableProperties(entity);
             metrics.datumIndexed(label);
             if (labels.size() > 1) {
                 metrics.multiLabel(labels, Cip68Metrics.INDEXED_OUTCOME);
@@ -111,9 +154,35 @@ public class Cip68Processor {
                                 + "stored with label {}",
                         refNft.policyId(), refNft.assetName(), labels, label);
             }
-            return Optional.of(buildCip68Metadata(stored, refNft, output.getInlineDatum(), slot,
-                    output.getTxHash(), output.getTxIndex(), label));
+            return Optional.of(entity);
         });
+    }
+
+    /**
+     * Writes the {@code properties} as JSON now, and throws if that fails, so the output is skipped by
+     * {@link #skipOutput}.
+     * <p>
+     * Why: Hibernate writes this column as JSON when the batch is flushed, inside the block transaction. An exception
+     * there stops the whole sync, and the datum is untrusted input that anyone can put on-chain: a value nested more
+     * than 1000 levels deep did exactly that (https://github.com/bloxbean/yaci-store/issues/1240, a transaction with
+     * such a datum was accepted by a real cardano-node). The parser now drops a property nested deeper than 100
+     * levels, so this is a second line of defence for a value the parser did not foresee. The general question of
+     * isolating any failure of this module from the sync is https://github.com/bloxbean/yaci-store/issues/1243.
+     * <p>
+     * It uses a default mapper, like Hibernate's JSON mapping when it is not configured; if the two ever differ, this
+     * check is only an approximation. It does not replace a transaction-level fix: a failure inside the database at
+     * flush or commit is not caught here. Do not remove it because it looks redundant; ask whether #1243 was solved
+     * in another way first.
+     */
+    private void requireSerializableProperties(Cip68Metadata entity) {
+        if (entity.getProperties() == null) {
+            return;
+        }
+        try {
+            PROPERTIES_MAPPER.writeValueAsString(entity.getProperties());
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("the properties cannot be written as JSON: " + e.getOriginalMessage(), e);
+        }
     }
 
     /**
