@@ -45,7 +45,9 @@ public class FeeResolver {
                 var collateralUtxos = utxoClient.getUtxosByIds(collateralUtxoKeys);
 
                 if (collateralUtxos != null && collateralUtxos.size() != collateralUtxoKeys.size()) {
-                    log.error("Collateral utxos not found for transaction : {}", transaction.getBody().getTxHash());
+                    //Expected during parallel processing when the collateral utxo is created in the same batch.
+                    //The caller retries at pre-commit and logs an error if the fee is still unresolved.
+                    log.debug("Collateral utxos not found for transaction : {}", transaction.getBody().getTxHash());
                     return null;
                 }
 
