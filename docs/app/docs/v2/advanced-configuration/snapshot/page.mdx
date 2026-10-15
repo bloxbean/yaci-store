@@ -190,6 +190,11 @@ behind the source tip. This lets the restored instance replay several epoch tran
 `--allow-incomplete` acknowledges declared losses; it never bypasses failed coverage or integrity
 checks.
 
+Inspect and export need little memory, whatever the network size. Planning reads Parquet only to
+count the rows the importer must reproduce, one partition at a time; packaging copies files
+without loading rows. `--memory-limit` sets the DuckDB budget, and the thread count follows from it
+(about one thread per 512 MB), so a larger value only makes planning faster.
+
 Export packages files an exporter has already written; it never reruns or replaces an analytics
 exporter. It pins one DuckLake catalog snapshot, resolves the exact immutable file set, streams it
 into parts, re-reads and checksums every part, and publishes the manifest last with an atomic rename.
@@ -199,6 +204,7 @@ into parts, re-reads and checksums every part, and publishes the manifest last w
 | `--part-size` | `8GiB` | Target size per ZIP part. A Parquet file is never split. |
 | `--min-confirmations` | `2160` | Blocks the point must sit behind the newest exported block |
 | `--target-epoch` | `0` | Select an older completed epoch; `0` chooses the newest supported one |
+| `--memory-limit` | `1GB` | DuckDB memory limit for planning (also accepted by `snapshot inspect`) |
 | `--allow-incomplete` | `false` | Package even though the snapshot declares limitations |
 | `--unsigned` | `false` | Acknowledge that no signature will be produced |
 | `--spec-file`, `--allow-custom-specs` | – | Operator-supplied specifications |

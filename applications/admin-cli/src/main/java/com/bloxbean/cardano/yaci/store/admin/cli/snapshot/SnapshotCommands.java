@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.admin.cli.snapshot;
 
 import com.bloxbean.cardano.yaci.store.admin.cli.Groups;
 import com.bloxbean.cardano.yaci.store.snapshot.archive.ArchiveVerifier;
+import com.bloxbean.cardano.yaci.store.snapshot.ducklake.DuckLakeCatalog;
 import com.bloxbean.cardano.yaci.store.snapshot.export.ExportOptions;
 import com.bloxbean.cardano.yaci.store.snapshot.export.InspectionReport;
 import com.bloxbean.cardano.yaci.store.snapshot.export.SnapshotExporter;
@@ -58,6 +59,9 @@ public class SnapshotCommands {
             @Option(longNames = "target-epoch", defaultValue = "0",
                     description = "Restore to this completed epoch instead of the newest supported one")
             int targetEpoch,
+            @Option(longNames = "memory-limit", defaultValue = DuckLakeCatalog.DEFAULT_MEMORY_LIMIT,
+                    description = "DuckDB memory limit for planning; a larger value is faster, never required")
+            String memoryLimit,
             @Option(longNames = "spec-file", description = "Additional local specification file(s)")
             String specFile,
             @Option(longNames = "allow-custom-specs", defaultValue = "false",
@@ -69,7 +73,7 @@ public class SnapshotCommands {
             SnapshotCliSupport.ensureDirectory(Path.of(workDir));
             SnapshotSpecRegistry registry = support.exportRegistry(specFile, allowCustomSpecs);
             ExportOptions options = support.exportOptions(dataDir, workDir, workDir, "8GiB",
-                    targetEpoch, minConfirmations, true, true);
+                    targetEpoch, minConfirmations, true, true, memoryLimit);
             InspectionReport report = new SnapshotExporter(registry).inspect(options);
             printInspection(report, verbose);
         } catch (Exception e) {
@@ -100,6 +104,9 @@ public class SnapshotCommands {
             @Option(longNames = "unsigned", defaultValue = "false",
                     description = "Acknowledge that no signature will be produced")
             boolean unsigned,
+            @Option(longNames = "memory-limit", defaultValue = DuckLakeCatalog.DEFAULT_MEMORY_LIMIT,
+                    description = "DuckDB memory limit for planning; a larger value is faster, never required")
+            String memoryLimit,
             @Option(longNames = "spec-file", description = "Additional local specification file(s)") String specFile,
             @Option(longNames = "allow-custom-specs", defaultValue = "false",
                     description = "Acknowledge the use of operator-supplied specifications")
@@ -109,7 +116,7 @@ public class SnapshotCommands {
             SnapshotCliSupport.ensureDirectory(Path.of(output));
             SnapshotSpecRegistry registry = support.exportRegistry(specFile, allowCustomSpecs);
             ExportOptions options = support.exportOptions(dataDir, output, workDir, partSize,
-                    targetEpoch, minConfirmations, allowIncomplete, unsigned);
+                    targetEpoch, minConfirmations, allowIncomplete, unsigned, memoryLimit);
 
             writeLn(info("Packaging snapshot from %s", options.dataDir()));
             AtomicLong done = new AtomicLong();

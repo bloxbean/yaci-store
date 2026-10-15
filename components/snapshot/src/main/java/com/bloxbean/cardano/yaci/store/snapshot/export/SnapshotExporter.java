@@ -45,7 +45,7 @@ public class SnapshotExporter {
 
     /** Read-only analysis: candidate point, coverage, lossy mappings, estimated size and blockers. */
     public InspectionReport inspect(ExportOptions options) throws SQLException, IOException {
-        try (DuckLakeCatalog catalog = DuckLakeCatalog.open(options.dataDir(), options.workDir())) {
+        try (DuckLakeCatalog catalog = DuckLakeCatalog.open(options.dataDir(), options.workDir(), options.memoryLimit())) {
             return inspect(catalog, options);
         }
     }
@@ -166,7 +166,7 @@ public class SnapshotExporter {
             throw new IllegalArgumentException("Snapshot signing is not implemented; --unsigned is required");
         }
         long started = System.currentTimeMillis();
-        try (DuckLakeCatalog catalog = DuckLakeCatalog.open(options.dataDir(), options.workDir())) {
+        try (DuckLakeCatalog catalog = DuckLakeCatalog.open(options.dataDir(), options.workDir(), options.memoryLimit())) {
             InspectionReport report = inspect(catalog, options);
             if (!report.canExport()) {
                 throw new IllegalStateException("Snapshot export is blocked:\n  - "

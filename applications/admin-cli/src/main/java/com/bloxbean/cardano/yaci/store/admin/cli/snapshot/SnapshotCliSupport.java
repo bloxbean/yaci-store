@@ -167,7 +167,7 @@ public class SnapshotCliSupport {
 
     public ExportOptions exportOptions(String dataDir, String outputDir, String workDir, String partSize,
                                        int targetEpoch, long minConfirmations, boolean allowIncomplete,
-                                       boolean unsigned) throws SQLException {
+                                       boolean unsigned, String memoryLimit) throws SQLException {
         String schemaFingerprint;
         String flywayFingerprint;
         Map<String, String> tableSchemaFingerprints;
@@ -195,7 +195,8 @@ public class SnapshotCliSupport {
                 network(), protocolMagic(), null,
                 parseSize(partSize), targetEpoch, minConfirmations, allowIncomplete, unsigned,
                 yaciStoreVersion(), enabledModules(), pruningSettings(),
-                schemaFingerprint, flywayFingerprint, completedPartitions, tableSchemaFingerprints);
+                schemaFingerprint, flywayFingerprint, completedPartitions, tableSchemaFingerprints,
+                memoryLimit);
     }
 
     public ImportOptions importOptions(String manifest, String workDir, int workers, String memoryLimit,

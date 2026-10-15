@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.snapshot.export;
 
 import com.bloxbean.cardano.yaci.store.snapshot.ducklake.DuckLakeCatalog;
 import com.bloxbean.cardano.yaci.store.snapshot.ducklake.DuckLakeFile;
+import com.bloxbean.cardano.yaci.store.snapshot.spec.BatchBoundary;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.CutoffType;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.PartitionStrategy;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.SnapshotTableSpec;
@@ -14,6 +15,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -21,6 +23,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.stream.Collectors;
 
 /**
  * Resolves, for each table, the immutable file set and row count implied by the chosen consistency
@@ -65,7 +68,9 @@ public class ExportPlanner {
             Set<String> beyond = cutoff.type() == CutoffType.NONE ? Set.of()
                     : catalog.filePathsEntirelyAbove(relation, cutoff.column(), cutValue, snapshotId);
             files = allFiles.stream().filter(f -> !beyond.contains(f.relativePath())).toList();
-            rowCount = files.isEmpty() ? 0 : countDistinct(files, sourceKey, cutoff, cutValue);
+            boolean perPartition = spec.importSpec() != null
+                    && spec.importSpec().batchBoundary() == BatchBoundary.WHOLE_PARTITION;
+            rowCount = files.isEmpty() ? 0 : countDistinct(files, sourceKey, cutoff, cutValue, perPartition);
             exact = true;
         } else if (cutoff.type() == CutoffType.NONE) {
             files = allFiles;
@@ -112,16 +117,33 @@ public class ExportPlanner {
         };
     }
 
+    /**
+     * Distinct source keys at the cutoff. With {@code WHOLE_PARTITION} batching a grouped key never
+     * spans partitions, the same guarantee the importer relies on, so each partition is counted on its
+     * own and the counts are summed. That bounds the working set to one partition instead of the whole
+     * relation: one DISTINCT over a mainnet {@code address_utxo} export does not fit a small memory limit.
+     */
     private long countDistinct(List<DuckLakeFile> files, List<String> keyColumns,
-                               SnapshotTableSpec.CutoffRule cutoff, long cut) throws SQLException {
+                               SnapshotTableSpec.CutoffRule cutoff, long cut, boolean perPartition)
+            throws SQLException {
         String key = keyColumns.stream().map(Identifiers::quote).reduce((a, b) -> a + ", " + b).orElseThrow();
         String where = cutoff.type() == CutoffType.NONE ? ""
                 : " WHERE " + Identifiers.quote(cutoff.column()) + " <= " + cut;
-        String sql = "SELECT count(*) FROM (SELECT DISTINCT " + key + " FROM read_parquet("
-                + catalog.parquetList(files) + ")" + where + ")";
-        try (Statement st = catalog.connection().createStatement(); ResultSet rs = st.executeQuery(sql)) {
-            return rs.next() ? rs.getLong(1) : 0;
+        Collection<List<DuckLakeFile>> groups = perPartition
+                ? files.stream().collect(Collectors.groupingBy(DuckLakeFile::partition,
+                        LinkedHashMap::new, Collectors.toList())).values()
+                : List.of(files);
+        long total = 0;
+        try (Statement st = catalog.connection().createStatement()) {
+            for (List<DuckLakeFile> group : groups) {
+                String sql = "SELECT count(*) FROM (SELECT DISTINCT " + key + " FROM read_parquet("
+                        + catalog.parquetList(group) + ")" + where + ")";
+                try (ResultSet rs = st.executeQuery(sql)) {
+                    total += rs.next() ? rs.getLong(1) : 0;
+                }
+            }
         }
+        return total;
     }
 
     private long countRows(List<DuckLakeFile> files, String column, long cut) throws SQLException {

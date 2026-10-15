@@ -34,6 +34,9 @@ public class DuckLakeCatalog implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(DuckLakeCatalog.class);
     private static final String CAT = "snapcat";
 
+    /** Default memory limit for inspect and export, the same as the per-worker import default. */
+    public static final String DEFAULT_MEMORY_LIMIT = "1GB";
+
     private final Connection conn;
     private final Path dataDir;
     private final Map<String, String> relationPrefixes = new java.util.HashMap<>();
@@ -49,12 +52,22 @@ public class DuckLakeCatalog implements AutoCloseable {
      * database file loses committed WAL entries and can race with checkpoints.
      */
     public static DuckLakeCatalog open(Path dataDir, Path workDir) throws SQLException, IOException {
+        return open(dataDir, workDir, DEFAULT_MEMORY_LIMIT);
+    }
+
+    /**
+     * @param memoryLimit DuckDB memory limit for the catalog connection; the thread count follows from
+     *                    it. Planning works one partition at a time, so a larger value only makes it
+     *                    faster and the default must be enough for any network.
+     */
+    public static DuckLakeCatalog open(Path dataDir, Path workDir, String memoryLimit)
+            throws SQLException, IOException {
         Path catalog = dataDir.resolve("ducklake.catalog.db");
         if (!Files.isRegularFile(catalog)) {
             throw new IllegalArgumentException("DuckLake catalog not found: " + catalog);
         }
         Files.createDirectories(workDir);
-        Connection conn = DuckDb.open("2GB", workDir, 0);
+        Connection conn = DuckDb.open(memoryLimit, workDir, DuckDb.threadsFor(memoryLimit));
         try {
             DuckDb.exec(conn, "ATTACH '" + catalog.toAbsolutePath().toString().replace("'", "''")
                     + "' AS " + CAT + " (READ_ONLY)");

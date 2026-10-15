@@ -1,5 +1,7 @@
 package com.bloxbean.cardano.yaci.store.snapshot.export;
 
+import com.bloxbean.cardano.yaci.store.snapshot.ducklake.DuckLakeCatalog;
+
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
@@ -17,6 +19,7 @@ import java.util.Map;
  * @param unsigned         acknowledge that no signature will be produced
  * @param completedPartitions source export journal: exporter id → partition value → completed row count.
  *                            Must include zero-row partitions; missing entries block publication.
+ * @param memoryLimit      DuckDB memory limit for the catalog connection, e.g. {@code 1GB}
  */
 public record ExportOptions(Path dataDir,
                             Path workDir,
@@ -35,7 +38,20 @@ public record ExportOptions(Path dataDir,
                             String schemaFingerprint,
                             String flywayFingerprint,
                             Map<String, Map<String, Long>> completedPartitions,
-                            Map<String, String> tableSchemaFingerprints) {
+                            Map<String, String> tableSchemaFingerprints,
+                            String memoryLimit) {
+
+    public ExportOptions(Path dataDir, Path workDir, Path outputDir, String network, long protocolMagic,
+                         String genesisHash, long partSizeBytes, int targetEpoch, long minConfirmations,
+                         boolean allowIncomplete, boolean unsigned, String yaciStoreVersion,
+                         List<String> modules, Map<String, String> pruningSettings, String schemaFingerprint,
+                         String flywayFingerprint, Map<String, Map<String, Long>> completedPartitions,
+                         Map<String, String> tableSchemaFingerprints) {
+        this(dataDir, workDir, outputDir, network, protocolMagic, genesisHash, partSizeBytes, targetEpoch,
+                minConfirmations, allowIncomplete, unsigned, yaciStoreVersion, modules, pruningSettings,
+                schemaFingerprint, flywayFingerprint, completedPartitions, tableSchemaFingerprints,
+                DuckLakeCatalog.DEFAULT_MEMORY_LIMIT);
+    }
 
     public ExportOptions(Path dataDir, Path workDir, Path outputDir, String network, long protocolMagic,
                          String genesisHash, long partSizeBytes, int targetEpoch, long minConfirmations,

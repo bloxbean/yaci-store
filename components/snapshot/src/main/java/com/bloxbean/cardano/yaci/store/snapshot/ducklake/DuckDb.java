@@ -37,6 +37,38 @@ public final class DuckDb {
         return conn;
     }
 
+    /** Memory each DuckDB thread should have at least; more threads than this would starve every one. */
+    static final long BYTES_PER_THREAD = 512L * 1024 * 1024;
+
+    /**
+     * Threads for a connection with the given memory limit: one per {@link #BYTES_PER_THREAD}, at least
+     * one and at most the available processors. DuckDB defaults to one thread per core, which on a
+     * large host leaves each thread too little memory and fails queries a smaller host would finish.
+     */
+    public static int threadsFor(String memoryLimit) {
+        long perThread = parseBytes(memoryLimit) / BYTES_PER_THREAD;
+        return (int) Math.max(1, Math.min(Runtime.getRuntime().availableProcessors(), perThread));
+    }
+
+    /** Parses a DuckDB-style size such as {@code 1GB}, {@code 512MB} or {@code 4GiB}. */
+    static long parseBytes(String value) {
+        var m = java.util.regex.Pattern.compile("(?i)\\s*(\\d+(?:\\.\\d+)?)\\s*([KMGT]?I?B)?\\s*")
+                .matcher(value == null ? "" : value);
+        if (!m.matches()) {
+            throw new IllegalArgumentException("Invalid memory limit: " + value);
+        }
+        String unit = m.group(2) == null ? "B" : m.group(2).toUpperCase(java.util.Locale.ROOT);
+        long base = unit.contains("I") ? 1024 : 1000;
+        int power = switch (unit.charAt(0)) {
+            case 'K' -> 1;
+            case 'M' -> 2;
+            case 'G' -> 3;
+            case 'T' -> 4;
+            default -> 0;
+        };
+        return (long) (Double.parseDouble(m.group(1)) * Math.pow(base, power));
+    }
+
     public static void exec(Connection conn, String sql) throws SQLException {
         try (Statement st = conn.createStatement()) {
             st.execute(sql);
