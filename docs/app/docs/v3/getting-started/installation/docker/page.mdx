@@ -194,19 +194,7 @@ store.adapot.stake-snapshot-work-mem=512MB
 store.governance-aggr.drep-dist-work-mem=512MB
 ```
 
-### 3. Increase the PostgreSQL Lock Table
-
-With ledger-state, the `reward`, `epoch_stake` and `drep_dist` tables have one partition per epoch. A query that spans many epochs takes a lock on every partition and partition index it touches. With the PostgreSQL default (`max_locks_per_transaction=64`), the whole server has room for only about 64 × `max_connections` locks. As the number of epochs grows, queries then fail with `ERROR: out of shared memory`. This affects both API reads (returned as HTTP 500) and AdaPot stake snapshots.
-
-`compose/postgres-compose.yml` sets:
-
-```yaml
-"-c", "max_locks_per_transaction=1024"
-```
-
-If you use `postgres-compose-minimal.yml` or your own PostgreSQL server, set the same value there (for example in `postgresql.conf`). The setting uses additional shared memory, proportional to `max_locks_per_transaction` × `max_connections`. It only takes effect after PostgreSQL restarts. `./yaci-store.sh stop` followed by `./yaci-store.sh start` (next step) recreates the PostgreSQL container with the new value.
-
-### 4. Restart the Application
+### 3. Restart the Application
 
 After making these changes, restart Yaci Store:
 
