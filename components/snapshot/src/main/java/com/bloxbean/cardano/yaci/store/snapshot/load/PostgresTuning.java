@@ -52,6 +52,25 @@ public final class PostgresTuning {
         return out;
     }
 
+    /**
+     * The parallel worker pool caps the key rebuild and validation, which run up to {@code workers}
+     * connections that each ask for parallel workers. On mainnet the rebuild ran with 60% of 32 cores
+     * idle under the default pool of 8. These settings need a restart, so they are advice only.
+     */
+    public static List<String> parallelismAdvice(Connection pg, int workers) throws SQLException {
+        if (workers < 4) {
+            return List.of();
+        }
+        long pool = Math.min(Long.parseLong(current(pg, "max_worker_processes")),
+                Long.parseLong(current(pg, "max_parallel_workers")));
+        if (pool >= 2L * workers) {
+            return List.of();
+        }
+        return List.of(String.format("max_parallel_workers / max_worker_processes allow %d parallel workers in total;"
+                + " with --workers %d the key rebuild and validation can use about %d. On a machine with spare cores,"
+                + " raising both (needs a PostgreSQL restart) shortens them.", pool, workers, 2L * workers));
+    }
+
     /** Null when this session may change the settings, otherwise why it may not. */
     public static String cannotApply(Connection pg) throws SQLException {
         try (Statement st = pg.createStatement(); ResultSet rs = st.executeQuery(

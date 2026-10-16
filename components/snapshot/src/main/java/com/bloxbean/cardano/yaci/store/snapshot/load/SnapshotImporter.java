@@ -157,6 +157,7 @@ public class SnapshotImporter {
             } else {
                 warnings.addAll(PostgresTuning.advice(pg));
             }
+            warnings.addAll(PostgresTuning.parallelismAdvice(pg, options.workers()));
         }
 
         ArchiveVerifier.Result verified =

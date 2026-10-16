@@ -39,6 +39,14 @@ class PostgresTuningIT {
         assertThat(PostgresTuning.pending(pg, schema)).isFalse();
     }
 
+    @Test
+    void parallelismAdviceOnlyForManyWorkersOnASmallPool() throws Exception {
+        assertThat(PostgresTuning.parallelismAdvice(pg, 1)).isEmpty();
+        long pool = Math.min(Long.parseLong(setting("max_worker_processes")), Long.parseLong(setting("max_parallel_workers")));
+        assertThat(PostgresTuning.parallelismAdvice(pg, (int) pool)).singleElement().asString()
+                .contains("needs a PostgreSQL restart");
+    }
+
     /** Changes the server's configuration and puts it back, so it only runs when asked for. */
     @Test
     @EnabledIfEnvironmentVariable(named = "SNAPSHOT_IT_ALTER_SYSTEM", matches = "true")
