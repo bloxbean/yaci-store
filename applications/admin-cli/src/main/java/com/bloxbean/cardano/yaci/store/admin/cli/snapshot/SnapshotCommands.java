@@ -121,9 +121,10 @@ public class SnapshotCommands {
             writeLn(info("Packaging snapshot from %s", options.dataDir()));
             AtomicLong done = new AtomicLong();
             SnapshotExporter.ExportResult result = new SnapshotExporter(registry).export(options, p -> {
-                long n = done.incrementAndGet();
-                if (n % 500 == 0) {
-                    writeLn(info("  %d files processed", n));
+                if (p.startsWith("[")) {
+                    writeLn(info("  %s", p));
+                } else if (done.incrementAndGet() % 5000 == 0) {
+                    writeLn(info("  %,d files packed", done.get()));
                 }
             });
 

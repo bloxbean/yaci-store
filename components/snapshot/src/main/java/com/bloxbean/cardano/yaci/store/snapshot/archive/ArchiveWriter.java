@@ -5,14 +5,18 @@ import com.bloxbean.cardano.yaci.store.snapshot.util.Digests;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.DigestOutputStream;
+import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.zip.CRC32;
@@ -55,64 +59,92 @@ public class ArchiveWriter {
     public List<SnapshotManifest.PartManifest> write(List<SnapshotManifest.FileEntry> files,
                                                      List<String> owners,
                                                      Consumer<String> progress) throws IOException {
+        return write(files, owners, null, 1, progress);
+    }
+
+    /**
+     * Writes the parts, several at once. Part boundaries depend only on the file sizes, so they are
+     * planned first and each part is then an independent archive: the output is byte-identical
+     * whatever the thread count. Each part's SHA-256 is computed while it is written.
+     *
+     * @param crcs    CRC-32 per file path from the pre-scan, or null to compute them here (one extra
+     *                read per file)
+     * @param threads parts written at once
+     */
+    public List<SnapshotManifest.PartManifest> write(List<SnapshotManifest.FileEntry> files,
+                                                     List<String> owners, Map<String, Long> crcs,
+                                                     int threads, Consumer<String> progress) throws IOException {
         if (files.size() != owners.size()) {
             throw new IllegalArgumentException("files and owners must be the same length");
         }
         Files.createDirectories(outputDir);
 
-        List<SnapshotManifest.PartManifest> parts = new ArrayList<>();
-        int partNumber = 0;
-        int index = 0;
-        while (index < files.size()) {
-            partNumber++;
-            String fileName = String.format("%s.part-%05d.zip", baseName, partNumber);
-            Path partPath = outputDir.resolve(fileName);
-            Set<String> tables = new LinkedHashSet<>();
-            int entries = 0;
-            long uncompressed = 0;
-
-            try (OutputStream os = Files.newOutputStream(partPath);
-                 ZipOutputStream zip = new ZipOutputStream(os)) {
-                zip.setMethod(ZipOutputStream.STORED);
-                while (index < files.size()) {
-                    SnapshotManifest.FileEntry fe = files.get(index);
-                    // Never split a Parquet file: start a new part unless this part is still empty.
-                    if (entries > 0 && uncompressed + fe.size() > partSizeBytes) {
-                        break;
-                    }
-                    addStored(zip, fe);
-                    tables.add(owners.get(index));
-                    uncompressed += fe.size();
-                    entries++;
-                    index++;
-                    if (progress != null) {
-                        progress.accept(fe.path());
-                    }
-                }
+        // Never split a Parquet file: start a new part unless the current one is still empty.
+        List<int[]> ranges = new ArrayList<>();
+        int start = 0;
+        long uncompressed = 0;
+        for (int i = 0; i < files.size(); i++) {
+            long size = files.get(i).size();
+            if (i > start && uncompressed + size > partSizeBytes) {
+                ranges.add(new int[]{start, i});
+                start = i;
+                uncompressed = 0;
             }
-
-            long size = Files.size(partPath);
-            String sha = Digests.sha256Hex(partPath);
-            parts.add(new SnapshotManifest.PartManifest(partNumber, fileName, size, sha, entries,
-                    new ArrayList<>(tables)));
-            log.info("Wrote {} ({} entries, {} bytes)", fileName, entries, size);
+            uncompressed += size;
         }
-        return parts;
+        if (start < files.size()) {
+            ranges.add(new int[]{start, files.size()});
+        }
+
+        List<Integer> numbers = new ArrayList<>();
+        for (int n = 1; n <= ranges.size(); n++) numbers.add(n);
+        try {
+            return Parallel.map(numbers, threads, n -> writePart(n, files.subList(ranges.get(n - 1)[0], ranges.get(n - 1)[1]),
+                    owners.subList(ranges.get(n - 1)[0], ranges.get(n - 1)[1]), crcs, progress));
+        } catch (Parallel.PartFailure e) {
+            throw e.getCause() instanceof IOException io ? io : new IOException(e.getMessage(), e.getCause());
+        }
     }
 
-    private void addStored(ZipOutputStream zip, SnapshotManifest.FileEntry fe) throws IOException {
+    private SnapshotManifest.PartManifest writePart(int partNumber, List<SnapshotManifest.FileEntry> files,
+                                                    List<String> owners, Map<String, Long> crcs,
+                                                    Consumer<String> progress) throws IOException {
+        String fileName = String.format("%s.part-%05d.zip", baseName, partNumber);
+        Path partPath = outputDir.resolve(fileName);
+        Set<String> tables = new LinkedHashSet<>(owners);
+        MessageDigest sha = Digests.sha256();
+        try (OutputStream os = new DigestOutputStream(
+                new BufferedOutputStream(Files.newOutputStream(partPath), 1 << 20), sha);
+             ZipOutputStream zip = new ZipOutputStream(os)) {
+            zip.setMethod(ZipOutputStream.STORED);
+            for (SnapshotManifest.FileEntry fe : files) {
+                Long crc = crcs == null ? null : crcs.get(fe.path());
+                addStored(zip, fe, crc);
+                if (progress != null) {
+                    progress.accept(fe.path());
+                }
+            }
+        }
+        long size = Files.size(partPath);
+        log.info("Wrote {} ({} entries, {} bytes)", fileName, files.size(), size);
+        return new SnapshotManifest.PartManifest(partNumber, fileName, size, Digests.hex(sha.digest()),
+                files.size(), new ArrayList<>(tables));
+    }
+
+    private void addStored(ZipOutputStream zip, SnapshotManifest.FileEntry fe, Long knownCrc) throws IOException {
         Path source = dataDir.resolve(fe.path());
         ZipEntry entry = new ZipEntry(fe.path());
         entry.setMethod(ZipEntry.STORED);
         entry.setSize(fe.size());
         entry.setCompressedSize(fe.size());
-        entry.setCrc(crc32(source));
+        entry.setCrc(knownCrc != null ? knownCrc : crc32(source));
         // Fixed timestamp keeps repeated exports of the same file set byte-comparable.
         entry.setTime(0L);
         zip.putNextEntry(entry);
         try (InputStream in = Files.newInputStream(source)) {
             in.transferTo(zip);
         }
+        // ZipOutputStream checks the stored CRC and size against the bytes written.
         zip.closeEntry();
     }
 

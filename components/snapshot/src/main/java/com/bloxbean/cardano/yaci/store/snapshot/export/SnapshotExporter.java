@@ -4,6 +4,7 @@ import java.time.ZoneOffset;
 import java.time.LocalDate;
 import com.bloxbean.cardano.yaci.store.snapshot.archive.ArchiveVerifier;
 import com.bloxbean.cardano.yaci.store.snapshot.archive.ArchiveWriter;
+import com.bloxbean.cardano.yaci.store.snapshot.archive.Parallel;
 import com.bloxbean.cardano.yaci.store.snapshot.ducklake.DuckLakeCatalog;
 import com.bloxbean.cardano.yaci.store.snapshot.ducklake.DuckLakeFile;
 import com.bloxbean.cardano.yaci.store.snapshot.manifest.ManifestCodec;
@@ -21,10 +22,13 @@ import java.nio.file.Path;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
 /**
@@ -182,27 +186,54 @@ public class SnapshotExporter {
             String baseName = String.format("yaci-%s-e%d-%s", options.network(),
                     report.completedEpoch(), snapshotId.substring(0, 8));
 
-            // Pre-scan: one pass over the file set produces the digests, sizes and CRCs the archive
-            // writer and manifest both need.
-            List<SnapshotManifest.FileEntry> allEntries = new ArrayList<>();
-            List<String> owners = new ArrayList<>();
-            List<SnapshotManifest.TableManifest> tableManifests = new ArrayList<>();
-
-            for (TablePlan plan : report.plans()) {
-                List<SnapshotManifest.FileEntry> entries = new ArrayList<>();
-                for (DuckLakeFile f : plan.files()) {
+            // Pre-scan: one read per file produces the SHA-256 for the manifest and the CRC-32 the
+            // archive writer needs. Files are independent, so several are read at once.
+            int threads = ArchiveVerifier.DEFAULT_THREADS;
+            List<DuckLakeFile> scanFiles = report.plans().stream().flatMap(pl -> pl.files().stream()).toList();
+            long scanBytes = scanFiles.stream().mapToLong(DuckLakeFile::sizeBytes).sum();
+            say(progress, "digest", String.format("Hashing %,d files (%s) with %d threads",
+                    scanFiles.size(), bytes(scanBytes), threads));
+            long scanStart = System.currentTimeMillis();
+            AtomicInteger scanned = new AtomicInteger();
+            AtomicLong lastReport = new AtomicLong(scanStart);
+            List<Digests.FileDigest> digests;
+            try {
+                digests = Parallel.map(scanFiles, threads, f -> {
                     Path abs = options.dataDir().resolve(f.relativePath());
                     if (!Files.isRegularFile(abs)) {
                         throw new IOException("Catalog references a missing file: " + f.relativePath());
                     }
+                    Digests.FileDigest d = Digests.sha256AndCrc32(abs);
+                    int n = scanned.incrementAndGet();
+                    long now = System.currentTimeMillis();
+                    long last = lastReport.get();
+                    if (now - last >= 30_000 && lastReport.compareAndSet(last, now)) {
+                        say(progress, "digest", String.format("%,d/%,d files  elapsed %ds", n, scanFiles.size(),
+                                (now - scanStart) / 1000));
+                    }
+                    return d;
+                });
+            } catch (Parallel.PartFailure e) {
+                throw e.getCause() instanceof IOException io ? io : new IOException(e.getMessage(), e.getCause());
+            }
+            say(progress, "digest", String.format("Hashed %,d files in %ds", scanFiles.size(),
+                    (System.currentTimeMillis() - scanStart) / 1000));
+
+            List<SnapshotManifest.FileEntry> allEntries = new ArrayList<>();
+            List<String> owners = new ArrayList<>();
+            Map<String, Long> crcs = new HashMap<>();
+            List<SnapshotManifest.TableManifest> tableManifests = new ArrayList<>();
+            int at = 0;
+            for (TablePlan plan : report.plans()) {
+                List<SnapshotManifest.FileEntry> entries = new ArrayList<>();
+                for (DuckLakeFile f : plan.files()) {
+                    Digests.FileDigest d = digests.get(at++);
                     SnapshotManifest.FileEntry fe = new SnapshotManifest.FileEntry(
-                            f.relativePath(), Files.size(abs), Digests.sha256Hex(abs), f.rowCount(), f.partition());
+                            f.relativePath(), d.size(), d.sha256(), f.rowCount(), f.partition());
                     entries.add(fe);
                     allEntries.add(fe);
                     owners.add(plan.spec().id());
-                    if (progress != null) {
-                        progress.accept("digest " + f.relativePath());
-                    }
+                    crcs.put(f.relativePath(), d.crc32());
                 }
                 tableManifests.add(toTableManifest(plan, entries));
             }
@@ -216,8 +247,14 @@ public class SnapshotExporter {
 
             ArchiveWriter writer = new ArchiveWriter(options.dataDir(), options.outputDir(), baseName,
                     options.partSizeBytes());
-            List<SnapshotManifest.PartManifest> parts =
-                    writer.write(allEntries, owners, progress == null ? null : p -> progress.accept("pack " + p));
+            long packStart = System.currentTimeMillis();
+            say(progress, "pack", String.format("Writing parts of up to %s with %d threads",
+                    bytes(options.partSizeBytes()), threads));
+            List<SnapshotManifest.PartManifest> parts = writer.write(allEntries, owners, crcs, threads,
+                    progress == null ? null : p -> progress.accept("pack " + p));
+            say(progress, "pack", String.format("Wrote %d parts (%s) in %ds", parts.size(),
+                    bytes(parts.stream().mapToLong(SnapshotManifest.PartManifest::size).sum()),
+                    (System.currentTimeMillis() - packStart) / 1000));
 
             SnapshotManifest manifest = new SnapshotManifest(
                     ManifestCodec.FORMAT_VERSION,
@@ -239,8 +276,12 @@ public class SnapshotExporter {
                     report.declaredLossy(), options.tableSchemaFingerprints());
 
             // Re-read every part before publishing the manifest.
+            long verifyStart = System.currentTimeMillis();
+            say(progress, "verify", "Re-reading " + parts.size() + " parts");
             ArchiveVerifier.Result verified =
-                    new ArchiveVerifier().verify(manifest, options.outputDir(), true);
+                    new ArchiveVerifier(threads).verify(manifest, options.outputDir(), true);
+            say(progress, "verify", String.format("Verified %d parts in %ds", parts.size(),
+                    (System.currentTimeMillis() - verifyStart) / 1000));
             if (!verified.ok()) {
                 throw new IOException("Written parts failed verification:\n  - "
                         + String.join("\n  - ", verified.problems()));
@@ -255,6 +296,18 @@ public class SnapshotExporter {
             log.info("Exported snapshot {} ({} parts, {} bytes)", snapshotId, parts.size(), bytes);
             return new ExportResult(manifestPath, manifest, report, bytes, System.currentTimeMillis() - started);
         }
+    }
+
+    private static void say(Consumer<String> progress, String phase, String message) {
+        log.info(message);
+        if (progress != null) {
+            progress.accept("[" + phase + "] " + message);
+        }
+    }
+
+    private static String bytes(long n) {
+        return n >= 1L << 30 ? String.format("%.1f GiB", n / (double) (1L << 30))
+                : String.format("%.1f MiB", n / (double) (1L << 20));
     }
 
     private SnapshotManifest.TableManifest toTableManifest(TablePlan plan,

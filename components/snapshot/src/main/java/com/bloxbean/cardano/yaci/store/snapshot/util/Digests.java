@@ -43,6 +43,25 @@ public final class Digests {
         return HexFormat.of().formatHex(md.digest());
     }
 
+    /** SHA-256 and CRC-32 of a file, from one read. */
+    public record FileDigest(long size, String sha256, long crc32) {}
+
+    public static FileDigest sha256AndCrc32(Path file) throws IOException {
+        MessageDigest md = sha256();
+        java.util.zip.CRC32 crc = new java.util.zip.CRC32();
+        long size = 0;
+        try (InputStream in = Files.newInputStream(file)) {
+            byte[] buf = new byte[1 << 16];
+            int r;
+            while ((r = in.read(buf)) != -1) {
+                md.update(buf, 0, r);
+                crc.update(buf, 0, r);
+                size += r;
+            }
+        }
+        return new FileDigest(size, HexFormat.of().formatHex(md.digest()), crc.getValue());
+    }
+
     public static String hex(byte[] raw) {
         return HexFormat.of().formatHex(raw);
     }

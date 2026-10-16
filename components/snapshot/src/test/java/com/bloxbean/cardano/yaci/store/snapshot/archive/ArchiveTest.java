@@ -117,6 +117,31 @@ class ArchiveTest {
     }
 
     @Test
+    void parallelPackingWithPrescannedCrcsMatchesSerialPacking(@TempDir Path tmp) throws IOException {
+        Path dataDir = tmp.resolve("data");
+        Fixture f = fixture(dataDir, 7, 1000);
+        Map<String, Long> crcs = new java.util.HashMap<>();
+        for (SnapshotManifest.FileEntry e : f.entries()) {
+            crcs.put(e.path(), Digests.sha256AndCrc32(dataDir.resolve(e.path())).crc32());
+        }
+
+        var serial = new ArchiveWriter(dataDir, tmp.resolve("a"), "snap", 2500).write(f.entries(), f.owners(), null);
+        var parallel = new ArchiveWriter(dataDir, tmp.resolve("b"), "snap", 2500)
+                .write(f.entries(), f.owners(), crcs, 4, null);
+
+        assertThat(parallel).hasSize(4).isEqualTo(serial);
+        for (var p : parallel) {
+            assertThat(Digests.sha256Hex(tmp.resolve("b").resolve(p.fileName()))).isEqualTo(p.sha256());
+        }
+
+        // A stale pre-scan CRC (the file changed after hashing) fails the write.
+        crcs.put(f.entries().get(0).path(), 0L);
+        assertThatThrownBy(() -> new ArchiveWriter(dataDir, tmp.resolve("c"), "snap", 2500)
+                .write(f.entries(), f.owners(), crcs, 4, null))
+                .isInstanceOf(IOException.class).hasMessageContaining("crc");
+    }
+
+    @Test
     void oneReadHashesThePartAndEveryEntry(@TempDir Path tmp) throws IOException {
         Path dataDir = tmp.resolve("data");
         Path out = tmp.resolve("out");
