@@ -240,6 +240,16 @@ public class SnapshotValidator {
         if (registry.byTarget("address_utxo").filter(s -> registry.isSelected(s.id())).isPresent())
             validateAddressUtxo(pg, schema, b);
 
+        // The AdaPot job reads the cost model of the previous epoch's parameters at the first epoch
+        // boundary after a restore, and fails outright when it is missing.
+        if (pgs.tableExists("epoch_param") && pgs.tableExists("cost_model")) {
+            long dangling = scalar(pg, "SELECT count(*) FROM " + qt(schema, "epoch_param") + " p"
+                    + " WHERE p.cost_model_hash IS NOT NULL AND NOT EXISTS (SELECT 1 FROM "
+                    + qt(schema, "cost_model") + " c WHERE c.hash = p.cost_model_hash)");
+            b.check("epoch-param-cost-models", dangling == 0,
+                    dangling + " epoch_param row(s) whose cost model is missing from cost_model");
+        }
+
         if (registry.byTarget("epoch").filter(s -> registry.isSelected(s.id())).isPresent()) {
             long epochMax = scalar(pg, "SELECT COALESCE(max(number), -1) FROM " + qt(schema, "epoch"));
             b.check("epoch-aggregate-at-point", epochMax <= point.epoch(),
