@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.snapshot.validate;
 
 import com.bloxbean.cardano.yaci.store.snapshot.manifest.ManifestCodec;
 import com.bloxbean.cardano.yaci.store.snapshot.manifest.ManifestValidator;
+import com.bloxbean.cardano.yaci.store.snapshot.load.Autovacuum;
 import com.bloxbean.cardano.yaci.store.snapshot.load.DeferredIndexes;
 import com.bloxbean.cardano.yaci.store.snapshot.load.ImportJournal;
 import com.bloxbean.cardano.yaci.store.snapshot.load.PgSchema;
@@ -128,6 +129,12 @@ public class SnapshotValidator {
         } else {
             b.fail("import-journal", "no import journal found for this schema");
         }
+
+        List<String> noAutovacuum = Autovacuum.disabledTables(pg, schema);
+        b.check("autovacuum-restored", noAutovacuum.isEmpty(), noAutovacuum.isEmpty()
+                ? "no table is left with autovacuum switched off by the import"
+                : noAutovacuum.size() + " table(s) with autovacuum off: "
+                        + String.join(", ", noAutovacuum.subList(0, Math.min(5, noAutovacuum.size()))));
 
         List<String> indexProblems = new DeferredIndexes(pg, schema).problems(manifest.snapshotId());
         b.check("deferred-indexes", indexProblems.isEmpty(), indexProblems.isEmpty()

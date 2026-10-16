@@ -260,29 +260,46 @@ public class SnapshotImporter {
 
             int partitionsCreated = prepareTargetPartitions(pg, options, manifest);
 
-            long t2 = System.currentTimeMillis();
-            LoadResult loaded = loadTables(options, manifest, extractRoot, journal, schema, progress);
-            long loadMillis = System.currentTimeMillis() - t2;
+            // Off until ANALYZE is done with the tables. Reset when the load fails too: a resumed
+            // import switches it off again, and an abandoned one must not leave it off.
+            Autovacuum.disable(pg, options.schema(), loadedTables(manifest));
+            LoadResult loaded;
+            long loadMillis;
+            long indexMillis;
+            long analyzeMillis;
+            try {
+                long t2 = System.currentTimeMillis();
+                loaded = loadTables(options, manifest, extractRoot, journal, schema, progress);
+                loadMillis = System.currentTimeMillis() - t2;
 
-            // Before the handlers and sequence reset, which read the loaded tables.
-            long tIndex = System.currentTimeMillis();
-            deferred.rebuild(manifest.snapshotId(), options.workers(),
-                    DeferredIndexes.postgresMemory(options.memoryLimit()),
-                    journal.rowsPerTable(manifest.snapshotId()), () -> connect(options),
-                    m -> say(progress, "indexes", m));
-            List<String> indexProblems = deferred.problems(manifest.snapshotId());
-            if (!indexProblems.isEmpty()) {
-                throw new IllegalStateException("Rebuilt keys and indexes do not match the schema:\n  - "
-                        + String.join("\n  - ", indexProblems));
+                // Before the handlers and sequence reset, which read the loaded tables.
+                long tIndex = System.currentTimeMillis();
+                deferred.rebuild(manifest.snapshotId(), options.workers(),
+                        DeferredIndexes.postgresMemory(options.memoryLimit()),
+                        journal.rowsPerTable(manifest.snapshotId()), () -> connect(options),
+                        m -> say(progress, "indexes", m));
+                List<String> indexProblems = deferred.problems(manifest.snapshotId());
+                if (!indexProblems.isEmpty()) {
+                    throw new IllegalStateException("Rebuilt keys and indexes do not match the schema:\n  - "
+                            + String.join("\n  - ", indexProblems));
+                }
+                indexMillis = System.currentTimeMillis() - tIndex;
+
+                // Before the handlers and the app's first start, both of which query the loaded tables.
+                long tStats = System.currentTimeMillis();
+                TableStatistics.analyze(options.schema(), loadedTables(manifest),
+                        journal.rowsPerTable(manifest.snapshotId()), options.workers(), () -> connect(options),
+                        m -> say(progress, "analyze", m));
+                analyzeMillis = System.currentTimeMillis() - tStats;
+            } catch (Exception e) {
+                try {
+                    Autovacuum.restore(pg, options.schema(), loadedTables(manifest));
+                } catch (SQLException restore) {
+                    e.addSuppressed(restore);
+                }
+                throw e;
             }
-            long indexMillis = System.currentTimeMillis() - tIndex;
-
-            // Before the handlers and the app's first start, both of which query the loaded tables.
-            long tStats = System.currentTimeMillis();
-            TableStatistics.analyze(options.schema(), loadedTables(manifest),
-                    journal.rowsPerTable(manifest.snapshotId()), options.workers(), () -> connect(options),
-                    m -> say(progress, "analyze", m));
-            long analyzeMillis = System.currentTimeMillis() - tStats;
+            Autovacuum.restore(pg, options.schema(), loadedTables(manifest));
 
             long t3 = System.currentTimeMillis();
             List<String> handlerResults = runHandlers(pg, options, manifest);
