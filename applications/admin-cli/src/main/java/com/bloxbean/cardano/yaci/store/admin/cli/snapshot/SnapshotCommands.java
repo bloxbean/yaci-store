@@ -238,7 +238,11 @@ public class SnapshotCommands {
 
             if (dryRun) {
                 SnapshotImporter.Preflight pre = importer.preflight(options);
-                pre.warnings().forEach(w -> writeLn(warn(w)));
+                printDryRun(pre.manifest(), registry, options);
+                // The table list above already shows the selected and skipped tables.
+                pre.warnings().stream()
+                        .filter(w -> !w.startsWith("Selected tables: ") && !w.startsWith("Skipped tables: "))
+                        .forEach(w -> writeLn(warn(w)));
                 if (!pre.ok()) {
                     writeLn(error("Import is blocked:"));
                     pre.blockers().forEach(bl -> writeLn("    - %s", bl));
@@ -488,6 +492,93 @@ public class SnapshotCommands {
         Path file = workDir.resolve("snapshot-blockers.txt");
         Files.writeString(file, sb.toString());
         return file;
+    }
+
+    /**
+     * Restored database size per byte of loaded Parquet, keys and indexes included: preprod restores
+     * of 7.5 GiB of Parquet took 59 to 63 GB. A rough guide only; row width and compression vary.
+     */
+    static final int DATABASE_BYTES_PER_PARQUET_BYTE = 8;
+
+    private void printDryRun(SnapshotManifest m, SnapshotSpecRegistry registry, ImportOptions options)
+            throws java.io.IOException {
+        writeLn(info("Snapshot %s (%s, epoch %d, block %d, slot %d)", m.snapshotId(), m.point().network(),
+                m.point().epoch(), m.point().blockNumber(), m.point().slot()));
+        writeLn("  Target schema : %s at %s", options.schema(), redactedUrl(options.jdbcUrl()));
+        describeImport(m, registry).forEach(l -> writeLn("  %s", l));
+
+        List<String> limitations = registry.selectedLimitations(m.declaredLossy());
+        if (!limitations.isEmpty()) {
+            writeLn(warn("Declared limitations (%d):", limitations.size()));
+            limitations.forEach(l -> writeLn("    - %s", l));
+        }
+
+        long extract = m.tables().stream().flatMap(t -> t.files().stream())
+                .mapToLong(SnapshotManifest.FileEntry::size).sum();
+        long free = Files.getFileStore(options.workDir()).getUsableSpace();
+        long database = loadedBytes(m, registry) * DATABASE_BYTES_PER_PARQUET_BYTE;
+        writeLn(info("Disk space:"));
+        String workLine = String.format("  Work directory : %s to extract, plus DuckDB spill; %s free at %s",
+                SnapshotCliSupport.humanBytes(extract), SnapshotCliSupport.humanBytes(free), options.workDir());
+        writeLn(free < extract ? warn(workLine.trim() + " (not enough to extract)") : workLine);
+        writeLn("  PostgreSQL     : roughly %s for the restored database (about %dx the Parquet it loads); "
+                        + "check the database volume, which this command cannot see",
+                SnapshotCliSupport.humanBytes(database), DATABASE_BYTES_PER_PARQUET_BYTE);
+    }
+
+    /** What an import of {@code m} loads, skips and leaves to handlers, from the manifest's counts. */
+    static List<String> describeImport(SnapshotManifest m, SnapshotSpecRegistry registry) {
+        List<SnapshotManifest.TableManifest> load = new java.util.ArrayList<>();
+        List<SnapshotManifest.TableManifest> skipped = new java.util.ArrayList<>();
+        List<String> other = new java.util.ArrayList<>();
+        for (SnapshotManifest.TableManifest t : m.tables()) {
+            var spec = registry.byId(t.specId()).orElse(null);
+            String restore = spec != null ? spec.restore().name() : t.restore();
+            if (spec != null && !registry.isSelected(spec.id())) {
+                skipped.add(t);
+            } else if ("IMPORT".equals(restore)) {
+                load.add(t);
+            } else {
+                other.add(t.targetTable() + " (" + restore.toLowerCase(java.util.Locale.ROOT).replace('_', '-') + ")");
+            }
+        }
+        List<String> out = new java.util.ArrayList<>();
+        out.add(tableGroup("Load", load));
+        if (!skipped.isEmpty()) {
+            out.add(tableGroup("Skip (store not enabled in the target)", skipped));
+        }
+        if (!other.isEmpty()) {
+            out.add("Not loaded from Parquet: " + String.join(", ", other));
+        }
+        return out;
+    }
+
+    private static String tableGroup(String title, List<SnapshotManifest.TableManifest> tables) {
+        StringBuilder sb = new StringBuilder(String.format("%s: %d table(s), %,d rows, %s", title, tables.size(),
+                tables.stream().mapToLong(SnapshotManifest.TableManifest::rowCount).sum(),
+                SnapshotCliSupport.humanBytes(tables.stream().mapToLong(SnapshotCommands::bytesOf).sum())));
+        tables.stream().sorted(java.util.Comparator.comparingLong(SnapshotCommands::bytesOf).reversed()
+                        .thenComparing(SnapshotManifest.TableManifest::targetTable))
+                .forEach(t -> sb.append(String.format("%n      %-34s %,16d %10s", t.targetTable(), t.rowCount(),
+                        SnapshotCliSupport.humanBytes(bytesOf(t)))));
+        return sb.toString();
+    }
+
+    private static long bytesOf(SnapshotManifest.TableManifest t) {
+        return t.files() == null ? 0 : t.files().stream().mapToLong(SnapshotManifest.FileEntry::size).sum();
+    }
+
+    private static long loadedBytes(SnapshotManifest m, SnapshotSpecRegistry registry) {
+        return m.tables().stream()
+                .filter(t -> registry.byId(t.specId()).filter(s -> registry.isSelected(s.id())
+                        && s.restore() == com.bloxbean.cardano.yaci.store.snapshot.spec.RestoreMode.IMPORT).isPresent())
+                .mapToLong(SnapshotCommands::bytesOf).sum();
+    }
+
+    /** The JDBC URL without its query string or user info, which may carry credentials. */
+    static String redactedUrl(String url) {
+        int q = url.indexOf('?');
+        return (q < 0 ? url : url.substring(0, q)).replaceFirst("//[^/@]*@", "//");
     }
 
     private void printImportReport(ImportReport r) {

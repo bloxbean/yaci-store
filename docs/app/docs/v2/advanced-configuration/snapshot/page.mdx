@@ -258,6 +258,10 @@ snapshot IDs and timestamps, even if they package the same file set.
 ## Restoring a snapshot
 
 Preflight (`--dry-run`) checks manifest compatibility, database state, part existence, and sizes.
+It also prints the target schema, the tables it would load and skip with their row counts and
+sizes, the declared limitations, and the disk space needed: the extraction size against the free
+space in the work directory, and a rough estimate of the restored database (about 8x the Parquet
+it loads) for the PostgreSQL volume, which it cannot check itself.
 It does not hash the archives. A real import verifies each part's digest once before extraction,
 then verifies the extracted files. Use `snapshot verify` for a standalone integrity check.
 Unsigned imports require explicit `--allow-unsigned`.
