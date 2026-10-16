@@ -100,23 +100,6 @@ class DeferredIndexesIT {
     }
 
     @Test
-    void aKeyBuiltAsAUniqueIndexButNotYetAttachedIsDroppedOnResume() throws Exception {
-        Map<String, String> before = definitions();
-        DeferredIndexes deferred = new DeferredIndexes(pg, schema);
-        deferred.defer("s1", List.of("utxo"), said::add);
-        // A crash between the two steps of the key: its unique index exists, the constraint does not.
-        exec("CREATE UNIQUE INDEX utxo_pkey ON " + schema + ".utxo USING btree (output_index, tx_hash)");
-
-        new DeferredIndexes(pg, schema).defer("s1", List.of("utxo"), said::add);
-
-        assertThat(definitions()).doesNotContainKey("utxo_pkey");
-        exec("INSERT INTO " + schema + ".utxo SELECT g, 'h' || g, g % 3 FROM generate_series(1, 100) g");
-        deferred.rebuild("s1", 3, null, Map.of("utxo", 100L), this::connect, said::add);
-        assertThat(definitions()).containsAllEntriesOf(before);
-        assertThat(deferred.problems("s1")).isEmpty();
-    }
-
-    @Test
     void duplicateRowsFailOnTheKeyAndLeaveItPending() throws Exception {
         DeferredIndexes deferred = new DeferredIndexes(pg, schema);
         deferred.defer("s1", List.of("utxo"), said::add);

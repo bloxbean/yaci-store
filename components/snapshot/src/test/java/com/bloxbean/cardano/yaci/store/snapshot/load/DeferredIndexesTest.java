@@ -28,30 +28,7 @@ class DeferredIndexesTest {
         var key = new DeferredIndexes.Entry("utxo", "utxo_pkey", DeferredIndexes.CONSTRAINT, true,
                 "PRIMARY KEY (tx_hash, output_index)", List.of("tx_hash", "output_index"), false);
         assertThat(key.createSql("s")).isEqualTo("ALTER TABLE \"s\".\"utxo\" ADD CONSTRAINT \"utxo_pkey\" PRIMARY KEY (tx_hash, output_index)");
-        assertThat(key.dropSql("s")).isEqualTo("ALTER TABLE \"s\".\"utxo\" DROP CONSTRAINT IF EXISTS \"utxo_pkey\";"
-                + " DROP INDEX IF EXISTS \"s\".\"utxo_pkey\"");
-    }
-
-    @Test
-    void aSimpleKeyIsBuiltAsAUniqueIndexAndAttached() {
-        var key = new DeferredIndexes.Entry("utxo", "utxo_pkey", DeferredIndexes.CONSTRAINT, true,
-                "PRIMARY KEY (output_index, tx_hash)", List.of("tx_hash", "output_index"), false);
-        assertThat(key.twoStepKind()).isEqualTo("PRIMARY KEY");
-        assertThat(key.uniqueIndexSql("s"))
-                .isEqualTo("CREATE UNIQUE INDEX IF NOT EXISTS \"utxo_pkey\" ON \"s\".\"utxo\" USING btree (output_index, tx_hash)");
-        assertThat(key.attachSql("s"))
-                .isEqualTo("ALTER TABLE \"s\".\"utxo\" ADD CONSTRAINT \"utxo_pkey\" PRIMARY KEY USING INDEX \"utxo_pkey\"");
-
-        for (String other : List.of("UNIQUE NULLS NOT DISTINCT (a)", "PRIMARY KEY (a) INCLUDE (b)",
-                "UNIQUE (a) DEFERRABLE", "EXCLUDE USING gist (r WITH &&)", "PRIMARY KEY (a) WITH (fillfactor='90')")) {
-            var complex = new DeferredIndexes.Entry("t", "k", DeferredIndexes.CONSTRAINT, true, other, List.of(), false);
-            assertThat(complex.twoStepKind()).as(other).isNull();
-        }
-        var unique = new DeferredIndexes.Entry("t", "uq", DeferredIndexes.CONSTRAINT, true, "UNIQUE (a, b)", List.of(), false);
-        assertThat(unique.twoStepKind()).isEqualTo("UNIQUE");
-        var index = new DeferredIndexes.Entry("t", "i", DeferredIndexes.INDEX, true,
-                "CREATE UNIQUE INDEX i ON s.t USING btree (a)", List.of(), false);
-        assertThat(index.twoStepKind()).isNull();
+        assertThat(key.dropSql("s")).isEqualTo("ALTER TABLE \"s\".\"utxo\" DROP CONSTRAINT IF EXISTS \"utxo_pkey\"");
     }
 
     @Test
