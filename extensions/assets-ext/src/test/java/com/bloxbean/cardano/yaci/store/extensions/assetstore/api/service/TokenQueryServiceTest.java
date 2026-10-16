@@ -60,6 +60,15 @@ class TokenQueryServiceTest {
         knownCip26.setName("nutcoin");
         knownCip26.setDescription("The legendary Nutcoin, the first native asset minted on Cardano.");
         knownCip26.setUrl("https://fivebinaries.com/nutcoin");
+        knownCip26.setProperties(new Mapping(
+                KNOWN_SUBJECT,
+                new Item(0, "https://fivebinaries.com/nutcoin", List.of()),
+                new Item(0, "nutcoin", List.of()),
+                null,
+                null,
+                null,
+                null,
+                new Item(0, "The legendary Nutcoin, the first native asset minted on Cardano.", List.of())));
         when(cip26StorageReader.findBySubject(KNOWN_SUBJECT)).thenReturn(Optional.of(knownCip26));
         when(cip26StorageReader.findLogoBySubject(KNOWN_SUBJECT)).thenReturn(Optional.empty());
 

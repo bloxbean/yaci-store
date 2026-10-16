@@ -138,25 +138,19 @@ public class Cip26TokenMetadata {
     public static Cip26TokenMetadata from(
             com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.Cip26Metadata entity,
             @Nullable String logoB64) {
-        if (entity == null) {
-            return null;
-        }
-
         Mapping mapping = entity.getProperties();
         Cip26TokenMetadataBuilder builder = Cip26TokenMetadata.builder()
                 .subject(entity.getSubject())
                 .policy(entity.getPolicy());
 
-        if (mapping != null) {
-            builder.name(stringProperty(mapping.name(), NameProperty::new));
-            builder.description(stringProperty(mapping.description(), DescriptionProperty::new));
-            builder.url(stringProperty(mapping.url(), UrlProperty::new));
-            builder.ticker(stringProperty(mapping.ticker(), TickerProperty::new));
-            builder.decimals(decimalsProperty(mapping.decimals()));
-            if (logoB64 != null) {
-                // Preserve signatures from mapping.logo() but use the canonical base64 string from Cip26Metadata.
-                builder.logo(logoProperty(mapping.logo(), logoB64));
-            }
+        builder.name(stringProperty(mapping.name(), NameProperty::new));
+        builder.description(stringProperty(mapping.description(), DescriptionProperty::new));
+        builder.url(stringProperty(mapping.url(), UrlProperty::new));
+        builder.ticker(stringProperty(mapping.ticker(), TickerProperty::new));
+        builder.decimals(decimalsProperty(mapping.decimals()));
+        if (logoB64 != null) {
+            // Preserve signatures from mapping.logo() but use the canonical base64 string from Cip26Metadata.
+            builder.logo(logoProperty(mapping.logo(), logoB64));
         }
 
         // CF's preprod V2 API does not emit `updated` / `updatedBy` (the fields end up null
@@ -168,7 +162,8 @@ public class Cip26TokenMetadata {
         return builder.build();
     }
 
-    private static <P extends TokenMetadataProperty<String>> P stringProperty(Item item, Supplier<P> ctor) {
+    @Nullable
+    private static <P extends TokenMetadataProperty<String>> P stringProperty(@Nullable Item item, Supplier<P> ctor) {
         if (item == null || item.value() == null) {
             return null;
         }
@@ -179,7 +174,8 @@ public class Cip26TokenMetadata {
         return property;
     }
 
-    private static DecimalsProperty decimalsProperty(Item item) {
+    @Nullable
+    private static DecimalsProperty decimalsProperty(@Nullable Item item) {
         if (item == null || item.value() == null) {
             return null;
         }

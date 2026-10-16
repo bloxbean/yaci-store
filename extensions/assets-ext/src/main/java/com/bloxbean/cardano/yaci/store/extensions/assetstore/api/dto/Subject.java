@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.annotation.Nullable;
 
 @Schema(description = "A token subject with its metadata and standards details")
 public record Subject(
@@ -16,5 +17,5 @@ public record Subject(
         @Schema(description = "Raw per-standard metadata, only present when show_cips_details=true",
                 nullable = true,
                 requiredMode = Schema.RequiredMode.NOT_REQUIRED)
-        Standards standards) {
+        @Nullable Standards standards) {
 }
