@@ -5,7 +5,8 @@
 Proposed. Partly implemented by PR #1220 (open): option B below, plus an early write of the `properties` as JSON, which
 covers the failure we have seen (#1240). Option C, the savepoint, is not implemented and is still the recommendation for
 a failure inside the database, which still stops the sync as in option A. The record asks for the choice about that
-remainder and gives a recommendation. The issue is #1243 and it stays open.
+remainder and gives a recommendation. #1243 is closed by #1220 for the failures it covers; the remainder is #1265 (low
+priority, for discussion).
 
 ## Date
 
@@ -114,7 +115,8 @@ to make. One behaviour is documented instead.
 
 ## References
 
-- #1243 (this decision), #1240 and PR #1220 (the case that exposed it)
+- #1243 (the issue, closed by PR #1220 for failures in memory), #1265 (the remainder and this decision), #1240 and PR #1220
+  (the case that exposed it)
 - ADR 0002 decisions 6 and 9: bounded values and what is reported
 - ADR 0003 decision 5: what the API returns when a datum is skipped
 - `Cip68Processor.processTransaction`, `BlockFetchService.stopSyncOnError`
