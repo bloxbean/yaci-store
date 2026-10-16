@@ -9,7 +9,13 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
-/** Validate all archive structure and require compatible specifications for every selected table. */
+/**
+ * Validate all archive structure and require compatible specifications for every selected table.
+ *
+ * <p>A specification must match at the same {@code spec-version}. A manifest that records the export
+ * contract digest needs only the contract to match, so a release that fixes an import transform
+ * still loads snapshots exported before the fix; an older manifest needs the whole specification.
+ */
 public final class ManifestValidator {
     private final SnapshotSpecRegistry registry;
 
@@ -44,6 +50,13 @@ public final class ManifestValidator {
             if (registry.isSelected(t.specId()) && spec != null) {
                 if (spec.specVersion() != t.specVersion()) {
                     problems.add("Specification '" + t.specId() + "' version does not match the local specification");
+                } else if (t.contractDigest() != null) {
+                    // Only what the data is must match; a newer importer may load it differently.
+                    if (!Objects.equals(spec.contractDigest(), t.contractDigest())) {
+                        problems.add("Specification '" + t.specId() + "' has an export contract different from "
+                                + "the local specification at the same spec-version. Re-export the snapshot, "
+                                + "or import it with the release that produced it.");
+                    }
                 } else if (!Objects.equals(spec.digest(), t.specDigest())) {
                     problems.add("Specification '" + t.specId() + "' has digest different from the local specification");
                 }
@@ -68,5 +81,28 @@ public final class ManifestValidator {
             }
         }
         return problems;
+    }
+
+    /**
+     * Selected tables whose export contract matches but whose import side differs from the
+     * specification the snapshot was exported with, so they load with this release's transform.
+     * Informational: {@link #validate} has already accepted them.
+     */
+    public List<String> importChanges(SnapshotManifest manifest) {
+        List<String> notes = new ArrayList<>();
+        for (SnapshotManifest.TableManifest t : manifest.tables() == null ? List.<SnapshotManifest.TableManifest>of()
+                : manifest.tables()) {
+            SnapshotTableSpec spec = registry.byId(t.specId()).orElse(null);
+            if (spec != null && registry.isSelected(t.specId()) && t.contractDigest() != null
+                    && t.contractDigest().equals(spec.contractDigest()) && !spec.digest().equals(t.specDigest())) {
+                notes.add("Specification '" + t.specId() + "' is loaded with this release's import "
+                        + (spec.importSpec().transformVersion() != t.transformVersion()
+                        ? "transform (version " + spec.importSpec().transformVersion() + "; the snapshot was "
+                        + "exported with version " + t.transformVersion() + ")"
+                        : "mapping, which differs from the exporting release's")
+                        + "; the export contract matches");
+            }
+        }
+        return notes;
     }
 }

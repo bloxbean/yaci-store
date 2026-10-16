@@ -79,8 +79,9 @@ public class SnapshotImporter {
         List<String> blockers = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
 
-        blockers.addAll(new ManifestValidator(registry)
-                .validate(manifest));
+        ManifestValidator validator = new ManifestValidator(registry);
+        blockers.addAll(validator.validate(manifest));
+        warnings.addAll(validator.importChanges(manifest));
         if (!options.allowUnsigned()) {
             blockers.add("Snapshot signing is not implemented; --allow-unsigned is required");
         }
@@ -281,6 +282,7 @@ public class SnapshotImporter {
                     manifest.point().protocolMagic(), manifest.point().epoch(), manifest.point().slot(),
                     manifest.point().blockNumber(), manifest.point().blockHash(),
                     schema.fingerprint(), ImportJournal.STATUS_LOADING, null, registry.scopeDigest()));
+            journal.recordTransforms(manifest.snapshotId(), registry.importedTables());
 
             // Before the partitions are created, so dropping a parent's index touches fewer of them.
             DeferredIndexes deferred = new DeferredIndexes(pg, options.schema());

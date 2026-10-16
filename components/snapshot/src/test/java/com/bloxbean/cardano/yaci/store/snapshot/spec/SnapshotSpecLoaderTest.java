@@ -81,6 +81,35 @@ class SnapshotSpecLoaderTest {
     }
 
     @Test
+    void theContractDigestCoversWhatTheDataIsNotHowItIsLoaded() {
+        SnapshotTableSpec base = load(MINIMAL);
+        assertThat(base.contractDigest()).hasSize(64).isEqualTo(load(MINIMAL).contractDigest());
+
+        // Import side, validation.required-columns and formatting: a new importer may change these.
+        for (String importOnly : new String[]{
+                MINIMAL.replace("source: vrf_key_hash", "source: vrf_key_hash\n        converter: to-varchar"),
+                MINIMAL.replace("batch-boundary: FILE_SET", "batch-boundary: FILE_SET\n    batch-size: 8"),
+                MINIMAL.replace("    bounds: [slot, epoch]", "    bounds: [slot, epoch]\n    required-columns: [tx_hash]"),
+                MINIMAL.replace("  kind: CHAIN_DATA", "  # a comment\n  kind: chain_data")}) {
+            SnapshotTableSpec changed = load(importOnly);
+            assertThat(changed.digest()).isNotEqualTo(base.digest());
+            assertThat(changed.contractDigest()).as(importOnly).isEqualTo(base.contractDigest());
+        }
+
+        // What is exported, at which point, and what the manifest records about it.
+        for (String contract : new String[]{
+                MINIMAL.replace("spec-version: 1", "spec-version: 2"),
+                MINIMAL.replace("column: block_time", "column: slot"),
+                MINIMAL.replace("type: SLOT_LTE", "type: EPOCH_LTE"),
+                MINIMAL.replace("exporter-id: pool_registration", "exporter-id: pool_registration_v2"),
+                MINIMAL.replace("key: [tx_hash, cert_index]", "key: [tx_hash]"),
+                MINIMAL.replace("bounds: [slot, epoch]", "bounds: [slot]"),
+                MINIMAL.replace("    bounds: [slot, epoch]", "    bounds: [slot, epoch]\n    source-key: [tx_hash]")}) {
+            assertThat(load(contract).contractDigest()).as(contract).isNotEqualTo(base.contractDigest());
+        }
+    }
+
+    @Test
     void rejectsUnknownKeys() {
         assertThatThrownBy(() -> load(MINIMAL.replace("  kind: CHAIN_DATA", "  kind: CHAIN_DATA\n  colour: red")))
                 .isInstanceOf(SpecException.class)

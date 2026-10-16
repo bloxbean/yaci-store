@@ -164,6 +164,12 @@ class SnapshotImportIT {
         assertThat(report.batchesSkipped()).isZero();
 
         try (Connection conn = PostgresSupport.connect()) {
+            // The manifest pins only the export contract; the journal keeps the transform that loaded.
+            var addressUtxo = registry.byId("address-utxo").orElseThrow();
+            assertThat(new ImportJournal(conn, schema).transforms(built.manifest().snapshotId())).hasValueSatisfying(
+                    t -> assertThat(t).contains("address-utxo=v" + addressUtxo.importSpec().transformVersion()
+                            + ":" + addressUtxo.digest()));
+
             // MAPPED with a timestamp conversion and three jsonb conversions.
             assertThat(count(conn, "block")).isEqualTo(SnapshotFixture.POINT_BLOCK + 1);
             assertThat(scalarLong(conn, "SELECT block_time FROM " + qt("block")
@@ -416,6 +422,40 @@ class SnapshotImportIT {
         assertThat(pre.blockers()).anySatisfy(b -> assertThat(b)
                 .contains("'address-utxo'").contains("tx_index").contains("narrowing 'INTEGER' to 'smallint'"));
         assertThat(root.resolve("work").resolve("extracted")).doesNotExist();
+    }
+
+    /**
+     * A manifest pins the export contract, so a release whose import transform differs still loads
+     * it, and says so; a different contract at the same spec-version is still refused.
+     */
+    @Test
+    void acceptsAChangedImportTransformButNotAChangedExportContract() throws Exception {
+        SnapshotFixture.Built built = fixture();
+        SnapshotManifest exportedEarlier = replaceTables(built.manifest(), built.manifest().tables().stream()
+                .map(t -> t.specId().equals("address-utxo") ? withDigests(t, "0".repeat(64), t.contractDigest()) : t)
+                .toList());
+        Path path = built.archiveDir().resolve("earlier.manifest.json");
+        new ManifestCodec().writeAtomically(exportedEarlier, path);
+        SnapshotImporter.Preflight pre = new SnapshotImporter(registry).preflight(options(path, 1));
+        assertThat(pre.blockers()).isEmpty();
+        assertThat(pre.warnings()).anySatisfy(w -> assertThat(w)
+                .contains("'address-utxo'").contains("export contract matches"));
+
+        SnapshotManifest otherContract = replaceTables(built.manifest(), built.manifest().tables().stream()
+                .map(t -> t.specId().equals("address-utxo") ? withDigests(t, t.specDigest(), "0".repeat(64)) : t)
+                .toList());
+        new ManifestCodec().writeAtomically(otherContract, path);
+        assertThat(new SnapshotImporter(registry).preflight(options(path, 1)).blockers())
+                .anySatisfy(b -> assertThat(b).contains("'address-utxo'").contains("export contract"));
+    }
+
+    private static SnapshotManifest.TableManifest withDigests(SnapshotManifest.TableManifest t, String specDigest,
+                                                              String contractDigest) {
+        return new SnapshotManifest.TableManifest(t.specId(), t.specVersion(), specDigest,
+                t.module(), t.kind(), t.restore(), t.reason(), t.sourceRelation(), t.exporterId(),
+                t.targetTable(), t.loadMode(), t.cutoffRule(), t.transformVersion(),
+                t.dependencies(), t.rowCount(), t.key(), t.columnFingerprint(),
+                t.sourceColumns(), t.bounds(), t.files(), contractDigest);
     }
 
     @Test

@@ -12,10 +12,19 @@ class ManifestValidatorTest {
     private final ManifestValidator validator = new ManifestValidator(registry);
 
     private List<SnapshotManifest.TableManifest> tables() {
-        return registry.all().stream().map(s -> new SnapshotManifest.TableManifest(s.id(),
-                s.specVersion(), s.digest(), s.module(), s.kind().name(), s.restore().name(),
-                s.reason(), s.relation(), null, s.targetTable(), null, null, 1,
-                List.of(), 0, List.of(), null, Map.of(), Map.of(), List.of())).toList();
+        return registry.all().stream().map(s -> table(s.id(), s.specVersion(), s.digest(), s.contractDigest()))
+                .toList();
+    }
+
+    private SnapshotManifest.TableManifest table(String id, int version, String digest, String contractDigest) {
+        var s = registry.byId(id).orElseThrow();
+        return new SnapshotManifest.TableManifest(s.id(), version, digest, s.module(), s.kind().name(),
+                s.restore().name(), s.reason(), s.relation(), null, s.targetTable(), null, null, 1,
+                List.of(), 0, List.of(), null, Map.of(), Map.of(), List.of(), contractDigest);
+    }
+
+    private List<SnapshotManifest.TableManifest> replacing(SnapshotManifest.TableManifest replacement) {
+        return tables().stream().map(t -> t.specId().equals(replacement.specId()) ? replacement : t).toList();
     }
 
     private SnapshotManifest manifest(int format, List<SnapshotManifest.TableManifest> tables) {
@@ -30,6 +39,32 @@ class ManifestValidatorTest {
         assertThat(validator.validate(manifest(1, tables().stream()
                 .filter(t -> !t.specId().equals("delegation")).toList())))
                 .anyMatch(p -> p.contains("Missing manifest specification 'delegation'"));
+    }
+
+    @Test
+    void aNewManifestPinsOnlyTheExportContract() {
+        var mir = registry.byId("mir").orElseThrow();
+        var fixedTransform = manifest(1, replacing(table("mir", mir.specVersion(), "0".repeat(64), mir.contractDigest())));
+        assertThat(validator.validate(fixedTransform)).isEmpty();
+        assertThat(validator.importChanges(fixedTransform)).singleElement().asString()
+                .contains("'mir'").contains("export contract matches");
+
+        var otherContract = manifest(1, replacing(table("mir", mir.specVersion(), mir.digest(), "0".repeat(64))));
+        assertThat(validator.validate(otherContract)).singleElement().asString()
+                .contains("'mir'").contains("export contract different");
+
+        var otherVersion = manifest(1, replacing(table("mir", mir.specVersion() + 1, mir.digest(), mir.contractDigest())));
+        assertThat(validator.validate(otherVersion)).singleElement().asString().contains("version does not match");
+    }
+
+    @Test
+    void aManifestWithoutAContractDigestStillNeedsTheWholeSpecification() {
+        var mir = registry.byId("mir").orElseThrow();
+        assertThat(validator.validate(manifest(1, replacing(table("mir", mir.specVersion(), mir.digest(), null)))))
+                .isEmpty();
+        var older = manifest(1, replacing(table("mir", mir.specVersion(), "0".repeat(64), null)));
+        assertThat(validator.validate(older)).singleElement().asString().contains("has digest different");
+        assertThat(validator.importChanges(older)).isEmpty();
     }
 
     @Test

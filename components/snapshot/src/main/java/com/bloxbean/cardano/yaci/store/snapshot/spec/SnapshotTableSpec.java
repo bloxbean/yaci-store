@@ -32,7 +32,10 @@ public record SnapshotTableSpec(
          * downsample, for instance. Recorded in the manifest alongside {@link #lossy()}.
          */
         String lossyNote,
-        /** SHA-256 of the canonical YAML bytes this spec was loaded from. */
+        /**
+         * SHA-256 of the YAML bytes this spec was loaded from and of its SQL transform resource: the
+         * whole spec, import side included. See {@link #contractDigest()} for the export side alone.
+         */
         String digest,
         /** Where the spec came from, for diagnostics only. Never written to a manifest. */
         String origin
@@ -54,6 +57,56 @@ public record SnapshotTableSpec(
     /** The analytics relation packaged for this spec, or {@code null} when the table has no export. */
     public String relation() {
         return source != null ? source.ducklakeRelation() : null;
+    }
+
+    /**
+     * Digest of the export contract: what the packaged data is, as opposed to how it is loaded.
+     *
+     * <p>It covers the identity and classification, the source (exporter, relation, partitioning),
+     * the consistency rules, the validation key, bounds and source key, and the declared
+     * limitations: everything that decides which files and rows an export contains and what its
+     * manifest records. It leaves out the {@code import} section (target mapping, converters, SQL
+     * transform, batching, target partitioning) and {@code validation.required-columns}, which only
+     * constrain the target. A manifest pins this digest, so an importer with a corrected transform
+     * still loads an existing snapshot. Changing anything covered here requires a new
+     * {@code spec-version}; a change to how the data is loaded keeps it, and bumps
+     * {@code transform-version} when the loaded rows change.
+     */
+    public String contractDigest() {
+        StringBuilder sb = new StringBuilder("snapshot-contract/1\n");
+        line(sb, "id", id);
+        line(sb, "spec-version", specVersion);
+        line(sb, "module", module);
+        line(sb, "kind", kind);
+        line(sb, "restore", restore);
+        line(sb, "reason", reason);
+        if (source != null) {
+            line(sb, "source.exporter-id", source.exporterId());
+            line(sb, "source.ducklake-relation", source.ducklakeRelation());
+            line(sb, "source.partition", source.partition().strategy() + "," + source.partition().column()
+                    + "," + source.partition().includeByronEpochs());
+        }
+        if (consistency != null) {
+            CompletedEpochRule ce = consistency.completedEpoch();
+            line(sb, "consistency.completed-epoch", ce.type() + "," + ce.column() + "," + ce.offset());
+            CutoffRule cut = consistency.cutoff();
+            line(sb, "consistency.cutoff", cut.type() + "," + cut.column() + "," + cut.offset());
+            CoverageRule cov = consistency.coverage();
+            line(sb, "consistency.coverage", cov.type() + "," + cov.column());
+        }
+        if (validation != null) {
+            line(sb, "validation.key", String.join(",", validation.key()));
+            line(sb, "validation.bounds", String.join(",", validation.bounds()));
+            line(sb, "validation.source-key", String.join(",", validation.sourceKey()));
+        }
+        new java.util.TreeMap<>(lossy == null ? Map.of() : lossy).forEach((c, r) -> line(sb, "lossy." + c, r));
+        line(sb, "lossy-note", lossyNote);
+        return com.bloxbean.cardano.yaci.store.snapshot.util.Digests.sha256Hex(sb.toString());
+    }
+
+    private static void line(StringBuilder sb, String key, Object value) {
+        String v = value == null ? "~" : value.toString().replace("\\", "\\\\").replace("\n", "\\n");
+        sb.append(key).append('=').append(v).append('\n');
     }
 
     /**

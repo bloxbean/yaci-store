@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.snapshot.load;
 
+import com.bloxbean.cardano.yaci.store.snapshot.spec.SnapshotTableSpec;
 import com.bloxbean.cardano.yaci.store.snapshot.util.Identifiers;
 
 import java.sql.Connection;
@@ -7,11 +8,13 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.stream.Collectors;
 
 /**
  * Durable record of import progress, living in the target schema so it survives any kind of crash.
@@ -69,6 +72,7 @@ public class ImportJournal {
                     + " updated_at timestamp NOT NULL DEFAULT now(),"
                     + " message text)");
             st.execute("ALTER TABLE " + q(RUN_TABLE) + " ADD COLUMN IF NOT EXISTS scope_digest varchar(64)");
+            st.execute("ALTER TABLE " + q(RUN_TABLE) + " ADD COLUMN IF NOT EXISTS transforms text");
         }
     }
 
@@ -137,6 +141,34 @@ public class ImportJournal {
             ps.setString(10, run.status());
             ps.setString(11, run.scopeDigest());
             ps.executeUpdate();
+        }
+    }
+
+    /**
+     * Record which import transform loads each table: {@code id=v<transform-version>:<spec digest>}.
+     * The manifest pins only the export contract, so this is where the transform that actually
+     * produced the rows is kept.
+     */
+    public void recordTransforms(String snapshotId, Collection<SnapshotTableSpec> specs) throws SQLException {
+        String transforms = specs.stream()
+                .map(s -> s.id() + "=v" + s.importSpec().transformVersion() + ":" + s.digest())
+                .sorted().collect(Collectors.joining(","));
+        try (PreparedStatement ps = conn.prepareStatement("UPDATE " + q(RUN_TABLE)
+                + " SET transforms=? WHERE snapshot_id=?")) {
+            ps.setString(1, transforms);
+            ps.setString(2, snapshotId);
+            ps.executeUpdate();
+        }
+    }
+
+    /** What {@link #recordTransforms} recorded for a run, if anything. */
+    public Optional<String> transforms(String snapshotId) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("SELECT transforms FROM " + q(RUN_TABLE)
+                + " WHERE snapshot_id=?")) {
+            ps.setString(1, snapshotId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? Optional.ofNullable(rs.getString(1)) : Optional.empty();
+            }
         }
     }
 

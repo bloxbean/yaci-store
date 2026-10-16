@@ -80,7 +80,7 @@ final class SnapshotFixture {
                     spec.importSpec().mode().name(), spec.consistency().cutoff().type().name(),
                     spec.importSpec().transformVersion(), spec.importSpec().dependencies(),
                     rows, spec.validation().key(), "fixture", declaredColumns(spec.relation()),
-                    Map.of(), files));
+                    Map.of(), files, spec.contractDigest()));
         }
         // Every other classified table is declared with zero files so preflight sees full coverage.
         for (SnapshotTableSpec spec : registry.all()) {
@@ -92,7 +92,8 @@ final class SnapshotFixture {
                     spec.relation(), spec.hasSource() ? spec.source().exporterId() : null,
                     spec.targetTable(),
                     spec.restore() == RestoreMode.IMPORT ? spec.importSpec().mode().name() : null,
-                    null, 1, List.of(), 0, List.of(), null, Map.of(), Map.of(), List.of()));
+                    null, 1, List.of(), 0, List.of(), null, Map.of(), Map.of(), List.of(),
+                    spec.contractDigest()));
         }
 
         // Small parts so the fixture exercises multi-part packaging and resume across parts.

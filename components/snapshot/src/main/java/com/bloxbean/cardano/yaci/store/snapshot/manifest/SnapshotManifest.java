@@ -54,6 +54,11 @@ public record SnapshotManifest(
     /**
      * Per-table snapshot facts. {@code columnFingerprint} covers the observed Parquet column
      * names/types so schema drift fails at import preflight rather than corrupting data.
+     *
+     * <p>{@code specDigest} is the exporting release's whole specification, import side included.
+     * {@code contractDigest} is its export contract alone ({@code SnapshotTableSpec.contractDigest()}),
+     * and is what an importer requires to match. Manifests written before it existed have none and
+     * still require the whole specification to match.
      */
     public record TableManifest(
             String specId,
@@ -79,8 +84,20 @@ public record SnapshotManifest(
              */
             Map<String, String> sourceColumns,
             Map<String, String> bounds,
-            List<FileEntry> files
-    ) {}
+            List<FileEntry> files,
+            String contractDigest
+    ) {
+        public TableManifest(String specId, int specVersion, String specDigest, String module, String kind,
+                             String restore, String reason, String sourceRelation, String exporterId,
+                             String targetTable, String loadMode, String cutoffRule, int transformVersion,
+                             List<String> dependencies, long rowCount, List<String> key,
+                             String columnFingerprint, Map<String, String> sourceColumns,
+                             Map<String, String> bounds, List<FileEntry> files) {
+            this(specId, specVersion, specDigest, module, kind, restore, reason, sourceRelation, exporterId,
+                    targetTable, loadMode, cutoffRule, transformVersion, dependencies, rowCount, key,
+                    columnFingerprint, sourceColumns, bounds, files, null);
+        }
+    }
 
     /** One packaged Parquet file, with the path it must be restored to relative to the data dir. */
     public record FileEntry(

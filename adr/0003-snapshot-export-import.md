@@ -283,7 +283,7 @@ The canonical JSON manifest includes at least:
 - the complete Cardano consistency point;
 - source module/profile set and pruning settings;
 - Flyway history fingerprint and PostgreSQL schema fingerprint;
-- per-table specification ID, specification version and digest, source and
+- per-table specification ID, specification version, digest and export contract digest, source and
   target names, owning module, load mode, cutoff rule, transform version,
   dependencies, row count, key, column fingerprint, observed source column
   types, min/max slot or epoch, and expected null counts;
@@ -319,6 +319,23 @@ cannot reintroduce the override.
 YAML specification *and* the SQL transform resource it references. Without that,
 editing a transform would change what an import produces while still matching
 the digest the manifest recorded.
+
+**Implementation note (export contract digest).** Pinning that whole digest made
+every importer fix a re-export: two `mir` transform corrections each cost a
+51-minute, 140 GiB mainnet re-export of unchanged data. A specification is
+therefore split into its export contract -- identity and classification, source
+relation, exporter, partitioning, completed-epoch, cutoff and coverage rules,
+validation key, bounds and source key, declared limitations -- and its import
+side: target mapping, converters, SQL transform, batching, target partitioning
+and required target columns. Manifests now also record `contractDigest`, a
+digest of the contract alone, and import requires only that to match at the same
+`spec-version`, so a newer importer loads an existing snapshot whose contract is
+unchanged and refuses one whose contract differs. Preflight warns which tables
+load with a different transform than the exporting release's, and the import
+journal records the transform version and full digest each table was loaded
+with. A manifest without `contractDigest` is validated as before, against the
+full digest. Resuming a partially loaded import still requires the identical
+specification set, since its committed batches came from the original transform.
 
 ## Table Inventory and Mapping Contract
 
@@ -550,7 +567,8 @@ Registry merge rules are deterministic:
 
 - `(table id, spec version)` is unique;
 - custom definitions cannot silently override a built-in definition;
-- the locally installed spec digest must equal the manifest digest;
+- the locally installed spec's export contract digest must equal the manifest's
+  (the full digest, for manifests that predate contract digests);
 - target schema and table names are identifier-validated and quoted;
 - SQL mode accepts one read-only DuckDB `SELECT` resource; and
 - every dependency must resolve to another selected table specification.
@@ -577,10 +595,15 @@ Adding a normal table should therefore require a migration and one YAML spec.
 Adding a normal column should require updating that spec and its fixture. Java
 is needed only for a genuinely new reusable converter or handler.
 
-Do not mutate a released specification. Schema or transform changes create a
-new `spec-version`, while snapshot format changes are reserved for changes to
-the overall archive/protocol. Import initially requires the exact local spec
-version and digest recorded in the manifest.
+Do not mutate a released specification's export contract. A change to what is
+exported (source schema, partitioning, cutoff, key, bounds) creates a new
+`spec-version`; a change to how it is loaded (mapping, converter, transform)
+keeps the `spec-version` and bumps `transform-version` when the loaded rows
+change, so existing snapshots stay importable. A test records the contract
+digest of every released `id@spec-version` and fails on a contract change that
+keeps the version. Snapshot format changes are reserved for changes to the
+overall archive/protocol. Import requires the exact local spec version and
+export contract recorded in the manifest.
 
 ### Deferred lossless `address_utxo` export
 
@@ -993,7 +1016,7 @@ Only after this gate passes is the import status changed from `VALIDATING` to
 ## Compatibility Policy
 
 The initial importer requires an exact snapshot format, exact local table
-specification versions and digests for selected stores, and exact per-table schema fingerprints
+specification versions and export contracts for selected stores, and exact per-table schema fingerprints
 for that scope. Disabled stores are skipped; selected dependencies and block/cursor/era state are
 required. The journal binds resume and validation to the selected specification digest. Older
 manifests without per-table fingerprints require the whole schema fingerprint to match. All
