@@ -56,10 +56,12 @@ On its mainnet test system, the PoC reported:
 The often-quoted 50-minute result is therefore the heap-load phase, not the time
 until the database is ready for normal use.
 
-The PoC deferred primary keys as well as indexes. The product importer will keep
-the base constraints created by Flyway and leave only the indexes managed by the
-normal admin CLI workflow unapplied. Its load and post-import index timings must
-therefore be measured independently rather than assumed to match the PoC.
+The PoC deferred primary keys as well as indexes. The product importer does the
+same for the keys and indexes created by Flyway (see [Index handling](#index-handling)):
+the first mainnet runs that kept them in place spent most of the load writing
+index pages to the WAL. The indexes managed by the normal admin CLI workflow stay
+unapplied. Load and post-import index timings are measured independently rather
+than assumed to match the PoC.
 
 The PoC also found that only 4 of 44 non-empty exported tables were direct
 copies. The current mapping includes:
@@ -804,15 +806,39 @@ configured disk floor.
 
 ### Index handling
 
-Snapshot import does not create, drop, defer, or rebuild admin-managed indexes.
-Index creation remains the existing Yaci Store operational workflow used after
-a normal initial sync.
-
 The target must contain the base tables, primary keys, unique constraints, and
-other schema objects created by Flyway for the matching release. The optional
-and read indexes managed through `index.yml` and `extra-index.yml` should not be
-applied before bulk import. If they already exist, the importer reports that
-loading may be slower but does not remove them.
+other schema objects created by Flyway for the matching release.
+
+The importer drops the keys and indexes of the tables it loads and rebuilds them
+after the load. Loading into indexed tables makes every row an index insert, and
+a key on a hash is a random one: on mainnet, with them in place, the COPY
+sessions spent most of their time waiting on WAL writes (`tx_input_pkey` alone
+was 22 GB). Building each index once over loaded data is a single sorted pass.
+
+No list of indexes is maintained for this. They are read from the catalog when
+the load starts (`pg_get_constraintdef`, `pg_get_indexdef`), so whatever the
+release's migrations created is exactly what comes back:
+
+- the captured definitions are written to the import journal before anything is
+  dropped, and a resumed import reads them from there, never from the
+  half-dropped catalog;
+- each one is dropped idempotently, then rebuilt in the transaction that marks it
+  built, so a crash at any point leaves a state the next run completes;
+- a table's keys are rebuilt before its other indexes, so duplicate rows fail on
+  the key, naming it;
+- after the rebuild, and again in schema validation, every captured definition
+  must match the live catalog verbatim and be valid;
+- rebuilds run on up to `--workers` connections, largest tables first, with
+  `maintenance_work_mem` set to the per-worker `--memory-limit`;
+- tables on either side of a foreign key keep their indexes.
+
+An index on a partitioned table is printed by PostgreSQL as `ON ONLY`, which
+would build no partition; it is replayed without `ONLY`.
+
+The optional and read indexes managed through `index.yml` and `extra-index.yml`
+are still not created by the importer. They are normally absent during the load;
+if an operator applied them beforehand, they are captured and rebuilt like the
+rest.
 
 After import and validation, the operator manually runs the existing admin CLI
 command:
@@ -1094,11 +1120,11 @@ for module-specific or cross-platform snapshots.
 
 ### Manage indexes inside snapshot import
 
-Rejected. Yaci Store already has the manual `apply-indexes` and
-`verify-indexes` workflow used after normal sync. Duplicating index lifecycle,
-retry, and definition management in the importer would add unnecessary risk and
-complexity. The importer only warns if admin-managed indexes were applied before
-the load.
+Rejected for the admin-managed indexes. Yaci Store already has the manual
+`apply-indexes` and `verify-indexes` workflow used after normal sync, and
+duplicating their definitions in the importer would add risk. The Flyway-created
+keys and indexes are deferred instead, from definitions read from the catalog
+rather than maintained separately (see [Index handling](#index-handling)).
 
 ### Resume from the maximum exported block
 

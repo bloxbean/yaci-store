@@ -192,6 +192,7 @@ public class ImportJournal {
     public void drop() throws SQLException {
         try (Statement st = conn.createStatement()) {
             st.execute("DROP TABLE IF EXISTS " + q(BATCH_TABLE));
+            st.execute("DROP TABLE IF EXISTS " + q(DeferredIndexes.TABLE));
             st.execute("DROP TABLE IF EXISTS " + q(RUN_TABLE));
         }
     }

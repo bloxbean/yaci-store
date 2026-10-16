@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.snapshot.validate;
 
 import com.bloxbean.cardano.yaci.store.snapshot.manifest.ManifestCodec;
 import com.bloxbean.cardano.yaci.store.snapshot.manifest.ManifestValidator;
+import com.bloxbean.cardano.yaci.store.snapshot.load.DeferredIndexes;
 import com.bloxbean.cardano.yaci.store.snapshot.load.ImportJournal;
 import com.bloxbean.cardano.yaci.store.snapshot.load.PgSchema;
 import com.bloxbean.cardano.yaci.store.snapshot.manifest.ConsistencyPoint;
@@ -129,6 +130,11 @@ public class SnapshotValidator {
         } else {
             b.fail("import-journal", "no import journal found for this schema");
         }
+
+        List<String> indexProblems = new DeferredIndexes(pg, schema).problems(manifest.snapshotId());
+        b.check("deferred-indexes", indexProblems.isEmpty(), indexProblems.isEmpty()
+                ? "every key and index dropped for the load is back, as captured"
+                : indexProblems.size() + " problem(s): " + String.join("; ", indexProblems.subList(0, Math.min(5, indexProblems.size()))));
 
         return b.build();
     }

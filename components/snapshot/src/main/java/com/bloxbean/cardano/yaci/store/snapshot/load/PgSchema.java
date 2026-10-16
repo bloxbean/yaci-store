@@ -13,7 +13,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
-import java.util.TreeSet;
 
 /** Reads the live PostgreSQL target schema. */
 public class PgSchema {
@@ -123,7 +122,8 @@ public class PgSchema {
                 }
             }
         }
-        return out;
+        // Mid-import, the key may be deferred until the load completes; report the one coming back.
+        return out.isEmpty() ? DeferredIndexes.recordedPrimaryKey(conn, schema, table) : out;
     }
 
     /**
@@ -237,29 +237,6 @@ public class PgSchema {
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     out.put(rs.getString(1), new String[]{rs.getString(2), rs.getString(3)});
-                }
-            }
-        }
-        return out;
-    }
-
-    /** Admin-managed indexes already present. Reported as a warning; never removed by the importer. */
-    public java.util.Set<String> nonConstraintIndexes() throws SQLException {
-        java.util.Set<String> out = new TreeSet<>();
-        String sql = """
-                SELECT c.relname
-                FROM pg_index i
-                JOIN pg_class c ON c.oid = i.indexrelid
-                JOIN pg_class t ON t.oid = i.indrelid
-                JOIN pg_namespace n ON n.oid = t.relnamespace
-                WHERE n.nspname = ? AND NOT i.indisprimary AND NOT i.indisunique
-                ORDER BY c.relname
-                """;
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, schema);
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    out.add(rs.getString(1));
                 }
             }
         }

@@ -6,19 +6,24 @@ import org.slf4j.LoggerFactory;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 /**
- * Time-based load progress: one status line at most every {@link #INTERVAL_MILLIS}, with batches,
- * Parquet bytes, rows, rate, an ETA from the byte rate, and the tables currently loading.
+ * Time-based load progress: one status line every {@link #INTERVAL_MILLIS} while the load runs, with
+ * batches, Parquet bytes, rows, rate, an ETA from the byte rate, and the tables currently loading.
+ * The line comes from a timer, not from batch completions: the largest batches go first and can each
+ * take many minutes.
  *
  * <p>Status lines start with {@code [load]} so a caller that samples per-item events can still
  * print every one of them.
  */
-final class LoadProgress {
+final class LoadProgress implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(LoadProgress.class);
     static final long INTERVAL_MILLIS = 30_000;
 
@@ -26,11 +31,11 @@ final class LoadProgress {
     private final long bytes;
     private final Consumer<String> sink;
     private final long startedAt = System.currentTimeMillis();
-    private final AtomicLong lastReport = new AtomicLong(startedAt);
     private final AtomicInteger doneBatches = new AtomicInteger();
     private final AtomicLong doneBytes = new AtomicLong();
     private final AtomicLong doneRows = new AtomicLong();
     private final Map<String, AtomicInteger> active = new ConcurrentHashMap<>();
+    private ScheduledExecutorService timer;
 
     LoadProgress(int batches, long bytes, Consumer<String> sink) {
         this.batches = batches;
@@ -45,6 +50,22 @@ final class LoadProgress {
         }
     }
 
+    /** Starts the periodic status line; {@link #close()} stops it. */
+    LoadProgress start() {
+        timer = Executors.newSingleThreadScheduledExecutor(
+                Thread.ofPlatform().name("snapshot-load-progress").daemon().factory());
+        timer.scheduleAtFixedRate(() -> say(line(System.currentTimeMillis())),
+                INTERVAL_MILLIS, INTERVAL_MILLIS, TimeUnit.MILLISECONDS);
+        return this;
+    }
+
+    @Override
+    public void close() {
+        if (timer != null) {
+            timer.shutdownNow();
+        }
+    }
+
     void started(String specId) {
         active.computeIfAbsent(specId, k -> new AtomicInteger()).incrementAndGet();
     }
@@ -54,11 +75,6 @@ final class LoadProgress {
         doneBatches.incrementAndGet();
         doneBytes.addAndGet(batchBytes);
         doneRows.addAndGet(rows);
-        long now = System.currentTimeMillis();
-        long last = lastReport.get();
-        if (now - last >= INTERVAL_MILLIS && lastReport.compareAndSet(last, now)) {
-            say(line(now));
-        }
     }
 
     void done() {

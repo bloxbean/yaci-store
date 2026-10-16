@@ -439,6 +439,7 @@ public class SnapshotCommands {
         writeLn("  Verify       : %s", SnapshotCliSupport.humanMillis(r.verifyMillis()));
         writeLn("  Extract      : %s", SnapshotCliSupport.humanMillis(r.extractMillis()));
         writeLn("  Heap load    : %s", SnapshotCliSupport.humanMillis(r.loadMillis()));
+        writeLn("  Keys/indexes : %s", SnapshotCliSupport.humanMillis(r.indexMillis()));
         writeLn("  Control state: %s", SnapshotCliSupport.humanMillis(r.controlStateMillis()));
         r.handlerResults().forEach(h -> writeLn("    %s", h));
         if (!r.sequencesReset().isEmpty()) {
@@ -450,6 +451,6 @@ public class SnapshotCommands {
                     r.declaredLimitations().size()));
             r.declaredLimitations().forEach(l -> writeLn("    - %s", l));
         }
-        writeLn(info("Index creation is not part of import. Run 'apply-indexes' after validation."));
+        writeLn(info("Keys and required indexes were rebuilt. Optional indexes: run 'apply-indexes' after validation."));
     }
 }

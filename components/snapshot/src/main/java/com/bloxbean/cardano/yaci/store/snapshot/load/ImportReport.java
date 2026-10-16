@@ -6,9 +6,10 @@ import java.util.Map;
 /**
  * Outcome of an import run.
  *
- * <p>Durations are reported per phase so archive verification, heap load and control-state work can
- * be read separately. The later manual {@code apply-indexes} step is deliberately not part of this:
- * index creation follows the normal admin CLI workflow and has its own timings.
+ * <p>Durations are reported per phase so archive verification, heap load, the rebuild of the keys and
+ * indexes deferred during the load, and control-state work can be read separately. The later manual
+ * {@code apply-indexes} step for optional indexes is deliberately not part of this: it follows the
+ * normal admin CLI workflow and has its own timings.
  */
 public record ImportReport(String snapshotId,
                            String status,
@@ -25,9 +26,10 @@ public record ImportReport(String snapshotId,
                            long verifyMillis,
                            long extractMillis,
                            long loadMillis,
+                           long indexMillis,
                            long controlStateMillis) {
 
     public long totalMillis() {
-        return verifyMillis + extractMillis + loadMillis + controlStateMillis;
+        return verifyMillis + extractMillis + loadMillis + indexMillis + controlStateMillis;
     }
 }

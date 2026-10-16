@@ -44,8 +44,9 @@ import java.util.function.Consumer;
  * items, and each batch commits its rows and its journal record in one transaction. Deleting a
  * partial import is never an automatic recovery action.
  *
- * <p>Admin-managed indexes are never created, dropped, deferred or rebuilt here. The operator runs
- * {@code apply-indexes} afterwards, exactly as after a normal initial sync.
+ * <p>The keys and indexes the migrations created on the loaded tables are dropped for the load and
+ * rebuilt after it ({@link DeferredIndexes}). The optional admin-managed indexes are not created
+ * here; the operator runs {@code apply-indexes} afterwards, exactly as after a normal initial sync.
  */
 public class SnapshotImporter {
 
@@ -127,13 +128,6 @@ public class SnapshotImporter {
                 blockers.add("Target schema already contains chain data in " + nonEmpty
                         + ". Import requires an empty schema, or a matching incomplete import journal. "
                         + "Clearing a non-empty schema is a separate, explicit operation.");
-            }
-
-            Set<String> indexes = schema.nonConstraintIndexes();
-            if (!indexes.isEmpty()) {
-                warnings.add(indexes.size() + " non-constraint index(es) already exist. Loading will be "
-                        + "slower; they are left in place. Indexes are normally applied after import with "
-                        + "'apply-indexes'.");
             }
 
             for (String table : schema.baseTables()) {
@@ -260,11 +254,28 @@ public class SnapshotImporter {
                     manifest.point().blockNumber(), manifest.point().blockHash(),
                     schema.fingerprint(), ImportJournal.STATUS_LOADING, null, registry.scopeDigest()));
 
+            // Before the partitions are created, so dropping a parent's index touches fewer of them.
+            DeferredIndexes deferred = new DeferredIndexes(pg, options.schema());
+            deferred.defer(manifest.snapshotId(), loadedTables(manifest), m -> say(progress, "indexes", m));
+
             int partitionsCreated = prepareTargetPartitions(pg, options, manifest);
 
             long t2 = System.currentTimeMillis();
             LoadResult loaded = loadTables(options, manifest, extractRoot, journal, schema, progress);
             long loadMillis = System.currentTimeMillis() - t2;
+
+            // Before the handlers and sequence reset, which read the loaded tables.
+            long tIndex = System.currentTimeMillis();
+            deferred.rebuild(manifest.snapshotId(), options.workers(),
+                    DeferredIndexes.postgresMemory(options.memoryLimit()),
+                    journal.rowsPerTable(manifest.snapshotId()), () -> connect(options),
+                    m -> say(progress, "indexes", m));
+            List<String> indexProblems = deferred.problems(manifest.snapshotId());
+            if (!indexProblems.isEmpty()) {
+                throw new IllegalStateException("Rebuilt keys and indexes do not match the schema:\n  - "
+                        + String.join("\n  - ", indexProblems));
+            }
+            long indexMillis = System.currentTimeMillis() - tIndex;
 
             long t3 = System.currentTimeMillis();
             List<String> handlerResults = runHandlers(pg, options, manifest);
@@ -283,7 +294,7 @@ public class SnapshotImporter {
                     loaded.planned, loaded.skipped, loaded.executed, loaded.rows,
                     journal.rowsPerTable(manifest.snapshotId()), handlerResults, sequences,
                     partitionsCreated, registry.selectedLimitations(manifest.declaredLossy()), warnings,
-                    verifyMillis, extractMillis, loadMillis, controlMillis);
+                    verifyMillis, extractMillis, loadMillis, indexMillis, controlMillis);
         }
     }
 
@@ -410,6 +421,7 @@ public class SnapshotImporter {
         status.say(String.format("Loading %,d batches, %s of Parquet, with %d workers",
                 items.size(), LoadProgress.bytes(totalBytes), workers));
 
+        status.start();
         ConcurrentLinkedQueue<WorkItem> queue = new ConcurrentLinkedQueue<>(items);
         AtomicLong executed = new AtomicLong();
         AtomicLong rows = new AtomicLong();
@@ -461,13 +473,15 @@ public class SnapshotImporter {
             threads.add(thread);
             thread.start();
         }
-        for (Thread t : threads) {
-            try {
+        try {
+            for (Thread t : threads) {
                 t.join();
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new IllegalStateException("Import interrupted", e);
             }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Import interrupted", e);
+        } finally {
+            status.close();
         }
         if (!failures.isEmpty()) {
             Exception first = failures.get(0);
@@ -475,6 +489,18 @@ public class SnapshotImporter {
         }
         status.done();
         return new LoadResult(planned, skippedBatches, executed.get(), rows.get());
+    }
+
+    /** Target tables that receive rows from the archive; their keys and indexes are deferred. */
+    private List<String> loadedTables(SnapshotManifest manifest) {
+        return registry.importedTables().stream()
+                .filter(spec -> {
+                    SnapshotManifest.TableManifest t = manifest.table(spec.id());
+                    return t != null && t.files() != null && !t.files().isEmpty();
+                })
+                .map(SnapshotTableSpec::targetTable)
+                .distinct()
+                .toList();
     }
 
     private int prepareTargetPartitions(Connection pg, ImportOptions options, SnapshotManifest manifest)
