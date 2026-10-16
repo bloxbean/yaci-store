@@ -243,8 +243,8 @@ public class DuckLakeCatalog implements AutoCloseable {
         }
         // Read the pinned blocks, not the export journal: its earliest entry may itself be missing.
         // Byron is era 1. Include epoch zero on networks that start in a later era.
-        String sql = "SELECT min(epoch) FROM read_parquet(" + parquetList(blocks)
-                + ") WHERE era > 1 AND number >= 0";
+        String sql = "SELECT min(epoch) FROM " + DuckDb.readParquet(parquetList(blocks))
+                + " WHERE era > 1 AND number >= 0";
         try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery(sql)) {
             if (rs.next()) {
                 int epoch = rs.getInt(1);

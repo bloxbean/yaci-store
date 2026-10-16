@@ -12,7 +12,7 @@ class SqlResourcesTest {
 
     @Test
     void acceptsAPlainSelect() {
-        SqlResources.validate("t.sql", "SELECT a, b FROM read_parquet(${files})");
+        SqlResources.validate("t.sql", "SELECT a, b FROM ${files}");
     }
 
     @Test
@@ -44,7 +44,19 @@ class SqlResourcesTest {
     @Test
     void keywordsInsideIdentifiersAreNotFalsePositives() {
         SqlResources.validate("t.sql",
-                "SELECT created_at, dropped_count, inserted_rows FROM read_parquet(${files})");
+                "SELECT created_at, dropped_count, inserted_rows FROM ${files}");
+    }
+
+    @Test
+    void aTransformMayNotScanFilesItself() {
+        // The caller binds ${files} to a scan that reads the files' own columns; a transform that
+        // called read_parquet itself would let hive directory values replace them again.
+        for (String bad : new String[]{"SELECT * FROM read_parquet(${files})",
+                "SELECT * FROM PARQUET_SCAN(['x.parquet'])"}) {
+            assertThatThrownBy(() -> SqlResources.validate("t.sql", bad))
+                    .isInstanceOf(SpecException.class)
+                    .hasMessageContaining("reads its inputs through ${files}");
+        }
     }
 
     @Test
@@ -54,9 +66,9 @@ class SqlResourcesTest {
 
     @Test
     void bindsPlaceholders() {
-        String bound = SqlResources.bind("SELECT * FROM read_parquet(${files}) WHERE slot <= ${cutSlot}",
-                Map.of("files", "['a.parquet']", "cutSlot", "123"));
-        assertThat(bound).isEqualTo("SELECT * FROM read_parquet(['a.parquet']) WHERE slot <= 123");
+        String bound = SqlResources.bind("SELECT * FROM ${files} WHERE slot <= ${cutSlot}",
+                Map.of("files", "t", "cutSlot", "123"));
+        assertThat(bound).isEqualTo("SELECT * FROM t WHERE slot <= 123");
     }
 
     @Test

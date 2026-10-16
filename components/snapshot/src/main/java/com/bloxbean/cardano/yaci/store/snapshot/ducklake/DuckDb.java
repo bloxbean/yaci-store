@@ -69,6 +69,21 @@ public final class DuckDb {
         return (long) (Double.parseDouble(m.group(1)) * Math.pow(base, power));
     }
 
+    /**
+     * A scan of exported Parquet files that reads each file's own columns.
+     *
+     * <p>DuckLake lays files out in hive-style {@code epoch=N} and {@code date=D} directories and also
+     * writes the partition column into every file. By default {@code read_parquet} detects those
+     * directories and replaces the file's column with the directory value, typed BIGINT or DATE, so
+     * the type the importer plans against depends on where a file happens to sit. Every snapshot scan
+     * goes through here so that never happens.
+     *
+     * @param files a DuckDB list literal of file paths
+     */
+    public static String readParquet(String files) {
+        return "read_parquet(" + files + ", hive_partitioning = false)";
+    }
+
     public static void exec(Connection conn, String sql) throws SQLException {
         try (Statement st = conn.createStatement()) {
             st.execute(sql);

@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.snapshot.export;
 
+import com.bloxbean.cardano.yaci.store.snapshot.ducklake.DuckDb;
 import com.bloxbean.cardano.yaci.store.snapshot.ducklake.DuckLakeCatalog;
 import com.bloxbean.cardano.yaci.store.snapshot.ducklake.DuckLakeFile;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.BatchBoundary;
@@ -136,8 +137,8 @@ public class ExportPlanner {
         long total = 0;
         try (Statement st = catalog.connection().createStatement()) {
             for (List<DuckLakeFile> group : groups) {
-                String sql = "SELECT count(*) FROM (SELECT DISTINCT " + key + " FROM read_parquet("
-                        + catalog.parquetList(group) + ")" + where + ")";
+                String sql = "SELECT count(*) FROM (SELECT DISTINCT " + key + " FROM "
+                        + DuckDb.readParquet(catalog.parquetList(group)) + where + ")";
                 try (ResultSet rs = st.executeQuery(sql)) {
                     total += rs.next() ? rs.getLong(1) : 0;
                 }
@@ -147,7 +148,7 @@ public class ExportPlanner {
     }
 
     private long countRows(List<DuckLakeFile> files, String column, long cut) throws SQLException {
-        String sql = "SELECT count(*) FROM read_parquet(" + catalog.parquetList(files) + ") WHERE "
+        String sql = "SELECT count(*) FROM " + DuckDb.readParquet(catalog.parquetList(files)) + " WHERE "
                 + Identifiers.quote(column) + " <= " + cut;
         try (Statement st = catalog.connection().createStatement(); ResultSet rs = st.executeQuery(sql)) {
             return rs.next() ? rs.getLong(1) : 0;
@@ -222,18 +223,14 @@ public class ExportPlanner {
                 || sample.isEmpty()) {
             return List.of();
         }
-        Map<String, String> params = new LinkedHashMap<>();
-        params.put("files", catalog.parquetList(sample));
-        params.put("cutSlot", Long.toString(cutSlot));
-        params.put("completedEpoch", Integer.toString(completedEpoch));
-        params.put("uuidNamespace", Identifiers.literal(
-                com.bloxbean.cardano.yaci.store.snapshot.convert.ConverterRegistry.UUID_NAMESPACE));
+        Map<String, String> dependencies = new LinkedHashMap<>();
         dependencySamples.forEach((dep, files) ->
-                params.put("dep." + dep, files.isEmpty() ? "[]" : catalog.parquetList(files)));
+                dependencies.put(dep, DuckDb.readParquet(files.isEmpty() ? "[]" : catalog.parquetList(files))));
 
         String sql = com.bloxbean.cardano.yaci.store.snapshot.load.SqlResources
                 .read(spec.importSpec().selectResource());
-        String bound = com.bloxbean.cardano.yaci.store.snapshot.load.SqlResources.bind(sql, params);
+        String bound = com.bloxbean.cardano.yaci.store.snapshot.load.SqlResources.bindTransform(sql,
+                DuckDb.readParquet(catalog.parquetList(sample)), dependencies, cutSlot, completedEpoch);
         try (Statement st = catalog.connection().createStatement()) {
             st.executeQuery("DESCRIBE (" + bound + ")").close();
             return List.of();

@@ -1,10 +1,8 @@
 package com.bloxbean.cardano.yaci.store.snapshot.load;
 
-import com.bloxbean.cardano.yaci.store.snapshot.convert.ConverterRegistry;
 import com.bloxbean.cardano.yaci.store.snapshot.convert.UuidV5Converter;
 import com.bloxbean.cardano.yaci.store.snapshot.ducklake.DuckDb;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.SnapshotSpecRegistry;
-import com.bloxbean.cardano.yaci.store.snapshot.util.Identifiers;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -18,9 +16,8 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * The mir export lives in hive-style {@code epoch=N} directories, and DuckDB replaces the file's
- * int32 epoch column with the directory value typed BIGINT. The transform must still produce the
- * target types (mainnet failed with id VARCHAR -> uuid and epoch BIGINT -> integer).
+ * The transform must produce the target types (mainnet failed with id VARCHAR -> uuid, and with
+ * epoch BIGINT -> integer while scans let the {@code epoch=N} directory replace the file's column).
  *
  * <p>One certificate pays many credentials, so the id must cover the credential too (mainnet failed
  * with a duplicate mir_pkey: 208,618 rows from 1,062 certificates).
@@ -53,11 +50,9 @@ class MirTransformTypesTest {
                     "SELECT 'bh'::VARCHAR hash, 4500000::BIGINT number");
 
             var spec = SnapshotSpecRegistry.builtIn().byId("mir").orElseThrow();
-            String sql = SqlResources.bind(SqlResources.read(spec.importSpec().selectResource()), Map.of(
-                    "files", "['" + mir + "']",
-                    "dep.block", "['" + block + "']",
-                    "cutSlot", "999999999",
-                    "uuidNamespace", Identifiers.literal(ConverterRegistry.UUID_NAMESPACE)));
+            String sql = SqlResources.bindTransform(SqlResources.read(spec.importSpec().selectResource()),
+                    DuckDb.readParquet("['" + mir + "']"),
+                    Map.of("block", DuckDb.readParquet("['" + block + "']")), 999999999L, 0);
 
             Map<String, String> produced = new LinkedHashMap<>();
             try (ResultSet rs = duck.createStatement().executeQuery("DESCRIBE (" + sql + ")")) {

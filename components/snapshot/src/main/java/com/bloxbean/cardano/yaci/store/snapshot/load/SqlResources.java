@@ -1,10 +1,13 @@
 package com.bloxbean.cardano.yaci.store.snapshot.load;
 
+import com.bloxbean.cardano.yaci.store.snapshot.convert.ConverterRegistry;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.SpecException;
+import com.bloxbean.cardano.yaci.store.snapshot.util.Identifiers;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -17,6 +20,11 @@ import java.util.regex.Pattern;
  * archive contributes nothing but a spec id, version and digest. Each resource must be a single
  * read-only {@code SELECT} (a leading {@code WITH} is allowed) and may not contain DDL, transaction
  * control, {@code ATTACH}, {@code COPY} or {@code INSTALL}.
+ *
+ * <p>A transform names its inputs as relations, {@code FROM ${files}} and {@code FROM ${dep.<id>}},
+ * and never scans files itself. The caller decides what each one is: a scan of the batch's files
+ * at import, a sample at export, or an empty relation of the recorded types when only the output
+ * types are wanted.
  */
 public final class SqlResources {
 
@@ -28,6 +36,9 @@ public final class SqlResources {
             "copy", "install", "load", "call", "pragma", "begin", "commit", "rollback", "export",
             "import", "set ", "grant", "revoke", "vacuum"
     };
+
+    /** File scans a transform must leave to the caller; see {@code DuckDb.readParquet}. */
+    private static final String[] SCANS = {"read_parquet", "parquet_scan"};
 
     private SqlResources() {
     }
@@ -69,6 +80,12 @@ public final class SqlResources {
                         + kw.trim() + "'");
             }
         }
+        for (String scan : SCANS) {
+            if (containsKeyword(lower, scan)) {
+                throw new SpecException(path + ": a transform reads its inputs through ${files} and "
+                        + "${dep.<id>}, not by calling " + scan + " itself");
+            }
+        }
     }
 
     private static boolean containsKeyword(String lower, String keyword) {
@@ -97,6 +114,23 @@ public final class SqlResources {
             out.append(i >= 0 ? line.substring(0, i) : line).append('\n');
         }
         return out.toString();
+    }
+
+    /**
+     * Bind a transform to its inputs and the consistency point.
+     *
+     * @param source       the relation {@code ${files}} stands for
+     * @param dependencies dependency spec id to the relation {@code ${dep.<id>}} stands for
+     */
+    public static String bindTransform(String sql, String source, Map<String, String> dependencies,
+                                       long cutSlot, int completedEpoch) {
+        Map<String, String> params = new LinkedHashMap<>();
+        params.put("files", source);
+        params.put("cutSlot", Long.toString(cutSlot));
+        params.put("completedEpoch", Integer.toString(completedEpoch));
+        params.put("uuidNamespace", Identifiers.literal(ConverterRegistry.UUID_NAMESPACE));
+        dependencies.forEach((dep, relation) -> params.put("dep." + dep, relation));
+        return bind(sql, params);
     }
 
     /**

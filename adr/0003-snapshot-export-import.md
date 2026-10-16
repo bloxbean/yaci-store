@@ -300,12 +300,20 @@ The manifest contains no database URL, user name, password, host name, or local
 absolute path.
 
 **Implementation note (source column types).** The manifest records each table's
-source column name and DuckLake type, not only a fingerprint of them. DuckDB
-widens `INT32` to `BIGINT` when it reads Parquet, so an importer that planned
-from the types it observes in the files would treat every `int32 -> integer`
-column as an unsafe narrowing. The importer therefore plans against the types
-the producing catalog recorded, while still comparing the column *names* with
-the files so real schema drift fails.
+source column name and DuckLake type, not only a fingerprint of them. The
+importer plans against the types the producing catalog recorded, while still
+comparing the column *names* with the files so real schema drift fails.
+
+**Implementation note (hive partition directories).** DuckLake writes files into
+`epoch=N` and `date=D` directories and also stores the partition column in each
+file. By default DuckDB's `read_parquet` detects those directories and replaces
+the file's column with the directory value, typed `BIGINT` or `DATE`: an `int32`
+epoch became `BIGINT`, which once looked like an unsafe narrowing and later broke
+the `mir` load. Every snapshot scan therefore passes `hive_partitioning = false`
+and reads the file's own columns; nothing relies on the directory value. SQL
+transforms do not call `read_parquet` at all: they read `FROM ${files}` and
+`FROM ${dep.<id>}`, and the caller binds those to the scans, so a transform
+cannot reintroduce the override.
 
 **Implementation note (specification digest).** The recorded digest covers the
 YAML specification *and* the SQL transform resource it references. Without that,

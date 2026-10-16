@@ -17,12 +17,12 @@
 -- limitation is declared in the specification and recorded in the manifest.
 --
 -- Parameters supplied by the importer:
---   ${files}    read_parquet list for this batch (whole partition directories)
---   ${dep.block} read_parquet list of the block files covering this batch's slot range
+--   ${files}    this batch's rows (whole partition directories)
+--   ${dep.block} the block files covering this batch's partitions
 --   ${cutSlot}  consistency point slot
 WITH flattened AS (
     SELECT *
-    FROM read_parquet(${files})
+    FROM ${files}
     WHERE slot <= ${cutSlot}
 ),
 grouped AS (
@@ -68,7 +68,7 @@ grouped AS (
     GROUP BY tx_hash, output_index
 ),
 blocks AS (
-    SELECT hash, number FROM read_parquet(${dep.block})
+    SELECT hash, number FROM ${dep.block}
 )
 SELECT
     g.tx_hash                                AS tx_hash,

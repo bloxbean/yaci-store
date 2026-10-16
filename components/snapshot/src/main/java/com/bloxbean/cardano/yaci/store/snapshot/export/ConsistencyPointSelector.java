@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.snapshot.export;
 
+import com.bloxbean.cardano.yaci.store.snapshot.ducklake.DuckDb;
 import com.bloxbean.cardano.yaci.store.snapshot.ducklake.DuckLakeCatalog;
 import com.bloxbean.cardano.yaci.store.snapshot.ducklake.DuckLakeFile;
 import com.bloxbean.cardano.yaci.store.snapshot.manifest.ConsistencyPoint;
@@ -183,7 +184,7 @@ public class ConsistencyPointSelector {
             return null;
         }
         String sql = "SELECT hash, number, slot, prev_hash, era, CAST(epoch(block_time) AS BIGINT) AS bt, epoch"
-                + " FROM read_parquet(" + catalog.parquetList(candidates) + ")"
+                + " FROM " + DuckDb.readParquet(catalog.parquetList(candidates))
                 + " WHERE epoch = " + epoch
                 + " ORDER BY number DESC LIMIT 1";
         try (Statement st = catalog.connection().createStatement(); ResultSet rs = st.executeQuery(sql)) {

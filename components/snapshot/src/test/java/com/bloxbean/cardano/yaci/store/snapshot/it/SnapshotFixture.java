@@ -113,9 +113,8 @@ final class SnapshotFixture {
 
     /**
      * The DuckLake column types the producing catalog records, copied from the real preprod export
-     * so the fixture manifest carries the same information a real one does. DuckDB widens INT32 to
-     * BIGINT when reading Parquet, which is exactly why the importer plans from these rather than
-     * from what it sees in the files.
+     * so the fixture manifest carries the same information a real one does. The importer plans
+     * DIRECT and MAPPED tables from these rather than from what it sees in the files.
      */
     private static Map<String, String> declaredColumns(String relation) {
         return switch (relation) {

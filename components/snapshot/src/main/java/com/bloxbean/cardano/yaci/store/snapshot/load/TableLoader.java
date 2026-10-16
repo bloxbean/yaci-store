@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.snapshot.load;
 
 import com.bloxbean.cardano.yaci.store.snapshot.convert.ConverterRegistry;
+import com.bloxbean.cardano.yaci.store.snapshot.ducklake.DuckDb;
 import com.bloxbean.cardano.yaci.store.snapshot.manifest.SnapshotManifest;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.CutoffType;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.ImportMode;
@@ -50,23 +51,18 @@ public class TableLoader {
     String sourceSelect(SnapshotTableSpec spec, ImportBatch batch, long cutSlot, int completedEpoch,
                         Map<String, List<SnapshotManifest.FileEntry>> dependencyFiles, String sourceFilter) {
         if (spec.importSpec().mode() == ImportMode.SQL) {
-            String sql = SqlResources.read(spec.importSpec().selectResource());
+            String source = DuckDb.readParquet(parquetList(batch.files()));
             if (sourceFilter != null) {
                 // Apply before grouping. Filtering the grouped result would not reduce its memory.
-                String scan = "read_parquet(${files})";
-                if (!sql.contains(scan)) throw new IllegalArgumentException("Transform has no source scan");
-                sql = sql.replace(scan, "(SELECT * FROM " + scan + " WHERE " + sourceFilter + ")");
+                source = "(SELECT * FROM " + source + " WHERE " + sourceFilter + ")";
             }
-            Map<String, String> params = new LinkedHashMap<>();
-            params.put("files", parquetList(batch.files()));
-            params.put("cutSlot", Long.toString(cutSlot));
-            params.put("completedEpoch", Integer.toString(completedEpoch));
-            params.put("uuidNamespace", Identifiers.literal(ConverterRegistry.UUID_NAMESPACE));
+            Map<String, String> dependencies = new LinkedHashMap<>();
             dependencyFiles.forEach((dep, files) ->
-                    params.put("dep." + dep, parquetList(narrowToBatchPartitions(batch, files))));
-            return "(" + SqlResources.bind(sql, params) + ")";
+                    dependencies.put(dep, DuckDb.readParquet(parquetList(narrowToBatchPartitions(batch, files)))));
+            return "(" + SqlResources.bindTransform(SqlResources.read(spec.importSpec().selectResource()),
+                    source, dependencies, cutSlot, completedEpoch) + ")";
         }
-        return "(SELECT * FROM read_parquet(" + parquetList(batch.files()) + ")"
+        return "(SELECT * FROM " + DuckDb.readParquet(parquetList(batch.files()))
                 + cutoffPredicate(spec, cutSlot, completedEpoch) + ")";
     }
 
@@ -133,10 +129,8 @@ public class TableLoader {
      * Resolve the column plan against the real source and target schemas for this batch.
      *
      * <p>For DIRECT and MAPPED the declared types come from the manifest, which records what the
-     * producing DuckLake catalog said. DuckDB widens INT32 to BIGINT when it reads Parquet, so
-     * planning from its view would make every {@code int32 -> integer} column look like an unsafe
-     * narrowing. The column <em>names</em> are still taken from the files, so a file whose schema has
-     * drifted from the manifest still fails.
+     * producing DuckLake catalog said. The column <em>names</em> are still taken from the files, so a
+     * file whose schema has drifted from the manifest still fails.
      *
      * <p>For SQL mode the transform's own output types are authoritative, because the transform casts
      * explicitly.

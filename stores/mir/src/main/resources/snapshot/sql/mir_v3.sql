@@ -5,15 +5,16 @@
 -- recovered by joining the block export on block_hash. One MIR certificate pays many credentials
 -- (mainnet: 208,618 rows from 1,062 certificates), so (tx_hash, cert_index) alone is not unique.
 --
--- Both id and epoch are cast to the target types. The files sit in hive-style epoch=N directories,
--- and DuckDB replaces the epoch column with the directory value typed BIGINT.
+-- id is cast to the target uuid type. The epoch cast dates from when the importer let DuckDB replace
+-- the file's int32 epoch with the BIGINT value of its epoch=N directory; scans now read the file's
+-- own columns, and the cast stays as a guard.
 --
 -- Parameters: ${files}, ${dep.block}, ${cutSlot}, ${uuidNamespace}
 WITH src AS (
-    SELECT * FROM read_parquet(${files}) WHERE slot <= ${cutSlot}
+    SELECT * FROM ${files} WHERE slot <= ${cutSlot}
 ),
 blocks AS (
-    SELECT hash, number FROM read_parquet(${dep.block})
+    SELECT hash, number FROM ${dep.block}
 ),
 keyed AS (
     SELECT s.*,

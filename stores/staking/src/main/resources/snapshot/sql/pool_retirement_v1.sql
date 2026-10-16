@@ -2,10 +2,10 @@
 --
 -- Parameters: ${files}, ${dep.block}, ${cutSlot}
 WITH src AS (
-    SELECT * FROM read_parquet(${files}) WHERE slot <= ${cutSlot}
+    SELECT * FROM ${files} WHERE slot <= ${cutSlot}
 ),
 blocks AS (
-    SELECT hash, number FROM read_parquet(${dep.block})
+    SELECT hash, number FROM ${dep.block}
 )
 SELECT
     s.tx_hash                           AS tx_hash,

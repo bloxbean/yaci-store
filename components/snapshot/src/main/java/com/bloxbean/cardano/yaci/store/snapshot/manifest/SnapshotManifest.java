@@ -75,8 +75,7 @@ public record SnapshotManifest(
             String columnFingerprint,
             /**
              * Source column name to DuckLake type, as recorded by the producing catalog. The importer
-             * plans against these rather than the types DuckDB infers when reading Parquet, because
-             * read_parquet widens INT32 to BIGINT and would make every narrowing look unsafe.
+             * plans against these rather than the types DuckDB infers when reading Parquet.
              */
             Map<String, String> sourceColumns,
             Map<String, String> bounds,
