@@ -2,8 +2,9 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto;
 
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.cip26.Cip26TokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
+import jakarta.annotation.Nullable;
 
-public record Standards(Cip26TokenMetadata cip26, FungibleTokenMetadata cip68) {
+public record Standards(@Nullable Cip26TokenMetadata cip26, @Nullable FungibleTokenMetadata cip68) {
 
     public static Standards empty() {
         return new Standards(null, null);

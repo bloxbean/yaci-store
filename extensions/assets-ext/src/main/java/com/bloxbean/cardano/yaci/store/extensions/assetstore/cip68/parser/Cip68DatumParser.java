@@ -276,6 +276,7 @@ public class Cip68DatumParser {
      * {@code properties} column. Returns {@code null} if neither part is populated, so
      * pure FT rows don't materialise an empty wrapper.
      */
+    @Nullable
     private Map<String, Object> buildPropertiesJson(MapPlutusData properties, @Nullable AssetType referenceNft) {
         List<Map<String, Object>> files = parseFiles(properties, referenceNft);
         Map<String, Object> additional = parseAdditionalProperties(properties, referenceNft);

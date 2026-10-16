@@ -4,6 +4,7 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.AssetsExtStorePrope
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.Cip26NetworkDefaults;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.ChangedMappings;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.MappingUpdateDetails;
+import jakarta.annotation.Nullable;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
@@ -53,6 +54,7 @@ public class GitService {
     String projectName;
     String mappingsFolderName;
 
+    @Nullable
     Git git;
 
     @PostConstruct
@@ -114,6 +116,7 @@ public class GitService {
      * the same temp dir but the existing clone points at a different upstream.
      * Reusing it would silently index the wrong network's tokens.
      */
+    @Nullable
     String reasonToFreshClone() {
         if (forceClone) {
             return "force-clone enabled";
@@ -140,6 +143,7 @@ public class GitService {
      * clone, without disturbing the {@link #git} field. Returns {@code null}
      * if the folder isn't a readable git repo or the URL key is absent.
      */
+    @Nullable
     String readExistingRemoteUrl() {
         File gitDir = getGitFolder().toPath().resolve(".git").toFile();
         if (!gitDir.exists()) {

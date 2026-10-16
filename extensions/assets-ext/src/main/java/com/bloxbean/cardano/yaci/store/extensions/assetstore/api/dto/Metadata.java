@@ -8,8 +8,10 @@ import lombok.Builder;
 import java.util.List;
 
 @Builder(toBuilder = true)
-public record Metadata(StringProperty name, StringProperty description, StringProperty ticker, LongProperty decimals,
-                       StringProperty logo, StringProperty url, LongProperty version) {
+public record Metadata(@Nullable StringProperty name, @Nullable StringProperty description,
+                       @Nullable StringProperty ticker, @Nullable LongProperty decimals,
+                       @Nullable StringProperty logo, @Nullable StringProperty url,
+                       @Nullable LongProperty version) {
 
     private static final Metadata EMPTY_METADATA = Metadata.builder().build();
 

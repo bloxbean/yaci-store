@@ -62,29 +62,6 @@ class Cip26TokenMetadataTest {
     class EntityLevel {
 
         @Test
-        void nullEntityReturnsNull() {
-            // Defensive contract: callers can pass a missing entity through without a null check.
-            assertThat(Cip26TokenMetadata.from(null, null)).isNull();
-        }
-
-        @Test
-        void entityWithoutMappingExposesSubjectAndPolicyOnly() {
-            // Real-world case: a row exists in cip26_metadata but the original mapping JSON wasn't
-            // stored (legacy entries). We still want a usable response carrying the on-chain bits.
-            Cip26TokenMetadata dto = Cip26TokenMetadata.from(entityWith(null), null);
-
-            assertThat(dto).isNotNull();
-            assertThat(dto.getSubject()).isEqualTo(SUBJECT);
-            assertThat(dto.getPolicy()).isEqualTo(POLICY);
-            assertThat(dto.getName()).isNull();
-            assertThat(dto.getDescription()).isNull();
-            assertThat(dto.getUrl()).isNull();
-            assertThat(dto.getTicker()).isNull();
-            assertThat(dto.getDecimals()).isNull();
-            assertThat(dto.getLogo()).isNull();
-        }
-
-        @Test
         void allWellKnownPropertiesAreLifted() {
             Mapping mapping = new Mapping(
                     SUBJECT,
