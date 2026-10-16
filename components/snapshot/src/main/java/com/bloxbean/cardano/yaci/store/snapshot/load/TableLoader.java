@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.snapshot.load;
 import com.bloxbean.cardano.yaci.store.snapshot.convert.ConverterRegistry;
 import com.bloxbean.cardano.yaci.store.snapshot.ducklake.DuckDb;
 import com.bloxbean.cardano.yaci.store.snapshot.manifest.SnapshotManifest;
+import com.bloxbean.cardano.yaci.store.snapshot.spec.BatchBoundary;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.CutoffType;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.ImportMode;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.SnapshotTableSpec;
@@ -100,6 +101,35 @@ public class TableLoader {
         return narrowed.isEmpty() ? dependency : narrowed;
     }
 
+    /**
+     * The target partition this batch alone fills, or null. That is the case when the target is
+     * range-partitioned on the very column the source is partitioned by (not remapped: epoch_stake,
+     * but not reward, whose source epoch is the earned epoch while the target is partitioned by
+     * spendable epoch) and the batch is exactly one source partition.
+     */
+    static String ownedPartition(ImportBatch batch) {
+        SnapshotTableSpec spec = batch.spec();
+        SnapshotTableSpec.TargetPartitioning target = spec.importSpec().targetPartitioning();
+        if (target == null || spec.source() == null || spec.source().partition() == null
+                || spec.importSpec().batchBoundary() != BatchBoundary.WHOLE_PARTITION
+                || batch.partition() == null || batch.partition().contains(",")) {
+            return null;
+        }
+        String column = target.column();
+        if (!column.equals(spec.source().partition().column()) || spec.importSpec().columns().containsKey(column)) {
+            return null;
+        }
+        String key = partitionKey(batch.partition());
+        if (key == null || !key.startsWith(column + "=")) {
+            return null;
+        }
+        String value = key.substring(column.length() + 1);
+        if (!value.matches("\\d+")) {
+            return null;
+        }
+        return target.partitionPrefix() + value;
+    }
+
     /** The {@code date=...} or {@code epoch=...} segment of a partition path. */
     private static String partitionKey(String partition) {
         if (partition == null) {
@@ -172,8 +202,17 @@ public class TableLoader {
         String journal = ImportJournal.qualifiedBatchTable(DuckPgSession.PG_ALIAS, schema);
 
         long rows = 0;
+        String owned = ownedPartition(batch);
         session.exec("BEGIN TRANSACTION");
         try {
+            if (owned != null) {
+                // With wal_level=minimal, rows written into a table truncated in the same transaction
+                // skip the WAL (on mainnet, 5M rows: 185 MB of WAL instead of 992 MB). It also makes a
+                // retried batch idempotent: nothing else writes into this partition.
+                session.exec("CALL postgres_execute(" + Identifiers.literal(DuckPgSession.PG_ALIAS) + ", "
+                        + Identifiers.literal("TRUNCATE ONLY " + Identifiers.quote(schema) + "." + Identifiers.quote(owned))
+                        + ")");
+            }
             for (String select : selects) {
                 String insert = "INSERT INTO " + target + " (" + plan.targetColumnList() + ") "
                         + "SELECT " + plan.selectList() + " FROM " + select + " AS src";
