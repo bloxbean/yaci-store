@@ -94,6 +94,7 @@ public class SnapshotExporter {
         blockers.addAll(selection.blockers());
 
         List<TablePlan> plans = new ArrayList<>();
+        Map<String, List<String>> incompletePartitions = new java.util.LinkedHashMap<>();
         if (selection.point() != null) {
             ExportPlanner planner = new ExportPlanner(catalog);
             var firstBlock = catalog.numericBounds("block", "number", snapshotId);
@@ -110,9 +111,13 @@ public class SnapshotExporter {
                 if (!availableRelations.contains(spec.relation())) {
                     continue;
                 }
-                blockers.addAll(ExportCoverage.check(spec, catalog.files(spec.relation(), snapshotId),
+                ExportCoverage.Result coverage = ExportCoverage.evaluate(spec, catalog.files(spec.relation(), snapshotId),
                         options.completedPartitions().getOrDefault(spec.source().exporterId(), Map.of()),
-                        firstDay, lastDay, firstNonByronEpoch, selection.completedEpoch(), selection.point().slot()));
+                        firstDay, lastDay, firstNonByronEpoch, selection.completedEpoch(), selection.point().slot());
+                blockers.addAll(coverage.blockers());
+                if (!coverage.partitions().isEmpty()) {
+                    incompletePartitions.put(spec.id(), coverage.partitions());
+                }
                 TablePlan plan = planner.plan(spec, snapshotId, selection.completedEpoch(),
                         selection.point().slot());
                 plans.add(plan);
@@ -154,7 +159,21 @@ public class SnapshotExporter {
 
         return new InspectionReport(snapshotId, catalog.duckdbVersion(), catalog.metadata(),
                 selection.completedEpoch(), selection.point(), selection.gating(), selection.limitedBy(),
-                selection.maxExportedBlock(), plans, others, lossy, blockers, warnings);
+                selection.maxExportedBlock(), plans, others, lossy, blockers, warnings, incompletePartitions);
+    }
+
+    /** Export refused by the inspection; the report carries the full blocker details. */
+    public static final class BlockedException extends IllegalStateException {
+        private final transient InspectionReport report;
+
+        BlockedException(InspectionReport report) {
+            super("Snapshot export is blocked:\n  - " + String.join("\n  - ", report.blockers()));
+            this.report = report;
+        }
+
+        public InspectionReport report() {
+            return report;
+        }
     }
 
     public record ExportResult(Path manifestPath, SnapshotManifest manifest, InspectionReport report,
@@ -173,8 +192,7 @@ public class SnapshotExporter {
             Progress.phase(progress, "Selecting the consistency point and planning coverage");
             InspectionReport report = inspect(catalog, options);
             if (!report.canExport()) {
-                throw new IllegalStateException("Snapshot export is blocked:\n  - "
-                        + String.join("\n  - ", report.blockers()));
+                throw new BlockedException(report);
             }
             if (!report.declaredLossy().isEmpty() && !options.allowIncomplete()) {
                 throw new IllegalStateException("This snapshot has declared limitations and is not "

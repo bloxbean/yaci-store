@@ -166,6 +166,10 @@ Reports the consistency point that would be selected, which tables constrained i
 behind the newest exported block, the estimated archive size, every declared limitation, and any
 blocker. It does not modify the source database or catalog.
 
+An incomplete-export blocker names the first five partitions of each table. When there are more,
+inspect and export write every incomplete partition to `snapshot-blockers.txt` in the work
+directory and print its path; `--verbose` also prints the full lists.
+
 Example output:
 
 ```text

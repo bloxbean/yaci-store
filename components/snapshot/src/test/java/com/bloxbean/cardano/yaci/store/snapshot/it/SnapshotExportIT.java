@@ -93,9 +93,14 @@ class SnapshotExportIT {
         assertThat(result.manifest().totalRows()).isEqualTo(3);
         assertThat(result.manifestPath()).exists();
         var incomplete = options(Map.of("block", block, "delegation", Map.of("date=2026-01-01", 1L)));
-        assertThat(exporter.inspect(incomplete).blockers())
+        var blocked = exporter.inspect(incomplete);
+        assertThat(blocked.blockers())
                 .anyMatch(p -> p.contains("delegation") && p.contains("date=2026-01-02"));
-        assertThatThrownBy(() -> exporter.export(incomplete, null)).hasMessageContaining("incomplete export");
+        assertThat(blocked.incompletePartitions())
+                .containsEntry("delegation", List.of("date=2026-01-02 has no completed export record"));
+        assertThatThrownBy(() -> exporter.export(incomplete, null)).hasMessageContaining("incomplete export")
+                .isInstanceOfSatisfying(SnapshotExporter.BlockedException.class,
+                        e -> assertThat(e.report().incompletePartitions()).containsKey("delegation"));
     }
 
     @Test

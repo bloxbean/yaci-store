@@ -23,9 +23,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.shell.command.annotation.Command;
 import org.springframework.shell.command.annotation.Option;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static com.bloxbean.cardano.yaci.store.admin.cli.common.ConsoleWriter.error;
@@ -69,7 +71,8 @@ public class SnapshotCommands {
             @Option(longNames = "allow-custom-specs", defaultValue = "false",
                     description = "Acknowledge the use of operator-supplied specifications")
             boolean allowCustomSpecs,
-            @Option(longNames = "verbose", defaultValue = "false", description = "List every table")
+            @Option(longNames = "verbose", defaultValue = "false",
+                    description = "List every table, and every incomplete partition of a blocker")
             boolean verbose) {
         try {
             SnapshotCliSupport.ensureDirectory(Path.of(workDir));
@@ -78,6 +81,7 @@ public class SnapshotCommands {
                     targetEpoch, minConfirmations, true, true, memoryLimit);
             InspectionReport report = new SnapshotExporter(registry).inspect(options);
             printInspection(report, verbose);
+            printBlockerReport(report, options.workDir(), verbose);
         } catch (CommandFailedException e) {
             throw e;
         } catch (Exception e) {
@@ -122,8 +126,14 @@ public class SnapshotCommands {
                     targetEpoch, minConfirmations, allowIncomplete, unsigned, memoryLimit);
 
             writeLn(info("Packaging snapshot from %s", options.dataDir()));
-            SnapshotExporter.ExportResult result = new SnapshotExporter(registry).export(options,
-                    new ProgressPrinter(SnapshotExporter.PHASES));
+            SnapshotExporter.ExportResult result;
+            try {
+                result = new SnapshotExporter(registry).export(options, new ProgressPrinter(SnapshotExporter.PHASES));
+            } catch (SnapshotExporter.BlockedException e) {
+                CommandFailedException failure = failed("snapshot export", e);
+                printBlockerReport(e.report(), options.workDir(), false);
+                throw failure;
+            }
 
             SnapshotManifest m = result.manifest();
             writeLn(success("Snapshot %s written to %s", m.snapshotId(), options.outputDir()));
@@ -439,6 +449,45 @@ public class SnapshotCommands {
             writeLn(error("Blockers (%d):", r.blockers().size()));
             r.blockers().forEach(bl -> writeLn("    - %s", bl));
         }
+    }
+
+    /**
+     * An incomplete-export blocker names only its first few partitions; a backfill needs all of
+     * them, so the full lists go to a file in the work directory (and to the console with
+     * {@code --verbose}).
+     */
+    private void printBlockerReport(InspectionReport r, Path workDir, boolean verbose) throws java.io.IOException {
+        Path file = writeBlockerReport(r, workDir);
+        if (file == null) {
+            return;
+        }
+        Map<String, List<String>> lists = r.truncatedPartitionLists();
+        if (verbose) {
+            lists.forEach((spec, partitions) -> {
+                writeLn(warn("[%s] %d incomplete partition(s):", spec, partitions.size()));
+                partitions.forEach(p -> writeLn("    - %s", p));
+            });
+        }
+        writeLn(info("Every incomplete partition (%d in %d table(s)) is listed in %s",
+                lists.values().stream().mapToInt(List::size).sum(), lists.size(), file));
+    }
+
+    /** Writes the blockers and every truncated partition list; null when no list was truncated. */
+    static Path writeBlockerReport(InspectionReport r, Path workDir) throws java.io.IOException {
+        Map<String, List<String>> lists = r.truncatedPartitionLists();
+        if (lists.isEmpty()) {
+            return null;
+        }
+        StringBuilder sb = new StringBuilder();
+        r.blockers().forEach(b -> sb.append(b).append('\n'));
+        lists.forEach((spec, partitions) -> {
+            sb.append('\n').append('[').append(spec).append("] ").append(partitions.size())
+                    .append(" incomplete partition(s):\n");
+            partitions.forEach(p -> sb.append(p).append('\n'));
+        });
+        Path file = workDir.resolve("snapshot-blockers.txt");
+        Files.writeString(file, sb.toString());
+        return file;
     }
 
     private void printImportReport(ImportReport r) {

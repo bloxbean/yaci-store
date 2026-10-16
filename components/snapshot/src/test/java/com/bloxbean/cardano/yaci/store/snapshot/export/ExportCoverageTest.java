@@ -37,6 +37,21 @@ class ExportCoverageTest {
     }
 
     @Test
+    void blockerNamesTheFirstPartitionsAndTheResultListsEveryOne() {
+        var spec = registry.byId("block").orElseThrow();
+        // 31 days, none with a completed export record.
+        var result = ExportCoverage.evaluate(spec, List.of(), Map.of(), start, start.plusDays(30), 0, 10, 100);
+        assertThat(result.blockers()).singleElement().satisfies(b -> assertThat(b)
+                .contains("date=2026-01-05").doesNotContain("date=2026-01-06")
+                .contains("(31 partitions affected, 26 not shown)"));
+        assertThat(result.partitions()).hasSize(31)
+                .first().isEqualTo("date=2026-01-01 has no completed export record");
+        assertThat(result.partitions()).last().asString().startsWith("date=2026-01-31");
+        assertThat(ExportCoverage.evaluate(spec, List.of(), Map.of("date=2026-01-01", 0L),
+                start, start, 0, 10, 100).partitions()).isEmpty();
+    }
+
+    @Test
     void slotCutRewardsRequirePartitionsThroughTheCompletedEpoch() {
         // Refunds are written in their own epoch, so the last two partitions are needed too.
         var spec = registry.byId("reward").orElseThrow();

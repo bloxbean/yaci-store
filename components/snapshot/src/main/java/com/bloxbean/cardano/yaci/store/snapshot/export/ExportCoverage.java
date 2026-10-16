@@ -13,11 +13,27 @@ import java.util.TreeMap;
 
 /** Completion evidence includes zero-row partitions; row maxima cannot prove export completeness. */
 public final class ExportCoverage {
+    /** Partitions named in a blocker; the rest are counted, and listed in full by {@link Result}. */
+    static final int SHOWN = 5;
+
     private ExportCoverage() {}
+
+    /**
+     * @param blockers   at most one blocker for the table, naming the first {@link #SHOWN} partitions
+     * @param partitions every incomplete partition, one problem each
+     */
+    public record Result(List<String> blockers, List<String> partitions) {}
 
     public static List<String> check(SnapshotTableSpec spec, List<DuckLakeFile> files,
                                      Map<String, Long> completed, LocalDate firstDay,
                                      LocalDate lastDay, int firstNonByronEpoch, int completedEpoch, long cutSlot) {
+        return evaluate(spec, files, completed, firstDay, lastDay, firstNonByronEpoch, completedEpoch, cutSlot)
+                .blockers();
+    }
+
+    public static Result evaluate(SnapshotTableSpec spec, List<DuckLakeFile> files,
+                                  Map<String, Long> completed, LocalDate firstDay,
+                                  LocalDate lastDay, int firstNonByronEpoch, int completedEpoch, long cutSlot) {
         Map<String, Long> observed = new TreeMap<>();
         for (DuckLakeFile file : files) {
             String dir = file.partition();
@@ -31,7 +47,8 @@ public final class ExportCoverage {
             }
         } else if (spec.source().partition().strategy() == PartitionStrategy.EPOCH) {
             if (firstNonByronEpoch < 0) {
-                return List.of("[" + spec.id() + "] cannot determine the first non-Byron epoch from exported blocks");
+                return new Result(List.of("[" + spec.id() + "] cannot determine the first non-Byron epoch from exported blocks"),
+                        List.of());
             }
             long lastEpoch = ExportPlanner.cutoffValue(spec.consistency().cutoff(), completedEpoch, cutSlot);
             // Epoch partitions with a slot cutoff (mir) are still required through the selected epoch.
@@ -44,7 +61,8 @@ public final class ExportCoverage {
                 required.add("epoch=" + epoch);
             }
         } else {
-            return List.of("[" + spec.id() + "] partition completion checks require DAILY or EPOCH partitioning");
+            return new Result(List.of("[" + spec.id() + "] partition completion checks require DAILY or EPOCH partitioning"),
+                    List.of());
         }
         List<String> problems = new ArrayList<>();
         for (String partition : required) {
@@ -57,11 +75,12 @@ public final class ExportCoverage {
             }
         }
         if (problems.isEmpty()) {
-            return List.of();
+            return new Result(List.of(), List.of());
         }
-        return List.of("[" + spec.id() + "] incomplete export: "
-                + String.join("; ", problems.subList(0, Math.min(5, problems.size())))
-                + (problems.size() > 5 ? " (" + problems.size() + " partitions affected)" : "")
-                + ". Backfill these partitions, including empty ones, before snapshot export.");
+        return new Result(List.of("[" + spec.id() + "] incomplete export: "
+                + String.join("; ", problems.subList(0, Math.min(SHOWN, problems.size())))
+                + (problems.size() > SHOWN ? " (" + problems.size() + " partitions affected, "
+                        + (problems.size() - SHOWN) + " not shown)" : "")
+                + ". Backfill these partitions, including empty ones, before snapshot export."), problems);
     }
 }
