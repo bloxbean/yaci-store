@@ -21,6 +21,7 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 /**
  * Offline validation of a restored database.
@@ -40,6 +41,11 @@ public class SnapshotValidator {
 
     /** Level 2: schema and load validation. */
     public ValidationReport validateLoad(Connection pg, String schema, SnapshotManifest manifest)
+            throws SQLException {
+        return validateLoad(pg, schema, manifest, new Scans(pg, schema, manifest, null, 1, m -> { }));
+    }
+
+    private ValidationReport validateLoad(Connection pg, String schema, SnapshotManifest manifest, Scans scans)
             throws SQLException {
         ValidationReport.Builder b = new ValidationReport.Builder("schema-and-load");
         for (String problem : new ManifestValidator(registry)
@@ -67,22 +73,14 @@ public class SnapshotValidator {
                                 + " row(s)");
                 continue;
             }
-            // Count rows and check required values in one pass over potentially very large tables.
-            String counts = "count(*)" + spec.validation().requiredColumns().stream()
-                    .map(c -> ", count(*) FILTER (WHERE " + Identifiers.quote(c) + " IS NULL)")
-                    .collect(java.util.stream.Collectors.joining());
-            try (Statement st = pg.createStatement();
-                 ResultSet rs = st.executeQuery("SELECT " + counts + " FROM " + qt(schema, t.targetTable()))) {
-                rs.next();
-                long actual = rs.getLong(1);
-                b.check("rows:" + t.targetTable(), actual == t.rowCount(),
-                        actual + " rows (manifest declares " + t.rowCount() + ")");
-                for (int i = 0; i < spec.validation().requiredColumns().size(); i++) {
-                    String column = spec.validation().requiredColumns().get(i);
-                    long nulls = rs.getLong(i + 2);
-                    b.check("required:" + spec.targetTable() + "." + column, nulls == 0,
-                            nulls + " null value(s)");
-                }
+            TableScanner.Result scan = scans.get().get(t.targetTable());
+            b.check("rows:" + t.targetTable(), scan.rows() == t.rowCount(),
+                    scan.rows() + " rows (manifest declares " + t.rowCount() + ")");
+            for (int i = 0; i < spec.validation().requiredColumns().size(); i++) {
+                String column = spec.validation().requiredColumns().get(i);
+                long nulls = scan.nulls().get(i);
+                b.check("required:" + spec.targetTable() + "." + column, nulls == 0,
+                        nulls + " null value(s)");
             }
         }
 
@@ -142,6 +140,13 @@ public class SnapshotValidator {
     /** Level 3: semantic validation. */
     public ValidationReport validateSemantics(Connection pg, String schema, SnapshotManifest manifest,
                                               long eventPublisherId, int cursorBlocksToKeep)
+            throws SQLException {
+        return validateSemantics(pg, schema, manifest, eventPublisherId, cursorBlocksToKeep,
+                new Scans(pg, schema, manifest, null, 1, m -> { }));
+    }
+
+    private ValidationReport validateSemantics(Connection pg, String schema, SnapshotManifest manifest,
+                                               long eventPublisherId, int cursorBlocksToKeep, Scans scans)
             throws SQLException {
         ValidationReport.Builder b = new ValidationReport.Builder("semantic");
         ConsistencyPoint point = manifest.point();
@@ -207,7 +212,9 @@ public class SnapshotValidator {
                 case EPOCH_LTE_OFFSET -> point.epoch() - cutoff.offset();
                 case NONE -> Long.MAX_VALUE;
             };
-            long beyond = scalar(pg, "SELECT count(*) FROM " + qt(schema, spec.targetTable())
+            TableScanner.Result scan = scans.get().get(spec.targetTable());
+            long beyond = scan != null && scan.beyondCutoff() != null ? scan.beyondCutoff()
+                    : scalar(pg, "SELECT count(*) FROM " + qt(schema, spec.targetTable())
                     + " WHERE " + Identifiers.quote(cutoffTargetColumn(spec)) + " > " + limit);
             b.check("cutoff:" + spec.targetTable(), beyond == 0,
                     beyond + " row(s) beyond " + cutoffTargetColumn(spec) + " <= " + limit);
@@ -238,7 +245,7 @@ public class SnapshotValidator {
         }
 
         if (registry.byTarget("address_utxo").filter(s -> registry.isSelected(s.id())).isPresent())
-            validateAddressUtxo(pg, schema, b);
+            validateAddressUtxo(pg, schema, b, scans);
 
         // The AdaPot job reads the cost model of the previous epoch's parameters at the first epoch
         // boundary after a restore, and fails outright when it is missing.
@@ -259,39 +266,113 @@ public class SnapshotValidator {
         return b.build();
     }
 
-    private void validateAddressUtxo(Connection pg, String schema, ValidationReport.Builder b)
+    private void validateAddressUtxo(Connection pg, String schema, ValidationReport.Builder b, Scans scans)
             throws SQLException {
-        String t = qt(schema, "address_utxo");
-        long total = scalar(pg, "SELECT count(*) FROM " + t);
-        if (total == 0) {
+        TableScanner.Result scan = scans.get().get("address_utxo");
+        if (scan == null || scan.utxo() == null) {
+            // Not part of this snapshot's loaded tables: read it on its own, still in one pass.
+            scan = TableScanner.scanOne(pg, schema, new TableScanner.Target("address_utxo", List.of(), null, 0,
+                    true, 0));
+        }
+        if (scan.rows() == 0) {
             b.pass("address-utxo", "table is empty");
             return;
         }
-        long duplicates = scalar(pg, "SELECT count(*) FROM (SELECT tx_hash, output_index FROM " + t
-                + " GROUP BY tx_hash, output_index HAVING count(*) > 1) d");
-        b.check("address-utxo-unique", duplicates == 0,
-                duplicates + " duplicate (tx_hash, output_index) key(s)");
+        // Rebuilding the key already proved uniqueness; only without it is a GROUP BY needed.
+        String key = uniqueKeyOn(pg, schema, "address_utxo", List.of("output_index", "tx_hash"));
+        if (key != null) {
+            b.pass("address-utxo-unique", "enforced by unique index " + key);
+        } else {
+            long duplicates = scalar(pg, "SELECT count(*) FROM (SELECT tx_hash, output_index FROM "
+                    + qt(schema, "address_utxo") + " GROUP BY tx_hash, output_index HAVING count(*) > 1) d");
+            b.check("address-utxo-unique", duplicates == 0,
+                    duplicates + " duplicate (tx_hash, output_index) key(s)");
+        }
 
-        long badJson = scalar(pg, "SELECT count(*) FROM " + t
-                + " WHERE amounts IS NULL OR jsonb_typeof(amounts) <> 'array'"
-                + "    OR jsonb_array_length(amounts) = 0");
-        b.check("address-utxo-amounts-shape", badJson == 0, badJson + " row(s) with invalid amounts");
+        TableScanner.UtxoResult u = scan.utxo();
+        b.check("address-utxo-amounts-shape", u.badAmounts() == 0, u.badAmounts() + " row(s) with invalid amounts");
+        b.check("address-utxo-lovelace-total", u.lovelaceMismatch() == 0,
+                u.lovelaceMismatch() + " row(s) whose lovelace_amount disagrees with amounts");
+        b.check("address-utxo-single-lovelace", u.multiLovelace() == 0,
+                u.multiLovelace() + " row(s) with more than one lovelace entry");
+        b.check("address-utxo-block-resolved", u.missingBlock() == 0,
+                u.missingBlock() + " row(s) whose block number could not be recovered");
+    }
 
-        long lovelaceMismatch = scalar(pg, "SELECT count(*) FROM " + t + " u"
-                + " WHERE u.lovelace_amount IS DISTINCT FROM ("
-                + "   SELECT COALESCE(sum((e->>'quantity')::numeric), 0)::bigint FROM jsonb_array_elements(u.amounts) e"
-                + "   WHERE e->>'unit' = 'lovelace')");
-        b.check("address-utxo-lovelace-total", lovelaceMismatch == 0,
-                lovelaceMismatch + " row(s) whose lovelace_amount disagrees with amounts");
+    /** A valid, non-partial unique index on exactly these columns, or null. */
+    private static String uniqueKeyOn(Connection pg, String schema, String table, List<String> sortedColumns)
+            throws SQLException {
+        try (PreparedStatement ps = pg.prepareStatement("SELECT i.relname FROM pg_index x"
+                + " JOIN pg_class i ON i.oid = x.indexrelid JOIN pg_class c ON c.oid = x.indrelid"
+                + " JOIN pg_namespace n ON n.oid = c.relnamespace"
+                + " WHERE n.nspname = ? AND c.relname = ? AND x.indisunique AND x.indisvalid"
+                + "   AND x.indpred IS NULL AND x.indexprs IS NULL"
+                + "   AND (SELECT array_agg(a.attname::text ORDER BY a.attname) FROM pg_attribute a"
+                + "        WHERE a.attrelid = c.oid AND a.attnum = ANY (x.indkey)) = ?::text[]"
+                + " LIMIT 1")) {
+            ps.setString(1, schema);
+            ps.setString(2, table);
+            ps.setArray(3, pg.createArrayOf("text", sortedColumns.toArray()));
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getString(1) : null;
+            }
+        }
+    }
 
-        long multiLovelace = scalar(pg, "SELECT count(*) FROM " + t + " u WHERE ("
-                + " SELECT count(*) FROM jsonb_array_elements(u.amounts) e WHERE e->>'unit' = 'lovelace') > 1");
-        b.check("address-utxo-single-lovelace", multiLovelace == 0,
-                multiLovelace + " row(s) with more than one lovelace entry");
+    /**
+     * Per-table scan results, computed once on first use and shared by both levels: one read of every
+     * loaded table instead of one per check.
+     */
+    private final class Scans {
+        private final Connection pg;
+        private final String schema;
+        private final SnapshotManifest manifest;
+        private final DeferredIndexes.ConnectionFactory connections;
+        private final int workers;
+        private final Consumer<String> progress;
+        private Map<String, TableScanner.Result> results;
 
-        long missingBlock = scalar(pg, "SELECT count(*) FROM " + t + " WHERE block IS NULL");
-        b.check("address-utxo-block-resolved", missingBlock == 0,
-                missingBlock + " row(s) whose block number could not be recovered");
+        Scans(Connection pg, String schema, SnapshotManifest manifest, DeferredIndexes.ConnectionFactory connections,
+              int workers, Consumer<String> progress) {
+            this.pg = pg;
+            this.schema = schema;
+            this.manifest = manifest;
+            this.connections = connections;
+            this.workers = workers;
+            this.progress = progress;
+        }
+
+        Map<String, TableScanner.Result> get() throws SQLException {
+            if (results == null) {
+                results = TableScanner.scan(schema, targets(), pg, connections, workers, progress);
+            }
+            return results;
+        }
+
+        private List<TableScanner.Target> targets() throws SQLException {
+            PgSchema pgs = new PgSchema(pg, schema);
+            ConsistencyPoint point = manifest.point();
+            boolean utxoSelected = registry.byTarget("address_utxo").filter(s -> registry.isSelected(s.id())).isPresent();
+            List<TableScanner.Target> targets = new ArrayList<>();
+            for (SnapshotManifest.TableManifest t : manifest.tables()) {
+                SnapshotTableSpec spec = registry.byId(t.specId()).orElse(null);
+                if (spec == null || !registry.isSelected(spec.id()) || spec.restore() != RestoreMode.IMPORT
+                        || !pgs.tableExists(t.targetTable())) {
+                    continue;
+                }
+                SnapshotTableSpec.CutoffRule cutoff = spec.consistency().cutoff();
+                String cutoffColumn = cutoff.type() == CutoffType.NONE ? null : cutoffTargetColumn(spec);
+                long limit = switch (cutoff.type()) {
+                    case SLOT_LTE -> point.slot();
+                    case EPOCH_LTE -> point.epoch();
+                    case EPOCH_LTE_OFFSET -> point.epoch() - cutoff.offset();
+                    case NONE -> Long.MAX_VALUE;
+                };
+                targets.add(new TableScanner.Target(t.targetTable(), spec.validation().requiredColumns(),
+                        cutoffColumn, limit, utxoSelected && "address_utxo".equals(t.targetTable()), t.rowCount()));
+            }
+            return targets;
+        }
     }
 
     /** The cutoff column names the source; find the target column it became. */
@@ -345,13 +426,26 @@ public class SnapshotValidator {
                 "exercise a rollback within the retained cursor history");
     }
 
-    /** Convenience for the CLI: run every offline level and merge the results. */
+    /** Runs every offline level on one connection. */
     public List<ValidationReport> validateAll(Connection pg, String schema, SnapshotManifest manifest,
                                               long eventPublisherId, int cursorBlocksToKeep)
             throws SQLException {
+        return validateAll(pg, schema, manifest, eventPublisherId, cursorBlocksToKeep, null, 1, m -> { });
+    }
+
+    /**
+     * Runs every offline level. Each loaded table is read once for all its per-row checks, on up to
+     * {@code workers} connections from {@code connections}, with a status line every minute.
+     */
+    public List<ValidationReport> validateAll(Connection pg, String schema, SnapshotManifest manifest,
+                                              long eventPublisherId, int cursorBlocksToKeep,
+                                              DeferredIndexes.ConnectionFactory connections, int workers,
+                                              Consumer<String> progress)
+            throws SQLException {
+        Scans scans = new Scans(pg, schema, manifest, connections, workers, progress);
         List<ValidationReport> reports = new ArrayList<>();
-        reports.add(validateLoad(pg, schema, manifest));
-        reports.add(validateSemantics(pg, schema, manifest, eventPublisherId, cursorBlocksToKeep));
+        reports.add(validateLoad(pg, schema, manifest, scans));
+        reports.add(validateSemantics(pg, schema, manifest, eventPublisherId, cursorBlocksToKeep, scans));
         return reports;
     }
 }

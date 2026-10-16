@@ -247,7 +247,7 @@ public class SnapshotCommands {
                 throw new CommandFailedException("snapshot import: status " + report.status(), null);
             }
             SnapshotManifest m = new ManifestCodec().read(Path.of(manifest).toAbsolutePath().normalize());
-            if (!runValidation(m, registry, true)) {
+            if (!runValidation(m, registry, true, workers)) {
                 throw new CommandFailedException("snapshot import: validation failed", null);
             }
             writeLn(info("Next (optional): run 'apply-indexes'."));
@@ -302,10 +302,13 @@ public class SnapshotCommands {
             boolean allowCustomSpecs,
             @Option(longNames = "mark-ready", defaultValue = "false",
                     description = "On success, mark the import READY and drop the temporary journal")
-            boolean markReady) {
+            boolean markReady,
+            @Option(longNames = "workers", defaultValue = "1",
+                    description = "Tables scanned in parallel, one database connection each")
+            int workers) {
         try {
             SnapshotManifest m = new ManifestCodec().read(Path.of(manifest).toAbsolutePath().normalize());
-            if (!runValidation(m, support.importRegistry(specFile, allowCustomSpecs), markReady)) {
+            if (!runValidation(m, support.importRegistry(specFile, allowCustomSpecs), markReady, workers)) {
                 throw new CommandFailedException("snapshot validate: validation failed", null);
             }
         } catch (CommandFailedException e) {
@@ -343,14 +346,15 @@ public class SnapshotCommands {
      *
      * @return true when every level passed
      */
-    private boolean runValidation(SnapshotManifest m, SnapshotSpecRegistry registry, boolean markReady)
-            throws Exception {
+    private boolean runValidation(SnapshotManifest m, SnapshotSpecRegistry registry, boolean markReady,
+                                  int workers) throws Exception {
         SnapshotValidator validator = new SnapshotValidator(registry);
 
         boolean allPassed = true;
         try (Connection conn = support.connect()) {
             List<ValidationReport> reports = validator.validateAll(conn, support.schema(), m,
-                    support.eventPublisherId(), support.cursorBlocksToKeep());
+                    support.eventPublisherId(), support.cursorBlocksToKeep(), support::connect, workers,
+                    p -> writeLn(info("  [validate] %s", p)));
             for (ValidationReport report : reports) {
                 writeLn(info("Level: %s", report.level()));
                 for (ValidationReport.Check c : report.checks()) {

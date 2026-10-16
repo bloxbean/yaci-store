@@ -276,6 +276,17 @@ class SnapshotImportIT {
                         .as("failures in %s: %s", report.level(), report.failures())
                         .isEmpty();
             }
+
+            // Scanning in parallel reports exactly the same checks.
+            List<ValidationReport> parallel = new SnapshotValidator(registry).validateAll(conn, schema,
+                    built.manifest(), 1, 10, PostgresSupport::connect, 3, m -> { });
+            assertThat(parallel).extracting(ValidationReport::checks)
+                    .isEqualTo(reports.stream().map(ValidationReport::checks).toList());
+            // The rebuilt primary key already proves uniqueness, so no GROUP BY is run.
+            assertThat(reports.get(1).checks())
+                    .filteredOn(c -> c.name().equals("address-utxo-unique"))
+                    .singleElement()
+                    .satisfies(c -> assertThat(c.detail()).startsWith("enforced by unique index "));
         }
     }
 
