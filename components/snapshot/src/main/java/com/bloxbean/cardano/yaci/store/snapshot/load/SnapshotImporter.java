@@ -488,7 +488,9 @@ public class SnapshotImporter {
 
         int planned = items.size() + (int) skippedBatches;
         int workers = Math.max(1, Math.min(options.workers(), items.size()));
-        LoadProgress status = new LoadProgress(items.size(), totalBytes, progress);
+        LoadProgress status = new LoadProgress(items.stream()
+                .map(w -> new LoadProgress.Planned(w.table().spec().id(), w.batch().bytes())).toList(),
+                workers, progress);
         // Rows at the consistency point, from the manifest: the Parquet files also hold rows past it.
         Progress.phase(progress, String.format("Loading %,d rows in %,d batches (%s of Parquet, %d workers)",
                 items.stream().map(w -> w.table().spec().id()).distinct()
@@ -515,7 +517,7 @@ public class SnapshotImporter {
                             TableWork table = item.table();
                             SnapshotTableSpec spec = table.spec();
                             ImportBatch batch = item.batch();
-                            status.started(spec.id());
+                            long batchStarted = status.started(spec.id());
                             String select = loader.sourceSelect(spec, batch,
                                     manifest.point().slot(), manifest.point().epoch(), table.dependencyFiles());
                             ColumnPlan plan = loader.planFor(session, spec, select, table.target(),
@@ -528,7 +530,7 @@ public class SnapshotImporter {
                             rows.addAndGet(n);
                             table.rows().addAndGet(n);
                             executed.incrementAndGet();
-                            status.finished(spec.id(), n, batch.bytes());
+                            status.finished(spec.id(), n, batch.bytes(), batchStarted);
                             if (progress != null) {
                                 progress.accept(spec.id() + " +" + n + " rows");
                             }
