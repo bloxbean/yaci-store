@@ -20,7 +20,23 @@ import java.util.TreeSet;
  */
 public class ArchiveVerifier {
 
+    /** Parallel part hashing: the default thread count, so a slow disk sees at most this many streams. */
+    public static final int DEFAULT_THREADS = Math.max(1, Math.min(8, Runtime.getRuntime().availableProcessors()));
+
     public record Result(boolean ok, List<String> problems, long bytesVerified) {}
+
+    private record PartCheck(List<String> problems, long bytes, Set<String> entries) {}
+
+    private final int threads;
+
+    public ArchiveVerifier() {
+        this(DEFAULT_THREADS);
+    }
+
+    /** @param threads parts hashed at once; parts are independent archives */
+    public ArchiveVerifier(int threads) {
+        this.threads = Math.max(1, threads);
+    }
 
     public Result verify(SnapshotManifest manifest, Path archiveDir, boolean deepEntryScan) {
         return check(manifest, archiveDir, deepEntryScan, true);
@@ -31,6 +47,14 @@ public class ArchiveVerifier {
         return check(manifest, archiveDir, false, false);
     }
 
+    /**
+     * Existence, sizes and the entry set of every part, without hashing. For a caller that hashes
+     * each part and each entry while it extracts them.
+     */
+    public Result structure(SnapshotManifest manifest, Path archiveDir) {
+        return check(manifest, archiveDir, true, false);
+    }
+
     private Result check(SnapshotManifest manifest, Path archiveDir, boolean deepEntryScan,
                          boolean hashParts) {
         List<String> problems = new ArrayList<>();
@@ -39,45 +63,19 @@ public class ArchiveVerifier {
         Set<String> declaredFiles = new TreeSet<>();
         manifest.tables().forEach(t -> t.files().forEach(f -> declaredFiles.add(f.path())));
 
-        Set<String> coveredFiles = new TreeSet<>();
-        for (SnapshotManifest.PartManifest part : manifest.parts()) {
-            Path p = archiveDir.resolve(part.fileName());
-            if (!Files.isRegularFile(p)) {
-                problems.add("Missing archive part: " + part.fileName());
-                continue;
-            }
-            try {
-                long size = Files.size(p);
-                if (size != part.size()) {
-                    problems.add(part.fileName() + ": size " + size + " but manifest declares " + part.size());
-                }
-                if (hashParts) {
-                    String sha = Digests.sha256Hex(p);
-                    if (!sha.equals(part.sha256())) {
-                        problems.add(part.fileName() + ": SHA-256 mismatch");
-                    }
-                    bytes += size;
-                }
+        List<PartCheck> checks = Parallel.map(manifest.parts(), hashParts ? threads : 1,
+                part -> checkPart(part, archiveDir.resolve(part.fileName()), deepEntryScan, hashParts));
 
-                if (deepEntryScan) {
-                    Set<String> entries = ArchiveExtractor.listEntries(p);
-                    if (entries.size() != part.entryCount()) {
-                        problems.add(part.fileName() + ": " + entries.size()
-                                + " entries but manifest declares " + part.entryCount());
-                    }
-                    for (String e : entries) {
-                        try {
-                            ArchiveExtractor.validateName(e);
-                        } catch (IOException ex) {
-                            problems.add(part.fileName() + ": " + ex.getMessage());
-                        }
-                        if (!coveredFiles.add(e)) {
-                            problems.add("File '" + e + "' appears in more than one part");
-                        }
-                    }
+        // Merged in manifest order, so duplicate reports are deterministic.
+        Set<String> coveredFiles = new TreeSet<>();
+        for (int i = 0; i < checks.size(); i++) {
+            PartCheck c = checks.get(i);
+            problems.addAll(c.problems());
+            bytes += c.bytes();
+            for (String e : c.entries()) {
+                if (!coveredFiles.add(e)) {
+                    problems.add("File '" + e + "' appears in more than one part");
                 }
-            } catch (IOException e) {
-                problems.add(part.fileName() + ": " + e.getMessage());
             }
         }
 
@@ -97,6 +95,49 @@ public class ArchiveVerifier {
         }
 
         return new Result(problems.isEmpty(), problems, bytes);
+    }
+
+    private static PartCheck checkPart(SnapshotManifest.PartManifest part, Path p, boolean deepEntryScan,
+                                       boolean hashParts) {
+        List<String> problems = new ArrayList<>();
+        Set<String> entries = new TreeSet<>();
+        long bytes = 0;
+        if (!Files.isRegularFile(p)) {
+            problems.add("Missing archive part: " + part.fileName());
+            return new PartCheck(problems, 0, entries);
+        }
+        try {
+            long size = Files.size(p);
+            if (size != part.size()) {
+                problems.add(part.fileName() + ": size " + size + " but manifest declares " + part.size());
+            }
+            if (hashParts) {
+                String sha = Digests.sha256Hex(p);
+                if (!sha.equals(part.sha256())) {
+                    problems.add(part.fileName() + ": SHA-256 mismatch");
+                }
+                bytes += size;
+            }
+
+            if (deepEntryScan) {
+                Set<String> listed = ArchiveExtractor.listEntries(p);
+                if (listed.size() != part.entryCount()) {
+                    problems.add(part.fileName() + ": " + listed.size()
+                            + " entries but manifest declares " + part.entryCount());
+                }
+                for (String e : listed) {
+                    try {
+                        ArchiveExtractor.validateName(e);
+                    } catch (IOException ex) {
+                        problems.add(part.fileName() + ": " + ex.getMessage());
+                    }
+                }
+                entries.addAll(listed);
+            }
+        } catch (IOException e) {
+            problems.add(part.fileName() + ": " + e.getMessage());
+        }
+        return new PartCheck(problems, bytes, entries);
     }
 
     private static String limit(Set<String> values) {

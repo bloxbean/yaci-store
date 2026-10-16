@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.snapshot.load;
 import com.bloxbean.cardano.yaci.store.snapshot.manifest.ManifestValidator;
 import com.bloxbean.cardano.yaci.store.snapshot.archive.ArchiveExtractor;
 import com.bloxbean.cardano.yaci.store.snapshot.archive.ArchiveVerifier;
+import com.bloxbean.cardano.yaci.store.snapshot.archive.Parallel;
 import com.bloxbean.cardano.yaci.store.snapshot.convert.ConverterRegistry;
 import com.bloxbean.cardano.yaci.store.snapshot.handler.HandlerRegistry;
 import com.bloxbean.cardano.yaci.store.snapshot.handler.SnapshotHandler;
@@ -228,7 +229,15 @@ public class SnapshotImporter {
                 throw new IllegalStateException("Target schema already contains chain data");
             }
             long t0 = System.currentTimeMillis();
-            ArchiveVerifier.Result verified = new ArchiveVerifier().verify(manifest, options.archiveDir(), true);
+            // With extraction, each part and each entry is hashed while it is extracted, in one read;
+            // only the structure is checked up front. Without it, the parts are hashed here instead.
+            int partThreads = Math.max(1, Math.min(options.workers(), ArchiveVerifier.DEFAULT_THREADS));
+            ArchiveVerifier verifier = new ArchiveVerifier(partThreads);
+            say(progress, "verify", "Checking " + manifest.parts().size() + " parts"
+                    + (options.skipExtraction() ? " (with digests)" : " (structure; digests are checked while extracting)"));
+            ArchiveVerifier.Result verified = options.skipExtraction()
+                    ? verifier.verify(manifest, options.archiveDir(), true)
+                    : verifier.structure(manifest, options.archiveDir());
             if (!verified.ok()) {
                 throw new IllegalStateException("Archive verification failed:\n  - "
                         + String.join("\n  - ", verified.problems()));
@@ -522,22 +531,56 @@ public class SnapshotImporter {
     private void extract(SnapshotManifest manifest, ImportOptions options, Path extractRoot,
                          Consumer<String> progress) throws IOException {
         Map<String, Long> expected = new TreeMap<>();
-        manifest.tables().forEach(t -> t.files().forEach(f -> expected.put(f.path(), f.size())));
+        Map<String, String> digests = new HashMap<>();
+        manifest.tables().forEach(t -> t.files().forEach(f -> {
+            expected.put(f.path(), f.size());
+            digests.put(f.path(), f.sha256());
+        }));
 
         long maxEntries = expected.size() + 16L;
         long maxBytes = expected.values().stream().mapToLong(Long::longValue).sum() + (1L << 20);
         ArchiveExtractor extractor = new ArchiveExtractor(extractRoot, maxEntries, maxBytes);
 
-        for (SnapshotManifest.PartManifest part : manifest.parts()) {
-            extractor.extract(options.archiveDir().resolve(part.fileName()), expected,
-                    progress == null ? null : p -> progress.accept("extract " + p));
-        }
-        for (SnapshotManifest.TableManifest t : manifest.tables()) {
-            for (SnapshotManifest.FileEntry f : t.files()) {
-                if (!extractor.verifyFile(f.path(), f.sha256())) {
-                    throw new IOException("Extracted file failed its digest check: " + f.path());
+        List<SnapshotManifest.PartManifest> parts = manifest.parts();
+        long totalBytes = parts.stream().mapToLong(SnapshotManifest.PartManifest::size).sum();
+        int threads = Math.max(1, Math.min(options.workers(), ArchiveVerifier.DEFAULT_THREADS));
+        say(progress, "extract", String.format("Extracting and verifying %d parts (%s) with %d threads",
+                parts.size(), LoadProgress.bytes(totalBytes), threads));
+        long started = System.currentTimeMillis();
+        AtomicInteger done = new AtomicInteger();
+        AtomicLong doneBytes = new AtomicLong();
+        try {
+            Parallel.map(parts, threads, part -> {
+                ArchiveExtractor.Extracted result;
+                try {
+                    result = extractor.extract(options.archiveDir().resolve(part.fileName()),
+                            expected, digests, progress == null ? null : p -> progress.accept("extract " + p));
+                } catch (IOException e) {
+                    // A damaged part usually fails ZIP's own CRC check before its SHA-256 is complete.
+                    throw new IllegalStateException("Archive verification failed:\n  - "
+                            + part.fileName() + ": " + e.getMessage(), e);
                 }
-            }
+                if (!result.partSha256().equals(part.sha256())) {
+                    throw new IllegalStateException("Archive verification failed:\n  - "
+                            + part.fileName() + ": SHA-256 mismatch");
+                }
+                int n = done.incrementAndGet();
+                long b = doneBytes.addAndGet(part.size());
+                long elapsed = Math.max(1, System.currentTimeMillis() - started);
+                say(progress, "extract", String.format("%d/%d parts  %s/%s  %.0f MB/s  %s",
+                        n, parts.size(), LoadProgress.bytes(b), LoadProgress.bytes(totalBytes),
+                        b / 1e6 / (elapsed / 1000.0), part.fileName()));
+                return result;
+            });
+        } catch (Parallel.PartFailure e) {
+            throw e.getCause() instanceof IOException io ? io : new IOException(e.getMessage(), e.getCause());
+        }
+    }
+
+    private static void say(Consumer<String> progress, String phase, String message) {
+        log.info(message);
+        if (progress != null) {
+            progress.accept("[" + phase + "] " + message);
         }
     }
 

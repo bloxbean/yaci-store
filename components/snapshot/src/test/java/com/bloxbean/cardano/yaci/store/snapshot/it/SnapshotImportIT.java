@@ -418,7 +418,8 @@ class SnapshotImportIT {
 
         assertThatThrownBy(() -> new SnapshotImporter(registry)
                 .importSnapshot(options(built.manifestPath(), 1), null))
-                .isInstanceOf(IllegalStateException.class).hasMessageContaining("SHA-256 mismatch");
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("Archive verification failed")
+                .hasMessageContaining(built.manifest().parts().get(0).fileName());
         try (Connection conn = PostgresSupport.connect()) {
             assertThat(count(conn, "block")).isZero();
             assertThat(new ImportJournal(conn, schema).exists()).isFalse();

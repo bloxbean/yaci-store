@@ -117,6 +117,57 @@ class ArchiveTest {
     }
 
     @Test
+    void oneReadHashesThePartAndEveryEntry(@TempDir Path tmp) throws IOException {
+        Path dataDir = tmp.resolve("data");
+        Path out = tmp.resolve("out");
+        Fixture f = fixture(dataDir, 3, 800);
+        var parts = new ArchiveWriter(dataDir, out, "snap", 1 << 30).write(f.entries(), f.owners(), null);
+        Path part = out.resolve(parts.get(0).fileName());
+
+        Map<String, Long> sizes = new java.util.TreeMap<>();
+        Map<String, String> digests = new java.util.TreeMap<>();
+        f.entries().forEach(e -> {
+            sizes.put(e.path(), e.size());
+            digests.put(e.path(), e.sha256());
+        });
+        var result = new ArchiveExtractor(tmp.resolve("work"), 100, 1 << 20).extract(part, sizes, digests, null);
+
+        assertThat(result.entries()).isEqualTo(3);
+        assertThat(result.partSha256()).isEqualTo(Digests.sha256Hex(part)).isEqualTo(parts.get(0).sha256());
+
+        // Same size, different content: only the entry digest can catch it.
+        String first = f.entries().get(0).path();
+        digests.put(first, "0".repeat(64));
+        assertThatThrownBy(() -> new ArchiveExtractor(tmp.resolve("work2"), 100, 1 << 20)
+                .extract(part, sizes, digests, null))
+                .isInstanceOf(IOException.class)
+                .hasMessageContaining("failed its digest check").hasMessageContaining(first);
+    }
+
+    @Test
+    void parallelVerificationFindsEveryBadPartAndCrossPartDuplicates(@TempDir Path tmp) throws IOException {
+        Path dataDir = tmp.resolve("data");
+        Path out = tmp.resolve("out");
+        Fixture f = fixture(dataDir, 6, 1000);
+        var parts = new ArchiveWriter(dataDir, out, "snap", 2500).write(f.entries(), f.owners(), null);
+        SnapshotManifest manifest = manifestOf(f.entries(), parts);
+
+        assertThat(new ArchiveVerifier(4).verify(manifest, out, true).ok()).isTrue();
+        assertThat(new ArchiveVerifier(4).structure(manifest, out).ok()).isTrue();
+
+        // Corrupt two parts in place (same size): both are reported, in manifest order.
+        for (int i : new int[]{0, 2}) {
+            Path p = out.resolve(parts.get(i).fileName());
+            byte[] bytes = Files.readAllBytes(p);
+            bytes[bytes.length / 2] ^= 1;
+            Files.write(p, bytes);
+        }
+        var result = new ArchiveVerifier(4).verify(manifest, out, false);
+        assertThat(result.problems()).containsExactly(
+                parts.get(0).fileName() + ": SHA-256 mismatch", parts.get(2).fileName() + ": SHA-256 mismatch");
+    }
+
+    @Test
     void rejectsPathTraversalEntries(@TempDir Path tmp) throws IOException {
         Path zip = tmp.resolve("evil.zip");
         writeZip(zip, Map.of("../../etc/passwd", "pwned"));

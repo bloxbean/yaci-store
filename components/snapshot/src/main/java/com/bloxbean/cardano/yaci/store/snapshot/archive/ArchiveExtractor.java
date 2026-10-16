@@ -4,8 +4,12 @@ import com.bloxbean.cardano.yaci.store.snapshot.util.Digests;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
+import java.security.DigestInputStream;
+import java.security.MessageDigest;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashSet;
@@ -38,18 +42,37 @@ public class ArchiveExtractor {
         this.maxTotalBytes = maxTotalBytes;
     }
 
+    /** One part's extraction: entries written, bytes written and the SHA-256 of the part file. */
+    public record Extracted(int entries, long bytes, String partSha256) {}
+
     /**
      * @param expectedSizes declared size per entry path from the manifest; an entry not present here,
      *                      or whose real size differs, is rejected
      * @return number of entries extracted
      */
     public int extract(Path zipFile, Map<String, Long> expectedSizes, Consumer<String> progress) throws IOException {
+        return extract(zipFile, expectedSizes, null, progress).entries();
+    }
+
+    /**
+     * Extracts a part in one sequential read. The part's SHA-256 is computed over the bytes as they
+     * are read, and each entry's SHA-256 while it is written, so verifying both costs no extra pass.
+     * An entry whose digest differs from {@code expectedDigests} fails the part. Safe to run for
+     * different parts at the same time.
+     *
+     * @param expectedDigests declared SHA-256 per entry path, or null to skip entry digests
+     */
+    public Extracted extract(Path zipFile, Map<String, Long> expectedSizes, Map<String, String> expectedDigests,
+                             Consumer<String> progress) throws IOException {
         Files.createDirectories(workDir);
         Set<String> seen = new HashSet<>();
         long totalBytes = 0;
         int count = 0;
+        MessageDigest partDigest = Digests.sha256();
+        byte[] buf = new byte[1 << 16];
 
-        try (InputStream fin = Files.newInputStream(zipFile);
+        try (InputStream fin = new DigestInputStream(
+                new BufferedInputStream(Files.newInputStream(zipFile), 1 << 20), partDigest);
              ZipInputStream zin = new ZipInputStream(fin)) {
             ZipEntry entry;
             while ((entry = zin.getNextEntry()) != null) {
@@ -78,7 +101,21 @@ public class ArchiveExtractor {
                     throw new IOException("Refusing to write through an existing symbolic link: " + target);
                 }
 
-                long written = Files.copy(zin, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                MessageDigest entryDigest = Digests.sha256();
+                long written = 0;
+                try (OutputStream out = Files.newOutputStream(target)) {
+                    int r;
+                    while ((r = zin.read(buf)) != -1) {
+                        written += r;
+                        // Stop as soon as an entry exceeds its declared size, before writing more.
+                        if (written > expected) {
+                            throw new IOException("Entry '" + name + "' is larger than the "
+                                    + expected + " bytes the manifest declares");
+                        }
+                        entryDigest.update(buf, 0, r);
+                        out.write(buf, 0, r);
+                    }
+                }
                 totalBytes += written;
                 if (written != expected) {
                     throw new IOException("Entry '" + name + "' is " + written
@@ -87,13 +124,21 @@ public class ArchiveExtractor {
                 if (totalBytes > maxTotalBytes) {
                     throw new IOException("Extraction exceeds the configured size limit of " + maxTotalBytes + " bytes");
                 }
+                String expectedSha = expectedDigests == null ? null : expectedDigests.get(name);
+                if (expectedSha != null && !Digests.hex(entryDigest.digest()).equals(expectedSha)) {
+                    throw new IOException("Extracted file failed its digest check: " + name);
+                }
                 if (progress != null) {
                     progress.accept(name);
                 }
             }
+            // The central directory follows the last entry; read it so the part digest covers the file.
+            while (fin.read(buf) != -1) {
+                // digest only
+            }
         }
         log.debug("Extracted {} entries ({} bytes) from {}", count, totalBytes, zipFile.getFileName());
-        return count;
+        return new Extracted(count, totalBytes, Digests.hex(partDigest.digest()));
     }
 
     /** Entry names present in a part, without extracting anything. */
