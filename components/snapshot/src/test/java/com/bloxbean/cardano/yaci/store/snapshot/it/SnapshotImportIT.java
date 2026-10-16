@@ -405,6 +405,19 @@ class SnapshotImportIT {
         assertThat(pre.blockers()).anySatisfy(b -> assertThat(b).contains("has digest"));
     }
 
+    /** A dry run plans the SQL transform's output against the target before anything is extracted. */
+    @Test
+    void preflightRejectsAnSqlTransformWhoseOutputDoesNotFitTheTarget() throws Exception {
+        SnapshotFixture.Built built = fixture();
+        try (var conn = PostgresSupport.connect(); var st = conn.createStatement()) {
+            st.execute("ALTER TABLE " + Identifiers.quote(schema) + ".address_utxo ALTER COLUMN tx_index TYPE smallint");
+        }
+        SnapshotImporter.Preflight pre = new SnapshotImporter(registry).preflight(options(built.manifestPath(), 1));
+        assertThat(pre.blockers()).anySatisfy(b -> assertThat(b)
+                .contains("'address-utxo'").contains("tx_index").contains("narrowing 'INTEGER' to 'smallint'"));
+        assertThat(root.resolve("work").resolve("extracted")).doesNotExist();
+    }
+
     @Test
     void refusesANonEmptySchemaWithNoMatchingJournal() throws Exception {
         SnapshotFixture.Built built = fixture();

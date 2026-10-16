@@ -119,20 +119,15 @@ public class SnapshotExporter {
             }
         }
 
-        // SQL transforms bind their own columns, so prepare each one against the real files before
-        // declaring the directory exportable.
+        // Plan every table against its target in the producing release's schema, and prepare each
+        // SQL transform, before declaring the directory exportable. Without a target only the
+        // transforms are prepared.
         if (selection.point() != null) {
             ExportPlanner planner = new ExportPlanner(catalog);
-            Map<String, List<DuckLakeFile>> samples = new java.util.HashMap<>();
-            for (TablePlan p : plans) {
-                samples.put(p.spec().id(), p.files().subList(0, Math.min(2, p.files().size())));
-            }
+            Map<String, TablePlan> byId = new java.util.LinkedHashMap<>();
+            plans.forEach(p -> byId.put(p.spec().id(), p));
             for (TablePlan plan : plans) {
-                Map<String, List<DuckLakeFile>> deps = new java.util.LinkedHashMap<>();
-                for (String dep : plan.spec().importSpec().dependencies()) {
-                    deps.put(dep, samples.getOrDefault(dep, List.of()));
-                }
-                planner.validateSqlTransform(plan.spec(), samples.get(plan.spec().id()), deps,
+                planner.validateImport(plan, byId, options.targetTables().get(plan.spec().targetTable()),
                                 selection.completedEpoch(), selection.point().slot())
                         .forEach(problem -> blockers.add("[" + plan.spec().id() + "] " + problem));
             }

@@ -1,8 +1,12 @@
 package com.bloxbean.cardano.yaci.store.snapshot.export;
 
+import com.bloxbean.cardano.yaci.store.snapshot.convert.ConverterRegistry;
 import com.bloxbean.cardano.yaci.store.snapshot.ducklake.DuckDb;
 import com.bloxbean.cardano.yaci.store.snapshot.ducklake.DuckLakeCatalog;
 import com.bloxbean.cardano.yaci.store.snapshot.ducklake.DuckLakeFile;
+import com.bloxbean.cardano.yaci.store.snapshot.load.ColumnPlanner;
+import com.bloxbean.cardano.yaci.store.snapshot.load.ImportPlanCheck;
+import com.bloxbean.cardano.yaci.store.snapshot.load.TargetTable;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.BatchBoundary;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.CutoffType;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.PartitionStrategy;
@@ -208,37 +212,42 @@ public class ExportPlanner {
     }
 
     /**
-     * Prepare an SQL transform against the real files and report what it cannot bind.
+     * Check that a table can be loaded into its target before it is packaged: plan its columns and,
+     * for SQL mode, prepare the transform and plan its output types.
      *
      * <p>A transform reads its source through its own resource, so the declared-column check cannot
-     * see which columns it needs. Without this, widening an exporter (or a transform referencing a
-     * column the export does not have) would package cleanly and only fail hours later at import.
+     * see which columns it needs or what types it produces. Without this, widening an exporter, a
+     * transform referencing a column the export does not have, or a transform whose output does not
+     * fit its target would package cleanly and only fail hours later at import.
      *
-     * @param sample a few of the relation's files -- enough to bind the query, not to run it
+     * <p>The transform reads a few of each input's files -- enough to bind the query, not to run it --
+     * or, for an input with no files, an empty relation of its catalog types.
+     *
+     * @param plans  every imported table's plan, by spec id, for the transform's dependencies
+     * @param target the target table in the producing release's schema, or {@code null} to only
+     *               prepare an SQL transform
      */
-    public List<String> validateSqlTransform(SnapshotTableSpec spec, List<DuckLakeFile> sample,
-                                             Map<String, List<DuckLakeFile>> dependencySamples,
-                                             int completedEpoch, long cutSlot) {
-        if (spec.importSpec().mode() != com.bloxbean.cardano.yaci.store.snapshot.spec.ImportMode.SQL
-                || sample.isEmpty()) {
+    public List<String> validateImport(TablePlan plan, Map<String, TablePlan> plans, TargetTable target,
+                                       int completedEpoch, long cutSlot) {
+        SnapshotTableSpec spec = plan.spec();
+        if (plan.sourceColumns().isEmpty()) {
             return List.of();
         }
         Map<String, String> dependencies = new LinkedHashMap<>();
-        dependencySamples.forEach((dep, files) ->
-                dependencies.put(dep, DuckDb.readParquet(files.isEmpty() ? "[]" : catalog.parquetList(files))));
-
-        String sql = com.bloxbean.cardano.yaci.store.snapshot.load.SqlResources
-                .read(spec.importSpec().selectResource());
-        String bound = com.bloxbean.cardano.yaci.store.snapshot.load.SqlResources.bindTransform(sql,
-                DuckDb.readParquet(catalog.parquetList(sample)), dependencies, cutSlot, completedEpoch);
-        try (Statement st = catalog.connection().createStatement()) {
-            st.executeQuery("DESCRIBE (" + bound + ")").close();
-            return List.of();
-        } catch (SQLException e) {
-            String message = e.getMessage() == null ? "" : e.getMessage().replaceAll("\\s+", " ").trim();
-            return List.of("SQL transform " + spec.importSpec().selectResource()
-                    + " cannot be prepared against the export: " + message);
+        for (String dep : spec.importSpec().dependencies()) {
+            TablePlan d = plans.get(dep);
+            if (d == null || d.sourceColumns().isEmpty()) {
+                return List.of(); // the dependency's own blocker says why
+            }
+            dependencies.put(dep, sample(d));
         }
+        return ImportPlanCheck.check(catalog.connection(), new ColumnPlanner(new ConverterRegistry()), spec,
+                plan.sourceColumns(), sample(plan), dependencies, target, cutSlot, completedEpoch);
+    }
+
+    private String sample(TablePlan plan) {
+        return plan.files().isEmpty() ? ImportPlanCheck.emptyRelation(plan.sourceColumns())
+                : DuckDb.readParquet(catalog.parquetList(plan.files().subList(0, Math.min(2, plan.files().size()))));
     }
 
     /** Digest of the observed source column names and types, so schema drift is detectable. */

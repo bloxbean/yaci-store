@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.admin.cli.snapshot;
 import com.bloxbean.cardano.yaci.store.snapshot.export.ExportOptions;
 import com.bloxbean.cardano.yaci.store.snapshot.load.ImportOptions;
 import com.bloxbean.cardano.yaci.store.snapshot.load.PgSchema;
+import com.bloxbean.cardano.yaci.store.snapshot.load.TargetTable;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.SnapshotSpecRegistry;
 import lombok.RequiredArgsConstructor;
 import com.bloxbean.cardano.yaci.store.common.config.StoreModuleConfig;
@@ -165,18 +166,26 @@ public class SnapshotCliSupport {
         return SnapshotSpecRegistry.load(custom, allowCustomSpecs);
     }
 
-    public ExportOptions exportOptions(String dataDir, String outputDir, String workDir, String partSize,
-                                       int targetEpoch, long minConfirmations, boolean allowIncomplete,
-                                       boolean unsigned, String memoryLimit) throws SQLException {
+    public ExportOptions exportOptions(SnapshotSpecRegistry registry, String dataDir, String outputDir,
+                                       String workDir, String partSize, int targetEpoch, long minConfirmations,
+                                       boolean allowIncomplete, boolean unsigned, String memoryLimit)
+            throws SQLException {
         String schemaFingerprint;
         String flywayFingerprint;
         Map<String, String> tableSchemaFingerprints;
+        Map<String, TargetTable> targetTables = new LinkedHashMap<>();
         Map<String, Map<String, Long>> completedPartitions = new LinkedHashMap<>();
         try (Connection conn = connect()) {
             PgSchema pgs = new PgSchema(conn, schema());
             schemaFingerprint = pgs.fingerprint();
             flywayFingerprint = pgs.flywayFingerprint();
             tableSchemaFingerprints = pgs.tableFingerprints();
+            // This source runs the release the snapshot is for, so its tables are the import targets.
+            for (var spec : registry.importedTables()) {
+                if (pgs.tableExists(spec.targetTable())) {
+                    targetTables.put(spec.targetTable(), pgs.table(spec.targetTable()));
+                }
+            }
             String stateTable = com.bloxbean.cardano.yaci.store.snapshot.util.Identifiers.quote(schema())
                     + ".analytics_export_state";
             try (var st = conn.createStatement();
@@ -196,7 +205,7 @@ public class SnapshotCliSupport {
                 parseSize(partSize), targetEpoch, minConfirmations, allowIncomplete, unsigned,
                 yaciStoreVersion(), enabledModules(), pruningSettings(),
                 schemaFingerprint, flywayFingerprint, completedPartitions, tableSchemaFingerprints,
-                memoryLimit);
+                memoryLimit, targetTables);
     }
 
     public ImportOptions importOptions(String manifest, String workDir, int workers, String memoryLimit,

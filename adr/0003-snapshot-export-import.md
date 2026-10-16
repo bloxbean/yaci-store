@@ -727,6 +727,19 @@ the check, `snapshot inspect` reports `pool_registration_v2.sql cannot be
 prepared ... does not have a column named margin_numerator` in seconds; without
 it, the snapshot packaged cleanly and would have failed an hour into an import.
 
+**Implementation note (transform output types are planned before heavy work).**
+Binding was not enough: `mir_v3.sql` bound, but produced `id` as `VARCHAR` for a
+`uuid` column, and the import found that 34 minutes in, after verification and
+extraction, while `import --dry-run` passed. mir also has no rows on preprod, so
+no sample file existed to prepare it against. Every imported table is now planned
+against its target, SQL transforms by describing their output, in three places:
+`snapshot inspect`/`export`, against the producing release's own tables, so such a
+spec is never packaged; `import --dry-run` (preflight), before anything is
+extracted; and over the extracted files just before the load. Where no file is at
+hand (a table with no rows, or preflight), the transform reads an empty relation of
+the source types the catalog and the manifest record, which describes to the same
+output types as the files.
+
 ## Export Command
 
 Proposed command shape:

@@ -73,7 +73,7 @@ public class SnapshotCommands {
         try {
             SnapshotCliSupport.ensureDirectory(Path.of(workDir));
             SnapshotSpecRegistry registry = support.exportRegistry(specFile, allowCustomSpecs);
-            ExportOptions options = support.exportOptions(dataDir, workDir, workDir, "8GiB",
+            ExportOptions options = support.exportOptions(registry, dataDir, workDir, workDir, "8GiB",
                     targetEpoch, minConfirmations, true, true, memoryLimit);
             InspectionReport report = new SnapshotExporter(registry).inspect(options);
             printInspection(report, verbose);
@@ -117,7 +117,7 @@ public class SnapshotCommands {
             SnapshotCliSupport.ensureDirectory(Path.of(workDir));
             SnapshotCliSupport.ensureDirectory(Path.of(output));
             SnapshotSpecRegistry registry = support.exportRegistry(specFile, allowCustomSpecs);
-            ExportOptions options = support.exportOptions(dataDir, output, workDir, partSize,
+            ExportOptions options = support.exportOptions(registry, dataDir, output, workDir, partSize,
                     targetEpoch, minConfirmations, allowIncomplete, unsigned, memoryLimit);
 
             writeLn(info("Packaging snapshot from %s", options.dataDir()));
@@ -229,7 +229,8 @@ public class SnapshotCommands {
                     writeLn(error("Import is blocked:"));
                     pre.blockers().forEach(bl -> writeLn("    - %s", bl));
                 } else {
-                    writeLn(success("Preflight passed (existence and sizes checked; import verifies digests). Nothing written."));
+                    writeLn(success("Preflight passed (mappings and transform output types checked against the target; "
+                            + "part existence and sizes checked, digests are verified during import). Nothing written."));
                 }
                 return;
             }

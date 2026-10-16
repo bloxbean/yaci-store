@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.snapshot.export;
 
 import com.bloxbean.cardano.yaci.store.snapshot.ducklake.DuckLakeCatalog;
+import com.bloxbean.cardano.yaci.store.snapshot.load.TargetTable;
 
 import java.nio.file.Path;
 import java.util.List;
@@ -20,6 +21,9 @@ import java.util.Map;
  * @param completedPartitions source export journal: exporter id → partition value → completed row count.
  *                            Must include zero-row partitions; missing entries block publication.
  * @param memoryLimit      DuckDB memory limit for the catalog connection, e.g. {@code 1GB}
+ * @param targetTables     the imported tables' definitions in this release's PostgreSQL schema, by
+ *                         name, so every mapping and SQL transform output is planned against them
+ *                         before anything is packaged. Tables absent here are not planned.
  */
 public record ExportOptions(Path dataDir,
                             Path workDir,
@@ -39,7 +43,20 @@ public record ExportOptions(Path dataDir,
                             String flywayFingerprint,
                             Map<String, Map<String, Long>> completedPartitions,
                             Map<String, String> tableSchemaFingerprints,
-                            String memoryLimit) {
+                            String memoryLimit,
+                            Map<String, TargetTable> targetTables) {
+
+    public ExportOptions(Path dataDir, Path workDir, Path outputDir, String network, long protocolMagic,
+                         String genesisHash, long partSizeBytes, int targetEpoch, long minConfirmations,
+                         boolean allowIncomplete, boolean unsigned, String yaciStoreVersion,
+                         List<String> modules, Map<String, String> pruningSettings, String schemaFingerprint,
+                         String flywayFingerprint, Map<String, Map<String, Long>> completedPartitions,
+                         Map<String, String> tableSchemaFingerprints, String memoryLimit) {
+        this(dataDir, workDir, outputDir, network, protocolMagic, genesisHash, partSizeBytes, targetEpoch,
+                minConfirmations, allowIncomplete, unsigned, yaciStoreVersion, modules, pruningSettings,
+                schemaFingerprint, flywayFingerprint, completedPartitions, tableSchemaFingerprints,
+                memoryLimit, Map.of());
+    }
 
     public ExportOptions(Path dataDir, Path workDir, Path outputDir, String network, long protocolMagic,
                          String genesisHash, long partSizeBytes, int targetEpoch, long minConfirmations,

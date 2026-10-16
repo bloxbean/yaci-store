@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.snapshot.it;
 import com.bloxbean.cardano.yaci.store.snapshot.export.ExportOptions;
 import com.bloxbean.cardano.yaci.store.snapshot.ducklake.DuckLakeCatalog;
 import com.bloxbean.cardano.yaci.store.snapshot.export.SnapshotExporter;
+import com.bloxbean.cardano.yaci.store.snapshot.load.TargetTable;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.SnapshotSpecLoader;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.SnapshotSpecRegistry;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.SnapshotTableSpec;
@@ -11,6 +12,7 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Path;
 import java.sql.DriverManager;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.nio.charset.StandardCharsets;
@@ -79,6 +81,13 @@ class SnapshotExportIT {
         var exporter = new SnapshotExporter(registry);
         var report = exporter.inspect(complete);
         assertThat(report.blockers()).isEmpty();
+        // Planned against the producing release's tables before anything is packaged.
+        String blockColumns = "hash varchar(64), number bigint, slot bigint, prev_hash varchar(64), era integer,"
+                + " epoch integer, block_time timestamp with time zone, date date";
+        assertThat(exporter.inspect(withTargets(complete, target("block", blockColumns))).blockers()).isEmpty();
+        assertThat(exporter.inspect(withTargets(complete,
+                        target("block", blockColumns.replace("hash varchar(64)", "hash integer")))).blockers())
+                .anySatisfy(b -> assertThat(b).startsWith("[block]").contains("column 'hash'"));
         assertThat(report.point().epoch()).isEqualTo(1);
         var result = exporter.export(complete, null);
         assertThat(result.manifest().totalRows()).isEqualTo(3);
@@ -113,6 +122,25 @@ class SnapshotExportIT {
             assertThat(catalog.firstNonByronEpoch(catalog.latestSnapshotId())).hasValue(4);
             assertThat(catalog.firstNonByronEpoch(byronSnapshot)).isEmpty();
         }
+    }
+
+    private static ExportOptions withTargets(ExportOptions o, TargetTable target) {
+        return new ExportOptions(o.dataDir(), o.workDir(), o.outputDir(), o.network(), o.protocolMagic(),
+                o.genesisHash(), o.partSizeBytes(), o.targetEpoch(), o.minConfirmations(), o.allowIncomplete(),
+                o.unsigned(), o.yaciStoreVersion(), o.modules(), o.pruningSettings(), o.schemaFingerprint(),
+                o.flywayFingerprint(), o.completedPartitions(), o.tableSchemaFingerprints(), o.memoryLimit(),
+                Map.of(target.name(), target));
+    }
+
+    private static TargetTable target(String name, String declaration) {
+        Map<String, String> columns = new LinkedHashMap<>();
+        Map<String, Boolean> nullable = new LinkedHashMap<>();
+        for (String column : declaration.split(",")) {
+            String[] parts = column.trim().split(" ", 2);
+            columns.put(parts[0], parts[1]);
+            nullable.put(parts[0], true);
+        }
+        return new TargetTable("s", name, columns, nullable, Map.of(), List.of(), false);
     }
 
     private ExportOptions options(Map<String, Map<String, Long>> completed) {

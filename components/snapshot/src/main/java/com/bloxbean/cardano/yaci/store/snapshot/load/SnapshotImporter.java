@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.store.snapshot.archive.ArchiveExtractor;
 import com.bloxbean.cardano.yaci.store.snapshot.archive.ArchiveVerifier;
 import com.bloxbean.cardano.yaci.store.snapshot.archive.Parallel;
 import com.bloxbean.cardano.yaci.store.snapshot.convert.ConverterRegistry;
+import com.bloxbean.cardano.yaci.store.snapshot.ducklake.DuckDb;
 import com.bloxbean.cardano.yaci.store.snapshot.handler.HandlerRegistry;
 import com.bloxbean.cardano.yaci.store.snapshot.handler.SnapshotHandler;
 import com.bloxbean.cardano.yaci.store.snapshot.manifest.ManifestCodec;
@@ -141,7 +142,7 @@ public class SnapshotImporter {
                 }
             }
 
-            blockers.addAll(planEveryTable(manifest, schema));
+            blockers.addAll(planEveryTable(manifest, schema, options));
 
             if (options.tunePostgres()) {
                 String denied = PostgresTuning.cannotApply(pg);
@@ -179,31 +180,49 @@ public class SnapshotImporter {
      * the live target schema without reading a Parquet file. Without this, a mapping problem in a
      * table late in the load order only surfaces after the earlier tables have been imported.
      *
-     * <p>SQL-mode tables are skipped: their output columns come from running the transform, which is
-     * checked per batch during the load.
+     * <p>An SQL transform's output types only exist once it is bound to inputs, and nothing is
+     * extracted yet, so it is described over empty relations of the recorded source types: what
+     * {@code --dry-run} checks is what the load will see. The load repeats the check over the
+     * extracted files.
      */
-    private List<String> planEveryTable(SnapshotManifest manifest, PgSchema schema) {
+    private List<String> planEveryTable(SnapshotManifest manifest, PgSchema schema, ImportOptions options)
+            throws SQLException {
         ColumnPlanner planner = new ColumnPlanner(converters);
         List<String> problems = new ArrayList<>();
-        for (SnapshotManifest.TableManifest t : manifest.tables()) {
-            SnapshotTableSpec spec = registry.byId(t.specId()).orElse(null);
-            if (spec == null || !registry.isSelected(spec.id()) || spec.restore() != RestoreMode.IMPORT
-                    || spec.importSpec().mode() == com.bloxbean.cardano.yaci.store.snapshot.spec.ImportMode.SQL
-                    || t.sourceColumns() == null || t.sourceColumns().isEmpty()) {
-                continue;
-            }
-            try {
-                if (!schema.tableExists(spec.targetTable())) {
+        try (Connection duck = DuckDb.open(options.memoryLimit(), null, 1)) {
+            for (SnapshotManifest.TableManifest t : manifest.tables()) {
+                SnapshotTableSpec spec = registry.byId(t.specId()).orElse(null);
+                if (spec == null || !registry.isSelected(spec.id()) || spec.restore() != RestoreMode.IMPORT
+                        || !recorded(t)) {
                     continue;
                 }
-                planner.plan(spec, t.sourceColumns(), schema.table(spec.targetTable()));
-            } catch (ColumnPlanner.MappingException e) {
-                problems.add(e.getMessage());
-            } catch (SQLException e) {
-                problems.add("Unable to read target table " + spec.targetTable() + ": " + e.getMessage());
+                Map<String, String> dependencies = new LinkedHashMap<>();
+                for (String dep : spec.importSpec().dependencies()) {
+                    SnapshotManifest.TableManifest d = manifest.table(dep);
+                    if (d != null && recorded(d)) {
+                        dependencies.put(dep, ImportPlanCheck.emptyRelation(d.sourceColumns()));
+                    }
+                }
+                if (dependencies.size() < spec.importSpec().dependencies().size()) {
+                    continue; // an older manifest; the load checks the transform over the files
+                }
+                try {
+                    if (!schema.tableExists(spec.targetTable())) {
+                        continue;
+                    }
+                    problems.addAll(ImportPlanCheck.check(duck, planner, spec, t.sourceColumns(),
+                            ImportPlanCheck.emptyRelation(t.sourceColumns()), dependencies,
+                            schema.table(spec.targetTable()), manifest.point().slot(), manifest.point().epoch()));
+                } catch (SQLException e) {
+                    problems.add("Unable to read target table " + spec.targetTable() + ": " + e.getMessage());
+                }
             }
         }
         return problems;
+    }
+
+    private static boolean recorded(SnapshotManifest.TableManifest t) {
+        return t.sourceColumns() != null && !t.sourceColumns().isEmpty();
     }
 
     public ImportReport importSnapshot(ImportOptions options, Consumer<String> progress)
