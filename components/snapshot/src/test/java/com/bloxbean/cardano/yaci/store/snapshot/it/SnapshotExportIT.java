@@ -89,7 +89,12 @@ class SnapshotExportIT {
                         target("block", blockColumns.replace("hash varchar(64)", "hash integer")))).blockers())
                 .anySatisfy(b -> assertThat(b).startsWith("[block]").contains("column 'hash'"));
         assertThat(report.point().epoch()).isEqualTo(1);
-        var result = exporter.export(complete, null);
+        // Re-reading the written parts is opt-in; each part is already hashed while it is written.
+        assertThat(exporter.phases()).isEqualTo(3);
+        List<String> said = new java.util.ArrayList<>();
+        var result = new SnapshotExporter(registry).verifyParts(true).export(complete, said::add);
+        assertThat(said).anyMatch(m -> m.startsWith("[phase] Re-reading 1 parts"))
+                .anyMatch(m -> m.startsWith("[verify] Verified 1 parts"));
         assertThat(result.manifest().totalRows()).isEqualTo(3);
         assertThat(result.manifestPath()).exists();
         var incomplete = options(Map.of("block", block, "delegation", Map.of("date=2026-01-01", 1L)));

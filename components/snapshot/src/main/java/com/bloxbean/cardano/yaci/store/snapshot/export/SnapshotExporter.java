@@ -42,13 +42,26 @@ public class SnapshotExporter {
 
     private static final Logger log = LoggerFactory.getLogger(SnapshotExporter.class);
 
-    /** Phase banners {@link #export} sends, so a caller can number them. */
-    public static final int PHASES = 4;
-
     private final SnapshotSpecRegistry registry;
+    private boolean verifyParts;
 
     public SnapshotExporter(SnapshotSpecRegistry registry) {
         this.registry = registry;
+    }
+
+    /**
+     * Re-reads every written part and checks its digest before publishing the manifest. Off by
+     * default: each part is hashed while it is written, and the import checks every part and file
+     * digest again while extracting, so on mainnet this pass only repeated 2.5 minutes of hashing.
+     */
+    public SnapshotExporter verifyParts(boolean verify) {
+        this.verifyParts = verify;
+        return this;
+    }
+
+    /** Phase banners {@link #export} sends, so a caller can number them. */
+    public int phases() {
+        return verifyParts ? 4 : 3;
     }
 
     /** Read-only analysis: candidate point, coverage, lossy mappings, estimated size and blockers. */
@@ -303,22 +316,8 @@ public class SnapshotExporter {
                     parts,
                     report.declaredLossy(), options.tableSchemaFingerprints());
 
-            // Re-read every part before publishing the manifest.
-            long verifyStart = System.currentTimeMillis();
-            long partBytes = parts.stream().mapToLong(SnapshotManifest.PartManifest::size).sum();
-            Progress.phase(progress, String.format("Re-reading %d parts (%s)", parts.size(), bytes(partBytes)));
-            AtomicLong hashed = new AtomicLong();
-            ArchiveVerifier.Result verified;
-            try (Progress.Ticker ignored = Progress.every(Progress.INTERVAL_MILLIS, "verify",
-                    () -> Progress.rate(hashed.get(), partBytes, verifyStart, System.currentTimeMillis()),
-                    progress)) {
-                verified = new ArchiveVerifier(threads).verify(manifest, options.outputDir(), true, hashed::addAndGet);
-            }
-            say(progress, "verify", String.format("Verified %d parts in %s", parts.size(),
-                    Progress.duration(System.currentTimeMillis() - verifyStart)));
-            if (!verified.ok()) {
-                throw new IOException("Written parts failed verification:\n  - "
-                        + String.join("\n  - ", verified.problems()));
+            if (verifyParts) {
+                verifyWrittenParts(manifest, parts, options, threads, progress);
             }
 
             Path manifestPath = options.outputDir().resolve(baseName + ".manifest.json");
@@ -329,6 +328,27 @@ public class SnapshotExporter {
             long bytes = parts.stream().mapToLong(SnapshotManifest.PartManifest::size).sum();
             log.info("Exported snapshot {} ({} parts, {} bytes)", snapshotId, parts.size(), bytes);
             return new ExportResult(manifestPath, manifest, report, bytes, System.currentTimeMillis() - started);
+        }
+    }
+
+    /** Re-reads every written part before the manifest is published. */
+    private void verifyWrittenParts(SnapshotManifest manifest, List<SnapshotManifest.PartManifest> parts,
+                                    ExportOptions options, int threads, Consumer<String> progress) throws IOException {
+        long verifyStart = System.currentTimeMillis();
+        long partBytes = parts.stream().mapToLong(SnapshotManifest.PartManifest::size).sum();
+        Progress.phase(progress, String.format("Re-reading %d parts (%s)", parts.size(), bytes(partBytes)));
+        AtomicLong hashed = new AtomicLong();
+        ArchiveVerifier.Result verified;
+        try (Progress.Ticker ignored = Progress.every(Progress.INTERVAL_MILLIS, "verify",
+                () -> Progress.rate(hashed.get(), partBytes, verifyStart, System.currentTimeMillis()),
+                progress)) {
+            verified = new ArchiveVerifier(threads).verify(manifest, options.outputDir(), true, hashed::addAndGet);
+        }
+        say(progress, "verify", String.format("Verified %d parts in %s", parts.size(),
+                Progress.duration(System.currentTimeMillis() - verifyStart)));
+        if (!verified.ok()) {
+            throw new IOException("Written parts failed verification:\n  - "
+                    + String.join("\n  - ", verified.problems()));
         }
     }
 

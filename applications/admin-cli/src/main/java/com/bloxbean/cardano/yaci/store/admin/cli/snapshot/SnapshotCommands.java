@@ -117,7 +117,10 @@ public class SnapshotCommands {
             @Option(longNames = "spec-file", description = "Additional local specification file(s)") String specFile,
             @Option(longNames = "allow-custom-specs", defaultValue = "false",
                     description = "Acknowledge the use of operator-supplied specifications")
-            boolean allowCustomSpecs) {
+            boolean allowCustomSpecs,
+            @Option(longNames = "verify", defaultValue = "false",
+                    description = "Re-read every written part and check its digest before publishing the manifest")
+            boolean verify) {
         try {
             SnapshotCliSupport.ensureDirectory(Path.of(workDir));
             SnapshotCliSupport.ensureDirectory(Path.of(output));
@@ -128,7 +131,8 @@ public class SnapshotCommands {
             writeLn(info("Packaging snapshot from %s", options.dataDir()));
             SnapshotExporter.ExportResult result;
             try {
-                result = new SnapshotExporter(registry).export(options, new ProgressPrinter(SnapshotExporter.PHASES));
+                SnapshotExporter exporter = new SnapshotExporter(registry).verifyParts(verify);
+                result = exporter.export(options, new ProgressPrinter(exporter.phases()));
             } catch (SnapshotExporter.BlockedException e) {
                 CommandFailedException failure = failed("snapshot export", e);
                 printBlockerReport(e.report(), options.workDir(), false);
