@@ -32,7 +32,7 @@ class CostModelExporterTest {
     @BeforeEach
     void setUp() {
         // One slot per second from time 0, so a day's end slot is its end time.
-        when(eraService.slotFromTime(anyLong())).thenAnswer(i -> i.getArgument(0));
+        when(eraService.slotAtOrAfterTime(anyLong())).thenAnswer(i -> i.getArgument(0));
         when(eraService.getFirstNonByronSlot()).thenReturn(1000L);
         when(eraService.getFirstNonByronEpoch()).thenReturn(Optional.of(1));
         when(eraService.getEpochNo(Era.Shelley, DAY_END - 1)).thenReturn(638);

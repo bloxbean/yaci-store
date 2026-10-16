@@ -177,6 +177,40 @@ public class EraService {
     }
 
     /**
+     * First absolute slot whose block time is at or after the given time.
+     *
+     * Unlike {@link #slotFromTime(long)}, which rounds to the nearest slot, this never returns a
+     * slot that starts before epochSeconds. Byron slots (20s on mainnet) are not aligned to
+     * midnight, so [slotAtOrAfterTime(dayStart), slotAtOrAfterTime(nextDayStart)) is exactly the
+     * set of slots whose block time falls on that day.
+     *
+     * @param epochSeconds Unix timestamp in seconds
+     * @return Absolute slot number (negative before genesis)
+     */
+    public long slotAtOrAfterTime(long epochSeconds) {
+        long slot = slotFromTime(epochSeconds);
+        while (slotStartTime(slot) < epochSeconds) {
+            slot++;
+        }
+        while (slotStartTime(slot - 1) >= epochSeconds) {
+            slot--;
+        }
+        return slot;
+    }
+
+    /**
+     * Block time of a slot, with the same era choice as {@link #slotFromTime(long)}: Byron
+     * arithmetic before the first non-Byron slot, or while that slot is not yet known.
+     */
+    private long slotStartTime(long slot) {
+        long firstShelley = firstShelleySlot();
+        if (!_shelleyEraResolved || slot < firstShelley) {
+            return byronBlockTime(slot);
+        }
+        return blockTime(Era.Shelley, slot);
+    }
+
+    /**
      * Find all the eras stored in the database.
      *
      * @return
