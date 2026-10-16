@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.admin.cli.snapshot;
 
+import com.bloxbean.cardano.yaci.store.admin.cli.common.CommandFailedException;
 import com.bloxbean.cardano.yaci.store.admin.cli.Groups;
 import com.bloxbean.cardano.yaci.store.snapshot.archive.ArchiveVerifier;
 import com.bloxbean.cardano.yaci.store.snapshot.ducklake.DuckLakeCatalog;
@@ -76,9 +77,10 @@ public class SnapshotCommands {
                     targetEpoch, minConfirmations, true, true, memoryLimit);
             InspectionReport report = new SnapshotExporter(registry).inspect(options);
             printInspection(report, verbose);
+        } catch (CommandFailedException e) {
+            throw e;
         } catch (Exception e) {
-            writeLn(error("snapshot inspect failed: %s", e.getMessage()));
-            log.debug("inspect failed", e);
+            throw failed("snapshot inspect", e);
         }
     }
 
@@ -142,9 +144,10 @@ public class SnapshotCommands {
                 writeLn(warn("Declared limitations (%d):", registry.selectedLimitations(m.declaredLossy()).size()));
                 registry.selectedLimitations(m.declaredLossy()).forEach(l -> writeLn("    - %s", l));
             }
+        } catch (CommandFailedException e) {
+            throw e;
         } catch (Exception e) {
-            writeLn(error("snapshot export failed: %s", e.getMessage()));
-            log.debug("export failed", e);
+            throw failed("snapshot export", e);
         }
     }
 
@@ -169,10 +172,12 @@ public class SnapshotCommands {
             } else {
                 writeLn(error("Verification failed:"));
                 result.problems().forEach(p -> writeLn("    - %s", p));
+                throw new CommandFailedException("snapshot verify: verification failed", null);
             }
+        } catch (CommandFailedException e) {
+            throw e;
         } catch (Exception e) {
-            writeLn(error("snapshot verify failed: %s", e.getMessage()));
-            log.debug("verify failed", e);
+            throw failed("snapshot verify", e);
         }
     }
 
@@ -239,15 +244,17 @@ public class SnapshotCommands {
             }
             if (!ImportJournal.STATUS_VALIDATING.equals(report.status())) {
                 writeLn(error("Import ended with status %s; skipping validation.", report.status()));
-                return;
+                throw new CommandFailedException("snapshot import: status " + report.status(), null);
             }
             SnapshotManifest m = new ManifestCodec().read(Path.of(manifest).toAbsolutePath().normalize());
-            if (runValidation(m, registry, true)) {
-                writeLn(info("Next (optional): run 'apply-indexes'."));
+            if (!runValidation(m, registry, true)) {
+                throw new CommandFailedException("snapshot import: validation failed", null);
             }
+            writeLn(info("Next (optional): run 'apply-indexes'."));
+        } catch (CommandFailedException e) {
+            throw e;
         } catch (Exception e) {
-            writeLn(error("snapshot import failed: %s", e.getMessage()));
-            log.debug("import failed", e);
+            throw failed("snapshot import", e);
         }
     }
 
@@ -277,9 +284,10 @@ public class SnapshotCommands {
                     writeLn(warn("Could not read batch details: %s", e.getMessage()));
                 }
             }, () -> writeLn(info("Journal exists but records no run.")));
+        } catch (CommandFailedException e) {
+            throw e;
         } catch (Exception e) {
-            writeLn(error("snapshot import-status failed: %s", e.getMessage()));
-            log.debug("import-status failed", e);
+            throw failed("snapshot import-status", e);
         }
     }
 
@@ -297,11 +305,34 @@ public class SnapshotCommands {
             boolean markReady) {
         try {
             SnapshotManifest m = new ManifestCodec().read(Path.of(manifest).toAbsolutePath().normalize());
-            runValidation(m, support.importRegistry(specFile, allowCustomSpecs), markReady);
+            if (!runValidation(m, support.importRegistry(specFile, allowCustomSpecs), markReady)) {
+                throw new CommandFailedException("snapshot validate: validation failed", null);
+            }
+        } catch (CommandFailedException e) {
+            throw e;
         } catch (Exception e) {
-            writeLn(error("snapshot validate failed: %s", e.getMessage()));
-            log.debug("validate failed", e);
+            throw failed("snapshot validate", e);
         }
+    }
+
+    /**
+     * Prints why a command failed, with its cause chain (the top-level message alone often hides the
+     * real error), and returns the exception that makes the process exit non-zero.
+     */
+    private CommandFailedException failed(String command, Exception e) {
+        writeLn(error("%s failed: %s", command, e.getMessage()));
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        seen.add(String.valueOf(e.getMessage()));
+        int depth = 0;
+        for (Throwable c = e.getCause(); c != null && depth < 5; c = c.getCause(), depth++) {
+            String message = c.getClass().getSimpleName() + ": " + c.getMessage();
+            if (c.getMessage() != null && seen.add(c.getMessage())) {
+                writeLn("    caused by %s", message);
+            }
+        }
+        writeLn("    (stack trace: LOGGING_LEVEL_COM_BLOXBEAN_CARDANO_YACI_STORE_ADMIN_CLI_SNAPSHOT=DEBUG)");
+        log.debug(command + " failed", e);
+        return new CommandFailedException(command + " failed", e);
     }
 
     // ---------------------------------------------------------------- validation

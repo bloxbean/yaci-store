@@ -1,0 +1,2 @@
+org.springframework.boot.SpringBootExceptionReporter=\
+com.bloxbean.cardano.yaci.store.admin.cli.common.ExitCodeExceptionReporter
