@@ -37,12 +37,14 @@ class ExportCoverageTest {
     }
 
     @Test
-    void epochCoverageUsesTheRewardOffsetAndIncludesEmptyEarlyEpochs() {
+    void slotCutRewardsRequirePartitionsThroughTheCompletedEpoch() {
+        // Refunds are written in their own epoch, so the last two partitions are needed too.
         var spec = registry.byId("reward").orElseThrow();
-        assertThat(ExportCoverage.check(spec, List.of(), Map.of("epoch=0", 0L, "epoch=1", 0L, "epoch=2", 0L),
+        assertThat(ExportCoverage.check(spec, List.of(),
+                Map.of("epoch=0", 0L, "epoch=1", 0L, "epoch=2", 0L, "epoch=3", 0L, "epoch=4", 0L),
                 start, start, 0, 4, 100)).isEmpty();
-        assertThat(ExportCoverage.check(spec, List.of(), Map.of("epoch=0", 0L, "epoch=2", 0L),
-                start, start, 0, 4, 100)).anyMatch(p -> p.contains("epoch=1"));
+        assertThat(ExportCoverage.check(spec, List.of(), Map.of("epoch=0", 0L, "epoch=1", 0L, "epoch=2", 0L),
+                start, start, 0, 4, 100)).anyMatch(p -> p.contains("epoch=3") && p.contains("epoch=4"));
     }
 
     @Test
@@ -74,9 +76,11 @@ class ExportCoverageTest {
     }
 
     @Test
-    void rewardOffsetCanEndBeforeFirstNonByronEpoch() {
+    void rewardCoverageStartsAtTheFirstNonByronEpoch() {
         var spec = registry.byId("reward").orElseThrow();
-        assertThat(ExportCoverage.check(spec, List.of(), Map.of(),
+        assertThat(ExportCoverage.check(spec, List.of(), Map.of("epoch=4", 0L),
                 start, start, 4, 4, 100)).isEmpty();
+        assertThat(ExportCoverage.check(spec, List.of(), Map.of(),
+                start, start, 4, 4, 100)).anyMatch(p -> p.contains("epoch=4"));
     }
 }

@@ -680,6 +680,19 @@ recreates the rest. `takeStakeSnapshot` deletes and rewrites its tag
 unconditionally, so importing one extra `epoch_stake` epoch is redundant but
 harmless.
 
+**Implementation note (reward is cut by slot).** `reward` was first cut at
+`earned_epoch <= point epoch - 2`. That holds for member and leader rewards,
+written by the job above at the first block of N+2, but not for pool deposit
+refunds: the sync writes those at the first block of the retirement epoch with
+earned and spendable epoch equal to that epoch. The mainnet e2e lost three
+refunds from the point epoch, and one DRep's `drep_dist` came out 500 ADA low.
+`slot <= point slot` keeps exactly the rows that existed at the point (verified
+on mainnet: 451,373,323 rows either way). The analytics store writes reward
+partition N only after job N+2, so a slot cut needs partitions through the point
+epoch and the newest selectable point moves back one epoch. Rebuilding the late
+refunds in the importer was rejected: it would duplicate
+`PoolDepositRefundProcessor` in SQL.
+
 **Implementation note (pool margin rationals are required for reward
 calculation).** The analytics export carries `pool_registration.margin` as a
 float; the reward calculation deliberately reads the exact
