@@ -280,7 +280,7 @@ public class Cip68DatumParser {
         List<Map<String, Object>> files = parseFiles(properties, referenceNft);
         Map<String, Object> additional = parseAdditionalProperties(properties, referenceNft);
 
-        boolean hasFiles = files != null && !files.isEmpty();
+        boolean hasFiles = !files.isEmpty();
         boolean hasAdditional = !additional.isEmpty();
         if (!hasFiles && !hasAdditional) {
             return null;
@@ -403,18 +403,19 @@ public class Cip68DatumParser {
      * <p>
      * {@code files} is optional, so one that breaks the CIP-68 definition is left out as a whole, with a warning, and
      * the rest of the datum is kept: every entry has to be a map with a {@code mediaType} byte string and a
-     * {@code src} that is a URI with one of the allowed schemes.
+     * {@code src} that is a URI with one of the allowed schemes. Returns an empty list when there is no usable
+     * {@code files}, never {@code null}.
      */
     private List<Map<String, Object>> parseFiles(MapPlutusData properties, @Nullable AssetType referenceNft) {
         PlutusData filesProp = properties.getMap().get(BytesPlutusData.of(FILES));
         if (!(filesProp instanceof ListPlutusData filesList)) {
-            return null;
+            return List.of();
         }
         for (PlutusData item : filesList.getPlutusDataList()) {
             Optional<String> invalid = invalidFileReason(item);
             if (invalid.isPresent()) {
                 warnFilesDropped(invalid.get(), referenceNft);
-                return null;
+                return List.of();
             }
         }
         List<Map<String, Object>> result = new ArrayList<>();

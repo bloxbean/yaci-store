@@ -111,7 +111,7 @@ class Cip68ProcessingFailureTest {
     @Test
     void aFailureWhileParsingTheDatumSharedByReferenceNftsIsOneSkippedOutput() {
         // the shared flat datum is parsed when the output is first seen, before any token is read
-        doThrow(new IllegalStateException("boom")).when(parser).parse(eq(BAD_DATUM));
+        doThrow(new IllegalStateException("boom")).when(parser).parse(BAD_DATUM);
 
         AddressUtxo shared = outputWithReferenceNfts(BAD_DATUM, "01", "02", "03");
         AddressUtxoEvent event = event(tx(shared));
