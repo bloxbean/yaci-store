@@ -27,6 +27,8 @@ Some of the key files and directories included in this distribution:
 │   ├── application-ledger-state.properties
 │   ├── application-plugins.yml
 ├── plugin-scripts/          # Folder for custom plugin scripts (mounted inside the container)
+├── data/                    # Application data, including the analytics export (data/analytics)
+├── snapshots/               # Snapshot parts, manifests and import work files (admin CLI only)
 ├── grafana/                 # Grafana configuration and dashboards
 ├── prometheus/              # Prometheus configuration
 
@@ -143,6 +145,24 @@ Use `admin-cli.sh` to run administrative tasks like applying indexes or rolling 
 
 > ⚠️ Yaci Store must be **stopped**, but PostgreSQL must remain **running** before performing rollback.
 > In interactive mode, you'll be prompted to confirm.
+
+---
+
+### 📦 Snapshots
+
+The admin CLI container mounts `config/` and `data/` like the Yaci Store container, so it reads the
+same profile files (from `SPRING_PROFILES_ACTIVE` in `config/env`) and the analytics export in
+`data/analytics`, and it joins the same network, so the database host in `config/application.properties`
+resolves as it does for the application. `snapshots/` is mounted at `/app/snapshots`: put snapshot
+output, manifests and work directories there, since anything else written inside the container is
+removed when the command exits.
+
+```bash
+./admin-cli.sh snapshot inspect --work-dir /app/snapshots/work
+./admin-cli.sh snapshot export --output /app/snapshots/out --work-dir /app/snapshots/work --unsigned
+./admin-cli.sh snapshot import --manifest /app/snapshots/in/<name>.manifest.json \
+    --work-dir /app/snapshots/work --allow-unsigned --dry-run
+```
 
 ---
 
