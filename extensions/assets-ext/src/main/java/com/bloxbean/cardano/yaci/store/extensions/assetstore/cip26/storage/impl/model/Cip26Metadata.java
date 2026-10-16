@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model;
 
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.Mapping;
+import jakarta.annotation.Nullable;
 import jakarta.persistence.*;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -54,6 +55,7 @@ public class Cip26Metadata {
      * @see <a href="https://github.com/cardano-foundation/CIPs/blob/main/CIP-0026/README.md">CIP-0026</a>
      */
     @Column(columnDefinition = "TEXT")
+    @Nullable
     private String policy;
 
     /** CIP-26 name: max 50 chars (enforced by cf-tokens-cip26 validator). */
@@ -62,10 +64,12 @@ public class Cip26Metadata {
 
     /** CIP-26 ticker: 2-9 chars (enforced by cf-tokens-cip26 validator). */
     @Column(length = 9)
+    @Nullable
     private String ticker;
 
     /** CIP-26 url: max 250 chars (enforced by cf-tokens-cip26 validator). */
     @Column(length = 250)
+    @Nullable
     private String url;
 
     /** CIP-26 description: max 500 chars per spec. */
@@ -74,6 +78,7 @@ public class Cip26Metadata {
 
     /** CIP-26 decimals (well-known property 'decimals'): 0–19 in practice; the write path rejects
      *  anything outside {@link com.bloxbean.cardano.yaci.store.extensions.assetstore.util.TokenDecimals}. */
+    @Nullable
     private Long decimals;
 
     /**
@@ -83,6 +88,7 @@ public class Cip26Metadata {
      * pay no scan-time cost.
      */
     @Column(columnDefinition = "TEXT")
+    @Nullable
     private String logo;
 
     @Temporal(TemporalType.TIMESTAMP)

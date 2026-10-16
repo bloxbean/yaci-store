@@ -35,6 +35,11 @@ public record ParsedCip68Datum(
         @Nullable String mediaType,
         @Nullable Map<String, Object> properties
 ) {
+    /** The same datum without its {@code logo}. */
+    public ParsedCip68Datum withoutLogo() {
+        return new ParsedCip68Datum(decimals, description, null, name, ticker, url, version, image, mediaType, properties);
+    }
+
     /**
      * Project to the FT-shape DTO for read-path consumers (the API today only surfaces
      * FT data; NFT-specific fields are stored but not yet exposed).

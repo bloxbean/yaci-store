@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.AssetType;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Constants;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.ParsedCip68Datum;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.Cip68Metadata;
@@ -185,25 +186,181 @@ class Cip68TokenServiceTest {
     }
 
     @Nested
+    @DisplayName("extractReferenceNfts")
+    class ExtractReferenceNfts {
+
+        private AddressUtxo utxoWith(Amt... amounts) {
+            return AddressUtxo.builder().amounts(List.of(amounts)).build();
+        }
+
+        private Amt amt(String assetNameHex, long quantity) {
+            return Amt.builder().unit(POLICY_ID + assetNameHex).quantity(BigInteger.valueOf(quantity)).build();
+        }
+
+        @Test
+        void returnsEveryReferenceNftInTheOutputInOrder() {
+            Amt first = amt("000643b001", 1);
+            Amt second = amt("000643b002", 1);
+            Amt third = amt("000643b003", 1);
+
+            assertThat(service.extractReferenceNfts(utxoWith(first, amt("000de14001", 1), second, third)))
+                    .containsExactly(first, second, third);
+        }
+
+        @Test
+        void ignoresAssetsThatAreNotReferenceNfts() {
+            // a user token, and a reference-NFT-looking asset with quantity 2
+            assertThat(service.extractReferenceNfts(utxoWith(amt("000de14001", 1), amt("000643b001", 2)))).isEmpty();
+        }
+
+        @Test
+        void returnsOneForTheUsualOutput() {
+            Amt only = amt("000643b001", 1);
+
+            assertThat(service.extractReferenceNfts(utxoWith(only))).containsExactly(only);
+            assertThat(service.extractReferenceNft(utxoWith(only))).contains(only);
+        }
+    }
+
+    @Nested
     @DisplayName("isValidMetadata")
     class IsValidMetadata {
 
-        @Test
-        void validWhenNameAndDescriptionPresent() {
-            ParsedCip68Datum m = new ParsedCip68Datum(null, "desc", null, "name", null, null, null, null, null, null);
-            assertThat(service.isValidMetadata(m)).isTrue();
+        private ParsedCip68Datum datum(String name, String description, String image) {
+            return new ParsedCip68Datum(null, description, null, name, null, null, 1L, image, null, null);
         }
 
         @Test
-        void invalidWhenNameMissing() {
-            ParsedCip68Datum m = new ParsedCip68Datum(null, "desc", null, null, null, null, null, null, null, null);
-            assertThat(service.isValidMetadata(m)).isFalse();
+        void fungibleTokenNeedsNameAndDescription() {
+            assertThat(service.isValidMetadata(datum("name", "desc", null), Cip68Constants.LABEL_FT)).isTrue();
         }
 
         @Test
-        void invalidWhenDescriptionMissing() {
-            ParsedCip68Datum m = new ParsedCip68Datum(null, null, null, "name", null, null, null, null, null, null);
-            assertThat(service.isValidMetadata(m)).isFalse();
+        void fungibleTokenWithoutDescriptionIsInvalid() {
+            // 333: CIP-68 declares `description : bounded_bytes`, without a `?`
+            assertThat(service.isValidMetadata(datum("name", null, null), Cip68Constants.LABEL_FT)).isFalse();
+        }
+
+        @Test
+        void nftWithoutDescriptionIsValid() {
+            // 222: CIP-68 declares `? description : bounded_bytes`
+            assertThat(service.isValidMetadata(datum("name", null, "ipfs://Qm"), Cip68Constants.LABEL_NFT)).isTrue();
+        }
+
+        @Test
+        void richFungibleTokenWithoutDescriptionIsValid() {
+            // 444: `? description : bounded_bytes` too
+            assertThat(service.isValidMetadata(datum("name", null, "ipfs://Qm"), Cip68Constants.LABEL_RFT)).isTrue();
+        }
+
+        @Test
+        void nftWithDescriptionIsStillValid() {
+            assertThat(service.isValidMetadata(datum("name", "desc", "ipfs://Qm"), Cip68Constants.LABEL_NFT)).isTrue();
+        }
+
+        @Test
+        void nftWithoutImageIsInvalid() {
+            // CIP-68 requires `image` for 222
+            assertThat(service.isValidMetadata(datum("name", "desc", null), Cip68Constants.LABEL_NFT)).isFalse();
+            assertThat(service.invalidReason(datum("name", "desc", null), Cip68Constants.LABEL_NFT))
+                    .hasValueSatisfying(r -> assertThat(r).contains("no image").contains("222"));
+        }
+
+        @Test
+        void rftWithoutImageIsInvalid() {
+            // ... and for 444
+            assertThat(service.invalidReason(datum("name", "desc", null), Cip68Constants.LABEL_RFT))
+                    .hasValueSatisfying(r -> assertThat(r).contains("no image").contains("444"));
+        }
+
+        @Test
+        void emptyOrBlankImageIsInvalid() {
+            assertThat(service.isValidMetadata(datum("name", "desc", ""), Cip68Constants.LABEL_NFT)).isFalse();
+            assertThat(service.isValidMetadata(datum("name", "desc", "  "), Cip68Constants.LABEL_RFT)).isFalse();
+        }
+
+        @Test
+        void fungibleTokenNeedsNoImage() {
+            // 333 has `logo`, which is optional
+            assertThat(service.isValidMetadata(datum("name", "desc", null), Cip68Constants.LABEL_FT)).isTrue();
+        }
+
+        @Test
+        void imageSchemesCip68AllowAreValid() {
+            for (String image : new String[]{"https://example.com/a.png", "ipfs://Qm", "ar://abc", "data:image/png;base64,AAAA",
+                    "IPFS://Qm", "HTTPS://example.com/a.png"}) {
+                assertThat(service.isValidMetadata(datum("name", null, image), Cip68Constants.LABEL_NFT))
+                        .as(image).isTrue();
+                assertThat(service.isValidMetadata(datum("name", null, image), Cip68Constants.LABEL_RFT))
+                        .as(image).isTrue();
+            }
+        }
+
+        @Test
+        void imageWithAnotherSchemeIsInvalid() {
+            for (String image : new String[]{"iagon://675816de7e3fc1.26175981_Wine", "http://example.com/a.png", "ftp://x/y",
+                    "image IPFS here", "Qm123", "ipfs:", "ipfs"}) {
+                assertThat(service.invalidReason(datum("name", "desc", image), Cip68Constants.LABEL_NFT))
+                        .as(image).hasValueSatisfying(r -> assertThat(r).contains("not a URI").contains("https, ipfs, ar, data"));
+            }
+        }
+
+        @Test
+        void aLongInvalidImageIsAbbreviatedInTheReason() {
+            String reason = service.invalidReason(datum("name", "desc", "iagon://" + "x".repeat(500)), Cip68Constants.LABEL_NFT)
+                    .orElseThrow();
+
+            assertThat(reason).contains("iagon://").hasSizeLessThan(250);
+        }
+
+        private ParsedCip68Datum ft(String logo) {
+            return new ParsedCip68Datum(null, "desc", logo, "name", null, null, 1L, null, null, null);
+        }
+
+        @Test
+        void fungibleTokenWithoutALogoIsValid() {
+            assertThat(service.isValidMetadata(ft(null), Cip68Constants.LABEL_FT)).isTrue();
+            assertThat(service.isValidMetadata(ft(""), Cip68Constants.LABEL_FT)).isTrue();
+            assertThat(service.isValidMetadata(ft("  "), Cip68Constants.LABEL_FT)).isTrue();
+        }
+
+        @Test
+        void fungibleTokenLogoWithAnAllowedSchemeIsValid() {
+            for (String logo : new String[]{"https://example.com/l.png", "ipfs://Qm", "ar://tx", "data:image/png;base64,AAAA", "IPFS://Qm"}) {
+                assertThat(service.isValidMetadata(ft(logo), Cip68Constants.LABEL_FT)).as(logo).isTrue();
+            }
+        }
+
+        @Test
+        void fungibleTokenLogoWithAnotherSchemeDoesNotRejectTheDatumButIsReported() {
+            for (String logo : new String[]{"iagon://6911e6dd275fee62fb8917ba", "http://example.com/l.png", "iVBORw0KGgoAAAANSUhEUgAA", "logo here"}) {
+                assertThat(service.invalidReason(ft(logo), Cip68Constants.LABEL_FT)).as(logo).isEmpty();
+                assertThat(service.invalidLogoReason(ft(logo)))
+                        .as(logo).hasValueSatisfying(r -> assertThat(r).contains("logo").contains("not a URI").contains("https, ipfs, ar, data"));
+            }
+        }
+
+        @Test
+        void aMissingBlankOrAllowedLogoHasNothingToReport() {
+            for (String logo : new String[]{null, "", "  ", "https://example.com/l.png", "ipfs://Qm", "ar://tx", "data:image/png;base64,AAAA", "IPFS://Qm"}) {
+                assertThat(service.invalidLogoReason(ft(logo))).as(String.valueOf(logo)).isEmpty();
+            }
+        }
+
+        @Test
+        void aLogoIsNotCheckedOnNftsAndRfts() {
+            ParsedCip68Datum nft = new ParsedCip68Datum(null, null, "iagon://logo", "name", null, null, 1L, "ipfs://Qm", null, null);
+
+            assertThat(service.isValidMetadata(nft, Cip68Constants.LABEL_NFT)).isTrue();
+            assertThat(service.isValidMetadata(nft, Cip68Constants.LABEL_RFT)).isTrue();
+        }
+
+        @Test
+        void nameIsRequiredForEveryLabel() {
+            for (int label : new int[]{Cip68Constants.LABEL_NFT, Cip68Constants.LABEL_FT, Cip68Constants.LABEL_RFT}) {
+                assertThat(service.isValidMetadata(datum(null, "desc", "ipfs://Qm"), label))
+                        .as("label %d without name", label).isFalse();
+            }
         }
     }
 
