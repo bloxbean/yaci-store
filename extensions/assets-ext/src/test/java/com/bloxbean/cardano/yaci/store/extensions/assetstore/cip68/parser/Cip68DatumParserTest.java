@@ -3,9 +3,11 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.parser;
 import com.bloxbean.cardano.client.common.cbor.CborSerializationUtil;
 import com.bloxbean.cardano.client.plutus.spec.*;
 import com.bloxbean.cardano.client.util.HexUtil;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.metrics.Cip68Metrics;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.AssetType;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.ParsedCip68Datum;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -341,9 +343,16 @@ class Cip68DatumParserTest {
         }
 
         @Test
-        void shouldAcceptVersionUpToLongMaxAndRejectBeyond() throws Exception {
-            assertThat(parse("ticker", "TT", BigInteger.valueOf(Long.MAX_VALUE)))
-                    .hasValueSatisfying(m -> assertThat(m.version()).isEqualTo(Long.MAX_VALUE));
+        void shouldOnlyAcceptTheVersionsCip68Defines() throws Exception {
+            for (long version = 1; version <= 4; version++) {
+                final long v = version;
+                assertThat(parse("ticker", "TT", BigInteger.valueOf(v)))
+                        .hasValueSatisfying(m -> assertThat(m.version()).isEqualTo(v));
+            }
+            // anything else is not indexed, whether it fits a long or not
+            assertThat(parse("ticker", "TT", BigInteger.ZERO)).isEmpty();
+            assertThat(parse("ticker", "TT", BigInteger.valueOf(5))).isEmpty();
+            assertThat(parse("ticker", "TT", BigInteger.valueOf(Long.MAX_VALUE))).isEmpty();
             assertThat(parse("ticker", "TT", BigInteger.TWO.pow(63))).isEmpty();
         }
     }
@@ -365,8 +374,13 @@ class Cip68DatumParserTest {
 
         /** {"721": {policy_id: {asset_name: metadata}}} with raw-byte policy and asset keys, per CIP-68 version 4. */
         private static MapPlutusData nested(String policyId, String assetNameHex, MapPlutusData metadata) {
+            return nestedEntry(policyId, assetNameHex, metadata);
+        }
+
+        /** Same, with any value as the entry, to build an entry that is not a map. */
+        private static MapPlutusData nestedEntry(String policyId, String assetNameHex, PlutusData entry) {
             MapPlutusData byAsset = new MapPlutusData();
-            byAsset.put(BytesPlutusData.of(HexUtil.decodeHexString(assetNameHex)), metadata);
+            byAsset.put(BytesPlutusData.of(HexUtil.decodeHexString(assetNameHex)), entry);
             MapPlutusData byPolicy = new MapPlutusData();
             byPolicy.put(BytesPlutusData.of(HexUtil.decodeHexString(policyId)), byAsset);
             MapPlutusData root = new MapPlutusData();
@@ -377,6 +391,37 @@ class Cip68DatumParserTest {
         private static String datum(MapPlutusData properties, long version) throws Exception {
             ConstrPlutusData datum = ConstrPlutusData.of(0, properties, BigIntPlutusData.of(version));
             return HexUtil.encodeHexString(CborSerializationUtil.serialize(datum.serialize()));
+        }
+
+        @Test
+        void shouldReportANestedDatumAsNested() throws Exception {
+            String hex = datum(nested(POLICY_ID, ASSET_NAME_HEX, metadata("Nested")), 4);
+
+            assertThat(parser.hasNestedMetadata(hex)).isTrue();
+        }
+
+        @Test
+        void shouldNotReportAFlatDatumAsNested() throws Exception {
+            assertThat(parser.hasNestedMetadata(datum(metadata("Flat"), 1))).isFalse();
+            // version 4 without the "721" key is read as a flat map
+            assertThat(parser.hasNestedMetadata(datum(metadata("Flat v4"), 4))).isFalse();
+        }
+
+        @Test
+        void shouldReportA721KeyAsNestedWhateverTheVersion() throws Exception {
+            // the CIP's step 4 tells nested from direct metadata by the "721" key, not by the version
+            for (long version : new long[]{1, 3, 4, 5, 100}) {
+                assertThat(parser.hasNestedMetadata(datum(nested(POLICY_ID, ASSET_NAME_HEX, metadata("Any")), version)))
+                        .as("version %d", version).isTrue();
+            }
+        }
+
+        @Test
+        void shouldNotReportAnythingThatIsNotACip68DatumAsNested() {
+            assertThat(parser.hasNestedMetadata(null)).isFalse();
+            assertThat(parser.hasNestedMetadata("")).isFalse();
+            assertThat(parser.hasNestedMetadata("not-hex")).isFalse();
+            assertThat(parser.hasNestedMetadata("d8799f00ff")).isFalse();
         }
 
         @Test
@@ -407,6 +452,45 @@ class Cip68DatumParserTest {
             String datum = datum(nested(OTHER_POLICY_ID, ASSET_NAME_HEX, metadata("Foreign")), 4);
 
             assertThat(parser.parse(datum, REFERENCE_NFT)).isEmpty();
+        }
+
+        @Test
+        void shouldCountANestedDatumWithoutAUsableEntryAsSkipped() throws Exception {
+            SimpleMeterRegistry registry = new SimpleMeterRegistry();
+            Cip68DatumParser counting = new Cip68DatumParser(new Cip68Metrics(registry));
+
+            // an entry that is there and valid, and a flat datum: neither is counted
+            assertThat(counting.parse(datum(nested(POLICY_ID, ASSET_NAME_HEX, metadata("Mine")), 4), REFERENCE_NFT)).isPresent();
+            assertThat(counting.parse(datum(metadata("Flat"), 4), REFERENCE_NFT)).isPresent();
+            assertThat(noNestedEntryCount(registry)).isZero();
+
+            // another policy
+            assertThat(counting.parse(datum(nested(OTHER_POLICY_ID, ASSET_NAME_HEX, metadata("Foreign")), 4), REFERENCE_NFT)).isEmpty();
+            assertThat(noNestedEntryCount(registry)).isEqualTo(1);
+
+            // the right policy, another asset name
+            assertThat(counting.parse(datum(nested(POLICY_ID, HexUtil.encodeHexString("Other".getBytes()), metadata("Other")), 4),
+                    REFERENCE_NFT)).isEmpty();
+            assertThat(noNestedEntryCount(registry)).isEqualTo(2);
+
+            // an entry that is not a map
+            assertThat(counting.parse(datum(nestedEntry(POLICY_ID, ASSET_NAME_HEX, BytesPlutusData.of("not a map")), 4),
+                    REFERENCE_NFT)).isEmpty();
+            assertThat(noNestedEntryCount(registry)).isEqualTo(3);
+
+            // more than one entry and no token to choose by
+            MapPlutusData root = nested(POLICY_ID, ASSET_NAME_HEX, metadata("A"));
+            MapPlutusData byPolicy = (MapPlutusData) root.getMap().get(BytesPlutusData.of("721"));
+            MapPlutusData byAsset = (MapPlutusData) byPolicy.getMap().get(BytesPlutusData.of(HexUtil.decodeHexString(POLICY_ID)));
+            byAsset.put(BytesPlutusData.of("Other".getBytes()), metadata("B"));
+            assertThat(counting.parse(datum(root, 4))).isEmpty();
+            assertThat(noNestedEntryCount(registry)).isEqualTo(4);
+        }
+
+        private static double noNestedEntryCount(SimpleMeterRegistry registry) {
+            var counter = registry.find(Cip68Metrics.SKIPPED).tag("label", "unknown")
+                    .tag("reason", Cip68Metrics.NO_NESTED_ENTRY).counter();
+            return counter == null ? 0 : counter.count();
         }
 
         @Test
@@ -543,35 +627,24 @@ class Cip68DatumParserTest {
             return (Map<String, Object>) datum.properties().get("additional_properties");
         }
 
-        private static Map<String, Object> constructor(long alternative, Object... fields) {
-            return Map.of("constructor", alternative, "fields", List.of(fields));
-        }
-
         @Test
-        void shouldKeepMetadataWhenAPropertyIsAConstructor() {
+        void shouldKeepTheTokenAndDropThePropertyWhenItIsAConstructor() {
             assertThat(parser.parse(NFT_WITH_CONSTRUCTOR_PROPERTY)).hasValueSatisfying(m -> {
                 assertThat(m.name()).isEqualTo("NFT #1");
-                assertThat(additionalProperties(m).get("contractData")).isEqualTo(constructor(0,
-                        BigInteger.ONE,
-                        List.of("dc9acfee35243d123e8f10bc58692a6bc5aa3135c7eafc2aac9daafc"),
-                        constructor(1),
-                        "9abc17656a6d1c24688292777c18c1ce599845a588f4d893c1884da2",
-                        constructor(1),
-                        constructor(1)));
+                // contractData was the only additional property
+                assertThat(m.properties()).isNull();
             });
         }
 
         @Test
-        void shouldKeepFungibleTokenMetadataWhenAPropertyIsAConstructor() {
+        void shouldKeepFungibleTokenMetadataAndDropOnlyTheConstructorProperty() {
             assertThat(parser.parse(FT_WITH_CONSTRUCTOR_PROPERTY)).hasValueSatisfying(m -> {
                 assertThat(m.name()).isEqualTo("Wrapped pUSDC");
                 assertThat(m.ticker()).isEqualTo("pUSDC");
                 assertThat(m.decimals()).isEqualTo(6L);
 
                 Map<String, Object> additional = additionalProperties(m);
-                assertThat(additional.get("seed")).isEqualTo(constructor(0,
-                        constructor(0, "42f5390b279a4b49d56fe594b2d5eaf02e8e387fa1612f87bafd2feed7c836af"),
-                        BigInteger.TWO));
+                assertThat(additional).doesNotContainKey("seed");
                 assertThat(additional.get("oracles")).isEqualTo(List.of(
                         "80edfa909a3d40a54fca4c3ee852c7ba2a79391738911dc363580dc2",
                         "ab25d3b9476a3e3343a2f353b08b40913c573de7d286ef37ac4013e0",
@@ -581,15 +654,14 @@ class Cip68DatumParserTest {
         }
 
         @Test
-        void shouldKeepMetadataOfMainnetDatumsWithAConstructorOwner() {
+        void shouldKeepMainnetVouchersAndDropTheirConstructorOwner() {
             MAINNET_VOUCHERS_WITH_CONSTRUCTOR_OWNER.forEach((datum, name) ->
                     assertThat(parser.parse(datum)).as(name).hasValueSatisfying(m -> {
                         assertThat(m.name()).isEqualTo(name);
                         assertThat(m.version()).isEqualTo(1L);
                         assertThat(m.url()).isEqualTo("https://pbg.io/vouchers");
-                        assertThat(additionalProperties(m)).containsKeys("owner", "datum", "tokens", "period", "price");
-                        assertThat(additionalProperties(m).get("owner"))
-                                .isInstanceOfSatisfying(Map.class, owner -> assertThat(owner.keySet()).containsExactlyInAnyOrder("constructor", "fields"));
+                        assertThat(additionalProperties(m)).containsKeys("datum", "tokens", "period", "price")
+                                .doesNotContainKey("owner");
                     }));
         }
 

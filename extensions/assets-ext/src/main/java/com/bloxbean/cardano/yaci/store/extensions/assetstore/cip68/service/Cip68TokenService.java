@@ -4,6 +4,8 @@ import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.AssetType;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Uri;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.DatumRejection;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.ParsedCip68Datum;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.parser.Cip68DatumParser;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.Cip68Metadata;
@@ -31,13 +33,91 @@ public class Cip68TokenService {
     private final Cip68MetadataRepository metadataReferenceNftRepository;
 
     /**
-     * Validate a CIP-68 datum. Per spec, name and description are the required fields
-     * for any of the user-token labels (222 NFT / 333 FT / 444 RFT).
+     * Validate a CIP-68 datum against the fields its label requires.
      *
-     * @return true if the metadata satisfies CIP-68's required-field constraint
+     * @param parsed the parsed datum
+     * @param label  the user-token label the datum belongs to: {@code 222} (NFT), {@code 333} (FT) or
+     *               {@code 444} (RFT)
+     * @return true if {@link #invalidReason} finds nothing wrong
      */
-    public boolean isValidMetadata(ParsedCip68Datum parsed) {
-        return parsed.name() != null && parsed.description() != null;
+    public boolean isValidMetadata(ParsedCip68Datum parsed, int label) {
+        return invalidReason(parsed, label).isEmpty();
+    }
+
+    /**
+     * Says why a CIP-68 datum is not indexed, or an empty result when it is valid. Parsing is strict about
+     * what CIP-68 requires for the label:
+     * <ul>
+     *   <li>{@code name} for every label;</li>
+     *   <li>{@code description} only for the 333 fungible token (for 222 and 444 it is {@code ? description});</li>
+     *   <li>{@code image} for the 222 NFT and the 444 RFT, as a URI whose scheme is one of
+     *       {@code https}, {@code ipfs}, {@code ar} or {@code data}. A missing or empty image, or another
+     *       scheme (for example {@code iagon://}, or free text), is not indexed: wallets and explorers
+     *       follow the CIP and could not show such a token.</li>
+     * </ul>
+     * The optional fields do not reject the datum: see {@link #invalidLogoReason}.
+     *
+     * @param parsed the parsed datum
+     * @param label  the user-token label the datum belongs to
+     * @return the reason the datum is rejected, empty if it is valid
+     */
+    public Optional<String> invalidReason(ParsedCip68Datum parsed, int label) {
+        return rejection(parsed, label).map(DatumRejection::message);
+    }
+
+    /**
+     * Same check as {@link #invalidReason}, with a machine-readable reason next to the message (used for the
+     * skipped-datum counter).
+     *
+     * @param parsed the parsed datum
+     * @param label  the user-token label the datum belongs to
+     * @return why the datum is rejected, empty if it is valid
+     */
+    public Optional<DatumRejection> rejection(ParsedCip68Datum parsed, int label) {
+        if (parsed.name() == null) {
+            return Optional.of(new DatumRejection(DatumRejection.Reason.NO_NAME, "it has no name"));
+        }
+        if (label == LABEL_FT) {
+            if (parsed.description() == null) {
+                return Optional.of(new DatumRejection(DatumRejection.Reason.NO_DESCRIPTION,
+                        "it has no description, which CIP-68 requires for a fungible token (label " + LABEL_FT + ")"));
+            }
+            return Optional.empty();
+        }
+        String image = parsed.image();
+        if (image == null || image.isBlank()) {
+            return Optional.of(new DatumRejection(DatumRejection.Reason.NO_IMAGE,
+                    "it has no image, which CIP-68 requires for label " + label));
+        }
+        if (!Cip68Uri.hasAllowedScheme(image)) {
+            return Optional.of(new DatumRejection(DatumRejection.Reason.BAD_IMAGE_SCHEME,
+                    "its image '" + abbreviate(image) + "' is not a URI with one of the schemes CIP-68 allows "
+                            + "(https, ipfs, ar, data)"));
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * Says why the {@code logo} of a datum cannot be stored, or an empty result when there is no logo or it is fine.
+     * The logo is optional, so a bad one does not reject the datum: it is left out and the rest is indexed. CIP-68
+     * defines it as a URI whose scheme is one of {@code https}, {@code ipfs}, {@code ar} or {@code data}, so a bare
+     * IPFS hash, or any other scheme, is not accepted.
+     *
+     * @param parsed the parsed datum
+     * @return the reason the logo is left out, empty if there is none or it is valid
+     */
+    public Optional<String> invalidLogoReason(ParsedCip68Datum parsed) {
+        String logo = parsed.logo();
+        if (logo == null || logo.isBlank() || Cip68Uri.hasAllowedScheme(logo)) {
+            return Optional.empty();
+        }
+        return Optional.of("its logo '" + abbreviate(logo) + "' is not a URI with one of the schemes CIP-68 allows "
+                + "(https, ipfs, ar, data)");
+    }
+
+    private static String abbreviate(String value) {
+        String oneLine = value.replaceAll("\\s+", " ");
+        return oneLine.length() <= 60 ? oneLine : oneLine.substring(0, 60) + "...";
     }
 
     /**
@@ -58,6 +138,17 @@ public class Cip68TokenService {
      */
     public Optional<Amt> extractReferenceNft(AddressUtxo utxo) {
         return utxo.getAmounts().stream().filter(this::isReferenceNft).findFirst();
+    }
+
+    /**
+     * Returns every reference NFT in the output, in the order of its assets. An output normally holds one,
+     * but a version 4 nested datum can describe several, which is why they may be locked together.
+     *
+     * @param utxo the utxo to check
+     * @return the amounts matching Cip68 Reference NFT requirements, empty if there are none
+     */
+    public List<Amt> extractReferenceNfts(AddressUtxo utxo) {
+        return utxo.getAmounts().stream().filter(this::isReferenceNft).toList();
     }
 
     /**
