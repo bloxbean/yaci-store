@@ -282,11 +282,15 @@ temporary workaround until the decoder stops recursing (cardano-client-lib#681).
 The 100-level limit on a property value is separate from the datum depth. The value goes to a JSON column, and Jackson
 refuses to write or read a document nested deeper than 1000 levels. Before the limit, a datum with a property nested
 1100 levels (about 1 KB of datum, so anyone can mint one) failed on flush inside the block transaction and stopped the
-sync (#1240). 100 is far above anything real, and far below 1000 even with the levels the parser wraps around the
+sync (#1240). It is a real input: a transaction with such a datum (2,449 bytes) was accepted and included in a block by
+`cardano-node` 11.0.1 on a local devnet (Yaci DevKit). The failure is Jackson's, in Hibernate's conversion of the map to
+JSON before the statement is sent (`Could not serialize object of java type: java.util.Map`); the database never sees
+the value, so it is not a PostgreSQL limit, and it was reproduced on H2 only. 100 is far above anything real, and far below 1000 even with the levels the parser wraps around the
 value (`properties`, `additional_properties` or `files`, the entry). The check is bounded, so it runs before the
 constructor check, which recurses as deep as the value goes. The key is dropped, not kept with a `null`: the API does not
 expose `properties`, and the datum hex stays in `cip68_metadata.datum`. Isolating any other failure of the listener from
-the sync is a separate change (#1243).
+the sync is ADR 0004 (#1243); #1220 also writes the `properties` as JSON while the row is built, so a value Jackson
+refuses skips that output instead of stopping the sync.
 
 The `logo` and `image` limit is the one the CIP-26 logo already has; the CIP-68 spec gives none. It cannot
 trigger on current data: the ledger limits a transaction to `maxTxSize` (16,384 bytes at epoch 660), so a

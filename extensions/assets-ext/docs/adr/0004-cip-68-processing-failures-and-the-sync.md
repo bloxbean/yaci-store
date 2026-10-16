@@ -2,8 +2,10 @@
 
 ## Status
 
-Proposed. The decision is not implemented: today the behaviour is option A below. The record asks for the choice
-between A and C and gives a recommendation. The issue is #1243.
+Proposed. Partly implemented by PR #1220 (open): option B below, plus an early write of the `properties` as JSON, which
+covers the failure we have seen (#1240). Option C, the savepoint, is not implemented and is still the recommendation for
+a failure inside the database, which still stops the sync as in option A. The record asks for the choice about that
+remainder and gives a recommendation. The issue is #1243 and it stays open.
 
 ## Date
 
@@ -21,7 +23,10 @@ modules that have nothing to do with token metadata (utxo, blocks, ledger state)
 that interprets a datum reads untrusted, arbitrary on-chain data, so unexpected failures are a matter of when.
 
 This has happened. #1240: a datum with a property nested more than 1000 levels deep made Jackson fail when the row was
-written, at flush, inside the block transaction, and the sync stopped (reproduced with a test, #1240). It was fixed at the source
+written, at flush, inside the block transaction, and the sync stopped (reproduced with a test, #1240). The datum is a real
+input: a transaction with a 1,100-level datum was accepted into a block by `cardano-node` 11.0.1 on a local devnet. The
+failure is Jackson's, before any SQL is sent, so it does not depend on the database (the test ran on H2; it has not been run
+on PostgreSQL). It was fixed at the source
 (ADR 0002 decision 6: such a property is dropped at a depth of 100), but any other failure of the same kind stops the sync
 the same way. The parser already turns the failures it knows into WARNs and skips (ADR 0002 decision 9); this record is about
 the ones it does not know.
@@ -35,11 +40,19 @@ Two facts about the transaction make a simple fix insufficient:
 
 ## Options
 
-**A. Let the sync stop (today).** Nothing is lost silently and the bad datum is found at once. The price is that an
+**A. Let the sync stop (today for a failure inside the database; before #1220, for any failure).** Nothing is lost silently and the bad datum is found at once. The price is that an
 optional module can halt a node that is otherwise healthy, until a person fixes the code.
 
 **B. A `try/catch` per output.** Cheap, and catches what the parser throws. It does not catch a flush or commit failure
-(above), so it only moves the problem.
+(above), so on its own it only moves the problem. **Implemented in PR #1220**, with the one addition that lets it reach
+the failure we know: the `properties` are written as JSON once while the row is built, with a default Jackson mapper (what
+Hibernate does later, at flush), so a value Jackson refuses (#1240) fails inside the `try` and skips the output. The skip is
+the WARN and the `processing_failure` count described under Decision. Only work in memory is inside the `try`; the
+`saveAll` is outside it, so a database that is down still stops the sync. A failure in one token of an output with several
+reference NFTs skips the rest of that output. Not covered: a failure inside the database at flush or commit (a rejected
+value, for example), which is what C is for. The mapper of the early write is a default `ObjectMapper`, an approximation
+of Hibernate's; the repository does not configure Hibernate's JSON mapper, so today they agree. The code carries a comment
+with the links to #1240 and #1243, so that it is not removed as redundant.
 
 **C. Isolate the write: a savepoint around the save, and a fallback.** The save of the batch runs in a nested
 transaction (`Propagation.NESTED`, or `REQUIRES_NEW`). If it fails, the batch is saved again one entity at a time, each in
@@ -66,7 +79,10 @@ solves more but costs a new extension point that no other module needs.
 - One WARN with the policy id, the asset name, the exception class and message, and the datum hex, so that the datum can be
   reproduced in a test. The stack trace goes to DEBUG, the same rule as for parse failures (ADR 0002 decision 9).
 - The counter `datums.skipped` with a new reason `processing_failure` (label `unknown`, as for `parse_failure`), so that an
-  alert can use `increase()` and a rate rises visibly when something new appears on chain.
+  alert can use `increase()` and a rate rises visibly when something new appears on chain. Unlike the other skip reasons,
+  which are expected bad data, this one means something nobody foresaw, so it is the one to alert on.
+
+Both are implemented in PR #1220 for option B and would be the same for C.
 
 *No configuration flag.* A switch between stopping and skipping would give every operator a decision they are not in a position
 to make. One behaviour is documented instead.
@@ -91,7 +107,10 @@ to make. One behaviour is documented instead.
 - Whether to also skip a failure in the CIP-26 path. CIP-26 runs in its own scheduled job, outside the block transaction
   (ADR 0001), so it does not stop the sync; the question does not arise there.
 - What an unexpected failure that is not about one datum should do: for example the database being unavailable. That is not
-  a bad datum and must still stop the sync, so the skip has to be limited to failures that come from the entity.
+  a bad datum and must still stop the sync, so the skip has to be limited to failures that come from the entity. For B in
+  PR #1220 this does not arise, because the `try` holds no database call. For C it does.
+- Whether the rest of an output should be skipped when one token of it fails (B in PR #1220 does that), or only the token.
+  Only a failure caused by an attacker's datum reaches it, so the simpler behaviour was kept.
 
 ## References
 
