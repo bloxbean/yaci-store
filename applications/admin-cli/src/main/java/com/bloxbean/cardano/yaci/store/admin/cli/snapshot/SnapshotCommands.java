@@ -440,6 +440,7 @@ public class SnapshotCommands {
         writeLn("  Extract      : %s", SnapshotCliSupport.humanMillis(r.extractMillis()));
         writeLn("  Heap load    : %s", SnapshotCliSupport.humanMillis(r.loadMillis()));
         writeLn("  Keys/indexes : %s", SnapshotCliSupport.humanMillis(r.indexMillis()));
+        writeLn("  Statistics   : %s", SnapshotCliSupport.humanMillis(r.analyzeMillis()));
         writeLn("  Control state: %s", SnapshotCliSupport.humanMillis(r.controlStateMillis()));
         r.handlerResults().forEach(h -> writeLn("    %s", h));
         if (!r.sequencesReset().isEmpty()) {

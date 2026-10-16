@@ -277,6 +277,13 @@ public class SnapshotImporter {
             }
             long indexMillis = System.currentTimeMillis() - tIndex;
 
+            // Before the handlers and the app's first start, both of which query the loaded tables.
+            long tStats = System.currentTimeMillis();
+            TableStatistics.analyze(options.schema(), loadedTables(manifest),
+                    journal.rowsPerTable(manifest.snapshotId()), options.workers(), () -> connect(options),
+                    m -> say(progress, "analyze", m));
+            long analyzeMillis = System.currentTimeMillis() - tStats;
+
             long t3 = System.currentTimeMillis();
             List<String> handlerResults = runHandlers(pg, options, manifest);
             Map<String, Long> sequences = new SequenceReset(pg, options.schema()).resetTables(registry.isScoped()
@@ -294,7 +301,7 @@ public class SnapshotImporter {
                     loaded.planned, loaded.skipped, loaded.executed, loaded.rows,
                     journal.rowsPerTable(manifest.snapshotId()), handlerResults, sequences,
                     partitionsCreated, registry.selectedLimitations(manifest.declaredLossy()), warnings,
-                    verifyMillis, extractMillis, loadMillis, indexMillis, controlMillis);
+                    verifyMillis, extractMillis, loadMillis, indexMillis, analyzeMillis, controlMillis);
         }
     }
 
