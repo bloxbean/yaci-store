@@ -29,7 +29,8 @@ snapshot-table:
       earned_epoch:
         source: epoch
     use-target-defaults: [update_datetime]
-    batch-boundary: SINGLE_BATCH
+    batch-boundary: WHOLE_PARTITION
+    batch-size: 1
     target-partitioning:
       column: spendable_epoch
       partition-prefix: reward_p

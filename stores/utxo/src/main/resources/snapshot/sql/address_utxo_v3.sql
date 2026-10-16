@@ -8,6 +8,11 @@
 -- byte-identical JSON. The writer keeps the order of the transaction's CBOR, which is not always
 -- canonical, so it cannot be derived from the units alone.
 --
+-- v3 collects each output's assets with an unordered list() and sorts it by asset_index
+-- afterwards. list(... ORDER BY ...) buffers and sorts every group inside the aggregate, which
+-- cannot spill: the densest mainnet day (2.96M asset rows) needed over 3GB that way and fits in 2GB
+-- this way, at a third of the time. asset_index is unique within an output, so the order is the same.
+--
 -- owner_addr_full is not present in this export and is therefore left to its column default. That
 -- limitation is declared in the specification and recorded in the manifest.
 --
@@ -39,21 +44,25 @@ grouped AS (
         any_value(block_time)               AS block_time,
         any_value(tx_index)                 AS tx_index,
         sum(CASE WHEN asset_unit = 'lovelace' THEN quantity ELSE 0 END) AS lovelace_amount,
-        -- list(... ORDER BY ...) is a real aggregate, so the element order is deterministic;
-        -- json_group_array is a macro and cannot take an ORDER BY.
+        -- list_sort orders the structs by their first field, asset_index, which is unique within an
+        -- output, so the element order is deterministic.
         --
         -- asset_name is restored to the empty string for an asset that has none: the analytics view
         -- applies NULLIF(asset_name, ''), so a NULL here means the asset had an empty name. The view
         -- maps policy_id the same way; lovelace has none, which the genesis UTxO writer (slot -1)
         -- stores as the empty string and the block writer as null.
-        CAST(list(struct_pack(unit := asset_unit,
-                              quantity := quantity,
-                              policy_id := CASE WHEN asset_unit = 'lovelace' AND slot = -1 THEN ''
-                                                ELSE policy_id END,
-                              asset_name := CASE WHEN asset_unit = 'lovelace' THEN asset_name
-                                                 WHEN asset_name IS NULL THEN ''
-                                                 ELSE asset_name END)
-                  ORDER BY asset_index)
+        CAST(list_transform(
+                 list_sort(list(struct_pack(
+                     i := asset_index,
+                     unit := asset_unit,
+                     quantity := quantity,
+                     policy_id := CASE WHEN asset_unit = 'lovelace' AND slot = -1 THEN ''
+                                       ELSE policy_id END,
+                     asset_name := CASE WHEN asset_unit = 'lovelace' THEN asset_name
+                                        WHEN asset_name IS NULL THEN ''
+                                        ELSE asset_name END))),
+                 lambda x: struct_pack(unit := x.unit, quantity := x.quantity,
+                                  policy_id := x.policy_id, asset_name := x.asset_name))
              AS JSON) AS amounts
     FROM flattened
     GROUP BY tx_hash, output_index

@@ -36,7 +36,7 @@ public class DuckPgSession implements AutoCloseable {
 
     public static DuckPgSession open(ImportOptions options, Path spillDir, int threads) throws SQLException {
         String schema = Identifiers.requireSqlIdentifier(options.schema(), "target schema");
-        String connectionString = pgConnectionString(options);
+        String connectionString = withLoadSettings(pgConnectionString(options));
         Connection duck = DuckDb.open(options.memoryLimit(), spillDir, threads);
         try {
             DuckDb.exec(duck, "INSTALL postgres");
@@ -48,6 +48,21 @@ public class DuckPgSession implements AutoCloseable {
             throw new SQLException(redact(e.getMessage(), options.password()), e.getSQLState());
         }
         return new DuckPgSession(duck, schema);
+    }
+
+    /**
+     * Asynchronous commit for the load connections. Each batch commits its rows and its journal entry
+     * in one transaction, so a crash can only lose whole recent batches, which a resume reloads. The
+     * libpq options parameter applies it to every connection DuckDB opens for the attachment.
+     */
+    static String withLoadSettings(String connectionString) {
+        String setting = "-c synchronous_commit=off";
+        int at = connectionString.indexOf("options='");
+        if (at < 0) {
+            return (connectionString + " options='" + setting + "'").trim();
+        }
+        int value = at + "options='".length();
+        return connectionString.substring(0, value) + setting + " " + connectionString.substring(value);
     }
 
     /** libpq key/value string built from the already-resolved JDBC settings. */

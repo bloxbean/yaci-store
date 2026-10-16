@@ -521,7 +521,7 @@ target table, beside its migrations:
 ```text
 stores/blocks/src/main/resources/snapshot/block.yml
 stores/utxo/src/main/resources/snapshot/address-utxo.yml
-stores/utxo/src/main/resources/snapshot/sql/address_utxo_v2.sql
+stores/utxo/src/main/resources/snapshot/sql/address_utxo_v3.sql
 aggregates/adapot/src/main/resources/snapshot/reward.yml
 ```
 
@@ -624,7 +624,7 @@ snapshot reproduces byte-identical ids.
 
 ```yaml
     mode: SQL
-    select-resource: classpath:/snapshot/sql/address_utxo_v2.sql
+    select-resource: classpath:/snapshot/sql/address_utxo_v3.sql
     transform-version: 1
     dependencies: [block]
     batch-boundary: WHOLE_PARTITION

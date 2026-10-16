@@ -24,6 +24,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -31,6 +32,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
@@ -328,6 +330,20 @@ public class SnapshotImporter {
 
     private record LoadResult(long planned, long skipped, long executed, long rows) {}
 
+    /** One table's load context, shared by every batch of that table. */
+    private record TableWork(SnapshotTableSpec spec, TargetTable target,
+                             Map<String, List<SnapshotManifest.FileEntry>> dependencyFiles,
+                             int batches, AtomicInteger remaining, AtomicLong rows) {}
+
+    private record WorkItem(TableWork table, ImportBatch batch) {}
+
+    /**
+     * Loads every table's batches from one queue, so all workers stay busy across table boundaries
+     * and a single large table never runs on one worker while the rest idle. The largest batches go
+     * first, which keeps the tail short. Batches are independent: each commits its rows and its
+     * journal entry in one transaction, and dependencies are read from Parquet, not from loaded
+     * tables.
+     */
     private LoadResult loadTables(ImportOptions options, SnapshotManifest manifest, Path extractRoot,
                                   ImportJournal journal, PgSchema schema, Consumer<String> progress)
             throws SQLException {
@@ -343,11 +359,6 @@ public class SnapshotImporter {
             declaredColumns.put(t.specId(), t.sourceColumns());
         });
 
-        AtomicLong planned = new AtomicLong();
-        AtomicLong skipped = new AtomicLong();
-        AtomicLong executed = new AtomicLong();
-        AtomicLong rows = new AtomicLong();
-
         // Resolve every table's mapping against the extracted files before writing a single row.
         // Preflight already planned the DIRECT and MAPPED tables from the manifest's recorded column
         // types; an SQL transform's output types only exist once the transform can be described, so
@@ -355,81 +366,106 @@ public class SnapshotImporter {
         // tables into it.
         planSqlTransforms(options, manifest, ordered, filesBySpec, schema, planner, loader);
 
+        List<WorkItem> items = new ArrayList<>();
+        long skippedBatches = 0;
+        long totalBytes = 0;
         for (SnapshotTableSpec spec : ordered) {
-            List<SnapshotManifest.FileEntry> files = filesBySpec.getOrDefault(spec.id(), List.of());
-            List<ImportBatch> batches = planner.plan(manifest.snapshotId(), spec, files);
-            planned.addAndGet(batches.size());
+            List<ImportBatch> batches = planner.plan(manifest.snapshotId(), spec,
+                    filesBySpec.getOrDefault(spec.id(), List.of()));
             if (batches.isEmpty()) {
                 continue;
             }
-
-            TargetTable target = schema.table(spec.targetTable());
             Map<String, List<SnapshotManifest.FileEntry>> dependencyFiles = new LinkedHashMap<>();
             for (String dep : spec.importSpec().dependencies()) {
                 SnapshotTableSpec depSpec = registry.byId(dep).orElseThrow(
                         () -> new IllegalStateException("Unknown dependency '" + dep + "'"));
                 dependencyFiles.put(depSpec.id(), filesBySpec.getOrDefault(depSpec.id(), List.of()));
             }
+            List<ImportBatch> pending = batches.stream().filter(b -> !completed.contains(b.batchId())).toList();
+            skippedBatches += batches.size() - pending.size();
+            TableWork table = new TableWork(spec, schema.table(spec.targetTable()), dependencyFiles,
+                    batches.size(), new AtomicInteger(pending.size()), new AtomicLong());
+            for (ImportBatch batch : pending) {
+                items.add(new WorkItem(table, batch));
+                totalBytes += batch.bytes();
+            }
+        }
+        items.sort(Comparator.comparingLong((WorkItem w) -> w.batch().bytes()).reversed());
 
-            ConcurrentLinkedQueue<ImportBatch> queue = new ConcurrentLinkedQueue<>(batches);
-            int workers = Math.max(1, Math.min(options.workers(), batches.size()));
-            List<Thread> threads = new ArrayList<>();
-            List<Exception> failures = new ArrayList<>();
+        int planned = items.size() + (int) skippedBatches;
+        int workers = Math.max(1, Math.min(options.workers(), items.size()));
+        LoadProgress status = new LoadProgress(items.size(), totalBytes, progress);
+        if (skippedBatches > 0) {
+            status.say("Resuming: " + skippedBatches + " of " + planned + " batches already loaded");
+        }
+        status.say(String.format("Loading %,d batches, %s of Parquet, with %d workers",
+                items.size(), LoadProgress.bytes(totalBytes), workers));
 
-            for (int w = 0; w < workers; w++) {
-                Path spill = options.workDir().resolve("spill-" + w);
-                Thread thread = Thread.ofPlatform().name("snapshot-import-" + w).unstarted(() -> {
-                    try {
-                        Files.createDirectories(spill);
-                        try (DuckPgSession session = DuckPgSession.open(options, spill, 2)) {
-                            ImportBatch batch;
-                            while ((batch = queue.poll()) != null) {
-                                if (completed.contains(batch.batchId())) {
-                                    skipped.incrementAndGet();
-                                    continue;
-                                }
-                                String select = loader.sourceSelect(spec, batch,
-                                        manifest.point().slot(), manifest.point().epoch(), dependencyFiles);
-                                ColumnPlan plan = loader.planFor(session, spec, select, target,
-                                        declaredColumns.get(spec.id()));
-                                long n = UtxoBatchLoader.supports(spec)
-                                        ? UtxoBatchLoader.load(loader, session, batch, plan, manifest,
-                                                dependencyFiles, options.schema())
-                                        : loader.loadBatch(session, batch, plan, select,
-                                                manifest.snapshotId(), options.schema());
-                                rows.addAndGet(n);
-                                executed.incrementAndGet();
-                                if (progress != null) {
-                                    progress.accept(spec.id() + " +" + n + " rows");
-                                }
+        ConcurrentLinkedQueue<WorkItem> queue = new ConcurrentLinkedQueue<>(items);
+        AtomicLong executed = new AtomicLong();
+        AtomicLong rows = new AtomicLong();
+        List<Exception> failures = new ArrayList<>();
+        List<Thread> threads = new ArrayList<>();
+        for (int w = 0; w < workers; w++) {
+            Path spill = options.workDir().resolve("spill-" + w);
+            Thread thread = Thread.ofPlatform().name("snapshot-import-" + w).unstarted(() -> {
+                WorkItem item = null;
+                try {
+                    Files.createDirectories(spill);
+                    try (DuckPgSession session = DuckPgSession.open(options, spill, 2)) {
+                        while ((item = queue.poll()) != null) {
+                            TableWork table = item.table();
+                            SnapshotTableSpec spec = table.spec();
+                            ImportBatch batch = item.batch();
+                            status.started(spec.id());
+                            String select = loader.sourceSelect(spec, batch,
+                                    manifest.point().slot(), manifest.point().epoch(), table.dependencyFiles());
+                            ColumnPlan plan = loader.planFor(session, spec, select, table.target(),
+                                    declaredColumns.get(spec.id()));
+                            long n = UtxoBatchLoader.supports(spec)
+                                    ? UtxoBatchLoader.load(loader, session, batch, plan, manifest,
+                                            table.dependencyFiles(), options.schema())
+                                    : loader.loadBatch(session, batch, plan, select,
+                                            manifest.snapshotId(), options.schema());
+                            rows.addAndGet(n);
+                            table.rows().addAndGet(n);
+                            executed.incrementAndGet();
+                            status.finished(spec.id(), n, batch.bytes());
+                            if (progress != null) {
+                                progress.accept(spec.id() + " +" + n + " rows");
+                            }
+                            if (table.remaining().decrementAndGet() == 0) {
+                                log.info("Loaded {} ({} batches, {} rows)", spec.id(), table.batches(),
+                                        table.rows().get());
                             }
                         }
-                    } catch (Exception e) {
-                        synchronized (failures) {
-                            failures.add(e);
-                        }
-                        queue.clear();
                     }
-                });
-                threads.add(thread);
-                thread.start();
-            }
-            for (Thread t : threads) {
-                try {
-                    t.join();
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    throw new IllegalStateException("Import interrupted", e);
+                } catch (Exception e) {
+                    String spec = item == null ? "?" : item.table().spec().id();
+                    synchronized (failures) {
+                        failures.add(new IllegalStateException("Failed loading '" + spec + "': "
+                                + DuckPgSession.redact(e.getMessage(), options.password()), e));
+                    }
+                    queue.clear();
                 }
-            }
-            if (!failures.isEmpty()) {
-                Exception first = failures.get(0);
-                throw new IllegalStateException("Failed loading '" + spec.id() + "': "
-                        + DuckPgSession.redact(first.getMessage(), options.password()), first);
-            }
-            log.info("Loaded {} ({} batches, {} rows so far)", spec.id(), batches.size(), rows.get());
+            });
+            threads.add(thread);
+            thread.start();
         }
-        return new LoadResult(planned.get(), skipped.get(), executed.get(), rows.get());
+        for (Thread t : threads) {
+            try {
+                t.join();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("Import interrupted", e);
+            }
+        }
+        if (!failures.isEmpty()) {
+            Exception first = failures.get(0);
+            throw new IllegalStateException(first.getMessage(), first.getCause());
+        }
+        status.done();
+        return new LoadResult(planned, skippedBatches, executed.get(), rows.get());
     }
 
     private int prepareTargetPartitions(Connection pg, ImportOptions options, SnapshotManifest manifest)

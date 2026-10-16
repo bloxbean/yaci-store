@@ -226,7 +226,8 @@ public class SnapshotCommands {
 
             AtomicLong ticks = new AtomicLong();
             ImportReport report = importer.importSnapshot(options, p -> {
-                if (ticks.incrementAndGet() % 200 == 0) {
+                // Status lines ("[phase] ...") are time-based already; per-item events are sampled.
+                if (p.startsWith("[") || ticks.incrementAndGet() % 200 == 0) {
                     writeLn(info("  %s", p));
                 }
             });

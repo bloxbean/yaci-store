@@ -23,8 +23,8 @@ final class UtxoBatchLoader {
 
     static boolean supports(SnapshotTableSpec spec) {
         return spec.id().equals("address-utxo") && spec.importSpec().mode() == ImportMode.SQL
-                && spec.importSpec().transformVersion() == 4
-                && "classpath:/snapshot/sql/address_utxo_v2.sql".equals(spec.importSpec().selectResource());
+                && spec.importSpec().transformVersion() == 5
+                && "classpath:/snapshot/sql/address_utxo_v3.sql".equals(spec.importSpec().selectResource());
     }
 
     static long load(TableLoader loader, DuckPgSession session, ImportBatch batch, ColumnPlan plan,
@@ -65,12 +65,15 @@ final class UtxoBatchLoader {
         }
     }
 
-    /** Conservative initial estimate; actual OOM feedback handles skew and unusually wide values. */
+    /**
+     * Initial estimate; OOM feedback handles skew and unusually wide values. Calibrated on mainnet
+     * with DuckDB 1.5.5: the densest day (2.96M asset rows, 96 MB of Parquet) needs 1.5-2GB in one
+     * pass, about 700 bytes per asset row or 20x the compressed size. A fifth of the limit is left
+     * for the Parquet scan, the block join and the PostgreSQL writer.
+     */
     static int initialBuckets(long rows, long compressedBytes, long memoryBytes) {
-        // Reserve half the budget for the Parquet scan, block join and PostgreSQL writer. Compressed
-        // bytes alone underestimate wide strings and the overhead of one list state per output.
-        double estimate = Math.max(rows * 4096.0, compressedBytes * 16.0);
-        double budget = Math.max(1, memoryBytes / 2.0);
+        double estimate = Math.max(rows * 700.0, compressedBytes * 20.0);
+        double budget = Math.max(1, memoryBytes * 0.8);
         int buckets = 1;
         while (buckets < MAX_BUCKETS && estimate / buckets > budget) buckets *= 2;
         return buckets;

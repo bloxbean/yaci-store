@@ -298,7 +298,6 @@ class SnapshotImportIT {
         try (Connection conn = PostgresSupport.connect()) {
             blocksAfterFirst = count(conn, "block");
             completedAfterFirst = new ImportJournal(conn, schema).completedCount(snapshotId);
-            assertThat(count(conn, "address_utxo")).isZero();
         }
         assertThat(blocksAfterFirst).isEqualTo(SnapshotFixture.POINT_BLOCK + 1);
         assertThat(completedAfterFirst).isPositive();
@@ -314,6 +313,8 @@ class SnapshotImportIT {
             assertThat(count(conn, "address_utxo")).isEqualTo(SnapshotFixture.POINT_BLOCK + 1);
             assertThat(scalarLong(conn, "SELECT count(*) FROM (SELECT hash FROM " + qt("block")
                     + " GROUP BY hash HAVING count(*) > 1) d")).isZero();
+            assertThat(scalarLong(conn, "SELECT count(*) FROM (SELECT tx_hash FROM " + qt("address_utxo")
+                    + " GROUP BY tx_hash, output_index HAVING count(*) > 1) d")).isZero();
         }
     }
 

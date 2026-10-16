@@ -11,6 +11,9 @@ class UtxoBatchLoaderTest {
                 .isGreaterThan(UtxoBatchLoader.initialBuckets(200_000, 10_000_000, 4_000_000_000L));
         assertThat(UtxoBatchLoader.initialBuckets(10, 100_000_000, 128_000_000)).isGreaterThan(1);
         assertThat(UtxoBatchLoader.initialBuckets(0, 0, 128_000_000)).isEqualTo(1);
+        // The densest mainnet day ran in one pass with 2GB; 3GB per worker must not slice it.
+        assertThat(UtxoBatchLoader.initialBuckets(2_960_901, 98_666_229, 3_000_000_000L)).isEqualTo(1);
+        assertThat(UtxoBatchLoader.initialBuckets(2_960_901, 98_666_229, 1_000_000_000L)).isEqualTo(4);
     }
 
     @Test

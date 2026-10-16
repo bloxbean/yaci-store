@@ -27,12 +27,12 @@ snapshot-table:
   import:
     target-table: address_utxo
     mode: SQL
-    select-resource: classpath:/snapshot/sql/address_utxo_v2.sql
-    transform-version: 4
+    select-resource: classpath:/snapshot/sql/address_utxo_v3.sql
+    transform-version: 5
     dependencies: [block]
     use-target-defaults: [owner_addr_full, update_datetime]
     batch-boundary: WHOLE_PARTITION
-    batch-size: 8
+    batch-size: 1
 
   validation:
     key: [output_index, tx_hash]

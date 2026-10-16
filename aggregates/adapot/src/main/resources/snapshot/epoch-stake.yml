@@ -27,7 +27,8 @@ snapshot-table:
     target-table: epoch_stake
     mode: MAPPED
     use-target-defaults: [create_datetime]
-    batch-boundary: SINGLE_BATCH
+    batch-boundary: WHOLE_PARTITION
+    batch-size: 1
     target-partitioning:
       column: epoch
       partition-prefix: epoch_stake_p

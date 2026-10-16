@@ -31,6 +31,16 @@ class DuckPgSessionTest {
     }
 
     @Test
+    void loadConnectionsCommitAsynchronouslyAndKeepUserOptions() {
+        assertThat(DuckPgSession.withLoadSettings("host='h' dbname='d'"))
+                .isEqualTo("host='h' dbname='d' options='-c synchronous_commit=off'");
+        String merged = DuckPgSession.withLoadSettings(DuckPgSession.pgConnectionString(options(
+                "jdbc:postgresql://localhost/db?options=-c%20search_path%3Dx", "secret")));
+        assertThat(merged).contains("options='-c synchronous_commit=off -c search_path=x'")
+                .containsOnlyOnce("options=");
+    }
+
+    @Test
     void redactsQuotedAndSqlEscapedPasswords() {
         String password = "has space'and\\slash";
         String connection = DuckPgSession.pgConnectionString(options("jdbc:postgresql://localhost/db", password));
