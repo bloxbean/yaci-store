@@ -36,7 +36,7 @@ class TableScannerIT {
                         + " ('a', 0, 10, 1, 5, '[{\"unit\":\"lovelace\",\"quantity\":5},{\"unit\":\"x\",\"quantity\":9}]'),"
                         // lovelace_amount disagrees with amounts
                         + " ('b', 0, 10, 1, 6, '[{\"unit\":\"lovelace\",\"quantity\":5}]'),"
-                        // two lovelace entries (sum 5 matches)
+                        // two lovelace entries: fails the single-lovelace check, and its total is not compared
                         + " ('c', 0, 10, 1, 5, '[{\"unit\":\"lovelace\",\"quantity\":2},{\"unit\":\"lovelace\",\"quantity\":3}]'),"
                         // amounts not an array, no block, beyond the cutoff, null tx_hash
                         + " (null, 0, 99, null, 0, '{\"unit\":\"lovelace\"}'),"
@@ -63,8 +63,8 @@ class TableScannerIT {
         assertThat(r.beyondCutoff()).isEqualTo(1);
         // non-array, empty and null amounts
         assertThat(r.utxo().badAmounts()).isEqualTo(3);
-        // 'b' (6 vs 5); the non-array row (0 vs 0), '[]' and null all compare equal to 0
-        assertThat(r.utxo().lovelaceMismatch()).isEqualTo(1);
+        // 'b' (6 vs 5) and 'c' (two entries); the non-array row (0 vs 0), '[]' and null compare equal to 0
+        assertThat(r.utxo().lovelaceMismatch()).isEqualTo(2);
         assertThat(r.utxo().multiLovelace()).isEqualTo(1);
         assertThat(r.utxo().missingBlock()).isEqualTo(1);
     }
@@ -82,6 +82,21 @@ class TableScannerIT {
         assertThat(parallel.get("block").beyondCutoff()).isEqualTo(5);
         assertThat(said).first().asString().isEqualTo("Scanning 2 table(s) with 2 connection(s)");
         assertThat(said).last().asString().startsWith("Scanned 2 table(s) in ");
+    }
+
+    @Test
+    void theAddressUtxoScanCanRunInParallel() throws Exception {
+        // A subquery that refers to the row would keep the JSON work in the leader process.
+        exec("SET max_parallel_workers_per_gather = 4", "SET parallel_setup_cost = 0", "SET parallel_tuple_cost = 0",
+                "SET min_parallel_table_scan_size = 0");
+        StringBuilder plan = new StringBuilder();
+        try (Statement st = pg.createStatement();
+             var rs = st.executeQuery("EXPLAIN " + TableScanner.sql(schema, utxo()))) {
+            while (rs.next()) {
+                plan.append(rs.getString(1)).append('\n');
+            }
+        }
+        assertThat(plan.toString()).contains("Gather").contains("Partial Aggregate").doesNotContain("SubPlan");
     }
 
     private TableScanner.Target utxo() {

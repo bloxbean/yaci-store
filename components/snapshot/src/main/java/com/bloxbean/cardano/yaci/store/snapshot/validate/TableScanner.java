@@ -130,32 +130,7 @@ final class TableScanner {
     }
 
     static Result scanOne(Connection pg, String schema, Target t) throws SQLException {
-        StringBuilder sql = new StringBuilder("SELECT count(*)");
-        for (String c : t.requiredColumns()) {
-            sql.append(", count(*) FILTER (WHERE u.").append(Identifiers.quote(c)).append(" IS NULL)");
-        }
-        if (t.cutoffColumn() != null) {
-            sql.append(", count(*) FILTER (WHERE u.").append(Identifiers.quote(t.cutoffColumn()))
-                    .append(" > ").append(t.cutoffLimit()).append(')');
-        }
-        if (t.addressUtxo()) {
-            sql.append(", count(*) FILTER (WHERE CASE WHEN jsonb_typeof(u.amounts) = 'array'"
-                            + " THEN jsonb_array_length(u.amounts) = 0 ELSE true END)")
-                    .append(", count(*) FILTER (WHERE u.lovelace_amount IS DISTINCT FROM l.lovelace)")
-                    .append(", count(*) FILTER (WHERE l.lovelace_entries > 1)")
-                    .append(", count(*) FILTER (WHERE u.block IS NULL)");
-        }
-        sql.append(" FROM ").append(Identifiers.quote(schema)).append('.').append(Identifiers.quote(t.table()))
-                .append(" u");
-        if (t.addressUtxo()) {
-            // One expansion of amounts per row serves both lovelace checks.
-            sql.append(" CROSS JOIN LATERAL (SELECT COALESCE(sum((e->>'quantity')::numeric)"
-                    + " FILTER (WHERE e->>'unit' = 'lovelace'), 0)::bigint AS lovelace,"
-                    + " count(*) FILTER (WHERE e->>'unit' = 'lovelace') AS lovelace_entries"
-                    + " FROM jsonb_array_elements(CASE WHEN jsonb_typeof(u.amounts) = 'array'"
-                    + " THEN u.amounts ELSE '[]'::jsonb END) e) l");
-        }
-        try (Statement st = pg.createStatement(); ResultSet rs = st.executeQuery(sql.toString())) {
+        try (Statement st = pg.createStatement(); ResultSet rs = st.executeQuery(sql(schema, t))) {
             rs.next();
             int i = 1;
             long rows = rs.getLong(i++);
@@ -169,6 +144,37 @@ final class TableScanner {
                     : null;
             return new Result(rows, nulls, beyond, utxo);
         }
+    }
+
+    static String sql(String schema, Target t) {
+        StringBuilder sql = new StringBuilder("SELECT count(*)");
+        for (String c : t.requiredColumns()) {
+            sql.append(", count(*) FILTER (WHERE u.").append(Identifiers.quote(c)).append(" IS NULL)");
+        }
+        if (t.cutoffColumn() != null) {
+            sql.append(", count(*) FILTER (WHERE u.").append(Identifiers.quote(t.cutoffColumn()))
+                    .append(" > ").append(t.cutoffLimit()).append(')');
+        }
+        String table = Identifiers.quote(schema) + "." + Identifiers.quote(t.table());
+        if (t.addressUtxo()) {
+            // The lovelace quantities come from a JSON path, not a subquery over jsonb_array_elements:
+            // a subquery that refers to the row is parallel-restricted and ran in the leader only, so
+            // the 355M-row mainnet scan used one core. More than one lovelace entry fails its own
+            // check; the total is then not compared again.
+            sql.append(", count(*) FILTER (WHERE CASE WHEN jsonb_typeof(u.amounts) = 'array'"
+                            + " THEN jsonb_array_length(u.amounts) = 0 ELSE true END)")
+                    .append(", count(*) FILTER (WHERE CASE jsonb_array_length(u.lovelace)"
+                            + " WHEN 0 THEN u.lovelace_amount IS DISTINCT FROM 0"
+                            + " WHEN 1 THEN u.lovelace_amount IS DISTINCT FROM (u.lovelace->>0)::numeric"
+                            + " ELSE true END)")
+                    .append(", count(*) FILTER (WHERE jsonb_array_length(u.lovelace) > 1)")
+                    .append(", count(*) FILTER (WHERE u.block IS NULL)");
+            table = "(SELECT r.*, CASE WHEN jsonb_typeof(r.amounts) = 'array'"
+                    + " THEN jsonb_path_query_array(r.amounts, '$[*] ? (@.unit == \"lovelace\").quantity')"
+                    + " ELSE '[]'::jsonb END AS lovelace FROM " + table + " r)";
+        }
+        sql.append(" FROM ").append(table).append(" u");
+        return sql.toString();
     }
 
     private static String elapsed(long started) {
