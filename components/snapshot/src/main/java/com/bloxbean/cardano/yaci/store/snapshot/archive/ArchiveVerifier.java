@@ -11,6 +11,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.function.LongConsumer;
 
 /**
  * Level-1 (artifact) validation: the exact required part set is present, each part's SHA-256 matches
@@ -39,12 +40,17 @@ public class ArchiveVerifier {
     }
 
     public Result verify(SnapshotManifest manifest, Path archiveDir, boolean deepEntryScan) {
-        return check(manifest, archiveDir, deepEntryScan, true);
+        return verify(manifest, archiveDir, deepEntryScan, null);
+    }
+
+    /** @param hashed told the bytes hashed as they are read, for progress; may be null */
+    public Result verify(SnapshotManifest manifest, Path archiveDir, boolean deepEntryScan, LongConsumer hashed) {
+        return check(manifest, archiveDir, deepEntryScan, true, hashed);
     }
 
     /** Cheap preflight: existence and sizes only. Import verifies every digest before extraction. */
     public Result inspect(SnapshotManifest manifest, Path archiveDir) {
-        return check(manifest, archiveDir, false, false);
+        return check(manifest, archiveDir, false, false, null);
     }
 
     /**
@@ -52,11 +58,11 @@ public class ArchiveVerifier {
      * each part and each entry while it extracts them.
      */
     public Result structure(SnapshotManifest manifest, Path archiveDir) {
-        return check(manifest, archiveDir, true, false);
+        return check(manifest, archiveDir, true, false, null);
     }
 
     private Result check(SnapshotManifest manifest, Path archiveDir, boolean deepEntryScan,
-                         boolean hashParts) {
+                         boolean hashParts, LongConsumer hashed) {
         List<String> problems = new ArrayList<>();
         long bytes = 0;
 
@@ -64,7 +70,7 @@ public class ArchiveVerifier {
         manifest.tables().forEach(t -> t.files().forEach(f -> declaredFiles.add(f.path())));
 
         List<PartCheck> checks = Parallel.map(manifest.parts(), hashParts ? threads : 1,
-                part -> checkPart(part, archiveDir.resolve(part.fileName()), deepEntryScan, hashParts));
+                part -> checkPart(part, archiveDir.resolve(part.fileName()), deepEntryScan, hashParts, hashed));
 
         // Merged in manifest order, so duplicate reports are deterministic.
         Set<String> coveredFiles = new TreeSet<>();
@@ -98,7 +104,7 @@ public class ArchiveVerifier {
     }
 
     private static PartCheck checkPart(SnapshotManifest.PartManifest part, Path p, boolean deepEntryScan,
-                                       boolean hashParts) {
+                                       boolean hashParts, LongConsumer hashed) {
         List<String> problems = new ArrayList<>();
         Set<String> entries = new TreeSet<>();
         long bytes = 0;
@@ -112,7 +118,7 @@ public class ArchiveVerifier {
                 problems.add(part.fileName() + ": size " + size + " but manifest declares " + part.size());
             }
             if (hashParts) {
-                String sha = Digests.sha256Hex(p);
+                String sha = Digests.sha256Hex(p, hashed);
                 if (!sha.equals(part.sha256())) {
                     problems.add(part.fileName() + ": SHA-256 mismatch");
                 }

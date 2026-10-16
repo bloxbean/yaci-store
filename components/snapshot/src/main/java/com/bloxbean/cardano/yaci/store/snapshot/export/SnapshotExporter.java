@@ -13,6 +13,7 @@ import com.bloxbean.cardano.yaci.store.snapshot.spec.RestoreMode;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.SnapshotSpecRegistry;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.SnapshotTableSpec;
 import com.bloxbean.cardano.yaci.store.snapshot.util.Digests;
+import com.bloxbean.cardano.yaci.store.snapshot.util.Progress;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,6 +41,9 @@ import java.util.function.Consumer;
 public class SnapshotExporter {
 
     private static final Logger log = LoggerFactory.getLogger(SnapshotExporter.class);
+
+    /** Phase banners {@link #export} sends, so a caller can number them. */
+    public static final int PHASES = 4;
 
     private final SnapshotSpecRegistry registry;
 
@@ -166,6 +170,7 @@ public class SnapshotExporter {
         }
         long started = System.currentTimeMillis();
         try (DuckLakeCatalog catalog = DuckLakeCatalog.open(options.dataDir(), options.workDir(), options.memoryLimit())) {
+            Progress.phase(progress, "Selecting the consistency point and planning coverage");
             InspectionReport report = inspect(catalog, options);
             if (!report.canExport()) {
                 throw new IllegalStateException("Snapshot export is blocked:\n  - "
@@ -186,33 +191,31 @@ public class SnapshotExporter {
             int threads = ArchiveVerifier.DEFAULT_THREADS;
             List<DuckLakeFile> scanFiles = report.plans().stream().flatMap(pl -> pl.files().stream()).toList();
             long scanBytes = scanFiles.stream().mapToLong(DuckLakeFile::sizeBytes).sum();
-            say(progress, "digest", String.format("Hashing %,d files (%s) with %d threads",
+            Progress.phase(progress, String.format("Hashing %,d files (%s) with %d threads",
                     scanFiles.size(), bytes(scanBytes), threads));
             long scanStart = System.currentTimeMillis();
             AtomicInteger scanned = new AtomicInteger();
-            AtomicLong lastReport = new AtomicLong(scanStart);
+            AtomicLong scannedBytes = new AtomicLong();
             List<Digests.FileDigest> digests;
-            try {
+            try (Progress.Ticker ignored = Progress.every(Progress.INTERVAL_MILLIS, "digest",
+                    () -> String.format("%,d/%,d files  %s", scanned.get(), scanFiles.size(),
+                            Progress.rate(scannedBytes.get(), scanBytes, scanStart, System.currentTimeMillis())),
+                    progress)) {
                 digests = Parallel.map(scanFiles, threads, f -> {
                     Path abs = options.dataDir().resolve(f.relativePath());
                     if (!Files.isRegularFile(abs)) {
                         throw new IOException("Catalog references a missing file: " + f.relativePath());
                     }
                     Digests.FileDigest d = Digests.sha256AndCrc32(abs);
-                    int n = scanned.incrementAndGet();
-                    long now = System.currentTimeMillis();
-                    long last = lastReport.get();
-                    if (now - last >= 30_000 && lastReport.compareAndSet(last, now)) {
-                        say(progress, "digest", String.format("%,d/%,d files  elapsed %ds", n, scanFiles.size(),
-                                (now - scanStart) / 1000));
-                    }
+                    scanned.incrementAndGet();
+                    scannedBytes.addAndGet(d.size());
                     return d;
                 });
             } catch (Parallel.PartFailure e) {
                 throw e.getCause() instanceof IOException io ? io : new IOException(e.getMessage(), e.getCause());
             }
-            say(progress, "digest", String.format("Hashed %,d files in %ds", scanFiles.size(),
-                    (System.currentTimeMillis() - scanStart) / 1000));
+            say(progress, "digest", String.format("Hashed %,d files in %s", scanFiles.size(),
+                    Progress.duration(System.currentTimeMillis() - scanStart)));
 
             List<SnapshotManifest.FileEntry> allEntries = new ArrayList<>();
             List<String> owners = new ArrayList<>();
@@ -243,13 +246,25 @@ public class SnapshotExporter {
             ArchiveWriter writer = new ArchiveWriter(options.dataDir(), options.outputDir(), baseName,
                     options.partSizeBytes());
             long packStart = System.currentTimeMillis();
-            say(progress, "pack", String.format("Writing parts of up to %s with %d threads",
-                    bytes(options.partSizeBytes()), threads));
-            List<SnapshotManifest.PartManifest> parts = writer.write(allEntries, owners, crcs, threads,
-                    progress == null ? null : p -> progress.accept("pack " + p));
-            say(progress, "pack", String.format("Wrote %d parts (%s) in %ds", parts.size(),
+            Progress.phase(progress, String.format("Writing %s into parts of up to %s with %d threads",
+                    bytes(scanBytes), bytes(options.partSizeBytes()), threads));
+            Map<String, Long> sizes = new HashMap<>();
+            allEntries.forEach(fe -> sizes.put(fe.path(), fe.size()));
+            AtomicInteger packed = new AtomicInteger();
+            AtomicLong packedBytes = new AtomicLong();
+            List<SnapshotManifest.PartManifest> parts;
+            try (Progress.Ticker ignored = Progress.every(Progress.INTERVAL_MILLIS, "pack",
+                    () -> String.format("%,d/%,d files  %s", packed.get(), allEntries.size(),
+                            Progress.rate(packedBytes.get(), scanBytes, packStart, System.currentTimeMillis())),
+                    progress)) {
+                parts = writer.write(allEntries, owners, crcs, threads, path -> {
+                    packed.incrementAndGet();
+                    packedBytes.addAndGet(sizes.getOrDefault(path, 0L));
+                });
+            }
+            say(progress, "pack", String.format("Wrote %d parts (%s) in %s", parts.size(),
                     bytes(parts.stream().mapToLong(SnapshotManifest.PartManifest::size).sum()),
-                    (System.currentTimeMillis() - packStart) / 1000));
+                    Progress.duration(System.currentTimeMillis() - packStart)));
 
             SnapshotManifest manifest = new SnapshotManifest(
                     ManifestCodec.FORMAT_VERSION,
@@ -272,11 +287,17 @@ public class SnapshotExporter {
 
             // Re-read every part before publishing the manifest.
             long verifyStart = System.currentTimeMillis();
-            say(progress, "verify", "Re-reading " + parts.size() + " parts");
-            ArchiveVerifier.Result verified =
-                    new ArchiveVerifier(threads).verify(manifest, options.outputDir(), true);
-            say(progress, "verify", String.format("Verified %d parts in %ds", parts.size(),
-                    (System.currentTimeMillis() - verifyStart) / 1000));
+            long partBytes = parts.stream().mapToLong(SnapshotManifest.PartManifest::size).sum();
+            Progress.phase(progress, String.format("Re-reading %d parts (%s)", parts.size(), bytes(partBytes)));
+            AtomicLong hashed = new AtomicLong();
+            ArchiveVerifier.Result verified;
+            try (Progress.Ticker ignored = Progress.every(Progress.INTERVAL_MILLIS, "verify",
+                    () -> Progress.rate(hashed.get(), partBytes, verifyStart, System.currentTimeMillis()),
+                    progress)) {
+                verified = new ArchiveVerifier(threads).verify(manifest, options.outputDir(), true, hashed::addAndGet);
+            }
+            say(progress, "verify", String.format("Verified %d parts in %s", parts.size(),
+                    Progress.duration(System.currentTimeMillis() - verifyStart)));
             if (!verified.ok()) {
                 throw new IOException("Written parts failed verification:\n  - "
                         + String.join("\n  - ", verified.problems()));

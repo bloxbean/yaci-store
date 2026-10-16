@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.snapshot.load;
 
 import com.bloxbean.cardano.yaci.store.snapshot.util.Identifiers;
+import com.bloxbean.cardano.yaci.store.snapshot.util.Progress;
 
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -9,10 +10,14 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 /**
@@ -25,6 +30,8 @@ import java.util.function.Consumer;
  * {@code ANALYZE} samples a fixed number of rows per table, so it takes minutes, not a table scan.
  */
 final class TableStatistics {
+
+    static final long INTERVAL_MILLIS = 60_000;
 
     private TableStatistics() {
     }
@@ -41,21 +48,30 @@ final class TableStatistics {
 
         long started = System.currentTimeMillis();
         int threads = Math.max(1, Math.min(workers, ordered.size()));
-        say.accept("Analyzing " + ordered.size() + " table(s) with " + threads + " connection(s)");
+        Set<String> running = ConcurrentHashMap.newKeySet();
+        AtomicInteger done = new AtomicInteger();
         ExecutorService pool = Executors.newFixedThreadPool(threads);
-        try {
-            List<Future<Void>> running = new ArrayList<>();
+        // Untagged: the caller's consumer tags and logs every line.
+        try (Progress.Ticker ignored = Progress.every(INTERVAL_MILLIS, null,
+                () -> done.get() + "/" + ordered.size() + " table(s) analyzed, elapsed "
+                        + LoadProgress.duration(System.currentTimeMillis() - started)
+                        + (running.isEmpty() ? "" : "; analyzing " + String.join(", ", new TreeSet<>(running))),
+                say)) {
+            List<Future<Void>> futures = new ArrayList<>();
             for (int i = 0; i < threads; i++) {
-                running.add(pool.submit(() -> {
+                futures.add(pool.submit(() -> {
                     try (Connection c = connections.open(); Statement st = c.createStatement()) {
                         for (String table = queue.poll(); table != null; table = queue.poll()) {
+                            running.add(table);
                             st.execute("ANALYZE " + Identifiers.quote(schema) + "." + Identifiers.quote(table));
+                            running.remove(table);
+                            done.incrementAndGet();
                         }
                     }
                     return null;
                 }));
             }
-            for (Future<Void> f : running) {
+            for (Future<Void> f : futures) {
                 f.get();
             }
         } catch (InterruptedException e) {

@@ -15,6 +15,7 @@ import com.bloxbean.cardano.yaci.store.snapshot.load.SnapshotImporter;
 import com.bloxbean.cardano.yaci.store.snapshot.manifest.ManifestCodec;
 import com.bloxbean.cardano.yaci.store.snapshot.manifest.SnapshotManifest;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.SnapshotSpecRegistry;
+import com.bloxbean.cardano.yaci.store.snapshot.util.Progress;
 import com.bloxbean.cardano.yaci.store.snapshot.validate.SnapshotValidator;
 import com.bloxbean.cardano.yaci.store.snapshot.validate.ValidationReport;
 import lombok.RequiredArgsConstructor;
@@ -121,14 +122,8 @@ public class SnapshotCommands {
                     targetEpoch, minConfirmations, allowIncomplete, unsigned, memoryLimit);
 
             writeLn(info("Packaging snapshot from %s", options.dataDir()));
-            AtomicLong done = new AtomicLong();
-            SnapshotExporter.ExportResult result = new SnapshotExporter(registry).export(options, p -> {
-                if (p.startsWith("[")) {
-                    writeLn(info("  %s", p));
-                } else if (done.incrementAndGet() % 5000 == 0) {
-                    writeLn(info("  %,d files packed", done.get()));
-                }
-            });
+            SnapshotExporter.ExportResult result = new SnapshotExporter(registry).export(options,
+                    new ProgressPrinter(SnapshotExporter.PHASES));
 
             SnapshotManifest m = result.manifest();
             writeLn(success("Snapshot %s written to %s", m.snapshotId(), options.outputDir()));
@@ -162,9 +157,18 @@ public class SnapshotCommands {
         try {
             Path manifestPath = Path.of(manifest).toAbsolutePath().normalize();
             SnapshotManifest m = new ManifestCodec().read(manifestPath);
-            ArchiveVerifier.Result result =
-                    new ArchiveVerifier().verify(m, manifestPath.getParent(), deep);
             writeLn(info("Snapshot %s (%s, epoch %d)", m.snapshotId(), m.point().network(), m.point().epoch()));
+            long total = m.parts().stream().mapToLong(SnapshotManifest.PartManifest::size).sum();
+            writeLn(info("Verifying %d parts (%s) with %d threads", m.parts().size(),
+                    SnapshotCliSupport.humanBytes(total), Math.min(m.parts().size(), ArchiveVerifier.DEFAULT_THREADS)));
+            long started = System.currentTimeMillis();
+            AtomicLong hashed = new AtomicLong();
+            ArchiveVerifier.Result result;
+            try (Progress.Ticker ignored = Progress.every(Progress.INTERVAL_MILLIS, "verify",
+                    () -> Progress.rate(hashed.get(), total, started, System.currentTimeMillis()),
+                    new ProgressPrinter(0))) {
+                result = new ArchiveVerifier().verify(m, manifestPath.getParent(), deep, hashed::addAndGet);
+            }
             writeLn("  Parts verified : %d (%s)", m.parts().size(),
                     SnapshotCliSupport.humanBytes(result.bytesVerified()));
             if (result.ok()) {
@@ -235,13 +239,8 @@ public class SnapshotCommands {
                 return;
             }
 
-            AtomicLong ticks = new AtomicLong();
-            ImportReport report = importer.importSnapshot(options, p -> {
-                // Status lines ("[phase] ...") are time-based already; per-item events are sampled.
-                if (p.startsWith("[") || ticks.incrementAndGet() % 200 == 0) {
-                    writeLn(info("  %s", p));
-                }
-            });
+            ProgressPrinter printer = new ProgressPrinter(SnapshotImporter.PHASES + (validate ? 1 : 0));
+            ImportReport report = importer.importSnapshot(options, printer);
             printImportReport(report);
             if (!validate) {
                 writeLn(info("Next: run 'snapshot validate --manifest %s', then 'apply-indexes'.", manifest));
@@ -252,7 +251,8 @@ public class SnapshotCommands {
                 throw new CommandFailedException("snapshot import: status " + report.status(), null);
             }
             SnapshotManifest m = new ManifestCodec().read(Path.of(manifest).toAbsolutePath().normalize());
-            if (!runValidation(m, registry, true, workers)) {
+            printer.accept(Progress.PHASE_PREFIX + "Validation");
+            if (!runValidation(m, registry, true, workers, printer.nested("validate"))) {
                 throw new CommandFailedException("snapshot import: validation failed", null);
             }
             writeLn(info("Next (optional): run 'apply-indexes'."));
@@ -313,7 +313,8 @@ public class SnapshotCommands {
             int workers) {
         try {
             SnapshotManifest m = new ManifestCodec().read(Path.of(manifest).toAbsolutePath().normalize());
-            if (!runValidation(m, support.importRegistry(specFile, allowCustomSpecs), markReady, workers)) {
+            if (!runValidation(m, support.importRegistry(specFile, allowCustomSpecs), markReady, workers,
+                    new ProgressPrinter(SnapshotValidator.PHASES))) {
                 throw new CommandFailedException("snapshot validate: validation failed", null);
             }
         } catch (CommandFailedException e) {
@@ -349,17 +350,18 @@ public class SnapshotCommands {
      * Runs every offline validation level and, when all pass and {@code markReady} is set, marks the
      * import READY and drops the journal.
      *
+     * @param progress receives the validator's banners and its status lines, tagged {@code [validate]}
      * @return true when every level passed
      */
     private boolean runValidation(SnapshotManifest m, SnapshotSpecRegistry registry, boolean markReady,
-                                  int workers) throws Exception {
+                                  int workers, java.util.function.Consumer<String> progress) throws Exception {
         SnapshotValidator validator = new SnapshotValidator(registry);
 
         boolean allPassed = true;
         try (Connection conn = support.connect()) {
             List<ValidationReport> reports = validator.validateAll(conn, support.schema(), m,
                     support.eventPublisherId(), support.cursorBlocksToKeep(), support::connect, workers,
-                    p -> writeLn(info("  [validate] %s", p)));
+                    p -> progress.accept(p.startsWith(Progress.PHASE_PREFIX) ? p : "[validate] " + p));
             for (ValidationReport report : reports) {
                 writeLn(info("Level: %s", report.level()));
                 for (ValidationReport.Check c : report.checks()) {

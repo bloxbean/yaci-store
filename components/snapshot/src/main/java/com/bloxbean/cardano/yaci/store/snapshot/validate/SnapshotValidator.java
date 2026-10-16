@@ -14,6 +14,7 @@ import com.bloxbean.cardano.yaci.store.snapshot.spec.RestoreMode;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.SnapshotSpecRegistry;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.SnapshotTableSpec;
 import com.bloxbean.cardano.yaci.store.snapshot.util.Identifiers;
+import com.bloxbean.cardano.yaci.store.snapshot.util.Progress;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -34,6 +35,9 @@ import java.util.function.Consumer;
  * declared cutoff, and the reconstructed control state is coherent.
  */
 public class SnapshotValidator {
+
+    /** Phase banners {@link #validateAll} sends, so a caller can number them. */
+    public static final int PHASES = 2;
 
     private final SnapshotSpecRegistry registry;
 
@@ -455,7 +459,9 @@ public class SnapshotValidator {
             throws SQLException {
         Scans scans = new Scans(pg, schema, manifest, connections, workers, progress);
         List<ValidationReport> reports = new ArrayList<>();
+        Progress.phase(progress, "Schema and load checks (one scan of each loaded table)");
         reports.add(validateLoad(pg, schema, manifest, scans));
+        Progress.phase(progress, "Semantic checks");
         reports.add(validateSemantics(pg, schema, manifest, eventPublisherId, cursorBlocksToKeep, scans));
         return reports;
     }

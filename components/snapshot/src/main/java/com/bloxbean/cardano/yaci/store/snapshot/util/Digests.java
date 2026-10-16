@@ -32,12 +32,20 @@ public final class Digests {
     }
 
     public static String sha256Hex(Path file) throws IOException {
+        return sha256Hex(file, null);
+    }
+
+    /** @param read told the size of every buffer read, for progress; may be null */
+    public static String sha256Hex(Path file, java.util.function.LongConsumer read) throws IOException {
         MessageDigest md = sha256();
         try (InputStream in = Files.newInputStream(file)) {
             byte[] buf = new byte[1 << 16];
             int r;
             while ((r = in.read(buf)) != -1) {
                 md.update(buf, 0, r);
+                if (read != null) {
+                    read.accept(r);
+                }
             }
         }
         return HexFormat.of().formatHex(md.digest());

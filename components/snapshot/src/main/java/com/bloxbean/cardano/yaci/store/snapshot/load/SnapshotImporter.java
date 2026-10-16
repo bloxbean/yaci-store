@@ -14,6 +14,7 @@ import com.bloxbean.cardano.yaci.store.snapshot.spec.RestoreMode;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.SnapshotSpecRegistry;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.SnapshotTableSpec;
 import com.bloxbean.cardano.yaci.store.snapshot.util.Digests;
+import com.bloxbean.cardano.yaci.store.snapshot.util.Progress;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -52,6 +53,9 @@ import java.util.function.Consumer;
 public class SnapshotImporter {
 
     private static final Logger log = LoggerFactory.getLogger(SnapshotImporter.class);
+
+    /** Phase banners {@link #importSnapshot} sends, so a caller can number them. */
+    public static final int PHASES = 6;
 
     /** PostgreSQL advisory lock key, so two imports cannot run against one schema. */
     private static final long ADVISORY_LOCK_KEY = 0x59414349_534E4150L;
@@ -256,8 +260,9 @@ public class SnapshotImporter {
             // only the structure is checked up front. Without it, the parts are hashed here instead.
             int partThreads = Math.max(1, Math.min(options.workers(), ArchiveVerifier.DEFAULT_THREADS));
             ArchiveVerifier verifier = new ArchiveVerifier(partThreads);
-            say(progress, "verify", "Checking " + manifest.parts().size() + " parts"
-                    + (options.skipExtraction() ? " (with digests)" : " (structure; digests are checked while extracting)"));
+            Progress.phase(progress, String.format("%s %d parts (%s)",
+                    options.skipExtraction() ? "Verifying" : "Verifying and extracting", manifest.parts().size(),
+                    Progress.bytes(manifest.parts().stream().mapToLong(SnapshotManifest.PartManifest::size).sum())));
             ArchiveVerifier.Result verified = options.skipExtraction()
                     ? verifier.verify(manifest, options.archiveDir(), true)
                     : verifier.structure(manifest, options.archiveDir());
@@ -284,11 +289,15 @@ public class SnapshotImporter {
                     schema.fingerprint(), ImportJournal.STATUS_LOADING, null, registry.scopeDigest()));
             journal.recordTransforms(manifest.snapshotId(), registry.importedTables());
 
+            Progress.phase(progress, "Preparing " + loadedTables(manifest).size()
+                    + " tables: deferring keys and indexes, creating partitions");
             // Before the partitions are created, so dropping a parent's index touches fewer of them.
             DeferredIndexes deferred = new DeferredIndexes(pg, options.schema());
-            deferred.defer(manifest.snapshotId(), loadedTables(manifest), m -> say(progress, "indexes", m));
+            List<DeferredIndexes.Entry> toRebuild =
+                    deferred.defer(manifest.snapshotId(), loadedTables(manifest), m -> say(progress, "indexes", m));
 
             int partitionsCreated = prepareTargetPartitions(pg, options, manifest);
+            say(progress, "partitions", "Created " + partitionsCreated + " partition(s)");
 
             // Off until ANALYZE is done with the tables. Reset when the load fails too: a resumed
             // import switches it off again, and an abandoned one must not leave it off.
@@ -307,6 +316,8 @@ public class SnapshotImporter {
 
                 // Before the handlers and sequence reset, which read the loaded tables.
                 long tIndex = System.currentTimeMillis();
+                long keys = toRebuild.stream().filter(DeferredIndexes.Entry::key).count();
+                Progress.phase(progress, String.format("Rebuilding %d keys and %d indexes", keys, toRebuild.size() - keys));
                 deferred.rebuild(manifest.snapshotId(), options.workers(),
                         DeferredIndexes.postgresMemory(options.memoryLimit()),
                         journal.rowsPerTable(manifest.snapshotId()), () -> connect(options),
@@ -320,6 +331,8 @@ public class SnapshotImporter {
 
                 // Before the handlers and the app's first start, both of which query the loaded tables.
                 long tStats = System.currentTimeMillis();
+                Progress.phase(progress, String.format("Analyzing %d tables (%d connections)", loadedTables(manifest).size(),
+                        Math.max(1, Math.min(options.workers(), loadedTables(manifest).size()))));
                 TableStatistics.analyze(options.schema(), loadedTables(manifest),
                         journal.rowsPerTable(manifest.snapshotId()), options.workers(), () -> connect(options),
                         m -> say(progress, "analyze", m));
@@ -337,6 +350,8 @@ public class SnapshotImporter {
             PostgresTuning.restore(pg, options.schema());
 
             long t3 = System.currentTimeMillis();
+            Progress.phase(progress, "Control state: " + registry.handlerTables().size()
+                    + " handlers, then sequence reset");
             List<String> handlerResults = runHandlers(pg, options, manifest);
             Map<String, Long> sequences = new SequenceReset(pg, options.schema()).resetTables(registry.isScoped()
                     ? registry.all().stream().map(SnapshotTableSpec::targetTable).collect(java.util.stream.Collectors.toSet()) : null);
@@ -474,11 +489,14 @@ public class SnapshotImporter {
         int planned = items.size() + (int) skippedBatches;
         int workers = Math.max(1, Math.min(options.workers(), items.size()));
         LoadProgress status = new LoadProgress(items.size(), totalBytes, progress);
+        // Rows at the consistency point, from the manifest: the Parquet files also hold rows past it.
+        Progress.phase(progress, String.format("Loading %,d rows in %,d batches (%s of Parquet, %d workers)",
+                items.stream().map(w -> w.table().spec().id()).distinct()
+                        .mapToLong(id -> manifest.table(id).rowCount()).sum(),
+                items.size(), Progress.bytes(totalBytes), workers));
         if (skippedBatches > 0) {
             status.say("Resuming: " + skippedBatches + " of " + planned + " batches already loaded");
         }
-        status.say(String.format("Loading %,d batches, %s of Parquet, with %d workers",
-                items.size(), LoadProgress.bytes(totalBytes), workers));
 
         status.start();
         ConcurrentLinkedQueue<WorkItem> queue = new ConcurrentLinkedQueue<>(items);
@@ -627,19 +645,21 @@ public class SnapshotImporter {
         ArchiveExtractor extractor = new ArchiveExtractor(extractRoot, maxEntries, maxBytes);
 
         List<SnapshotManifest.PartManifest> parts = manifest.parts();
-        long totalBytes = parts.stream().mapToLong(SnapshotManifest.PartManifest::size).sum();
         int threads = Math.max(1, Math.min(options.workers(), ArchiveVerifier.DEFAULT_THREADS));
-        say(progress, "extract", String.format("Extracting and verifying %d parts (%s) with %d threads",
-                parts.size(), LoadProgress.bytes(totalBytes), threads));
+        say(progress, "extract", threads + " thread(s); each part and entry is hashed while it is extracted");
         long started = System.currentTimeMillis();
+        long entryBytes = expected.values().stream().mapToLong(Long::longValue).sum();
         AtomicInteger done = new AtomicInteger();
         AtomicLong doneBytes = new AtomicLong();
-        try {
+        try (Progress.Ticker ignored = Progress.every(Progress.INTERVAL_MILLIS, "extract",
+                () -> String.format("%d/%d parts  %s", done.get(), parts.size(),
+                        Progress.rate(doneBytes.get(), entryBytes, started, System.currentTimeMillis())),
+                progress)) {
             Parallel.map(parts, threads, part -> {
                 ArchiveExtractor.Extracted result;
                 try {
                     result = extractor.extract(options.archiveDir().resolve(part.fileName()),
-                            expected, digests, progress == null ? null : p -> progress.accept("extract " + p));
+                            expected, digests, entry -> doneBytes.addAndGet(expected.getOrDefault(entry, 0L)));
                 } catch (IOException e) {
                     // A damaged part usually fails ZIP's own CRC check before its SHA-256 is complete.
                     throw new IllegalStateException("Archive verification failed:\n  - "
@@ -649,17 +669,14 @@ public class SnapshotImporter {
                     throw new IllegalStateException("Archive verification failed:\n  - "
                             + part.fileName() + ": SHA-256 mismatch");
                 }
-                int n = done.incrementAndGet();
-                long b = doneBytes.addAndGet(part.size());
-                long elapsed = Math.max(1, System.currentTimeMillis() - started);
-                say(progress, "extract", String.format("%d/%d parts  %s/%s  %.0f MB/s  %s",
-                        n, parts.size(), LoadProgress.bytes(b), LoadProgress.bytes(totalBytes),
-                        b / 1e6 / (elapsed / 1000.0), part.fileName()));
+                done.incrementAndGet();
                 return result;
             });
         } catch (Parallel.PartFailure e) {
             throw e.getCause() instanceof IOException io ? io : new IOException(e.getMessage(), e.getCause());
         }
+        say(progress, "extract", String.format("Extracted %d parts (%s) in %s", parts.size(),
+                Progress.bytes(entryBytes), Progress.duration(System.currentTimeMillis() - started)));
     }
 
     private static void say(Consumer<String> progress, String phase, String message) {

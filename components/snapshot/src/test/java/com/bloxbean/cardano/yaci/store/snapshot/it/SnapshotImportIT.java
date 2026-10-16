@@ -9,6 +9,7 @@ import com.bloxbean.cardano.yaci.store.snapshot.manifest.ManifestCodec;
 import com.bloxbean.cardano.yaci.store.snapshot.manifest.SnapshotManifest;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.SnapshotSpecRegistry;
 import com.bloxbean.cardano.yaci.store.snapshot.util.Identifiers;
+import com.bloxbean.cardano.yaci.store.snapshot.util.Progress;
 import com.bloxbean.cardano.yaci.store.snapshot.validate.SnapshotValidator;
 import com.bloxbean.cardano.yaci.store.snapshot.validate.ValidationReport;
 import org.junit.jupiter.api.BeforeEach;
@@ -253,6 +254,31 @@ class SnapshotImportIT {
             assertThat(scalarLong(conn, "SELECT count(*) FROM " + qt("adapot") + " WHERE epoch > "
                     + SnapshotFixture.POINT_EPOCH)).isZero();
         }
+    }
+
+    @Test
+    void importAndValidationAnnounceEachPhaseOnce() throws Exception {
+        SnapshotFixture.Built built = fixture();
+        List<String> events = new java.util.concurrent.CopyOnWriteArrayList<>();
+        new SnapshotImporter(registry).importSnapshot(options(built.manifestPath(), 2), events::add);
+        try (Connection conn = PostgresSupport.connect()) {
+            new SnapshotValidator(registry).validateAll(conn, schema, built.manifest(), 1, 10,
+                    PostgresSupport::connect, 2, events::add);
+        }
+        events.forEach(System.out::println);
+
+        List<String> banners = events.stream().filter(e -> e.startsWith(Progress.PHASE_PREFIX))
+                .map(e -> e.substring(Progress.PHASE_PREFIX.length())).toList();
+        assertThat(banners).hasSize(SnapshotImporter.PHASES + SnapshotValidator.PHASES);
+        assertThat(banners.get(0)).startsWith("Verifying and extracting " + built.manifest().parts().size() + " parts");
+        assertThat(banners.get(1)).startsWith("Preparing");
+        assertThat(banners.get(2)).startsWith("Loading " + String.format("%,d", built.manifest().tables().stream()
+                .filter(t -> registry.isSelected(t.specId())).mapToLong(SnapshotManifest.TableManifest::rowCount).sum()));
+        assertThat(banners.get(3)).startsWith("Rebuilding");
+        assertThat(banners.get(4)).startsWith("Analyzing");
+        assertThat(banners.get(5)).startsWith("Control state");
+        assertThat(banners.get(6)).startsWith("Schema and load checks");
+        assertThat(banners.get(7)).startsWith("Semantic checks");
     }
 
     @Test
