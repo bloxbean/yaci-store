@@ -34,7 +34,19 @@ public record ImportOptions(Path manifestPath,
                             boolean allowCustomSpecs,
                             List<Path> customSpecPaths,
                             boolean keepExtracted,
-                            boolean skipExtraction) {
+                            boolean skipExtraction,
+                            boolean tunePostgres) {
+
+    /** Without {@code --tune-postgres}. */
+    public ImportOptions(Path manifestPath, Path archiveDir, Path workDir, String jdbcUrl, String user,
+                         String password, String schema, String network, long protocolMagic, long eventPublisherId,
+                         int cursorBlocksToKeep, int workers, String memoryLimit, long minFreeDiskGb,
+                         boolean allowUnsigned, boolean allowCustomSpecs, List<Path> customSpecPaths,
+                         boolean keepExtracted, boolean skipExtraction) {
+        this(manifestPath, archiveDir, workDir, jdbcUrl, user, password, schema, network, protocolMagic,
+                eventPublisherId, cursorBlocksToKeep, workers, memoryLimit, minFreeDiskGb, allowUnsigned,
+                allowCustomSpecs, customSpecPaths, keepExtracted, skipExtraction, false);
+    }
 
     public static final int DEFAULT_WORKERS = 1;
     public static final String DEFAULT_MEMORY_LIMIT = "1GB";

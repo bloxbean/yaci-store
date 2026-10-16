@@ -201,7 +201,7 @@ public class SnapshotCliSupport {
 
     public ImportOptions importOptions(String manifest, String workDir, int workers, String memoryLimit,
                                        long minFreeDiskGb, boolean allowUnsigned, String specFile,
-                                       boolean allowCustomSpecs, boolean keepExtracted) {
+                                       boolean allowCustomSpecs, boolean keepExtracted, boolean tunePostgres) {
         Path manifestPath = Path.of(manifest).toAbsolutePath().normalize();
         List<Path> custom = new ArrayList<>();
         if (specFile != null && !specFile.isBlank()) {
@@ -213,7 +213,7 @@ public class SnapshotCliSupport {
                 Path.of(workDir).toAbsolutePath().normalize(),
                 jdbcUrl(), dbUser(), dbPassword(), schema(), network(), protocolMagic(),
                 eventPublisherId(), cursorBlocksToKeep(), workers, memoryLimit, minFreeDiskGb,
-                allowUnsigned, allowCustomSpecs, custom, keepExtracted, false);
+                allowUnsigned, allowCustomSpecs, custom, keepExtracted, false, tunePostgres);
     }
 
     public static void ensureDirectory(Path path) {

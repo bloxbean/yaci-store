@@ -210,12 +210,16 @@ public class SnapshotCommands {
             boolean dryRun,
             @Option(longNames = "validate", defaultValue = "false",
                     description = "After the import, run 'snapshot validate --mark-ready' in the same command")
-            boolean validate) {
+            boolean validate,
+            @Option(longNames = "tune-postgres", defaultValue = "false",
+                    description = "Raise max_wal_size, checkpoint_timeout and wal_compression with ALTER SYSTEM"
+                            + " for the import and restore them afterwards (needs superuser or ALTER SYSTEM grants)")
+            boolean tunePostgres) {
         try {
             SnapshotCliSupport.ensureDirectory(Path.of(workDir));
             SnapshotSpecRegistry registry = support.importRegistry(specFile, allowCustomSpecs);
             ImportOptions options = support.importOptions(manifest, workDir, workers, memoryLimit,
-                    minFreeDiskGb, allowUnsigned, specFile, allowCustomSpecs, keepExtracted);
+                    minFreeDiskGb, allowUnsigned, specFile, allowCustomSpecs, keepExtracted, tunePostgres);
             SnapshotImporter importer = new SnapshotImporter(registry);
 
             if (dryRun) {

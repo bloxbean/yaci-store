@@ -6,6 +6,7 @@ import com.bloxbean.cardano.yaci.store.snapshot.load.Autovacuum;
 import com.bloxbean.cardano.yaci.store.snapshot.load.DeferredIndexes;
 import com.bloxbean.cardano.yaci.store.snapshot.load.ImportJournal;
 import com.bloxbean.cardano.yaci.store.snapshot.load.PgSchema;
+import com.bloxbean.cardano.yaci.store.snapshot.load.PostgresTuning;
 import com.bloxbean.cardano.yaci.store.snapshot.manifest.ConsistencyPoint;
 import com.bloxbean.cardano.yaci.store.snapshot.manifest.SnapshotManifest;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.CutoffType;
@@ -135,6 +136,9 @@ public class SnapshotValidator {
                 ? "no table is left with autovacuum switched off by the import"
                 : noAutovacuum.size() + " table(s) with autovacuum off: "
                         + String.join(", ", noAutovacuum.subList(0, Math.min(5, noAutovacuum.size()))));
+
+        b.check("postgres-settings-restored", !PostgresTuning.pending(pg, schema),
+                "server settings changed by --tune-postgres are back to their original values");
 
         List<String> indexProblems = new DeferredIndexes(pg, schema).problems(manifest.snapshotId());
         b.check("deferred-indexes", indexProblems.isEmpty(), indexProblems.isEmpty()

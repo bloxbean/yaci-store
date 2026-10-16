@@ -142,6 +142,15 @@ public class SnapshotImporter {
             }
 
             blockers.addAll(planEveryTable(manifest, schema));
+
+            if (options.tunePostgres()) {
+                String denied = PostgresTuning.cannotApply(pg);
+                if (denied != null) {
+                    blockers.add(denied);
+                }
+            } else {
+                warnings.addAll(PostgresTuning.advice(pg));
+            }
         }
 
         ArchiveVerifier.Result verified =
@@ -263,6 +272,9 @@ public class SnapshotImporter {
             // Off until ANALYZE is done with the tables. Reset when the load fails too: a resumed
             // import switches it off again, and an abandoned one must not leave it off.
             Autovacuum.disable(pg, options.schema(), loadedTables(manifest));
+            if (options.tunePostgres()) {
+                PostgresTuning.apply(pg, options.schema()).forEach(m -> say(progress, "postgres", "Set " + m));
+            }
             LoadResult loaded;
             long loadMillis;
             long indexMillis;
@@ -294,12 +306,14 @@ public class SnapshotImporter {
             } catch (Exception e) {
                 try {
                     Autovacuum.restore(pg, options.schema(), loadedTables(manifest));
+                    PostgresTuning.restore(pg, options.schema());
                 } catch (SQLException restore) {
                     e.addSuppressed(restore);
                 }
                 throw e;
             }
             Autovacuum.restore(pg, options.schema(), loadedTables(manifest));
+            PostgresTuning.restore(pg, options.schema());
 
             long t3 = System.currentTimeMillis();
             List<String> handlerResults = runHandlers(pg, options, manifest);
