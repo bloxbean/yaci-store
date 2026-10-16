@@ -99,6 +99,12 @@ final class TableScanner {
             for (int i = 0; i < threads; i++) {
                 futures.add(pool.submit(() -> {
                     try (Connection c = connections.open()) {
+                        // The largest table is scanned first and alone at the end; let its query use the
+                        // server's parallel workers. On mainnet address_utxo's single scan otherwise ran
+                        // with the default 2 while the other connections had finished.
+                        try (Statement st = c.createStatement()) {
+                            st.execute("SET max_parallel_workers_per_gather = " + threads);
+                        }
                         for (Target t = queue.poll(); t != null; t = queue.poll()) {
                             running.add(t.table());
                             results.put(t.table(), scanOne(c, schema, t));
