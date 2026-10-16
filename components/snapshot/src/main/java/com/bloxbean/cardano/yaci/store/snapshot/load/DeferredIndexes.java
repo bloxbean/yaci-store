@@ -40,8 +40,9 @@ import java.util.regex.Pattern;
  * <p>The captured definitions live in the import journal, written before anything is dropped. A
  * resumed import reads them from there, never from the half-dropped catalog. An entry is dropped
  * idempotently and rebuilt in the same transaction that marks it built, so a crash at any point
- * leaves a state the next run completes. Keys are rebuilt before a table's other indexes, so
- * duplicate rows fail on the key, naming it.
+ * leaves a state the next run completes. A table's keys are rebuilt by one task, so duplicate rows
+ * fail on the key, naming it; its other indexes either wait for the keys or, when the keys can be
+ * built as unique indexes and attached, build alongside them.
  */
 public class DeferredIndexes {
 
@@ -51,6 +52,18 @@ public class DeferredIndexes {
     static final String CONSTRAINT = "CONSTRAINT";
     static final String INDEX = "INDEX";
     static final long PROGRESS_MILLIS = 60_000;
+
+    /**
+     * A key {@code ADD CONSTRAINT ... USING INDEX} can adopt: a plain column list with no
+     * {@code INCLUDE}, {@code NULLS NOT DISTINCT}, storage parameters, tablespace or deferrability.
+     */
+    private static final Pattern SIMPLE_KEY = Pattern.compile("^(PRIMARY KEY|UNIQUE) \\(([^()]+)\\)$");
+
+    /**
+     * Parallel workers each build may ask for. The server's {@code max_parallel_workers} caps the
+     * total, so the largest builds, which start first, get them, and the critical path shortens.
+     */
+    static final int PARALLEL_WORKERS_PER_BUILD = 4;
 
     /** Postgres prints an index on a partitioned table as {@code ON ONLY}, which builds no partitions. */
     private static final Pattern ON_ONLY =
@@ -78,10 +91,40 @@ public class DeferredIndexes {
 
         String dropSql(String schema) {
             if (CONSTRAINT.equals(kind)) {
+                // The index of a key built in two steps exists before its constraint does; a crash in
+                // between leaves it behind, and a resumed load must not insert into it.
                 return "ALTER TABLE " + Identifiers.quote(schema) + "." + Identifiers.quote(table)
-                        + " DROP CONSTRAINT IF EXISTS " + Identifiers.quote(name);
+                        + " DROP CONSTRAINT IF EXISTS " + Identifiers.quote(name)
+                        + "; DROP INDEX IF EXISTS " + Identifiers.quote(schema) + "." + Identifiers.quote(name);
             }
             return "DROP INDEX IF EXISTS " + Identifiers.quote(schema) + "." + Identifiers.quote(name);
+        }
+
+        /**
+         * {@code PRIMARY KEY} or {@code UNIQUE} when this key is a plain column list that can be built
+         * as a unique index first and attached afterwards, otherwise null.
+         */
+        String twoStepKind() {
+            if (!CONSTRAINT.equals(kind)) {
+                return null;
+            }
+            Matcher m = SIMPLE_KEY.matcher(definition);
+            return m.matches() ? m.group(1) : null;
+        }
+
+        String uniqueIndexSql(String schema) {
+            Matcher m = SIMPLE_KEY.matcher(definition);
+            if (!m.matches()) {
+                throw new IllegalStateException(label() + " is not a simple key: " + definition);
+            }
+            return "CREATE UNIQUE INDEX IF NOT EXISTS " + Identifiers.quote(name) + " ON "
+                    + Identifiers.quote(schema) + "." + Identifiers.quote(table) + " USING btree (" + m.group(2) + ")";
+        }
+
+        String attachSql(String schema) {
+            return "ALTER TABLE " + Identifiers.quote(schema) + "." + Identifiers.quote(table)
+                    + " ADD CONSTRAINT " + Identifiers.quote(name) + " " + twoStepKind()
+                    + " USING INDEX " + Identifiers.quote(name);
         }
 
         String label() {
@@ -190,8 +233,7 @@ public class DeferredIndexes {
     }
 
     /**
-     * Rebuilds every entry not yet built: each table's keys first, then all indexes, largest tables
-     * first, on up to {@code workers} connections.
+     * Rebuilds every entry not yet built, largest tables first, on up to {@code workers} connections.
      *
      * @param maintenanceWorkMem per-connection {@code maintenance_work_mem}, e.g. {@code "3GB"}, or null
      *                           for the server default
@@ -211,17 +253,35 @@ public class DeferredIndexes {
         Comparator<String> largestFirst = Comparator.comparingLong((String t) -> rows.get(t)).reversed()
                 .thenComparing(Comparator.naturalOrder());
 
-        // Keys of a table are rebuilt by one task, in order; a table's other indexes wait for them.
+        // Keys of a table are rebuilt by one task, in order. A simple key on a plain table is built as
+        // a unique index (SHARE lock) and attached afterwards, so the table's other indexes build at
+        // the same time and share its scan. Otherwise ADD CONSTRAINT holds an exclusive lock for the
+        // whole build, and the table's other indexes wait for it.
+        Set<String> plainTables = plainTables(rows.keySet());
         Map<String, List<Entry>> keysByTable = new java.util.TreeMap<>(largestFirst);
         pending.stream().filter(Entry::key)
                 .forEach(e -> keysByTable.computeIfAbsent(e.table(), k -> new ArrayList<>()).add(e));
         Map<String, CountDownLatch> keysDone = new HashMap<>();
-        keysByTable.keySet().forEach(t -> keysDone.put(t, new CountDownLatch(1)));
+        keysByTable.forEach((t, keys) -> {
+            if (!plainTables.contains(t) || keys.stream().anyMatch(k -> k.twoStepKind() == null)) {
+                keysDone.put(t, new CountDownLatch(1));
+            }
+        });
 
-        List<List<Entry>> tasks = new ArrayList<>(keysByTable.values());
-        pending.stream().filter(e -> !e.key())
-                .sorted(Comparator.comparing(Entry::table, largestFirst).thenComparing(Entry::name))
-                .forEach(e -> tasks.add(List.of(e)));
+        // Largest table first; an index that need not wait goes right after its table's keys, the
+        // rest after every key so no connection sits waiting on a latch.
+        List<Entry> indexes = pending.stream().filter(e -> !e.key())
+                .sorted(Comparator.comparing(Entry::table, largestFirst).thenComparing(Entry::name)).toList();
+        List<List<Entry>> tasks = new ArrayList<>();
+        for (String table : rows.keySet().stream().sorted(largestFirst).toList()) {
+            if (keysByTable.containsKey(table)) {
+                tasks.add(keysByTable.get(table));
+            }
+            if (!keysDone.containsKey(table)) {
+                indexes.stream().filter(e -> e.table().equals(table)).forEach(e -> tasks.add(List.of(e)));
+            }
+        }
+        indexes.stream().filter(e -> keysDone.containsKey(e.table())).forEach(e -> tasks.add(List.of(e)));
 
         int threads = Math.max(1, Math.min(workers, tasks.size()));
         say.accept(String.format("Rebuilding %d key(s) and index(es) on %d table(s) with %d connection(s)%s",
@@ -249,12 +309,13 @@ public class DeferredIndexes {
             Thread thread = Thread.ofPlatform().name("snapshot-index-" + w).unstarted(() -> {
                 try (Connection c = connections.open()) {
                     c.setAutoCommit(false);
-                    if (maintenanceWorkMem != null) {
-                        try (Statement st = c.createStatement()) {
+                    try (Statement st = c.createStatement()) {
+                        if (maintenanceWorkMem != null) {
                             st.execute("SET maintenance_work_mem = '" + maintenanceWorkMem + "'");
                         }
-                        c.commit();
+                        st.execute("SET max_parallel_maintenance_workers = " + PARALLEL_WORKERS_PER_BUILD);
                     }
+                    c.commit();
                     List<Entry> task;
                     while ((task = queue.poll()) != null) {
                         String table = task.get(0).table();
@@ -271,7 +332,7 @@ public class DeferredIndexes {
                             }
                             for (Entry e : task) {
                                 long t0 = System.currentTimeMillis();
-                                build(c, snapshotId, e);
+                                build(c, snapshotId, e, e.twoStepKind() != null && plainTables.contains(e.table()));
                                 String line = String.format("%d/%d %s (%s)", done.incrementAndGet(),
                                         pending.size(), e.label(), LoadProgress.duration(System.currentTimeMillis() - t0));
                                 synchronized (say) {
@@ -285,7 +346,7 @@ public class DeferredIndexes {
                             }
                             drain(queue, keysDone);
                         } finally {
-                            if (keyTask) {
+                            if (keyTask && keysDone.containsKey(table)) {
                                 keysDone.get(table).countDown();
                             }
                         }
@@ -361,17 +422,25 @@ public class DeferredIndexes {
     private static void drain(ConcurrentLinkedQueue<List<Entry>> queue, Map<String, CountDownLatch> keysDone) {
         List<Entry> task;
         while ((task = queue.poll()) != null) {
-            if (task.get(0).key()) {
+            if (task.get(0).key() && keysDone.containsKey(task.get(0).table())) {
                 keysDone.get(task.get(0).table()).countDown();
             }
         }
     }
 
-    private void build(Connection c, String snapshotId, Entry e) throws SQLException {
+    private void build(Connection c, String snapshotId, Entry e, boolean twoStep) throws SQLException {
         try (Statement st = c.createStatement();
              PreparedStatement mark = c.prepareStatement("UPDATE " + q() + " SET built = true, built_at = now()"
                      + " WHERE snapshot_id = ? AND kind = ? AND table_name = ? AND name = ?")) {
-            st.execute(e.createSql(schema));
+            if (twoStep) {
+                // Committed on its own, so the exclusive lock of the attach is only held for a catalog
+                // change, not for the build.
+                st.execute(e.uniqueIndexSql(schema));
+                c.commit();
+                st.execute(e.attachSql(schema));
+            } else {
+                st.execute(e.createSql(schema));
+            }
             mark.setString(1, snapshotId);
             mark.setString(2, e.kind());
             mark.setString(3, e.table());
@@ -570,6 +639,25 @@ public class DeferredIndexes {
         } finally {
             conn.setAutoCommit(autoCommit);
         }
+    }
+
+    /** Ordinary tables among these: neither partitioned nor a partition. */
+    private Set<String> plainTables(Collection<String> tables) throws SQLException {
+        Set<String> out = new java.util.HashSet<>();
+        String sql = """
+                SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE n.nspname = ? AND c.relname = ANY (?) AND c.relkind = 'r' AND NOT c.relispartition
+                """;
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, schema);
+            ps.setArray(2, conn.createArrayOf("text", tables.toArray()));
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    out.add(rs.getString(1));
+                }
+            }
+        }
+        return out;
     }
 
     private List<String> partitionsOf(List<String> tables) throws SQLException {
