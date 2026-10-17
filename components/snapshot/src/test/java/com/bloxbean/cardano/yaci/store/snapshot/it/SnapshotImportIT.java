@@ -145,6 +145,82 @@ class SnapshotImportIT {
         }
     }
 
+    private ImportOptions options(Path manifest, int workers, java.util.Map<String, String> retention,
+                                  java.util.Map<String, String> targetSettings) {
+        return new ImportOptions(manifest, manifest.getParent(), root.resolve("work"),
+                PostgresSupport.schemaUrl(), PostgresSupport.user(), PostgresSupport.password(),
+                schema, "preprod", 1, 1, 10, workers, "512MB", 0,
+                true, false, List.of(), false, false, false, retention, targetSettings);
+    }
+
+    @Test
+    void scopedImportReadsOnlyThePartsThatCarryItsTables() throws Exception {
+        var built = fixtureWithTableSchemas();
+        var selected = registry.selectModules(java.util.Set.of("core", "blocks"));
+        try (var conn = PostgresSupport.connect(); var st = conn.createStatement()) {
+            st.execute("DROP TABLE " + schema + ".address_utxo");
+            st.execute("DROP TABLE " + schema + ".adapot");
+            st.execute("DROP TABLE " + schema + ".epoch");
+            st.execute("DROP TABLE " + schema + ".epoch_stake CASCADE");
+        }
+        var importer = new SnapshotImporter(selected);
+        var pre = importer.preflight(options(built.manifestPath(), 2));
+        assertThat(pre.blockers()).isEmpty();
+        var selection = importer.selection(pre.archive(), pre.manifest());
+        assertThat(selection.parts()).hasSizeLessThan(built.manifest().parts().size());
+        assertThat(selection.files()).allMatch(f -> f.startsWith("main/block/") || f.startsWith("main/rollback/"));
+        assertThat(pre.warnings()).anyMatch(w -> w.startsWith("Reading " + selection.parts().size() + " of "));
+
+        List<String> messages = new java.util.concurrent.CopyOnWriteArrayList<>();
+        importer.importSnapshot(options(built.manifestPath(), 2), messages::add);
+        assertThat(messages).anyMatch(m -> m.contains("Extracted " + selection.files().size() + " files from "
+                + selection.parts().size() + " parts"));
+        try (var conn = PostgresSupport.connect()) {
+            for (var report : new SnapshotValidator(selected).validateAll(conn, schema, built.manifest(), 1, 10)) {
+                assertThat(report.passed()).withFailMessage(report.toString()).isTrue();
+            }
+        }
+    }
+
+    @Test
+    void epochStakeRetentionLoadsOnlyTheNewestEpochsAndValidates() throws Exception {
+        var built = fixture();
+        var pruning = java.util.Map.of("store.adapot.epoch-stake-pruning-enabled", "true");
+        var retention = java.util.Map.of("epoch_stake.epochs", "2");
+        var importer = new SnapshotImporter(registry);
+        assertThat(importer.preflight(options(built.manifestPath(), 1, retention, pruning)).blockers()).isEmpty();
+
+        importer.importSnapshot(options(built.manifestPath(), 1, retention, pruning), null);
+
+        try (var conn = PostgresSupport.connect()) {
+            assertThat(count(conn, "epoch_stake")).isEqualTo(2L * SnapshotFixture.STAKE_ROWS_PER_EPOCH);
+            try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery(
+                    "SELECT min(epoch) FROM " + Identifiers.quote(schema) + ".epoch_stake")) {
+                rs.next();
+                assertThat(rs.getInt(1)).isEqualTo(SnapshotFixture.POINT_EPOCH - 1);
+            }
+            for (var report : new SnapshotValidator(registry).validateAll(conn, schema, built.manifest(), 1, 10)) {
+                assertThat(report.passed()).withFailMessage(report.toString()).isTrue();
+            }
+        }
+    }
+
+    @Test
+    void epochStakeRetentionNeedsThePruningServiceOnTheTargetAndTheSameRetentionToResume() throws Exception {
+        var built = fixture();
+        var retention = java.util.Map.of("epoch_stake.epochs", "2");
+        var importer = new SnapshotImporter(registry);
+        assertThat(importer.preflight(options(built.manifestPath(), 1, retention, java.util.Map.of())).blockers())
+                .anyMatch(b -> b.contains("store.adapot.epoch-stake-pruning-enabled=true"));
+
+        var pruning = java.util.Map.of("store.adapot.epoch-stake-pruning-enabled", "true");
+        assertThatThrownBy(() -> importer.importSnapshot(options(built.manifestPath(), 1, retention, pruning), p -> {
+            if (p.startsWith("block +")) throw new IllegalStateException("interrupt");
+        })).hasMessageContaining("interrupt");
+        assertThat(importer.preflight(options(built.manifestPath(), 1, java.util.Map.of(), pruning)).blockers())
+                .anyMatch(b -> b.contains("Import retention does not match"));
+    }
+
     private ImportOptions options(Path manifest, int workers) {
         return new ImportOptions(manifest, manifest.getParent(), root.resolve("work"),
                 PostgresSupport.schemaUrl(), PostgresSupport.user(), PostgresSupport.password(),

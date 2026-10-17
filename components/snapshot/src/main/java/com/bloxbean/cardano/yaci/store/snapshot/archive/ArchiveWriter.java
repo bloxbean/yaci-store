@@ -74,8 +74,22 @@ public class ArchiveWriter {
     public List<SnapshotManifest.PartManifest> write(List<SnapshotManifest.FileEntry> files,
                                                      List<String> owners, Map<String, Long> crcs,
                                                      int threads, Consumer<String> progress) throws IOException {
-        if (files.size() != owners.size()) {
-            throw new IllegalArgumentException("files and owners must be the same length");
+        return write(files, owners, null, crcs, threads, progress);
+    }
+
+    /**
+     * As {@link #write(List, List, Map, int, Consumer)}, and a new part also starts wherever the group
+     * changes. The exporter groups files by store module, so an import that skips a module never
+     * needs a part that only carries its tables.
+     *
+     * @param groups parallel to {@code files}, or null for no group boundaries
+     */
+    public List<SnapshotManifest.PartManifest> write(List<SnapshotManifest.FileEntry> files,
+                                                     List<String> owners, List<String> groups,
+                                                     Map<String, Long> crcs, int threads,
+                                                     Consumer<String> progress) throws IOException {
+        if (files.size() != owners.size() || (groups != null && groups.size() != files.size())) {
+            throw new IllegalArgumentException("files, owners and groups must be the same length");
         }
         Files.createDirectories(outputDir);
 
@@ -85,7 +99,8 @@ public class ArchiveWriter {
         long uncompressed = 0;
         for (int i = 0; i < files.size(); i++) {
             long size = files.get(i).size();
-            if (i > start && uncompressed + size > partSizeBytes) {
+            boolean newGroup = groups != null && i > 0 && !groups.get(i).equals(groups.get(i - 1));
+            if (i > start && (newGroup || uncompressed + size > partSizeBytes)) {
                 ranges.add(new int[]{start, i});
                 start = i;
                 uncompressed = 0;

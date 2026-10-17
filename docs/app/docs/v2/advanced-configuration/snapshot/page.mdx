@@ -237,7 +237,8 @@ SHA256SUMS
 ```
 
 Parts are **independent** archives, not a spanned ZIP: each can be retried, mirrored and verified on
-its own. Entries are stored uncompressed, because DuckLake already writes Zstandard-compressed
+its own. Files are grouped by store module, and a new part starts where the module changes, so a
+scoped restore (below) never needs a part that only carries other stores' tables. Entries are stored uncompressed, because DuckLake already writes Zstandard-compressed
 Parquet and re-deflating costs hours of CPU for a fraction of a percent. Paths inside a part are
 relative to the analytics data directory, for example
 `main/block/date=2026-08-24/ducklake-....parquet`.
@@ -322,6 +323,24 @@ to import without matching unrelated source tables or Flyway history. Older mani
 these fingerprints require the whole schema fingerprint to match; otherwise regenerate the
 snapshot. Custom application tables still need explicit snapshot specifications.
 
+#### Scoped restore for a custom indexer
+
+One full snapshot serves every application. There is no table list to maintain: the stores your
+application enables, as recorded by its `store.schema-only=true` run, decide what is restored. The
+import then reads only the parts that carry those stores' tables, extracts only their files, and
+loads and validates only those tables. `--dry-run` prints the tables it loads and skips, and how many
+parts it reads (`Reading 9 of 18 parts`). Snapshots exported before parts were grouped by module mix
+stores in a part; their parts are still read, but other stores' files are not extracted.
+
+Limitations of a scoped restore:
+
+- The `blocks` store is always required, with its cursor and era state: sync cannot resume without it.
+- A table your application creates itself needs a snapshot specification. Without one, preflight
+  stops with "has no snapshot classification".
+- Dependencies between stores are not checked. If you enable a store whose processing reads another
+  store's tables, enable that store as well, exactly as for a normal sync.
+- To change the set of stores, initialize a new schema with the new flags and import again.
+
 Keep Yaci Store stopped during import. Remove `store.schema-only=true` (or set it to false) before
 starting normal sync after validation. The admin CLI also runs Flyway at startup, against the
 configured schema and with the migrations on its own classpath. On a target initialized as above
@@ -379,6 +398,15 @@ snapshot import --manifest <manifest> \
 | `--dry-run` | `false` | Preflight only; write nothing |
 | `--validate` | `false` | After a successful import, run `snapshot validate --mark-ready` in the same command |
 | `--tune-postgres` | `false` | Raise `max_wal_size`, `checkpoint_timeout` and `wal_compression` with `ALTER SYSTEM` for the import, then restore them |
+| `--epoch-stake-epochs` | `0` | Load only the newest N epochs of `epoch_stake` (at least 4); `0` loads every epoch |
+
+`--epoch-stake-epochs` restores what a node running `EpochStakePruningService` would hold. Mainnet's
+`epoch_stake` is 500M rows over 452 epochs, about 1M rows per epoch, so keeping 8 epochs skips almost
+all of it, and the parts that carry only older epochs are not read. The target must run with
+`store.adapot.epoch-stake-pruning-enabled=true`, or preflight refuses the import: the application
+would otherwise present the partial history as complete. Reward calculation reads the stake of
+epochs E-3 to E, hence the minimum of 4. Use the same value to resume an interrupted import;
+`snapshot validate` reads it from the import journal.
 
 Preflight reports `max_wal_size`, `checkpoint_timeout` and `wal_compression` when they are below
 16GB, 15min and on. With the 1GB default the load checkpoints every few seconds and spends its

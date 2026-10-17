@@ -220,7 +220,11 @@ public class SnapshotExporter {
             // Pre-scan: one read per file produces the SHA-256 for the manifest and the CRC-32 the
             // archive writer needs. Files are independent, so several are read at once.
             int threads = ArchiveVerifier.DEFAULT_THREADS;
-            List<DuckLakeFile> scanFiles = report.plans().stream().flatMap(pl -> pl.files().stream()).toList();
+            // Grouped by store module, each module's tables in their usual order, so parts can break
+            // at module boundaries and a scoped import skips whole parts.
+            List<TablePlan> plans = report.plans().stream()
+                    .sorted(java.util.Comparator.comparing((TablePlan pl) -> pl.spec().module())).toList();
+            List<DuckLakeFile> scanFiles = plans.stream().flatMap(pl -> pl.files().stream()).toList();
             long scanBytes = scanFiles.stream().mapToLong(DuckLakeFile::sizeBytes).sum();
             Progress.phase(progress, String.format("Hashing %,d files (%s) with %d threads",
                     scanFiles.size(), bytes(scanBytes), threads));
@@ -250,10 +254,11 @@ public class SnapshotExporter {
 
             List<SnapshotManifest.FileEntry> allEntries = new ArrayList<>();
             List<String> owners = new ArrayList<>();
+            List<String> modules = new ArrayList<>();
             Map<String, Long> crcs = new HashMap<>();
             List<SnapshotManifest.TableManifest> tableManifests = new ArrayList<>();
             int at = 0;
-            for (TablePlan plan : report.plans()) {
+            for (TablePlan plan : plans) {
                 List<SnapshotManifest.FileEntry> entries = new ArrayList<>();
                 for (DuckLakeFile f : plan.files()) {
                     Digests.FileDigest d = digests.get(at++);
@@ -262,6 +267,7 @@ public class SnapshotExporter {
                     entries.add(fe);
                     allEntries.add(fe);
                     owners.add(plan.spec().id());
+                    modules.add(plan.spec().module());
                     crcs.put(f.relativePath(), d.crc32());
                 }
                 tableManifests.add(toTableManifest(plan, entries));
@@ -288,7 +294,7 @@ public class SnapshotExporter {
                     () -> String.format("%,d/%,d files  %s", packed.get(), allEntries.size(),
                             Progress.rate(packedBytes.get(), scanBytes, packStart, System.currentTimeMillis())),
                     progress)) {
-                parts = writer.write(allEntries, owners, crcs, threads, path -> {
+                parts = writer.write(allEntries, owners, modules, crcs, threads, path -> {
                     packed.incrementAndGet();
                     packedBytes.addAndGet(sizes.getOrDefault(path, 0L));
                 });

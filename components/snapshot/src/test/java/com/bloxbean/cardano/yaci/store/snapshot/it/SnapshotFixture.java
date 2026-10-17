@@ -40,7 +40,11 @@ final class SnapshotFixture {
 
     record Built(Path archiveDir, Path manifestPath, SnapshotManifest manifest) {}
 
-    static final List<String> ALL_TABLES = List.of("block", "epoch", "address-utxo", "adapot", "rollback");
+    static final List<String> ALL_TABLES = List.of("block", "epoch", "address-utxo", "adapot", "rollback",
+            "epoch-stake");
+
+    /** {@code epoch_stake} rows per epoch partition; the partitions are epochs 0 to {@link #POINT_EPOCH}. */
+    static final int STAKE_ROWS_PER_EPOCH = 5;
 
     static Built build(Path root, String schemaFingerprint, String flywayFingerprint) throws Exception {
         return build(root, schemaFingerprint, flywayFingerprint, ALL_TABLES, "it-fixture-snapshot");
@@ -59,19 +63,25 @@ final class SnapshotFixture {
             writeAddressUtxo(st, dataDir);
             writeAdaPot(st, dataDir);
             writeRollback(st, dataDir);
+            writeEpochStake(st, dataDir);
         }
 
         SnapshotSpecRegistry registry = SnapshotSpecRegistry.builtIn();
         List<SnapshotManifest.FileEntry> allFiles = new ArrayList<>();
         List<String> owners = new ArrayList<>();
+        List<String> modules = new ArrayList<>();
         List<SnapshotManifest.TableManifest> tables = new ArrayList<>();
 
-        for (String specId : includedSpecIds) {
+        // Grouped by module, as the exporter writes them, so parts break at module boundaries.
+        List<String> ordered = includedSpecIds.stream()
+                .sorted(java.util.Comparator.comparing(id -> registry.byId(id).orElseThrow().module())).toList();
+        for (String specId : ordered) {
             SnapshotTableSpec spec = registry.byId(specId).orElseThrow();
             List<SnapshotManifest.FileEntry> files = collect(dataDir, "main/" + spec.relation());
             for (SnapshotManifest.FileEntry f : files) {
                 allFiles.add(f);
                 owners.add(specId);
+                modules.add(spec.module());
             }
             long rows = expectedRows(dataDir, spec, files);
             tables.add(new SnapshotManifest.TableManifest(spec.id(), spec.specVersion(), spec.digest(),
@@ -98,7 +108,7 @@ final class SnapshotFixture {
 
         // Small parts so the fixture exercises multi-part packaging and resume across parts.
         List<SnapshotManifest.PartManifest> parts =
-                new ArchiveWriter(dataDir, archiveDir, "it-snap", 32 * 1024).write(allFiles, owners, null);
+                new ArchiveWriter(dataDir, archiveDir, "it-snap", 32 * 1024).write(allFiles, owners, modules, null, 1, null);
 
         SnapshotManifest manifest = new SnapshotManifest(ManifestCodec.FORMAT_VERSION,
                 snapshotId,
@@ -145,6 +155,8 @@ final class SnapshotFixture {
                     "treasury", "decimal(38,0)", "reserves", "decimal(38,0)", "circulation", "decimal(38,0)",
                     "distributed_rewards", "decimal(38,0)", "undistributed_rewards", "decimal(38,0)",
                     "rewards_pot", "decimal(38,0)", "pool_rewards_pot", "decimal(38,0)");
+            case "epoch_stake" -> ordered("epoch", "int32", "address", "varchar", "amount", "decimal(38,0)",
+                    "pool_id", "varchar", "delegation_epoch", "int32", "active_epoch", "int32");
             case "rollback" -> ordered("id", "int64", "rollback_to_block_hash", "varchar",
                     "rollback_to_slot", "int64", "current_block_hash", "varchar",
                     "current_slot", "int64", "current_block", "int64",
@@ -343,6 +355,21 @@ final class SnapshotFixture {
                     + " CAST(8 AS DECIMAL(38,0)) AS undistributed_rewards,"
                     + " CAST(9 AS DECIMAL(38,0)) AS rewards_pot,"
                     + " CAST(10 AS DECIMAL(38,0)) AS pool_rewards_pot)"
+                    + " TO '" + target + "' (FORMAT PARQUET)");
+        }
+    }
+
+    private static void writeEpochStake(Statement st, Path dataDir) throws SQLException, IOException {
+        for (int epoch = 0; epoch <= POINT_EPOCH; epoch++) {
+            String target = parquetTarget(dataDir.resolve("main/epoch_stake/epoch=" + epoch));
+            st.execute("COPY (SELECT"
+                    + " CAST(" + epoch + " AS INTEGER) AS epoch,"
+                    + " 'stake_test1' || printf('%040x', n) AS address,"
+                    + " CAST(1000 + n AS DECIMAL(38,0)) AS amount,"
+                    + " printf('%056x', n % 2) AS pool_id,"
+                    + " CAST(" + epoch + " AS INTEGER) AS delegation_epoch,"
+                    + " CAST(" + epoch + " AS INTEGER) AS active_epoch"
+                    + " FROM range(0, " + STAKE_ROWS_PER_EPOCH + ") t(n))"
                     + " TO '" + target + "' (FORMAT PARQUET)");
         }
     }

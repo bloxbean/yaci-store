@@ -324,6 +324,73 @@ class ArchiveTest {
         assertThat(result.problems()).anySatisfy(p -> assertThat(p).contains("Missing archive part"));
     }
 
+    @Test
+    void startsANewPartWhereTheModuleChanges(@TempDir Path tmp) throws IOException {
+        Path dataDir = tmp.resolve("data");
+        Fixture f = fixture(dataDir, 4, 100);
+        List<String> modules = List.of("adapot", "adapot", "blocks", "blocks");
+
+        var parts = new ArchiveWriter(dataDir, tmp.resolve("out"), "snap", 1 << 30)
+                .write(f.entries(), f.owners(), modules, null, 1, null);
+
+        assertThat(parts).extracting(SnapshotManifest.PartManifest::entryCount).containsExactly(2, 2);
+    }
+
+    @Test
+    void extractionWritesOnlyTheSelectedEntriesButHashesTheWholePart(@TempDir Path tmp) throws IOException {
+        Path dataDir = tmp.resolve("data");
+        Path out = tmp.resolve("out");
+        Fixture f = fixture(dataDir, 3, 800);
+        var part = new ArchiveWriter(dataDir, out, "snap", 1 << 30).write(f.entries(), f.owners(), null).get(0);
+
+        Map<String, Long> sizes = new java.util.TreeMap<>();
+        Map<String, String> digests = new java.util.TreeMap<>();
+        f.entries().forEach(e -> {
+            sizes.put(e.path(), e.size());
+            digests.put(e.path(), e.sha256());
+        });
+        String wanted = f.entries().get(1).path();
+        Path work = tmp.resolve("work");
+        ArchiveExtractor.Extracted result;
+        try (var in = Files.newInputStream(out.resolve(part.fileName()))) {
+            result = new ArchiveExtractor(work, 100, 1 << 20).extract(in, sizes, digests, wanted::equals, null);
+        }
+
+        assertThat(result.written()).containsExactly(wanted);
+        assertThat(result.partSha256()).isEqualTo(part.sha256());
+        assertThat(Files.exists(work.resolve(wanted))).isTrue();
+        assertThat(Files.exists(work.resolve(f.entries().get(0).path()))).isFalse();
+    }
+
+    @Test
+    void partLayoutFindsTheFilesOfEachPartFromTheManifest(@TempDir Path tmp) throws IOException {
+        Path dataDir = tmp.resolve("data");
+        Fixture f = fixture(dataDir, 5, 1000);
+        var parts = new ArchiveWriter(dataDir, tmp.resolve("out"), "snap", 2500).write(f.entries(), f.owners(), null);
+        SnapshotManifest m = manifestOf(f.entries(), parts);
+
+        PartLayout layout = PartLayout.of(m);
+
+        assertThat(layout.exact()).isTrue();
+        assertThat(layout.files(2)).containsExactly(f.entries().get(2).path(), f.entries().get(3).path());
+        assertThat(layout.partsFor(m, java.util.Set.of(f.entries().get(4).path())))
+                .extracting(SnapshotManifest.PartManifest::partNumber).containsExactly(3);
+    }
+
+    @Test
+    void partLayoutFallsBackToTableListsWhenCountsDisagree(@TempDir Path tmp) throws IOException {
+        Path dataDir = tmp.resolve("data");
+        Fixture f = fixture(dataDir, 4, 1000);
+        var parts = new ArchiveWriter(dataDir, tmp.resolve("out"), "snap", 2500).write(f.entries(), f.owners(), null);
+        // A manifest whose table lists one file fewer than the parts carry.
+        SnapshotManifest m = manifestOf(f.entries().subList(0, 3), parts);
+
+        PartLayout layout = PartLayout.of(m);
+
+        assertThat(layout.exact()).isFalse();
+        assertThat(layout.partsFor(m, java.util.Set.of(f.entries().get(0).path()))).hasSize(2);
+    }
+
     private static SnapshotManifest manifestOf(List<SnapshotManifest.FileEntry> entries,
                                                List<SnapshotManifest.PartManifest> parts) {
         SnapshotManifest.TableManifest table = new SnapshotManifest.TableManifest(

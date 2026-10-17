@@ -232,17 +232,22 @@ public class SnapshotCommands {
             @Option(longNames = "tune-postgres", defaultValue = "false",
                     description = "Raise max_wal_size, checkpoint_timeout and wal_compression with ALTER SYSTEM"
                             + " for the import and restore them afterwards (needs superuser or ALTER SYSTEM grants)")
-            boolean tunePostgres) {
+            boolean tunePostgres,
+            @Option(longNames = "epoch-stake-epochs", defaultValue = "0",
+                    description = "Load only the newest N epochs of epoch_stake (at least 4; 0 loads every epoch)."
+                            + " The target must run with store.adapot.epoch-stake-pruning-enabled=true")
+            int epochStakeEpochs) {
         try {
             SnapshotCliSupport.ensureDirectory(Path.of(workDir));
             SnapshotSpecRegistry registry = support.importRegistry(specFile, allowCustomSpecs);
             ImportOptions options = support.importOptions(manifest, workDir, workers, memoryLimit,
-                    minFreeDiskGb, allowUnsigned, specFile, allowCustomSpecs, keepExtracted, tunePostgres);
+                    minFreeDiskGb, allowUnsigned, specFile, allowCustomSpecs, keepExtracted, tunePostgres,
+                    epochStakeEpochs);
             SnapshotImporter importer = new SnapshotImporter(registry);
 
             if (dryRun) {
                 SnapshotImporter.Preflight pre = importer.preflight(options);
-                printDryRun(pre.manifest(), registry, options);
+                printDryRun(pre.manifest(), registry, options, importer.selection(pre.archive(), pre.manifest()));
                 // The table list above already shows the selected and skipped tables.
                 pre.warnings().stream()
                         .filter(w -> !w.startsWith("Selected tables: ") && !w.startsWith("Skipped tables: "))
@@ -504,8 +509,8 @@ public class SnapshotCommands {
      */
     static final int DATABASE_BYTES_PER_PARQUET_BYTE = 8;
 
-    private void printDryRun(SnapshotManifest m, SnapshotSpecRegistry registry, ImportOptions options)
-            throws java.io.IOException {
+    private void printDryRun(SnapshotManifest m, SnapshotSpecRegistry registry, ImportOptions options,
+                             ArchiveVerifier.Selection selection) throws java.io.IOException {
         writeLn(info("Snapshot %s (%s, epoch %d, block %d, slot %d)", m.snapshotId(), m.point().network(),
                 m.point().epoch(), m.point().blockNumber(), m.point().slot()));
         writeLn("  Target schema : %s at %s", options.schema(), redactedUrl(options.jdbcUrl()));
@@ -517,8 +522,12 @@ public class SnapshotCommands {
             limitations.forEach(l -> writeLn("    - %s", l));
         }
 
-        long extract = m.tables().stream().flatMap(t -> t.files().stream())
-                .mapToLong(SnapshotManifest.FileEntry::size).sum();
+        Map<String, Long> sizes = new java.util.HashMap<>();
+        m.tables().forEach(t -> t.files().forEach(f -> sizes.put(f.path(), f.size())));
+        long extract = selection.files().stream().mapToLong(f -> sizes.getOrDefault(f, 0L)).sum();
+        if (!m.retentionOrEmpty().isEmpty()) {
+            writeLn(info("Retention: %s", com.bloxbean.cardano.yaci.store.snapshot.manifest.Retention.format(m.retentionOrEmpty())));
+        }
         long free = Files.getFileStore(options.workDir()).getUsableSpace();
         long database = loadedBytes(m, registry) * DATABASE_BYTES_PER_PARQUET_BYTE;
         writeLn(info("Disk space:"));

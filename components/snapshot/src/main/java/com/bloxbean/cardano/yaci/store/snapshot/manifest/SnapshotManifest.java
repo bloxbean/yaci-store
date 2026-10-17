@@ -29,8 +29,30 @@ public record SnapshotManifest(
         List<PartManifest> parts,
         /** Non-empty means the snapshot is knowingly not an exact database copy. */
         List<String> declaredLossy,
-        Map<String, String> tableSchemaFingerprints
+        Map<String, String> tableSchemaFingerprints,
+        /** {@code full}, or {@code pruned} for a snapshot that keeps only {@link #retention}'s rows. Null means full. */
+        String flavor,
+        /**
+         * What a pruned or import-time-reduced snapshot keeps, e.g. {@code epoch_stake.epochs=8}. Empty
+         * or null for a full copy. See {@code Retention}.
+         */
+        Map<String, String> retention
 ) {
+
+    public static final String FLAVOR_FULL = "full";
+    public static final String FLAVOR_PRUNED = "pruned";
+
+    public SnapshotManifest(int formatVersion, String snapshotId, String createdAt, String producer,
+                            String yaciStoreVersion, String specFormatVersion, String duckdbVersion,
+                            String ducklakeFormatVersion, ConsistencyPoint point, String genesisHash,
+                            List<String> modules, Map<String, String> pruningSettings, String schemaFingerprint,
+                            String flywayFingerprint, List<TableManifest> tables, List<PartManifest> parts,
+                            List<String> declaredLossy, Map<String, String> tableSchemaFingerprints) {
+        this(formatVersion, snapshotId, createdAt, producer, yaciStoreVersion, specFormatVersion,
+                duckdbVersion, ducklakeFormatVersion, point, genesisHash, modules, pruningSettings,
+                schemaFingerprint, flywayFingerprint, tables, parts, declaredLossy, tableSchemaFingerprints,
+                null, null);
+    }
 
     public SnapshotManifest(int formatVersion, String snapshotId, String createdAt, String producer,
                             String yaciStoreVersion, String specFormatVersion, String duckdbVersion,
@@ -41,6 +63,23 @@ public record SnapshotManifest(
         this(formatVersion, snapshotId, createdAt, producer, yaciStoreVersion, specFormatVersion,
                 duckdbVersion, ducklakeFormatVersion, point, genesisHash, modules, pruningSettings,
                 schemaFingerprint, flywayFingerprint, tables, parts, declaredLossy, Map.of());
+    }
+
+    /** The flavor, {@link #FLAVOR_FULL} when the manifest predates the field. */
+    public String flavorOrFull() {
+        return flavor == null ? FLAVOR_FULL : flavor;
+    }
+
+    public Map<String, String> retentionOrEmpty() {
+        return retention == null ? Map.of() : retention;
+    }
+
+    /** A copy with different tables and retention; everything else, the parts included, is unchanged. */
+    public SnapshotManifest withTables(List<TableManifest> newTables, String newFlavor, Map<String, String> newRetention) {
+        return new SnapshotManifest(formatVersion, snapshotId, createdAt, producer, yaciStoreVersion,
+                specFormatVersion, duckdbVersion, ducklakeFormatVersion, point, genesisHash, modules,
+                pruningSettings, schemaFingerprint, flywayFingerprint, newTables, parts, declaredLossy,
+                tableSchemaFingerprints, newFlavor, newRetention);
     }
 
     public TableManifest table(String specId) {

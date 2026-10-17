@@ -211,6 +211,15 @@ public class SnapshotCliSupport {
     public ImportOptions importOptions(String manifest, String workDir, int workers, String memoryLimit,
                                        long minFreeDiskGb, boolean allowUnsigned, String specFile,
                                        boolean allowCustomSpecs, boolean keepExtracted, boolean tunePostgres) {
+        return importOptions(manifest, workDir, workers, memoryLimit, minFreeDiskGb, allowUnsigned, specFile,
+                allowCustomSpecs, keepExtracted, tunePostgres, 0);
+    }
+
+    /** @param epochStakeEpochs keep only the newest N epochs of {@code epoch_stake}; 0 keeps every epoch */
+    public ImportOptions importOptions(String manifest, String workDir, int workers, String memoryLimit,
+                                       long minFreeDiskGb, boolean allowUnsigned, String specFile,
+                                       boolean allowCustomSpecs, boolean keepExtracted, boolean tunePostgres,
+                                       int epochStakeEpochs) {
         Path manifestPath = Path.of(manifest).toAbsolutePath().normalize();
         List<Path> custom = new ArrayList<>();
         if (specFile != null && !specFile.isBlank()) {
@@ -222,7 +231,9 @@ public class SnapshotCliSupport {
                 Path.of(workDir).toAbsolutePath().normalize(),
                 jdbcUrl(), dbUser(), dbPassword(), schema(), network(), protocolMagic(),
                 eventPublisherId(), cursorBlocksToKeep(), workers, memoryLimit, minFreeDiskGb,
-                allowUnsigned, allowCustomSpecs, custom, keepExtracted, false, tunePostgres);
+                allowUnsigned, allowCustomSpecs, custom, keepExtracted, false, tunePostgres,
+                com.bloxbean.cardano.yaci.store.snapshot.manifest.Retention.epochStake(epochStakeEpochs),
+                pruningSettings());
     }
 
     public static void ensureDirectory(Path path) {
