@@ -111,6 +111,9 @@ public class SnapshotCommands {
             @Option(longNames = "unsigned", defaultValue = "false",
                     description = "Acknowledge that no signature will be produced")
             boolean unsigned,
+            @Option(longNames = "signing-key",
+                    description = "Ed25519 private key (PKCS#8 PEM) to sign the snapshot with (default: store.snapshot.signing-key)")
+            String signingKey,
             @Option(longNames = "memory-limit", defaultValue = DuckLakeCatalog.DEFAULT_MEMORY_LIMIT,
                     description = "DuckDB memory limit for planning; a larger value is faster, never required")
             String memoryLimit,
@@ -120,19 +123,42 @@ public class SnapshotCommands {
             boolean allowCustomSpecs,
             @Option(longNames = "verify", defaultValue = "false",
                     description = "Re-read every written part and check its digest before publishing the manifest")
-            boolean verify) {
+            boolean verify,
+            @Option(longNames = "publish", defaultValue = "false",
+                    description = "Upload the snapshot when the export succeeds; it is staged unless --live")
+            boolean publish,
+            @Option(longNames = "live", defaultValue = "false",
+                    description = "With --publish: add it to index.json at once (default: staged, importable by id)")
+            boolean live,
+            @Option(longNames = "history-split", defaultValue = "true",
+                    description = "Package the history of address_utxo, tx_input and epoch_stake in parts of its own,"
+                            + " so an import into a target that prunes them skips it")
+            boolean historySplit,
+            @Option(longNames = "utxo-safe-blocks", defaultValue = "2160",
+                    description = "History split: outputs spent, and inputs, before this many blocks before the point are history")
+            int utxoSafeBlocks,
+            @Option(longNames = "epoch-stake-epochs", defaultValue = "8",
+                    description = "History split: epoch_stake epochs older than the newest N are history (at least 4)")
+            int epochStakeEpochs,
+            @Option(longNames = "remote", description = SnapshotRemoteCommands.REMOTE_HELP) String remote) {
         try {
             SnapshotCliSupport.ensureDirectory(Path.of(workDir));
             SnapshotCliSupport.ensureDirectory(Path.of(output));
             SnapshotSpecRegistry registry = support.exportRegistry(specFile, allowCustomSpecs);
+            SnapshotCliSupport.SigningKey key = unsigned ? null : support.signingKey(signingKey);
+            if (key == null && !unsigned) {
+                throw new CommandFailedException("snapshot export: pass --signing-key (or set store.snapshot.signing-key),"
+                        + " or --unsigned to produce an unsigned snapshot", null);
+            }
             ExportOptions options = support.exportOptions(registry, dataDir, output, workDir, partSize,
-                    targetEpoch, minConfirmations, allowIncomplete, unsigned, memoryLimit);
+                    targetEpoch, minConfirmations, allowIncomplete, unsigned, memoryLimit)
+                    .withHistorySplit(historySplit, utxoSafeBlocks, epochStakeEpochs);
 
-            writeLn(info("Packaging snapshot from %s", options.dataDir()));
+            writeLn(info("Packaging snapshot from %s%s", options.dataDir(), historySplit ? ", history in parts of its own" : ""));
             SnapshotExporter.ExportResult result;
             try {
                 SnapshotExporter exporter = new SnapshotExporter(registry).verifyParts(verify);
-                result = exporter.export(options, new ProgressPrinter(exporter.phases()));
+                result = exporter.export(options, new ProgressPrinter(exporter.phases(options)));
             } catch (SnapshotExporter.BlockedException e) {
                 CommandFailedException failure = failed("snapshot export", e);
                 printBlockerReport(e.report(), options.workDir(), false);
@@ -145,13 +171,28 @@ public class SnapshotCommands {
                     m.point().blockNumber(), m.point().slot());
             writeLn("  Block hash    : %s", m.point().blockHash());
             writeLn("  Tables        : %d, rows %d", m.tables().size(), m.totalRows());
+            if (!m.retentionOrEmpty().isEmpty()) {
+                writeLn("  Retention     : %s", com.bloxbean.cardano.yaci.store.snapshot.manifest.Retention.format(m.retention()));
+            }
             writeLn("  Parts         : %d (%s)", m.parts().size(),
                     SnapshotCliSupport.humanBytes(result.bytesWritten()));
             writeLn("  Manifest      : %s", result.manifestPath().getFileName());
             writeLn("  Duration      : %s", SnapshotCliSupport.humanMillis(result.millis()));
+            if (key != null) {
+                String keyId = com.bloxbean.cardano.yaci.store.snapshot.manifest.SnapshotSignature.sign(
+                        result.manifestPath(), key.privateKey(), key.publicKey());
+                writeLn("  Signed        : key %s (SHA256SUMS.sig)", keyId);
+            } else {
+                writeLn(warn("  Signed        : no (--unsigned)"));
+            }
             if (!registry.selectedLimitations(m.declaredLossy()).isEmpty()) {
                 writeLn(warn("Declared limitations (%d):", registry.selectedLimitations(m.declaredLossy()).size()));
                 registry.selectedLimitations(m.declaredLossy()).forEach(l -> writeLn("    - %s", l));
+            }
+            if (publish) {
+                try (var store = support.remoteStore(remote)) {
+                    SnapshotRemoteCommands.publish(store, result.manifestPath(), 4, live);
+                }
             }
         } catch (CommandFailedException e) {
             throw e;
@@ -167,7 +208,10 @@ public class SnapshotCommands {
             String manifest,
             @Option(longNames = "deep", defaultValue = "true",
                     description = "Also scan part entries for traversal, duplicates and coverage")
-            boolean deep) {
+            boolean deep,
+            @Option(longNames = "trusted-key",
+                    description = "Publisher public key(s), comma-separated PEM files (default: store.snapshot.trusted-keys)")
+            String trustedKey) {
         try {
             Path manifestPath = Path.of(manifest).toAbsolutePath().normalize();
             SnapshotManifest m = new ManifestCodec().read(manifestPath);
@@ -185,6 +229,16 @@ public class SnapshotCommands {
             }
             writeLn("  Parts verified : %d (%s)", m.parts().size(),
                     SnapshotCliSupport.humanBytes(result.bytesVerified()));
+            var signature = com.bloxbean.cardano.yaci.store.snapshot.manifest.SnapshotSignature.verify(manifestPath,
+                    support.trustedKeys(trustedKey));
+            switch (signature.status()) {
+                case VERIFIED -> writeLn(success("Signature: %s", signature.describe()));
+                case INVALID -> {
+                    writeLn(error("Signature: %s", signature.describe()));
+                    throw new CommandFailedException("snapshot verify: signature verification failed", null);
+                }
+                default -> writeLn(warn("Signature: %s", signature.describe()));
+            }
             if (result.ok()) {
                 writeLn(success("All parts match the manifest"));
             } else {
@@ -202,8 +256,14 @@ public class SnapshotCommands {
     @Command(command = "snapshot import",
             description = "Import a verified snapshot into the configured empty, migrated schema.")
     public void importSnapshot(
-            @Option(longNames = "manifest", required = true, description = "Path to the manifest JSON")
+            @Option(longNames = "manifest", description = "Path to the manifest JSON of a local snapshot")
             String manifest,
+            @Option(longNames = "snapshot",
+                    description = "Instead of --manifest: a published snapshot id (a unique prefix of a live one's;"
+                            + " the full id of a staged one), or latest,"
+                            + " streamed from --remote")
+            String snapshot,
+            @Option(longNames = "remote", description = SnapshotRemoteCommands.REMOTE_HELP) String remote,
             @Option(longNames = "work-dir", required = true,
                     description = "Directory for extracted Parquet and per-worker DuckDB spill files")
             String workDir,
@@ -214,8 +274,11 @@ public class SnapshotCommands {
                     description = "Minimum free space required in the work directory at preflight")
             long minFreeDiskGb,
             @Option(longNames = "allow-unsigned", defaultValue = "false",
-                    description = "Import a snapshot with no signature")
+                    description = "Import a snapshot without a signature verified by a trusted key")
             boolean allowUnsigned,
+            @Option(longNames = "trusted-key",
+                    description = "Publisher public key(s), comma-separated PEM files (default: store.snapshot.trusted-keys)")
+            String trustedKey,
             @Option(longNames = "spec-file", description = "Additional local specification file(s)") String specFile,
             @Option(longNames = "allow-custom-specs", defaultValue = "false",
                     description = "Acknowledge the use of operator-supplied specifications")
@@ -232,17 +295,49 @@ public class SnapshotCommands {
             @Option(longNames = "tune-postgres", defaultValue = "false",
                     description = "Raise max_wal_size, checkpoint_timeout and wal_compression with ALTER SYSTEM"
                             + " for the import and restore them afterwards (needs superuser or ALTER SYSTEM grants)")
-            boolean tunePostgres) {
+            boolean tunePostgres,
+            @Option(longNames = "epoch-stake-epochs", defaultValue = "0",
+                    description = "Load only the newest N epochs of epoch_stake (at least 4). Default: the target's"
+                            + " store.adapot.epoch-stake-safe-epochs when it runs with"
+                            + " store.adapot.epoch-stake-pruning-enabled=true, otherwise every epoch")
+            int epochStakeEpochs) {
+        boolean local = manifest != null && !manifest.isBlank();
+        if (local == (snapshot != null && !snapshot.isBlank())) {
+            throw new CommandFailedException("snapshot import: pass either --manifest or --snapshot", null);
+        }
+        com.bloxbean.cardano.yaci.store.snapshot.remote.SnapshotStore store = null;
         try {
             SnapshotCliSupport.ensureDirectory(Path.of(workDir));
             SnapshotSpecRegistry registry = support.importRegistry(specFile, allowCustomSpecs);
+            com.bloxbean.cardano.yaci.store.snapshot.archive.PartSource parts = null;
+            if (!local) {
+                store = support.remoteStore(remote);
+                var repo = new com.bloxbean.cardano.yaci.store.snapshot.remote.SnapshotRepository(store);
+                // Chosen against this target's schema too, so latest is the newest snapshot it can take.
+                com.bloxbean.cardano.yaci.store.snapshot.remote.SnapshotRepository.Resolved resolved;
+                try (java.sql.Connection target = support.connect()) {
+                    resolved = repo.resolve(support.network(), snapshot,
+                            SnapshotRemoteCommands.compatibility(registry, target, support.schema()), new ProgressPrinter(0));
+                }
+                Path dir = Path.of(workDir).toAbsolutePath().normalize()
+                        .resolve("snapshot-" + resolved.entry().snapshotId());
+                manifest = repo.downloadMetadata(resolved, dir).toString();
+                parts = repo.partSource(resolved);
+                SnapshotRemoteCommands.printSnapshot(resolved, store);
+                writeLn("  Manifest    : saved to %s", manifest);
+            }
             ImportOptions options = support.importOptions(manifest, workDir, workers, memoryLimit,
-                    minFreeDiskGb, allowUnsigned, specFile, allowCustomSpecs, keepExtracted, tunePostgres);
+                    minFreeDiskGb, allowUnsigned, specFile, allowCustomSpecs, keepExtracted, tunePostgres,
+                    support.epochStakeEpochs(epochStakeEpochs)).withPartSource(parts).withTrustedKeys(support.trustedKeys(trustedKey));
             SnapshotImporter importer = new SnapshotImporter(registry);
 
             if (dryRun) {
                 SnapshotImporter.Preflight pre = importer.preflight(options);
-                printDryRun(pre.manifest(), registry, options);
+                printDryRun(pre.manifest(), registry, options, importer.selection(pre.archive(), pre.manifest()));
+                if (pre.signature() != null) {
+                    writeLn(pre.signature().trusted() ? success("Signature: %s", pre.signature().describe())
+                            : warn("Signature: %s", pre.signature().describe()));
+                }
                 // The table list above already shows the selected and skipped tables.
                 pre.warnings().stream()
                         .filter(w -> !w.startsWith("Selected tables: ") && !w.startsWith("Skipped tables: "))
@@ -278,6 +373,10 @@ public class SnapshotCommands {
             throw e;
         } catch (Exception e) {
             throw failed("snapshot import", e);
+        } finally {
+            if (store != null) {
+                store.close();
+            }
         }
     }
 
@@ -346,7 +445,7 @@ public class SnapshotCommands {
      * Prints why a command failed, with its cause chain (the top-level message alone often hides the
      * real error), and returns the exception that makes the process exit non-zero.
      */
-    private CommandFailedException failed(String command, Exception e) {
+    static CommandFailedException failed(String command, Exception e) {
         writeLn(error("%s failed: %s", command, e.getMessage()));
         java.util.Set<String> seen = new java.util.HashSet<>();
         seen.add(String.valueOf(e.getMessage()));
@@ -504,8 +603,8 @@ public class SnapshotCommands {
      */
     static final int DATABASE_BYTES_PER_PARQUET_BYTE = 8;
 
-    private void printDryRun(SnapshotManifest m, SnapshotSpecRegistry registry, ImportOptions options)
-            throws java.io.IOException {
+    private void printDryRun(SnapshotManifest m, SnapshotSpecRegistry registry, ImportOptions options,
+                             ArchiveVerifier.Selection selection) throws java.io.IOException {
         writeLn(info("Snapshot %s (%s, epoch %d, block %d, slot %d)", m.snapshotId(), m.point().network(),
                 m.point().epoch(), m.point().blockNumber(), m.point().slot()));
         writeLn("  Target schema : %s at %s", options.schema(), redactedUrl(options.jdbcUrl()));
@@ -517,8 +616,12 @@ public class SnapshotCommands {
             limitations.forEach(l -> writeLn("    - %s", l));
         }
 
-        long extract = m.tables().stream().flatMap(t -> t.files().stream())
-                .mapToLong(SnapshotManifest.FileEntry::size).sum();
+        Map<String, Long> sizes = new java.util.HashMap<>();
+        m.tables().forEach(t -> t.files().forEach(f -> sizes.put(f.path(), f.size())));
+        long extract = selection.files().stream().mapToLong(f -> sizes.getOrDefault(f, 0L)).sum();
+        if (!m.retentionOrEmpty().isEmpty()) {
+            writeLn(info("Retention: %s", com.bloxbean.cardano.yaci.store.snapshot.manifest.Retention.format(m.retentionOrEmpty())));
+        }
         long free = Files.getFileStore(options.workDir()).getUsableSpace();
         long database = loadedBytes(m, registry) * DATABASE_BYTES_PER_PARQUET_BYTE;
         writeLn(info("Disk space:"));

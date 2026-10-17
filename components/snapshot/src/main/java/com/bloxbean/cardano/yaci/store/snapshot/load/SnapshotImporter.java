@@ -4,11 +4,14 @@ import com.bloxbean.cardano.yaci.store.snapshot.manifest.ManifestValidator;
 import com.bloxbean.cardano.yaci.store.snapshot.archive.ArchiveExtractor;
 import com.bloxbean.cardano.yaci.store.snapshot.archive.ArchiveVerifier;
 import com.bloxbean.cardano.yaci.store.snapshot.archive.Parallel;
+import com.bloxbean.cardano.yaci.store.snapshot.archive.PartLayout;
 import com.bloxbean.cardano.yaci.store.snapshot.convert.ConverterRegistry;
 import com.bloxbean.cardano.yaci.store.snapshot.ducklake.DuckDb;
 import com.bloxbean.cardano.yaci.store.snapshot.handler.HandlerRegistry;
 import com.bloxbean.cardano.yaci.store.snapshot.handler.SnapshotHandler;
 import com.bloxbean.cardano.yaci.store.snapshot.manifest.ManifestCodec;
+import com.bloxbean.cardano.yaci.store.snapshot.manifest.Retention;
+import com.bloxbean.cardano.yaci.store.snapshot.manifest.SnapshotSignature;
 import com.bloxbean.cardano.yaci.store.snapshot.manifest.SnapshotManifest;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.RestoreMode;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.SnapshotSpecRegistry;
@@ -57,6 +60,9 @@ public class SnapshotImporter {
     /** Phase banners {@link #importSnapshot} sends, so a caller can number them. */
     public static final int PHASES = 6;
 
+    /** Reads of one remote part before the import gives up; every attempt starts the part again. */
+    static final int PART_ATTEMPTS = 3;
+
     /** PostgreSQL advisory lock key, so two imports cannot run against one schema. */
     private static final long ADVISORY_LOCK_KEY = 0x59414349_534E4150L;
 
@@ -69,28 +75,73 @@ public class SnapshotImporter {
     }
 
     /** Preflight-only view, used by {@code snapshot import-status} and before any write. */
+    /**
+     * @param manifest the import's view: the snapshot as published, reduced by the import's own
+     *                 retention ({@link Retention#apply})
+     * @param archive  the snapshot as published, which the parts are checked against
+     * @param signature whether the snapshot is signed, and by a trusted key
+     */
     public record Preflight(SnapshotManifest manifest,
                             List<String> blockers,
                             List<String> warnings,
-                            ImportJournal.Run existingRun) {
+                            ImportJournal.Run existingRun,
+                            SnapshotManifest archive,
+                            SnapshotSignature.Verification signature) {
+        public Preflight(SnapshotManifest manifest, List<String> blockers, List<String> warnings,
+                         ImportJournal.Run existingRun, SnapshotManifest archive) {
+            this(manifest, blockers, warnings, existingRun, archive, null);
+        }
+
         public boolean ok() {
             return blockers.isEmpty();
         }
     }
 
     public Preflight preflight(ImportOptions options) throws SQLException, IOException {
-        SnapshotManifest manifest = new ManifestCodec().read(options.manifestPath());
+        SnapshotManifest archive = new ManifestCodec().read(options.manifestPath());
         List<String> blockers = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
+        SnapshotManifest manifest;
+        Map<String, String> retentionNotes = new TreeMap<>();
+        Map<String, String> retention;
+        try {
+            retention = Retention.forTarget(archive, options.targetSettings(), options.retention(), retentionNotes);
+            manifest = Retention.apply(archive, retention);
+        } catch (IllegalArgumentException e) {
+            blockers.add(e.getMessage());
+            return new Preflight(archive, blockers, warnings, null, archive);
+        }
 
+        retentionNotes.forEach((table, note) -> {
+            if (registry.byTarget(table).filter(spec -> registry.isSelected(spec.id())).isPresent()) {
+                warnings.add(note);
+            }
+        });
         ManifestValidator validator = new ManifestValidator(registry);
         blockers.addAll(validator.validate(manifest));
         warnings.addAll(validator.importChanges(manifest));
-        if (!options.allowUnsigned()) {
-            blockers.add("Snapshot signing is not implemented; --allow-unsigned is required");
+        SnapshotSignature.Verification signature;
+        try {
+            signature = SnapshotSignature.verify(options.manifestPath(), options.trustedKeys());
+        } catch (IOException | RuntimeException e) {
+            signature = new SnapshotSignature.Verification(SnapshotSignature.Status.INVALID, null, List.of(e.getMessage()));
+        }
+        switch (signature.status()) {
+            case VERIFIED -> { }
+            case INVALID -> blockers.add("Snapshot " + signature.describe()
+                    + ". The snapshot is not what its publisher signed; do not import it.");
+            case UNSIGNED, UNVERIFIED -> {
+                if (options.allowUnsigned()) {
+                    warnings.add("Importing a snapshot that is " + signature.describe() + ".");
+                } else {
+                    blockers.add("The snapshot is " + signature.describe() + ". Configure the publisher's key in"
+                            + " store.snapshot.trusted-keys (or --trusted-key), or pass --allow-unsigned to import it"
+                            + " without a verified signature.");
+                }
+            }
         }
         if (!blockers.isEmpty()) {
-            return new Preflight(manifest, blockers, warnings, null);
+            return new Preflight(manifest, blockers, warnings, null, archive, signature);
         }
         // Resolve both database connection paths before any extraction or target writes.
         DuckPgSession.pgConnectionString(options);
@@ -102,6 +153,7 @@ public class SnapshotImporter {
                     + options.network() + "/" + options.protocolMagic()
                     + ". A network mismatch is never overridable.");
         }
+        blockers.addAll(retentionBlockers(manifest, options));
 
         ImportJournal.Run existing = null;
         try (Connection pg = connect(options)) {
@@ -118,6 +170,10 @@ public class SnapshotImporter {
             if (existing != null && (registry.isScoped() || existing.scopeDigest() != null)
                     && !registry.scopeDigest().equals(existing.scopeDigest())) {
                 blockers.add("Import scope does not match the journal. Resume with the original enabled stores and specifications.");
+            }
+            if (existing != null && !java.util.Objects.equals(existing.retention(), Retention.format(retention))) {
+                blockers.add("Import retention does not match the journal (" + existing.retention()
+                        + "). Resume with the original --epoch-stake-epochs and pruning settings.");
             }
             if (existing != null && !existing.manifestDigest().equals(new ManifestCodec().digest(manifest))) {
                 blockers.add("Import journal manifest digest does not match this manifest. "
@@ -160,10 +216,20 @@ public class SnapshotImporter {
             warnings.addAll(PostgresTuning.parallelismAdvice(pg, options.workers()));
         }
 
-        ArchiveVerifier.Result verified =
-                new ArchiveVerifier().inspect(manifest, options.archiveDir());
-        if (!verified.ok()) {
-            verified.problems().forEach(p -> blockers.add("Archive: " + p));
+        ArchiveVerifier.Selection selection = selection(archive, manifest);
+        if (selection.parts().size() < archive.parts().size()) {
+            warnings.add(String.format("Reading %d of %d parts (%s of %s); the others carry only skipped tables, epochs or history",
+                    selection.parts().size(), archive.parts().size(), Progress.bytes(partBytes(selection.parts())),
+                    Progress.bytes(partBytes(archive.parts()))));
+        }
+        if (options.partSource() == null) {
+            ArchiveVerifier.Result verified =
+                    new ArchiveVerifier().inspect(archive, options.archiveDir(), selection);
+            if (!verified.ok()) {
+                verified.problems().forEach(p -> blockers.add("Archive: " + p));
+            }
+        } else {
+            blockers.addAll(remoteParts(options.partSource(), selection));
         }
         if (!registry.selectedLimitations(manifest.declaredLossy()).isEmpty()) {
             warnings.add("This snapshot has " + registry.selectedLimitations(manifest.declaredLossy()).size()
@@ -176,7 +242,68 @@ public class SnapshotImporter {
                     + "; the configured minimum is " + options.minFreeDiskGb() + " GiB");
         }
 
-        return new Preflight(manifest, blockers, warnings, existing);
+        return new Preflight(manifest, blockers, warnings, existing, archive, signature);
+    }
+
+    /**
+     * A snapshot that keeps only part of a table's history can only go to a target that prunes that
+     * table the same way; otherwise the target would present partial history as complete.
+     */
+    private List<String> retentionBlockers(SnapshotManifest manifest, ImportOptions options) {
+        List<String> problems = new ArrayList<>();
+        new TreeMap<>(manifest.retentionOrEmpty()).forEach((key, value) -> {
+            String table = Retention.table(key);
+            boolean selected = registry.byTarget(table).filter(s -> registry.isSelected(s.id())).isPresent();
+            String setting = Retention.requiredSetting(key);
+            if (!selected || setting == null) {
+                return;
+            }
+            if (!"true".equalsIgnoreCase(options.targetSettings().getOrDefault(setting, "false"))) {
+                problems.add(String.format("This import keeps only part of %s (%s=%s). The target must run with "
+                        + "%s=true, or it would present partial history as complete.", table, key, value, setting));
+            }
+        });
+        return problems;
+    }
+
+    /**
+     * The files this import loads (the selected tables', and the files their transforms read), and
+     * the parts that carry them.
+     */
+    public ArchiveVerifier.Selection selection(SnapshotManifest archive, SnapshotManifest manifest) {
+        Set<String> specs = new java.util.TreeSet<>();
+        for (SnapshotTableSpec spec : registry.importedTables()) {
+            specs.add(spec.id());
+            specs.addAll(spec.importSpec().dependencies());
+        }
+        Set<String> files = new java.util.TreeSet<>();
+        manifest.tables().stream().filter(t -> specs.contains(t.specId()) && t.files() != null)
+                .forEach(t -> t.files().forEach(f -> files.add(f.path())));
+        return new ArchiveVerifier.Selection(PartLayout.of(archive).partsFor(archive, files), files);
+    }
+
+    /** Every part the import reads is in the remote store, with the size the manifest declares. */
+    private static List<String> remoteParts(com.bloxbean.cardano.yaci.store.snapshot.archive.PartSource source,
+                                            ArchiveVerifier.Selection selection) {
+        List<String> problems = new ArrayList<>();
+        for (SnapshotManifest.PartManifest part : selection.parts()) {
+            try {
+                var size = source.size(part);
+                if (size.isEmpty()) {
+                    problems.add("Archive: missing archive part " + part.fileName() + " at " + source.describe());
+                } else if (size.getAsLong() != part.size()) {
+                    problems.add("Archive: " + part.fileName() + ": size " + size.getAsLong() + " but manifest declares "
+                            + part.size());
+                }
+            } catch (IOException e) {
+                problems.add("Archive: " + part.fileName() + ": " + e.getMessage());
+            }
+        }
+        return problems;
+    }
+
+    private static long partBytes(List<SnapshotManifest.PartManifest> parts) {
+        return parts.stream().mapToLong(SnapshotManifest.PartManifest::size).sum();
     }
 
     /**
@@ -239,6 +366,10 @@ public class SnapshotImporter {
                     + String.join("\n  - ", pre.blockers()));
         }
         SnapshotManifest manifest = pre.manifest();
+        SnapshotManifest archive = pre.archive();
+        Map<String, String> retention = Retention.forTarget(archive, options.targetSettings(), options.retention(),
+                new TreeMap<>());
+        ArchiveVerifier.Selection selection = selection(archive, manifest);
         List<String> warnings = new ArrayList<>(pre.warnings());
 
         try (Connection pg = connect(options)) {
@@ -249,6 +380,9 @@ public class SnapshotImporter {
             if (current != null && (registry.isScoped() || current.scopeDigest() != null)
                     && !registry.scopeDigest().equals(current.scopeDigest())) {
                 throw new IllegalStateException("Import scope does not match the journal");
+            }
+            if (current != null && !java.util.Objects.equals(current.retention(), Retention.format(retention))) {
+                throw new IllegalStateException("Import retention does not match the journal");
             }
             if (current != null && !current.manifestDigest().equals(new ManifestCodec().digest(manifest))) {
                 throw new IllegalStateException("Import journal manifest digest does not match this manifest");
@@ -262,11 +396,19 @@ public class SnapshotImporter {
             int partThreads = Math.max(1, Math.min(options.workers(), ArchiveVerifier.DEFAULT_THREADS));
             ArchiveVerifier verifier = new ArchiveVerifier(partThreads);
             Progress.phase(progress, String.format("%s %d parts (%s)",
-                    options.skipExtraction() ? "Verifying" : "Verifying and extracting", manifest.parts().size(),
-                    Progress.bytes(manifest.parts().stream().mapToLong(SnapshotManifest.PartManifest::size).sum())));
-            ArchiveVerifier.Result verified = options.skipExtraction()
-                    ? verifier.verify(manifest, options.archiveDir(), true)
-                    : verifier.structure(manifest, options.archiveDir());
+                    options.skipExtraction() ? "Verifying"
+                            : options.partSource() != null && options.partSource().remote() ? "Downloading, verifying and extracting"
+                            : "Verifying and extracting", selection.parts().size(),
+                    Progress.bytes(partBytes(selection.parts()))));
+            if (options.skipExtraction() && options.partSource() != null) {
+                throw new IllegalArgumentException("Skipping extraction needs the parts in a local directory");
+            }
+            // A streamed part cannot be checked up front: extraction checks every entry, and afterwards
+            // that every selected file arrived.
+            ArchiveVerifier.Result verified = options.partSource() != null ? new ArchiveVerifier.Result(true, List.of(), 0)
+                    : options.skipExtraction()
+                    ? verifier.verify(archive, options.archiveDir(), true, null, selection)
+                    : verifier.structure(archive, options.archiveDir(), selection);
             if (!verified.ok()) {
                 throw new IllegalStateException("Archive verification failed:\n  - "
                         + String.join("\n  - ", verified.problems()));
@@ -276,7 +418,7 @@ public class SnapshotImporter {
             Path extractRoot = options.workDir().resolve("extracted");
             long t1 = System.currentTimeMillis();
             if (!options.skipExtraction()) {
-                extract(manifest, options, extractRoot, progress);
+                extract(archive, selection, options, extractRoot, progress);
             }
             long extractMillis = System.currentTimeMillis() - t1;
 
@@ -287,7 +429,8 @@ public class SnapshotImporter {
                     new ManifestCodec().digest(manifest), manifest.point().network(),
                     manifest.point().protocolMagic(), manifest.point().epoch(), manifest.point().slot(),
                     manifest.point().blockNumber(), manifest.point().blockHash(),
-                    schema.fingerprint(), ImportJournal.STATUS_LOADING, null, registry.scopeDigest()));
+                    schema.fingerprint(), ImportJournal.STATUS_LOADING, null, registry.scopeDigest(),
+                    Retention.format(retention)));
             journal.recordTransforms(manifest.snapshotId(), registry.importedTables());
 
             Progress.phase(progress, "Preparing " + loadedTables(manifest).size()
@@ -633,43 +776,67 @@ public class SnapshotImporter {
         return results;
     }
 
-    private void extract(SnapshotManifest manifest, ImportOptions options, Path extractRoot,
-                         Consumer<String> progress) throws IOException {
+    /**
+     * Extracts the selected files from the parts that carry them; entries of skipped tables are read
+     * past. Every part is checked against the published manifest, and afterwards every selected
+     * file must have been written exactly once.
+     */
+    private void extract(SnapshotManifest archive, ArchiveVerifier.Selection selection, ImportOptions options,
+                         Path extractRoot, Consumer<String> progress) throws IOException {
         Map<String, Long> expected = new TreeMap<>();
         Map<String, String> digests = new HashMap<>();
-        manifest.tables().forEach(t -> t.files().forEach(f -> {
+        archive.tables().forEach(t -> t.files().forEach(f -> {
             expected.put(f.path(), f.size());
             digests.put(f.path(), f.sha256());
         }));
 
         long maxEntries = expected.size() + 16L;
-        long maxBytes = expected.values().stream().mapToLong(Long::longValue).sum() + (1L << 20);
+        long entryBytes = selection.files().stream().mapToLong(f -> expected.getOrDefault(f, 0L)).sum();
+        long maxBytes = entryBytes + (1L << 20);
         ArchiveExtractor extractor = new ArchiveExtractor(extractRoot, maxEntries, maxBytes);
 
-        List<SnapshotManifest.PartManifest> parts = manifest.parts();
+        List<SnapshotManifest.PartManifest> parts = selection.parts();
         int threads = Math.max(1, Math.min(options.workers(), ArchiveVerifier.DEFAULT_THREADS));
         say(progress, "extract", threads + " thread(s); each part and entry is hashed while it is extracted");
         long started = System.currentTimeMillis();
-        long entryBytes = expected.values().stream().mapToLong(Long::longValue).sum();
         AtomicInteger done = new AtomicInteger();
         AtomicLong doneBytes = new AtomicLong();
+        Set<String> written = java.util.concurrent.ConcurrentHashMap.newKeySet();
         try (Progress.Ticker ignored = Progress.every(Progress.INTERVAL_MILLIS, "extract",
                 () -> String.format("%d/%d parts  %s", done.get(), parts.size(),
                         Progress.rate(doneBytes.get(), entryBytes, started, System.currentTimeMillis())),
                 progress)) {
+            com.bloxbean.cardano.yaci.store.snapshot.archive.PartSource source = options.parts();
+            int attempts = source.remote() ? PART_ATTEMPTS : 1;
             Parallel.map(parts, threads, part -> {
-                ArchiveExtractor.Extracted result;
-                try {
-                    result = extractor.extract(options.archiveDir().resolve(part.fileName()),
-                            expected, digests, entry -> doneBytes.addAndGet(expected.getOrDefault(entry, 0L)));
-                } catch (IOException e) {
-                    // A damaged part usually fails ZIP's own CRC check before its SHA-256 is complete.
-                    throw new IllegalStateException("Archive verification failed:\n  - "
-                            + part.fileName() + ": " + e.getMessage(), e);
+                ArchiveExtractor.Extracted result = null;
+                for (int attempt = 1; result == null; attempt++) {
+                    AtomicLong attemptBytes = new AtomicLong();
+                    try (var in = source.open(part)) {
+                        result = extractor.extract(in, expected, digests, selection.files()::contains, entry -> {
+                            long n = expected.getOrDefault(entry, 0L);
+                            attemptBytes.addAndGet(n);
+                            doneBytes.addAndGet(n);
+                        });
+                        if (!result.partSha256().equals(part.sha256())) {
+                            result = null;
+                            throw new IOException("SHA-256 mismatch");
+                        }
+                    } catch (IOException e) {
+                        doneBytes.addAndGet(-attemptBytes.get());
+                        if (attempt >= attempts) {
+                            // A damaged part usually fails ZIP's own CRC check before its SHA-256 is complete.
+                            throw new IllegalStateException("Archive verification failed:\n  - "
+                                    + part.fileName() + ": " + e.getMessage(), e);
+                        }
+                        say(progress, "extract", "Retrying " + part.fileName() + " (" + e.getMessage() + ")");
+                    }
                 }
-                if (!result.partSha256().equals(part.sha256())) {
-                    throw new IllegalStateException("Archive verification failed:\n  - "
-                            + part.fileName() + ": SHA-256 mismatch");
+                for (String name : result.written()) {
+                    if (!written.add(name)) {
+                        throw new IllegalStateException("Archive verification failed:\n  - "
+                                + name + " appears in more than one part");
+                    }
                 }
                 done.incrementAndGet();
                 return result;
@@ -677,8 +844,14 @@ public class SnapshotImporter {
         } catch (Parallel.PartFailure e) {
             throw e.getCause() instanceof IOException io ? io : new IOException(e.getMessage(), e.getCause());
         }
-        say(progress, "extract", String.format("Extracted %d parts (%s) in %s", parts.size(),
-                Progress.bytes(entryBytes), Progress.duration(System.currentTimeMillis() - started)));
+        Set<String> missing = new java.util.TreeSet<>(selection.files());
+        missing.removeAll(written);
+        if (!missing.isEmpty()) {
+            throw new IllegalStateException("Archive verification failed:\n  - " + missing.size()
+                    + " file(s) declared in the manifest are in none of the parts read, e.g. " + missing.iterator().next());
+        }
+        say(progress, "extract", String.format("Extracted %d files from %d parts (%s) in %s", written.size(),
+                parts.size(), Progress.bytes(entryBytes), Progress.duration(System.currentTimeMillis() - started)));
     }
 
     private static void say(Consumer<String> progress, String phase, String message) {

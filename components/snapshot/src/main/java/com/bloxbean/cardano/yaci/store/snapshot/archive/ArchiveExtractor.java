@@ -16,6 +16,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipInputStream;
@@ -42,8 +43,15 @@ public class ArchiveExtractor {
         this.maxTotalBytes = maxTotalBytes;
     }
 
-    /** One part's extraction: entries written, bytes written and the SHA-256 of the part file. */
-    public record Extracted(int entries, long bytes, String partSha256) {}
+    /**
+     * One part's extraction: entries written, bytes written, the SHA-256 of the whole part and the
+     * paths written. Entries a caller skipped are read past and counted in the digest only.
+     */
+    public record Extracted(int entries, long bytes, String partSha256, Set<String> written) {
+        public Extracted(int entries, long bytes, String partSha256) {
+            this(entries, bytes, partSha256, Set.of());
+        }
+    }
 
     /**
      * @param expectedSizes declared size per entry path from the manifest; an entry not present here,
@@ -64,16 +72,45 @@ public class ArchiveExtractor {
      */
     public Extracted extract(Path zipFile, Map<String, Long> expectedSizes, Map<String, String> expectedDigests,
                              Consumer<String> progress) throws IOException {
+        return extract(zipFile, expectedSizes, expectedDigests, name -> true, progress);
+    }
+
+    /** As above, writing only the entries {@code write} accepts. */
+    public Extracted extract(Path zipFile, Map<String, Long> expectedSizes, Map<String, String> expectedDigests,
+                             Predicate<String> write, Consumer<String> progress) throws IOException {
+        try (InputStream in = Files.newInputStream(zipFile)) {
+            Extracted result = extract(in, expectedSizes, expectedDigests, write, progress);
+            log.debug("Extracted {} entries ({} bytes) from {}", result.entries(), result.bytes(), zipFile.getFileName());
+            return result;
+        }
+    }
+
+    /**
+     * Extracts a part from a stream: a local file or a download. Parts are written with each entry's
+     * size and CRC in its local header, so nothing needs to seek. The stream is read to its end, so
+     * the part digest covers every byte, and is not closed.
+     *
+     * @param write which declared entries to write; the others are checked against their declared
+     *              size and read past
+     */
+    public Extracted extract(InputStream source, Map<String, Long> expectedSizes, Map<String, String> expectedDigests,
+                             Predicate<String> write, Consumer<String> progress) throws IOException {
         Files.createDirectories(workDir);
         Set<String> seen = new HashSet<>();
+        Set<String> written = new HashSet<>();
         long totalBytes = 0;
         int count = 0;
         MessageDigest partDigest = Digests.sha256();
         byte[] buf = new byte[1 << 16];
 
-        try (InputStream fin = new DigestInputStream(
-                new BufferedInputStream(Files.newInputStream(zipFile), 1 << 20), partDigest);
-             ZipInputStream zin = new ZipInputStream(fin)) {
+        // The caller owns the source; closing the ZIP stream releases its inflater only.
+        InputStream unclosed = new java.io.FilterInputStream(source) {
+            @Override
+            public void close() {
+            }
+        };
+        InputStream fin = new DigestInputStream(new BufferedInputStream(unclosed, 1 << 20), partDigest);
+        try (ZipInputStream zin = new ZipInputStream(fin)) {
             ZipEntry entry;
             while ((entry = zin.getNextEntry()) != null) {
                 String name = entry.getName();
@@ -92,6 +129,23 @@ public class ArchiveExtractor {
                     throw new IOException("Entry '" + name + "' is not declared in the manifest");
                 }
 
+                if (!write.test(name)) {
+                    long skipped = 0;
+                    int r;
+                    while ((r = zin.read(buf)) != -1) {
+                        skipped += r;
+                        if (skipped > expected) {
+                            throw new IOException("Entry '" + name + "' is larger than the "
+                                    + expected + " bytes the manifest declares");
+                        }
+                    }
+                    if (skipped != expected) {
+                        throw new IOException("Entry '" + name + "' is " + skipped
+                                + " bytes but the manifest declares " + expected);
+                    }
+                    continue;
+                }
+
                 Path target = workDir.resolve(name).normalize();
                 if (!target.startsWith(workDir)) {
                     throw new IOException("Entry resolves outside the work directory: " + name);
@@ -102,13 +156,13 @@ public class ArchiveExtractor {
                 }
 
                 MessageDigest entryDigest = Digests.sha256();
-                long written = 0;
+                long entryBytes = 0;
                 try (OutputStream out = Files.newOutputStream(target)) {
                     int r;
                     while ((r = zin.read(buf)) != -1) {
-                        written += r;
+                        entryBytes += r;
                         // Stop as soon as an entry exceeds its declared size, before writing more.
-                        if (written > expected) {
+                        if (entryBytes > expected) {
                             throw new IOException("Entry '" + name + "' is larger than the "
                                     + expected + " bytes the manifest declares");
                         }
@@ -116,9 +170,9 @@ public class ArchiveExtractor {
                         out.write(buf, 0, r);
                     }
                 }
-                totalBytes += written;
-                if (written != expected) {
-                    throw new IOException("Entry '" + name + "' is " + written
+                totalBytes += entryBytes;
+                if (entryBytes != expected) {
+                    throw new IOException("Entry '" + name + "' is " + entryBytes
                             + " bytes but the manifest declares " + expected);
                 }
                 if (totalBytes > maxTotalBytes) {
@@ -128,6 +182,7 @@ public class ArchiveExtractor {
                 if (expectedSha != null && !Digests.hex(entryDigest.digest()).equals(expectedSha)) {
                     throw new IOException("Extracted file failed its digest check: " + name);
                 }
+                written.add(name);
                 if (progress != null) {
                     progress.accept(name);
                 }
@@ -137,8 +192,7 @@ public class ArchiveExtractor {
                 // digest only
             }
         }
-        log.debug("Extracted {} entries ({} bytes) from {}", count, totalBytes, zipFile.getFileName());
-        return new Extracted(count, totalBytes, Digests.hex(partDigest.digest()));
+        return new Extracted(written.size(), totalBytes, Digests.hex(partDigest.digest()), written);
     }
 
     /** Entry names present in a part, without extracting anything. */

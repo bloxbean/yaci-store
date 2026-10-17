@@ -1,5 +1,7 @@
 plugins {
     id 'org.springframework.boot' version "${springBootVersion}"
+    // git.properties: the commit a snapshot was exported with is recorded in its manifest.
+    id "com.gorylenko.gradle-git-properties" version "${gradleGitPropertiesVersion}"
 //    id 'org.graalvm.buildtools.native' version "${graalvmBuildToolVersion}"
 }
 

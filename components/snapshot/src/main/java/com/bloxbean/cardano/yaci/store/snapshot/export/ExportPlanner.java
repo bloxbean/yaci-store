@@ -202,6 +202,13 @@ public class ExportPlanner {
         Map<String, String> out = new TreeMap<>();
         Set<String> columns = new TreeSet<>(spec.validation().bounds());
         for (String col : columns) {
+            // Catalog statistics are strings: compared as text, epoch 99 sorts after 660.
+            Optional<long[]> n = catalog.numericBounds(relation, col, snapshotId);
+            if (n.isPresent()) {
+                out.put(col + ".min", Long.toString(n.get()[0]));
+                out.put(col + ".max", Long.toString(n.get()[1]));
+                continue;
+            }
             Optional<DuckLakeCatalog.Bounds> b = catalog.bounds(relation, col, snapshotId);
             b.ifPresent(v -> {
                 out.put(col + ".min", v.min());

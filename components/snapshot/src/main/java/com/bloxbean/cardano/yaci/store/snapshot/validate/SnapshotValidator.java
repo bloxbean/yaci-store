@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.snapshot.validate;
 
 import com.bloxbean.cardano.yaci.store.snapshot.manifest.ManifestCodec;
 import com.bloxbean.cardano.yaci.store.snapshot.manifest.ManifestValidator;
+import com.bloxbean.cardano.yaci.store.snapshot.manifest.Retention;
 import com.bloxbean.cardano.yaci.store.snapshot.load.Autovacuum;
 import com.bloxbean.cardano.yaci.store.snapshot.load.DeferredIndexes;
 import com.bloxbean.cardano.yaci.store.snapshot.load.ImportJournal;
@@ -48,7 +49,8 @@ public class SnapshotValidator {
     /** Level 2: schema and load validation. */
     public ValidationReport validateLoad(Connection pg, String schema, SnapshotManifest manifest)
             throws SQLException {
-        return validateLoad(pg, schema, manifest, new Scans(pg, schema, manifest, null, 1, m -> { }));
+        SnapshotManifest view = importView(pg, schema, manifest);
+        return validateLoad(pg, schema, view, new Scans(pg, schema, view, null, 1, m -> { }));
     }
 
     private ValidationReport validateLoad(Connection pg, String schema, SnapshotManifest manifest, Scans scans)
@@ -457,6 +459,7 @@ public class SnapshotValidator {
                                               DeferredIndexes.ConnectionFactory connections, int workers,
                                               Consumer<String> progress)
             throws SQLException {
+        manifest = importView(pg, schema, manifest);
         Scans scans = new Scans(pg, schema, manifest, connections, workers, progress);
         List<ValidationReport> reports = new ArrayList<>();
         Progress.phase(progress, "Schema and load checks (one scan of each loaded table)");
@@ -464,5 +467,18 @@ public class SnapshotValidator {
         Progress.phase(progress, "Semantic checks");
         reports.add(validateSemantics(pg, schema, manifest, eventPublisherId, cursorBlocksToKeep, scans));
         return reports;
+    }
+
+    /**
+     * The manifest as the import saw it: reduced by the retention the import added, which its journal
+     * records, so the counts expected here are the ones the import loaded.
+     */
+    static SnapshotManifest importView(Connection pg, String schema, SnapshotManifest manifest) throws SQLException {
+        ImportJournal journal = new ImportJournal(pg, schema);
+        if (!journal.exists()) {
+            return manifest;
+        }
+        String retention = journal.currentRun().map(ImportJournal.Run::retention).orElse(null);
+        return Retention.apply(manifest, Retention.parse(retention));
     }
 }

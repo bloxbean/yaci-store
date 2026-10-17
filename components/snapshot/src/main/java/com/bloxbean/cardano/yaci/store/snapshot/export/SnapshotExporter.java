@@ -64,6 +64,11 @@ public class SnapshotExporter {
         return verifyParts ? 4 : 3;
     }
 
+    /** As {@link #phases()}, for an export with {@code options}: a history split is a phase of its own. */
+    public int phases(ExportOptions options) {
+        return phases() + (options.historySplit() ? 1 : 0);
+    }
+
     /** Read-only analysis: candidate point, coverage, lossy mappings, estimated size and blockers. */
     public InspectionReport inspect(ExportOptions options) throws SQLException, IOException {
         try (DuckLakeCatalog catalog = DuckLakeCatalog.open(options.dataDir(), options.workDir(), options.memoryLimit())) {
@@ -197,9 +202,6 @@ public class SnapshotExporter {
      * published last with an atomic rename, so a manifest on disk always describes complete parts.
      */
     public ExportResult export(ExportOptions options, Consumer<String> progress) throws SQLException, IOException {
-        if (!options.unsigned()) {
-            throw new IllegalArgumentException("Snapshot signing is not implemented; --unsigned is required");
-        }
         long started = System.currentTimeMillis();
         try (DuckLakeCatalog catalog = DuckLakeCatalog.open(options.dataDir(), options.workDir(), options.memoryLimit())) {
             Progress.phase(progress, "Selecting the consistency point and planning coverage");
@@ -217,10 +219,34 @@ public class SnapshotExporter {
             String baseName = String.format("yaci-%s-e%d-%s", options.network(),
                     report.completedEpoch(), snapshotId.substring(0, 8));
 
+            // The history split adds a pruned copy of the UTxO relations, packaged from the work directory;
+            // every original file is still packaged, marked full-only.
+            List<TablePlan> planned = report.plans();
+            Map<String, Path> rewritten = Map.of();
+            Map<String, TieredExport.Tiers> tiers = Map.of();
+            if (options.historySplit()) {
+                Progress.phase(progress, "Adding the pruned tier: address_utxo and tx_input as a pruning node holds them");
+                TieredExport.Result split = new TieredExport(catalog, options.workDir(), options.memoryLimit(), progress)
+                        .apply(planned, report.point(), report.ducklakeSnapshotId(), options.utxoSafeBlocks(),
+                                options.epochStakeEpochs());
+                planned = split.plans();
+                rewritten = split.rewritten();
+                tiers = split.tiers();
+            }
+            Map<String, Path> sources = rewritten;
+            java.util.function.Function<String, Path> source = rel -> {
+                Path p = sources.get(rel);
+                return p != null ? p : options.dataDir().resolve(rel);
+            };
+
             // Pre-scan: one read per file produces the SHA-256 for the manifest and the CRC-32 the
             // archive writer needs. Files are independent, so several are read at once.
             int threads = ArchiveVerifier.DEFAULT_THREADS;
-            List<DuckLakeFile> scanFiles = report.plans().stream().flatMap(pl -> pl.files().stream()).toList();
+            // Grouped by store module, each module's tables in their usual order, so parts can break
+            // at module boundaries and a scoped import skips whole parts.
+            List<TablePlan> plans = planned.stream()
+                    .sorted(java.util.Comparator.comparing((TablePlan pl) -> pl.spec().module())).toList();
+            List<DuckLakeFile> scanFiles = plans.stream().flatMap(pl -> pl.files().stream()).toList();
             long scanBytes = scanFiles.stream().mapToLong(DuckLakeFile::sizeBytes).sum();
             Progress.phase(progress, String.format("Hashing %,d files (%s) with %d threads",
                     scanFiles.size(), bytes(scanBytes), threads));
@@ -233,7 +259,7 @@ public class SnapshotExporter {
                             Progress.rate(scannedBytes.get(), scanBytes, scanStart, System.currentTimeMillis())),
                     progress)) {
                 digests = Parallel.map(scanFiles, threads, f -> {
-                    Path abs = options.dataDir().resolve(f.relativePath());
+                    Path abs = source.apply(f.relativePath());
                     if (!Files.isRegularFile(abs)) {
                         throw new IOException("Catalog references a missing file: " + f.relativePath());
                     }
@@ -250,21 +276,26 @@ public class SnapshotExporter {
 
             List<SnapshotManifest.FileEntry> allEntries = new ArrayList<>();
             List<String> owners = new ArrayList<>();
+            List<String> modules = new ArrayList<>();
             Map<String, Long> crcs = new HashMap<>();
             List<SnapshotManifest.TableManifest> tableManifests = new ArrayList<>();
             int at = 0;
-            for (TablePlan plan : report.plans()) {
+            for (TablePlan plan : plans) {
+                TieredExport.Tiers tier = tiers.get(plan.spec().id());
                 List<SnapshotManifest.FileEntry> entries = new ArrayList<>();
                 for (DuckLakeFile f : plan.files()) {
                     Digests.FileDigest d = digests.get(at++);
+                    String fileTier = tier == null ? null : tier.of(f.relativePath());
                     SnapshotManifest.FileEntry fe = new SnapshotManifest.FileEntry(
-                            f.relativePath(), d.size(), d.sha256(), f.rowCount(), f.partition());
+                            f.relativePath(), d.size(), d.sha256(), f.rowCount(), f.partition(), fileTier);
                     entries.add(fe);
                     allEntries.add(fe);
                     owners.add(plan.spec().id());
+                    // Each tier goes in parts of its own, so an import that skips it skips whole parts.
+                    modules.add(plan.spec().module() + (fileTier == null ? "" : "/" + fileTier));
                     crcs.put(f.relativePath(), d.crc32());
                 }
-                tableManifests.add(toTableManifest(plan, entries));
+                tableManifests.add(toTableManifest(plan, entries, tier == null ? null : tier.split()));
             }
 
             for (SnapshotTableSpec spec : report.nonImportedTables()) {
@@ -274,7 +305,7 @@ public class SnapshotExporter {
                         0, List.of(), 0L, List.of(), null, Map.of(), Map.of(), List.of(), spec.contractDigest()));
             }
 
-            ArchiveWriter writer = new ArchiveWriter(options.dataDir(), options.outputDir(), baseName,
+            ArchiveWriter writer = new ArchiveWriter(source, options.outputDir(), baseName,
                     options.partSizeBytes());
             long packStart = System.currentTimeMillis();
             Progress.phase(progress, String.format("Writing %s into parts of up to %s with %d threads",
@@ -288,7 +319,7 @@ public class SnapshotExporter {
                     () -> String.format("%,d/%,d files  %s", packed.get(), allEntries.size(),
                             Progress.rate(packedBytes.get(), scanBytes, packStart, System.currentTimeMillis())),
                     progress)) {
-                parts = writer.write(allEntries, owners, crcs, threads, path -> {
+                parts = writer.write(allEntries, owners, modules, crcs, threads, path -> {
                     packed.incrementAndGet();
                     packedBytes.addAndGet(sizes.getOrDefault(path, 0L));
                 });
@@ -314,7 +345,7 @@ public class SnapshotExporter {
                     options.flywayFingerprint(),
                     tableManifests,
                     parts,
-                    report.declaredLossy(), options.tableSchemaFingerprints());
+                    report.declaredLossy(), options.tableSchemaFingerprints(), null, null, options.yaciStoreCommit());
 
             if (verifyParts) {
                 verifyWrittenParts(manifest, parts, options, threads, progress);
@@ -323,7 +354,7 @@ public class SnapshotExporter {
             Path manifestPath = options.outputDir().resolve(baseName + ".manifest.json");
             ManifestCodec codec = new ManifestCodec();
             codec.writeAtomically(manifest, manifestPath);
-            writeChecksums(options.outputDir(), baseName, manifest, manifestPath, codec);
+            com.bloxbean.cardano.yaci.store.snapshot.archive.Checksums.write(manifest, manifestPath);
 
             long bytes = parts.stream().mapToLong(SnapshotManifest.PartManifest::size).sum();
             log.info("Exported snapshot {} ({} parts, {} bytes)", snapshotId, parts.size(), bytes);
@@ -364,8 +395,8 @@ public class SnapshotExporter {
                 : String.format("%.1f MiB", n / (double) (1L << 20));
     }
 
-    private SnapshotManifest.TableManifest toTableManifest(TablePlan plan,
-                                                           List<SnapshotManifest.FileEntry> entries) {
+    private SnapshotManifest.TableManifest toTableManifest(TablePlan plan, List<SnapshotManifest.FileEntry> entries,
+                                                           SnapshotManifest.HistorySplit split) {
         SnapshotTableSpec spec = plan.spec();
         SnapshotTableSpec.CutoffRule cut = spec.consistency().cutoff();
         String cutoffRule = cut.type() + (cut.column() == null ? "" : "(" + cut.column()
@@ -376,20 +407,6 @@ public class SnapshotExporter {
                 spec.targetTable(), spec.importSpec().mode().name(), cutoffRule,
                 spec.importSpec().transformVersion(), spec.importSpec().dependencies(),
                 plan.rowCount(), spec.validation().key(), plan.columnFingerprint(),
-                plan.sourceColumns(), plan.bounds(), entries, spec.contractDigest());
-    }
-
-    /**
-     * {@code SHA256SUMS} in the usual {@code sha256sum -c} format, so parts can be verified with
-     * standard tools before any Yaci Store code runs.
-     */
-    private void writeChecksums(Path dir, String baseName, SnapshotManifest manifest,
-                                Path manifestPath, ManifestCodec codec) throws IOException {
-        StringBuilder sb = new StringBuilder();
-        Map<String, String> sums = new TreeMap<>();
-        manifest.parts().forEach(p -> sums.put(p.fileName(), p.sha256()));
-        sums.put(manifestPath.getFileName().toString(), Digests.sha256Hex(manifestPath));
-        sums.forEach((name, sha) -> sb.append(sha).append("  ").append(name).append('\n'));
-        Files.writeString(dir.resolve("SHA256SUMS"), sb.toString());
+                plan.sourceColumns(), plan.bounds(), entries, spec.contractDigest(), split);
     }
 }

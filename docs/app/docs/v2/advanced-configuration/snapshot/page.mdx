@@ -8,8 +8,8 @@ chain from genesis.
 <Callout type="warning">
 This feature is ready for manual preprod qualification, not a claim of production or mainnet
 readiness. Automated tests cover import, resume, export, and the review fixes. The updated lossless
-stake-balance path still needs a full network restore and live acceptance run. Snapshots are
-unsigned and retain the [declared limitations](#known-limitations).
+stake-balance path still needs a full network restore and live acceptance run. Snapshots retain the
+[declared limitations](#known-limitations); see [Signing snapshots](#signing-snapshots) for signatures.
 </Callout>
 
 ## Prerequisites and starting the CLI
@@ -86,6 +86,14 @@ before treating a restored database as equivalent to a synced one.
 | `snapshot import` | Load a verified snapshot into an empty, migrated schema |
 | `snapshot import-status` | Show the state of any import recorded in the configured schema |
 | `snapshot validate` | Run the offline validation levels against the imported database |
+| `snapshot publish` | Upload an exported snapshot to S3, R2 or a directory, staged (or live with `--live`) |
+| `snapshot promote` | Make a staged snapshot live: add it to its network's `index.json` |
+| `snapshot unlist` | Take a live snapshot out of `index.json`; it can still be imported by id |
+| `snapshot list` | List the live snapshots published for the configured network (`--all` adds staged ones) |
+| `snapshot download` | Download a published snapshot for an offline import or a mirror |
+| `snapshot index --rebuild` | Regenerate a network's `index.json` from the live snapshots in the store |
+| `snapshot keygen` | Create an Ed25519 key pair for signing snapshots |
+| `snapshot sign` | Sign an exported snapshot's `SHA256SUMS` |
 
 All of them use the datasource and schema from the same Spring configuration the admin CLI already
 uses. Passwords are never accepted as command arguments and never appear in a manifest, report or
@@ -215,8 +223,12 @@ while extracting, so it is optional.
 | `--target-epoch` | `0` | Select an older completed epoch; `0` chooses the newest supported one |
 | `--memory-limit` | `1GB` | DuckDB memory limit for planning (also accepted by `snapshot inspect`) |
 | `--allow-incomplete` | `false` | Package even though the snapshot declares limitations |
-| `--unsigned` | `false` | Acknowledge that no signature will be produced |
+| `--signing-key` | `store.snapshot.signing-key` | Ed25519 private key (PEM) to sign the snapshot with |
+| `--unsigned` | `false` | Produce an unsigned snapshot (required when no signing key is set) |
 | `--verify` | `false` | Re-read and checksum every written part before publishing the manifest |
+| `--history-split` | `true` | Add a pruned tier for the tables a pruning node trims ([full and pruned tiers](#full-and-pruned-tiers)) |
+| `--utxo-safe-blocks`, `--epoch-stake-epochs` | `2160`, `8` | History split: the spent-output window and the `epoch_stake` epochs in the pruned tier |
+| `--publish`, `--live`, `--remote` | `false` | Upload the snapshot when the export succeeds, staged unless `--live` ([publishing](#publishing-and-downloading-snapshots)) |
 | `--spec-file`, `--allow-custom-specs` | – | Operator-supplied specifications |
 
 <Callout type="info">
@@ -225,6 +237,41 @@ It refuses a catalog held by another writer. It never copies a live database fil
 omit committed WAL entries. Analytics writes, compaction, and garbage collection must stay stopped
 throughout export.
 </Callout>
+
+### Full and pruned tiers
+
+One snapshot serves both full and pruning targets. For each table a pruning node trims, the
+snapshot holds the full table and a small *pruned tier*, each in parts of its own:
+
+| Table | Full import loads | Pruning import loads |
+|---|---|---|
+| `address_utxo` | Every original file | A copy of the rows of outputs unspent at the point, or spent within the last `--utxo-safe-blocks` blocks (default 2160) |
+| `tx_input` | Every original file | A copy of the inputs spent within the last `--utxo-safe-blocks` blocks |
+| `epoch_stake` | Every epoch | The newest `--epoch-stake-epochs` epochs (default 8, at least 4); older epochs are in parts of their own |
+
+A full import loads exactly what it would from a snapshot without tiers. An import into a target that
+prunes these tables reads only the pruned tier, so it downloads, extracts and loads only what the
+target keeps. On mainnet the pruned copy is about 1 GiB, against 51.6 GiB for the two full tables. The
+choice comes from the target's own configuration:
+
+| Target setting | Effect |
+|---|---|
+| `store.utxo.pruning-enabled=true`, `store.utxo.pruning-safe-blocks` at most the snapshot's window | `address_utxo` and `tx_input`: pruned tier only |
+| `store.utxo.pruning-enabled=true`, a wider `store.utxo.pruning-safe-blocks` | The full tables; the target's pruning service removes the rest |
+| `store.adapot.epoch-stake-pruning-enabled=true` | `epoch_stake`: the newest `store.adapot.epoch-stake-safe-epochs` epochs (default 8), or `--epoch-stake-epochs` |
+| Pruning off | The full tables |
+
+The window keeps exactly what a rollback within the 2160-block cursor tail needs: rolling back an
+input un-spends its output, which must still exist. The pruned copy is written to the work directory
+as Parquet, in the same daily partitions and columns, with every row of a kept output. An anti-join of
+every output against the inputs spent before the window works through 64 hash buckets of keys under
+`--memory-limit`, spilling to the work directory. On mainnet it adds about 5 minutes to an export.
+
+The manifest marks each file `full` (only a full import loads it) or `pruned` (only a pruning import
+loads it), and records each split: its key and window (for example `address_utxo.spent-safe-blocks=2160`)
+and the pruned tier's row count and bounds, which validation checks. A pruned node has the usual
+limitations of pruning: address and transaction history only covers unspent outputs and recent spends,
+`epoch_stake` only recent epochs, and a rollback deeper than the window is not possible.
 
 ### Archive layout
 
@@ -237,7 +284,8 @@ SHA256SUMS
 ```
 
 Parts are **independent** archives, not a spanned ZIP: each can be retried, mirrored and verified on
-its own. Entries are stored uncompressed, because DuckLake already writes Zstandard-compressed
+its own. Files are grouped by store module, and a new part starts where the module changes, so a
+scoped restore (below) never needs a part that only carries other stores' tables. Entries are stored uncompressed, because DuckLake already writes Zstandard-compressed
 Parquet and re-deflating costs hours of CPU for a fraction of a percent. Paths inside a part are
 relative to the analytics data directory, for example
 `main/block/date=2026-08-24/ducklake-....parquet`.
@@ -263,14 +311,15 @@ snapshot IDs and timestamps, even if they package the same file set.
 
 ## Restoring a snapshot
 
-Preflight (`--dry-run`) checks manifest compatibility, database state, part existence, and sizes.
+Preflight (`--dry-run`) checks manifest compatibility, the signature, database state, part existence, and sizes.
 It also prints the target schema, the tables it would load and skip with their row counts and
 sizes, the declared limitations, and the disk space needed: the extraction size against the free
 space in the work directory, and a rough estimate of the restored database (about 8x the Parquet
 it loads) for the PostgreSQL volume, which it cannot check itself.
 It does not hash the archives. A real import checks each part's digest and every extracted file's
 digest in the same pass as the extraction. Use `snapshot verify` for a standalone integrity check.
-Unsigned imports require explicit `--allow-unsigned`.
+A snapshot not signed by a key in `store.snapshot.trusted-keys` requires an explicit `--allow-unsigned`
+(see [Signing snapshots](#signing-snapshots)).
 
 ### 1. Prepare the target schema
 
@@ -321,6 +370,27 @@ empty. New manifests carry per-table schema fingerprints, allowing a smaller tar
 to import without matching unrelated source tables or Flyway history. Older manifests without
 these fingerprints require the whole schema fingerprint to match; otherwise regenerate the
 snapshot. Custom application tables still need explicit snapshot specifications.
+
+#### Scoped restore for a custom indexer
+
+One full snapshot serves every application. There is no table list to maintain: the stores your
+application enables, as recorded by its `store.schema-only=true` run, decide what is restored. The
+import then reads only the parts that carry those stores' tables, extracts only their files, and
+loads and validates only those tables. `--dry-run` prints the tables it loads and skips, and how many
+parts it reads (`Reading 9 of 18 parts`). Snapshots exported before parts were grouped by module mix
+stores in a part; their parts are still read, but other stores' files are not extracted.
+
+Limitations of a scoped restore:
+
+- The `blocks` store is always required, with its cursor and era state: sync cannot resume without it.
+- A table your application creates itself needs a snapshot specification. Without one, preflight
+  stops with "has no snapshot classification".
+- Dependencies between stores are not checked. If you enable a store whose processing reads another
+  store's tables, enable that store as well, exactly as for a normal sync. For example, `staking`
+  needs `epoch`, and in the Conway era `epoch_param` is written by the AdaPot job, so an `epoch` store
+  without the ledger-state profile stops updating protocol parameters after the snapshot point, as it
+  would on a normal sync.
+- To change the set of stores, initialize a new schema with the new flags and import again.
 
 Keep Yaci Store stopped during import. Remove `store.schema-only=true` (or set it to false) before
 starting normal sync after validation. The admin CLI also runs Flyway at startup, against the
@@ -379,6 +449,16 @@ snapshot import --manifest <manifest> \
 | `--dry-run` | `false` | Preflight only; write nothing |
 | `--validate` | `false` | After a successful import, run `snapshot validate --mark-ready` in the same command |
 | `--tune-postgres` | `false` | Raise `max_wal_size`, `checkpoint_timeout` and `wal_compression` with `ALTER SYSTEM` for the import, then restore them |
+| `--epoch-stake-epochs` | target's | Load only the newest N epochs of `epoch_stake` (at least 4). Default: `store.adapot.epoch-stake-safe-epochs` when the target prunes `epoch_stake`, otherwise every epoch |
+
+A target that prunes loads only what it keeps ([full and pruned tiers](#full-and-pruned-tiers)).
+The dry run says, per table, which tier it loads and why. `--epoch-stake-epochs` restores what a node
+running `EpochStakePruningService` would hold. Mainnet's `epoch_stake` is 500M rows over 452 epochs,
+about 1M rows per epoch, so keeping 8 epochs skips almost all of it, and the parts that carry only
+older epochs are not read. An explicit value needs `store.adapot.epoch-stake-pruning-enabled=true`
+on the target, or preflight refuses the import: the application would otherwise present the partial
+history as complete. Reward calculation reads the stake of epochs E-3 to E, hence the minimum of 4.
+Resume with the same settings; `snapshot validate` reads them from the import journal.
 
 Preflight reports `max_wal_size`, `checkpoint_timeout` and `wal_compression` when they are below
 16GB, 15min and on. With the 1GB default the load checkpoints every few seconds and spends its
@@ -415,8 +495,9 @@ many tables in parallel, one connection each, and a status line is printed every
 
 Four levels are defined; the first three are offline and must all pass before sync is enabled.
 
-1. **Artifact** — explicit unsigned acknowledgement, part digests, ZIP traversal/duplicate/size
-   protections, exact required part set, per-file digest after extraction.
+1. **Artifact** — a signature by a trusted key (or an explicit `--allow-unsigned`), part digests,
+   ZIP traversal/duplicate/size protections, every selected file present exactly once, per-file
+   digest after extraction.
 2. **Schema and load** — selected table fingerprints, per-table row counts after cutoff, tables
    that must be empty really are, required non-null column values, sequence values, a journal
    matching the exact manifest, every key and index dropped for the load rebuilt as captured, and
@@ -483,6 +564,172 @@ not a total-machine RAM requirement.
 Execution slices do not change the specification, manifest, or persisted batch IDs. The entire
 original batch and its journal entry commit together. Existing imports can resume with the new
 CLI and a different memory limit without regenerating the snapshot or clearing data.
+
+## Signing snapshots
+
+A snapshot is signed with an Ed25519 key over its `SHA256SUMS`, which lists the SHA-256 of the
+manifest and of every part; the manifest in turn pins every file. One signature therefore covers the
+whole snapshot, down to each Parquet file.
+
+```bash
+snapshot keygen --output /secure/keys            # snapshot-signing.pem (private), snapshot-signing.pub
+snapshot export ... --signing-key /secure/keys/snapshot-signing.pem
+snapshot sign --manifest <manifest> --signing-key /secure/keys/snapshot-signing.pem   # an existing export
+```
+
+Export writes `SHA256SUMS.sig` (the raw 64-byte signature) and `SHA256SUMS.sig.json` (the key id and
+public key). Without a signing key (`--signing-key` or `store.snapshot.signing-key`), export needs
+`--unsigned`. Keys are standard PEM, so `openssl genpkey -algorithm ed25519 -out key.pem` and
+`openssl pkey -in key.pem -pubout -out key.pub` work too. The public key is expected next to the
+private one with a `.pub` extension, or at `store.snapshot.signing-public-key`. Anyone can check a
+signature without Yaci Store:
+
+```bash
+openssl pkeyutl -verify -pubin -inkey snapshot-signing.pub -rawin -in SHA256SUMS -sigfile SHA256SUMS.sig
+sha256sum -c SHA256SUMS
+```
+
+Importers configure the publisher's public key:
+
+```properties
+store.snapshot.trusted-keys=/etc/yaci/snapshot-signing.pub
+```
+
+`snapshot import` and `snapshot verify` then check the signature, that `SHA256SUMS` lists this
+manifest's digest, and that it agrees with the manifest on every part. A snapshot signed by a trusted
+key imports without `--allow-unsigned`. An unsigned snapshot, or one whose key is not configured,
+needs `--allow-unsigned` and the import warns. A signature that fails, or checksums that do not match
+the manifest, block the import even with `--allow-unsigned`.
+
+## Publishing and downloading snapshots
+
+Snapshots can be published to any S3-compatible bucket (Cloudflare R2, AWS S3, MinIO) or a directory,
+and imported straight from there or from a public HTTPS URL. The layout is:
+
+```text
+<prefix>/<network>/index.json
+<prefix>/<network>/<snapshot-id>/<base>.manifest.json
+<prefix>/<network>/<snapshot-id>/<base>.part-00001.zip ...
+<prefix>/<network>/<snapshot-id>/SHA256SUMS
+<prefix>/<network>/<snapshot-id>/snapshot.json
+```
+
+`mainnet`, `preprod` and `preview` share one bucket; every command uses the network of the configured
+protocol magic (or `--network`). A snapshot directory holds exactly the files export wrote, so a
+download is byte-identical to the export, plus `snapshot.json`, the snapshot's entry. `index.json`
+lists each network's live snapshots, newest first. Each entry has the point (epoch, slot, block,
+block time), the Yaci Store version and git commit that made it, size, parts, stores, history
+splits, signing key id and the SHA-256 of its manifest. It is plain public JSON, so a listing page can
+read it straight from the public URL. For a page on another origin, allow `GET` in the bucket's CORS
+policy.
+
+### Configuration
+
+The location and credentials come from the admin CLI's configuration or environment, never from
+command arguments:
+
+```properties
+# Where snapshots are published to and imported from; --remote overrides it.
+store.snapshot.remote.url=s3://yaci-snapshots/v1
+# S3 API endpoint; omit for AWS S3. Cloudflare R2: https://<account-id>.r2.cloudflarestorage.com
+store.snapshot.remote.endpoint=https://<account-id>.r2.cloudflarestorage.com
+store.snapshot.remote.region=auto
+# Unset: the AWS default credential chain (AWS_ACCESS_KEY_ID, profiles, ...).
+# Or STORE_SNAPSHOT_REMOTE_ACCESS_KEY_ID / STORE_SNAPSHOT_REMOTE_SECRET_ACCESS_KEY in the environment.
+store.snapshot.remote.access-key-id=
+store.snapshot.remote.secret-access-key=
+```
+
+| Property | Default | Purpose |
+|---|---|---|
+| `store.snapshot.remote.url` | | `s3://bucket/prefix`, `https://host/prefix` (read-only) or a directory |
+| `store.snapshot.remote.endpoint` | AWS | S3 API endpoint of an S3-compatible service |
+| `store.snapshot.remote.region` | `auto` with an endpoint, else `us-east-1` | Signing region |
+| `store.snapshot.remote.path-style` | `true` with an endpoint | Bucket in the path rather than the host name |
+| `store.snapshot.remote.piece-size` | `64MiB` | Multipart piece size (at least 5MiB); smaller files go in one PUT |
+| `store.snapshot.remote.upload-threads` | `4` | Pieces of one file uploaded at once |
+
+For R2, create an API token with *Object Read & Write* on the bucket, and use its access key id and
+secret. To let anyone download without credentials, connect a custom domain or enable the bucket's
+`r2.dev` URL; importers then use `--remote https://snapshots.example.org/v1`.
+
+### Publishing
+
+```bash
+snapshot export --output /path/to/out --signing-key /secure/keys/snapshot-signing.pem ... --publish
+# or, for an existing export:
+snapshot publish --manifest /path/to/out/yaci-mainnet-e659-4417bd67.manifest.json
+```
+
+Parts go first, several at once, as multipart uploads read straight from the files. The checksums,
+the manifest and `snapshot.json` follow. Each object records its SHA-256, and a rerun skips
+everything already uploaded, so an interrupted publish resumes.
+
+A published snapshot is **staged**: it is not in `index.json`, so `snapshot list` and
+`--snapshot latest` do not see it, but it can be imported with its full id. Test it, then make it
+public:
+
+```bash
+snapshot import --snapshot 4417bd67-6dc6-4f3d-ab0b-d3ec82be2279 --work-dir ... --validate   # test
+snapshot promote --snapshot 4417bd67-6dc6-4f3d-ab0b-d3ec82be2279                            # go live
+snapshot unlist  --snapshot 4417bd67-6dc6-4f3d-ab0b-d3ec82be2279                            # withdraw
+```
+
+`--live` on `publish` (or on `export --publish`) skips the staging step. The index is updated last
+and with a conditional write, so it never points at an incomplete snapshot, and two publishers cannot
+drop each other's entry. Republishing a live snapshot keeps it live. `snapshot list --all` also shows
+staged snapshots, and `snapshot index --rebuild` regenerates the index from the live ones. Both read
+the store itself, so they need an `s3://` or local location. A staged snapshot's files are as public
+as a live one's; staging only keeps it out of the index.
+
+### Importing from a store
+
+```bash
+snapshot list                                   # what is published for the configured network
+snapshot import --snapshot latest --work-dir /path/to/work --allow-unsigned --workers 8 --validate
+snapshot import --snapshot 4417bd67 --remote https://snapshots.example.org/v1 --work-dir ...
+```
+
+`--snapshot latest` picks the newest live snapshot that this release can import into this target.
+It checks each candidate's manifest against the digest in the index, then against the local
+specifications and the target's schema, and skips one made by an incompatible release with a message
+saying why. `--snapshot <id>` accepts a
+unique prefix of a live snapshot's id, or the full id of a staged one. The network is always the
+target's configured one. Before anything is downloaded, the import prints the chosen snapshot: its
+point, the release and commit that made it, size, stores, history split, signature, and whether it
+is staged.
+
+The manifest and checksums are saved under the work directory. The parts the import needs (for a
+scoped target, only its stores' parts) are streamed straight into the extractor, several at once.
+They are not stored, so the work directory needs room for the extracted Parquet only. Every part and
+file is checked against the manifest as it arrives. A part that fails or stalls (no data for two
+minutes) is fetched again, up to three times.
+
+#### Which snapshots a release can import
+
+Compatibility is decided by what a snapshot contains, never by comparing version strings:
+
+- **Every selected table** must have the same specification version and export contract digest as
+  the importing release's. The contract covers what the exported data is (source relation,
+  partitioning, cutoff, key and bounds), not how it is loaded, so a release that only changes how a
+  table is imported still takes older snapshots.
+- **The target schema** must match the snapshot's source. A full restore compares the schema
+  fingerprint and the applied Flyway migrations. A scoped restore compares only the selected tables'
+  definitions.
+
+Two releases with the same tables and migrations, for example two betas without a schema change,
+import each other's snapshots. A release that adds a migration does not take a snapshot from the
+release before it for a full restore. Keep each release's newest snapshot in the index for as long as
+that release is supported: `latest` walks the index newest first and takes the first snapshot that
+passes both checks, so an older node keeps finding one it can import. The first release with snapshot
+import is the oldest that can restore one.
+
+For an air-gapped target or a mirror, `snapshot download --snapshot latest --output /dir` writes the
+whole snapshot to a directory, resuming parts already downloaded. Then use
+`snapshot import --manifest /dir/<manifest>`.
+
+To test without a cloud account, run MinIO locally and point `store.snapshot.remote.endpoint` at it
+(`http://localhost:9000`, `path-style` on).
 
 ## Resuming an interrupted import
 

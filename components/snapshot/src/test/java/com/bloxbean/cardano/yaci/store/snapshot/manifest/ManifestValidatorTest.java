@@ -76,4 +76,20 @@ class ManifestValidatorTest {
         assertThat(validator.validate(manifest(2, tables())))
                 .anyMatch(p -> p.contains("Unsupported snapshot"));
     }
+
+    @Test
+    void anEmptyTableOfARemovedSpecificationIsIgnoredButOneWithDataIsNot() {
+        var removed = new SnapshotManifest.TableManifest("cip113-registry-node", 1, "d", "assets-ext", "EXTENSION_DATA",
+                "EMPTY_EXPECTED", "gone", null, null, "cip113_registry_node", null, null, 0, List.of(), 0, List.of(),
+                null, Map.of(), Map.of(), List.of(), "c");
+        var withData = new SnapshotManifest.TableManifest("gone-table", 1, "d", "x", "CHAIN_DATA", "IMPORT", null,
+                "gone", "gone", "gone", "MAPPED", null, 1, List.of(), 5, List.of(), null, Map.of(), Map.of(),
+                List.of(new SnapshotManifest.FileEntry("main/gone/f.parquet", 1, "h", 5, "main/gone")), "c");
+        var tables = new ArrayList<>(tables());
+        tables.add(removed);
+        assertThat(validator.validate(manifest(1, tables))).isEmpty();
+        tables.add(withData);
+        assertThat(validator.validate(manifest(1, tables))).singleElement().asString()
+                .contains("'gone-table' not installed locally");
+    }
 }

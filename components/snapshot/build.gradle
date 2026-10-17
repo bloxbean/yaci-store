@@ -13,6 +13,16 @@ dependencies {
     implementation(libs.duckdb.jdbc)
     implementation "org.postgresql:postgresql:${postgresDriverVersion}"
 
+    // Generic S3 (Cloudflare R2, AWS S3, MinIO) for publishing and downloading snapshots (ADR 0005).
+    // The JDK URLConnection client replaces the Netty and Apache clients the S3 module pulls in.
+    implementation platform(libs.awssdk.bom)
+    implementation('software.amazon.awssdk:s3') {
+        exclude group: 'software.amazon.awssdk', module: 'netty-nio-client'
+        exclude group: 'software.amazon.awssdk', module: 'apache-client'
+        exclude group: 'software.amazon.awssdk', module: 'apache5-client'
+    }
+    implementation 'software.amazon.awssdk:url-connection-client'
+
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation(libs.assertj.core)
 }
