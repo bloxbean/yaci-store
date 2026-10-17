@@ -157,7 +157,7 @@ public class SnapshotCommands {
             SnapshotExporter.ExportResult result;
             try {
                 SnapshotExporter exporter = new SnapshotExporter(registry).verifyParts(verify);
-                result = exporter.export(options, new ProgressPrinter(exporter.phases()));
+                result = exporter.export(options, new ProgressPrinter(exporter.phases(options)));
             } catch (SnapshotExporter.BlockedException e) {
                 CommandFailedException failure = failed("snapshot export", e);
                 printBlockerReport(e.report(), options.workDir(), false);

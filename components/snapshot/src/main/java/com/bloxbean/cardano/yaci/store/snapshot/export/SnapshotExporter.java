@@ -64,6 +64,11 @@ public class SnapshotExporter {
         return verifyParts ? 4 : 3;
     }
 
+    /** As {@link #phases()}, for an export with {@code options}: a pruned one has a pruning phase. */
+    public int phases(ExportOptions options) {
+        return phases() + (options.pruned() ? 1 : 0);
+    }
+
     /** Read-only analysis: candidate point, coverage, lossy mappings, estimated size and blockers. */
     public InspectionReport inspect(ExportOptions options) throws SQLException, IOException {
         try (DuckLakeCatalog catalog = DuckLakeCatalog.open(options.dataDir(), options.workDir(), options.memoryLimit())) {
