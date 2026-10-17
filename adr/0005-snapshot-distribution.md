@@ -442,3 +442,20 @@ the full snapshot.
 
 **MinIO for local tests.** MinIO's images and binaries can no longer be downloaded. The S3 integration
 test runs against any S3-compatible endpoint given in the environment.
+
+**One artifact on mainnet (D11).** A signed export at epoch 659 with the pruned tier took 10m24s (the
+plain full export took 8m53s): the pruned tier took 4m17s under 4 GB, and the archive is 142.9 GiB in 34
+parts (140.8 GiB without it). A first version that rewrote `address_utxo` into disjoint current and
+history files spent 34m57s on the history write alone and was dropped.
+
+- The pruned copies hold exactly the source rows of their keys: `address_utxo` 29,251,336 rows of
+  10,899,118 outputs, and `tx_input` 35,525 rows. This was checked by count and by a hash of every
+  column, and the counts equal the D8 pruned export's.
+- Every table's row count equals export #6's at the same point. Nine tables are in different files,
+  because the DuckLake catalog merged files after export #6; the rows of the new and the removed
+  files are equal.
+- A blocks + transaction + UTxO target with UTxO pruning imported it with the signature verified and
+  no `--allow-unsigned`. It read 7 of 34 parts (34.3 GiB) and loaded 161,762,413 rows in 27m11s; all
+  96 checks passed. The unspent set is identical to the full restore's: 10,863,593 outputs and
+  37,115,529,274,342,681 lovelace.
+
