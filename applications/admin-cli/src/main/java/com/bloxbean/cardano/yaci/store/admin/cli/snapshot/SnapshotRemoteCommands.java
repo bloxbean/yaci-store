@@ -228,4 +228,26 @@ public class SnapshotRemoteCommands {
     static Function<SnapshotManifest, List<String>> compatibility(SnapshotSpecRegistry registry) {
         return m -> new ManifestValidator(registry).validate(m);
     }
+
+    /**
+     * What stops this release importing a manifest into {@code schema}: the specifications, and the
+     * target's schema (its fingerprint and Flyway history, or each selected table's definition for a
+     * scoped target). With it, {@code latest} skips a snapshot whose tables match but whose release
+     * migrated the schema differently, and takes an older one that fits.
+     */
+    static Function<SnapshotManifest, List<String>> compatibility(SnapshotSpecRegistry registry,
+                                                                  java.sql.Connection target, String schema) {
+        return m -> {
+            List<String> problems = new java.util.ArrayList<>(new ManifestValidator(registry).validate(m));
+            if (problems.isEmpty()) {
+                try {
+                    problems.addAll(com.bloxbean.cardano.yaci.store.snapshot.load.SchemaCompatibility.check(
+                            new com.bloxbean.cardano.yaci.store.snapshot.load.PgSchema(target, schema), m, registry));
+                } catch (java.sql.SQLException e) {
+                    problems.add("Unable to read the target schema: " + e.getMessage());
+                }
+            }
+            return problems;
+        };
+    }
 }

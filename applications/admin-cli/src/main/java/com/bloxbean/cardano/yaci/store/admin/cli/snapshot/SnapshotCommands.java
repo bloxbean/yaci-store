@@ -313,8 +313,12 @@ public class SnapshotCommands {
             if (!local) {
                 store = support.remoteStore(remote);
                 var repo = new com.bloxbean.cardano.yaci.store.snapshot.remote.SnapshotRepository(store);
-                var resolved = repo.resolve(support.network(), snapshot,
-                        SnapshotRemoteCommands.compatibility(registry), new ProgressPrinter(0));
+                // Chosen against this target's schema too, so latest is the newest snapshot it can take.
+                com.bloxbean.cardano.yaci.store.snapshot.remote.SnapshotRepository.Resolved resolved;
+                try (java.sql.Connection target = support.connect()) {
+                    resolved = repo.resolve(support.network(), snapshot,
+                            SnapshotRemoteCommands.compatibility(registry, target, support.schema()), new ProgressPrinter(0));
+                }
                 Path dir = Path.of(workDir).toAbsolutePath().normalize()
                         .resolve("snapshot-" + resolved.entry().snapshotId());
                 manifest = repo.downloadMetadata(resolved, dir).toString();

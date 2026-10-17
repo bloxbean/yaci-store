@@ -690,9 +690,10 @@ snapshot import --snapshot latest --work-dir /path/to/work --allow-unsigned --wo
 snapshot import --snapshot 4417bd67 --remote https://snapshots.example.org/v1 --work-dir ...
 ```
 
-`--snapshot latest` picks the newest live snapshot that this release can import. It checks each
-candidate's manifest against the digest in the index, then against the local specifications, and
-skips one made by an incompatible release with a message saying why. `--snapshot <id>` accepts a
+`--snapshot latest` picks the newest live snapshot that this release can import into this target.
+It checks each candidate's manifest against the digest in the index, then against the local
+specifications and the target's schema, and skips one made by an incompatible release with a message
+saying why. `--snapshot <id>` accepts a
 unique prefix of a live snapshot's id, or the full id of a staged one. The network is always the
 target's configured one. Before anything is downloaded, the import prints the chosen snapshot: its
 point, the release and commit that made it, size, stores, history split, signature, and whether it
@@ -703,6 +704,25 @@ scoped target, only its stores' parts) are streamed straight into the extractor,
 They are not stored, so the work directory needs room for the extracted Parquet only. Every part and
 file is checked against the manifest as it arrives. A part that fails or stalls (no data for two
 minutes) is fetched again, up to three times.
+
+#### Which snapshots a release can import
+
+Compatibility is decided by what a snapshot contains, never by comparing version strings:
+
+- **Every selected table** must have the same specification version and export contract digest as
+  the importing release's. The contract covers what the exported data is (source relation,
+  partitioning, cutoff, key and bounds), not how it is loaded, so a release that only changes how a
+  table is imported still takes older snapshots.
+- **The target schema** must match the snapshot's source. A full restore compares the schema
+  fingerprint and the applied Flyway migrations. A scoped restore compares only the selected tables'
+  definitions.
+
+Two releases with the same tables and migrations, for example two betas without a schema change,
+import each other's snapshots. A release that adds a migration does not take a snapshot from the
+release before it for a full restore. Keep each release's newest snapshot in the index for as long as
+that release is supported: `latest` walks the index newest first and takes the first snapshot that
+passes both checks, so an older node keeps finding one it can import. The first release with snapshot
+import is the oldest that can restore one.
 
 For an air-gapped target or a mirror, `snapshot download --snapshot latest --output /dir` writes the
 whole snapshot to a directory, resuming parts already downloaded. Then use
