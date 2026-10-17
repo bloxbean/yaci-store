@@ -120,7 +120,11 @@ public class SnapshotCommands {
             boolean allowCustomSpecs,
             @Option(longNames = "verify", defaultValue = "false",
                     description = "Re-read every written part and check its digest before publishing the manifest")
-            boolean verify) {
+            boolean verify,
+            @Option(longNames = "publish", defaultValue = "false",
+                    description = "Upload the snapshot and add it to the index when the export succeeds")
+            boolean publish,
+            @Option(longNames = "remote", description = SnapshotRemoteCommands.REMOTE_HELP) String remote) {
         try {
             SnapshotCliSupport.ensureDirectory(Path.of(workDir));
             SnapshotCliSupport.ensureDirectory(Path.of(output));
@@ -152,6 +156,11 @@ public class SnapshotCommands {
             if (!registry.selectedLimitations(m.declaredLossy()).isEmpty()) {
                 writeLn(warn("Declared limitations (%d):", registry.selectedLimitations(m.declaredLossy()).size()));
                 registry.selectedLimitations(m.declaredLossy()).forEach(l -> writeLn("    - %s", l));
+            }
+            if (publish) {
+                try (var store = support.remoteStore(remote)) {
+                    SnapshotRemoteCommands.publish(store, result.manifestPath(), 4);
+                }
             }
         } catch (CommandFailedException e) {
             throw e;
@@ -202,8 +211,15 @@ public class SnapshotCommands {
     @Command(command = "snapshot import",
             description = "Import a verified snapshot into the configured empty, migrated schema.")
     public void importSnapshot(
-            @Option(longNames = "manifest", required = true, description = "Path to the manifest JSON")
+            @Option(longNames = "manifest", description = "Path to the manifest JSON of a local snapshot")
             String manifest,
+            @Option(longNames = "snapshot",
+                    description = "Instead of --manifest: a published snapshot id (or unique prefix), or latest,"
+                            + " streamed from --remote")
+            String snapshot,
+            @Option(longNames = "flavor", defaultValue = "full", description = "full or pruned, for --snapshot latest")
+            String flavor,
+            @Option(longNames = "remote", description = SnapshotRemoteCommands.REMOTE_HELP) String remote,
             @Option(longNames = "work-dir", required = true,
                     description = "Directory for extracted Parquet and per-worker DuckDB spill files")
             String workDir,
@@ -237,12 +253,32 @@ public class SnapshotCommands {
                     description = "Load only the newest N epochs of epoch_stake (at least 4; 0 loads every epoch)."
                             + " The target must run with store.adapot.epoch-stake-pruning-enabled=true")
             int epochStakeEpochs) {
+        boolean local = manifest != null && !manifest.isBlank();
+        if (local == (snapshot != null && !snapshot.isBlank())) {
+            throw new CommandFailedException("snapshot import: pass either --manifest or --snapshot", null);
+        }
+        com.bloxbean.cardano.yaci.store.snapshot.remote.SnapshotStore store = null;
         try {
             SnapshotCliSupport.ensureDirectory(Path.of(workDir));
             SnapshotSpecRegistry registry = support.importRegistry(specFile, allowCustomSpecs);
+            com.bloxbean.cardano.yaci.store.snapshot.archive.PartSource parts = null;
+            if (!local) {
+                store = support.remoteStore(remote);
+                var repo = new com.bloxbean.cardano.yaci.store.snapshot.remote.SnapshotRepository(store);
+                var resolved = repo.resolve(support.network(), snapshot, flavor,
+                        SnapshotRemoteCommands.compatibility(registry), new ProgressPrinter(0));
+                Path dir = Path.of(workDir).toAbsolutePath().normalize()
+                        .resolve("snapshot-" + resolved.entry().snapshotId());
+                manifest = repo.downloadMetadata(resolved, dir).toString();
+                parts = repo.partSource(resolved);
+                writeLn(info("Snapshot %s (%s, epoch %d, %s) from %s", resolved.entry().snapshotId(),
+                        resolved.entry().flavorOrFull(), resolved.entry().epoch(),
+                        SnapshotCliSupport.humanBytes(resolved.entry().sizeBytes()), store.describe()));
+                writeLn("  Manifest saved to %s", manifest);
+            }
             ImportOptions options = support.importOptions(manifest, workDir, workers, memoryLimit,
                     minFreeDiskGb, allowUnsigned, specFile, allowCustomSpecs, keepExtracted, tunePostgres,
-                    epochStakeEpochs);
+                    epochStakeEpochs).withPartSource(parts);
             SnapshotImporter importer = new SnapshotImporter(registry);
 
             if (dryRun) {
@@ -283,6 +319,10 @@ public class SnapshotCommands {
             throw e;
         } catch (Exception e) {
             throw failed("snapshot import", e);
+        } finally {
+            if (store != null) {
+                store.close();
+            }
         }
     }
 
@@ -351,7 +391,7 @@ public class SnapshotCommands {
      * Prints why a command failed, with its cause chain (the top-level message alone often hides the
      * real error), and returns the exception that makes the process exit non-zero.
      */
-    private CommandFailedException failed(String command, Exception e) {
+    static CommandFailedException failed(String command, Exception e) {
         writeLn(error("%s failed: %s", command, e.getMessage()));
         java.util.Set<String> seen = new java.util.HashSet<>();
         seen.add(String.valueOf(e.getMessage()));

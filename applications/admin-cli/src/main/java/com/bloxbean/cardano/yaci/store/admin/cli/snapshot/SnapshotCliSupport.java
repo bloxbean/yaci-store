@@ -4,6 +4,9 @@ import com.bloxbean.cardano.yaci.store.snapshot.export.ExportOptions;
 import com.bloxbean.cardano.yaci.store.snapshot.load.ImportOptions;
 import com.bloxbean.cardano.yaci.store.snapshot.load.PgSchema;
 import com.bloxbean.cardano.yaci.store.snapshot.load.TargetTable;
+import com.bloxbean.cardano.yaci.store.snapshot.remote.S3SnapshotStore;
+import com.bloxbean.cardano.yaci.store.snapshot.remote.SnapshotLocations;
+import com.bloxbean.cardano.yaci.store.snapshot.remote.SnapshotStore;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.SnapshotSpecRegistry;
 import lombok.RequiredArgsConstructor;
 import com.bloxbean.cardano.yaci.store.common.config.StoreModuleConfig;
@@ -234,6 +237,31 @@ public class SnapshotCliSupport {
                 allowUnsigned, allowCustomSpecs, custom, keepExtracted, false, tunePostgres,
                 com.bloxbean.cardano.yaci.store.snapshot.manifest.Retention.epochStake(epochStakeEpochs),
                 pruningSettings());
+    }
+
+    /**
+     * S3 settings from {@code store.snapshot.remote.*}. Credentials come from configuration or the
+     * environment ({@code STORE_SNAPSHOT_REMOTE_ACCESS_KEY_ID}, ...), never from command arguments;
+     * unset means the AWS default credential chain.
+     */
+    public S3SnapshotStore.Settings s3Settings() {
+        String endpoint = environment.getProperty("store.snapshot.remote.endpoint");
+        boolean custom = endpoint != null && !endpoint.isBlank();
+        return new S3SnapshotStore.Settings(endpoint,
+                environment.getProperty("store.snapshot.remote.region", custom ? "auto" : "us-east-1"),
+                environment.getProperty("store.snapshot.remote.path-style", Boolean.class, custom),
+                environment.getProperty("store.snapshot.remote.access-key-id"),
+                environment.getProperty("store.snapshot.remote.secret-access-key"),
+                parseSize(environment.getProperty("store.snapshot.remote.piece-size", "64MiB")),
+                environment.getProperty("store.snapshot.remote.upload-threads", Integer.class,
+                        S3SnapshotStore.Settings.DEFAULT_UPLOAD_THREADS));
+    }
+
+    /** The store at {@code location}, or at {@code store.snapshot.remote.url} when it is blank. */
+    public SnapshotStore remoteStore(String location) {
+        String url = location != null && !location.isBlank() ? location
+                : environment.getProperty("store.snapshot.remote.url");
+        return SnapshotLocations.open(url, s3Settings());
     }
 
     public static void ensureDirectory(Path path) {

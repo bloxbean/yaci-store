@@ -329,7 +329,7 @@ public class SnapshotExporter {
             Path manifestPath = options.outputDir().resolve(baseName + ".manifest.json");
             ManifestCodec codec = new ManifestCodec();
             codec.writeAtomically(manifest, manifestPath);
-            writeChecksums(options.outputDir(), baseName, manifest, manifestPath, codec);
+            com.bloxbean.cardano.yaci.store.snapshot.archive.Checksums.write(manifest, manifestPath);
 
             long bytes = parts.stream().mapToLong(SnapshotManifest.PartManifest::size).sum();
             log.info("Exported snapshot {} ({} parts, {} bytes)", snapshotId, parts.size(), bytes);
@@ -383,19 +383,5 @@ public class SnapshotExporter {
                 spec.importSpec().transformVersion(), spec.importSpec().dependencies(),
                 plan.rowCount(), spec.validation().key(), plan.columnFingerprint(),
                 plan.sourceColumns(), plan.bounds(), entries, spec.contractDigest());
-    }
-
-    /**
-     * {@code SHA256SUMS} in the usual {@code sha256sum -c} format, so parts can be verified with
-     * standard tools before any Yaci Store code runs.
-     */
-    private void writeChecksums(Path dir, String baseName, SnapshotManifest manifest,
-                                Path manifestPath, ManifestCodec codec) throws IOException {
-        StringBuilder sb = new StringBuilder();
-        Map<String, String> sums = new TreeMap<>();
-        manifest.parts().forEach(p -> sums.put(p.fileName(), p.sha256()));
-        sums.put(manifestPath.getFileName().toString(), Digests.sha256Hex(manifestPath));
-        sums.forEach((name, sha) -> sb.append(sha).append("  ").append(name).append('\n'));
-        Files.writeString(dir.resolve("SHA256SUMS"), sb.toString());
     }
 }

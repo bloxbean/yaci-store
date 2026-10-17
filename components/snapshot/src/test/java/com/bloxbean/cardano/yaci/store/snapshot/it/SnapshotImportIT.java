@@ -154,6 +154,40 @@ class SnapshotImportIT {
     }
 
     @Test
+    void importsAPublishedSnapshotStreamedFromAPublicLocationRetryingABrokenRead() throws Exception {
+        var built = fixture();
+        com.bloxbean.cardano.yaci.store.snapshot.archive.Checksums.write(built.manifest(), built.manifestPath());
+        Path bucket = root.resolve("bucket");
+        var local = new com.bloxbean.cardano.yaci.store.snapshot.remote.SnapshotRepository(
+                new com.bloxbean.cardano.yaci.store.snapshot.remote.LocalSnapshotStore(bucket));
+        local.publish(built.manifestPath(), 2, null);
+
+        try (var server = new com.bloxbean.cardano.yaci.store.snapshot.remote.TestHttpServer(bucket, true);
+             var http = new com.bloxbean.cardano.yaci.store.snapshot.remote.HttpSnapshotStore(
+                     java.net.URI.create(server.url()), java.time.Duration.ofSeconds(2))) {
+            var repo = new com.bloxbean.cardano.yaci.store.snapshot.remote.SnapshotRepository(http);
+            var resolved = repo.resolve("preprod", "latest", null,
+                    m -> new com.bloxbean.cardano.yaci.store.snapshot.manifest.ManifestValidator(registry).validate(m), null);
+            Path manifest = repo.downloadMetadata(resolved, root.resolve("work/snapshot"));
+            var options = options(manifest, 2).withPartSource(repo.partSource(resolved));
+            var importer = new SnapshotImporter(registry);
+            assertThat(importer.preflight(options).blockers()).isEmpty();
+
+            List<String> messages = new java.util.concurrent.CopyOnWriteArrayList<>();
+            importer.importSnapshot(options, messages::add);
+
+            assertThat(messages).anyMatch(m -> m.contains("Downloading, verifying and extracting"));
+            assertThat(messages).anyMatch(m -> m.contains("Retrying " + built.manifest().parts().get(0).fileName()));
+        }
+        try (var conn = PostgresSupport.connect()) {
+            assertThat(count(conn, "block")).isEqualTo(SnapshotFixture.POINT_BLOCK + 1);
+            for (var report : new SnapshotValidator(registry).validateAll(conn, schema, built.manifest(), 1, 10)) {
+                assertThat(report.passed()).withFailMessage(report.toString()).isTrue();
+            }
+        }
+    }
+
+    @Test
     void scopedImportReadsOnlyThePartsThatCarryItsTables() throws Exception {
         var built = fixtureWithTableSchemas();
         var selected = registry.selectModules(java.util.Set.of("core", "blocks"));

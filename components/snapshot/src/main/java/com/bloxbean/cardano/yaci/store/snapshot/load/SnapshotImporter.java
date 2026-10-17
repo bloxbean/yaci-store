@@ -59,6 +59,9 @@ public class SnapshotImporter {
     /** Phase banners {@link #importSnapshot} sends, so a caller can number them. */
     public static final int PHASES = 6;
 
+    /** Reads of one remote part before the import gives up; every attempt starts the part again. */
+    static final int PART_ATTEMPTS = 3;
+
     /** PostgreSQL advisory lock key, so two imports cannot run against one schema. */
     private static final long ADVISORY_LOCK_KEY = 0x59414349_534E4150L;
 
@@ -186,10 +189,14 @@ public class SnapshotImporter {
                     selection.parts().size(), archive.parts().size(), Progress.bytes(partBytes(selection.parts())),
                     Progress.bytes(partBytes(archive.parts()))));
         }
-        ArchiveVerifier.Result verified =
-                new ArchiveVerifier().inspect(archive, options.archiveDir(), selection);
-        if (!verified.ok()) {
-            verified.problems().forEach(p -> blockers.add("Archive: " + p));
+        if (options.partSource() == null) {
+            ArchiveVerifier.Result verified =
+                    new ArchiveVerifier().inspect(archive, options.archiveDir(), selection);
+            if (!verified.ok()) {
+                verified.problems().forEach(p -> blockers.add("Archive: " + p));
+            }
+        } else {
+            blockers.addAll(remoteParts(options.partSource(), selection));
         }
         if (!registry.selectedLimitations(manifest.declaredLossy()).isEmpty()) {
             warnings.add("This snapshot has " + registry.selectedLimitations(manifest.declaredLossy()).size()
@@ -240,6 +247,26 @@ public class SnapshotImporter {
         manifest.tables().stream().filter(t -> specs.contains(t.specId()) && t.files() != null)
                 .forEach(t -> t.files().forEach(f -> files.add(f.path())));
         return new ArchiveVerifier.Selection(PartLayout.of(archive).partsFor(archive, files), files);
+    }
+
+    /** Every part the import reads is in the remote store, with the size the manifest declares. */
+    private static List<String> remoteParts(com.bloxbean.cardano.yaci.store.snapshot.archive.PartSource source,
+                                            ArchiveVerifier.Selection selection) {
+        List<String> problems = new ArrayList<>();
+        for (SnapshotManifest.PartManifest part : selection.parts()) {
+            try {
+                var size = source.size(part);
+                if (size.isEmpty()) {
+                    problems.add("Archive: missing archive part " + part.fileName() + " at " + source.describe());
+                } else if (size.getAsLong() != part.size()) {
+                    problems.add("Archive: " + part.fileName() + ": size " + size.getAsLong() + " but manifest declares "
+                            + part.size());
+                }
+            } catch (IOException e) {
+                problems.add("Archive: " + part.fileName() + ": " + e.getMessage());
+            }
+        }
+        return problems;
     }
 
     private static long partBytes(List<SnapshotManifest.PartManifest> parts) {
@@ -334,9 +361,17 @@ public class SnapshotImporter {
             int partThreads = Math.max(1, Math.min(options.workers(), ArchiveVerifier.DEFAULT_THREADS));
             ArchiveVerifier verifier = new ArchiveVerifier(partThreads);
             Progress.phase(progress, String.format("%s %d parts (%s)",
-                    options.skipExtraction() ? "Verifying" : "Verifying and extracting", selection.parts().size(),
+                    options.skipExtraction() ? "Verifying"
+                            : options.partSource() != null && options.partSource().remote() ? "Downloading, verifying and extracting"
+                            : "Verifying and extracting", selection.parts().size(),
                     Progress.bytes(partBytes(selection.parts()))));
-            ArchiveVerifier.Result verified = options.skipExtraction()
+            if (options.skipExtraction() && options.partSource() != null) {
+                throw new IllegalArgumentException("Skipping extraction needs the parts in a local directory");
+            }
+            // A streamed part cannot be checked up front: extraction checks every entry, and afterwards
+            // that every selected file arrived.
+            ArchiveVerifier.Result verified = options.partSource() != null ? new ArchiveVerifier.Result(true, List.of(), 0)
+                    : options.skipExtraction()
                     ? verifier.verify(archive, options.archiveDir(), true, null, selection)
                     : verifier.structure(archive, options.archiveDir(), selection);
             if (!verified.ok()) {
@@ -736,20 +771,31 @@ public class SnapshotImporter {
                 () -> String.format("%d/%d parts  %s", done.get(), parts.size(),
                         Progress.rate(doneBytes.get(), entryBytes, started, System.currentTimeMillis())),
                 progress)) {
+            com.bloxbean.cardano.yaci.store.snapshot.archive.PartSource source = options.parts();
+            int attempts = source.remote() ? PART_ATTEMPTS : 1;
             Parallel.map(parts, threads, part -> {
-                ArchiveExtractor.Extracted result;
-                try {
-                    result = extractor.extract(options.archiveDir().resolve(part.fileName()),
-                            expected, digests, selection.files()::contains,
-                            entry -> doneBytes.addAndGet(expected.getOrDefault(entry, 0L)));
-                } catch (IOException e) {
-                    // A damaged part usually fails ZIP's own CRC check before its SHA-256 is complete.
-                    throw new IllegalStateException("Archive verification failed:\n  - "
-                            + part.fileName() + ": " + e.getMessage(), e);
-                }
-                if (!result.partSha256().equals(part.sha256())) {
-                    throw new IllegalStateException("Archive verification failed:\n  - "
-                            + part.fileName() + ": SHA-256 mismatch");
+                ArchiveExtractor.Extracted result = null;
+                for (int attempt = 1; result == null; attempt++) {
+                    AtomicLong attemptBytes = new AtomicLong();
+                    try (var in = source.open(part)) {
+                        result = extractor.extract(in, expected, digests, selection.files()::contains, entry -> {
+                            long n = expected.getOrDefault(entry, 0L);
+                            attemptBytes.addAndGet(n);
+                            doneBytes.addAndGet(n);
+                        });
+                        if (!result.partSha256().equals(part.sha256())) {
+                            result = null;
+                            throw new IOException("SHA-256 mismatch");
+                        }
+                    } catch (IOException e) {
+                        doneBytes.addAndGet(-attemptBytes.get());
+                        if (attempt >= attempts) {
+                            // A damaged part usually fails ZIP's own CRC check before its SHA-256 is complete.
+                            throw new IllegalStateException("Archive verification failed:\n  - "
+                                    + part.fileName() + ": " + e.getMessage(), e);
+                        }
+                        say(progress, "extract", "Retrying " + part.fileName() + " (" + e.getMessage() + ")");
+                    }
                 }
                 for (String name : result.written()) {
                     if (!written.add(name)) {

@@ -1,5 +1,7 @@
 package com.bloxbean.cardano.yaci.store.snapshot.load;
 
+import com.bloxbean.cardano.yaci.store.snapshot.archive.PartSource;
+
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
@@ -21,6 +23,8 @@ import java.util.Map;
  * @param targetSettings the target's store settings a retention depends on, e.g.
  *                       {@code store.utxo.pruning-enabled}; a pruned snapshot is refused unless the
  *                       target runs the matching pruning
+ * @param partSource     where the parts are read from; null for the files in {@code archiveDir}. A
+ *                       remote source is streamed straight into the extractor (ADR 0005, D5)
  */
 public record ImportOptions(Path manifestPath,
                             Path archiveDir,
@@ -43,7 +47,33 @@ public record ImportOptions(Path manifestPath,
                             boolean skipExtraction,
                             boolean tunePostgres,
                             Map<String, String> retention,
-                            Map<String, String> targetSettings) {
+                            Map<String, String> targetSettings,
+                            PartSource partSource) {
+
+    public ImportOptions(Path manifestPath, Path archiveDir, Path workDir, String jdbcUrl, String user,
+                         String password, String schema, String network, long protocolMagic, long eventPublisherId,
+                         int cursorBlocksToKeep, int workers, String memoryLimit, long minFreeDiskGb,
+                         boolean allowUnsigned, boolean allowCustomSpecs, List<Path> customSpecPaths,
+                         boolean keepExtracted, boolean skipExtraction, boolean tunePostgres,
+                         Map<String, String> retention, Map<String, String> targetSettings) {
+        this(manifestPath, archiveDir, workDir, jdbcUrl, user, password, schema, network, protocolMagic,
+                eventPublisherId, cursorBlocksToKeep, workers, memoryLimit, minFreeDiskGb, allowUnsigned,
+                allowCustomSpecs, customSpecPaths, keepExtracted, skipExtraction, tunePostgres, retention,
+                targetSettings, null);
+    }
+
+    /** A copy that reads its parts from {@code source}. */
+    public ImportOptions withPartSource(PartSource source) {
+        return new ImportOptions(manifestPath, archiveDir, workDir, jdbcUrl, user, password, schema, network,
+                protocolMagic, eventPublisherId, cursorBlocksToKeep, workers, memoryLimit, minFreeDiskGb, allowUnsigned,
+                allowCustomSpecs, customSpecPaths, keepExtracted, skipExtraction, tunePostgres, retention,
+                targetSettings, source);
+    }
+
+    /** The parts' source: {@link #partSource}, or the files in {@link #archiveDir}. */
+    public PartSource parts() {
+        return partSource != null ? partSource : PartSource.directory(archiveDir);
+    }
 
     public ImportOptions {
         retention = retention == null ? Map.of() : Map.copyOf(retention);

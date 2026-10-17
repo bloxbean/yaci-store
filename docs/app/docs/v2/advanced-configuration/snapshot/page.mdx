@@ -86,6 +86,10 @@ before treating a restored database as equivalent to a synced one.
 | `snapshot import` | Load a verified snapshot into an empty, migrated schema |
 | `snapshot import-status` | Show the state of any import recorded in the configured schema |
 | `snapshot validate` | Run the offline validation levels against the imported database |
+| `snapshot publish` | Upload an exported snapshot to S3, R2 or a directory, and add it to the index |
+| `snapshot list` | List the snapshots published for the configured network |
+| `snapshot download` | Download a published snapshot for an offline import or a mirror |
+| `snapshot index --rebuild` | Regenerate a network's `index.json` from the manifests in the store |
 
 All of them use the datasource and schema from the same Spring configuration the admin CLI already
 uses. Passwords are never accepted as command arguments and never appear in a manifest, report or
@@ -338,7 +342,10 @@ Limitations of a scoped restore:
 - A table your application creates itself needs a snapshot specification. Without one, preflight
   stops with "has no snapshot classification".
 - Dependencies between stores are not checked. If you enable a store whose processing reads another
-  store's tables, enable that store as well, exactly as for a normal sync.
+  store's tables, enable that store as well, exactly as for a normal sync. For example, `staking`
+  needs `epoch`, and in the Conway era `epoch_param` is written by the AdaPot job, so an `epoch` store
+  without the ledger-state profile stops updating protocol parameters after the snapshot point, as it
+  would on a normal sync.
 - To change the set of stores, initialize a new schema with the new flags and import again.
 
 Keep Yaci Store stopped during import. Remove `store.schema-only=true` (or set it to false) before
@@ -511,6 +518,92 @@ not a total-machine RAM requirement.
 Execution slices do not change the specification, manifest, or persisted batch IDs. The entire
 original batch and its journal entry commit together. Existing imports can resume with the new
 CLI and a different memory limit without regenerating the snapshot or clearing data.
+
+## Publishing and downloading snapshots
+
+Snapshots can be published to any S3-compatible bucket (Cloudflare R2, AWS S3, MinIO) or a directory,
+and imported straight from there or from a public HTTPS URL. The layout is:
+
+```text
+<prefix>/<network>/index.json
+<prefix>/<network>/<snapshot-id>/<base>.manifest.json
+<prefix>/<network>/<snapshot-id>/<base>.part-00001.zip ...
+<prefix>/<network>/<snapshot-id>/SHA256SUMS
+```
+
+A snapshot directory holds exactly the files export wrote, so a download is byte-identical to the
+export. `index.json` lists each network's snapshots, newest first, with their epoch, size, flavor and
+the SHA-256 of their manifest.
+
+### Configuration
+
+The location and credentials come from the admin CLI's configuration or environment, never from
+command arguments:
+
+```properties
+# Where snapshots are published to and imported from; --remote overrides it.
+store.snapshot.remote.url=s3://yaci-snapshots/v1
+# S3 API endpoint; omit for AWS S3. Cloudflare R2: https://<account-id>.r2.cloudflarestorage.com
+store.snapshot.remote.endpoint=https://<account-id>.r2.cloudflarestorage.com
+store.snapshot.remote.region=auto
+# Unset: the AWS default credential chain (AWS_ACCESS_KEY_ID, profiles, ...).
+# Or STORE_SNAPSHOT_REMOTE_ACCESS_KEY_ID / STORE_SNAPSHOT_REMOTE_SECRET_ACCESS_KEY in the environment.
+store.snapshot.remote.access-key-id=
+store.snapshot.remote.secret-access-key=
+```
+
+| Property | Default | Purpose |
+|---|---|---|
+| `store.snapshot.remote.url` | | `s3://bucket/prefix`, `https://host/prefix` (read-only) or a directory |
+| `store.snapshot.remote.endpoint` | AWS | S3 API endpoint of an S3-compatible service |
+| `store.snapshot.remote.region` | `auto` with an endpoint, else `us-east-1` | Signing region |
+| `store.snapshot.remote.path-style` | `true` with an endpoint | Bucket in the path rather than the host name |
+| `store.snapshot.remote.piece-size` | `64MiB` | Multipart piece size (at least 5MiB); smaller files go in one PUT |
+| `store.snapshot.remote.upload-threads` | `4` | Pieces of one file uploaded at once |
+
+For R2, create an API token with *Object Read & Write* on the bucket, and use its access key id and
+secret. To let anyone download without credentials, connect a custom domain or enable the bucket's
+`r2.dev` URL; importers then use `--remote https://snapshots.example.org/v1`.
+
+### Publishing
+
+```bash
+snapshot export --output /path/to/out --allow-unsigned ... --publish
+# or, for an existing export:
+snapshot publish --manifest /path/to/out/yaci-mainnet-e659-4417bd67.manifest.json
+```
+
+Parts go first, several at once, as multipart uploads read straight from the files. The checksums and
+the manifest follow, and `index.json` is updated last, so the index never points at an incomplete
+snapshot. Each object records its SHA-256, and a rerun skips everything already uploaded, so an
+interrupted publish resumes. The index is rewritten with a conditional write, so two publishers cannot
+drop each other's entry. `snapshot index --rebuild` regenerates it from the manifests in the store.
+
+### Importing from a store
+
+```bash
+snapshot list                                   # what is published for the configured network
+snapshot import --snapshot latest --work-dir /path/to/work --allow-unsigned --workers 8 --validate
+snapshot import --snapshot 4417bd67 --remote https://snapshots.example.org/v1 --work-dir ...
+```
+
+`--snapshot latest` picks the newest snapshot of the flavor (`--flavor full`, the default, or
+`pruned`) that this release can import. It checks each candidate's manifest against the digest in
+the index, then against the local specifications, and skips one made by an incompatible release with
+a message saying why. The network is always the target's configured one.
+
+The manifest and checksums are saved under the work directory. The parts the import needs (for a
+scoped target, only its stores' parts) are streamed straight into the extractor, several at once.
+They are not stored, so the work directory needs room for the extracted Parquet only. Every part and
+file is checked against the manifest as it arrives. A part that fails or stalls (no data for two
+minutes) is fetched again, up to three times.
+
+For an air-gapped target or a mirror, `snapshot download --snapshot latest --output /dir` writes the
+whole snapshot to a directory, resuming parts already downloaded. Then use
+`snapshot import --manifest /dir/<manifest>`.
+
+To test without a cloud account, run MinIO locally and point `store.snapshot.remote.endpoint` at it
+(`http://localhost:9000`, `path-style` on).
 
 ## Resuming an interrupted import
 
