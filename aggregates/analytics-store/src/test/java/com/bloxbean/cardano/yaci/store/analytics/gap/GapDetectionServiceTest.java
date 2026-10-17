@@ -13,7 +13,9 @@ import org.junit.jupiter.api.Test;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
@@ -120,5 +122,20 @@ class GapDetectionServiceTest {
         when(blockStorageReader.findRecentBlock()).thenReturn(Optional.empty());
         when(genesisConfig.getStartTime()).thenReturn(Instant.parse("2022-06-01T00:00:00Z").getEpochSecond());
         assertEquals(LocalDate.parse("2022-05-31"), service.getExportEndDate());
+    }
+
+    @Test
+    void byronEpochsAreScannedOnlyForTablesThatIncludeThem() {
+        EraService eraService = mock(EraService.class);
+        ExportStateService stateService = mock(ExportStateService.class);
+        GapDetectionService gaps = new GapDetectionService(genesisConfig, blockStorageReader,
+                stateService, properties, eraService);
+        when(eraService.getFirstNonByronEpoch()).thenReturn(Optional.of(4));
+        when(blockStorageReader.findRecentBlock())
+                .thenReturn(Optional.of(Block.builder().epochNumber(6).build()));
+        when(stateService.getCompletedPartitions("epoch")).thenReturn(Set.of("epoch=1", "epoch=4"));
+
+        assertEquals(List.of(5, 6), gaps.findMissingEpochExports("epoch"));
+        assertEquals(List.of(0, 2, 3, 5, 6), gaps.findMissingEpochExports("epoch", true));
     }
 }

@@ -4,7 +4,12 @@ services:
     env_file:
       - ../config/env
     volumes:
-      - ../config/application.properties:/app/config/application.properties
+      # The same config/ and data/ as the yaci-store container: the profile files selected by
+      # SPRING_PROFILES_ACTIVE in config/env, and the analytics export that snapshot commands read.
+      - ../config:/app/config
+      - ../data:/app/data
+      # Snapshot parts, manifests and import work files: pass paths under /app/snapshots.
+      - ../snapshots:/app/snapshots
     stdin_open: true
     tty: true
     networks:

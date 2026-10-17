@@ -1,0 +1,30 @@
+snapshot-table:
+  id: rollback
+  spec-version: 1
+  module: blocks
+  kind: CHAIN_DATA
+  restore: IMPORT
+
+  source:
+    exporter-id: rollback
+    ducklake-relation: rollback
+    partition:
+      strategy: DAILY
+      column: block_time
+
+  consistency:
+    cutoff:
+      type: SLOT_LTE
+      column: current_slot
+
+  import:
+    target-table: rollback
+    mode: MAPPED
+    ignore-source-columns: [block_time, date]
+    use-target-defaults: [create_datetime, update_datetime]
+    batch-boundary: SINGLE_BATCH
+
+  validation:
+    key: [id]
+    bounds: [current_slot]
+    required-columns: [id]
