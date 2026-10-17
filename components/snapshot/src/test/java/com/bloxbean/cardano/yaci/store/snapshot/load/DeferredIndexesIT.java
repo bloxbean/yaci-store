@@ -70,7 +70,7 @@ class DeferredIndexesIT {
                 "INSERT INTO " + schema + ".stake SELECT 1 + g % 2, 'a' || g, g FROM generate_series(1, 1000) g",
                 "INSERT INTO " + schema + ".utxo SELECT g, 'h' || g, g % 3 FROM generate_series(1, 1000) g");
 
-        deferred.rebuild("s1", 3, "64MB", Map.of("stake", 1000L, "utxo", 1000L), this::connect, said::add);
+        deferred.rebuild("s1", 3, "64MB", this::connect, said::add);
 
         // Partition indexes come back under the same generated names, plus the new partition's.
         assertThat(definitions()).containsAllEntriesOf(before).hasSize(before.size() + 2);
@@ -83,10 +83,27 @@ class DeferredIndexesIT {
     }
 
     @Test
+    void theLargestTableOnDiskStartsFirstWithMoreParallelWorkers() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeTrue(count("SELECT current_setting('max_parallel_maintenance_workers')::int") < 4
+                && count("SELECT least(current_setting('max_parallel_workers')::int,"
+                + " current_setting('max_worker_processes')::int)") >= 8);
+        DeferredIndexes deferred = new DeferredIndexes(pg, schema);
+        deferred.defer("s1", List.of("stake", "utxo"), said::add);
+        // utxo has fewer rows than stake, but wider ones.
+        exec("INSERT INTO " + schema + ".stake SELECT 1, 'a' || g, g FROM generate_series(1, 20000) g",
+                "INSERT INTO " + schema + ".utxo SELECT g, repeat('h', 500) || g, 0 FROM generate_series(1, 5000) g");
+
+        deferred.rebuild("s1", 2, null, this::connect, said::add);
+
+        assertThat(said).contains("Starting key utxo_pkey on utxo first, with up to 4 parallel workers");
+        assertThat(deferred.problems("s1")).isEmpty();
+    }
+
+    @Test
     void resumeUsesTheJournalAndOnlyRebuildsWhatIsMissing() throws Exception {
         DeferredIndexes deferred = new DeferredIndexes(pg, schema);
         deferred.defer("s1", List.of("utxo"), said::add);
-        deferred.rebuild("s1", 1, null, Map.of(), this::connect, said::add);
+        deferred.rebuild("s1", 1, null, this::connect, said::add);
         // A crash after one index came back: drop it again behind the journal's back.
         exec("DROP INDEX " + schema + ".idx_utxo_slot",
                 "UPDATE " + schema + "." + DeferredIndexes.TABLE + " SET built = false WHERE name = 'idx_utxo_slot'");
@@ -95,7 +112,7 @@ class DeferredIndexesIT {
 
         assertThat(pending).extracting(DeferredIndexes.Entry::name).containsExactly("idx_utxo_slot");
         assertThat(definitions()).containsKeys("utxo_pkey", "uq_utxo_slot_hash");
-        deferred.rebuild("s1", 2, null, Map.of(), this::connect, said::add);
+        deferred.rebuild("s1", 2, null, this::connect, said::add);
         assertThat(deferred.problems("s1")).isEmpty();
     }
 
@@ -105,7 +122,7 @@ class DeferredIndexesIT {
         deferred.defer("s1", List.of("utxo"), said::add);
         exec("INSERT INTO " + schema + ".utxo VALUES (1, 'h', 0), (2, 'h', 0)");
 
-        assertThatThrownBy(() -> deferred.rebuild("s1", 2, null, Map.of(), this::connect, said::add))
+        assertThatThrownBy(() -> deferred.rebuild("s1", 2, null, this::connect, said::add))
                 .isInstanceOf(SQLException.class)
                 .hasMessageContaining("utxo_pkey on utxo")
                 .hasMessageContaining("duplicate keys");
@@ -116,7 +133,7 @@ class DeferredIndexesIT {
     void reportsAnIndexThatChangedAfterTheRebuild() throws Exception {
         DeferredIndexes deferred = new DeferredIndexes(pg, schema);
         deferred.defer("s1", List.of("utxo"), said::add);
-        deferred.rebuild("s1", 1, null, Map.of(), this::connect, said::add);
+        deferred.rebuild("s1", 1, null, this::connect, said::add);
         exec("DROP INDEX " + schema + ".idx_utxo_slot",
                 "CREATE INDEX idx_utxo_slot ON " + schema + ".utxo (slot)");
 

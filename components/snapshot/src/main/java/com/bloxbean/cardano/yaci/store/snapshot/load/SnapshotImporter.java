@@ -320,8 +320,7 @@ public class SnapshotImporter {
                 long keys = toRebuild.stream().filter(DeferredIndexes.Entry::key).count();
                 Progress.phase(progress, String.format("Rebuilding %d keys and %d indexes", keys, toRebuild.size() - keys));
                 deferred.rebuild(manifest.snapshotId(), options.workers(),
-                        DeferredIndexes.postgresMemory(options.memoryLimit()),
-                        journal.rowsPerTable(manifest.snapshotId()), () -> connect(options),
+                        DeferredIndexes.postgresMemory(options.memoryLimit()), () -> connect(options),
                         m -> say(progress, "indexes", m));
                 List<String> indexProblems = deferred.problems(manifest.snapshotId());
                 if (!indexProblems.isEmpty()) {

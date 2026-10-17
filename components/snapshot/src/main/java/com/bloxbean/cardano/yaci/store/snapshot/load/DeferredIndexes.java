@@ -51,6 +51,10 @@ public class DeferredIndexes {
     static final String CONSTRAINT = "CONSTRAINT";
     static final String INDEX = "INDEX";
     static final long PROGRESS_MILLIS = 60_000;
+    /** Parallel workers asked for by the first build, at most half the server's pool. */
+    static final int LEAD_PARALLEL_WORKERS = 4;
+    /** How long the other connections wait for the first build's workers before starting anyway. */
+    static final long LEAD_WAIT_MILLIS = 120_000;
 
     /** Postgres prints an index on a partitioned table as {@code ON ONLY}, which builds no partitions. */
     private static final Pattern ON_ONLY =
@@ -193,20 +197,27 @@ public class DeferredIndexes {
      * Rebuilds every entry not yet built: each table's keys first, then all indexes, largest tables
      * first, on up to {@code workers} connections.
      *
+     * <p>Postgres hands out parallel workers when a build starts, from a pool shared by every build.
+     * The first task, the largest table's key and the longest build, starts alone with up to
+     * {@link #LEAD_PARALLEL_WORKERS}; the other connections start once its workers are running.
+     * Started together, the largest key could find the pool empty and scan its table in one process.
+     *
      * @param maintenanceWorkMem per-connection {@code maintenance_work_mem}, e.g. {@code "3GB"}, or null
      *                           for the server default
-     * @param tableRows          loaded row counts, used only to start the largest builds first
      */
-    public void rebuild(String snapshotId, int workers, String maintenanceWorkMem, Map<String, Long> tableRows,
+    public void rebuild(String snapshotId, int workers, String maintenanceWorkMem,
                         ConnectionFactory connections, Consumer<String> say) throws SQLException {
         List<Entry> pending = entries(snapshotId).stream().filter(e -> !e.built()).toList();
         if (pending.isEmpty()) {
             return;
         }
+        // Size on disk, not rows: address_utxo has fewer rows than epoch_stake but takes far longer.
         Map<String, Long> rows = new HashMap<>();
         Map<String, String> parents = partitionParents(pending.stream().map(Entry::table).distinct().toList(), null);
+        Map<String, Long> bytes = tableBytes(pending.stream()
+                .map(e -> parents.getOrDefault(e.table(), e.table())).distinct().toList());
         for (Entry e : pending) {
-            rows.put(e.table(), tableRows.getOrDefault(parents.getOrDefault(e.table(), e.table()), 0L));
+            rows.put(e.table(), bytes.getOrDefault(parents.getOrDefault(e.table(), e.table()), 0L));
         }
         Comparator<String> largestFirst = Comparator.comparingLong((String t) -> rows.get(t)).reversed()
                 .thenComparing(Comparator.naturalOrder());
@@ -227,6 +238,13 @@ public class DeferredIndexes {
         say.accept(String.format("Rebuilding %d key(s) and index(es) on %d table(s) with %d connection(s)%s",
                 pending.size(), rows.size(), threads,
                 maintenanceWorkMem == null ? "" : ", maintenance_work_mem " + maintenanceWorkMem));
+        int leadWorkers = threads > 1 ? leadParallelWorkers() : 0;
+        if (leadWorkers > 0) {
+            say.accept(String.format("Starting %s first, with up to %d parallel workers", tasks.get(0).get(0).label(),
+                    leadWorkers));
+        }
+        java.util.concurrent.atomic.AtomicInteger leadPid = new java.util.concurrent.atomic.AtomicInteger();
+        CountDownLatch leadFirstTaskDone = new CountDownLatch(1);
 
         ConcurrentLinkedQueue<List<Entry>> queue = new ConcurrentLinkedQueue<>(tasks);
         List<SQLException> failures = new ArrayList<>();
@@ -246,15 +264,23 @@ public class DeferredIndexes {
         }, PROGRESS_MILLIS, PROGRESS_MILLIS, java.util.concurrent.TimeUnit.MILLISECONDS);
         List<Thread> pool = new ArrayList<>();
         for (int w = 0; w < threads; w++) {
+            boolean lead = w == 0 && leadWorkers > 0;
             Thread thread = Thread.ofPlatform().name("snapshot-index-" + w).unstarted(() -> {
                 try (Connection c = connections.open()) {
                     c.setAutoCommit(false);
-                    if (maintenanceWorkMem != null) {
-                        try (Statement st = c.createStatement()) {
+                    try (Statement st = c.createStatement()) {
+                        if (maintenanceWorkMem != null) {
                             st.execute("SET maintenance_work_mem = '" + maintenanceWorkMem + "'");
                         }
-                        c.commit();
+                        if (lead) {
+                            st.execute("SET max_parallel_maintenance_workers = " + leadWorkers);
+                            try (ResultSet rs = st.executeQuery("SELECT pg_backend_pid()")) {
+                                rs.next();
+                                leadPid.set(rs.getInt(1));
+                            }
+                        }
                     }
+                    c.commit();
                     List<Entry> task;
                     while ((task = queue.poll()) != null) {
                         String table = task.get(0).table();
@@ -289,6 +315,13 @@ public class DeferredIndexes {
                                 keysDone.get(table).countDown();
                             }
                         }
+                        if (lead && leadFirstTaskDone.getCount() > 0) {
+                            try (Statement st = c.createStatement()) {
+                                st.execute("RESET max_parallel_maintenance_workers");
+                            }
+                            c.commit();
+                            leadFirstTaskDone.countDown();
+                        }
                     }
                 } catch (SQLException e) {
                     synchronized (failures) {
@@ -297,10 +330,15 @@ public class DeferredIndexes {
                     drain(queue, keysDone);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
+                } finally {
+                    leadFirstTaskDone.countDown();
                 }
             });
             pool.add(thread);
             thread.start();
+            if (lead) {
+                awaitParallelWorkers(leadPid, leadFirstTaskDone);
+            }
         }
         try {
             for (Thread t : pool) {
@@ -355,6 +393,80 @@ public class DeferredIndexes {
             }
         }
         return out.isEmpty() ? null : "building " + String.join("; ", out);
+    }
+
+    /**
+     * Parallel workers for the first build: {@link #LEAD_PARALLEL_WORKERS}, at most half the pool, or
+     * 0 when that is no more than the server already gives every build.
+     */
+    private int leadParallelWorkers() {
+        String sql = "SELECT least(current_setting('max_parallel_workers')::int,"
+                + " current_setting('max_worker_processes')::int),"
+                + " current_setting('max_parallel_maintenance_workers')::int";
+        synchronized (conn) {
+            try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery(sql)) {
+                rs.next();
+                int lead = Math.min(LEAD_PARALLEL_WORKERS, rs.getInt(1) / 2);
+                return lead > rs.getInt(2) ? lead : 0;
+            } catch (SQLException e) {
+                log.debug("Unable to read the parallel worker settings", e);
+                return 0;
+            }
+        }
+    }
+
+    /**
+     * Waits until the backend {@code pid} has parallel workers running, its first task is done, or
+     * {@link #LEAD_WAIT_MILLIS} passed. A build that gets no workers is not waited for longer.
+     */
+    private void awaitParallelWorkers(java.util.concurrent.atomic.AtomicInteger pid, CountDownLatch firstTaskDone) {
+        long deadline = System.currentTimeMillis() + LEAD_WAIT_MILLIS;
+        try {
+            while (!firstTaskDone.await(500, java.util.concurrent.TimeUnit.MILLISECONDS)
+                    && System.currentTimeMillis() < deadline) {
+                if (pid.get() == 0) {
+                    continue;
+                }
+                synchronized (conn) {
+                    try (PreparedStatement ps = conn.prepareStatement(
+                            "SELECT count(*) FROM pg_stat_activity WHERE leader_pid = ?")) {
+                        ps.setInt(1, pid.get());
+                        try (ResultSet rs = ps.executeQuery()) {
+                            if (rs.next() && rs.getLong(1) > 0) {
+                                return;
+                            }
+                        }
+                    } catch (SQLException e) {
+                        log.debug("Unable to read parallel workers", e);
+                        return;
+                    }
+                }
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    /** Heap size in bytes of each table, its partitions included. */
+    private Map<String, Long> tableBytes(List<String> tables) throws SQLException {
+        Map<String, Long> out = new HashMap<>();
+        String sql = """
+                SELECT c.relname, coalesce((SELECT sum(pg_relation_size(t.relid)) FROM pg_partition_tree(c.oid) t),
+                                           pg_relation_size(c.oid))
+                FROM pg_class c
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE n.nspname = ? AND c.relname = ANY (?::text[])
+                """;
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, schema);
+            ps.setArray(2, conn.createArrayOf("text", tables.toArray()));
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    out.put(rs.getString(1), rs.getLong(2));
+                }
+            }
+        }
+        return out;
     }
 
     /** Empties the queue after a failure, releasing anything waiting on a key task that will not run. */
