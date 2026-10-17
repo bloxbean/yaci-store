@@ -6,6 +6,7 @@ import com.bloxbean.cardano.yaci.store.metadata.storage.impl.TxMetadataStorageIm
 import com.bloxbean.cardano.yaci.store.metadata.storage.impl.TxMetadataStorageReaderImpl;
 import com.bloxbean.cardano.yaci.store.metadata.storage.impl.mapper.MetadataMapper;
 import com.bloxbean.cardano.yaci.store.metadata.storage.impl.repository.TxMetadataLabelRepository;
+import org.jooq.DSLContext;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
@@ -32,8 +33,8 @@ public class MetadataStoreConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public TxMetadataStorage txMetadataStorage(TxMetadataLabelRepository txMetadataLabelRepository,
-                                               MetadataMapper metadataMapper) {
-        return new TxMetadataStorageImpl(txMetadataLabelRepository, metadataMapper);
+                                               MetadataMapper metadataMapper, DSLContext dslContext) {
+        return new TxMetadataStorageImpl(txMetadataLabelRepository, metadataMapper, dslContext);
     }
 
     @Bean

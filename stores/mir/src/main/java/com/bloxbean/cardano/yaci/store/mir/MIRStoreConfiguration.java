@@ -6,6 +6,7 @@ import com.bloxbean.cardano.yaci.store.mir.storage.impl.MIRRepository;
 import com.bloxbean.cardano.yaci.store.mir.storage.impl.MIRStorageImpl;
 import com.bloxbean.cardano.yaci.store.mir.storage.impl.MIRStorageReaderImpl;
 import com.bloxbean.cardano.yaci.store.mir.storage.impl.mapper.MIRMapper;
+import org.jooq.DSLContext;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
@@ -32,8 +33,8 @@ public class MIRStoreConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public MIRStorage mirStorage(MIRRepository mirRepository,
-                                     MIRMapper mapper) {
-        return new MIRStorageImpl(mirRepository, mapper);
+                                     MIRMapper mapper, DSLContext dslContext) {
+        return new MIRStorageImpl(mirRepository, mapper, dslContext);
     }
 
     @Bean
