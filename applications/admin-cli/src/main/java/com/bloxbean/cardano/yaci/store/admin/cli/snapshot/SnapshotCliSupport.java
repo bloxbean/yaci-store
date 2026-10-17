@@ -96,8 +96,18 @@ public class SnapshotCliSupport {
                         ? getClass().getPackage().getImplementationVersion() : "unknown");
     }
 
-    /** The git commit this build was made from ({@code git.properties}), or null when unknown. */
+    /**
+     * The git commit this build was made from, or null when unknown. A snapshot build's version
+     * already names its commit ({@code 3.0.0-beta6-5e97d04ca-SNAPSHOT}), taken from the checkout it was
+     * built in, and that wins: in a git worktree, {@code git.properties} describes the main checkout's
+     * HEAD instead. A release version names none, so it comes from {@code git.properties}.
+     */
     public String yaciStoreCommit() {
+        java.util.regex.Matcher inVersion = java.util.regex.Pattern.compile("-([0-9a-f]{7,40})-SNAPSHOT$")
+                .matcher(yaciStoreVersion());
+        if (inVersion.find()) {
+            return inVersion.group(1);
+        }
         try (java.io.InputStream in = getClass().getResourceAsStream("/git.properties")) {
             if (in == null) {
                 return null;

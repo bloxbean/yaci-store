@@ -56,8 +56,8 @@ public class SnapshotRemoteCommands {
 
     static void publish(SnapshotStore store, Path manifest, int threads, boolean live) throws Exception {
         var result = new SnapshotRepository(store).publish(manifest, threads, live, new ProgressPrinter(0));
-        writeLn(success("Published snapshot %s to %s%s", result.entry().snapshotId(), store.describe(),
-                result.directory()));
+        writeLn(success("Published snapshot %s to %s", result.entry().snapshotId(), store.describe()));
+        writeLn("  Directory   : %s", result.directory());
         writeLn("  Sent        : %d file(s), %s (%d already there)", result.filesSent(),
                 SnapshotCliSupport.humanBytes(result.bytesSent()), result.filesSkipped());
         writeLn("  Duration    : %s", SnapshotCliSupport.humanMillis(result.millis()));
