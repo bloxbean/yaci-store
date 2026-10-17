@@ -81,9 +81,12 @@ the target asks for it through its own configuration, the same way scoped import
 | `store.transaction.save-cbor=true` or `save-full-tx-cbor=true` | `transaction_cbor` loaded, if the snapshot holds the same form (full or body); otherwise preflight refuses, since mixing forms in one table breaks the API's contract |
 | neither | the tables stay empty, and their parts are not downloaded |
 
-Each optional table's files go in a part group of their own (`<module>/cbor`), as D11's tiers do, so a
-target that does not want CBOR never downloads it, even though `block_cbor` belongs to the `blocks`
-module, which every target enables.
+Each optional table's files go in parts of their own: one part group per table (`blocks/block_cbor`,
+`transaction/transaction_cbor`), as D11's tiers do. A part therefore holds only `block_cbor` or only
+`transaction_cbor`, never both and never another table. A target downloads a CBOR table's parts only
+when it enables that table, so `block_cbor` and `transaction_cbor` are pulled independently. A target
+that does not want CBOR never downloads it, even though `block_cbor` belongs to the `blocks` module,
+which every target enables.
 
 ### D3 — Recent CBOR as a pruned tier
 
