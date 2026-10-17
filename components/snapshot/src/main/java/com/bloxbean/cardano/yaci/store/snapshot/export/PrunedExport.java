@@ -63,6 +63,8 @@ final class PrunedExport {
     private final Path outDir;
     private final String memoryLimit;
     private final Consumer<String> progress;
+    /** Files already written and counted, so writing a relation in chunks counts each file once. */
+    private final Map<String, DuckLakeFile> counted = new java.util.HashMap<>();
 
     PrunedExport(DuckLakeCatalog catalog, Path workDir, String memoryLimit, Consumer<String> progress) {
         this.catalog = catalog;
@@ -160,31 +162,107 @@ final class PrunedExport {
         return replan(duck, plan, files, rows);
     }
 
+    /** Spent keys and output keys are split into this many buckets, so each join holds 1/BUCKETS of them. */
+    static final int BUCKETS = 64;
+    /** Date partitions written per COPY, so only this many output files are open at once. */
+    static final int PARTITIONS_PER_WRITE = 32;
+
+    /**
+     * Outputs not spent before the window. Memory is bounded by a bucket, not by the chain:
+     *
+     * <ol>
+     *   <li>the keys of inputs spent before the window, and the keys of every output at the point, are
+     *       written to the spill directory in {@link #BUCKETS} buckets by {@code hash(tx_hash)};</li>
+     *   <li>each bucket's outputs are anti-joined with its spent keys, giving the kept outputs;</li>
+     *   <li>the kept outputs' rows are written {@link #PARTITIONS_PER_WRITE} date partitions at a time.</li>
+     * </ol>
+     */
     private TablePlan pruneAddressUtxo(Connection duck, TablePlan plan, TablePlan spent, ConsistencyPoint point,
                                        long windowSlot, Map<String, Path> rewritten) throws SQLException, IOException {
         long started = System.currentTimeMillis();
-        String sql = windowSlot == Long.MIN_VALUE
-                ? "SELECT * FROM " + DuckDb.readParquet(catalog.parquetList(plan.files())) + " WHERE slot <= " + point.slot()
-                : "SELECT u.* FROM " + DuckDb.readParquet(catalog.parquetList(plan.files())) + " u"
-                + " ANTI JOIN (SELECT tx_hash, output_index FROM " + DuckDb.readParquet(catalog.parquetList(spent.files()))
-                + " WHERE spent_at_slot < " + windowSlot + ") s"
-                + " ON u.tx_hash = s.tx_hash AND u.output_index = s.output_index"
-                + " WHERE u.slot <= " + point.slot();
-        List<DuckLakeFile> files = write(duck, plan, sql, rewritten);
-        // The importer regroups the flattened rows by output, so the count to reproduce is the number of
-        // distinct outputs. An output's rows share a block, so they never span partitions.
-        long outputs = 0;
-        Map<String, List<DuckLakeFile>> byPartition = files.stream()
-                .collect(Collectors.groupingBy(DuckLakeFile::partition, LinkedHashMap::new, Collectors.toList()));
-        String key = plan.spec().validation().sourceKey().stream().map(Identifiers::quote).collect(Collectors.joining(", "));
-        for (List<DuckLakeFile> group : byPartition.values()) {
-            outputs += DuckDb.queryLong(duck, "SELECT count(*) FROM (SELECT DISTINCT " + key + " FROM "
-                    + DuckDb.readParquet(list(group, rewritten)) + ")", 0);
+        Path work = outDir.resolve(".utxo");
+        deleteRecursively(work);
+        Files.createDirectories(work);
+        String outputs = DuckDb.readParquet(catalog.parquetList(plan.files()));
+        String bucket = "CAST(hash(tx_hash) % " + BUCKETS + " AS INTEGER) AS b";
+        try {
+            if (windowSlot != Long.MIN_VALUE) {
+                copy(duck, "SELECT tx_hash, output_index, " + bucket + " FROM "
+                        + DuckDb.readParquet(catalog.parquetList(spent.files())) + " WHERE spent_at_slot < " + windowSlot,
+                        work.resolve("spent"), "b");
+            }
+            // One row per output when asset_index 1 is every output's first asset; otherwise every row, made
+            // distinct per bucket below.
+            long firstAssets = !plan.sourceColumns().containsKey("asset_index") ? -1
+                    : DuckDb.queryLong(duck, "SELECT count(*) FROM " + outputs
+                    + " WHERE asset_index = 1 AND slot <= " + point.slot(), -1);
+            boolean onePerOutput = firstAssets == plan.rowCount();
+            copy(duck, "SELECT tx_hash, output_index, \"date\", " + bucket + " FROM " + outputs
+                    + " WHERE slot <= " + point.slot() + (onePerOutput ? " AND asset_index = 1" : ""),
+                    work.resolve("outputs"), "b");
+            say(String.format("address_utxo: keys bucketed in %s", Progress.duration(System.currentTimeMillis() - started)));
+
+            Path kept = work.resolve("kept");
+            Files.createDirectories(kept);
+            for (int b = 0; b < BUCKETS; b++) {
+                Path o = work.resolve("outputs/b=" + b);
+                if (!Files.isDirectory(o)) {
+                    continue;
+                }
+                String bucketOutputs = "(SELECT " + (onePerOutput ? "" : "DISTINCT ") + "tx_hash, output_index, \"date\" FROM "
+                        + DuckDb.readParquet(glob(o)) + ")";
+                Path s = work.resolve("spent/b=" + b);
+                String select = windowSlot == Long.MIN_VALUE || !Files.isDirectory(s) ? "SELECT * FROM " + bucketOutputs
+                        : "SELECT o.* FROM " + bucketOutputs + " o ANTI JOIN " + DuckDb.readParquet(glob(s))
+                        + " x ON o.tx_hash = x.tx_hash AND o.output_index = x.output_index";
+                DuckDb.exec(duck, "COPY (" + select + ") TO "
+                        + Identifiers.literal(kept.resolve("kept_" + b + ".parquet").toString()) + " (FORMAT parquet)");
+            }
+            long outputsKept = DuckDb.queryLong(duck, "SELECT count(*) FROM " + DuckDb.readParquet(glob(kept)), 0);
+            say(String.format("address_utxo: %,d of %,d outputs kept, %s so far", outputsKept, plan.rowCount(),
+                    Progress.duration(System.currentTimeMillis() - started)));
+
+            // Write the kept outputs' rows, a few date partitions at a time.
+            Map<String, List<DuckLakeFile>> byPartition = plan.files().stream()
+                    .collect(Collectors.groupingBy(DuckLakeFile::partition, TreeMap::new, Collectors.toList()));
+            List<List<DuckLakeFile>> chunks = new ArrayList<>();
+            List<DuckLakeFile> chunk = new ArrayList<>();
+            int partitions = 0;
+            for (List<DuckLakeFile> files : byPartition.values()) {
+                chunk.addAll(files);
+                if (++partitions % PARTITIONS_PER_WRITE == 0) {
+                    chunks.add(chunk);
+                    chunk = new ArrayList<>();
+                }
+            }
+            if (!chunk.isEmpty()) {
+                chunks.add(chunk);
+            }
+            List<DuckLakeFile> files = new ArrayList<>();
+            for (List<DuckLakeFile> c : chunks) {
+                String rows = DuckDb.readParquet(catalog.parquetList(c));
+                files = write(duck, plan, "SELECT u.* FROM " + rows + " u SEMI JOIN (SELECT tx_hash, output_index FROM "
+                        + DuckDb.readParquet(glob(kept)) + " WHERE \"date\" IN (SELECT DISTINCT \"date\" FROM " + rows + ")) k"
+                        + " ON u.tx_hash = k.tx_hash AND u.output_index = k.output_index WHERE u.slot <= " + point.slot(),
+                        rewritten);
+            }
+            long rowsKept = files.stream().mapToLong(DuckLakeFile::rowCount).sum();
+            say(String.format("address_utxo: %,d rows in %d files written in %s", rowsKept, files.size(),
+                    Progress.duration(System.currentTimeMillis() - started)));
+            return replan(duck, plan, files, outputsKept);
+        } finally {
+            deleteRecursively(work);
         }
-        say(String.format("address_utxo: %,d of %,d outputs kept (%,d rows, %d files) in %s", outputs, plan.rowCount(),
-                files.stream().mapToLong(DuckLakeFile::rowCount).sum(), files.size(),
-                Progress.duration(System.currentTimeMillis() - started)));
-        return replan(duck, plan, files, outputs);
+    }
+
+    /** {@code select} into {@code dir}, one directory per value of {@code partitionColumn}. */
+    private static void copy(Connection duck, String select, Path dir, String partitionColumn) throws SQLException {
+        DuckDb.exec(duck, "COPY (" + select + ") TO " + Identifiers.literal(dir.toString())
+                + " (FORMAT parquet, PARTITION_BY (" + partitionColumn + "), OVERWRITE_OR_IGNORE true)");
+    }
+
+    private static String glob(Path dir) {
+        return Identifiers.literal(dir.resolve("**/*.parquet").toString());
     }
 
     /**
@@ -203,9 +281,14 @@ final class PrunedExport {
         try (Stream<Path> walk = Files.walk(dir)) {
             for (Path p : walk.filter(f -> f.toString().endsWith(".parquet")).sorted().toList()) {
                 String rel = prefix + "/" + dir.relativize(p).toString().replace('\\', '/');
-                long rows = DuckDb.queryLong(duck, "SELECT count(*) FROM "
-                        + DuckDb.readParquet("[" + Identifiers.literal(p.toAbsolutePath().toString()) + "]"), 0);
-                files.add(new DuckLakeFile(rel, rows, Files.size(p)));
+                DuckLakeFile known = counted.get(rel);
+                if (known == null) {
+                    long rows = DuckDb.queryLong(duck, "SELECT count(*) FROM "
+                            + DuckDb.readParquet("[" + Identifiers.literal(p.toAbsolutePath().toString()) + "]"), 0);
+                    known = new DuckLakeFile(rel, rows, Files.size(p));
+                    counted.put(rel, known);
+                }
+                files.add(known);
                 rewritten.put(rel, p.toAbsolutePath());
             }
         }

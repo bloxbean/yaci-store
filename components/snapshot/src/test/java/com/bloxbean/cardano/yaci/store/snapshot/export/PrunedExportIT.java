@@ -42,6 +42,15 @@ class PrunedExportIT {
 
     @Test
     void keepsWhatAPruningNodeHoldsAtThePoint() throws Exception {
+        prunes(true);
+    }
+
+    @Test
+    void findsTheOutputsWithoutAssetIndexToo() throws Exception {
+        prunes(false);
+    }
+
+    private void prunes(boolean assetIndex) throws Exception {
         try (var conn = DriverManager.getConnection("jdbc:duckdb:"); var st = conn.createStatement()) {
             st.execute("LOAD ducklake");
             st.execute("ATTACH 'ducklake:" + root.resolve("ducklake.catalog.db") + "' AS lake (DATA_PATH '" + root + "')");
@@ -51,10 +60,12 @@ class PrunedExportIT {
             st.execute("INSERT INTO lake.block SELECT n, n * 20, DATE '2026-01-01' + CAST(n / 40 AS INTEGER) FROM range(0, 121) t(n)");
 
             st.execute("CREATE TABLE lake.address_utxo(tx_hash VARCHAR, output_index SMALLINT, asset_unit VARCHAR,"
-                    + " quantity DECIMAL(38,0), epoch INTEGER, slot BIGINT, block_time TIMESTAMPTZ, date DATE)");
+                    + " quantity DECIMAL(38,0), epoch INTEGER, slot BIGINT, block_time TIMESTAMPTZ, date DATE"
+                    + (assetIndex ? ", asset_index BIGINT" : "") + ")");
             st.execute("ALTER TABLE lake.address_utxo SET PARTITIONED BY (date)");
             st.execute("INSERT INTO lake.address_utxo SELECT printf('%064x', n), 0, asset, 1, CAST(n / 10 AS INTEGER),"
                     + " n * 20, to_timestamp(1700000000 + n * 20), DATE '2026-01-01' + CAST(n / 40 AS INTEGER)"
+                    + (assetIndex ? ", CASE asset WHEN 'lovelace' THEN 1 ELSE 2 END" : "")
                     + " FROM range(0, 50) t(n), (SELECT unnest(['lovelace', 'tok']) AS asset)");
 
             st.execute("CREATE TABLE lake.tx_input(tx_hash VARCHAR, output_index SMALLINT, spent_tx_hash VARCHAR,"
