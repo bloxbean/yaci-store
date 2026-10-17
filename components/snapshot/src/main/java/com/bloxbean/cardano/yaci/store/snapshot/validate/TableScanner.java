@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.snapshot.validate;
 
 import com.bloxbean.cardano.yaci.store.snapshot.load.DeferredIndexes;
 import com.bloxbean.cardano.yaci.store.snapshot.util.Identifiers;
+import com.bloxbean.cardano.yaci.store.snapshot.util.ParallelWorkers;
 
 import java.sql.Connection;
 import java.sql.ResultSet;
@@ -14,12 +15,14 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 /**
@@ -57,8 +60,11 @@ final class TableScanner {
         if (targets.isEmpty()) {
             return results;
         }
+        // address_utxo first: its amount checks make it the longest scan, though epoch_stake and
+        // reward have more rows.
         List<Target> ordered = new ArrayList<>(targets);
-        ordered.sort(Comparator.comparingLong(Target::expectedRows).reversed());
+        ordered.sort(Comparator.comparing(Target::addressUtxo).reversed()
+                .thenComparing(Comparator.comparingLong(Target::expectedRows).reversed()));
         int threads = connections == null ? 1 : Math.max(1, Math.min(workers, ordered.size()));
         long started = System.currentTimeMillis();
         say.accept("Scanning " + ordered.size() + " table(s) with " + threads + " connection(s)");
@@ -81,7 +87,7 @@ final class TableScanner {
                     running.remove(t.table());
                 }
             } else {
-                parallel(schema, ordered, connections, threads, results, running);
+                parallel(schema, ordered, shared, connections, threads, results, running);
             }
         } finally {
             timer.shutdownNow();
@@ -90,29 +96,48 @@ final class TableScanner {
         return results;
     }
 
-    private static void parallel(String schema, List<Target> ordered, DeferredIndexes.ConnectionFactory connections,
-                                 int threads, Map<String, Result> results, Set<String> running) throws SQLException {
+    private static void parallel(String schema, List<Target> ordered, Connection shared,
+                                 DeferredIndexes.ConnectionFactory connections, int threads,
+                                 Map<String, Result> results, Set<String> running) throws SQLException {
         ConcurrentLinkedQueue<Target> queue = new ConcurrentLinkedQueue<>(ordered);
         ExecutorService pool = Executors.newFixedThreadPool(threads);
+        AtomicInteger leadPid = new AtomicInteger();
+        CountDownLatch leadFirstDone = new CountDownLatch(1);
         try {
             List<Future<Void>> futures = new ArrayList<>();
             for (int i = 0; i < threads; i++) {
+                boolean lead = i == 0;
                 futures.add(pool.submit(() -> {
                     try (Connection c = connections.open()) {
-                        // The largest table is scanned first and alone at the end; let its query use the
+                        // The longest scan runs first and alone at the end; let its query use the
                         // server's parallel workers. On mainnet address_utxo's single scan otherwise ran
                         // with the default 2 while the other connections had finished.
                         try (Statement st = c.createStatement()) {
                             st.execute("SET max_parallel_workers_per_gather = " + threads);
                         }
+                        if (lead) {
+                            leadPid.set(ParallelWorkers.backendPid(c));
+                        }
                         for (Target t = queue.poll(); t != null; t = queue.poll()) {
                             running.add(t.table());
                             results.put(t.table(), scanOne(c, schema, t));
                             running.remove(t.table());
+                            if (lead) {
+                                leadFirstDone.countDown();
+                            }
+                        }
+                    } finally {
+                        if (lead) {
+                            leadFirstDone.countDown();
                         }
                     }
                     return null;
                 }));
+                // The other scans start once the first one's workers run: started together, the
+                // smaller scans took the whole pool and address_utxo ran in one process.
+                if (lead) {
+                    ParallelWorkers.awaitLaunched(shared, leadPid, leadFirstDone);
+                }
             }
             for (Future<Void> f : futures) {
                 f.get();

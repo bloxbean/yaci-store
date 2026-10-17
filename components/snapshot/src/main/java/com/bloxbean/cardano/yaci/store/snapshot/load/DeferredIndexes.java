@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.snapshot.load;
 
 import com.bloxbean.cardano.yaci.store.snapshot.util.Identifiers;
+import com.bloxbean.cardano.yaci.store.snapshot.util.ParallelWorkers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,8 +54,6 @@ public class DeferredIndexes {
     static final long PROGRESS_MILLIS = 60_000;
     /** Parallel workers asked for by the first build, at most half the server's pool. */
     static final int LEAD_PARALLEL_WORKERS = 4;
-    /** How long the other connections wait for the first build's workers before starting anyway. */
-    static final long LEAD_WAIT_MILLIS = 120_000;
 
     /** Postgres prints an index on a partitioned table as {@code ON ONLY}, which builds no partitions. */
     private static final Pattern ON_ONLY =
@@ -274,10 +273,7 @@ public class DeferredIndexes {
                         }
                         if (lead) {
                             st.execute("SET max_parallel_maintenance_workers = " + leadWorkers);
-                            try (ResultSet rs = st.executeQuery("SELECT pg_backend_pid()")) {
-                                rs.next();
-                                leadPid.set(rs.getInt(1));
-                            }
+                            leadPid.set(ParallelWorkers.backendPid(c));
                         }
                     }
                     c.commit();
@@ -337,7 +333,7 @@ public class DeferredIndexes {
             pool.add(thread);
             thread.start();
             if (lead) {
-                awaitParallelWorkers(leadPid, leadFirstTaskDone);
+                ParallelWorkers.awaitLaunched(conn, leadPid, leadFirstTaskDone);
             }
         }
         try {
@@ -412,38 +408,6 @@ public class DeferredIndexes {
                 log.debug("Unable to read the parallel worker settings", e);
                 return 0;
             }
-        }
-    }
-
-    /**
-     * Waits until the backend {@code pid} has parallel workers running, its first task is done, or
-     * {@link #LEAD_WAIT_MILLIS} passed. A build that gets no workers is not waited for longer.
-     */
-    private void awaitParallelWorkers(java.util.concurrent.atomic.AtomicInteger pid, CountDownLatch firstTaskDone) {
-        long deadline = System.currentTimeMillis() + LEAD_WAIT_MILLIS;
-        try {
-            while (!firstTaskDone.await(500, java.util.concurrent.TimeUnit.MILLISECONDS)
-                    && System.currentTimeMillis() < deadline) {
-                if (pid.get() == 0) {
-                    continue;
-                }
-                synchronized (conn) {
-                    try (PreparedStatement ps = conn.prepareStatement(
-                            "SELECT count(*) FROM pg_stat_activity WHERE leader_pid = ?")) {
-                        ps.setInt(1, pid.get());
-                        try (ResultSet rs = ps.executeQuery()) {
-                            if (rs.next() && rs.getLong(1) > 0) {
-                                return;
-                            }
-                        }
-                    } catch (SQLException e) {
-                        log.debug("Unable to read parallel workers", e);
-                        return;
-                    }
-                }
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
         }
     }
 
