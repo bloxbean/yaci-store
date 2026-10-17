@@ -96,6 +96,21 @@ public class SnapshotCliSupport {
                         ? getClass().getPackage().getImplementationVersion() : "unknown");
     }
 
+    /** The git commit this build was made from ({@code git.properties}), or null when unknown. */
+    public String yaciStoreCommit() {
+        try (java.io.InputStream in = getClass().getResourceAsStream("/git.properties")) {
+            if (in == null) {
+                return null;
+            }
+            java.util.Properties p = new java.util.Properties();
+            p.load(in);
+            String commit = p.getProperty("git.commit.id.abbrev");
+            return commit == null || commit.isBlank() ? null : commit.trim();
+        } catch (java.io.IOException e) {
+            return null;
+        }
+    }
+
     public Connection connect() throws SQLException {
         return DriverManager.getConnection(jdbcUrl(), dbUser(), dbPassword());
     }
@@ -209,7 +224,7 @@ public class SnapshotCliSupport {
                 parseSize(partSize), targetEpoch, minConfirmations, allowIncomplete, unsigned,
                 yaciStoreVersion(), enabledModules(), pruningSettings(),
                 schemaFingerprint, flywayFingerprint, completedPartitions, tableSchemaFingerprints,
-                memoryLimit, targetTables);
+                memoryLimit, targetTables).withCommit(yaciStoreCommit());
     }
 
     public ImportOptions importOptions(String manifest, String workDir, int workers, String memoryLimit,
@@ -217,6 +232,31 @@ public class SnapshotCliSupport {
                                        boolean allowCustomSpecs, boolean keepExtracted, boolean tunePostgres) {
         return importOptions(manifest, workDir, workers, memoryLimit, minFreeDiskGb, allowUnsigned, specFile,
                 allowCustomSpecs, keepExtracted, tunePostgres, 0);
+    }
+
+    /**
+     * The target's settings an import's retention depends on: whether it prunes a table, and how much
+     * it keeps ({@code Retention.forTarget}).
+     */
+    public Map<String, String> targetSettings() {
+        Map<String, String> out = new LinkedHashMap<>(pruningSettings());
+        out.put("store.utxo.pruning-safe-blocks", environment.getProperty("store.utxo.pruning-safe-blocks", "2160"));
+        out.put("store.adapot.epoch-stake-safe-epochs", environment.getProperty("store.adapot.epoch-stake-safe-epochs", "8"));
+        return out;
+    }
+
+    /**
+     * The newest epochs of {@code epoch_stake} an import loads: {@code requested} when positive, otherwise
+     * the target's own {@code store.adapot.epoch-stake-safe-epochs} when it prunes epoch_stake, otherwise
+     * 0 for every epoch.
+     */
+    public int epochStakeEpochs(int requested) {
+        if (requested > 0) {
+            return requested;
+        }
+        Map<String, String> settings = targetSettings();
+        return "true".equalsIgnoreCase(settings.get("store.adapot.epoch-stake-pruning-enabled"))
+                ? Integer.parseInt(settings.get("store.adapot.epoch-stake-safe-epochs").trim()) : 0;
     }
 
     /** @param epochStakeEpochs keep only the newest N epochs of {@code epoch_stake}; 0 keeps every epoch */
@@ -237,7 +277,7 @@ public class SnapshotCliSupport {
                 eventPublisherId(), cursorBlocksToKeep(), workers, memoryLimit, minFreeDiskGb,
                 allowUnsigned, allowCustomSpecs, custom, keepExtracted, false, tunePostgres,
                 com.bloxbean.cardano.yaci.store.snapshot.manifest.Retention.epochStake(epochStakeEpochs),
-                pruningSettings());
+                targetSettings());
     }
 
     /**

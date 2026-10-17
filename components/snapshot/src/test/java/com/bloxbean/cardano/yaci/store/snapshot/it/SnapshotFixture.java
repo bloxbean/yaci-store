@@ -52,6 +52,18 @@ final class SnapshotFixture {
 
     static Built build(Path root, String schemaFingerprint, String flywayFingerprint,
                        List<String> includedSpecIds, String snapshotId) throws Exception {
+        return build(root, schemaFingerprint, flywayFingerprint, includedSpecIds, snapshotId, false);
+    }
+
+    /** {@code address_utxo}'s first day as its history tier, in parts of its own (ADR 0005, D11). */
+    static final String UTXO_HISTORY_PARTITION = "main/address_utxo/date=2026-01-01";
+
+    /**
+     * @param utxoHistory package {@code address_utxo}'s {@link #UTXO_HISTORY_PARTITION} as history, with
+     *                    a split keyed {@code address_utxo.spent-safe-blocks=2160}
+     */
+    static Built build(Path root, String schemaFingerprint, String flywayFingerprint,
+                       List<String> includedSpecIds, String snapshotId, boolean utxoHistory) throws Exception {
         Path dataDir = root.resolve("data");
         Path archiveDir = root.resolve("archive");
         Files.createDirectories(dataDir);
@@ -78,10 +90,23 @@ final class SnapshotFixture {
         for (String specId : ordered) {
             SnapshotTableSpec spec = registry.byId(specId).orElseThrow();
             List<SnapshotManifest.FileEntry> files = collect(dataDir, "main/" + spec.relation());
+            SnapshotManifest.HistorySplit split = null;
+            if (utxoHistory && specId.equals("address-utxo")) {
+                List<SnapshotManifest.FileEntry> current = files.stream()
+                        .filter(f -> !f.partition().equals(UTXO_HISTORY_PARTITION)).toList();
+                List<SnapshotManifest.FileEntry> history = files.stream()
+                        .filter(f -> f.partition().equals(UTXO_HISTORY_PARTITION))
+                        .map(f -> new SnapshotManifest.FileEntry(f.path(), f.size(), f.sha256(), f.rowCount(),
+                                f.partition(), true)).toList();
+                files = new ArrayList<>(current);
+                files.addAll(history);
+                split = new SnapshotManifest.HistorySplit("address_utxo.spent-safe-blocks", "2160",
+                        expectedRows(dataDir, spec, current), Map.of());
+            }
             for (SnapshotManifest.FileEntry f : files) {
                 allFiles.add(f);
                 owners.add(specId);
-                modules.add(spec.module());
+                modules.add(spec.module() + (f.inHistory() ? "/history" : ""));
             }
             long rows = expectedRows(dataDir, spec, files);
             tables.add(new SnapshotManifest.TableManifest(spec.id(), spec.specVersion(), spec.digest(),
@@ -90,7 +115,7 @@ final class SnapshotFixture {
                     spec.importSpec().mode().name(), spec.consistency().cutoff().type().name(),
                     spec.importSpec().transformVersion(), spec.importSpec().dependencies(),
                     rows, spec.validation().key(), "fixture", declaredColumns(spec.relation()),
-                    Map.of(), files, spec.contractDigest()));
+                    Map.of(), files, spec.contractDigest(), split));
         }
         // Every other classified table is declared with zero files so preflight sees full coverage.
         for (SnapshotTableSpec spec : registry.all()) {

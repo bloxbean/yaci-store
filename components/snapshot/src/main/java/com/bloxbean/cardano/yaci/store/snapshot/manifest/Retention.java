@@ -11,9 +11,11 @@ import java.util.regex.Pattern;
 /**
  * What a reduced snapshot keeps, as {@code <target table>.<rule>=<value>} entries (ADR 0005).
  *
- * <p>A pruned snapshot is built with its retention, and records it in the manifest. An import can add
- * an epoch retention of its own: {@link #apply} then gives the importer and the validator the same
- * reduced view of the manifest, so both expect exactly the kept files and rows.
+ * <p>An import adds a retention of its own: the newest epochs of {@code epoch_stake}
+ * ({@code --epoch-stake-epochs}), and the current tier of each table whose history the snapshot packages
+ * apart ({@link SnapshotManifest.HistorySplit}), when the target prunes that table ({@link #forTarget}).
+ * {@link #apply} then gives the importer and the validator the same reduced view of the manifest, so
+ * both expect exactly the kept files and rows.
  *
  * <p>Every retention matches a pruning service, and the target must run that service: otherwise it
  * would present partial history as complete. {@link #requiredSetting} names it.
@@ -42,6 +44,54 @@ public final class Retention {
             case UTXO_SPENT_SAFE_BLOCKS, TX_INPUT_SAFE_BLOCKS -> "store.utxo.pruning-enabled";
             default -> null;
         };
+    }
+
+    /**
+     * The target setting that widens a pruning service's window, with its default, for a key whose
+     * value is a window; null for any other key.
+     */
+    public static Map.Entry<String, String> windowSetting(String key) {
+        return switch (key) {
+            case UTXO_SPENT_SAFE_BLOCKS, TX_INPUT_SAFE_BLOCKS -> Map.entry("store.utxo.pruning-safe-blocks", "2160");
+            default -> null;
+        };
+    }
+
+    /**
+     * What an import of {@code archive} keeps: {@code requested}, plus the current tier of each table
+     * with a history split whose pruning the target runs ({@link #requiredSetting}) with a window no
+     * wider than the split's. A target with a wider window loads the history too, and its own pruning
+     * service removes what it does not keep.
+     *
+     * @param notes receives, by target table, whether its split applies and why
+     */
+    public static Map<String, String> forTarget(SnapshotManifest archive, Map<String, String> targetSettings,
+                                                Map<String, String> requested, Map<String, String> notes) {
+        Map<String, String> out = new TreeMap<>(requested == null ? Map.of() : requested);
+        for (SnapshotManifest.TableManifest t : archive.tables()) {
+            SnapshotManifest.HistorySplit split = t.historySplit();
+            if (split == null) {
+                continue;
+            }
+            String setting = requiredSetting(split.key());
+            if (setting == null || !"true".equalsIgnoreCase(targetSettings.getOrDefault(setting, "false"))) {
+                notes.put(t.targetTable(), String.format("%s: full history (%s is off)", t.targetTable(), setting));
+                continue;
+            }
+            Map.Entry<String, String> window = windowSetting(split.key());
+            if (window != null) {
+                long target = Long.parseLong(targetSettings.getOrDefault(window.getKey(), window.getValue()).trim());
+                if (target > Long.parseLong(split.value())) {
+                    notes.put(t.targetTable(), String.format("%s: full history, because %s=%d is wider than the snapshot's %s; the"
+                            + " target's pruning removes the rest", t.targetTable(), window.getKey(), target, split.value()));
+                    continue;
+                }
+            }
+            out.put(split.key(), split.value());
+            notes.put(t.targetTable(), String.format("%s: current rows only (%s=%s), its history parts are skipped",
+                    t.targetTable(), split.key(), split.value()));
+        }
+        return out;
     }
 
     /** The target table a retention entry reduces. */
@@ -88,32 +138,53 @@ public final class Retention {
     }
 
     /**
-     * The manifest an import with {@code extra} sees: each {@code <table>.epochs=N} keeps that table's
-     * newest N epoch partitions, and the manifest records the combined retention. Parts are unchanged:
-     * a skipped file is simply not extracted. Without {@code extra}, the manifest is returned as is.
+     * The manifest an import with {@code extra} sees: a {@code key=value} that matches a table's
+     * {@link SnapshotManifest.HistorySplit} keeps its current tier, and each {@code <table>.epochs=N}
+     * keeps that table's newest N epoch partitions. The manifest records the combined retention. Parts
+     * are unchanged: a skipped file is simply not extracted, and a part holding only skipped files is
+     * not read. Without {@code extra}, the manifest is returned as is.
      *
-     * @throws IllegalArgumentException when a table's files are not one epoch per partition, or its
-     *                                  row count is not the sum of its files', so the kept rows could
-     *                                  not be counted from the manifest alone
+     * @throws IllegalArgumentException when an entry matches no table, or a table's files are not one
+     *                                  epoch per partition, or its row count is not the sum of its
+     *                                  files', so the kept rows could not be counted from the manifest
      */
     public static SnapshotManifest apply(SnapshotManifest manifest, Map<String, String> extra) {
         if (extra == null || extra.isEmpty()) {
             return manifest;
         }
+        java.util.Set<String> used = new java.util.HashSet<>();
         List<SnapshotManifest.TableManifest> tables = new ArrayList<>();
         for (SnapshotManifest.TableManifest t : manifest.tables()) {
-            String value = extra.get(t.targetTable() + EPOCHS);
-            tables.add(value == null || t.files() == null || t.files().isEmpty() ? t
-                    : keepNewestEpochs(t, Integer.parseInt(value)));
+            SnapshotManifest.TableManifest view = t;
+            SnapshotManifest.HistorySplit split = t.historySplit();
+            if (split != null && split.value().equals(extra.get(split.key()))) {
+                view = currentTier(t, split);
+                used.add(split.key());
+            }
+            String epochs = extra.get(t.targetTable() + EPOCHS);
+            if (epochs != null) {
+                used.add(t.targetTable() + EPOCHS);
+                if (view.files() != null && !view.files().isEmpty()) {
+                    view = keepNewestEpochs(view, Integer.parseInt(epochs));
+                }
+            }
+            tables.add(view);
         }
         for (String key : extra.keySet()) {
-            if (!key.endsWith(EPOCHS)) {
-                throw new IllegalArgumentException("Retention '" + key + "' cannot be applied at import");
+            if (!used.contains(key) && !key.endsWith(EPOCHS)) {
+                throw new IllegalArgumentException("Retention '" + key + "=" + extra.get(key) + "' cannot be applied"
+                        + " at import: the snapshot has no history split for it");
             }
         }
         Map<String, String> combined = new TreeMap<>(manifest.retentionOrEmpty());
         combined.putAll(extra);
         return manifest.withTables(tables, manifest.flavor(), combined);
+    }
+
+    private static SnapshotManifest.TableManifest currentTier(SnapshotManifest.TableManifest t,
+                                                              SnapshotManifest.HistorySplit split) {
+        List<SnapshotManifest.FileEntry> current = t.files().stream().filter(f -> !f.inHistory()).toList();
+        return t.reduced(current, split.rowCount(), split.bounds() == null ? Map.of() : split.bounds());
     }
 
     private static SnapshotManifest.TableManifest keepNewestEpochs(SnapshotManifest.TableManifest t, int epochs) {
@@ -141,9 +212,6 @@ public final class Retention {
             bounds.put("epoch.min", Integer.toString(Math.max(oldestKept,
                     kept.stream().mapToInt(epochOf::get).min().orElse(oldestKept))));
         }
-        return new SnapshotManifest.TableManifest(t.specId(), t.specVersion(), t.specDigest(), t.module(),
-                t.kind(), t.restore(), t.reason(), t.sourceRelation(), t.exporterId(), t.targetTable(),
-                t.loadMode(), t.cutoffRule(), t.transformVersion(), t.dependencies(), rows, t.key(),
-                t.columnFingerprint(), t.sourceColumns(), bounds, kept, t.contractDigest());
+        return t.reduced(kept, rows, bounds);
     }
 }

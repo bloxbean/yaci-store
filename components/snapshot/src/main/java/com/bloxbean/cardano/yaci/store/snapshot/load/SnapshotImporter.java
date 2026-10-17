@@ -102,13 +102,21 @@ public class SnapshotImporter {
         List<String> blockers = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
         SnapshotManifest manifest;
+        Map<String, String> retentionNotes = new TreeMap<>();
+        Map<String, String> retention;
         try {
-            manifest = Retention.apply(archive, options.retention());
+            retention = Retention.forTarget(archive, options.targetSettings(), options.retention(), retentionNotes);
+            manifest = Retention.apply(archive, retention);
         } catch (IllegalArgumentException e) {
             blockers.add(e.getMessage());
             return new Preflight(archive, blockers, warnings, null, archive);
         }
 
+        retentionNotes.forEach((table, note) -> {
+            if (registry.byTarget(table).filter(spec -> registry.isSelected(spec.id())).isPresent()) {
+                warnings.add(note);
+            }
+        });
         ManifestValidator validator = new ManifestValidator(registry);
         blockers.addAll(validator.validate(manifest));
         warnings.addAll(validator.importChanges(manifest));
@@ -163,9 +171,9 @@ public class SnapshotImporter {
                     && !registry.scopeDigest().equals(existing.scopeDigest())) {
                 blockers.add("Import scope does not match the journal. Resume with the original enabled stores and specifications.");
             }
-            if (existing != null && !java.util.Objects.equals(existing.retention(), Retention.format(options.retention()))) {
+            if (existing != null && !java.util.Objects.equals(existing.retention(), Retention.format(retention))) {
                 blockers.add("Import retention does not match the journal (" + existing.retention()
-                        + "). Resume with the original --epoch-stake-epochs.");
+                        + "). Resume with the original --epoch-stake-epochs and pruning settings.");
             }
             if (existing != null && !existing.manifestDigest().equals(new ManifestCodec().digest(manifest))) {
                 blockers.add("Import journal manifest digest does not match this manifest. "
@@ -210,7 +218,7 @@ public class SnapshotImporter {
 
         ArchiveVerifier.Selection selection = selection(archive, manifest);
         if (selection.parts().size() < archive.parts().size()) {
-            warnings.add(String.format("Reading %d of %d parts (%s of %s); the others carry only skipped tables or epochs",
+            warnings.add(String.format("Reading %d of %d parts (%s of %s); the others carry only skipped tables, epochs or history",
                     selection.parts().size(), archive.parts().size(), Progress.bytes(partBytes(selection.parts())),
                     Progress.bytes(partBytes(archive.parts()))));
         }
@@ -359,6 +367,8 @@ public class SnapshotImporter {
         }
         SnapshotManifest manifest = pre.manifest();
         SnapshotManifest archive = pre.archive();
+        Map<String, String> retention = Retention.forTarget(archive, options.targetSettings(), options.retention(),
+                new TreeMap<>());
         ArchiveVerifier.Selection selection = selection(archive, manifest);
         List<String> warnings = new ArrayList<>(pre.warnings());
 
@@ -371,7 +381,7 @@ public class SnapshotImporter {
                     && !registry.scopeDigest().equals(current.scopeDigest())) {
                 throw new IllegalStateException("Import scope does not match the journal");
             }
-            if (current != null && !java.util.Objects.equals(current.retention(), Retention.format(options.retention()))) {
+            if (current != null && !java.util.Objects.equals(current.retention(), Retention.format(retention))) {
                 throw new IllegalStateException("Import retention does not match the journal");
             }
             if (current != null && !current.manifestDigest().equals(new ManifestCodec().digest(manifest))) {
@@ -420,7 +430,7 @@ public class SnapshotImporter {
                     manifest.point().protocolMagic(), manifest.point().epoch(), manifest.point().slot(),
                     manifest.point().blockNumber(), manifest.point().blockHash(),
                     schema.fingerprint(), ImportJournal.STATUS_LOADING, null, registry.scopeDigest(),
-                    Retention.format(options.retention())));
+                    Retention.format(retention)));
             journal.recordTransforms(manifest.snapshotId(), registry.importedTables());
 
             Progress.phase(progress, "Preparing " + loadedTables(manifest).size()

@@ -160,7 +160,7 @@ class SnapshotImportIT {
         Path bucket = root.resolve("bucket");
         var local = new com.bloxbean.cardano.yaci.store.snapshot.remote.SnapshotRepository(
                 new com.bloxbean.cardano.yaci.store.snapshot.remote.LocalSnapshotStore(bucket));
-        local.publish(built.manifestPath(), 2, null);
+        local.publish(built.manifestPath(), 2, true, null);
 
         try (var server = new com.bloxbean.cardano.yaci.store.snapshot.remote.TestHttpServer(bucket, true);
              var http = new com.bloxbean.cardano.yaci.store.snapshot.remote.HttpSnapshotStore(
@@ -211,6 +211,63 @@ class SnapshotImportIT {
                 .preflight(options(built.manifestPath(), 1, java.util.Map.of(),
                         java.util.Map.of("store.adapot.epoch-stake-pruning-enabled", "true"))).blockers())
                 .noneMatch(b -> b.contains("store.utxo.pruning-enabled"));
+    }
+
+    private SnapshotFixture.Built fixtureWithUtxoHistory() throws Exception {
+        try (Connection conn = PostgresSupport.connect()) {
+            PgSchema pgs = new PgSchema(conn, schema);
+            return SnapshotFixture.build(root, pgs.fingerprint(), pgs.flywayFingerprint(), SnapshotFixture.ALL_TABLES,
+                    "it-fixture-snapshot", true);
+        }
+    }
+
+    @Test
+    void aPruningTargetSkipsTheHistoryPartsOfTheSameSnapshot() throws Exception {
+        var built = fixtureWithUtxoHistory();
+        var split = built.manifest().table("address-utxo").historySplit();
+        var pruning = java.util.Map.of("store.utxo.pruning-enabled", "true");
+        var importer = new SnapshotImporter(registry);
+        var pre = importer.preflight(options(built.manifestPath(), 1, java.util.Map.of(), pruning));
+        assertThat(pre.blockers()).isEmpty();
+        assertThat(pre.warnings()).anyMatch(w -> w.startsWith("address_utxo: current rows only"));
+        assertThat(pre.manifest().retention()).containsEntry("address_utxo.spent-safe-blocks", "2160");
+        var selection = importer.selection(pre.archive(), pre.manifest());
+        assertThat(selection.files()).noneMatch(f -> f.startsWith(SnapshotFixture.UTXO_HISTORY_PARTITION));
+        var layout = com.bloxbean.cardano.yaci.store.snapshot.archive.PartLayout.of(built.manifest());
+        assertThat(layout.exact()).isTrue();
+        assertThat(selection.parts()).hasSizeLessThan(built.manifest().parts().size())
+                .noneMatch(p -> layout.files(p.partNumber()).stream()
+                        .anyMatch(f -> f.startsWith(SnapshotFixture.UTXO_HISTORY_PARTITION)));
+
+        importer.importSnapshot(options(built.manifestPath(), 1, java.util.Map.of(), pruning), null);
+
+        try (var conn = PostgresSupport.connect()) {
+            assertThat(count(conn, "address_utxo")).isEqualTo(split.rowCount());
+            for (var report : new SnapshotValidator(registry).validateAll(conn, schema, built.manifest(), 1, 10)) {
+                assertThat(report.passed()).withFailMessage(report.toString()).isTrue();
+            }
+        }
+    }
+
+    @Test
+    void aFullTargetAndAWiderPruningWindowLoadTheHistoryToo() throws Exception {
+        var built = fixtureWithUtxoHistory();
+        var importer = new SnapshotImporter(registry);
+        var wider = java.util.Map.of("store.utxo.pruning-enabled", "true", "store.utxo.pruning-safe-blocks", "5000");
+        var pre = importer.preflight(options(built.manifestPath(), 1, java.util.Map.of(), wider));
+        assertThat(pre.blockers()).isEmpty();
+        assertThat(pre.warnings()).anyMatch(w -> w.startsWith("address_utxo: full history, because"));
+        assertThat(importer.selection(pre.archive(), pre.manifest()).parts()).hasSameSizeAs(built.manifest().parts());
+
+        importer.importSnapshot(options(built.manifestPath(), 1, java.util.Map.of(), java.util.Map.of()), null);
+
+        try (var conn = PostgresSupport.connect()) {
+            assertThat(count(conn, "address_utxo")).isEqualTo(built.manifest().table("address-utxo").rowCount())
+                    .isGreaterThan(built.manifest().table("address-utxo").historySplit().rowCount());
+            for (var report : new SnapshotValidator(registry).validateAll(conn, schema, built.manifest(), 1, 10)) {
+                assertThat(report.passed()).withFailMessage(report.toString()).isTrue();
+            }
+        }
     }
 
     @Test

@@ -64,9 +64,9 @@ public class SnapshotExporter {
         return verifyParts ? 4 : 3;
     }
 
-    /** As {@link #phases()}, for an export with {@code options}: a pruned one has a pruning phase. */
+    /** As {@link #phases()}, for an export with {@code options}: a history split is a phase of its own. */
     public int phases(ExportOptions options) {
-        return phases() + (options.pruned() ? 1 : 0);
+        return phases() + (options.historySplit() ? 1 : 0);
     }
 
     /** Read-only analysis: candidate point, coverage, lossy mappings, estimated size and blockers. */
@@ -216,22 +216,22 @@ public class SnapshotExporter {
             }
 
             String snapshotId = UUID.randomUUID().toString();
-            String baseName = String.format("yaci-%s-e%d-%s%s", options.network(),
-                    report.completedEpoch(), options.pruned() ? "pruned-" : "", snapshotId.substring(0, 8));
+            String baseName = String.format("yaci-%s-e%d-%s", options.network(),
+                    report.completedEpoch(), snapshotId.substring(0, 8));
 
-            // A pruned snapshot rewrites the UTxO relations and drops old epoch_stake partitions; the
+            // The history split rewrites the UTxO relations into a current and a history tier; the
             // rewritten files are packaged from the work directory instead of the analytics directory.
             List<TablePlan> planned = report.plans();
             Map<String, Path> rewritten = Map.of();
-            Map<String, String> retention = null;
-            if (options.pruned()) {
-                Progress.phase(progress, "Pruning: unspent and recently spent UTxOs, the newest epoch_stake epochs");
-                PrunedExport.Result pruned = new PrunedExport(catalog, options.workDir(), options.memoryLimit(), progress)
+            Map<String, TieredExport.Tiers> tiers = Map.of();
+            if (options.historySplit()) {
+                Progress.phase(progress, "Splitting address_utxo, tx_input and epoch_stake into current and history tiers");
+                TieredExport.Result split = new TieredExport(catalog, options.workDir(), options.memoryLimit(), progress)
                         .apply(planned, report.point(), report.ducklakeSnapshotId(), options.utxoSafeBlocks(),
                                 options.epochStakeEpochs());
-                planned = pruned.plans();
-                rewritten = pruned.rewritten();
-                retention = pruned.retention();
+                planned = split.plans();
+                rewritten = split.rewritten();
+                tiers = split.tiers();
             }
             Map<String, Path> sources = rewritten;
             java.util.function.Function<String, Path> source = rel -> {
@@ -281,18 +281,21 @@ public class SnapshotExporter {
             List<SnapshotManifest.TableManifest> tableManifests = new ArrayList<>();
             int at = 0;
             for (TablePlan plan : plans) {
+                TieredExport.Tiers tier = tiers.get(plan.spec().id());
                 List<SnapshotManifest.FileEntry> entries = new ArrayList<>();
                 for (DuckLakeFile f : plan.files()) {
                     Digests.FileDigest d = digests.get(at++);
+                    boolean history = tier != null && tier.history().contains(f.relativePath());
                     SnapshotManifest.FileEntry fe = new SnapshotManifest.FileEntry(
-                            f.relativePath(), d.size(), d.sha256(), f.rowCount(), f.partition());
+                            f.relativePath(), d.size(), d.sha256(), f.rowCount(), f.partition(), history ? true : null);
                     entries.add(fe);
                     allEntries.add(fe);
                     owners.add(plan.spec().id());
-                    modules.add(plan.spec().module());
+                    // History goes in parts of its own, so an import that skips it skips whole parts.
+                    modules.add(plan.spec().module() + (history ? "/history" : ""));
                     crcs.put(f.relativePath(), d.crc32());
                 }
-                tableManifests.add(toTableManifest(plan, entries));
+                tableManifests.add(toTableManifest(plan, entries, tier == null ? null : tier.split()));
             }
 
             for (SnapshotTableSpec spec : report.nonImportedTables()) {
@@ -342,8 +345,7 @@ public class SnapshotExporter {
                     options.flywayFingerprint(),
                     tableManifests,
                     parts,
-                    report.declaredLossy(), options.tableSchemaFingerprints(),
-                    options.pruned() ? SnapshotManifest.FLAVOR_PRUNED : null, retention);
+                    report.declaredLossy(), options.tableSchemaFingerprints(), null, null, options.yaciStoreCommit());
 
             if (verifyParts) {
                 verifyWrittenParts(manifest, parts, options, threads, progress);
@@ -393,8 +395,8 @@ public class SnapshotExporter {
                 : String.format("%.1f MiB", n / (double) (1L << 20));
     }
 
-    private SnapshotManifest.TableManifest toTableManifest(TablePlan plan,
-                                                           List<SnapshotManifest.FileEntry> entries) {
+    private SnapshotManifest.TableManifest toTableManifest(TablePlan plan, List<SnapshotManifest.FileEntry> entries,
+                                                           SnapshotManifest.HistorySplit split) {
         SnapshotTableSpec spec = plan.spec();
         SnapshotTableSpec.CutoffRule cut = spec.consistency().cutoff();
         String cutoffRule = cut.type() + (cut.column() == null ? "" : "(" + cut.column()
@@ -405,6 +407,6 @@ public class SnapshotExporter {
                 spec.targetTable(), spec.importSpec().mode().name(), cutoffRule,
                 spec.importSpec().transformVersion(), spec.importSpec().dependencies(),
                 plan.rowCount(), spec.validation().key(), plan.columnFingerprint(),
-                plan.sourceColumns(), plan.bounds(), entries, spec.contractDigest());
+                plan.sourceColumns(), plan.bounds(), entries, spec.contractDigest(), split);
     }
 }

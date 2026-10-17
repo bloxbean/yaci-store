@@ -75,4 +75,59 @@ class RetentionTest {
         assertThat(Retention.requiredSetting("epoch_stake.epochs")).isEqualTo("store.adapot.epoch-stake-pruning-enabled");
         assertThat(Retention.requiredSetting("address_utxo.spent-safe-blocks")).isEqualTo("store.utxo.pruning-enabled");
     }
+
+    /** address_utxo with two current files and two history files, split at 2160 blocks. */
+    private static SnapshotManifest.TableManifest splitUtxo() {
+        List<SnapshotManifest.FileEntry> files = List.of(
+                new SnapshotManifest.FileEntry("main/address_utxo/date=2026-01-02/current_a.parquet", 10, "h", 30, "main/address_utxo/date=2026-01-02"),
+                new SnapshotManifest.FileEntry("main/address_utxo/date=2026-01-03/current_b.parquet", 10, "h", 20, "main/address_utxo/date=2026-01-03"),
+                new SnapshotManifest.FileEntry("main/address_utxo/date=2026-01-01/history_a.parquet", 10, "h", 400, "main/address_utxo/date=2026-01-01", true),
+                new SnapshotManifest.FileEntry("main/address_utxo/date=2026-01-02/history_b.parquet", 10, "h", 100, "main/address_utxo/date=2026-01-02", true));
+        return new SnapshotManifest.TableManifest("address-utxo", 1, "d", "utxo", "CHAIN_DATA", "IMPORT", null,
+                "address_utxo", "address_utxo", "address_utxo", "MAPPED", "SLOT_LTE", 1, List.of(), 200,
+                List.of("tx_hash", "output_index"), "f", Map.of(), Map.of("slot.min", "0", "slot.max", "99"), files, "c",
+                new SnapshotManifest.HistorySplit(Retention.UTXO_SPENT_SAFE_BLOCKS, "2160", 20,
+                        Map.of("slot.min", "40", "slot.max", "99")));
+    }
+
+    @Test
+    void aHistorySplitKeepsTheCurrentFilesWithTheirRowsAndBounds() {
+        var m = manifest(splitUtxo(), table("block", List.of(), 0));
+
+        SnapshotManifest view = Retention.apply(m, Map.of(Retention.UTXO_SPENT_SAFE_BLOCKS, "2160"));
+
+        var utxo = view.table("address-utxo");
+        assertThat(utxo.files()).extracting(SnapshotManifest.FileEntry::path).allMatch(p -> p.contains("current_"));
+        assertThat(utxo.rowCount()).isEqualTo(20);
+        assertThat(utxo.bounds()).containsEntry("slot.min", "40");
+        assertThat(utxo.historySplit()).isNull();
+        assertThat(view.retention()).containsEntry(Retention.UTXO_SPENT_SAFE_BLOCKS, "2160");
+        assertThat(m.historySplits()).containsExactly(Map.entry(Retention.UTXO_SPENT_SAFE_BLOCKS, "2160"));
+        // Without the retention, every file and the whole table's count.
+        assertThat(Retention.apply(m, Map.of())).isSameAs(m);
+        assertThatThrownBy(() -> Retention.apply(m, Map.of(Retention.UTXO_SPENT_SAFE_BLOCKS, "100")))
+                .hasMessageContaining("no history split");
+        assertThatThrownBy(() -> Retention.apply(manifest(table("block", List.of(), 0)),
+                Map.of(Retention.TX_INPUT_SAFE_BLOCKS, "2160"))).hasMessageContaining("no history split");
+    }
+
+    @Test
+    void theTargetsPruningSettingsChooseTheCurrentTier() {
+        var m = manifest(splitUtxo());
+        Map<String, String> notes = new java.util.TreeMap<>();
+
+        assertThat(Retention.forTarget(m, Map.of(), Map.of(), notes)).isEmpty();
+        assertThat(notes.get("address_utxo")).contains("full history").contains("store.utxo.pruning-enabled is off");
+
+        assertThat(Retention.forTarget(m, Map.of("store.utxo.pruning-enabled", "true"), Map.of(), notes))
+                .containsExactly(Map.entry(Retention.UTXO_SPENT_SAFE_BLOCKS, "2160"));
+        assertThat(notes.get("address_utxo")).startsWith("address_utxo: current rows only");
+
+        assertThat(Retention.forTarget(m, Map.of("store.utxo.pruning-enabled", "true",
+                "store.utxo.pruning-safe-blocks", "1000"), Map.of(), notes)).containsKey(Retention.UTXO_SPENT_SAFE_BLOCKS);
+        assertThat(Retention.forTarget(m, Map.of("store.utxo.pruning-enabled", "true",
+                "store.utxo.pruning-safe-blocks", "5000"), Map.of("epoch_stake.epochs", "8"), notes))
+                .containsExactly(Map.entry("epoch_stake.epochs", "8"));
+        assertThat(notes.get("address_utxo")).contains("wider than the snapshot's 2160");
+    }
 }

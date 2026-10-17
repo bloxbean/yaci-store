@@ -24,10 +24,13 @@ import java.util.Map;
  * @param targetTables     the imported tables' definitions in this release's PostgreSQL schema, by
  *                         name, so every mapping and SQL transform output is planned against them
  *                         before anything is packaged. Tables absent here are not planned.
- * @param flavor           {@code full}, or {@code pruned} for what a node running UTxO and epoch-stake
- *                         pruning would hold (ADR 0005, D8)
- * @param utxoSafeBlocks   pruned only: keep outputs spent within this many blocks before the point
- * @param epochStakeEpochs pruned only: keep this many newest epochs of {@code epoch_stake}
+ * @param historySplit     package the history of {@code address_utxo}, {@code tx_input} and
+ *                         {@code epoch_stake} in parts of its own, so an import into a target that
+ *                         prunes them skips it (ADR 0005, D11)
+ * @param utxoSafeBlocks   history split: outputs spent, and inputs, before this many blocks before the
+ *                         point are history
+ * @param epochStakeEpochs history split: epochs older than the newest this many are history
+ * @param yaciStoreCommit  git commit of this release, when known
  */
 public record ExportOptions(Path dataDir,
                             Path workDir,
@@ -49,9 +52,10 @@ public record ExportOptions(Path dataDir,
                             Map<String, String> tableSchemaFingerprints,
                             String memoryLimit,
                             Map<String, TargetTable> targetTables,
-                            String flavor,
+                            boolean historySplit,
                             int utxoSafeBlocks,
-                            int epochStakeEpochs) {
+                            int epochStakeEpochs,
+                            String yaciStoreCommit) {
 
     public static final int DEFAULT_UTXO_SAFE_BLOCKS = 2160;
     public static final int DEFAULT_EPOCH_STAKE_EPOCHS = 8;
@@ -66,20 +70,23 @@ public record ExportOptions(Path dataDir,
         this(dataDir, workDir, outputDir, network, protocolMagic, genesisHash, partSizeBytes, targetEpoch,
                 minConfirmations, allowIncomplete, unsigned, yaciStoreVersion, modules, pruningSettings,
                 schemaFingerprint, flywayFingerprint, completedPartitions, tableSchemaFingerprints, memoryLimit,
-                targetTables, com.bloxbean.cardano.yaci.store.snapshot.manifest.SnapshotManifest.FLAVOR_FULL,
-                DEFAULT_UTXO_SAFE_BLOCKS, DEFAULT_EPOCH_STAKE_EPOCHS);
+                targetTables, false, DEFAULT_UTXO_SAFE_BLOCKS, DEFAULT_EPOCH_STAKE_EPOCHS, null);
     }
 
-    public boolean pruned() {
-        return com.bloxbean.cardano.yaci.store.snapshot.manifest.SnapshotManifest.FLAVOR_PRUNED.equals(flavor);
-    }
-
-    /** A copy for the given flavor. */
-    public ExportOptions withFlavor(String newFlavor, int newUtxoSafeBlocks, int newEpochStakeEpochs) {
+    /** A copy with the history split on or off, at the given windows. */
+    public ExportOptions withHistorySplit(boolean split, int newUtxoSafeBlocks, int newEpochStakeEpochs) {
         return new ExportOptions(dataDir, workDir, outputDir, network, protocolMagic, genesisHash, partSizeBytes,
                 targetEpoch, minConfirmations, allowIncomplete, unsigned, yaciStoreVersion, modules, pruningSettings,
                 schemaFingerprint, flywayFingerprint, completedPartitions, tableSchemaFingerprints, memoryLimit,
-                targetTables, newFlavor, newUtxoSafeBlocks, newEpochStakeEpochs);
+                targetTables, split, newUtxoSafeBlocks, newEpochStakeEpochs, yaciStoreCommit);
+    }
+
+    /** A copy that records {@code commit} as the release's git commit. */
+    public ExportOptions withCommit(String commit) {
+        return new ExportOptions(dataDir, workDir, outputDir, network, protocolMagic, genesisHash, partSizeBytes,
+                targetEpoch, minConfirmations, allowIncomplete, unsigned, yaciStoreVersion, modules, pruningSettings,
+                schemaFingerprint, flywayFingerprint, completedPartitions, tableSchemaFingerprints, memoryLimit,
+                targetTables, historySplit, utxoSafeBlocks, epochStakeEpochs, commit);
     }
 
     public ExportOptions(Path dataDir, Path workDir, Path outputDir, String network, long protocolMagic,

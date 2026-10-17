@@ -104,8 +104,8 @@ class S3SnapshotStoreIT {
         Path manifest = SnapshotRepositoryTest.snapshot(tmp.resolve("s"), "44444444-4444-4444-4444-444444444444", 100, null);
         var repo = new SnapshotRepository(store);
 
-        repo.publish(manifest, 2, null);
-        assertThat(repo.publish(manifest, 2, null).filesSent()).isZero();
+        repo.publish(manifest, 2, true, null);
+        assertThat(repo.publish(manifest, 2, true, null).filesSent()).isZero();
         var resolved = repo.resolve("preprod", "latest", null, m -> List.of(), null);
         Path out = tmp.resolve("download");
         repo.downloadMetadata(resolved, out);

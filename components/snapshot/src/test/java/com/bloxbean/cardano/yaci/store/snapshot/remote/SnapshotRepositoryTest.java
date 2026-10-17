@@ -76,8 +76,8 @@ public class SnapshotRepositoryTest {
         Path first = snapshot(tmp.resolve("s1"), ID1, 100, null);
         Path second = snapshot(tmp.resolve("s2"), ID2, 101, null);
 
-        var result = repo.publish(first, 2, null);
-        repo.publish(second, 2, null);
+        var result = repo.publish(first, 2, true, null);
+        repo.publish(second, 2, true, null);
 
         assertThat(result.directory()).isEqualTo("preprod/" + ID1 + "/");
         assertThat(store.list("preprod/" + ID1 + "/")).contains("preprod/" + ID1 + "/SHA256SUMS",
@@ -92,9 +92,9 @@ public class SnapshotRepositoryTest {
     void aSecondPublishSendsNothingAndKeepsOneIndexEntry() throws Exception {
         var repo = new SnapshotRepository(new LocalSnapshotStore(tmp.resolve("bucket")));
         Path m = snapshot(tmp.resolve("s1"), ID1, 100, null);
-        repo.publish(m, 2, null);
+        repo.publish(m, 2, true, null);
 
-        var again = repo.publish(m, 2, null);
+        var again = repo.publish(m, 2, true, null);
 
         assertThat(again.filesSent()).isZero();
         assertThat(again.filesSkipped()).isGreaterThan(1);
@@ -102,27 +102,64 @@ public class SnapshotRepositoryTest {
     }
 
     @Test
-    void latestSkipsSnapshotsThisReleaseCannotImportAndHonoursTheFlavor() throws Exception {
+    void latestSkipsSnapshotsThisReleaseCannotImport() throws Exception {
         var repo = new SnapshotRepository(new LocalSnapshotStore(tmp.resolve("bucket")));
-        repo.publish(snapshot(tmp.resolve("s1"), ID1, 100, null), 1, null);
-        repo.publish(snapshot(tmp.resolve("s2"), ID2, 102, null), 1, null);
-        repo.publish(snapshot(tmp.resolve("s3"), ID3, 103, SnapshotManifest.FLAVOR_PRUNED), 1, null);
+        repo.publish(snapshot(tmp.resolve("s1"), ID1, 100, null), 1, true, null);
+        repo.publish(snapshot(tmp.resolve("s2"), ID2, 102, null), 1, true, null);
         List<String> messages = new ArrayList<>();
 
-        var full = repo.resolve("preprod", "latest", null,
+        var latest = repo.resolve("preprod", "latest",
                 m -> m.point().epoch() > 101 ? List.of("made by a newer release") : List.of(), messages::add);
-        var pruned = repo.resolve("preprod", "latest", "pruned", m -> List.of(), null);
-        var byPrefix = repo.resolve("preprod", "2222", null, m -> List.of(), null);
+        var byPrefix = repo.resolve("preprod", "2222", m -> List.of(), null);
 
-        assertThat(full.entry().snapshotId()).isEqualTo(ID1);
+        assertThat(latest.entry().snapshotId()).isEqualTo(ID1);
         assertThat(messages).anyMatch(m -> m.contains("Skipping " + ID2) && m.contains("made by a newer release"));
-        assertThat(pruned.entry().snapshotId()).isEqualTo(ID3);
-        assertThat(pruned.manifest().retention()).containsEntry("epoch_stake.epochs", "8");
         assertThat(byPrefix.entry().snapshotId()).isEqualTo(ID2);
-        assertThatThrownBy(() -> repo.resolve("preprod", ID2, null, m -> List.of("too new"), null))
+        assertThatThrownBy(() -> repo.resolve("preprod", ID2, m -> List.of("too new"), null))
                 .hasMessageContaining("cannot be imported by this release");
-        assertThatThrownBy(() -> repo.resolve("mainnet", "latest", null, m -> List.of(), null))
-                .hasMessageContaining("No snapshots are published for mainnet");
+        assertThatThrownBy(() -> repo.resolve("mainnet", "latest", m -> List.of(), null))
+                .hasMessageContaining("No live snapshot is published for mainnet");
+    }
+
+    @Test
+    void aStagedSnapshotIsImportableByIdButNotListedUntilPromoted() throws Exception {
+        Path bucket = tmp.resolve("bucket");
+        var repo = new SnapshotRepository(new LocalSnapshotStore(bucket));
+        repo.publish(snapshot(tmp.resolve("s1"), ID1, 100, null), 1, true, null);
+        var staged = repo.publish(snapshot(tmp.resolve("s2"), ID2, 101, null), 1, null);
+        List<String> messages = new ArrayList<>();
+
+        assertThat(staged.entry().live()).isFalse();
+        assertThat(repo.index("preprod").snapshots()).extracting(SnapshotIndex.Entry::snapshotId).containsExactly(ID1);
+        assertThat(repo.resolve("preprod", "latest", m -> List.of(), null).entry().snapshotId()).isEqualTo(ID1);
+        var byId = repo.resolve("preprod", ID2, m -> List.of(), messages::add);
+        assertThat(byId.entry().snapshotId()).isEqualTo(ID2);
+        assertThat(byId.entry().live()).isFalse();
+        assertThat(messages).anyMatch(m -> m.contains("staged"));
+        // A staged snapshot is found by its full id only.
+        assertThatThrownBy(() -> repo.resolve("preprod", "2222", m -> List.of(), null))
+                .hasMessageContaining("is not published");
+        assertThat(repo.scan("preprod", null)).extracting(e -> e.snapshotId() + ":" + e.live())
+                .containsExactly(ID2 + ":false", ID1 + ":true");
+        // Rebuilding the index does not make it live.
+        assertThat(repo.rebuildIndex("preprod", 1, null).snapshots()).extracting(SnapshotIndex.Entry::snapshotId)
+                .containsExactly(ID1);
+
+        var promoted = repo.promote("preprod", ID2);
+
+        assertThat(promoted.live()).isTrue();
+        assertThat(repo.resolve("preprod", "latest", m -> List.of(), null).entry().snapshotId()).isEqualTo(ID2);
+        assertThat(SnapshotIndex.Entry.parse(Files.readAllBytes(bucket.resolve("preprod/" + ID2 + "/snapshot.json"))).live())
+                .isTrue();
+        // Republishing a live snapshot keeps it live.
+        repo.publish(snapshot(tmp.resolve("s2"), ID2, 101, null), 1, null);
+        assertThat(repo.index("preprod").snapshots()).extracting(SnapshotIndex.Entry::snapshotId).containsExactly(ID2, ID1);
+
+        repo.unlist("preprod", ID2);
+
+        assertThat(repo.index("preprod").snapshots()).extracting(SnapshotIndex.Entry::snapshotId).containsExactly(ID1);
+        assertThat(repo.resolve("preprod", ID2, m -> List.of(), null).entry().live()).isFalse();
+        assertThatThrownBy(() -> repo.promote("preprod", "../x")).hasMessageContaining("Invalid snapshot id");
     }
 
     @Test
@@ -130,7 +167,7 @@ public class SnapshotRepositoryTest {
         Path bucket = tmp.resolve("bucket");
         var repo = new SnapshotRepository(new LocalSnapshotStore(bucket));
         Path m = snapshot(tmp.resolve("s1"), ID1, 100, null);
-        repo.publish(m, 1, null);
+        repo.publish(m, 1, true, null);
         Path published = bucket.resolve("preprod/" + ID1 + "/" + m.getFileName());
         Files.writeString(published, Files.readString(published).replace("\"test\"", "\"evil\""));
 
@@ -143,7 +180,7 @@ public class SnapshotRepositoryTest {
         Path bucket = tmp.resolve("bucket");
         var repo = new SnapshotRepository(new LocalSnapshotStore(bucket));
         Path m = snapshot(tmp.resolve("s1"), ID1, 100, null);
-        repo.publish(m, 1, null);
+        repo.publish(m, 1, true, null);
         var resolved = repo.resolve("preprod", "latest", null, x -> List.of(), null);
         Path out = tmp.resolve("download");
 
@@ -170,7 +207,7 @@ public class SnapshotRepositoryTest {
     @Test
     void aPublicHttpLocationIsReadAnonymouslyAndStreamsPartsIntoTheExtractor() throws Exception {
         Path bucket = tmp.resolve("bucket");
-        new SnapshotRepository(new LocalSnapshotStore(bucket)).publish(snapshot(tmp.resolve("s1"), ID1, 100, null), 1, null);
+        new SnapshotRepository(new LocalSnapshotStore(bucket)).publish(snapshot(tmp.resolve("s1"), ID1, 100, null), 1, true, null);
         AtomicInteger requests = new AtomicInteger();
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/snapshots/", exchange -> {
@@ -214,7 +251,7 @@ public class SnapshotRepositoryTest {
                 }
             }
             assertThat(written).isEqualTo(sizes.size());
-            assertThatThrownBy(() -> repo.publish(tmp.resolve("s1/out").resolve("x"), 1, null))
+            assertThatThrownBy(() -> repo.publish(tmp.resolve("s1/out").resolve("x"), 1, true, null))
                     .isInstanceOf(UnsupportedOperationException.class);
         } finally {
             server.stop(0);
@@ -226,8 +263,8 @@ public class SnapshotRepositoryTest {
     void theIndexIsRebuiltFromTheManifestsInTheStore() throws Exception {
         Path bucket = tmp.resolve("bucket");
         var repo = new SnapshotRepository(new LocalSnapshotStore(bucket));
-        repo.publish(snapshot(tmp.resolve("s1"), ID1, 100, null), 1, null);
-        repo.publish(snapshot(tmp.resolve("s2"), ID2, 101, null), 1, null);
+        repo.publish(snapshot(tmp.resolve("s1"), ID1, 100, null), 1, true, null);
+        repo.publish(snapshot(tmp.resolve("s2"), ID2, 101, null), 1, true, null);
         Files.writeString(bucket.resolve("preprod/index.json"), "{\"formatVersion\":1,\"network\":\"preprod\",\"snapshots\":[]}");
 
         SnapshotIndex rebuilt = repo.rebuildIndex("preprod", 1, null);

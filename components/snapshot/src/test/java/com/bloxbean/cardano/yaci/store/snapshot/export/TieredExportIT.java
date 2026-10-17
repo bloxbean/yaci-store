@@ -21,18 +21,18 @@ import java.util.stream.Collectors;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * A pruned export over a real DuckLake catalog: blocks 0 to 120 at 20 slots each, the point at block
- * 99 and a 10-block window, so inputs spent from block 89 on are kept.
+ * A history split over a real DuckLake catalog: blocks 0 to 120 at 20 slots each, the point at block
+ * 99 and a 10-block window, so inputs spent from block 89 on are current.
  *
  * <ul>
- *   <li>outputs 0-19 are spent at blocks 60-79, before the window: dropped, with their inputs;</li>
- *   <li>outputs 20-29 are spent at blocks 90-99, inside the window: kept, with their inputs;</li>
- *   <li>outputs 30-34 are spent at block 110, after the point: kept, their inputs cut off;</li>
- *   <li>outputs 35-49 are unspent: kept.</li>
+ *   <li>outputs 0-19 are spent at blocks 60-79, before the window: history, with their inputs;</li>
+ *   <li>outputs 20-29 are spent at blocks 90-99, inside the window: current, with their inputs;</li>
+ *   <li>outputs 30-34 are spent at block 110, after the point: current, their inputs cut off;</li>
+ *   <li>outputs 35-49 are unspent: current.</li>
  * </ul>
  */
 @EnabledIfEnvironmentVariable(named = "SNAPSHOT_IT_JDBC_URL", matches = ".+")
-class PrunedExportIT {
+class TieredExportIT {
 
     @TempDir
     Path root;
@@ -41,16 +41,16 @@ class PrunedExportIT {
     private static final int SAFE_BLOCKS = 10;
 
     @Test
-    void keepsWhatAPruningNodeHoldsAtThePoint() throws Exception {
-        prunes(true);
+    void currentTierIsWhatAPruningNodeHoldsAtThePoint() throws Exception {
+        splits(true);
     }
 
     @Test
     void findsTheOutputsWithoutAssetIndexToo() throws Exception {
-        prunes(false);
+        splits(false);
     }
 
-    private void prunes(boolean assetIndex) throws Exception {
+    private void splits(boolean assetIndex) throws Exception {
         try (var conn = DriverManager.getConnection("jdbc:duckdb:"); var st = conn.createStatement()) {
             st.execute("LOAD ducklake");
             st.execute("ATTACH 'ducklake:" + root.resolve("ducklake.catalog.db") + "' AS lake (DATA_PATH '" + root + "')");
@@ -97,37 +97,71 @@ class PrunedExportIT {
                     planner.plan(registry.byId("epoch-stake").orElseThrow(), snapshot, 9, point.slot()));
             assertThat(plans.get(0).rowCount()).isEqualTo(50);
 
-            var result = new PrunedExport(catalog, root.resolve("work"), "512MB", null)
+            var result = new TieredExport(catalog, root.resolve("work"), "512MB", null)
                     .apply(plans, point, snapshot, SAFE_BLOCKS, 4);
 
+            // address_utxo: every row up to the point, current outputs first, then history.
             TablePlan utxo = result.plans().get(0);
-            TablePlan inputs = result.plans().get(1);
-            TablePlan stake = result.plans().get(2);
-            assertThat(utxo.rowCount()).isEqualTo(30);
-            assertThat(keys(result.rewritten(), utxo, "tx_hash")).containsExactlyElementsOf(
-                    java.util.stream.IntStream.range(20, 50).mapToObj(n -> String.format("%064x", n)).toList());
+            TieredExport.Tiers utxoTiers = result.tiers().get("address-utxo");
+            assertThat(utxo.rowCount()).isEqualTo(50);
+            assertThat(utxoTiers.split().key()).isEqualTo(Retention.UTXO_SPENT_SAFE_BLOCKS);
+            assertThat(utxoTiers.split().value()).isEqualTo("10");
+            assertThat(utxoTiers.split().rowCount()).isEqualTo(30);
+            List<DuckLakeFile> utxoCurrent = current(utxo, utxoTiers);
+            List<DuckLakeFile> utxoHistory = history(utxo, utxoTiers);
+            assertThat(keys(result.rewritten(), utxoCurrent, "tx_hash")).containsExactlyElementsOf(hashes(20, 50));
+            assertThat(keys(result.rewritten(), utxoHistory, "tx_hash")).containsExactlyElementsOf(hashes(0, 20));
+            assertThat(rows(utxoCurrent)).isEqualTo(60);
+            assertThat(rows(utxoHistory)).isEqualTo(40);
             assertThat(utxo.files()).allMatch(f -> f.relativePath().startsWith("main/address_utxo/date="))
                     .allMatch(f -> result.rewritten().containsKey(f.relativePath()));
-            assertThat(utxo.files().stream().mapToLong(DuckLakeFile::rowCount).sum()).isEqualTo(60);
+            assertThat(utxo.files().subList(0, utxoCurrent.size())).isEqualTo(utxoCurrent);
+            assertThat(utxoTiers.split().bounds()).containsEntry("slot.min", Long.toString(20 * 20L));
 
-            assertThat(inputs.rowCount()).isEqualTo(10);
-            assertThat(keys(result.rewritten(), inputs, "tx_hash")).containsExactlyElementsOf(
-                    java.util.stream.IntStream.range(20, 30).mapToObj(n -> String.format("%064x", n)).toList());
-            assertThat(inputs.bounds()).containsEntry("spent_at_slot.min", Long.toString(90 * 20L))
+            // tx_input: the file entirely before the window goes to history unchanged.
+            TablePlan inputs = result.plans().get(1);
+            TieredExport.Tiers inputTiers = result.tiers().get("tx-input");
+            assertThat(inputs.rowCount()).isEqualTo(30);
+            assertThat(inputTiers.split().rowCount()).isEqualTo(10);
+            assertThat(keys(result.rewritten(), current(inputs, inputTiers), "tx_hash")).containsExactlyElementsOf(hashes(20, 30));
+            List<DuckLakeFile> inputHistory = history(inputs, inputTiers);
+            assertThat(rows(inputHistory)).isEqualTo(20);
+            assertThat(keys(result.rewritten(), inputHistory, "tx_hash")).containsExactlyElementsOf(hashes(0, 20));
+            assertThat(inputTiers.split().bounds()).containsEntry("spent_at_slot.min", Long.toString(90 * 20L))
                     .containsEntry("spent_at_slot.max", Long.toString(99 * 20L));
 
-            assertThat(stake.rowCount()).isEqualTo(12);
-            assertThat(stake.files()).allMatch(f -> f.relativePath().matches(".*epoch=[6-9]/.*"));
-            assertThat(stake.bounds()).containsEntry("epoch.min", "6").containsEntry("epoch.max", "9");
+            // epoch_stake: the newest 4 epochs current, the rest history, nothing rewritten.
+            TablePlan stake = result.plans().get(2);
+            TieredExport.Tiers stakeTiers = result.tiers().get("epoch-stake");
+            assertThat(stake.rowCount()).isEqualTo(30);
+            assertThat(stakeTiers.split()).isNull();
+            assertThat(current(stake, stakeTiers)).allMatch(f -> f.relativePath().matches(".*epoch=[6-9]/.*"));
+            assertThat(history(stake, stakeTiers)).hasSize(6).allMatch(f -> f.relativePath().matches(".*epoch=[0-5]/.*"));
+            assertThat(stake.files()).noneMatch(f -> result.rewritten().containsKey(f.relativePath()));
 
-            assertThat(result.retention()).containsEntry(Retention.UTXO_SPENT_SAFE_BLOCKS, "10")
-                    .containsEntry(Retention.TX_INPUT_SAFE_BLOCKS, "10").containsEntry(Retention.EPOCH_STAKE_EPOCHS, "4");
-            assertThat(Files.exists(root.resolve("work/pruned/.spill"))).isFalse();
+            assertThat(Files.exists(root.resolve("work/tiers/.spill"))).isFalse();
         }
     }
 
-    private static List<String> keys(Map<String, Path> rewritten, TablePlan plan, String column) throws Exception {
-        String files = plan.files().stream().map(f -> Identifiers.literal(rewritten.get(f.relativePath()).toString()))
+    private static List<DuckLakeFile> current(TablePlan plan, TieredExport.Tiers tiers) {
+        return plan.files().stream().filter(f -> !tiers.history().contains(f.relativePath())).toList();
+    }
+
+    private static List<DuckLakeFile> history(TablePlan plan, TieredExport.Tiers tiers) {
+        return plan.files().stream().filter(f -> tiers.history().contains(f.relativePath())).toList();
+    }
+
+    private static long rows(List<DuckLakeFile> files) {
+        return files.stream().mapToLong(DuckLakeFile::rowCount).sum();
+    }
+
+    private static List<String> hashes(int from, int to) {
+        return java.util.stream.IntStream.range(from, to).mapToObj(n -> String.format("%064x", n)).toList();
+    }
+
+    private List<String> keys(Map<String, Path> rewritten, List<DuckLakeFile> list, String column) throws Exception {
+        String files = list.stream().map(f -> Identifiers.literal(rewritten.getOrDefault(f.relativePath(),
+                        root.resolve(f.relativePath())).toString()))
                 .collect(Collectors.joining(", ", "[", "]"));
         try (var conn = DriverManager.getConnection("jdbc:duckdb:")) {
             return DuckDb.query(conn, "SELECT DISTINCT " + column + " FROM " + DuckDb.readParquet(files) + " ORDER BY 1", rs -> {

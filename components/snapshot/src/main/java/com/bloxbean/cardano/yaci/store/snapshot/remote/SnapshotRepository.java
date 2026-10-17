@@ -68,13 +68,20 @@ public class SnapshotRepository {
                                 int filesSkipped, long millis) {}
 
     /**
-     * Uploads a local snapshot and adds it to its network's index. Parts go first, then the checksums
-     * and signature, then the manifest, and the index last, so the index never points at an incomplete
+     * Uploads a local snapshot. Parts go first, then the checksums and signature, then the manifest,
+     * then {@value SnapshotIndex#ENTRY_FILE}, and the index last, so neither ever points at an incomplete
      * snapshot. Files already present with the same size and SHA-256 are skipped, so a rerun resumes.
+     *
+     * <p>A snapshot published without {@code live} is staged: it is not in the index, so {@code list} and
+     * {@code latest} do not see it, but it can be imported by its id. {@link #promote} makes it live.
      *
      * @param threads files uploaded at once
      */
     public PublishResult publish(Path manifestPath, int threads, Consumer<String> progress) throws IOException {
+        return publish(manifestPath, threads, false, progress);
+    }
+
+    public PublishResult publish(Path manifestPath, int threads, boolean live, Consumer<String> progress) throws IOException {
         if (!store.writable()) {
             throw SnapshotStore.readOnly(store.describe());
         }
@@ -144,10 +151,21 @@ public class SnapshotRepository {
 
         String keyId = signatureKeyId(dir.resolve(SIGNATURE_INFO));
         SnapshotIndex.Entry entry = SnapshotIndex.Entry.of(m, m.snapshotId() + "/" + manifestPath.getFileName(),
-                manifestSha, keyId);
-        updateIndex(network, m.point().protocolMagic(), index -> index.with(entry, Instant.now().toString()));
-        say(progress, "publish", String.format("Published %s: %d file(s) sent, %d already there, index updated",
-                m.snapshotId(), uploaded.get(), skipped.get()));
+                manifestSha, keyId).withLive(live);
+        // A republish keeps a live snapshot live.
+        List<SnapshotIndex.Entry> indexed = index(network).snapshots();
+        boolean listed = indexed != null && indexed.stream().anyMatch(e -> e.snapshotId().equals(m.snapshotId()));
+        if (live || listed) {
+            entry = entry.withLive(true);
+            store.putBytes(snapshotDir + SnapshotIndex.ENTRY_FILE, entry.toBytes());
+            SnapshotIndex.Entry listedEntry = entry;
+            updateIndex(network, m.point().protocolMagic(), index -> index.with(listedEntry, Instant.now().toString()));
+        } else {
+            store.putBytes(snapshotDir + SnapshotIndex.ENTRY_FILE, entry.toBytes());
+        }
+        say(progress, "publish", String.format("Published %s: %d file(s) sent, %d already there, %s",
+                m.snapshotId(), uploaded.get(), skipped.get(), entry.live() ? "live in the index"
+                        : "staged (not in the index; import it by id, then promote it)"));
         return new PublishResult(entry, snapshotDir, sent.get(), uploaded.get(), skipped.get(),
                 System.currentTimeMillis() - started);
     }
@@ -207,10 +225,10 @@ public class SnapshotRepository {
     }
 
     /**
-     * Regenerates the network's index from the manifests in the store, for a store edited by hand.
+     * Every snapshot in the store for {@code network}, live or staged, from the manifests themselves.
      * Needs a store that can list.
      */
-    public SnapshotIndex rebuildIndex(String network, long protocolMagic, Consumer<String> progress) throws IOException {
+    public List<SnapshotIndex.Entry> scan(String network, Consumer<String> progress) throws IOException {
         List<SnapshotIndex.Entry> entries = new ArrayList<>();
         for (String key : store.list(network + "/")) {
             if (!key.endsWith(".manifest.json")) {
@@ -226,17 +244,61 @@ public class SnapshotRepository {
                 var node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(info.get().bytes());
                 keyId = node.hasNonNull("keyId") ? node.get("keyId").asText() : null;
             }
-            entries.add(SnapshotIndex.Entry.of(m, relative, Digests.sha256Hex(bytes), keyId));
-            say(progress, "index", "Found " + m.snapshotId() + " (epoch " + m.point().epoch() + ", " + m.flavorOrFull() + ")");
+            boolean live = store.read(network + "/" + dir + SnapshotIndex.ENTRY_FILE)
+                    .map(t -> SnapshotIndex.Entry.parse(t.bytes()).live()).orElse(false);
+            entries.add(SnapshotIndex.Entry.of(m, relative, Digests.sha256Hex(bytes), keyId).withLive(live));
+            say(progress, "index", "Found " + m.snapshotId() + " (epoch " + m.point().epoch() + ", "
+                    + (live ? "live" : "staged") + ")");
         }
-        List<SnapshotIndex.Entry> sorted = SnapshotIndex.sorted(entries);
+        return SnapshotIndex.sorted(entries);
+    }
+
+    /**
+     * Regenerates the network's index from the snapshots in the store that are live, for a store edited
+     * by hand. Needs a store that can list.
+     */
+    public SnapshotIndex rebuildIndex(String network, long protocolMagic, Consumer<String> progress) throws IOException {
+        List<SnapshotIndex.Entry> live = scan(network, progress).stream().filter(SnapshotIndex.Entry::live).toList();
         return updateIndex(network, protocolMagic, before ->
-                new SnapshotIndex(SnapshotIndex.FORMAT_VERSION, network, protocolMagic, Instant.now().toString(), sorted));
+                new SnapshotIndex(SnapshotIndex.FORMAT_VERSION, network, protocolMagic, Instant.now().toString(), live));
+    }
+
+    /**
+     * Makes a staged snapshot live: its {@value SnapshotIndex#ENTRY_FILE} says so, and the index lists
+     * it. The manifest is checked against the entry's digest first.
+     */
+    public SnapshotIndex.Entry promote(String network, String snapshotId) throws IOException {
+        SnapshotIndex.Entry entry = stagedEntry(network, snapshotId).withLive(true);
+        fetch(network, entry);
+        store.putBytes(network + "/" + entry.directory() + SnapshotIndex.ENTRY_FILE, entry.toBytes());
+        long magic = new ManifestCodec().parse(store.read(network + "/" + entry.manifest()).orElseThrow().bytes())
+                .point().protocolMagic();
+        updateIndex(network, magic, index -> index.with(entry, Instant.now().toString()));
+        return entry;
+    }
+
+    /** Takes a live snapshot out of the index; its files stay, and it can still be imported by its id. */
+    public SnapshotIndex.Entry unlist(String network, String snapshotId) throws IOException {
+        SnapshotIndex.Entry entry = stagedEntry(network, snapshotId).withLive(false);
+        store.putBytes(network + "/" + entry.directory() + SnapshotIndex.ENTRY_FILE, entry.toBytes());
+        updateIndex(network, 0, index -> index.without(entry.snapshotId(), Instant.now().toString()));
+        return entry;
+    }
+
+    /** The entry in {@code <network>/<id>/snapshot.json}; ids are matched exactly. */
+    private SnapshotIndex.Entry stagedEntry(String network, String snapshotId) throws IOException {
+        if (snapshotId == null || snapshotId.isBlank() || snapshotId.contains("/") || snapshotId.contains("..")) {
+            throw new IOException("Invalid snapshot id '" + snapshotId + "'");
+        }
+        return store.read(network + "/" + snapshotId + "/" + SnapshotIndex.ENTRY_FILE)
+                .map(t -> SnapshotIndex.Entry.parse(t.bytes()))
+                .orElseThrow(() -> new IOException("Snapshot " + snapshotId + " is not published for " + network
+                        + " at " + store.describe() + " (pass the full id)"));
     }
 
     // ------------------------------------------------------------------ resolve
 
-    /** A snapshot chosen from the index, with its verified manifest. */
+    /** A snapshot chosen from the index (or, when staged, by its id), with its verified manifest. */
     public record Resolved(String network, SnapshotIndex.Entry entry, byte[] manifestBytes, SnapshotManifest manifest) {
         public String directory() {
             return network + "/" + entry.directory();
@@ -248,34 +310,38 @@ public class SnapshotRepository {
         }
     }
 
+    public Resolved resolve(String network, String snapshot, Function<SnapshotManifest, List<String>> problems,
+                            Consumer<String> progress) throws IOException {
+        return resolve(network, snapshot, null, problems, progress);
+    }
+
     /**
-     * Picks a snapshot: an id (or a unique prefix of one), or {@value #LATEST} for the newest of the
-     * flavor that this release can import. Each candidate's manifest is fetched and checked against
-     * the digest in the index, then against {@code problems}; a {@value #LATEST} candidate with
-     * problems is skipped, an explicitly named one is refused.
+     * Picks a snapshot: an id (or a unique prefix of a live one's), or {@value #LATEST} for the newest
+     * live snapshot that this release can import. A staged snapshot is found only by its full id. Each
+     * candidate's manifest is fetched and checked against the digest in its entry, then against
+     * {@code problems}; a {@value #LATEST} candidate with problems is skipped, an explicitly named one is
+     * refused.
      *
+     * @param flavor   unused; kept for callers built before every snapshot was full
      * @param problems what stops this release importing a manifest; empty when it can
      */
     public Resolved resolve(String network, String snapshot, String flavor,
                             Function<SnapshotManifest, List<String>> problems, Consumer<String> progress) throws IOException {
         SnapshotIndex index = index(network);
         List<SnapshotIndex.Entry> entries = index.snapshots() == null ? List.of() : index.snapshots();
-        if (entries.isEmpty()) {
-            throw new IOException("No snapshots are published for " + network + " at " + store.describe());
-        }
         boolean latest = snapshot == null || snapshot.isBlank() || LATEST.equalsIgnoreCase(snapshot);
         List<SnapshotIndex.Entry> candidates;
         if (latest) {
-            String wanted = flavor == null || flavor.isBlank() ? SnapshotManifest.FLAVOR_FULL : flavor;
-            candidates = entries.stream().filter(e -> e.flavorOrFull().equals(wanted)).toList();
+            candidates = entries;
             if (candidates.isEmpty()) {
-                throw new IOException("No " + wanted + " snapshot is published for " + network + " at " + store.describe());
+                throw new IOException("No live snapshot is published for " + network + " at " + store.describe());
             }
         } else {
             candidates = entries.stream().filter(e -> e.snapshotId().equals(snapshot)
                     || e.snapshotId().startsWith(snapshot)).toList();
             if (candidates.isEmpty()) {
-                throw new IOException("Snapshot " + snapshot + " is not in the " + network + " index at " + store.describe());
+                candidates = List.of(stagedEntry(network, snapshot));
+                say(progress, "resolve", "Snapshot " + snapshot + " is staged, not live: importing it by id");
             }
             if (candidates.size() > 1) {
                 throw new IOException("Snapshot id " + snapshot + " is ambiguous: "
@@ -293,11 +359,11 @@ public class SnapshotRepository {
                 throw new IOException("Snapshot " + e.snapshotId() + " cannot be imported by this release:\n  - "
                         + String.join("\n  - ", p));
             }
-            String reason = e.snapshotId() + " (epoch " + e.epoch() + ", Yaci Store " + e.yaciStoreVersion() + "): " + p.get(0);
+            String reason = e.snapshotId() + " (epoch " + e.epoch() + ", Yaci Store " + e.release() + "): " + p.get(0);
             skipped.add(reason);
             say(progress, "resolve", "Skipping " + reason);
         }
-        throw new IOException("None of the " + candidates.size() + " published snapshot(s) can be imported by this release:\n  - "
+        throw new IOException("None of the " + candidates.size() + " live snapshot(s) can be imported by this release:\n  - "
                 + String.join("\n  - ", skipped));
     }
 
@@ -434,12 +500,12 @@ public class SnapshotRepository {
     public static Map<String, String> describe(SnapshotIndex.Entry e) {
         Map<String, String> out = new LinkedHashMap<>();
         out.put("id", e.snapshotId());
-        out.put("flavor", e.flavorOrFull());
         out.put("epoch", Integer.toString(e.epoch()));
         out.put("block", Long.toString(e.blockNumber()));
         out.put("size", Progress.bytes(e.sizeBytes()));
-        out.put("release", e.yaciStoreVersion());
+        out.put("release", e.release());
         out.put("signed", e.keyId() == null ? "no" : "key " + e.keyId());
+        out.put("state", e.live() ? "live" : "staged");
         out.put("created", e.createdAt());
         return out;
     }

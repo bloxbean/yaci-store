@@ -57,6 +57,17 @@ public interface SnapshotStore extends AutoCloseable {
     /** Removes an object; nothing happens when it does not exist. */
     void delete(String key) throws IOException;
 
+    /** Writes {@code bytes} at {@code key}, replacing what is there. */
+    default void putBytes(String key, byte[] bytes) throws IOException {
+        Path tmp = java.nio.file.Files.createTempFile("yaci-snapshot-", ".tmp");
+        try {
+            java.nio.file.Files.write(tmp, bytes);
+            put(key, tmp, com.bloxbean.cardano.yaci.store.snapshot.util.Digests.sha256Hex(bytes), n -> { });
+        } finally {
+            java.nio.file.Files.deleteIfExists(tmp);
+        }
+    }
+
     @Override
     default void close() {
     }
