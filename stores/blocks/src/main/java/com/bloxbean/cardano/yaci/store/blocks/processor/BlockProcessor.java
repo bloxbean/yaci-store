@@ -13,14 +13,17 @@ import com.bloxbean.cardano.yaci.store.blocks.storage.BlockStorage;
 import com.bloxbean.cardano.yaci.store.blocks.util.BlockUtil;
 import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClient;
 import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
+import com.bloxbean.cardano.yaci.store.common.util.ErrorCode;
 import com.bloxbean.cardano.yaci.store.common.util.TransactionFeeUtil;
 import com.bloxbean.cardano.yaci.store.events.BlockEvent;
+import com.bloxbean.cardano.yaci.store.events.ErrorEvent;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
 import jakarta.validation.constraints.NotNull;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -41,17 +44,20 @@ public class BlockProcessor {
     private final BlockCborStorage blockCborStorage;
     private final BlocksStoreProperties blocksStoreProperties;
     private final UtxoClient utxoClient;
+    private final ApplicationEventPublisher publisher;
     private final List<Tuple<Block, com.bloxbean.cardano.yaci.core.model.Block>> pendingBlocks =
             Collections.synchronizedList(new ArrayList<>());
 
     public BlockProcessor(BlockStorage blockStorage,
                           BlockCborStorage blockCborStorage,
                           BlocksStoreProperties blocksStoreProperties,
-                          UtxoClient utxoClient) {
+                          UtxoClient utxoClient,
+                          ApplicationEventPublisher publisher) {
         this.blockStorage = blockStorage;
         this.blockCborStorage = blockCborStorage;
         this.blocksStoreProperties = blocksStoreProperties;
         this.utxoClient = utxoClient;
+        this.publisher = publisher;
     }
 
     @EventListener
@@ -185,6 +191,12 @@ public class BlockProcessor {
                 log.warn("Collateral fee unresolved for transaction {} in block {} at slot {}; "
                                 + "using declared fee {}. Block and epoch total fees may be inaccurate.",
                         body.getTxHash(), block.getHash(), block.getSlot(), fee);
+                publisher.publishEvent(ErrorEvent.builder()
+                        .block(block.getNumber())
+                        .errorCode(ErrorCode.DATA_MISSING_ERROR.name())
+                        .reason("Collateral fee unresolved; declared fee used in block total fees")
+                        .details("tx_hash: " + body.getTxHash() + ", block_hash: " + block.getHash())
+                        .build());
             }
             totalFees = totalFees.add(fee);
         }
