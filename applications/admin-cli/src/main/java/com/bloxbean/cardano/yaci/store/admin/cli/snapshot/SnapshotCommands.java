@@ -111,6 +111,9 @@ public class SnapshotCommands {
             @Option(longNames = "unsigned", defaultValue = "false",
                     description = "Acknowledge that no signature will be produced")
             boolean unsigned,
+            @Option(longNames = "signing-key",
+                    description = "Ed25519 private key (PKCS#8 PEM) to sign the snapshot with (default: store.snapshot.signing-key)")
+            String signingKey,
             @Option(longNames = "memory-limit", defaultValue = DuckLakeCatalog.DEFAULT_MEMORY_LIMIT,
                     description = "DuckDB memory limit for planning; a larger value is faster, never required")
             String memoryLimit,
@@ -141,6 +144,11 @@ public class SnapshotCommands {
             if (!SnapshotManifest.FLAVOR_FULL.equals(flavor) && !SnapshotManifest.FLAVOR_PRUNED.equals(flavor)) {
                 throw new CommandFailedException("snapshot export: --flavor must be full or pruned", null);
             }
+            SnapshotCliSupport.SigningKey key = unsigned ? null : support.signingKey(signingKey);
+            if (key == null && !unsigned) {
+                throw new CommandFailedException("snapshot export: pass --signing-key (or set store.snapshot.signing-key),"
+                        + " or --unsigned to produce an unsigned snapshot", null);
+            }
             ExportOptions options = support.exportOptions(registry, dataDir, output, workDir, partSize,
                     targetEpoch, minConfirmations, allowIncomplete, unsigned, memoryLimit)
                     .withFlavor(flavor, utxoSafeBlocks, epochStakeEpochs);
@@ -169,6 +177,13 @@ public class SnapshotCommands {
                     SnapshotCliSupport.humanBytes(result.bytesWritten()));
             writeLn("  Manifest      : %s", result.manifestPath().getFileName());
             writeLn("  Duration      : %s", SnapshotCliSupport.humanMillis(result.millis()));
+            if (key != null) {
+                String keyId = com.bloxbean.cardano.yaci.store.snapshot.manifest.SnapshotSignature.sign(
+                        result.manifestPath(), key.privateKey(), key.publicKey());
+                writeLn("  Signed        : key %s (SHA256SUMS.sig)", keyId);
+            } else {
+                writeLn(warn("  Signed        : no (--unsigned)"));
+            }
             if (!registry.selectedLimitations(m.declaredLossy()).isEmpty()) {
                 writeLn(warn("Declared limitations (%d):", registry.selectedLimitations(m.declaredLossy()).size()));
                 registry.selectedLimitations(m.declaredLossy()).forEach(l -> writeLn("    - %s", l));
@@ -192,7 +207,10 @@ public class SnapshotCommands {
             String manifest,
             @Option(longNames = "deep", defaultValue = "true",
                     description = "Also scan part entries for traversal, duplicates and coverage")
-            boolean deep) {
+            boolean deep,
+            @Option(longNames = "trusted-key",
+                    description = "Publisher public key(s), comma-separated PEM files (default: store.snapshot.trusted-keys)")
+            String trustedKey) {
         try {
             Path manifestPath = Path.of(manifest).toAbsolutePath().normalize();
             SnapshotManifest m = new ManifestCodec().read(manifestPath);
@@ -210,6 +228,16 @@ public class SnapshotCommands {
             }
             writeLn("  Parts verified : %d (%s)", m.parts().size(),
                     SnapshotCliSupport.humanBytes(result.bytesVerified()));
+            var signature = com.bloxbean.cardano.yaci.store.snapshot.manifest.SnapshotSignature.verify(manifestPath,
+                    support.trustedKeys(trustedKey));
+            switch (signature.status()) {
+                case VERIFIED -> writeLn(success("Signature: %s", signature.describe()));
+                case INVALID -> {
+                    writeLn(error("Signature: %s", signature.describe()));
+                    throw new CommandFailedException("snapshot verify: signature verification failed", null);
+                }
+                default -> writeLn(warn("Signature: %s", signature.describe()));
+            }
             if (result.ok()) {
                 writeLn(success("All parts match the manifest"));
             } else {
@@ -246,8 +274,11 @@ public class SnapshotCommands {
                     description = "Minimum free space required in the work directory at preflight")
             long minFreeDiskGb,
             @Option(longNames = "allow-unsigned", defaultValue = "false",
-                    description = "Import a snapshot with no signature")
+                    description = "Import a snapshot without a signature verified by a trusted key")
             boolean allowUnsigned,
+            @Option(longNames = "trusted-key",
+                    description = "Publisher public key(s), comma-separated PEM files (default: store.snapshot.trusted-keys)")
+            String trustedKey,
             @Option(longNames = "spec-file", description = "Additional local specification file(s)") String specFile,
             @Option(longNames = "allow-custom-specs", defaultValue = "false",
                     description = "Acknowledge the use of operator-supplied specifications")
@@ -294,12 +325,16 @@ public class SnapshotCommands {
             }
             ImportOptions options = support.importOptions(manifest, workDir, workers, memoryLimit,
                     minFreeDiskGb, allowUnsigned, specFile, allowCustomSpecs, keepExtracted, tunePostgres,
-                    epochStakeEpochs).withPartSource(parts);
+                    epochStakeEpochs).withPartSource(parts).withTrustedKeys(support.trustedKeys(trustedKey));
             SnapshotImporter importer = new SnapshotImporter(registry);
 
             if (dryRun) {
                 SnapshotImporter.Preflight pre = importer.preflight(options);
                 printDryRun(pre.manifest(), registry, options, importer.selection(pre.archive(), pre.manifest()));
+                if (pre.signature() != null) {
+                    writeLn(pre.signature().trusted() ? success("Signature: %s", pre.signature().describe())
+                            : warn("Signature: %s", pre.signature().describe()));
+                }
                 // The table list above already shows the selected and skipped tables.
                 pre.warnings().stream()
                         .filter(w -> !w.startsWith("Selected tables: ") && !w.startsWith("Skipped tables: "))

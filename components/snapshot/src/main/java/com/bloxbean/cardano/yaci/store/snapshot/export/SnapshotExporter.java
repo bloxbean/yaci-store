@@ -197,9 +197,6 @@ public class SnapshotExporter {
      * published last with an atomic rename, so a manifest on disk always describes complete parts.
      */
     public ExportResult export(ExportOptions options, Consumer<String> progress) throws SQLException, IOException {
-        if (!options.unsigned()) {
-            throw new IllegalArgumentException("Snapshot signing is not implemented; --unsigned is required");
-        }
         long started = System.currentTimeMillis();
         try (DuckLakeCatalog catalog = DuckLakeCatalog.open(options.dataDir(), options.workDir(), options.memoryLimit())) {
             Progress.phase(progress, "Selecting the consistency point and planning coverage");

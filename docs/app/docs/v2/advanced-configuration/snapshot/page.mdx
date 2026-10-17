@@ -8,8 +8,8 @@ chain from genesis.
 <Callout type="warning">
 This feature is ready for manual preprod qualification, not a claim of production or mainnet
 readiness. Automated tests cover import, resume, export, and the review fixes. The updated lossless
-stake-balance path still needs a full network restore and live acceptance run. Snapshots are
-unsigned and retain the [declared limitations](#known-limitations).
+stake-balance path still needs a full network restore and live acceptance run. Snapshots retain the
+[declared limitations](#known-limitations); see [Signing snapshots](#signing-snapshots) for signatures.
 </Callout>
 
 ## Prerequisites and starting the CLI
@@ -90,6 +90,8 @@ before treating a restored database as equivalent to a synced one.
 | `snapshot list` | List the snapshots published for the configured network |
 | `snapshot download` | Download a published snapshot for an offline import or a mirror |
 | `snapshot index --rebuild` | Regenerate a network's `index.json` from the manifests in the store |
+| `snapshot keygen` | Create an Ed25519 key pair for signing snapshots |
+| `snapshot sign` | Sign an exported snapshot's `SHA256SUMS` |
 
 All of them use the datasource and schema from the same Spring configuration the admin CLI already
 uses. Passwords are never accepted as command arguments and never appear in a manifest, report or
@@ -219,8 +221,12 @@ while extracting, so it is optional.
 | `--target-epoch` | `0` | Select an older completed epoch; `0` chooses the newest supported one |
 | `--memory-limit` | `1GB` | DuckDB memory limit for planning (also accepted by `snapshot inspect`) |
 | `--allow-incomplete` | `false` | Package even though the snapshot declares limitations |
-| `--unsigned` | `false` | Acknowledge that no signature will be produced |
+| `--signing-key` | `store.snapshot.signing-key` | Ed25519 private key (PEM) to sign the snapshot with |
+| `--unsigned` | `false` | Produce an unsigned snapshot (required when no signing key is set) |
 | `--verify` | `false` | Re-read and checksum every written part before publishing the manifest |
+| `--flavor` | `full` | `pruned` for a [pruned snapshot](#pruned-snapshots) |
+| `--utxo-safe-blocks`, `--epoch-stake-epochs` | `2160`, `8` | Pruned only: the spent-output window and the `epoch_stake` epochs kept |
+| `--publish`, `--remote` | `false` | Upload the snapshot when the export succeeds ([publishing](#publishing-and-downloading-snapshots)) |
 | `--spec-file`, `--allow-custom-specs` | – | Operator-supplied specifications |
 
 <Callout type="info">
@@ -294,14 +300,15 @@ snapshot IDs and timestamps, even if they package the same file set.
 
 ## Restoring a snapshot
 
-Preflight (`--dry-run`) checks manifest compatibility, database state, part existence, and sizes.
+Preflight (`--dry-run`) checks manifest compatibility, the signature, database state, part existence, and sizes.
 It also prints the target schema, the tables it would load and skip with their row counts and
 sizes, the declared limitations, and the disk space needed: the extraction size against the free
 space in the work directory, and a rough estimate of the restored database (about 8x the Parquet
 it loads) for the PostgreSQL volume, which it cannot check itself.
 It does not hash the archives. A real import checks each part's digest and every extracted file's
 digest in the same pass as the extraction. Use `snapshot verify` for a standalone integrity check.
-Unsigned imports require explicit `--allow-unsigned`.
+A snapshot not signed by a key in `store.snapshot.trusted-keys` requires an explicit `--allow-unsigned`
+(see [Signing snapshots](#signing-snapshots)).
 
 ### 1. Prepare the target schema
 
@@ -476,8 +483,9 @@ many tables in parallel, one connection each, and a status line is printed every
 
 Four levels are defined; the first three are offline and must all pass before sync is enabled.
 
-1. **Artifact** — explicit unsigned acknowledgement, part digests, ZIP traversal/duplicate/size
-   protections, exact required part set, per-file digest after extraction.
+1. **Artifact** — a signature by a trusted key (or an explicit `--allow-unsigned`), part digests,
+   ZIP traversal/duplicate/size protections, every selected file present exactly once, per-file
+   digest after extraction.
 2. **Schema and load** — selected table fingerprints, per-table row counts after cutoff, tables
    that must be empty really are, required non-null column values, sequence values, a journal
    matching the exact manifest, every key and index dropped for the load rebuilt as captured, and
@@ -545,6 +553,42 @@ Execution slices do not change the specification, manifest, or persisted batch I
 original batch and its journal entry commit together. Existing imports can resume with the new
 CLI and a different memory limit without regenerating the snapshot or clearing data.
 
+## Signing snapshots
+
+A snapshot is signed with an Ed25519 key over its `SHA256SUMS`, which lists the SHA-256 of the
+manifest and of every part; the manifest in turn pins every file. One signature therefore covers the
+whole snapshot, down to each Parquet file.
+
+```bash
+snapshot keygen --output /secure/keys            # snapshot-signing.pem (private), snapshot-signing.pub
+snapshot export ... --signing-key /secure/keys/snapshot-signing.pem
+snapshot sign --manifest <manifest> --signing-key /secure/keys/snapshot-signing.pem   # an existing export
+```
+
+Export writes `SHA256SUMS.sig` (the raw 64-byte signature) and `SHA256SUMS.sig.json` (the key id and
+public key). Without a signing key (`--signing-key` or `store.snapshot.signing-key`), export needs
+`--unsigned`. Keys are standard PEM, so `openssl genpkey -algorithm ed25519 -out key.pem` and
+`openssl pkey -in key.pem -pubout -out key.pub` work too. The public key is expected next to the
+private one with a `.pub` extension, or at `store.snapshot.signing-public-key`. Anyone can check a
+signature without Yaci Store:
+
+```bash
+openssl pkeyutl -verify -pubin -inkey snapshot-signing.pub -rawin -in SHA256SUMS -sigfile SHA256SUMS.sig
+sha256sum -c SHA256SUMS
+```
+
+Importers configure the publisher's public key:
+
+```properties
+store.snapshot.trusted-keys=/etc/yaci/snapshot-signing.pub
+```
+
+`snapshot import` and `snapshot verify` then check the signature, that `SHA256SUMS` lists this
+manifest's digest, and that it agrees with the manifest on every part. A snapshot signed by a trusted
+key imports without `--allow-unsigned`. An unsigned snapshot, or one whose key is not configured,
+needs `--allow-unsigned` and the import warns. A signature that fails, or checksums that do not match
+the manifest, block the import even with `--allow-unsigned`.
+
 ## Publishing and downloading snapshots
 
 Snapshots can be published to any S3-compatible bucket (Cloudflare R2, AWS S3, MinIO) or a directory,
@@ -594,7 +638,7 @@ secret. To let anyone download without credentials, connect a custom domain or e
 ### Publishing
 
 ```bash
-snapshot export --output /path/to/out --allow-unsigned ... --publish
+snapshot export --output /path/to/out --signing-key /secure/keys/snapshot-signing.pem ... --publish
 # or, for an existing export:
 snapshot publish --manifest /path/to/out/yaci-mainnet-e659-4417bd67.manifest.json
 ```

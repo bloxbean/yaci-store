@@ -26,13 +26,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-class SnapshotRepositoryTest {
+public class SnapshotRepositoryTest {
 
     @TempDir
     Path tmp;
 
     /** A real exported snapshot directory: parts, manifest and SHA256SUMS. */
-    static Path snapshot(Path dir, String id, int epoch, String flavor) throws IOException {
+    public static Path snapshot(Path dir, String id, int epoch, String flavor) throws IOException {
         Path data = dir.resolve("data");
         List<SnapshotManifest.FileEntry> files = new ArrayList<>();
         List<String> owners = new ArrayList<>();

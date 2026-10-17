@@ -11,6 +11,7 @@ import com.bloxbean.cardano.yaci.store.snapshot.handler.HandlerRegistry;
 import com.bloxbean.cardano.yaci.store.snapshot.handler.SnapshotHandler;
 import com.bloxbean.cardano.yaci.store.snapshot.manifest.ManifestCodec;
 import com.bloxbean.cardano.yaci.store.snapshot.manifest.Retention;
+import com.bloxbean.cardano.yaci.store.snapshot.manifest.SnapshotSignature;
 import com.bloxbean.cardano.yaci.store.snapshot.manifest.SnapshotManifest;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.RestoreMode;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.SnapshotSpecRegistry;
@@ -78,12 +79,19 @@ public class SnapshotImporter {
      * @param manifest the import's view: the snapshot as published, reduced by the import's own
      *                 retention ({@link Retention#apply})
      * @param archive  the snapshot as published, which the parts are checked against
+     * @param signature whether the snapshot is signed, and by a trusted key
      */
     public record Preflight(SnapshotManifest manifest,
                             List<String> blockers,
                             List<String> warnings,
                             ImportJournal.Run existingRun,
-                            SnapshotManifest archive) {
+                            SnapshotManifest archive,
+                            SnapshotSignature.Verification signature) {
+        public Preflight(SnapshotManifest manifest, List<String> blockers, List<String> warnings,
+                         ImportJournal.Run existingRun, SnapshotManifest archive) {
+            this(manifest, blockers, warnings, existingRun, archive, null);
+        }
+
         public boolean ok() {
             return blockers.isEmpty();
         }
@@ -104,11 +112,28 @@ public class SnapshotImporter {
         ManifestValidator validator = new ManifestValidator(registry);
         blockers.addAll(validator.validate(manifest));
         warnings.addAll(validator.importChanges(manifest));
-        if (!options.allowUnsigned()) {
-            blockers.add("Snapshot signing is not implemented; --allow-unsigned is required");
+        SnapshotSignature.Verification signature;
+        try {
+            signature = SnapshotSignature.verify(options.manifestPath(), options.trustedKeys());
+        } catch (IOException | RuntimeException e) {
+            signature = new SnapshotSignature.Verification(SnapshotSignature.Status.INVALID, null, List.of(e.getMessage()));
+        }
+        switch (signature.status()) {
+            case VERIFIED -> { }
+            case INVALID -> blockers.add("Snapshot " + signature.describe()
+                    + ". The snapshot is not what its publisher signed; do not import it.");
+            case UNSIGNED, UNVERIFIED -> {
+                if (options.allowUnsigned()) {
+                    warnings.add("Importing a snapshot that is " + signature.describe() + ".");
+                } else {
+                    blockers.add("The snapshot is " + signature.describe() + ". Configure the publisher's key in"
+                            + " store.snapshot.trusted-keys (or --trusted-key), or pass --allow-unsigned to import it"
+                            + " without a verified signature.");
+                }
+            }
         }
         if (!blockers.isEmpty()) {
-            return new Preflight(manifest, blockers, warnings, null, archive);
+            return new Preflight(manifest, blockers, warnings, null, archive, signature);
         }
         // Resolve both database connection paths before any extraction or target writes.
         DuckPgSession.pgConnectionString(options);
@@ -209,7 +234,7 @@ public class SnapshotImporter {
                     + "; the configured minimum is " + options.minFreeDiskGb() + " GiB");
         }
 
-        return new Preflight(manifest, blockers, warnings, existing, archive);
+        return new Preflight(manifest, blockers, warnings, existing, archive, signature);
     }
 
     /**

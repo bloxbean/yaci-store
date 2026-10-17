@@ -4,6 +4,7 @@ import com.bloxbean.cardano.yaci.store.snapshot.export.ExportOptions;
 import com.bloxbean.cardano.yaci.store.snapshot.load.ImportOptions;
 import com.bloxbean.cardano.yaci.store.snapshot.load.PgSchema;
 import com.bloxbean.cardano.yaci.store.snapshot.load.TargetTable;
+import com.bloxbean.cardano.yaci.store.snapshot.manifest.SnapshotSignature;
 import com.bloxbean.cardano.yaci.store.snapshot.remote.S3SnapshotStore;
 import com.bloxbean.cardano.yaci.store.snapshot.remote.SnapshotLocations;
 import com.bloxbean.cardano.yaci.store.snapshot.remote.SnapshotStore;
@@ -262,6 +263,48 @@ public class SnapshotCliSupport {
         String url = location != null && !location.isBlank() ? location
                 : environment.getProperty("store.snapshot.remote.url");
         return SnapshotLocations.open(url, s3Settings());
+    }
+
+    /**
+     * The signing key: {@code option}, or {@code store.snapshot.signing-key}; null when neither is set.
+     * Its public half is {@code store.snapshot.signing-public-key}, or the same path ending in {@code .pub}.
+     */
+    public SigningKey signingKey(String option) throws java.io.IOException {
+        String path = option != null && !option.isBlank() ? option : environment.getProperty("store.snapshot.signing-key");
+        if (path == null || path.isBlank()) {
+            return null;
+        }
+        Path priv = Path.of(path.trim()).toAbsolutePath().normalize();
+        String pubProperty = environment.getProperty("store.snapshot.signing-public-key");
+        Path pub = pubProperty != null && !pubProperty.isBlank() && (option == null || option.isBlank())
+                ? Path.of(pubProperty.trim())
+                : priv.resolveSibling(priv.getFileName().toString().replaceFirst("\\.pem$", "") + ".pub");
+        if (!Files.isRegularFile(pub)) {
+            throw new IllegalArgumentException("No public key at " + pub + " for signing key " + priv
+                    + "; write it with 'openssl pkey -in <key> -pubout -out " + pub.getFileName() + "'");
+        }
+        return new SigningKey(SnapshotSignature.readPrivateKey(priv), SnapshotSignature.readPublicKey(pub));
+    }
+
+    public record SigningKey(java.security.PrivateKey privateKey, java.security.PublicKey publicKey) {
+        @Override
+        public String toString() {
+            return "SigningKey[" + SnapshotSignature.keyId(publicKey) + "]";
+        }
+    }
+
+    /** Public keys from {@code option}, or {@code store.snapshot.trusted-keys}: comma-separated PEM files. */
+    public List<java.security.PublicKey> trustedKeys(String option) throws java.io.IOException {
+        String paths = option != null && !option.isBlank() ? option : environment.getProperty("store.snapshot.trusted-keys");
+        List<java.security.PublicKey> keys = new ArrayList<>();
+        if (paths != null) {
+            for (String p : paths.split(",")) {
+                if (!p.isBlank()) {
+                    keys.add(SnapshotSignature.readPublicKey(Path.of(p.trim())));
+                }
+            }
+        }
+        return keys;
     }
 
     public static void ensureDirectory(Path path) {

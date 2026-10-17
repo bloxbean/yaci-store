@@ -214,6 +214,31 @@ class SnapshotImportIT {
     }
 
     @Test
+    void aTrustedSignatureReplacesAllowUnsignedAndABadOneIsNeverAccepted() throws Exception {
+        var built = fixture();
+        com.bloxbean.cardano.yaci.store.snapshot.archive.Checksums.write(built.manifest(), built.manifestPath());
+        var keys = com.bloxbean.cardano.yaci.store.snapshot.manifest.SnapshotSignature.generate(root.resolve("keys"), "pub");
+        var other = com.bloxbean.cardano.yaci.store.snapshot.manifest.SnapshotSignature.generate(root.resolve("keys"), "other");
+        var pub = com.bloxbean.cardano.yaci.store.snapshot.manifest.SnapshotSignature.readPublicKey(keys.publicKey());
+        var otherPub = com.bloxbean.cardano.yaci.store.snapshot.manifest.SnapshotSignature.readPublicKey(other.publicKey());
+        com.bloxbean.cardano.yaci.store.snapshot.manifest.SnapshotSignature.sign(built.manifestPath(),
+                com.bloxbean.cardano.yaci.store.snapshot.manifest.SnapshotSignature.readPrivateKey(keys.privateKey()), pub);
+        var importer = new SnapshotImporter(registry);
+        var strict = new ImportOptions(built.manifestPath(), built.archiveDir(), root.resolve("work"),
+                PostgresSupport.schemaUrl(), PostgresSupport.user(), PostgresSupport.password(),
+                schema, "preprod", 1, 1, 10, 1, "512MB", 0, false, false, List.of(), false, false);
+
+        var trusted = importer.preflight(strict.withTrustedKeys(List.of(pub)));
+        assertThat(trusted.blockers()).isEmpty();
+        assertThat(trusted.signature().trusted()).isTrue();
+        assertThat(importer.preflight(strict).blockers()).anyMatch(b -> b.contains("store.snapshot.trusted-keys"));
+        assertThat(importer.preflight(strict.withTrustedKeys(List.of(otherPub))).blockers())
+                .anyMatch(b -> b.contains("signature verification failed"));
+        assertThat(importer.preflight(options(built.manifestPath(), 1).withTrustedKeys(List.of(otherPub))).blockers())
+                .anyMatch(b -> b.contains("signature verification failed"));
+    }
+
+    @Test
     void scopedImportReadsOnlyThePartsThatCarryItsTables() throws Exception {
         var built = fixtureWithTableSchemas();
         var selected = registry.selectModules(java.util.Set.of("core", "blocks"));
