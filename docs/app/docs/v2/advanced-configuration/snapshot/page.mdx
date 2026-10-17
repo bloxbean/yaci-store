@@ -386,7 +386,8 @@ time writing WAL. These settings cost disk for `pg_wal` and a longer crash recov
 and need no restart. `--tune-postgres` applies them for the import only: it records the server's
 values in the target schema first, restores them after the load (also when the import fails), and
 needs a superuser or `ALTER SYSTEM` granted on those parameters (PostgreSQL 15+). On a server you
-manage you can instead set them permanently.
+manage you can instead set them permanently; the shipped `postgres-compose.yml` sets
+`max_wal_size=16GB` and `checkpoint_timeout=15min`, which also speed up a normal sync.
 
 During the import the loaded tables' keys and the indexes their migrations created are dropped and
 rebuilt after the load, autovacuum is kept off those tables until the end, and every loaded table
