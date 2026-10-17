@@ -18,6 +18,7 @@ import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Against a real S3-compatible service: MinIO locally, Cloudflare R2 for the final check. Runs only
@@ -129,5 +130,33 @@ class S3SnapshotStoreIT {
                 assertThat(anonymous.entry().snapshotId()).isEqualTo(resolved.entry().snapshotId());
             }
         }
+    }
+
+    @Test
+    void aStagedSnapshotIsReadableByIdButOnlyListedOncePromoted() throws Exception {
+        String id = "55555555-5555-5555-5555-555555555555";
+        Path manifest = SnapshotRepositoryTest.snapshot(tmp.resolve("s"), id, 100, null);
+        var repo = new SnapshotRepository(store);
+
+        assertThat(repo.publish(manifest, 2, null).entry().live()).isFalse();
+
+        assertThat(repo.index("preprod").snapshots()).isEmpty();
+        assertThat(repo.resolve("preprod", id, m -> List.of(), null).entry().live()).isFalse();
+        assertThat(repo.scan("preprod", null)).extracting(SnapshotIndex.Entry::snapshotId).containsExactly(id);
+        String publicUrl = env("SNAPSHOT_S3_IT_PUBLIC_URL");
+        if (publicUrl != null && !publicUrl.isBlank()) {
+            try (var http = SnapshotLocations.open(publicUrl.replaceAll("/+$", "") + "/" + run, null)) {
+                var anonymous = new SnapshotRepository(http);
+                assertThatThrownBy(() -> anonymous.resolve("preprod", "latest", m -> List.of(), null))
+                        .hasMessageContaining("No live snapshot");
+                assertThat(anonymous.resolve("preprod", id, m -> List.of(), null).manifest().snapshotId()).isEqualTo(id);
+            }
+        }
+
+        repo.promote("preprod", id);
+
+        assertThat(repo.resolve("preprod", "latest", m -> List.of(), null).entry().snapshotId()).isEqualTo(id);
+        repo.unlist("preprod", id);
+        assertThat(repo.index("preprod").snapshots()).isEmpty();
     }
 }
