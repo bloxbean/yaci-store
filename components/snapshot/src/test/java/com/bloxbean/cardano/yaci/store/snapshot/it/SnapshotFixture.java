@@ -55,12 +55,13 @@ final class SnapshotFixture {
         return build(root, schemaFingerprint, flywayFingerprint, includedSpecIds, snapshotId, false);
     }
 
-    /** {@code address_utxo}'s first day as its history tier, in parts of its own (ADR 0005, D11). */
-    static final String UTXO_HISTORY_PARTITION = "main/address_utxo/date=2026-01-01";
+    /** The day of {@code address_utxo} whose copy is the fixture's pruned tier. */
+    static final String UTXO_PRUNED_PARTITION = "main/address_utxo/date=2026-01-02";
 
     /**
-     * @param utxoHistory package {@code address_utxo}'s {@link #UTXO_HISTORY_PARTITION} as history, with
-     *                    a split keyed {@code address_utxo.spent-safe-blocks=2160}
+     * @param utxoHistory mark {@code address_utxo}'s files full-only and add a pruned tier: a copy of
+     *                    {@link #UTXO_PRUNED_PARTITION}, with a split keyed
+     *                    {@code address_utxo.spent-safe-blocks=2160}
      */
     static Built build(Path root, String schemaFingerprint, String flywayFingerprint,
                        List<String> includedSpecIds, String snapshotId, boolean utxoHistory) throws Exception {
@@ -92,23 +93,28 @@ final class SnapshotFixture {
             List<SnapshotManifest.FileEntry> files = collect(dataDir, "main/" + spec.relation());
             SnapshotManifest.HistorySplit split = null;
             if (utxoHistory && specId.equals("address-utxo")) {
-                List<SnapshotManifest.FileEntry> current = files.stream()
-                        .filter(f -> !f.partition().equals(UTXO_HISTORY_PARTITION)).toList();
-                List<SnapshotManifest.FileEntry> history = files.stream()
-                        .filter(f -> f.partition().equals(UTXO_HISTORY_PARTITION))
-                        .map(f -> new SnapshotManifest.FileEntry(f.path(), f.size(), f.sha256(), f.rowCount(),
-                                f.partition(), true)).toList();
-                files = new ArrayList<>(current);
-                files.addAll(history);
+                List<SnapshotManifest.FileEntry> copy = new ArrayList<>();
+                for (SnapshotManifest.FileEntry f : files) {
+                    if (f.partition().equals(UTXO_PRUNED_PARTITION)) {
+                        String path = UTXO_PRUNED_PARTITION + "/pruned_copy.parquet";
+                        Files.copy(dataDir.resolve(f.path()), dataDir.resolve(path));
+                        copy.add(new SnapshotManifest.FileEntry(path, f.size(), f.sha256(), f.rowCount(), f.partition(),
+                                SnapshotManifest.FileEntry.TIER_PRUNED));
+                    }
+                }
                 split = new SnapshotManifest.HistorySplit("address_utxo.spent-safe-blocks", "2160",
-                        expectedRows(dataDir, spec, current), Map.of());
+                        expectedRows(dataDir, spec, copy), Map.of());
+                List<SnapshotManifest.FileEntry> tiered = new ArrayList<>(copy);
+                files.forEach(f -> tiered.add(new SnapshotManifest.FileEntry(f.path(), f.size(), f.sha256(), f.rowCount(),
+                        f.partition(), SnapshotManifest.FileEntry.TIER_FULL)));
+                files = tiered;
             }
             for (SnapshotManifest.FileEntry f : files) {
                 allFiles.add(f);
                 owners.add(specId);
-                modules.add(spec.module() + (f.inHistory() ? "/history" : ""));
+                modules.add(spec.module() + (f.tier() == null ? "" : "/" + f.tier()));
             }
-            long rows = expectedRows(dataDir, spec, files);
+            long rows = expectedRows(dataDir, spec, files.stream().filter(f -> !f.prunedOnly()).toList());
             tables.add(new SnapshotManifest.TableManifest(spec.id(), spec.specVersion(), spec.digest(),
                     spec.module(), spec.kind().name(), spec.restore().name(), spec.reason(),
                     spec.relation(), spec.source().exporterId(), spec.targetTable(),

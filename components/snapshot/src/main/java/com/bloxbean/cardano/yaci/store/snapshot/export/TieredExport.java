@@ -25,7 +25,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
-import java.util.TreeSet;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -33,26 +32,26 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * Splits the tables a pruning node keeps only part of into a current and a history tier (ADR 0005,
- * D11). Both tiers are in the snapshot, in separate parts: a full import reads both, an import into a
- * target that prunes the table reads only the current tier, so it downloads what a pruned snapshot
- * would have held.
+ * Adds a pruned tier to the tables a pruning node keeps only part of (ADR 0005, D11). The snapshot
+ * keeps every original file, marked {@code full}: a full import loads them as before. For the UTxO
+ * relations it adds a copy of the rows a pruning node holds at the point, marked {@code pruned}: an
+ * import into a target that prunes the table loads only that copy, so it downloads and loads only what
+ * the target keeps. Old {@code epoch_stake} epochs are marked {@code full} too.
  *
  * <ul>
- *   <li>{@code tx_input}: current = inputs spent within the last {@code utxoSafeBlocks} blocks before
- *       the point; history = the older ones;</li>
- *   <li>{@code address_utxo}: current = outputs not spent before that window, so unspent at the point
- *       or spent within the window, which a rollback inside the cursor tail un-spends; history = the
- *       outputs spent before it. Every row of an output is in the same tier;</li>
- *   <li>{@code epoch_stake}: current = the newest {@code epochStakeEpochs} epoch partitions, history =
- *       the older ones, unchanged. The import picks its own number of epochs.</li>
+ *   <li>{@code tx_input}: the pruned copy holds the inputs spent within the last {@code utxoSafeBlocks}
+ *       blocks before the point;</li>
+ *   <li>{@code address_utxo}: the pruned copy holds every row of the outputs not spent before that
+ *       window, so unspent at the point or spent within the window, which a rollback inside the cursor
+ *       tail un-spends;</li>
+ *   <li>{@code epoch_stake}: epochs older than the newest {@code epochStakeEpochs} are marked
+ *       {@code full}; the import picks its own number of epochs.</li>
  * </ul>
  *
- * <p>The UTxO relations are rewritten as Parquet in the same daily partitions and columns, so the
- * importer's transforms, batching and validation are unchanged; rows after the point are left out,
- * as the importer's cutoff would. Every source row up to the point lands in exactly one tier, which is
- * checked before anything is packaged. The anti-join of every output against every spent input works
- * one hash bucket of keys at a time under the export's memory limit.
+ * <p>The copies are Parquet in the same daily partitions and columns as the originals, so the
+ * importer's transforms, batching and validation are unchanged; rows after the point are left out, as
+ * the importer's cutoff would. The anti-join of every output against the inputs spent before the window
+ * works one hash bucket of keys at a time under the export's memory limit.
  */
 final class TieredExport {
 
@@ -63,21 +62,23 @@ final class TieredExport {
     static final String EPOCH_STAKE = "epoch_stake";
 
     private static final Pattern EPOCH_DIRECTORY = Pattern.compile("(?:^|/)epoch=(-?\\d+)(?:/|$)");
-    private static final String CURRENT = "current";
-    private static final String HISTORY = "history";
-
     /**
      * One table's tiers.
      *
-     * @param history paths of the files only a full import needs
-     * @param split   the current tier's rows and bounds, for a table whose current tier an import selects
-     *                by retention key; null when the import selects it otherwise ({@code epoch_stake})
+     * @param tiers {@link SnapshotManifest.FileEntry#TIER_FULL} or {@code TIER_PRUNED} by file path;
+     *              files not in it are loaded by every import
+     * @param split the pruned tier's rows and bounds, for a table whose pruned tier an import selects by
+     *              retention key; null when the import selects its files otherwise ({@code epoch_stake})
      */
-    record Tiers(Set<String> history, SnapshotManifest.HistorySplit split) {}
+    record Tiers(Map<String, String> tiers, SnapshotManifest.HistorySplit split) {
+        String of(String path) {
+            return tiers.get(path);
+        }
+    }
 
     /**
-     * The plans with every file of the split tables (current first, then history), where each rewritten
-     * file is by its path in the snapshot, and each split table's tiers by spec id.
+     * The plans with every file of the split tables (shared, then pruned, then full-only), where each
+     * written file is by its path in the snapshot, and each split table's tiers by spec id.
      */
     record Result(List<TablePlan> plans, Map<String, Path> rewritten, Map<String, Tiers> tiers) {}
 
@@ -113,7 +114,7 @@ final class TieredExport {
         List<TablePlan> out = new ArrayList<>();
 
         long windowSlot = windowStartSlot(point, utxoSafeBlocks, snapshotId);
-        say(String.format("Current tier: UTxOs unspent at block %d or spent from block %d (slot %d) on; epoch_stake"
+        say(String.format("Pruned tier: UTxOs unspent at block %d or spent from block %d (slot %d) on; epoch_stake"
                 + " from the newest %d epochs", point.blockNumber(), point.blockNumber() - utxoSafeBlocks, windowSlot,
                 epochStakeEpochs));
 
@@ -162,33 +163,21 @@ final class TieredExport {
         return slot;
     }
 
-    /**
-     * Files entirely before the window go to history unread; the others are rewritten into both tiers
-     * by {@code spent_at_slot}.
-     */
+    /** The pruned copy: the inputs spent within the window, from the files not entirely before it. */
     private TablePlan splitTxInput(Connection duck, TablePlan plan, ConsistencyPoint point, long windowSlot,
                                    long snapshotId, int safeBlocks, Map<String, Path> rewritten,
                                    Map<String, Tiers> tiers) throws SQLException, IOException {
         long started = System.currentTimeMillis();
         Set<String> before = catalog.fileRowCountsEntirelyBelow(TX_INPUT, "spent_at_slot", windowSlot - 1, snapshotId).keySet();
-        List<DuckLakeFile> unread = plan.files().stream().filter(f -> before.contains(f.relativePath())).toList();
         List<DuckLakeFile> candidates = plan.files().stream().filter(f -> !before.contains(f.relativePath())).toList();
-        Written w = candidates.isEmpty() ? new Written(List.of(), List.of())
-                : write(duck, plan, "SELECT *, spent_at_slot < " + windowSlot + " AS __history FROM "
-                + DuckDb.readParquet(catalog.parquetList(candidates)) + " WHERE spent_at_slot <= " + point.slot(), rewritten);
-
-        List<DuckLakeFile> history = new ArrayList<>(unread);
-        history.addAll(w.history());
-        long currentRows = rows(w.current());
-        long historyRows = rows(history);
-        if (currentRows + historyRows != plan.rowCount()) {
-            throw new IllegalStateException(String.format("tx_input tiers hold %,d + %,d rows, but the table has %,d"
-                    + " up to the point", currentRows, historyRows, plan.rowCount()));
-        }
-        say(String.format("tx_input: %,d current and %,d history rows (%d files rewritten, %d unchanged) in %s",
-                currentRows, historyRows, candidates.size(), unread.size(),
+        List<DuckLakeFile> copy = candidates.isEmpty() ? List.of()
+                : write(duck, plan, "SELECT * FROM " + DuckDb.readParquet(catalog.parquetList(candidates))
+                + " WHERE spent_at_slot <= " + point.slot() + " AND spent_at_slot >= " + windowSlot, rewritten);
+        long rows = rows(copy);
+        say(String.format("tx_input: %,d of %,d rows in the pruned tier, from %d of %d files, in %s", rows,
+                plan.rowCount(), candidates.size(), plan.files().size(),
                 Progress.duration(System.currentTimeMillis() - started)));
-        return tiered(duck, plan, w.current(), history, currentRows, Retention.TX_INPUT_SAFE_BLOCKS, safeBlocks, tiers);
+        return tiered(duck, plan, copy, rows, Retention.TX_INPUT_SAFE_BLOCKS, safeBlocks, tiers);
     }
 
     /** Spent keys and output keys are split into this many buckets, so each join holds 1/BUCKETS of them. */
@@ -197,15 +186,14 @@ final class TieredExport {
     static final int PARTITIONS_PER_WRITE = 32;
 
     /**
-     * Outputs not spent before the window are current, the others history. Memory is bounded by a
+     * The pruned copy: every row of the outputs not spent before the window. Memory is bounded by a
      * bucket, not by the chain:
      *
      * <ol>
      *   <li>the keys of inputs spent before the window, and the keys of every output at the point, are
      *       written to the spill directory in {@link #BUCKETS} buckets by {@code hash(tx_hash)};</li>
-     *   <li>each bucket's outputs are anti-joined with its spent keys, giving the current outputs;</li>
-     *   <li>every row up to the point is written, {@link #PARTITIONS_PER_WRITE} date partitions at a
-     *       time, to the current tier when its output is current and to history otherwise.</li>
+     *   <li>each bucket's outputs are anti-joined with its spent keys, giving the kept outputs;</li>
+     *   <li>the kept outputs' rows are written {@link #PARTITIONS_PER_WRITE} date partitions at a time.</li>
      * </ol>
      */
     private TablePlan splitAddressUtxo(Connection duck, TablePlan plan, TablePlan spent, ConsistencyPoint point,
@@ -249,10 +237,10 @@ final class TieredExport {
                         + Identifiers.literal(kept.resolve("kept_" + b + ".parquet").toString()) + " (FORMAT parquet)");
             }
             long outputsKept = DuckDb.queryLong(duck, "SELECT count(*) FROM " + DuckDb.readParquet(glob(kept)), 0);
-            say(String.format("address_utxo: %,d of %,d outputs current, %s so far", outputsKept, plan.rowCount(),
+            say(String.format("address_utxo: %,d of %,d outputs kept, %s so far", outputsKept, plan.rowCount(),
                     Progress.duration(System.currentTimeMillis() - started)));
 
-            // Every row, a few date partitions at a time, into the tier of its output.
+            // The kept outputs' rows, a few date partitions at a time.
             Map<String, List<DuckLakeFile>> byPartition = plan.files().stream()
                     .collect(Collectors.groupingBy(DuckLakeFile::partition, TreeMap::new, Collectors.toList()));
             List<List<DuckLakeFile>> chunks = new ArrayList<>();
@@ -268,27 +256,23 @@ final class TieredExport {
             if (!chunk.isEmpty()) {
                 chunks.add(chunk);
             }
-            long sourceRows = 0;
-            Written w = new Written(List.of(), List.of());
+            List<DuckLakeFile> copy = List.of();
             for (List<DuckLakeFile> c : chunks) {
                 String rows = DuckDb.readParquet(catalog.parquetList(c));
-                sourceRows += DuckDb.queryLong(duck, "SELECT count(*) FROM " + rows + " WHERE slot <= " + point.slot(), 0);
-                w = write(duck, plan, "SELECT u.*, NOT EXISTS (SELECT 1 FROM (SELECT tx_hash, output_index FROM "
+                copy = write(duck, plan, "SELECT u.* FROM " + rows + " u SEMI JOIN (SELECT tx_hash, output_index FROM "
                         + DuckDb.readParquet(glob(kept)) + " WHERE \"date\" IN (SELECT DISTINCT \"date\" FROM " + rows + ")) k"
-                        + " WHERE k.tx_hash = u.tx_hash AND k.output_index = u.output_index) AS __history"
-                        + " FROM " + rows + " u WHERE u.slot <= " + point.slot(), rewritten);
+                        + " ON u.tx_hash = k.tx_hash AND u.output_index = k.output_index WHERE u.slot <= " + point.slot(),
+                        rewritten);
             }
-            long currentRows = rows(w.current());
-            long historyRows = rows(w.history());
-            if (currentRows + historyRows != sourceRows) {
-                throw new IllegalStateException(String.format("address_utxo tiers hold %,d + %,d rows, but the source has"
-                        + " %,d up to the point", currentRows, historyRows, sourceRows));
+            long copied = DuckDb.queryLong(duck, "SELECT count(*) FROM (SELECT DISTINCT tx_hash, output_index FROM "
+                    + DuckDb.readParquet(paths(copy)) + ")", -1);
+            if (copied != outputsKept) {
+                throw new IllegalStateException(String.format("address_utxo's pruned tier holds %,d outputs, not the"
+                        + " %,d kept", copied, outputsKept));
             }
-            say(String.format("address_utxo: %,d current and %,d history rows in %d files, written in %s", currentRows,
-                    historyRows, w.current().size() + w.history().size(),
-                    Progress.duration(System.currentTimeMillis() - started)));
-            return tiered(duck, plan, w.current(), w.history(), outputsKept, Retention.UTXO_SPENT_SAFE_BLOCKS,
-                    safeBlocks, tiers);
+            say(String.format("address_utxo: %,d rows of %,d outputs in %d files, written in %s", rows(copy), copied,
+                    copy.size(), Progress.duration(System.currentTimeMillis() - started)));
+            return tiered(duck, plan, copy, outputsKept, Retention.UTXO_SPENT_SAFE_BLOCKS, safeBlocks, tiers);
         } finally {
             deleteRecursively(work);
         }
@@ -304,41 +288,21 @@ final class TieredExport {
         return Identifiers.literal(dir.resolve("**/*.parquet").toString());
     }
 
-    /** Every file written so far, by tier. */
-    private record Written(List<DuckLakeFile> current, List<DuckLakeFile> history) {}
-
     /**
-     * Runs {@code select}, whose last column {@code __history} names each row's tier, into Parquet under
-     * the relation's own layout: one directory per {@code date}, as the source export has, so batching
-     * and dependency narrowing are unchanged. Files are named by tier, so both share a partition.
+     * Runs {@code select} into Parquet under the relation's own directory layout: one directory per
+     * {@code date}, as the source export has, so batching and dependency narrowing are unchanged.
+     *
+     * @return every file written for the relation so far
      */
-    private Written write(Connection duck, TablePlan plan, String select, Map<String, Path> rewritten)
+    private List<DuckLakeFile> write(Connection duck, TablePlan plan, String select, Map<String, Path> rewritten)
             throws SQLException, IOException {
         String prefix = relationPrefix(plan);
         Path dir = outDir.resolve(prefix);
-        Path staging = outDir.resolve(".staging");
-        deleteRecursively(staging);
         Files.createDirectories(dir);
-        // Partitioned by a copy of the date, so the date column itself stays in the file and the tier
-        // column does not.
-        DuckDb.exec(duck, "COPY (SELECT *, \"date\" AS __date FROM (" + select + ")) TO "
-                + Identifiers.literal(staging.toAbsolutePath().toString())
-                + " (FORMAT parquet, COMPRESSION zstd, PARTITION_BY (__history, __date), WRITE_PARTITION_COLUMNS false,"
-                + " FILENAME_PATTERN 'part_{uuid}')");
-        try (Stream<Path> walk = Files.walk(staging)) {
-            for (Path p : walk.filter(f -> f.toString().endsWith(".parquet")).sorted().toList()) {
-                Path rel = staging.relativize(p);
-                String tier = rel.getName(0).toString().equals("__history=true") ? HISTORY : CURRENT;
-                String date = rel.getName(1).toString().substring("__date=".length());
-                Path target = dir.resolve("date=" + date).resolve(tier + "_" + p.getFileName());
-                Files.createDirectories(target.getParent());
-                Files.move(p, target);
-            }
-        } finally {
-            deleteRecursively(staging);
-        }
-        List<DuckLakeFile> current = new ArrayList<>();
-        List<DuckLakeFile> history = new ArrayList<>();
+        DuckDb.exec(duck, "COPY (" + select + ") TO " + Identifiers.literal(dir.toAbsolutePath().toString())
+                + " (FORMAT parquet, COMPRESSION zstd, PARTITION_BY (\"date\"), WRITE_PARTITION_COLUMNS true,"
+                + " FILENAME_PATTERN 'pruned_{uuid}', OVERWRITE_OR_IGNORE true)");
+        List<DuckLakeFile> files = new ArrayList<>();
         try (Stream<Path> walk = Files.walk(dir)) {
             for (Path p : walk.filter(f -> f.toString().endsWith(".parquet")).sorted().toList()) {
                 String rel = prefix + "/" + dir.relativize(p).toString().replace('\\', '/');
@@ -349,27 +313,32 @@ final class TieredExport {
                     known = new DuckLakeFile(rel, rows, Files.size(p));
                     counted.put(rel, known);
                 }
-                (p.getFileName().toString().startsWith(HISTORY + "_") ? history : current).add(known);
+                files.add(known);
                 rewritten.put(rel, p.toAbsolutePath());
             }
         }
-        current.sort(Comparator.comparing(DuckLakeFile::relativePath));
-        history.sort(Comparator.comparing(DuckLakeFile::relativePath));
-        return new Written(current, history);
+        files.sort(Comparator.comparing(DuckLakeFile::relativePath));
+        return files;
+    }
+
+    private String paths(List<DuckLakeFile> files) {
+        return files.stream().map(f -> Identifiers.literal(outDir.resolve(f.relativePath()).toString()))
+                .collect(Collectors.joining(", ", "[", "]"));
     }
 
     /**
-     * The table with its current files first, then its history files; its row count and bounds stay the
-     * whole table's, and the current tier's go in the split.
+     * The table with its pruned copy first, then its original files marked full-only; its row count and
+     * bounds stay the whole table's, and the copy's go in the split.
      */
-    private TablePlan tiered(Connection duck, TablePlan plan, List<DuckLakeFile> current, List<DuckLakeFile> history,
-                             long currentRows, String key, int value, Map<String, Tiers> tiers) throws SQLException {
-        Map<String, String> bounds = bounds(duck, plan, current);
-        tiers.put(plan.spec().id(), new Tiers(history.stream().map(DuckLakeFile::relativePath)
-                .collect(Collectors.toCollection(TreeSet::new)),
-                new SnapshotManifest.HistorySplit(key, Integer.toString(value), currentRows, bounds)));
-        List<DuckLakeFile> files = new ArrayList<>(current);
-        files.addAll(history);
+    private TablePlan tiered(Connection duck, TablePlan plan, List<DuckLakeFile> copy, long copyRows, String key,
+                             int value, Map<String, Tiers> tiers) throws SQLException {
+        Map<String, String> byPath = new LinkedHashMap<>();
+        copy.forEach(f -> byPath.put(f.relativePath(), SnapshotManifest.FileEntry.TIER_PRUNED));
+        plan.files().forEach(f -> byPath.put(f.relativePath(), SnapshotManifest.FileEntry.TIER_FULL));
+        tiers.put(plan.spec().id(), new Tiers(byPath,
+                new SnapshotManifest.HistorySplit(key, Integer.toString(value), copyRows, bounds(duck, plan, copy))));
+        List<DuckLakeFile> files = new ArrayList<>(copy);
+        files.addAll(plan.files());
         return new TablePlan(plan.spec(), files, plan.rowCount(), plan.exactRowCount(), plan.sourceColumns(),
                 plan.bounds(), plan.columnFingerprint(), plan.problems());
     }
@@ -380,8 +349,7 @@ final class TieredExport {
         if (files.isEmpty()) {
             return bounds;
         }
-        String scan = DuckDb.readParquet(files.stream().map(f -> Identifiers.literal(outDir.resolve(f.relativePath()).toString()))
-                .collect(Collectors.joining(", ", "[", "]")));
+        String scan = DuckDb.readParquet(paths(files));
         for (String column : plan.spec().validation().bounds()) {
             String q = Identifiers.quote(column);
             try (Statement st = duck.createStatement();
@@ -395,7 +363,7 @@ final class TieredExport {
         return bounds;
     }
 
-    /** The newest {@code epochs} epoch partitions are current, the older ones history; nothing is rewritten. */
+    /** Epoch partitions older than the newest {@code epochs} are full-only; nothing is rewritten. */
     private TablePlan splitEpochs(TablePlan plan, int epochs, Map<String, Tiers> tiers) {
         long fileRows = rows(plan.files());
         if (fileRows != plan.rowCount()) {
@@ -414,10 +382,11 @@ final class TieredExport {
         int oldestCurrent = newest - epochs + 1;
         List<DuckLakeFile> current = plan.files().stream().filter(f -> epochOf.get(f) >= oldestCurrent).toList();
         List<DuckLakeFile> history = plan.files().stream().filter(f -> epochOf.get(f) < oldestCurrent).toList();
-        say(String.format("epoch_stake: epochs %d to %d current (%,d rows), %d older epochs history (%,d rows)",
+        say(String.format("epoch_stake: epochs %d to %d for every import (%,d rows), %d older epochs full-only (%,d rows)",
                 oldestCurrent, newest, rows(current), history.stream().map(epochOf::get).distinct().count(), rows(history)));
-        tiers.put(plan.spec().id(), new Tiers(history.stream().map(DuckLakeFile::relativePath)
-                .collect(Collectors.toCollection(TreeSet::new)), null));
+        Map<String, String> byPath = new LinkedHashMap<>();
+        history.forEach(f -> byPath.put(f.relativePath(), SnapshotManifest.FileEntry.TIER_FULL));
+        tiers.put(plan.spec().id(), new Tiers(byPath, null));
         List<DuckLakeFile> files = new ArrayList<>(current);
         files.addAll(history);
         return new TablePlan(plan.spec(), files, plan.rowCount(), plan.exactRowCount(), plan.sourceColumns(),

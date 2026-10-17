@@ -232,12 +232,13 @@ class SnapshotImportIT {
         assertThat(pre.warnings()).anyMatch(w -> w.startsWith("address_utxo: current rows only"));
         assertThat(pre.manifest().retention()).containsEntry("address_utxo.spent-safe-blocks", "2160");
         var selection = importer.selection(pre.archive(), pre.manifest());
-        assertThat(selection.files()).noneMatch(f -> f.startsWith(SnapshotFixture.UTXO_HISTORY_PARTITION));
+        assertThat(selection.files()).filteredOn(f -> f.startsWith("main/address_utxo/"))
+                .containsExactly(SnapshotFixture.UTXO_PRUNED_PARTITION + "/pruned_copy.parquet");
         var layout = com.bloxbean.cardano.yaci.store.snapshot.archive.PartLayout.of(built.manifest());
         assertThat(layout.exact()).isTrue();
         assertThat(selection.parts()).hasSizeLessThan(built.manifest().parts().size())
                 .noneMatch(p -> layout.files(p.partNumber()).stream()
-                        .anyMatch(f -> f.startsWith(SnapshotFixture.UTXO_HISTORY_PARTITION)));
+                        .anyMatch(f -> f.startsWith("main/address_utxo/") && !f.endsWith("pruned_copy.parquet")));
 
         importer.importSnapshot(options(built.manifestPath(), 1, java.util.Map.of(), pruning), null);
 
@@ -257,7 +258,8 @@ class SnapshotImportIT {
         var pre = importer.preflight(options(built.manifestPath(), 1, java.util.Map.of(), wider));
         assertThat(pre.blockers()).isEmpty();
         assertThat(pre.warnings()).anyMatch(w -> w.startsWith("address_utxo: full history, because"));
-        assertThat(importer.selection(pre.archive(), pre.manifest()).parts()).hasSameSizeAs(built.manifest().parts());
+        // A full import never loads the pruned copy, so no output is loaded twice.
+        assertThat(importer.selection(pre.archive(), pre.manifest()).files()).noneMatch(f -> f.endsWith("pruned_copy.parquet"));
 
         importer.importSnapshot(options(built.manifestPath(), 1, java.util.Map.of(), java.util.Map.of()), null);
 

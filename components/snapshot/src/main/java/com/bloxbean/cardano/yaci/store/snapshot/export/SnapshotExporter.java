@@ -219,13 +219,13 @@ public class SnapshotExporter {
             String baseName = String.format("yaci-%s-e%d-%s", options.network(),
                     report.completedEpoch(), snapshotId.substring(0, 8));
 
-            // The history split rewrites the UTxO relations into a current and a history tier; the
-            // rewritten files are packaged from the work directory instead of the analytics directory.
+            // The history split adds a pruned copy of the UTxO relations, packaged from the work directory;
+            // every original file is still packaged, marked full-only.
             List<TablePlan> planned = report.plans();
             Map<String, Path> rewritten = Map.of();
             Map<String, TieredExport.Tiers> tiers = Map.of();
             if (options.historySplit()) {
-                Progress.phase(progress, "Splitting address_utxo, tx_input and epoch_stake into current and history tiers");
+                Progress.phase(progress, "Adding the pruned tier: address_utxo and tx_input as a pruning node holds them");
                 TieredExport.Result split = new TieredExport(catalog, options.workDir(), options.memoryLimit(), progress)
                         .apply(planned, report.point(), report.ducklakeSnapshotId(), options.utxoSafeBlocks(),
                                 options.epochStakeEpochs());
@@ -285,14 +285,14 @@ public class SnapshotExporter {
                 List<SnapshotManifest.FileEntry> entries = new ArrayList<>();
                 for (DuckLakeFile f : plan.files()) {
                     Digests.FileDigest d = digests.get(at++);
-                    boolean history = tier != null && tier.history().contains(f.relativePath());
+                    String fileTier = tier == null ? null : tier.of(f.relativePath());
                     SnapshotManifest.FileEntry fe = new SnapshotManifest.FileEntry(
-                            f.relativePath(), d.size(), d.sha256(), f.rowCount(), f.partition(), history ? true : null);
+                            f.relativePath(), d.size(), d.sha256(), f.rowCount(), f.partition(), fileTier);
                     entries.add(fe);
                     allEntries.add(fe);
                     owners.add(plan.spec().id());
-                    // History goes in parts of its own, so an import that skips it skips whole parts.
-                    modules.add(plan.spec().module() + (history ? "/history" : ""));
+                    // Each tier goes in parts of its own, so an import that skips it skips whole parts.
+                    modules.add(plan.spec().module() + (fileTier == null ? "" : "/" + fileTier));
                     crcs.put(f.relativePath(), d.crc32());
                 }
                 tableManifests.add(toTableManifest(plan, entries, tier == null ? null : tier.split()));

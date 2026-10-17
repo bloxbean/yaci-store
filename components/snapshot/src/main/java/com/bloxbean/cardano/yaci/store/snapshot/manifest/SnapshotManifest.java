@@ -159,8 +159,8 @@ public record SnapshotManifest(
             List<FileEntry> files,
             String contractDigest,
             /**
-             * Set when some of {@link #files} are marked {@link FileEntry#history}: what an import that
-             * prunes this table loads instead of the whole table. Null for a table without history files.
+             * Set when the table has a pruned tier ({@link FileEntry#tier}): what an import that prunes
+             * this table loads instead of the whole table. Null for a table without one.
              */
             HistorySplit historySplit
     ) {
@@ -195,9 +195,10 @@ public record SnapshotManifest(
     }
 
     /**
-     * The current tier of a table whose history is packaged in separate parts (ADR 0005, D11). An import
-     * whose retention includes {@code key=value} loads the files not marked history: {@code rowCount}
-     * rows, with {@code bounds}. A full import loads every file and expects the table's own count.
+     * The pruned tier of a table (ADR 0005, D11). An import whose retention includes {@code key=value}
+     * loads the files not marked {@link FileEntry#TIER_FULL}: {@code rowCount} rows, with {@code bounds}.
+     * A full import loads the files not marked {@link FileEntry#TIER_PRUNED} and expects the table's own
+     * count and bounds.
      *
      * @param key   a {@code Retention} key, e.g. {@code address_utxo.spent-safe-blocks}
      * @param value the window the split was made with, e.g. {@code 2160}
@@ -207,8 +208,9 @@ public record SnapshotManifest(
     /**
      * One packaged Parquet file, with the path it must be restored to relative to the data dir.
      *
-     * @param history true for a file only a full import needs (ADR 0005, D11); null otherwise, so
-     *                manifests without history files are unchanged
+     * @param tier which imports load the file (ADR 0005, D11): {@link #TIER_FULL} only a full import,
+     *             {@link #TIER_PRUNED} only an import that prunes the table, null both. Null is omitted
+     *             from the JSON, so manifests without tiers are unchanged.
      */
     public record FileEntry(
             String path,
@@ -216,14 +218,23 @@ public record SnapshotManifest(
             String sha256,
             long rowCount,
             String partition,
-            Boolean history
+            String tier
     ) {
+        /** Only a full import loads it: the table's history, or its whole original export. */
+        public static final String TIER_FULL = "full";
+        /** Only an import that prunes the table loads it: the current rows, rewritten. */
+        public static final String TIER_PRUNED = "pruned";
+
         public FileEntry(String path, long size, String sha256, long rowCount, String partition) {
             this(path, size, sha256, rowCount, partition, null);
         }
 
-        public boolean inHistory() {
-            return Boolean.TRUE.equals(history);
+        public boolean fullOnly() {
+            return TIER_FULL.equals(tier);
+        }
+
+        public boolean prunedOnly() {
+            return TIER_PRUNED.equals(tier);
         }
     }
 

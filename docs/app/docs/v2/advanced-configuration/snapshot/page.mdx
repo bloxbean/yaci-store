@@ -226,8 +226,8 @@ while extracting, so it is optional.
 | `--signing-key` | `store.snapshot.signing-key` | Ed25519 private key (PEM) to sign the snapshot with |
 | `--unsigned` | `false` | Produce an unsigned snapshot (required when no signing key is set) |
 | `--verify` | `false` | Re-read and checksum every written part before publishing the manifest |
-| `--history-split` | `true` | Put the history of the tables a pruning node trims in parts of its own ([current and history tiers](#current-and-history-tiers)) |
-| `--utxo-safe-blocks`, `--epoch-stake-epochs` | `2160`, `8` | History split: the spent-output window and the `epoch_stake` epochs in the current tier |
+| `--history-split` | `true` | Add a pruned tier for the tables a pruning node trims ([full and pruned tiers](#full-and-pruned-tiers)) |
+| `--utxo-safe-blocks`, `--epoch-stake-epochs` | `2160`, `8` | History split: the spent-output window and the `epoch_stake` epochs in the pruned tier |
 | `--publish`, `--live`, `--remote` | `false` | Upload the snapshot when the export succeeds, staged unless `--live` ([publishing](#publishing-and-downloading-snapshots)) |
 | `--spec-file`, `--allow-custom-specs` | – | Operator-supplied specifications |
 
@@ -238,41 +238,40 @@ omit committed WAL entries. Analytics writes, compaction, and garbage collection
 throughout export.
 </Callout>
 
-### Current and history tiers
+### Full and pruned tiers
 
-One snapshot serves both full and pruning targets. Export splits each table that a pruning node
-trims into a current tier and a history tier, and puts each tier in parts of its own:
+One snapshot serves both full and pruning targets. For each table a pruning node trims, the
+snapshot holds the full table and a small *pruned tier*, each in parts of its own:
 
-| Table | Current tier | History tier |
+| Table | Full import loads | Pruning import loads |
 |---|---|---|
-| `address_utxo` | Outputs unspent at the point, plus outputs spent within the last `--utxo-safe-blocks` blocks (default 2160) | Outputs spent before that window |
-| `tx_input` | Inputs spent within the last `--utxo-safe-blocks` blocks | Older inputs |
-| `epoch_stake` | The newest `--epoch-stake-epochs` epochs (default 8, at least 4) | Older epochs |
+| `address_utxo` | Every original file | A copy of the rows of outputs unspent at the point, or spent within the last `--utxo-safe-blocks` blocks (default 2160) |
+| `tx_input` | Every original file | A copy of the inputs spent within the last `--utxo-safe-blocks` blocks |
+| `epoch_stake` | Every epoch | The newest `--epoch-stake-epochs` epochs (default 8, at least 4); older epochs are in parts of their own |
 
-A full import reads both tiers and loads exactly what it would without the split. An import into a
-target that prunes these tables reads only the current tier, so it downloads, extracts and loads
-only what the target keeps. The choice comes from the target's own configuration:
+A full import loads exactly what it would from a snapshot without tiers. An import into a target that
+prunes these tables reads only the pruned tier, so it downloads, extracts and loads only what the
+target keeps. On mainnet the pruned copy is about 1 GiB, against 51.6 GiB for the two full tables. The
+choice comes from the target's own configuration:
 
 | Target setting | Effect |
 |---|---|
-| `store.utxo.pruning-enabled=true`, `store.utxo.pruning-safe-blocks` at most the snapshot's window | `address_utxo` and `tx_input`: current tier only |
-| `store.utxo.pruning-enabled=true`, a wider `store.utxo.pruning-safe-blocks` | Both tiers; the target's pruning service removes the rest |
+| `store.utxo.pruning-enabled=true`, `store.utxo.pruning-safe-blocks` at most the snapshot's window | `address_utxo` and `tx_input`: pruned tier only |
+| `store.utxo.pruning-enabled=true`, a wider `store.utxo.pruning-safe-blocks` | The full tables; the target's pruning service removes the rest |
 | `store.adapot.epoch-stake-pruning-enabled=true` | `epoch_stake`: the newest `store.adapot.epoch-stake-safe-epochs` epochs (default 8), or `--epoch-stake-epochs` |
-| Pruning off | Both tiers |
+| Pruning off | The full tables |
 
 The window keeps exactly what a rollback within the 2160-block cursor tail needs: rolling back an
-input un-spends its output, which must still exist. The UTxO tables are rewritten into the work
-directory as Parquet, in the same daily partitions and columns, with each output's rows in one tier.
-An anti-join of every output against the inputs spent before the window works through 64 hash
-buckets of keys, under `--memory-limit`, spilling to the work directory. Export checks that every
-source row up to the point is in exactly one tier before it packages anything. On mainnet, the
-UTxO split adds about 10 minutes to an export.
+input un-spends its output, which must still exist. The pruned copy is written to the work directory
+as Parquet, in the same daily partitions and columns, with every row of a kept output. An anti-join of
+every output against the inputs spent before the window works through 64 hash buckets of keys under
+`--memory-limit`, spilling to the work directory. On mainnet it adds about 5 minutes to an export.
 
-The manifest marks each history file and records each split: its key and window (for example
-`address_utxo.spent-safe-blocks=2160`) and the current tier's row count and bounds, which validation
-checks. A pruned node has the usual limitations of pruning: address and transaction history only
-covers unspent outputs and recent spends, `epoch_stake` only recent epochs, and a rollback deeper
-than the window is not possible.
+The manifest marks each file `full` (only a full import loads it) or `pruned` (only a pruning import
+loads it), and records each split: its key and window (for example `address_utxo.spent-safe-blocks=2160`)
+and the pruned tier's row count and bounds, which validation checks. A pruned node has the usual
+limitations of pruning: address and transaction history only covers unspent outputs and recent spends,
+`epoch_stake` only recent epochs, and a rollback deeper than the window is not possible.
 
 ### Archive layout
 
@@ -452,7 +451,7 @@ snapshot import --manifest <manifest> \
 | `--tune-postgres` | `false` | Raise `max_wal_size`, `checkpoint_timeout` and `wal_compression` with `ALTER SYSTEM` for the import, then restore them |
 | `--epoch-stake-epochs` | target's | Load only the newest N epochs of `epoch_stake` (at least 4). Default: `store.adapot.epoch-stake-safe-epochs` when the target prunes `epoch_stake`, otherwise every epoch |
 
-A target that prunes loads only what it keeps ([current and history tiers](#current-and-history-tiers)).
+A target that prunes loads only what it keeps ([full and pruned tiers](#full-and-pruned-tiers)).
 The dry run says, per table, which tier it loads and why. `--epoch-stake-epochs` restores what a node
 running `EpochStakePruningService` would hold. Mainnet's `epoch_stake` is 500M rows over 452 epochs,
 about 1M rows per epoch, so keeping 8 epochs skips almost all of it, and the parts that carry only

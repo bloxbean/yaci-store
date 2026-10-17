@@ -88,7 +88,7 @@ public final class Retention {
                 }
             }
             out.put(split.key(), split.value());
-            notes.put(t.targetTable(), String.format("%s: current rows only (%s=%s), its history parts are skipped",
+            notes.put(t.targetTable(), String.format("%s: current rows only (%s=%s), from its pruned tier; the full table's parts are skipped",
                     t.targetTable(), split.key(), split.value()));
         }
         return out;
@@ -138,18 +138,25 @@ public final class Retention {
     }
 
     /**
-     * The manifest an import with {@code extra} sees: a {@code key=value} that matches a table's
-     * {@link SnapshotManifest.HistorySplit} keeps its current tier, and each {@code <table>.epochs=N}
-     * keeps that table's newest N epoch partitions. The manifest records the combined retention. Parts
-     * are unchanged: a skipped file is simply not extracted, and a part holding only skipped files is
-     * not read. Without {@code extra}, the manifest is returned as is.
+     * The manifest an import with {@code extra} sees. A table with a {@link SnapshotManifest.HistorySplit}
+     * whose {@code key=value} is in {@code extra} keeps its pruned tier (every file not marked
+     * {@code full}), with the split's count and bounds; otherwise it keeps every file not marked
+     * {@code pruned}. Each {@code <table>.epochs=N} keeps that table's newest N epoch partitions. The
+     * manifest records the combined retention. Parts are unchanged: a skipped file is simply not
+     * extracted, and a part holding only skipped files is not read. A manifest without tiers and an
+     * empty {@code extra} is returned as is.
      *
      * @throws IllegalArgumentException when an entry matches no table, or a table's files are not one
      *                                  epoch per partition, or its row count is not the sum of its
      *                                  files', so the kept rows could not be counted from the manifest
      */
     public static SnapshotManifest apply(SnapshotManifest manifest, Map<String, String> extra) {
-        if (extra == null || extra.isEmpty()) {
+        if (extra == null) {
+            extra = Map.of();
+        }
+        boolean tiered = manifest.tables().stream().anyMatch(t -> t.files() != null
+                && t.files().stream().anyMatch(SnapshotManifest.FileEntry::prunedOnly));
+        if (extra.isEmpty() && !tiered) {
             return manifest;
         }
         java.util.Set<String> used = new java.util.HashSet<>();
@@ -158,8 +165,11 @@ public final class Retention {
             SnapshotManifest.TableManifest view = t;
             SnapshotManifest.HistorySplit split = t.historySplit();
             if (split != null && split.value().equals(extra.get(split.key()))) {
-                view = currentTier(t, split);
+                view = prunedTier(t, split);
                 used.add(split.key());
+            } else if (t.files() != null && t.files().stream().anyMatch(SnapshotManifest.FileEntry::prunedOnly)) {
+                view = t.reduced(t.files().stream().filter(f -> !f.prunedOnly()).toList(), t.rowCount(),
+                        t.bounds() == null ? Map.of() : t.bounds());
             }
             String epochs = extra.get(t.targetTable() + EPOCHS);
             if (epochs != null) {
@@ -178,13 +188,13 @@ public final class Retention {
         }
         Map<String, String> combined = new TreeMap<>(manifest.retentionOrEmpty());
         combined.putAll(extra);
-        return manifest.withTables(tables, manifest.flavor(), combined);
+        return manifest.withTables(tables, manifest.flavor(), combined.isEmpty() ? manifest.retention() : combined);
     }
 
-    private static SnapshotManifest.TableManifest currentTier(SnapshotManifest.TableManifest t,
-                                                              SnapshotManifest.HistorySplit split) {
-        List<SnapshotManifest.FileEntry> current = t.files().stream().filter(f -> !f.inHistory()).toList();
-        return t.reduced(current, split.rowCount(), split.bounds() == null ? Map.of() : split.bounds());
+    private static SnapshotManifest.TableManifest prunedTier(SnapshotManifest.TableManifest t,
+                                                             SnapshotManifest.HistorySplit split) {
+        List<SnapshotManifest.FileEntry> kept = t.files().stream().filter(f -> !f.fullOnly()).toList();
+        return t.reduced(kept, split.rowCount(), split.bounds() == null ? Map.of() : split.bounds());
     }
 
     private static SnapshotManifest.TableManifest keepNewestEpochs(SnapshotManifest.TableManifest t, int epochs) {

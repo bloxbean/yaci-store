@@ -170,7 +170,7 @@ by epoch partition value. It is enabled only where a pruning service defines the
 
 ### D8 — Pruned snapshots are built at export (superseded by D11)
 
-*Superseded by D11: the pruning is still done at export, but its output is the current tier of the
+*Superseded by D11: the pruning is still done at export, but its output is the pruned tier of the
 one full snapshot rather than a second artifact. The reasoning below still applies to that tier.*
 
 A *pruned* snapshot (`snapshot export --flavor pruned`) holds what a node running the matching
@@ -273,41 +273,40 @@ store.snapshot.trusted-keys=/etc/yaci/snapshot-signing.pub
 `--remote` accepts any D1 location, so `snapshot import --remote https://snapshots.example.org/v1`
 needs no credentials at all.
 
-### D11 — One snapshot, with a current and a history tier
+### D11 — One snapshot, with a full and a pruned tier
 
 Publishing a full and a pruned snapshot doubles the bucket storage (about 141 + 73 GiB per mainnet
 snapshot) and the upload, and makes users choose between two artifacts. Pruning at import instead
 keeps one artifact but costs every pruning user the full UTxO download, plus the anti-join on their
-machine. Instead, the export packages the pruned tables in two tiers, each in parts of its own:
+machine. Instead, the one snapshot carries both forms of the pruned tables, each in parts of its own:
 
-| Table | Current tier | History tier |
-|---|---|---|
-| `address_utxo` | Outputs unspent at the point, or spent within the window (D8) | Outputs spent before the window, rewritten |
-| `tx_input` | Inputs spent within the window | Older inputs: the files entirely before the window unchanged, plus the boundary rows |
-| `epoch_stake` | The newest 8 epochs | Older epochs, unchanged |
+| Table | `full` (full import only) | `pruned` (pruning import only) | both |
+|---|---|---|---|
+| `address_utxo` | Every original file, unchanged | A copy of every row of the outputs unspent at the point or spent within the window (D8) | |
+| `tx_input` | Every original file, unchanged | A copy of the inputs spent within the window | |
+| `epoch_stake` | Epochs older than the newest 8, unchanged | | The newest 8 epochs |
 
-- **Rows.** Every row of one output is in one tier, so the importer's per-partition regrouping is
-  unchanged. Rows after the point are left out, as the importer's cutoff would leave them. Export checks
-  that the tiers' rows add up to the source's rows up to the point.
-- **Manifest.** Each history file is marked `"history": true`, and its group is
-  `<module>/history`, so it starts a new part. Each row-split table records a `historySplit`
-  (`key`, `value`, the current tier's `rowCount` and `bounds`). The table's own count and bounds stay
-  the full table's. `epoch_stake` needs no split record: the import picks any number of epochs from the
-  per-epoch files, and the history parts are only read for more than 8 epochs.
+- **Why a copy, not a split.** A first version rewrote `address_utxo` into disjoint current and
+  history files. On mainnet, writing the 1.47B history rows took 35 minutes under a 4 GB DuckDB
+  limit. Keeping the originals and adding a copy of the 29M current rows costs the existing pruning
+  pass (about 4 minutes) and about 1 GiB in the archive. The full import is byte-for-byte what it was.
+- **Manifest.** Each file has an optional `tier` (`full` or `pruned`), and each tier is its own part
+  group (`<module>/<tier>`), so it starts new parts. Each copied table records a `historySplit`
+  (`key`, `value`, the pruned tier's `rowCount` and `bounds`). The table's own count and bounds stay the
+  full table's. `epoch_stake` needs no split record: the import picks any number of epochs from the
+  per-epoch files, and the older parts are only read for more than 8 epochs.
 - **Import.** `Retention.forTarget` adds a split's `key=value` to the import's retention when the
   target runs the matching pruning (`store.utxo.pruning-enabled`) with a window no wider than the
-  split's (`store.utxo.pruning-safe-blocks`). A wider window loads both tiers and lets the target's
-  pruning trim them. `--epoch-stake-epochs` defaults to the target's
-  `store.adapot.epoch-stake-safe-epochs` when it prunes `epoch_stake`. `Retention.apply` turns the
-  retention into the reduced view (current files, split count and bounds). That view drives the file
-  and part selection, the validator (from the journal's retention) and the journal's resume check.
-- **Extensible.** A new history table needs only a split in the exporter, a retention key, the
-  target setting it depends on (`Retention.requiredSetting`, `windowSetting`), and, for a window, the
-  setting that widens it. `transaction_cbor` with `store.transaction.cbor-retention-slots` is the
-  obvious next one, once it has an analytics export.
-
-The cost is on the producer: the UTxO split rewrites all of `address_utxo` (1.5B rows on mainnet) instead
-of copying its files. We estimate about 10 extra minutes and 38 GiB of temporary disk.
+  split's (`store.utxo.pruning-safe-blocks`). A wider window loads the full table and lets the target's
+  pruning trim it. `--epoch-stake-epochs` defaults to the target's `store.adapot.epoch-stake-safe-epochs`
+  when it prunes `epoch_stake`. `Retention.apply` turns the retention into the view: with a split, the
+  files not marked `full`, with the split's count and bounds; otherwise, the files not marked `pruned`.
+  That view drives file and part selection, the validator (through the journal's retention) and the
+  journal's resume check, so no import ever loads both forms.
+- **Extensible.** A new pruned table needs a copy in the exporter, a retention key, the target setting
+  it depends on (`Retention.requiredSetting`), and, for a window, the setting that widens it
+  (`windowSetting`). `transaction_cbor` with `store.transaction.cbor-retention-slots` is the obvious
+  next one, once it has an analytics export.
 
 ### D12 — Staged and live snapshots
 
@@ -355,14 +354,14 @@ bucket's CORS policy to allow `GET`.
   It picks a snapshot this release can actually import.
 - A scoped indexer downloads and extracts only its stores' parts.
 - One snapshot also makes a small UTxO node practical: a pruning target downloads, loads and
-  stores only the current tier.
+  stores only the pruned tier.
 - End-to-end integrity and authenticity from the publisher's key down to each Parquet file,
   verifiable with standard tools.
 
 **Negative**
 
 - The admin CLI gains the AWS SDK (S3 module, URL-connection client).
-- The history split rewrites `address_utxo` at export, roughly doubling the export time.
+- The pruned tier adds the pruning pass (about 4 minutes on mainnet) and about 1 GiB to every export.
 - A pruning target carries the pruned node's limitations, which the operator accepts through
   their pruning configuration.
 
@@ -394,7 +393,7 @@ Each step is its own commit on `feature/snapshot-distribution`, stacked on ADR 0
 
 **Status as of 2026-10-17.** D1 to D13 are implemented on `feature/snapshot-distribution` (PR #1267).
 The numbers below for the pruned export come from the D8 flavor, before D11 replaced it with the
-current tier. That tier is computed by the same steps.
+pruned tier. That tier is computed by the same steps.
 
 **Scoped import on mainnet.** The target ran blocks, epoch, staking and governance, imported from export
 #6 (140.8 GiB, parts written before D6, so they mix modules).

@@ -76,13 +76,13 @@ class RetentionTest {
         assertThat(Retention.requiredSetting("address_utxo.spent-safe-blocks")).isEqualTo("store.utxo.pruning-enabled");
     }
 
-    /** address_utxo with two current files and two history files, split at 2160 blocks. */
+    /** address_utxo with two original files (full-only) and two pruned copies, split at 2160 blocks. */
     private static SnapshotManifest.TableManifest splitUtxo() {
         List<SnapshotManifest.FileEntry> files = List.of(
-                new SnapshotManifest.FileEntry("main/address_utxo/date=2026-01-02/current_a.parquet", 10, "h", 30, "main/address_utxo/date=2026-01-02"),
-                new SnapshotManifest.FileEntry("main/address_utxo/date=2026-01-03/current_b.parquet", 10, "h", 20, "main/address_utxo/date=2026-01-03"),
-                new SnapshotManifest.FileEntry("main/address_utxo/date=2026-01-01/history_a.parquet", 10, "h", 400, "main/address_utxo/date=2026-01-01", true),
-                new SnapshotManifest.FileEntry("main/address_utxo/date=2026-01-02/history_b.parquet", 10, "h", 100, "main/address_utxo/date=2026-01-02", true));
+                new SnapshotManifest.FileEntry("main/address_utxo/date=2026-01-02/pruned_a.parquet", 10, "h", 30, "main/address_utxo/date=2026-01-02", "pruned"),
+                new SnapshotManifest.FileEntry("main/address_utxo/date=2026-01-03/pruned_b.parquet", 10, "h", 20, "main/address_utxo/date=2026-01-03", "pruned"),
+                new SnapshotManifest.FileEntry("main/address_utxo/date=2026-01-02/ducklake-a.parquet", 10, "h", 400, "main/address_utxo/date=2026-01-02", "full"),
+                new SnapshotManifest.FileEntry("main/address_utxo/date=2026-01-03/ducklake-b.parquet", 10, "h", 100, "main/address_utxo/date=2026-01-03", "full"));
         return new SnapshotManifest.TableManifest("address-utxo", 1, "d", "utxo", "CHAIN_DATA", "IMPORT", null,
                 "address_utxo", "address_utxo", "address_utxo", "MAPPED", "SLOT_LTE", 1, List.of(), 200,
                 List.of("tx_hash", "output_index"), "f", Map.of(), Map.of("slot.min", "0", "slot.max", "99"), files, "c",
@@ -91,20 +91,26 @@ class RetentionTest {
     }
 
     @Test
-    void aHistorySplitKeepsTheCurrentFilesWithTheirRowsAndBounds() {
+    void aSplitSelectsThePrunedTierAndAFullImportNeverSeesIt() {
         var m = manifest(splitUtxo(), table("block", List.of(), 0));
 
-        SnapshotManifest view = Retention.apply(m, Map.of(Retention.UTXO_SPENT_SAFE_BLOCKS, "2160"));
+        SnapshotManifest pruned = Retention.apply(m, Map.of(Retention.UTXO_SPENT_SAFE_BLOCKS, "2160"));
+        SnapshotManifest full = Retention.apply(m, Map.of());
 
-        var utxo = view.table("address-utxo");
-        assertThat(utxo.files()).extracting(SnapshotManifest.FileEntry::path).allMatch(p -> p.contains("current_"));
+        var utxo = pruned.table("address-utxo");
+        assertThat(utxo.files()).extracting(SnapshotManifest.FileEntry::path).allMatch(p -> p.contains("/pruned_"));
         assertThat(utxo.rowCount()).isEqualTo(20);
         assertThat(utxo.bounds()).containsEntry("slot.min", "40");
         assertThat(utxo.historySplit()).isNull();
-        assertThat(view.retention()).containsEntry(Retention.UTXO_SPENT_SAFE_BLOCKS, "2160");
+        assertThat(pruned.retention()).containsEntry(Retention.UTXO_SPENT_SAFE_BLOCKS, "2160");
         assertThat(m.historySplits()).containsExactly(Map.entry(Retention.UTXO_SPENT_SAFE_BLOCKS, "2160"));
-        // Without the retention, every file and the whole table's count.
-        assertThat(Retention.apply(m, Map.of())).isSameAs(m);
+
+        var whole = full.table("address-utxo");
+        assertThat(whole.files()).extracting(SnapshotManifest.FileEntry::path).allMatch(p -> p.contains("/ducklake-"));
+        assertThat(whole.rowCount()).isEqualTo(200);
+        assertThat(whole.bounds()).containsEntry("slot.min", "0");
+        assertThat(full.retention()).isNull();
+
         assertThatThrownBy(() -> Retention.apply(m, Map.of(Retention.UTXO_SPENT_SAFE_BLOCKS, "100")))
                 .hasMessageContaining("no history split");
         assertThatThrownBy(() -> Retention.apply(manifest(table("block", List.of(), 0)),

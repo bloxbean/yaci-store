@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.store.snapshot.ducklake.DuckLakeCatalog;
 import com.bloxbean.cardano.yaci.store.snapshot.ducklake.DuckLakeFile;
 import com.bloxbean.cardano.yaci.store.snapshot.manifest.ConsistencyPoint;
 import com.bloxbean.cardano.yaci.store.snapshot.manifest.Retention;
+import com.bloxbean.cardano.yaci.store.snapshot.manifest.SnapshotManifest;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.SnapshotSpecRegistry;
 import com.bloxbean.cardano.yaci.store.snapshot.util.Identifiers;
 import org.junit.jupiter.api.Test;
@@ -21,14 +22,14 @@ import java.util.stream.Collectors;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * A history split over a real DuckLake catalog: blocks 0 to 120 at 20 slots each, the point at block
- * 99 and a 10-block window, so inputs spent from block 89 on are current.
+ * The pruned tier over a real DuckLake catalog: blocks 0 to 120 at 20 slots each, the point at block
+ * 99 and a 10-block window, so inputs spent from block 89 on are kept.
  *
  * <ul>
- *   <li>outputs 0-19 are spent at blocks 60-79, before the window: history, with their inputs;</li>
- *   <li>outputs 20-29 are spent at blocks 90-99, inside the window: current, with their inputs;</li>
- *   <li>outputs 30-34 are spent at block 110, after the point: current, their inputs cut off;</li>
- *   <li>outputs 35-49 are unspent: current.</li>
+ *   <li>outputs 0-19 are spent at blocks 60-79, before the window: dropped from the pruned tier, with their inputs;</li>
+ *   <li>outputs 20-29 are spent at blocks 90-99, inside the window: kept, with their inputs;</li>
+ *   <li>outputs 30-34 are spent at block 110, after the point: kept, their inputs cut off;</li>
+ *   <li>outputs 35-49 are unspent: kept.</li>
  * </ul>
  */
 @EnabledIfEnvironmentVariable(named = "SNAPSHOT_IT_JDBC_URL", matches = ".+")
@@ -100,55 +101,49 @@ class TieredExportIT {
             var result = new TieredExport(catalog, root.resolve("work"), "512MB", null)
                     .apply(plans, point, snapshot, SAFE_BLOCKS, 4);
 
-            // address_utxo: every row up to the point, current outputs first, then history.
+            // address_utxo: the pruned copy first, then every original file, full-only and unchanged.
             TablePlan utxo = result.plans().get(0);
             TieredExport.Tiers utxoTiers = result.tiers().get("address-utxo");
             assertThat(utxo.rowCount()).isEqualTo(50);
             assertThat(utxoTiers.split().key()).isEqualTo(Retention.UTXO_SPENT_SAFE_BLOCKS);
             assertThat(utxoTiers.split().value()).isEqualTo("10");
             assertThat(utxoTiers.split().rowCount()).isEqualTo(30);
-            List<DuckLakeFile> utxoCurrent = current(utxo, utxoTiers);
-            List<DuckLakeFile> utxoHistory = history(utxo, utxoTiers);
-            assertThat(keys(result.rewritten(), utxoCurrent, "tx_hash")).containsExactlyElementsOf(hashes(20, 50));
-            assertThat(keys(result.rewritten(), utxoHistory, "tx_hash")).containsExactlyElementsOf(hashes(0, 20));
-            assertThat(rows(utxoCurrent)).isEqualTo(60);
-            assertThat(rows(utxoHistory)).isEqualTo(40);
-            assertThat(utxo.files()).allMatch(f -> f.relativePath().startsWith("main/address_utxo/date="))
-                    .allMatch(f -> result.rewritten().containsKey(f.relativePath()));
-            assertThat(utxo.files().subList(0, utxoCurrent.size())).isEqualTo(utxoCurrent);
+            List<DuckLakeFile> utxoCopy = tier(utxo, utxoTiers, SnapshotManifest.FileEntry.TIER_PRUNED);
+            assertThat(keys(result.rewritten(), utxoCopy, "tx_hash")).containsExactlyElementsOf(hashes(20, 50));
+            assertThat(rows(utxoCopy)).isEqualTo(60);
+            assertThat(utxoCopy).allMatch(f -> f.relativePath().startsWith("main/address_utxo/date=")
+                    && result.rewritten().containsKey(f.relativePath()));
+            assertThat(tier(utxo, utxoTiers, SnapshotManifest.FileEntry.TIER_FULL)).isEqualTo(plans.get(0).files());
+            assertThat(utxo.files().subList(0, utxoCopy.size())).isEqualTo(utxoCopy);
             assertThat(utxoTiers.split().bounds()).containsEntry("slot.min", Long.toString(20 * 20L));
 
-            // tx_input: the file entirely before the window goes to history unchanged.
+            // tx_input: the inputs spent within the window, copied; the originals full-only.
             TablePlan inputs = result.plans().get(1);
             TieredExport.Tiers inputTiers = result.tiers().get("tx-input");
             assertThat(inputs.rowCount()).isEqualTo(30);
             assertThat(inputTiers.split().rowCount()).isEqualTo(10);
-            assertThat(keys(result.rewritten(), current(inputs, inputTiers), "tx_hash")).containsExactlyElementsOf(hashes(20, 30));
-            List<DuckLakeFile> inputHistory = history(inputs, inputTiers);
-            assertThat(rows(inputHistory)).isEqualTo(20);
-            assertThat(keys(result.rewritten(), inputHistory, "tx_hash")).containsExactlyElementsOf(hashes(0, 20));
+            List<DuckLakeFile> inputCopy = tier(inputs, inputTiers, SnapshotManifest.FileEntry.TIER_PRUNED);
+            assertThat(keys(result.rewritten(), inputCopy, "tx_hash")).containsExactlyElementsOf(hashes(20, 30));
+            assertThat(tier(inputs, inputTiers, SnapshotManifest.FileEntry.TIER_FULL)).isEqualTo(plans.get(1).files());
             assertThat(inputTiers.split().bounds()).containsEntry("spent_at_slot.min", Long.toString(90 * 20L))
                     .containsEntry("spent_at_slot.max", Long.toString(99 * 20L));
 
-            // epoch_stake: the newest 4 epochs current, the rest history, nothing rewritten.
+            // epoch_stake: epochs before the newest 4 full-only, nothing rewritten.
             TablePlan stake = result.plans().get(2);
             TieredExport.Tiers stakeTiers = result.tiers().get("epoch-stake");
             assertThat(stake.rowCount()).isEqualTo(30);
             assertThat(stakeTiers.split()).isNull();
-            assertThat(current(stake, stakeTiers)).allMatch(f -> f.relativePath().matches(".*epoch=[6-9]/.*"));
-            assertThat(history(stake, stakeTiers)).hasSize(6).allMatch(f -> f.relativePath().matches(".*epoch=[0-5]/.*"));
+            assertThat(tier(stake, stakeTiers, null)).allMatch(f -> f.relativePath().matches(".*epoch=[6-9]/.*"));
+            assertThat(tier(stake, stakeTiers, SnapshotManifest.FileEntry.TIER_FULL)).hasSize(6)
+                    .allMatch(f -> f.relativePath().matches(".*epoch=[0-5]/.*"));
             assertThat(stake.files()).noneMatch(f -> result.rewritten().containsKey(f.relativePath()));
 
             assertThat(Files.exists(root.resolve("work/tiers/.spill"))).isFalse();
         }
     }
 
-    private static List<DuckLakeFile> current(TablePlan plan, TieredExport.Tiers tiers) {
-        return plan.files().stream().filter(f -> !tiers.history().contains(f.relativePath())).toList();
-    }
-
-    private static List<DuckLakeFile> history(TablePlan plan, TieredExport.Tiers tiers) {
-        return plan.files().stream().filter(f -> tiers.history().contains(f.relativePath())).toList();
+    private static List<DuckLakeFile> tier(TablePlan plan, TieredExport.Tiers tiers, String tier) {
+        return plan.files().stream().filter(f -> java.util.Objects.equals(tiers.of(f.relativePath()), tier)).toList();
     }
 
     private static long rows(List<DuckLakeFile> files) {
