@@ -15,6 +15,7 @@ import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
 import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClient;
 import com.bloxbean.cardano.yaci.store.client.utxo.DummyUtxoClient;
+import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClientImpl;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,7 +25,10 @@ import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
+import org.springframework.http.HttpStatus;
+import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.client.RestTemplate;
 
 import java.math.BigInteger;
 import java.util.ArrayList;
@@ -34,6 +38,10 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
+import static org.springframework.test.web.client.ExpectedCount.twice;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withNoContent;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 
 @ExtendWith(MockitoExtension.class)
 class BlockProcessorTest {
@@ -243,6 +251,42 @@ class BlockProcessorTest {
         verify(blockStorage).save(blockArgCaptor.capture());
         assertThat(blockArgCaptor.getValue().getTotalFees()).isEqualTo(3_000_000);
         assertThat(output).doesNotContain("using declared fee");
+    }
+
+    @Test
+    void noContentFromRemoteUtxoClientUsesDeclaredFeeAtPreCommit() {
+        var restTemplate = new RestTemplate();
+        var server = MockRestServiceServer.bindTo(restTemplate).build();
+        server.expect(twice(), requestTo("http://utxo-store/api/v1/utxos")).andRespond(withNoContent());
+        var processor = new BlockProcessor(blockStorage, blockCborStorage, blocksStoreProperties,
+                new UtxoClientImpl(restTemplate, "http://utxo-store/api/v1"));
+        var event = blockEvent(List.of(collateralTransaction("remote", 200_000, null, null)), List.of(0));
+
+        processor.handleBlockHeaderEvent(event);
+        verify(blockStorage, never()).save(any());
+        processor.handleCollateralFees(new PreCommitEvent(event.getMetadata()));
+
+        verify(blockStorage).save(blockArgCaptor.capture());
+        assertThat(blockArgCaptor.getValue().getTotalFees()).isEqualTo(200_000);
+        server.verify();
+    }
+
+    @Test
+    void notFoundFromRemoteUtxoClientUsesDeclaredFeeAtPreCommit() {
+        var restTemplate = new RestTemplate();
+        var server = MockRestServiceServer.bindTo(restTemplate).build();
+        server.expect(twice(), requestTo("http://utxo-store/api/v1/utxos")).andRespond(withStatus(HttpStatus.NOT_FOUND));
+        var processor = new BlockProcessor(blockStorage, blockCborStorage, blocksStoreProperties,
+                new UtxoClientImpl(restTemplate, "http://utxo-store/api/v1"));
+        var event = blockEvent(List.of(collateralTransaction("remote", 200_000, null, null)), List.of(0));
+
+        processor.handleBlockHeaderEvent(event);
+        verify(blockStorage, never()).save(any());
+        processor.handleCollateralFees(new PreCommitEvent(event.getMetadata()));
+
+        verify(blockStorage).save(blockArgCaptor.capture());
+        assertThat(blockArgCaptor.getValue().getTotalFees()).isEqualTo(200_000);
+        server.verify();
     }
 
     @Test
