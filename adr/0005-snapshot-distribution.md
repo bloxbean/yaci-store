@@ -329,3 +329,55 @@ Each step is its own commit on `feature/snapshot-distribution`, stacked on ADR 0
   `index --prune --keep N`. It is deferred until the cadence is known.
 - **Distribution of the official signing key.** It could be in the release notes, the docs, or
   embedded in the CLI. Rotation follows from the key id in `SHA256SUMS.sig.json`.
+
+## Implementation notes
+
+**Status as of 2026-10-17.** D1 to D9 are implemented on `feature/snapshot-distribution` (PR #1267).
+
+**Scoped import on mainnet.** The target ran blocks, epoch, staking and governance, imported from export
+#6 (140.8 GiB, parts written before D6, so they mix modules).
+
+- The import read 5 of 18 parts (36.9 GiB) and extracted 4.6 GiB.
+- Import and validation took 3m17s, and all 127 checks passed.
+- The application then synced from the point to the chain tip with no errors.
+
+A later export with module-aligned parts has 22 single-module parts, so a scoped import reads only its
+modules' parts.
+
+**Cross-store runtime dependency.** In the Conway era, `epoch_param` is written by the AdaPot job. An
+`epoch` store without the ledger-state profile therefore stops updating protocol parameters after the
+point, exactly as a normal sync with the same flags does. This is documented as an example of the
+store dependencies that scoped imports do not check.
+
+**Stalled downloads.** The JDK `HttpClient` timeout covers only the response headers. A connection that
+stalls mid-body would otherwise block forever. A stall guard closes a stream that sends nothing for two
+minutes, and the per-part retry fetches the part again. The integration test serves parts that stall
+halfway on the first read.
+
+**Remote import at scale.** Export #6 was published to a directory store in 3m01s. A second publish
+skipped every file in 3m35s; for a local store this re-hashes the files, while S3 compares the recorded
+digest instead. The store was served over plain HTTP, and `snapshot import --snapshot latest` streamed
+the scoped target's 5 parts in 1m07s, the same as reading them from local disk. Validation passed.
+
+**Pruned export memory.** The first design, a single anti-join written into date partitions, ran out
+of memory under `--memory-limit 4GB`. The implementation splits the work so that memory is bounded by
+a bucket:
+
+1. The keys of inputs spent before the window, and the keys of every output, are written to the spill
+   directory in 64 hash buckets.
+2. Each bucket's outputs are anti-joined with that bucket's spent keys.
+3. The kept outputs' rows are written 32 date partitions at a time.
+
+The mainnet pruned export under 4 GB kept:
+
+| Table | Kept | Out of |
+|---|---|---|
+| `address_utxo` outputs | 10,899,118 (29.3M rows) | 356,770,869 |
+| `epoch_stake` rows | 10,694,920 (epochs 652 to 659) | 499,975,373 |
+| `tx_input` rows | 35,525 (the 2160-block window) | 345,907,276 |
+
+Pruning took 4m22s and the whole signed export 7m55s. The archive is 72.7 GiB, against 140.8 GiB for
+the full snapshot.
+
+**MinIO for local tests.** MinIO's images and binaries can no longer be downloaded. The S3 integration
+test runs against any S3-compatible endpoint given in the environment.
