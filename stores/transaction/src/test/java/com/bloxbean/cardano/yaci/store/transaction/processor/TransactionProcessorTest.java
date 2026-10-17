@@ -296,6 +296,7 @@ class TransactionProcessorTest {
 
         verify(transactionStorage).saveAll(txnListCaptor.capture());
         assertThat(txnListCaptor.getValue().get(0).getFee()).isEqualTo(BigInteger.valueOf(3_000_000));
+        assertThat(publishedEvents()).noneMatch(ErrorEvent.class::isInstance);
     }
 
     @Test
@@ -309,6 +310,22 @@ class TransactionProcessorTest {
 
         verify(transactionStorage).saveAll(txnListCaptor.capture());
         assertThat(txnListCaptor.getValue().get(0).getFee()).isNull();
+        assertThat(publishedEvents())
+                .filteredOn(ErrorEvent.class::isInstance)
+                .map(ErrorEvent.class::cast)
+                .singleElement()
+                .satisfies(errorEvent -> {
+                    assertThat(errorEvent.getBlock()).isEqualTo(eventMetadata().getBlock());
+                    assertThat(errorEvent.getErrorCode()).isEqualTo(ErrorCode.DATA_MISSING_ERROR.name());
+                    assertThat(errorEvent.getDetails()).contains("tx_hash: invalid-tx")
+                            .contains("block_hash: " + eventMetadata().getBlockHash());
+                });
+    }
+
+    private List<Object> publishedEvents() {
+        ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(publisher, Mockito.atLeastOnce()).publishEvent(eventCaptor.capture());
+        return eventCaptor.getAllValues();
     }
 
     private TransactionProcessor processorWithUtxoClient(UtxoClient utxoClient) {
@@ -320,6 +337,7 @@ class TransactionProcessorTest {
     private TransactionEvent invalidTransactionEvent() {
         Transaction transaction = Transaction.builder()
                 .txHash("invalid-tx")
+                .blockNumber(eventMetadata().getBlock())
                 .body(TransactionBody.builder()
                         .txHash("invalid-tx")
                         .inputs(Set.of())
