@@ -459,3 +459,14 @@ history files spent 34m57s on the history write alone and was dropped.
   96 checks passed. The unspent set is identical to the full restore's: 10,863,593 outputs and
   37,115,529,274,342,681 lovelace.
 
+**Cloudflare R2 (2026-10-17).** The S3 integration tests pass against the R2 bucket, including
+anonymous reads through the bucket's custom domain. The signed mainnet snapshot `9ce14bda` was
+published staged: 142.9 GiB, 38 files, in 23m45s, about 107 MB/s from the VM.
+
+- Its `mainnet/index.json` did not exist, so it was not listed, while
+  `<id>/snapshot.json` was public.
+- A pruning target with no credentials imported it by id from `https://yaci-snapshot.bloxbean.org`. It
+  streamed 7 of 34 parts (34.3 GiB) in 9m47s, about 60 MB/s from R2, and finished in 36m37s; validation
+  passed. The unspent set again matched the full restore.
+- `snapshot promote` then added it to `mainnet/index.json`.
+
