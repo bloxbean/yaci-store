@@ -50,7 +50,7 @@ if [[ "$1" == rollback* ]]; then
 fi
 
 # Create the mounted directories first, so Docker does not create them owned by root
-mkdir -p "$ROOT_DIR/data" "$ROOT_DIR/snapshots"
+mkdir -p "$ROOT_DIR/data" "$ROOT_DIR/logs" "$ROOT_DIR/plugins/scripts" "$ROOT_DIR/plugins/ext-jars" "$ROOT_DIR/plugins/files"
 
 # Run the admin CLI with all provided arguments
 docker compose -f "$COMPOSE_FILE" run --rm admin-cli "$@"

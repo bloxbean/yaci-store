@@ -27,8 +27,7 @@ Some of the key files and directories included in this distribution:
 │   ├── application-ledger-state.properties
 │   ├── application-plugins.yml
 ├── plugin-scripts/          # Folder for custom plugin scripts (mounted inside the container)
-├── data/                    # Application data, including the analytics export (data/analytics)
-├── snapshots/               # Snapshot parts, manifests and import work files (admin CLI only)
+├── data/                    # Application data: the analytics export (data/analytics), snapshot files (data/snapshots)
 ├── grafana/                 # Grafana configuration and dashboards
 ├── prometheus/              # Prometheus configuration
 
@@ -150,19 +149,28 @@ Use `admin-cli.sh` to run administrative tasks like applying indexes or rolling 
 
 ### 📦 Snapshots
 
-The admin CLI container mounts `config/` and `data/` like the Yaci Store container, so it reads the
-same profile files (from `SPRING_PROFILES_ACTIVE` in `config/env`) and the analytics export in
-`data/analytics`, and it joins the same network, so the database host in `config/application.properties`
-resolves as it does for the application. `snapshots/` is mounted at `/app/snapshots`: put snapshot
-output, manifests and work directories there, since anything else written inside the container is
-removed when the command exits.
+The admin CLI container has the same environment and mounts as the Yaci Store container: `config/env`
+(and the Spring profiles it activates), the whole `config/` folder, `data/`, `logs/` and `plugins/`. It
+joins the same network, so it reads exactly the configuration the application reads, and the database
+host in `config/application.properties` resolves as it does for the application. Put snapshot output
+and work directories under `data/` (for example `/app/data/snapshots/...`), since anything written
+elsewhere inside the container is removed when the command exits.
 
 ```bash
-./admin-cli.sh snapshot inspect --work-dir /app/snapshots/work
-./admin-cli.sh snapshot export --output /app/snapshots/out --work-dir /app/snapshots/work --unsigned
-./admin-cli.sh snapshot import --manifest /app/snapshots/in/<name>.manifest.json \
-    --work-dir /app/snapshots/work --allow-unsigned --dry-run
+# Restore a new instance from a published snapshot (no credentials needed)
+./admin-cli.sh snapshot list --remote https://yaci-snapshot.bloxbean.org
+./admin-cli.sh snapshot import --snapshot latest --remote https://yaci-snapshot.bloxbean.org \
+    --work-dir /app/data/snapshots/work --workers 8 --validate
+
+# Export this instance (stop Yaci Store first: ./yaci-store.sh stop:yaci-store)
+./admin-cli.sh snapshot inspect --work-dir /app/data/snapshots/work
+./admin-cli.sh snapshot export --output /app/data/snapshots/out --work-dir /app/data/snapshots/work \
+    --signing-key /app/data/snapshots/keys/snapshot-signing.pem
 ```
+
+The target schema must exist and be empty before an import: run Yaci Store once with
+`--store.schema-only=true` and the store flags it will run with. See the snapshot documentation for
+every option.
 
 ---
 
