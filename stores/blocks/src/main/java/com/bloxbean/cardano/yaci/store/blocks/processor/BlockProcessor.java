@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.blocks.processor;
 
 import com.bloxbean.cardano.yaci.core.model.BlockHeader;
 import com.bloxbean.cardano.yaci.core.model.TransactionBody;
+import com.bloxbean.cardano.yaci.core.model.TransactionOutput;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.blocks.BlocksStoreProperties;
 import com.bloxbean.cardano.yaci.store.blocks.domain.Block;
@@ -31,6 +32,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.IntStream;
 
 import static com.bloxbean.cardano.yaci.store.blocks.BlocksStoreConfiguration.STORE_BLOCKS_ENABLED;
 
@@ -96,11 +98,13 @@ public class BlockProcessor {
             block.setOpCertSigma(blockHeader.getHeaderBody().getOperationalCert().getSigma());
         }
 
-        handleTransaction(block, blockEvent.getBlock().getTransactionBodies());
+        var invalidTransactionIndexes = blockEvent.getBlock().getInvalidTransactions();
+        Set<Integer> invalidTransactions = invalidTransactionIndexes == null
+                ? Set.of() : new HashSet<>(invalidTransactionIndexes);
 
-        var invalidTransactions = blockEvent.getBlock().getInvalidTransactions();
-        var pendingBlock = new PendingBlock(block, blockEvent.getBlock().getTransactionBodies(),
-                invalidTransactions == null ? Set.of() : new HashSet<>(invalidTransactions));
+        handleTransaction(block, blockEvent.getBlock().getTransactionBodies(), invalidTransactions);
+
+        var pendingBlock = new PendingBlock(block, blockEvent.getBlock().getTransactionBodies(), invalidTransactions);
         if (resolveFees(pendingBlock, false)) {
             blockStorage.save(block);
         } else {
@@ -140,13 +144,13 @@ public class BlockProcessor {
         blockCborStorage.save(blockCbor);
     }
 
-    public void handleTransaction(Block block, List<TransactionBody> transactionBodies) {
+    public void handleTransaction(Block block, List<TransactionBody> transactionBodies, Set<Integer> invalidTransactions) {
         if (transactionBodies == null || transactionBodies.size() == 0)
             return;
 
-        BigInteger transactionOutputInLovelace = transactionBodies
-                .stream()
-                .flatMap(transactionBody -> transactionBody.getOutputs().stream())
+        BigInteger transactionOutputInLovelace = IntStream.range(0, transactionBodies.size())
+                .mapToObj(i -> appliedOutputs(transactionBodies.get(i), invalidTransactions.contains(i)))
+                .flatMap(List::stream)
                 .flatMap(transactionOutput -> transactionOutput.getAmounts().stream())
                 .filter(amount -> BlockUtil.amountIsInADA(amount))
                 .map(amount -> amount.getQuantity())
@@ -159,6 +163,14 @@ public class BlockProcessor {
 
         block.setTotalOutput(transactionOutputInLovelace == null ? BigInteger.ZERO : transactionOutputInLovelace);
         block.setTotalFees(totalFees == null ? BigInteger.ZERO : totalFees);
+    }
+
+    // An invalid transaction applies only its collateral return output, if present.
+    private List<TransactionOutput> appliedOutputs(TransactionBody body, boolean invalid) {
+        if (!invalid)
+            return body.getOutputs();
+
+        return body.getCollateralReturn() == null ? List.of() : List.of(body.getCollateralReturn());
     }
 
     private boolean resolveFees(PendingBlock pendingBlock, boolean useDeclaredFeeIfUnresolved) {
