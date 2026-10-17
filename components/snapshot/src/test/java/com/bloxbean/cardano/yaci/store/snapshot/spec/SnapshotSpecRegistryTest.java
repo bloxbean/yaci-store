@@ -182,4 +182,27 @@ class SnapshotSpecRegistryTest {
 
         assertThat(all.withoutImportedTablesOf(java.util.Set.of("no-such-module"))).isSameAs(all);
     }
+
+    @Test
+    void optionalCborTablesFollowTheirOwnSettingsIndependently() {
+        SnapshotSpecRegistry all = SnapshotSpecRegistry.builtIn();
+        assertThat(all.byId("transaction-cbor").orElseThrow().enabledBy())
+                .containsExactly("store.transaction.save-cbor", "store.transaction.save-full-tx-cbor");
+        assertThat(all.byId("transaction-cbor").orElseThrow().mustMatch()).containsExactly("store.transaction.save-full-tx-cbor");
+
+        SnapshotSpecRegistry none = all.withoutDisabledOptionalTables(p -> false);
+        assertThat(none.isSelected("transaction-cbor")).isFalse();
+        assertThat(none.isSelected("block-cbor")).isFalse();
+        assertThat(none.isSelected("transaction")).isTrue();
+        assertThat(none.knownTables()).anyMatch(s -> s.id().equals("transaction-cbor"));
+
+        SnapshotSpecRegistry fullTx = all.withoutDisabledOptionalTables(p -> p.equals("store.transaction.save-full-tx-cbor"));
+        assertThat(fullTx.isSelected("transaction-cbor")).isTrue();
+        assertThat(fullTx.isSelected("block-cbor")).isFalse();
+        SnapshotSpecRegistry blocks = all.withoutDisabledOptionalTables(p -> p.equals("store.blocks.save-cbor"));
+        assertThat(blocks.isSelected("block-cbor")).isTrue();
+        assertThat(blocks.isSelected("transaction-cbor")).isFalse();
+
+        assertThat(all.withoutDisabledOptionalTables(p -> true)).isSameAs(all);
+    }
 }

@@ -58,13 +58,16 @@ would add about 164 GiB, more than doubling it. Recent CBOR adds almost nothing.
 
 ## Decision
 
-### D1 — Export CBOR to the analytics store only when asked
+### D1 — Export CBOR like any other table, when the source saves it
 
 New `TransactionCborExporter` and `BlockCborExporter` in the analytics store write daily partitions
 (`slot`-ranged, like the other chain tables) with `tx_hash`/`block_hash`, `cbor_data` (BLOB),
-`cbor_size`, `slot` and the partition date. They run only when the source saves the CBOR and
-`yaci.store.analytics.export-cbor=true` (default false). An analytics node that never asked for CBOR
-therefore does not grow by the figures above.
+`cbor_size`, `slot` and the partition date. Like every other exporter, each runs when its data
+exists: `store.transaction.save-cbor` or `save-full-tx-cbor` for transactions, and
+`store.blocks.save-cbor` for blocks. There is no separate switch. A node that does not save CBOR does
+not grow by the figures above, and one that does pays for it in both PostgreSQL and the analytics
+store. The specifications declare the same settings as `enabled-by`, so the snapshot exporter
+includes a CBOR table exactly when the source writes it.
 
 The exporters export exactly what the table holds. The manifest records the source's
 `store.transaction.save-full-tx-cbor` with the other pruning settings, so an importer knows whether
@@ -72,8 +75,10 @@ The exporters export exactly what the table holds. The manifest records the sour
 
 ### D2 — Optional at import, in parts of their own
 
-The specifications become `IMPORT` with a new `optional: true`. An optional table is loaded only when
-the target asks for it through its own configuration, the same way scoped imports already work:
+The specifications become `IMPORT` and declare `enabled-by` (the settings that turn the table on) and
+`must-match` (settings whose value the target must share with the source). An optional table is
+loaded only when the target asks for it through its own configuration, the same way scoped imports
+already work:
 
 | Target setting | Effect |
 |---|---|
@@ -88,15 +93,16 @@ when it enables that table, so `block_cbor` and `transaction_cbor` are pulled in
 that does not want CBOR never downloads it, even though `block_cbor` belongs to the `blocks` module,
 which every target enables.
 
-### D3 — Recent CBOR as a pruned tier
+### D3 — Recent CBOR as a pruned tier (later)
 
 With CBOR pruning on, the target keeps 43,200 slots. As in ADR 0005 D11, the export adds a pruned copy
 of the newest `cbor-pruning-safe-slots` (retention key `transaction_cbor.safe-slots`, likewise for
 blocks), marked `pruned`, and marks the full history `full`. A target with
 `store.transaction.cbor-pruning-enabled=true` and a window no wider than the copy's loads the copy:
-about 12 MB instead of 84 GB.
+about 12 MB instead of 84 GB. Deferred: until it exists, a target with CBOR pruning loads the full
+history and its pruning service trims it.
 
-### D4 — Backfill with a second event publisher
+### D4 — Backfill with a second event publisher (later, in its own PR)
 
 The idea: a second process syncs the chain again from genesis, or from the first slot missing CBOR,
 with its own `store.event-publisher-id` (say 2), and writes only CBOR, while the main process (id 1)
@@ -156,15 +162,12 @@ restored node that wants full CBOR history gets it from a snapshot that carries 
 
 Each step is its own commit on `feature/snapshot-cbor`, stacked on ADR 0005's branch.
 
-1. Exporters and the `export-cbor` switch, with a DuckDB round trip of `bytea` to BLOB to `bytea` in
-   the analytics store's tests.
-2. `optional` specifications, part groups, the target check (including full versus body), and import
-   and validation tests.
-3. The pruned tier for CBOR (D3).
-4. The CBOR-only backfill mode (D4). Qualify it on preprod: back-fill a range, then compare the CBOR
-   with a node that saved it from the start.
-5. Mainnet measurement: a preprod or mainnet export with CBOR, replacing the estimates above with
-   real sizes.
+1. Exporters, gated by the source's CBOR settings (D1).
+2. `enabled-by` / `must-match` specifications, one part group per CBOR table, the target check
+   (including full versus body), and import and validation tests (D2).
+3. Qualify on preprod: a source that saves CBOR, export, then import into targets with and without
+   CBOR; real sizes replace the estimates above.
+4. Later, in their own PRs: the pruned tier for CBOR (D3) and the CBOR-only backfill (D4).
 
 ## Open questions
 

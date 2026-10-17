@@ -1,12 +1,35 @@
 snapshot-table:
   id: transaction-cbor
-  spec-version: 1
+  spec-version: 2
   module: transaction
   kind: CHAIN_DATA
-  restore: NOT_RESTORED
-  reason: >-
-    transaction CBOR has no analytics export; enable it only on an instance that syncs the range
-    itself
+  restore: IMPORT
+  # Written only when the store saves CBOR; exported and imported only then, in parts of its own (ADR 0006).
+  enabled-by: [store.transaction.save-cbor, store.transaction.save-full-tx-cbor]
+  # Whole signed transactions or bodies only: the target must hold the same form.
+  must-match: [store.transaction.save-full-tx-cbor]
+
+  source:
+    exporter-id: transaction_cbor
+    ducklake-relation: transaction_cbor
+    partition:
+      strategy: DAILY
+      column: block_time
+
+  consistency:
+    cutoff:
+      type: SLOT_LTE
+      column: slot
 
   import:
     target-table: transaction_cbor
+    mode: MAPPED
+    ignore-source-columns: [block, block_time, date, epoch]
+    use-target-defaults: [create_datetime, update_datetime]
+    batch-boundary: FILE_SET
+    batch-size: 32
+
+  validation:
+    key: [tx_hash]
+    bounds: [slot]
+    required-columns: [tx_hash, cbor_data, slot]
