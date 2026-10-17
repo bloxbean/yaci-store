@@ -86,10 +86,12 @@ before treating a restored database as equivalent to a synced one.
 | `snapshot import` | Load a verified snapshot into an empty, migrated schema |
 | `snapshot import-status` | Show the state of any import recorded in the configured schema |
 | `snapshot validate` | Run the offline validation levels against the imported database |
-| `snapshot publish` | Upload an exported snapshot to S3, R2 or a directory, and add it to the index |
-| `snapshot list` | List the snapshots published for the configured network |
+| `snapshot publish` | Upload an exported snapshot to S3, R2 or a directory, staged (or live with `--live`) |
+| `snapshot promote` | Make a staged snapshot live: add it to its network's `index.json` |
+| `snapshot unlist` | Take a live snapshot out of `index.json`; it can still be imported by id |
+| `snapshot list` | List the live snapshots published for the configured network (`--all` adds staged ones) |
 | `snapshot download` | Download a published snapshot for an offline import or a mirror |
-| `snapshot index --rebuild` | Regenerate a network's `index.json` from the manifests in the store |
+| `snapshot index --rebuild` | Regenerate a network's `index.json` from the live snapshots in the store |
 | `snapshot keygen` | Create an Ed25519 key pair for signing snapshots |
 | `snapshot sign` | Sign an exported snapshot's `SHA256SUMS` |
 
@@ -224,9 +226,9 @@ while extracting, so it is optional.
 | `--signing-key` | `store.snapshot.signing-key` | Ed25519 private key (PEM) to sign the snapshot with |
 | `--unsigned` | `false` | Produce an unsigned snapshot (required when no signing key is set) |
 | `--verify` | `false` | Re-read and checksum every written part before publishing the manifest |
-| `--flavor` | `full` | `pruned` for a [pruned snapshot](#pruned-snapshots) |
-| `--utxo-safe-blocks`, `--epoch-stake-epochs` | `2160`, `8` | Pruned only: the spent-output window and the `epoch_stake` epochs kept |
-| `--publish`, `--remote` | `false` | Upload the snapshot when the export succeeds ([publishing](#publishing-and-downloading-snapshots)) |
+| `--history-split` | `true` | Put the history of the tables a pruning node trims in parts of its own ([current and history tiers](#current-and-history-tiers)) |
+| `--utxo-safe-blocks`, `--epoch-stake-epochs` | `2160`, `8` | History split: the spent-output window and the `epoch_stake` epochs in the current tier |
+| `--publish`, `--live`, `--remote` | `false` | Upload the snapshot when the export succeeds, staged unless `--live` ([publishing](#publishing-and-downloading-snapshots)) |
 | `--spec-file`, `--allow-custom-specs` | – | Operator-supplied specifications |
 
 <Callout type="info">
@@ -236,31 +238,41 @@ omit committed WAL entries. Analytics writes, compaction, and garbage collection
 throughout export.
 </Callout>
 
-### Pruned snapshots
+### Current and history tiers
 
-`snapshot export --flavor pruned` produces what a node running UTxO and epoch-stake pruning would
-hold at the consistency point, published next to the full snapshot:
+One snapshot serves both full and pruning targets. Export splits each table that a pruning node
+trims into a current tier and a history tier, and puts each tier in parts of its own:
 
-| Table | Kept |
+| Table | Current tier | History tier |
+|---|---|---|
+| `address_utxo` | Outputs unspent at the point, plus outputs spent within the last `--utxo-safe-blocks` blocks (default 2160) | Outputs spent before that window |
+| `tx_input` | Inputs spent within the last `--utxo-safe-blocks` blocks | Older inputs |
+| `epoch_stake` | The newest `--epoch-stake-epochs` epochs (default 8, at least 4) | Older epochs |
+
+A full import reads both tiers and loads exactly what it would without the split. An import into a
+target that prunes these tables reads only the current tier, so it downloads, extracts and loads
+only what the target keeps. The choice comes from the target's own configuration:
+
+| Target setting | Effect |
 |---|---|
-| `address_utxo` | Outputs unspent at the point, plus outputs spent within the last `--utxo-safe-blocks` blocks (default 2160) |
-| `tx_input` | Inputs spent within the last `--utxo-safe-blocks` blocks |
-| `epoch_stake` | The newest `--epoch-stake-epochs` epochs (default 8, at least 4) |
-| everything else | Unchanged |
+| `store.utxo.pruning-enabled=true`, `store.utxo.pruning-safe-blocks` at most the snapshot's window | `address_utxo` and `tx_input`: current tier only |
+| `store.utxo.pruning-enabled=true`, a wider `store.utxo.pruning-safe-blocks` | Both tiers; the target's pruning service removes the rest |
+| `store.adapot.epoch-stake-pruning-enabled=true` | `epoch_stake`: the newest `store.adapot.epoch-stake-safe-epochs` epochs (default 8), or `--epoch-stake-epochs` |
+| Pruning off | Both tiers |
 
 The window keeps exactly what a rollback within the 2160-block cursor tail needs: rolling back an
 input un-spends its output, which must still exist. The UTxO tables are rewritten into the work
-directory as Parquet, in the same daily partitions and columns, by one DuckDB anti-join of every
-output against every input spent before the window. It runs under `--memory-limit` and spills to the
-work directory, so a small limit is slower but never fails. The manifest records
-`"flavor": "pruned"` and the retention, for example `address_utxo.spent-safe-blocks=2160`.
+directory as Parquet, in the same daily partitions and columns, with each output's rows in one tier.
+An anti-join of every output against the inputs spent before the window works through 64 hash
+buckets of keys, under `--memory-limit`, spilling to the work directory. Export checks that every
+source row up to the point is in exactly one tier before it packages anything. On mainnet, the
+UTxO split adds about 10 minutes to an export.
 
-Importing a pruned snapshot needs a target that prunes the same way: `store.utxo.pruning-enabled=true`
-for the UTxO tables and `store.adapot.epoch-stake-pruning-enabled=true` for `epoch_stake` (only for
-stores the target enables). Otherwise preflight refuses it, because the application would serve the
-partial history as complete. A pruned node has the usual limitations of pruning: address and
-transaction history only covers unspent outputs and recent spends, `epoch_stake` only recent epochs,
-and a rollback deeper than the window is not possible.
+The manifest marks each history file and records each split: its key and window (for example
+`address_utxo.spent-safe-blocks=2160`) and the current tier's row count and bounds, which validation
+checks. A pruned node has the usual limitations of pruning: address and transaction history only
+covers unspent outputs and recent spends, `epoch_stake` only recent epochs, and a rollback deeper
+than the window is not possible.
 
 ### Archive layout
 
@@ -438,15 +450,16 @@ snapshot import --manifest <manifest> \
 | `--dry-run` | `false` | Preflight only; write nothing |
 | `--validate` | `false` | After a successful import, run `snapshot validate --mark-ready` in the same command |
 | `--tune-postgres` | `false` | Raise `max_wal_size`, `checkpoint_timeout` and `wal_compression` with `ALTER SYSTEM` for the import, then restore them |
-| `--epoch-stake-epochs` | `0` | Load only the newest N epochs of `epoch_stake` (at least 4); `0` loads every epoch |
+| `--epoch-stake-epochs` | target's | Load only the newest N epochs of `epoch_stake` (at least 4). Default: `store.adapot.epoch-stake-safe-epochs` when the target prunes `epoch_stake`, otherwise every epoch |
 
-`--epoch-stake-epochs` restores what a node running `EpochStakePruningService` would hold. Mainnet's
-`epoch_stake` is 500M rows over 452 epochs, about 1M rows per epoch, so keeping 8 epochs skips almost
-all of it, and the parts that carry only older epochs are not read. The target must run with
-`store.adapot.epoch-stake-pruning-enabled=true`, or preflight refuses the import: the application
-would otherwise present the partial history as complete. Reward calculation reads the stake of
-epochs E-3 to E, hence the minimum of 4. Use the same value to resume an interrupted import;
-`snapshot validate` reads it from the import journal.
+A target that prunes loads only what it keeps ([current and history tiers](#current-and-history-tiers)).
+The dry run says, per table, which tier it loads and why. `--epoch-stake-epochs` restores what a node
+running `EpochStakePruningService` would hold. Mainnet's `epoch_stake` is 500M rows over 452 epochs,
+about 1M rows per epoch, so keeping 8 epochs skips almost all of it, and the parts that carry only
+older epochs are not read. An explicit value needs `store.adapot.epoch-stake-pruning-enabled=true`
+on the target, or preflight refuses the import: the application would otherwise present the partial
+history as complete. Reward calculation reads the stake of epochs E-3 to E, hence the minimum of 4.
+Resume with the same settings; `snapshot validate` reads them from the import journal.
 
 Preflight reports `max_wal_size`, `checkpoint_timeout` and `wal_compression` when they are below
 16GB, 15min and on. With the 1GB default the load checkpoints every few seconds and spends its
@@ -599,11 +612,17 @@ and imported straight from there or from a public HTTPS URL. The layout is:
 <prefix>/<network>/<snapshot-id>/<base>.manifest.json
 <prefix>/<network>/<snapshot-id>/<base>.part-00001.zip ...
 <prefix>/<network>/<snapshot-id>/SHA256SUMS
+<prefix>/<network>/<snapshot-id>/snapshot.json
 ```
 
-A snapshot directory holds exactly the files export wrote, so a download is byte-identical to the
-export. `index.json` lists each network's snapshots, newest first, with their epoch, size, flavor and
-the SHA-256 of their manifest.
+`mainnet`, `preprod` and `preview` share one bucket; every command uses the network of the configured
+protocol magic (or `--network`). A snapshot directory holds exactly the files export wrote, so a
+download is byte-identical to the export, plus `snapshot.json`, the snapshot's entry. `index.json`
+lists each network's live snapshots, newest first. Each entry has the point (epoch, slot, block,
+block time), the Yaci Store version and git commit that made it, size, parts, stores, history
+splits, signing key id and the SHA-256 of its manifest. It is plain public JSON, so a listing page can
+read it straight from the public URL. For a page on another origin, allow `GET` in the bucket's CORS
+policy.
 
 ### Configuration
 
@@ -643,11 +662,26 @@ snapshot export --output /path/to/out --signing-key /secure/keys/snapshot-signin
 snapshot publish --manifest /path/to/out/yaci-mainnet-e659-4417bd67.manifest.json
 ```
 
-Parts go first, several at once, as multipart uploads read straight from the files. The checksums and
-the manifest follow, and `index.json` is updated last, so the index never points at an incomplete
-snapshot. Each object records its SHA-256, and a rerun skips everything already uploaded, so an
-interrupted publish resumes. The index is rewritten with a conditional write, so two publishers cannot
-drop each other's entry. `snapshot index --rebuild` regenerates it from the manifests in the store.
+Parts go first, several at once, as multipart uploads read straight from the files. The checksums,
+the manifest and `snapshot.json` follow. Each object records its SHA-256, and a rerun skips
+everything already uploaded, so an interrupted publish resumes.
+
+A published snapshot is **staged**: it is not in `index.json`, so `snapshot list` and
+`--snapshot latest` do not see it, but it can be imported with its full id. Test it, then make it
+public:
+
+```bash
+snapshot import --snapshot 4417bd67-6dc6-4f3d-ab0b-d3ec82be2279 --work-dir ... --validate   # test
+snapshot promote --snapshot 4417bd67-6dc6-4f3d-ab0b-d3ec82be2279                            # go live
+snapshot unlist  --snapshot 4417bd67-6dc6-4f3d-ab0b-d3ec82be2279                            # withdraw
+```
+
+`--live` on `publish` (or on `export --publish`) skips the staging step. The index is updated last
+and with a conditional write, so it never points at an incomplete snapshot, and two publishers cannot
+drop each other's entry. Republishing a live snapshot keeps it live. `snapshot list --all` also shows
+staged snapshots, and `snapshot index --rebuild` regenerates the index from the live ones. Both read
+the store itself, so they need an `s3://` or local location. A staged snapshot's files are as public
+as a live one's; staging only keeps it out of the index.
 
 ### Importing from a store
 
@@ -657,10 +691,13 @@ snapshot import --snapshot latest --work-dir /path/to/work --allow-unsigned --wo
 snapshot import --snapshot 4417bd67 --remote https://snapshots.example.org/v1 --work-dir ...
 ```
 
-`--snapshot latest` picks the newest snapshot of the flavor (`--flavor full`, the default, or
-`pruned`) that this release can import. It checks each candidate's manifest against the digest in
-the index, then against the local specifications, and skips one made by an incompatible release with
-a message saying why. The network is always the target's configured one.
+`--snapshot latest` picks the newest live snapshot that this release can import. It checks each
+candidate's manifest against the digest in the index, then against the local specifications, and
+skips one made by an incompatible release with a message saying why. `--snapshot <id>` accepts a
+unique prefix of a live snapshot's id, or the full id of a staged one. The network is always the
+target's configured one. Before anything is downloaded, the import prints the chosen snapshot: its
+point, the release and commit that made it, size, stores, history split, signature, and whether it
+is staged.
 
 The manifest and checksums are saved under the work directory. The parts the import needs (for a
 scoped target, only its stores' parts) are streamed straight into the extractor, several at once.

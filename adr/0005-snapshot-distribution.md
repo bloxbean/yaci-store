@@ -168,7 +168,10 @@ skips files.
 The mechanism is generic: a `Retention` applies to any table with an `EPOCH` partition strategy,
 by epoch partition value. It is enabled only where a pruning service defines the semantics.
 
-### D8 — Pruned snapshots are built at export
+### D8 — Pruned snapshots are built at export (superseded by D11)
+
+*Superseded by D11: the pruning is still done at export, but its output is the current tier of the
+one full snapshot rather than a second artifact. The reasoning below still applies to that tier.*
 
 A *pruned* snapshot (`snapshot export --flavor pruned`) holds what a node running the matching
 pruning settings would hold at the consistency point. It is published next to the full snapshot.
@@ -258,16 +261,73 @@ store.snapshot.trusted-keys=/etc/yaci/snapshot-signing.pub
 
 | Command | Purpose |
 |---|---|
-| `snapshot export … [--flavor full\|pruned] [--publish]` | export, optionally sign and publish in one step |
-| `snapshot publish --manifest m.json [--remote …]` | upload a local snapshot and add it to the index |
-| `snapshot list [--remote …] [--all]` | snapshots for the configured network, with compatibility |
-| `snapshot download --snapshot latest\|<id> [--flavor …] --output dir` | fetch for offline import or mirroring |
-| `snapshot import --snapshot latest\|<id> [--flavor …] [--remote …] --work-dir …` | stream, verify and import |
-| `snapshot index --rebuild` | regenerate `index.json` from the manifests in the store |
+| `snapshot export … [--history-split] [--publish [--live]]` | export, optionally sign and publish in one step |
+| `snapshot publish --manifest m.json [--remote …] [--live]` | upload a local snapshot, staged unless `--live` (D12) |
+| `snapshot promote\|unlist --snapshot <id>` | add a staged snapshot to the index, or take one out |
+| `snapshot list [--remote …] [--all] [--check]` | live (with `--all`, also staged) snapshots for the configured network |
+| `snapshot download --snapshot latest\|<id> --output dir` | fetch for offline import or mirroring |
+| `snapshot import --snapshot latest\|<id> [--remote …] --work-dir …` | stream, verify and import |
+| `snapshot index --rebuild` | regenerate `index.json` from the live snapshots in the store |
 | `snapshot keygen --output dir` | create an Ed25519 signing key pair |
 
 `--remote` accepts any D1 location, so `snapshot import --remote https://snapshots.example.org/v1`
 needs no credentials at all.
+
+### D11 — One snapshot, with a current and a history tier
+
+Publishing a full and a pruned snapshot doubles the bucket storage (about 141 + 73 GiB per mainnet
+snapshot) and the upload, and makes users choose between two artifacts. Pruning at import instead
+keeps one artifact but costs every pruning user the full UTxO download, plus the anti-join on their
+machine. Instead, the export packages the pruned tables in two tiers, each in parts of its own:
+
+| Table | Current tier | History tier |
+|---|---|---|
+| `address_utxo` | Outputs unspent at the point, or spent within the window (D8) | Outputs spent before the window, rewritten |
+| `tx_input` | Inputs spent within the window | Older inputs: the files entirely before the window unchanged, plus the boundary rows |
+| `epoch_stake` | The newest 8 epochs | Older epochs, unchanged |
+
+- **Rows.** Every row of one output is in one tier, so the importer's per-partition regrouping is
+  unchanged. Rows after the point are left out, as the importer's cutoff would leave them. Export checks
+  that the tiers' rows add up to the source's rows up to the point.
+- **Manifest.** Each history file is marked `"history": true`, and its group is
+  `<module>/history`, so it starts a new part. Each row-split table records a `historySplit`
+  (`key`, `value`, the current tier's `rowCount` and `bounds`). The table's own count and bounds stay
+  the full table's. `epoch_stake` needs no split record: the import picks any number of epochs from the
+  per-epoch files, and the history parts are only read for more than 8 epochs.
+- **Import.** `Retention.forTarget` adds a split's `key=value` to the import's retention when the
+  target runs the matching pruning (`store.utxo.pruning-enabled`) with a window no wider than the
+  split's (`store.utxo.pruning-safe-blocks`). A wider window loads both tiers and lets the target's
+  pruning trim them. `--epoch-stake-epochs` defaults to the target's
+  `store.adapot.epoch-stake-safe-epochs` when it prunes `epoch_stake`. `Retention.apply` turns the
+  retention into the reduced view (current files, split count and bounds). That view drives the file
+  and part selection, the validator (from the journal's retention) and the journal's resume check.
+- **Extensible.** A new history table needs only a split in the exporter, a retention key, the
+  target setting it depends on (`Retention.requiredSetting`, `windowSetting`), and, for a window, the
+  setting that widens it. `transaction_cbor` with `store.transaction.cbor-retention-slots` is the
+  obvious next one, once it has an analytics export.
+
+The cost is on the producer: the UTxO split rewrites all of `address_utxo` (1.5B rows on mainnet) instead
+of copying its files. We estimate about 10 extra minutes and 38 GiB of temporary disk.
+
+### D12 — Staged and live snapshots
+
+A snapshot must be importable before anyone else can find it, so that it can be tested in the real
+location first. `publish` writes the snapshot's index entry to `<network>/<id>/snapshot.json`, with
+`"live": false`, and leaves `index.json` alone unless `--live` is passed. `latest`, `list` and a listing
+page only see `index.json`. `import --snapshot <full id>` falls back to `snapshot.json`, so a staged
+snapshot can still be imported by its id. `promote` re-checks the manifest digest, sets `live` and
+adds the entry to the index. `unlist` reverses it. `index --rebuild` includes only live snapshots, and
+republishing a live snapshot keeps it live. Staging hides a snapshot from discovery; it does not
+protect it: its files are as readable as a live one's.
+
+### D13 — What a snapshot entry shows
+
+The manifest records the release's git commit (`yaciStoreCommit`, from `git.properties`), since a
+release version carries no commit. Each index entry has the point (epoch, slot, block, block time), the
+version and commit, size, parts, modules, history splits, signing key id and the manifest digest. A
+remote import and a download print these before any part is fetched, and mark a staged snapshot.
+`index.json` is the public JSON for an external listing page; a page on another origin needs the
+bucket's CORS policy to allow `GET`.
 
 ## Alternatives considered
 
@@ -294,17 +354,17 @@ needs no credentials at all.
 - One command restores a node from a public bucket, with no credentials and no manual copying.
   It picks a snapshot this release can actually import.
 - A scoped indexer downloads and extracts only its stores' parts.
-- A pruned snapshot makes a small UTxO node practical: a fraction of the download, the load and
-  the disk.
+- One snapshot also makes a small UTxO node practical: a pruning target downloads, loads and
+  stores only the current tier.
 - End-to-end integrity and authenticity from the publisher's key down to each Parquet file,
   verifiable with standard tools.
 
 **Negative**
 
 - The admin CLI gains the AWS SDK (S3 module, URL-connection client).
-- Two flavors double the producer's export and publish work, and the bucket storage.
-- Pruned snapshots carry the pruned node's limitations, which the operator must accept
-  explicitly through their pruning configuration.
+- The history split rewrites `address_utxo` at export, roughly doubling the export time.
+- A pruning target carries the pruned node's limitations, which the operator accepts through
+  their pruning configuration.
 
 ## Implementation plan
 
@@ -332,7 +392,9 @@ Each step is its own commit on `feature/snapshot-distribution`, stacked on ADR 0
 
 ## Implementation notes
 
-**Status as of 2026-10-17.** D1 to D9 are implemented on `feature/snapshot-distribution` (PR #1267).
+**Status as of 2026-10-17.** D1 to D13 are implemented on `feature/snapshot-distribution` (PR #1267).
+The numbers below for the pruned export come from the D8 flavor, before D11 replaced it with the
+current tier. That tier is computed by the same steps.
 
 **Scoped import on mainnet.** The target ran blocks, epoch, staking and governance, imported from export
 #6 (140.8 GiB, parts written before D6, so they mix modules).
