@@ -12,6 +12,8 @@ import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.common.domain.TxOuput;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
+import com.bloxbean.cardano.yaci.store.common.util.ErrorCode;
+import com.bloxbean.cardano.yaci.store.events.ErrorEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
@@ -169,6 +171,12 @@ public class TransactionProcessor {
                 var fee = feeResolver.resolveFee(invalidTx._2);
                 if (fee == null) {
                     log.error("Fee not found for transaction. Something is wrong : {}", invalidTx._2.getBody().getTxHash());
+                    publisher.publishEvent(ErrorEvent.builder()
+                            .block(invalidTx._1.getBlockNumber())
+                            .errorCode(ErrorCode.DATA_MISSING_ERROR.name())
+                            .reason("Collateral fee unresolved; transaction fee stored as null")
+                            .details("tx_hash: " + invalidTx._1.getTxHash() + ", block_hash: " + invalidTx._1.getBlockHash())
+                            .build());
                 }
 
                 invalidTx._1.setFee(fee);

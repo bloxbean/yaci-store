@@ -8,6 +8,8 @@ import com.bloxbean.cardano.yaci.store.client.utxo.DummyUtxoClient;
 import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClient;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
+import com.bloxbean.cardano.yaci.store.common.util.ErrorCode;
+import com.bloxbean.cardano.yaci.store.events.ErrorEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
@@ -258,6 +260,7 @@ class TransactionProcessorTest {
 
         verify(transactionStorage).saveAll(txnListCaptor.capture());
         assertThat(txnListCaptor.getValue().get(0).getFee()).isEqualTo(BigInteger.valueOf(3_000_000));
+        assertThat(publishedEvents()).noneMatch(ErrorEvent.class::isInstance);
     }
 
     @Test
@@ -271,6 +274,22 @@ class TransactionProcessorTest {
 
         verify(transactionStorage).saveAll(txnListCaptor.capture());
         assertThat(txnListCaptor.getValue().get(0).getFee()).isNull();
+        assertThat(publishedEvents())
+                .filteredOn(ErrorEvent.class::isInstance)
+                .map(ErrorEvent.class::cast)
+                .singleElement()
+                .satisfies(errorEvent -> {
+                    assertThat(errorEvent.getBlock()).isEqualTo(eventMetadata().getBlock());
+                    assertThat(errorEvent.getErrorCode()).isEqualTo(ErrorCode.DATA_MISSING_ERROR.name());
+                    assertThat(errorEvent.getDetails()).contains("tx_hash: invalid-tx")
+                            .contains("block_hash: " + eventMetadata().getBlockHash());
+                });
+    }
+
+    private List<Object> publishedEvents() {
+        ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(publisher, Mockito.atLeastOnce()).publishEvent(eventCaptor.capture());
+        return eventCaptor.getAllValues();
     }
 
     private TransactionProcessor processorWithUtxoClient(UtxoClient utxoClient) {
@@ -282,6 +301,7 @@ class TransactionProcessorTest {
     private TransactionEvent invalidTransactionEvent() {
         Transaction transaction = Transaction.builder()
                 .txHash("invalid-tx")
+                .blockNumber(eventMetadata().getBlock())
                 .body(TransactionBody.builder()
                         .txHash("invalid-tx")
                         .inputs(Set.of())
@@ -303,22 +323,6 @@ class TransactionProcessorTest {
                 .transactions(List.of(transaction))
                 .metadata(eventMetadata())
                 .build();
-    }
-
-    private void handleWithFullTxCborEnabled(List<Transaction> transactions) {
-        TransactionStoreProperties properties = TransactionStoreProperties.builder()
-                .saveCbor(false)
-                .saveFullTxCbor(true)
-                .build();
-
-        TransactionProcessor processorWithFullTxCborOnly = new TransactionProcessor(
-                transactionStorage, transactionCborStorage, transactionWitnessStorage, invalidTransactionStorage,
-                new ObjectMapper(), feeResolver, publisher, properties);
-
-        processorWithFullTxCborOnly.handleTransactionEvent(TransactionEvent.builder()
-                .transactions(transactions)
-                .metadata(eventMetadata())
-                .build());
     }
 
     private EventMetadata eventMetadata() {
