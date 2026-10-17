@@ -38,13 +38,19 @@ public class ArchiveWriter {
     private static final Logger log = LoggerFactory.getLogger(ArchiveWriter.class);
     public static final long DEFAULT_PART_SIZE = 8L * 1024 * 1024 * 1024;
 
-    private final Path dataDir;
+    private final java.util.function.Function<String, Path> source;
     private final Path outputDir;
     private final String baseName;
     private final long partSizeBytes;
 
     public ArchiveWriter(Path dataDir, Path outputDir, String baseName, long partSizeBytes) {
-        this.dataDir = dataDir;
+        this(dataDir::resolve, outputDir, baseName, partSizeBytes);
+    }
+
+    /** @param source where each file is, by its path in the snapshot */
+    public ArchiveWriter(java.util.function.Function<String, Path> source, Path outputDir, String baseName,
+                         long partSizeBytes) {
+        this.source = source;
         this.outputDir = outputDir;
         this.baseName = baseName;
         this.partSizeBytes = partSizeBytes > 0 ? partSizeBytes : DEFAULT_PART_SIZE;
@@ -147,16 +153,16 @@ public class ArchiveWriter {
     }
 
     private void addStored(ZipOutputStream zip, SnapshotManifest.FileEntry fe, Long knownCrc) throws IOException {
-        Path source = dataDir.resolve(fe.path());
+        Path file = source.apply(fe.path());
         ZipEntry entry = new ZipEntry(fe.path());
         entry.setMethod(ZipEntry.STORED);
         entry.setSize(fe.size());
         entry.setCompressedSize(fe.size());
-        entry.setCrc(knownCrc != null ? knownCrc : crc32(source));
+        entry.setCrc(knownCrc != null ? knownCrc : crc32(file));
         // Fixed timestamp keeps repeated exports of the same file set byte-comparable.
         entry.setTime(0L);
         zip.putNextEntry(entry);
-        try (InputStream in = Files.newInputStream(source)) {
+        try (InputStream in = Files.newInputStream(file)) {
             in.transferTo(zip);
         }
         // ZipOutputStream checks the stored CRC and size against the bytes written.

@@ -124,15 +124,28 @@ public class SnapshotCommands {
             @Option(longNames = "publish", defaultValue = "false",
                     description = "Upload the snapshot and add it to the index when the export succeeds")
             boolean publish,
+            @Option(longNames = "flavor", defaultValue = "full",
+                    description = "full, or pruned: unspent and recently spent UTxOs and the newest epoch_stake epochs")
+            String flavor,
+            @Option(longNames = "utxo-safe-blocks", defaultValue = "2160",
+                    description = "pruned: keep outputs spent within this many blocks before the point")
+            int utxoSafeBlocks,
+            @Option(longNames = "epoch-stake-epochs", defaultValue = "8",
+                    description = "pruned: keep this many newest epochs of epoch_stake (at least 4)")
+            int epochStakeEpochs,
             @Option(longNames = "remote", description = SnapshotRemoteCommands.REMOTE_HELP) String remote) {
         try {
             SnapshotCliSupport.ensureDirectory(Path.of(workDir));
             SnapshotCliSupport.ensureDirectory(Path.of(output));
             SnapshotSpecRegistry registry = support.exportRegistry(specFile, allowCustomSpecs);
+            if (!SnapshotManifest.FLAVOR_FULL.equals(flavor) && !SnapshotManifest.FLAVOR_PRUNED.equals(flavor)) {
+                throw new CommandFailedException("snapshot export: --flavor must be full or pruned", null);
+            }
             ExportOptions options = support.exportOptions(registry, dataDir, output, workDir, partSize,
-                    targetEpoch, minConfirmations, allowIncomplete, unsigned, memoryLimit);
+                    targetEpoch, minConfirmations, allowIncomplete, unsigned, memoryLimit)
+                    .withFlavor(flavor, utxoSafeBlocks, epochStakeEpochs);
 
-            writeLn(info("Packaging snapshot from %s", options.dataDir()));
+            writeLn(info("Packaging %s snapshot from %s", flavor, options.dataDir()));
             SnapshotExporter.ExportResult result;
             try {
                 SnapshotExporter exporter = new SnapshotExporter(registry).verifyParts(verify);
@@ -149,6 +162,9 @@ public class SnapshotCommands {
                     m.point().blockNumber(), m.point().slot());
             writeLn("  Block hash    : %s", m.point().blockHash());
             writeLn("  Tables        : %d, rows %d", m.tables().size(), m.totalRows());
+            if (!m.retentionOrEmpty().isEmpty()) {
+                writeLn("  Retention     : %s", com.bloxbean.cardano.yaci.store.snapshot.manifest.Retention.format(m.retention()));
+            }
             writeLn("  Parts         : %d (%s)", m.parts().size(),
                     SnapshotCliSupport.humanBytes(result.bytesWritten()));
             writeLn("  Manifest      : %s", result.manifestPath().getFileName());

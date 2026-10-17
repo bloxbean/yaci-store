@@ -214,15 +214,35 @@ public class SnapshotExporter {
             }
 
             String snapshotId = UUID.randomUUID().toString();
-            String baseName = String.format("yaci-%s-e%d-%s", options.network(),
-                    report.completedEpoch(), snapshotId.substring(0, 8));
+            String baseName = String.format("yaci-%s-e%d-%s%s", options.network(),
+                    report.completedEpoch(), options.pruned() ? "pruned-" : "", snapshotId.substring(0, 8));
+
+            // A pruned snapshot rewrites the UTxO relations and drops old epoch_stake partitions; the
+            // rewritten files are packaged from the work directory instead of the analytics directory.
+            List<TablePlan> planned = report.plans();
+            Map<String, Path> rewritten = Map.of();
+            Map<String, String> retention = null;
+            if (options.pruned()) {
+                Progress.phase(progress, "Pruning: unspent and recently spent UTxOs, the newest epoch_stake epochs");
+                PrunedExport.Result pruned = new PrunedExport(catalog, options.workDir(), options.memoryLimit(), progress)
+                        .apply(planned, report.point(), report.ducklakeSnapshotId(), options.utxoSafeBlocks(),
+                                options.epochStakeEpochs());
+                planned = pruned.plans();
+                rewritten = pruned.rewritten();
+                retention = pruned.retention();
+            }
+            Map<String, Path> sources = rewritten;
+            java.util.function.Function<String, Path> source = rel -> {
+                Path p = sources.get(rel);
+                return p != null ? p : options.dataDir().resolve(rel);
+            };
 
             // Pre-scan: one read per file produces the SHA-256 for the manifest and the CRC-32 the
             // archive writer needs. Files are independent, so several are read at once.
             int threads = ArchiveVerifier.DEFAULT_THREADS;
             // Grouped by store module, each module's tables in their usual order, so parts can break
             // at module boundaries and a scoped import skips whole parts.
-            List<TablePlan> plans = report.plans().stream()
+            List<TablePlan> plans = planned.stream()
                     .sorted(java.util.Comparator.comparing((TablePlan pl) -> pl.spec().module())).toList();
             List<DuckLakeFile> scanFiles = plans.stream().flatMap(pl -> pl.files().stream()).toList();
             long scanBytes = scanFiles.stream().mapToLong(DuckLakeFile::sizeBytes).sum();
@@ -237,7 +257,7 @@ public class SnapshotExporter {
                             Progress.rate(scannedBytes.get(), scanBytes, scanStart, System.currentTimeMillis())),
                     progress)) {
                 digests = Parallel.map(scanFiles, threads, f -> {
-                    Path abs = options.dataDir().resolve(f.relativePath());
+                    Path abs = source.apply(f.relativePath());
                     if (!Files.isRegularFile(abs)) {
                         throw new IOException("Catalog references a missing file: " + f.relativePath());
                     }
@@ -280,7 +300,7 @@ public class SnapshotExporter {
                         0, List.of(), 0L, List.of(), null, Map.of(), Map.of(), List.of(), spec.contractDigest()));
             }
 
-            ArchiveWriter writer = new ArchiveWriter(options.dataDir(), options.outputDir(), baseName,
+            ArchiveWriter writer = new ArchiveWriter(source, options.outputDir(), baseName,
                     options.partSizeBytes());
             long packStart = System.currentTimeMillis();
             Progress.phase(progress, String.format("Writing %s into parts of up to %s with %d threads",
@@ -320,7 +340,8 @@ public class SnapshotExporter {
                     options.flywayFingerprint(),
                     tableManifests,
                     parts,
-                    report.declaredLossy(), options.tableSchemaFingerprints());
+                    report.declaredLossy(), options.tableSchemaFingerprints(),
+                    options.pruned() ? SnapshotManifest.FLAVOR_PRUNED : null, retention);
 
             if (verifyParts) {
                 verifyWrittenParts(manifest, parts, options, threads, progress);

@@ -188,6 +188,32 @@ class SnapshotImportIT {
     }
 
     @Test
+    void aPrunedSnapshotNeedsATargetThatPrunesTheSameTables() throws Exception {
+        var built = fixture();
+        var m = built.manifest();
+        var pruned = m.withTables(m.tables(), SnapshotManifest.FLAVOR_PRUNED,
+                java.util.Map.of("address_utxo.spent-safe-blocks", "2160", "epoch_stake.epochs", "8"));
+        new ManifestCodec().writeAtomically(pruned, built.manifestPath());
+        var importer = new SnapshotImporter(registry);
+
+        assertThat(importer.preflight(options(built.manifestPath(), 1, java.util.Map.of(),
+                java.util.Map.of("store.adapot.epoch-stake-pruning-enabled", "true"))).blockers())
+                .anyMatch(b -> b.contains("store.utxo.pruning-enabled=true"))
+                .noneMatch(b -> b.contains("epoch-stake-pruning-enabled"));
+        assertThat(importer.preflight(options(built.manifestPath(), 1, java.util.Map.of(), java.util.Map.of(
+                "store.utxo.pruning-enabled", "true", "store.adapot.epoch-stake-pruning-enabled", "true"))).blockers())
+                .isEmpty();
+        // A scoped target without the UTxO store does not care how the snapshot pruned it.
+        try (var conn = PostgresSupport.connect(); var st = conn.createStatement()) {
+            st.execute("DROP TABLE " + schema + ".address_utxo");
+        }
+        assertThat(new SnapshotImporter(registry.selectModules(java.util.Set.of("core", "blocks", "epoch-aggr", "adapot")))
+                .preflight(options(built.manifestPath(), 1, java.util.Map.of(),
+                        java.util.Map.of("store.adapot.epoch-stake-pruning-enabled", "true"))).blockers())
+                .noneMatch(b -> b.contains("store.utxo.pruning-enabled"));
+    }
+
+    @Test
     void scopedImportReadsOnlyThePartsThatCarryItsTables() throws Exception {
         var built = fixtureWithTableSchemas();
         var selected = registry.selectModules(java.util.Set.of("core", "blocks"));

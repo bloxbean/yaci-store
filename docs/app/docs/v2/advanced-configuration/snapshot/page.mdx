@@ -230,6 +230,32 @@ omit committed WAL entries. Analytics writes, compaction, and garbage collection
 throughout export.
 </Callout>
 
+### Pruned snapshots
+
+`snapshot export --flavor pruned` produces what a node running UTxO and epoch-stake pruning would
+hold at the consistency point, published next to the full snapshot:
+
+| Table | Kept |
+|---|---|
+| `address_utxo` | Outputs unspent at the point, plus outputs spent within the last `--utxo-safe-blocks` blocks (default 2160) |
+| `tx_input` | Inputs spent within the last `--utxo-safe-blocks` blocks |
+| `epoch_stake` | The newest `--epoch-stake-epochs` epochs (default 8, at least 4) |
+| everything else | Unchanged |
+
+The window keeps exactly what a rollback within the 2160-block cursor tail needs: rolling back an
+input un-spends its output, which must still exist. The UTxO tables are rewritten into the work
+directory as Parquet, in the same daily partitions and columns, by one DuckDB anti-join of every
+output against every input spent before the window. It runs under `--memory-limit` and spills to the
+work directory, so a small limit is slower but never fails. The manifest records
+`"flavor": "pruned"` and the retention, for example `address_utxo.spent-safe-blocks=2160`.
+
+Importing a pruned snapshot needs a target that prunes the same way: `store.utxo.pruning-enabled=true`
+for the UTxO tables and `store.adapot.epoch-stake-pruning-enabled=true` for `epoch_stake` (only for
+stores the target enables). Otherwise preflight refuses it, because the application would serve the
+partial history as complete. A pruned node has the usual limitations of pruning: address and
+transaction history only covers unspent outputs and recent spends, `epoch_stake` only recent epochs,
+and a rollback deeper than the window is not possible.
+
 ### Archive layout
 
 ```text
