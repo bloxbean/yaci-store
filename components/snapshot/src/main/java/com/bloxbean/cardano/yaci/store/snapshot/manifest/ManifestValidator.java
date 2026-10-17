@@ -81,7 +81,11 @@ public final class ManifestValidator {
             }
         }
         for (SnapshotTableSpec spec : registry.all()) {
-            if (!seen.contains(spec.id())) {
+            if (!seen.contains(spec.id()) && spec.optional()) {
+                problems.add("The snapshot does not carry " + spec.targetTable() + ", which this target turns on with "
+                        + String.join(" or ", spec.enabledBy()) + ". Turn it off, or import a snapshot exported"
+                        + " from a source that saves it.");
+            } else if (!seen.contains(spec.id())) {
                 problems.add("Missing manifest specification '" + spec.id() + "'; a complete snapshot is required");
             }
         }

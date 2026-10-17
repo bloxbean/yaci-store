@@ -155,8 +155,10 @@ public class SnapshotCliSupport {
                     profile.put(spec.module(), environment.getProperty("store." + spec.module() + ".enabled", Boolean.class, false));
                 }
             }
+            // Optional tables (transaction_cbor, block_cbor) only when the target saves them (ADR 0006).
             return registry.selectModules(profile.entrySet().stream().filter(Map.Entry::getValue)
-                    .map(Map.Entry::getKey).collect(java.util.stream.Collectors.toSet()));
+                    .map(Map.Entry::getKey).collect(java.util.stream.Collectors.toSet()))
+                    .withoutDisabledOptionalTables(this::setting);
         }
     }
 
@@ -168,7 +170,13 @@ public class SnapshotCliSupport {
         java.util.Set<String> disabled = StoreModuleConfig.configured(environment).entrySet().stream()
                 .filter(e -> !e.getValue()).map(Map.Entry::getKey)
                 .collect(java.util.stream.Collectors.toSet());
-        return registry(specFile, allowCustomSpecs).withoutImportedTablesOf(disabled);
+        return registry(specFile, allowCustomSpecs).withoutImportedTablesOf(disabled)
+                .withoutDisabledOptionalTables(this::setting);
+    }
+
+    /** A boolean store setting, false when unset. */
+    private Boolean setting(String property) {
+        return environment.getProperty(property, Boolean.class, false);
     }
 
     public Map<String, String> pruningSettings() {
@@ -182,6 +190,11 @@ public class SnapshotCliSupport {
                 environment.getProperty("store.adapot.epoch-stake-pruning-enabled", "false"));
         out.put("store.account.pruning-enabled",
                 environment.getProperty("store.account.pruning-enabled", "false"));
+        // What the optional CBOR tables hold (ADR 0006): a target must match the transaction form.
+        for (String cbor : List.of("store.blocks.save-cbor", "store.transaction.save-cbor",
+                "store.transaction.save-full-tx-cbor")) {
+            out.put(cbor, environment.getProperty(cbor, "false"));
+        }
         return out;
     }
 
