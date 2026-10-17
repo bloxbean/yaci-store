@@ -8,7 +8,9 @@ import com.bloxbean.cardano.yaci.store.blocks.domain.BlockCbor;
 
 import com.bloxbean.cardano.yaci.store.blocks.storage.BlockCborStorage;
 import com.bloxbean.cardano.yaci.store.blocks.storage.BlockStorage;
+import com.bloxbean.cardano.yaci.store.common.util.ErrorCode;
 import com.bloxbean.cardano.yaci.store.events.BlockEvent;
+import com.bloxbean.cardano.yaci.store.events.ErrorEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
@@ -24,6 +26,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.test.web.client.MockRestServiceServer;
@@ -53,6 +56,8 @@ class BlockProcessorTest {
     private BlocksStoreProperties blocksStoreProperties;
     @Mock
     private UtxoClient utxoClient;
+    @Mock
+    private ApplicationEventPublisher publisher;
     @InjectMocks
     private BlockProcessor blockProcessor;
     @Captor
@@ -210,11 +215,20 @@ class BlockProcessorTest {
         assertThat(blockArgCaptor.getValue().getTotalFees()).isEqualTo(4_694_944);
         assertThat(output).contains("Collateral fee unresolved for transaction missing")
                 .contains("using declared fee 200000. Block and epoch total fees may be inaccurate.");
+
+        var eventCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(publisher).publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getValue()).isInstanceOfSatisfying(ErrorEvent.class, errorEvent -> {
+            assertThat(errorEvent.getBlock()).isEqualTo(200);
+            assertThat(errorEvent.getErrorCode()).isEqualTo(ErrorCode.DATA_MISSING_ERROR.name());
+            assertThat(errorEvent.getDetails()).contains("tx_hash: missing")
+                    .contains("block_hash: " + blockArgCaptor.getValue().getHash());
+        });
     }
 
     @Test
     void dummyUtxoClientDoesNotStopBlockProcessing() {
-        var processor = new BlockProcessor(blockStorage, blockCborStorage, blocksStoreProperties, new DummyUtxoClient());
+        var processor = new BlockProcessor(blockStorage, blockCborStorage, blocksStoreProperties, new DummyUtxoClient(), publisher);
         var event = blockEvent(List.of(collateralTransaction("alonzo", 200_000, null, null)), List.of(0));
 
         processor.handleBlockHeaderEvent(event);
@@ -251,6 +265,7 @@ class BlockProcessorTest {
         verify(blockStorage).save(blockArgCaptor.capture());
         assertThat(blockArgCaptor.getValue().getTotalFees()).isEqualTo(3_000_000);
         assertThat(output).doesNotContain("using declared fee");
+        verifyNoInteractions(publisher);
     }
 
     @Test
@@ -259,7 +274,7 @@ class BlockProcessorTest {
         var server = MockRestServiceServer.bindTo(restTemplate).build();
         server.expect(twice(), requestTo("http://utxo-store/api/v1/utxos")).andRespond(withNoContent());
         var processor = new BlockProcessor(blockStorage, blockCborStorage, blocksStoreProperties,
-                new UtxoClientImpl(restTemplate, "http://utxo-store/api/v1"));
+                new UtxoClientImpl(restTemplate, "http://utxo-store/api/v1"), publisher);
         var event = blockEvent(List.of(collateralTransaction("remote", 200_000, null, null)), List.of(0));
 
         processor.handleBlockHeaderEvent(event);
@@ -277,7 +292,7 @@ class BlockProcessorTest {
         var server = MockRestServiceServer.bindTo(restTemplate).build();
         server.expect(twice(), requestTo("http://utxo-store/api/v1/utxos")).andRespond(withStatus(HttpStatus.NOT_FOUND));
         var processor = new BlockProcessor(blockStorage, blockCborStorage, blocksStoreProperties,
-                new UtxoClientImpl(restTemplate, "http://utxo-store/api/v1"));
+                new UtxoClientImpl(restTemplate, "http://utxo-store/api/v1"), publisher);
         var event = blockEvent(List.of(collateralTransaction("remote", 200_000, null, null)), List.of(0));
 
         processor.handleBlockHeaderEvent(event);
