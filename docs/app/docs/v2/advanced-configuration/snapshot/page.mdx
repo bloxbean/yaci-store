@@ -365,7 +365,7 @@ and profiles for the application and CLI. An existing empty, migrated target can
 mode once to create this record without recreating its tables.
 
 Only enabled stores are restored and validated. Required dependencies must also be enabled;
-block, cursor, and era state are required to resume sync. Disabled stores' chain tables must stay
+cursor and era state are always restored, as sync cannot resume without them. Disabled stores' chain tables must stay
 empty. New manifests carry per-table schema fingerprints, allowing a smaller target application
 to import without matching unrelated source tables or Flyway history. Older manifests without
 these fingerprints require the whole schema fingerprint to match; otherwise regenerate the
@@ -382,7 +382,12 @@ stores in a part; their parts are still read, but other stores' files are not ex
 
 Limitations of a scoped restore:
 
-- The `blocks` store is always required, with its cursor and era state: sync cannot resume without it.
+- The cursor and era state are always restored. They are rebuilt from the block tail, so without the
+  `blocks` store the import still reads the snapshot's block files (on mainnet one part of about
+  3.8 GiB), stages only the rows it needs (the newest `store.cardano.cursor-no-of-blocks-to-keep`
+  blocks and the first block of each era) in a scratch table, and drops it: the `block` table stays
+  empty. Validation then checks the cursor against the snapshot point instead of the block table.
+  A metadata or script indexer therefore needs only its own stores.
 - A table your application creates itself needs a snapshot specification. Without one, preflight
   stops with "has no snapshot classification".
 - Dependencies between stores are not checked. If you enable a store whose processing reads another
@@ -473,6 +478,15 @@ During the import the loaded tables' keys and the indexes their migrations creat
 rebuilt after the load, autovacuum is kept off those tables until the end, and every loaded table
 is analyzed, so the application's first queries have planner statistics.
 
+Before the rebuild, the loaded tables are frozen (`VACUUM (FREEZE)`, one table per worker, largest
+first) while they still have no index. Otherwise every freshly loaded page is rewritten three more
+times: the rebuild's scan sets its hint bits, and the first autovacuum freezes it and sets the
+visibility map, hours after the import. With data checksums, on by default from PostgreSQL 18, each
+of those writes after a checkpoint logs a full page image, so on mainnet the WAL reached twice the
+restored database's size and the rebuild waited on WAL writes. Freezing does that work once; the
+rebuild, validation and autovacuum then only read the pages. `--freeze false` leaves it to
+autovacuum.
+
 <Callout type="warning">
 `--min-free-disk-gb` checks the **work directory** before loading; it is not a continuous disk-space
 monitor. Allow room for extraction and DuckDB spill, and monitor disk usage during the run. Make sure the
@@ -504,7 +518,8 @@ Four levels are defined; the first three are offline and must all pass before sy
    no table left with autovacuum off or server setting left changed by the import.
 3. **Semantic** — the manifest point equals the last imported block *and* the final cursor, the
    retained block and cursor tails have a continuous previous-hash chain, no rows beyond any
-   table's declared cutoff, era rows point at real blocks, every epoch parameter's cost model is
+   table's declared cutoff, era rows point at real blocks (without the `blocks` store: the final
+   cursor equals the point and no era row is past it), every epoch parameter's cost model is
    present, `address_utxo` has one row per `(tx_hash, output_index)` (proved by its rebuilt unique
    key) with valid JSONB amounts, exactly one lovelace entry, a matching lovelace total and a
    resolved block number.
@@ -533,7 +548,12 @@ offline level and, if all pass, marks the import `READY`. If validation fails, t
 ```bash
 apply-indexes                        # default read indexes plus extra indexes
 apply-indexes --skip-extra-indexes   # default read indexes only
+apply-indexes --parallel 8           # 8 indexes at a time (default 4)
 ```
+
+`--parallel` builds that many indexes at the same time, one connection each, starting with the
+largest tables' so the longest builds do not start last. Each build uses up to the server's
+`maintenance_work_mem`, plus its parallel maintenance workers. `--parallel 1` builds one at a time.
 
 The optional read indexes are **not** part of the import. The importer rebuilds only the keys and
 indexes that the target's migrations created, which it dropped for the load; `apply-indexes` adds

@@ -51,7 +51,34 @@ public record ImportOptions(Path manifestPath,
                             Map<String, String> retention,
                             Map<String, String> targetSettings,
                             PartSource partSource,
-                            List<java.security.PublicKey> trustedKeys) {
+                            List<java.security.PublicKey> trustedKeys,
+                            boolean freezeAfterLoad) {
+
+    public ImportOptions(Path manifestPath, Path archiveDir, Path workDir, String jdbcUrl, String user,
+                         String password, String schema, String network, long protocolMagic, long eventPublisherId,
+                         int cursorBlocksToKeep, int workers, String memoryLimit, long minFreeDiskGb,
+                         boolean allowUnsigned, boolean allowCustomSpecs, List<Path> customSpecPaths,
+                         boolean keepExtracted, boolean skipExtraction, boolean tunePostgres,
+                         Map<String, String> retention, Map<String, String> targetSettings, PartSource partSource,
+                         List<java.security.PublicKey> trustedKeys) {
+        this(manifestPath, archiveDir, workDir, jdbcUrl, user, password, schema, network, protocolMagic,
+                eventPublisherId, cursorBlocksToKeep, workers, memoryLimit, minFreeDiskGb, allowUnsigned,
+                allowCustomSpecs, customSpecPaths, keepExtracted, skipExtraction, tunePostgres, retention,
+                targetSettings, partSource, trustedKeys, true);
+    }
+
+    /**
+     * A copy that does or does not freeze the loaded tables before the key rebuild. Freezing sets the
+     * hint bits and the visibility map in one pass while no index exists yet, so the rebuild, the
+     * validation scans and the first autovacuum do not each rewrite every page (with data checksums,
+     * a full page image in the WAL each time).
+     */
+    public ImportOptions withFreezeAfterLoad(boolean freeze) {
+        return new ImportOptions(manifestPath, archiveDir, workDir, jdbcUrl, user, password, schema, network,
+                protocolMagic, eventPublisherId, cursorBlocksToKeep, workers, memoryLimit, minFreeDiskGb, allowUnsigned,
+                allowCustomSpecs, customSpecPaths, keepExtracted, skipExtraction, tunePostgres, retention,
+                targetSettings, partSource, trustedKeys, freeze);
+    }
 
     public ImportOptions(Path manifestPath, Path archiveDir, Path workDir, String jdbcUrl, String user,
                          String password, String schema, String network, long protocolMagic, long eventPublisherId,
@@ -70,7 +97,7 @@ public record ImportOptions(Path manifestPath,
         return new ImportOptions(manifestPath, archiveDir, workDir, jdbcUrl, user, password, schema, network,
                 protocolMagic, eventPublisherId, cursorBlocksToKeep, workers, memoryLimit, minFreeDiskGb, allowUnsigned,
                 allowCustomSpecs, customSpecPaths, keepExtracted, skipExtraction, tunePostgres, retention,
-                targetSettings, partSource, keys);
+                targetSettings, partSource, keys, freezeAfterLoad);
     }
 
     public ImportOptions(Path manifestPath, Path archiveDir, Path workDir, String jdbcUrl, String user,
@@ -90,7 +117,7 @@ public record ImportOptions(Path manifestPath,
         return new ImportOptions(manifestPath, archiveDir, workDir, jdbcUrl, user, password, schema, network,
                 protocolMagic, eventPublisherId, cursorBlocksToKeep, workers, memoryLimit, minFreeDiskGb, allowUnsigned,
                 allowCustomSpecs, customSpecPaths, keepExtracted, skipExtraction, tunePostgres, retention,
-                targetSettings, source, trustedKeys);
+                targetSettings, source, trustedKeys, freezeAfterLoad);
     }
 
     /** The parts' source: {@link #partSource}, or the files in {@link #archiveDir}. */

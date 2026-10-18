@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.store.snapshot.util.Identifiers;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.List;
 
 /**
  * Rebuilds {@code era} from the first imported block of each era.
@@ -29,10 +30,15 @@ public class EraTransitionHandler implements SnapshotHandler {
     }
 
     @Override
+    public List<String> reads() {
+        return List.of("block");
+    }
+
+    @Override
     public String apply(Context ctx) throws SQLException {
         String schema = Identifiers.quote(ctx.schema());
         String era = schema + "." + Identifiers.quote("era");
-        String block = schema + "." + Identifiers.quote("block");
+        String block = ctx.relation("block");
 
         try (Statement st = ctx.connection().createStatement()) {
             st.executeUpdate("DELETE FROM " + era);

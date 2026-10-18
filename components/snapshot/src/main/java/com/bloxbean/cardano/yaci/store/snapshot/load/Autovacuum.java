@@ -64,7 +64,7 @@ public final class Autovacuum {
     }
 
     /** The tables themselves when ordinary, and every partition below them. */
-    private static List<String> leafTables(Connection pg, String schema, List<String> tables) throws SQLException {
+    static List<String> leafTables(Connection pg, String schema, List<String> tables) throws SQLException {
         List<String> out = new ArrayList<>();
         String sql = """
                 WITH RECURSIVE tree AS (

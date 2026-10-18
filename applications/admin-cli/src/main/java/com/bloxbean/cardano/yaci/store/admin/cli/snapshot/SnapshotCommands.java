@@ -300,7 +300,11 @@ public class SnapshotCommands {
                     description = "Load only the newest N epochs of epoch_stake (at least 4). Default: the target's"
                             + " store.adapot.epoch-stake-safe-epochs when it runs with"
                             + " store.adapot.epoch-stake-pruning-enabled=true, otherwise every epoch")
-            int epochStakeEpochs) {
+            int epochStakeEpochs,
+            @Option(longNames = "freeze", defaultValue = "true",
+                    description = "VACUUM (FREEZE) the loaded tables before the key rebuild, so the rebuild,"
+                            + " validation and autovacuum do not each rewrite every page; --freeze false leaves it to autovacuum")
+            boolean freeze) {
         boolean local = manifest != null && !manifest.isBlank();
         if (local == (snapshot != null && !snapshot.isBlank())) {
             throw new CommandFailedException("snapshot import: pass either --manifest or --snapshot", null);
@@ -328,7 +332,8 @@ public class SnapshotCommands {
             }
             ImportOptions options = support.importOptions(manifest, workDir, workers, memoryLimit,
                     minFreeDiskGb, allowUnsigned, specFile, allowCustomSpecs, keepExtracted, tunePostgres,
-                    support.epochStakeEpochs(epochStakeEpochs)).withPartSource(parts).withTrustedKeys(support.trustedKeys(trustedKey));
+                    support.epochStakeEpochs(epochStakeEpochs)).withPartSource(parts).withTrustedKeys(support.trustedKeys(trustedKey))
+                    .withFreezeAfterLoad(freeze);
             SnapshotImporter importer = new SnapshotImporter(registry);
 
             if (dryRun) {
@@ -697,6 +702,7 @@ public class SnapshotCommands {
         writeLn("  Verify       : %s", SnapshotCliSupport.humanMillis(r.verifyMillis()));
         writeLn("  Extract      : %s", SnapshotCliSupport.humanMillis(r.extractMillis()));
         writeLn("  Heap load    : %s", SnapshotCliSupport.humanMillis(r.loadMillis()));
+        writeLn("  Freeze       : %s", SnapshotCliSupport.humanMillis(r.freezeMillis()));
         writeLn("  Keys/indexes : %s", SnapshotCliSupport.humanMillis(r.indexMillis()));
         writeLn("  Statistics   : %s", SnapshotCliSupport.humanMillis(r.analyzeMillis()));
         writeLn("  Control state: %s", SnapshotCliSupport.humanMillis(r.controlStateMillis()));

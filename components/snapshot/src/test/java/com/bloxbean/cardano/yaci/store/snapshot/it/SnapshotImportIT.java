@@ -327,6 +327,43 @@ class SnapshotImportIT {
     }
 
     @Test
+    void aTargetWithoutTheBlocksStoreRebuildsTheSameCursorAndErasFromTheBlockFiles() throws Exception {
+        var built = fixtureWithTableSchemas();
+        String cursorRows = "SELECT block_number || ':' || block_hash || ':' || slot || ':' || era || ':'"
+                + " || prev_block_hash FROM " + qt("cursor_") + " ORDER BY block_number";
+        String eraRows = "SELECT era || ':' || start_slot || ':' || block || ':' || block_hash FROM "
+                + qt("era") + " ORDER BY era";
+        List<String> cursor;
+        List<String> eras;
+        new SnapshotImporter(registry).importSnapshot(options(built.manifestPath(), 1), null);
+        try (var conn = PostgresSupport.connect()) {
+            cursor = rows(conn, cursorRows);
+            eras = rows(conn, eraRows);
+            PostgresSupport.resetSchema(conn);
+        }
+
+        var selected = registry.selectModules(java.util.Set.of("core", "epoch-aggr"));
+        var importer = new SnapshotImporter(selected);
+        var pre = importer.preflight(options(built.manifestPath(), 2));
+        assertThat(pre.blockers()).isEmpty();
+        // The block files are read for the handlers, though no block row is loaded.
+        assertThat(importer.selection(pre.archive(), pre.manifest()).files())
+                .anyMatch(f -> f.startsWith("main/block/"));
+        importer.importSnapshot(options(built.manifestPath(), 2), null);
+        try (var conn = PostgresSupport.connect()) {
+            assertThat(count(conn, "block")).isZero();
+            assertThat(count(conn, "epoch")).isEqualTo(3);
+            assertThat(rows(conn, cursorRows)).hasSize(10).isEqualTo(cursor);
+            assertThat(rows(conn, eraRows)).hasSize(3).isEqualTo(eras);
+            assertThat(scalarLong(conn, "SELECT count(*) FROM pg_tables WHERE schemaname = '" + schema
+                    + "' AND tablename LIKE '\\_yaci\\_snapshot\\_import\\_src\\_%'")).isZero();
+            for (var report : new SnapshotValidator(selected).validateAll(conn, schema, built.manifest(), 1, 10)) {
+                assertThat(report.passed()).withFailMessage(report.toString()).isTrue();
+            }
+        }
+    }
+
+    @Test
     void epochStakeRetentionLoadsOnlyTheNewestEpochsAndValidates() throws Exception {
         var built = fixture();
         var pruning = java.util.Map.of("store.adapot.epoch-stake-pruning-enabled", "true");
@@ -397,6 +434,10 @@ class SnapshotImportIT {
                     + " WHERE number = 0")).isEqualTo(1700000000L);
             assertThat(scalarString(conn, "SELECT jsonb_typeof(leader_vrf) FROM " + qt("block")
                     + " WHERE number = 0")).isEqualTo("object");
+
+            // Frozen before the rebuild: every page all-visible (only VACUUM sets it), nothing left for autovacuum.
+            assertThat(scalarString(conn, "SELECT relpages > 0 AND relallvisible = relpages FROM pg_class"
+                    + " WHERE oid = '" + qt("block") + "'::regclass")).isEqualTo("t");
 
             // MAPPED with a rename: epoch.number comes from the export's epoch column.
             assertThat(count(conn, "epoch")).isEqualTo(3);
@@ -494,11 +535,12 @@ class SnapshotImportIT {
         assertThat(banners.get(1)).startsWith("Preparing");
         assertThat(banners.get(2)).startsWith("Loading " + String.format("%,d", built.manifest().tables().stream()
                 .filter(t -> registry.isSelected(t.specId())).mapToLong(SnapshotManifest.TableManifest::rowCount).sum()));
-        assertThat(banners.get(3)).startsWith("Rebuilding");
-        assertThat(banners.get(4)).startsWith("Analyzing");
-        assertThat(banners.get(5)).startsWith("Control state");
-        assertThat(banners.get(6)).startsWith("Schema and load checks");
-        assertThat(banners.get(7)).startsWith("Semantic checks");
+        assertThat(banners.get(3)).startsWith("Freezing");
+        assertThat(banners.get(4)).startsWith("Rebuilding");
+        assertThat(banners.get(5)).startsWith("Analyzing");
+        assertThat(banners.get(6)).startsWith("Control state");
+        assertThat(banners.get(7)).startsWith("Schema and load checks");
+        assertThat(banners.get(8)).startsWith("Semantic checks");
     }
 
     @Test
@@ -801,6 +843,16 @@ class SnapshotImportIT {
         try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery(sql)) {
             return rs.next() ? rs.getLong(1) : -1;
         }
+    }
+
+    private static List<String> rows(Connection conn, String sql) throws SQLException {
+        List<String> out = new java.util.ArrayList<>();
+        try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery(sql)) {
+            while (rs.next()) {
+                out.add(rs.getString(1));
+            }
+        }
+        return out;
     }
 
     private static String scalarString(Connection conn, String sql) throws SQLException {

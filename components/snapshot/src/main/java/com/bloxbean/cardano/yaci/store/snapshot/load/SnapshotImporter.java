@@ -58,7 +58,7 @@ public class SnapshotImporter {
     private static final Logger log = LoggerFactory.getLogger(SnapshotImporter.class);
 
     /** Phase banners {@link #importSnapshot} sends, so a caller can number them. */
-    public static final int PHASES = 6;
+    public static final int PHASES = 7;
 
     /** Reads of one remote part before the import gives up; every attempt starts the part again. */
     static final int PART_ATTEMPTS = 3;
@@ -204,6 +204,7 @@ public class SnapshotImporter {
             }
 
             blockers.addAll(planEveryTable(manifest, schema, options));
+            blockers.addAll(HandlerSources.problems(registry, handlers));
 
             if (options.tunePostgres()) {
                 String denied = PostgresTuning.cannotApply(pg);
@@ -276,6 +277,8 @@ public class SnapshotImporter {
             specs.add(spec.id());
             specs.addAll(spec.importSpec().dependencies());
         }
+        // Tables a handler reads but this import does not load: their rows are staged, not loaded.
+        specs.addAll(HandlerSources.unloaded(registry, handlers));
         Set<String> files = new java.util.TreeSet<>();
         manifest.tables().stream().filter(t -> specs.contains(t.specId()) && t.files() != null)
                 .forEach(t -> t.files().forEach(f -> files.add(f.path())));
@@ -451,12 +454,26 @@ public class SnapshotImporter {
             }
             LoadResult loaded;
             long loadMillis;
+            long freezeMillis;
             long indexMillis;
             long analyzeMillis;
             try {
                 long t2 = System.currentTimeMillis();
                 loaded = loadTables(options, manifest, extractRoot, journal, schema, progress);
                 loadMillis = System.currentTimeMillis() - t2;
+
+                // While no key or index exists, so one pass sets hint bits and the visibility map that
+                // the rebuild, validation and autovacuum would otherwise each write.
+                long tFreeze = System.currentTimeMillis();
+                if (options.freezeAfterLoad()) {
+                    Progress.phase(progress, String.format("Freezing %d tables before the key rebuild (%d connections)",
+                            loadedTables(manifest).size(), Math.max(1, options.workers())));
+                    TableFreeze.freeze(pg, options.schema(), loadedTables(manifest), options.workers(),
+                            () -> connect(options), m -> say(progress, "freeze", m));
+                } else {
+                    Progress.phase(progress, "Not freezing the loaded tables (disabled); autovacuum will");
+                }
+                freezeMillis = System.currentTimeMillis() - tFreeze;
 
                 // Before the handlers and sequence reset, which read the loaded tables.
                 long tIndex = System.currentTimeMillis();
@@ -495,7 +512,14 @@ public class SnapshotImporter {
             long t3 = System.currentTimeMillis();
             Progress.phase(progress, "Control state: " + registry.handlerTables().size()
                     + " handlers, then sequence reset");
-            List<String> handlerResults = runHandlers(pg, options, manifest);
+            Map<String, String> staged = HandlerSources.stage(registry, handlers, manifest, options, pg,
+                    new TableLoader(converters, extractRoot));
+            List<String> handlerResults;
+            try {
+                handlerResults = runHandlers(pg, options, manifest, staged);
+            } finally {
+                HandlerSources.drop(pg, staged);
+            }
             Map<String, Long> sequences = new SequenceReset(pg, options.schema()).resetTables(registry.isScoped()
                     ? registry.all().stream().map(SnapshotTableSpec::targetTable).collect(java.util.stream.Collectors.toSet()) : null);
             long controlMillis = System.currentTimeMillis() - t3;
@@ -511,7 +535,7 @@ public class SnapshotImporter {
                     loaded.planned, loaded.skipped, loaded.executed, loaded.rows,
                     journal.rowsPerTable(manifest.snapshotId()), handlerResults, sequences,
                     partitionsCreated, registry.selectedLimitations(manifest.declaredLossy()), warnings,
-                    verifyMillis, extractMillis, loadMillis, indexMillis, analyzeMillis, controlMillis);
+                    verifyMillis, extractMillis, loadMillis, freezeMillis, indexMillis, analyzeMillis, controlMillis);
         }
     }
 
@@ -754,8 +778,8 @@ public class SnapshotImporter {
         }
     }
 
-    private List<String> runHandlers(Connection pg, ImportOptions options, SnapshotManifest manifest)
-            throws SQLException {
+    private List<String> runHandlers(Connection pg, ImportOptions options, SnapshotManifest manifest,
+                                     Map<String, String> staged) throws SQLException {
         List<String> results = new ArrayList<>();
         boolean previousAutoCommit = pg.getAutoCommit();
         pg.setAutoCommit(false);
@@ -763,7 +787,7 @@ public class SnapshotImporter {
             for (SnapshotTableSpec spec : registry.handlerTables()) {
                 SnapshotHandler handler = handlers.get(spec.importSpec().handler());
                 SnapshotHandler.Context ctx = new SnapshotHandler.Context(pg, options.schema(),
-                        manifest.point(), options.eventPublisherId(), options.cursorBlocksToKeep(), spec);
+                        manifest.point(), options.eventPublisherId(), options.cursorBlocksToKeep(), spec, staged);
                 results.add(spec.targetTable() + ": " + handler.apply(ctx));
             }
             pg.commit();

@@ -6,6 +6,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.List;
 
 /**
  * Rebuilds {@code cursor_} from the imported block tail.
@@ -16,7 +17,9 @@ import java.sql.Statement;
  * {@code store.cardano.cursor-no-of-blocks-to-keep} depth, ending exactly at the snapshot point.
  *
  * <p>Rows are taken from the imported {@code block} table rather than from Parquet, which guarantees
- * the invariant validation checks: the final cursor is an imported block.
+ * the invariant validation checks: the final cursor is an imported block. A target that does not run
+ * the blocks store imports no block table; the importer then stages the block tail from the
+ * snapshot's files and the cursor is checked against the manifest point instead.
  */
 public class CursorTailHandler implements SnapshotHandler {
 
@@ -28,10 +31,15 @@ public class CursorTailHandler implements SnapshotHandler {
     }
 
     @Override
+    public List<String> reads() {
+        return List.of("block");
+    }
+
+    @Override
     public String apply(Context ctx) throws SQLException {
         String schema = Identifiers.quote(ctx.schema());
         String cursor = schema + "." + Identifiers.quote("cursor_");
-        String block = schema + "." + Identifiers.quote("block");
+        String block = ctx.relation("block");
 
         try (Statement st = ctx.connection().createStatement()) {
             st.executeUpdate("DELETE FROM " + cursor + " WHERE id = " + ctx.eventPublisherId());
