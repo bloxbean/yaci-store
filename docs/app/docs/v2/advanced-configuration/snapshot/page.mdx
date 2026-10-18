@@ -468,7 +468,8 @@ Resume with the same settings; `snapshot validate` reads them from the import jo
 Preflight reports `max_wal_size`, `checkpoint_timeout` and `wal_compression` when they are below
 16GB, 15min and on. With the 1GB default the load checkpoints every few seconds and spends its
 time writing WAL. These settings cost disk for `pg_wal` and a longer crash recovery, not memory,
-and need no restart. `--tune-postgres` applies them for the import only: it records the server's
+and need no restart. `--tune-postgres` sets `wal_compression` to `lz4` when the server supports it:
+`on` means pglz, which compresses on the writing process's CPU, several times slower. `--tune-postgres` applies them for the import only: it records the server's
 values in the target schema first, restores them after the load (also when the import fails), and
 needs a superuser or `ALTER SYSTEM` granted on those parameters (PostgreSQL 15+). On a server you
 manage you can instead set them permanently; the shipped `postgres-compose.yml` sets

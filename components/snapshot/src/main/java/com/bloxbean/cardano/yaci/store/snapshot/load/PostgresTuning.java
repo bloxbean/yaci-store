@@ -39,6 +39,17 @@ public final class PostgresTuning {
             new Recommendation("wal_compression", "on", 1,
                     "shrinks the full page images written after each checkpoint"));
 
+    /**
+     * {@code on} means pglz, which compresses on the writing backend's CPU: the freeze pass of one
+     * large table then runs at one core's pglz speed. lz4 is several times faster at a similar ratio.
+     */
+    static String walCompression(Connection pg) throws SQLException {
+        try (Statement st = pg.createStatement(); ResultSet rs = st.executeQuery(
+                "SELECT 'lz4' = ANY (enumvals) FROM pg_settings WHERE name = 'wal_compression'")) {
+            return rs.next() && rs.getBoolean(1) ? "lz4" : "on";
+        }
+    }
+
     private PostgresTuning() {
     }
 
@@ -166,7 +177,8 @@ public final class PostgresTuning {
                     long value = "wal_compression".equals(r.name()) ? ("off".equals(setting) ? 0 : 1)
                             : Long.parseLong(setting);
                     if (value < r.minimum()) {
-                        out.put(r.name(), r);
+                        out.put(r.name(), "wal_compression".equals(r.name())
+                                ? new Recommendation(r.name(), walCompression(pg), r.minimum(), r.why()) : r);
                     }
                 }
             }
