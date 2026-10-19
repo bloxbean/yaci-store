@@ -1,5 +1,13 @@
 package com.bloxbean.cardano.yaci.store.utxo.storage.impl;
 
+import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
+import com.bloxbean.cardano.yaci.store.common.domain.Amt;
+import com.bloxbean.cardano.yaci.store.common.domain.TxInput;
+import com.bloxbean.cardano.yaci.store.events.EventMetadata;
+import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
+import com.bloxbean.cardano.yaci.store.utxo.UtxoStoreProperties;
+import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.TxInputRepository;
+import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.UtxoRepository;
 import org.flywaydb.core.Flyway;
 import org.jooq.DSLContext;
 import org.jooq.SQLDialect;
@@ -15,15 +23,19 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import java.math.BigInteger;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 /**
- * {@link UnspentUtxoTableService} on PostgreSQL with the module's own postgresql migrations.
- * The H2 test covers the behaviour; this one checks that the jOOQ-rendered SQL runs on the
- * dialect production uses (jsonb amounts, the row-value IN of the delete) and that the commit
- * delete is driven from tx_input rather than scanning the table.
+ * The address_utxo_unspent writes of {@link UtxoStorageImpl} on PostgreSQL with the module's own
+ * postgresql migrations. The H2 test covers the behaviour; this one checks that the jOOQ-rendered
+ * SQL runs on the dialect production uses (jsonb amounts, the upsert, the rollback restore).
+ *
+ * <p>The JPA repositories are mocks, so the two deletes they own in a rollback (address_utxo and
+ * tx_input after the point) are done here in plain SQL, in the order UtxoRollbackProcessor runs them.
  */
 @Testcontainers(disabledWithoutDocker = true)
 class UnspentUtxoTablePostgresIT {
@@ -32,7 +44,7 @@ class UnspentUtxoTablePostgresIT {
     static final PostgreSQLContainer<?> PG = new PostgreSQLContainer<>("postgres:16");
 
     private static JdbcTemplate jdbc;
-    private static UnspentUtxoTableService service;
+    private static UtxoStorageImpl storage;
 
     @BeforeAll
     static void setUp() {
@@ -42,11 +54,14 @@ class UnspentUtxoTablePostgresIT {
                 .load().migrate();
         jdbc = new JdbcTemplate(ds);
         DSLContext dsl = DSL.using(new TransactionAwareDataSourceProxy(ds), SQLDialect.POSTGRES);
-        service = new UnspentUtxoTableService(dsl, new DataSourceTransactionManager(ds));
+        storage = new UtxoStorageImpl(mock(UtxoRepository.class), mock(TxInputRepository.class), dsl,
+                new UtxoCache(), new DataSourceTransactionManager(ds),
+                UtxoStoreProperties.builder().unspentTableEnabled(true).build());
     }
 
     @AfterEach
     void clean() {
+        commit();
         jdbc.update("delete from address_utxo_unspent");
         jdbc.update("delete from address_utxo");
         jdbc.update("delete from tx_input");
@@ -56,17 +71,31 @@ class UnspentUtxoTablePostgresIT {
         return String.format("%064x", n);
     }
 
-    private static void output(String txHash, int index, long slot) {
-        jdbc.update("""
-                insert into address_utxo (tx_hash, output_index, slot, block, block_time, owner_addr, lovelace_amount, amounts, tx_index)
-                values (?, ?, ?, ?, ?, ?, 1000000, cast(? as jsonb), ?)""",
-                txHash, index, slot, slot / 10, 1_600_000L + slot, "addr_test1" + txHash.substring(0, 8),
-                "[{\"unit\": \"lovelace\", \"quantity\": 1000000}, {\"unit\": \"aa\", \"quantity\": 7}]", index);
+    private static AddressUtxo output(String txHash, int index, long slot) {
+        return AddressUtxo.builder()
+                .txHash(txHash).outputIndex(index).slot(slot).blockNumber(slot / 10).blockTime(1_600_000L + slot)
+                .txIndex(index).ownerAddr("addr_test1" + txHash.substring(0, 8))
+                .lovelaceAmount(BigInteger.valueOf(1_000_000L))
+                .amounts(List.of(
+                        Amt.builder().unit("lovelace").quantity(BigInteger.valueOf(1_000_000L)).build(),
+                        Amt.builder().unit("aa").quantity(BigInteger.valueOf(7)).build()))
+                .build();
     }
 
-    private static void spend(String txHash, int index, long atSlot) {
-        jdbc.update("insert into tx_input (tx_hash, output_index, spent_at_slot, spent_at_block, spent_tx_hash) values (?, ?, ?, ?, ?)",
-                txHash, index, atSlot, atSlot / 10, "spender" + atSlot);
+    private static TxInput spend(String txHash, int index, long atSlot) {
+        return TxInput.builder().txHash(txHash).outputIndex(index)
+                .spentAtSlot(atSlot).spentAtBlock(atSlot / 10).spentTxHash("spender" + atSlot).build();
+    }
+
+    private static void commit() {
+        storage.handleCommit(new CommitEvent<>(EventMetadata.builder().build(), List.of()));
+    }
+
+    private static void rollbackTo(long slot) {
+        storage.deleteUnspentBySlotGreaterThan(slot);
+        jdbc.update("delete from address_utxo where slot > ?", slot);
+        storage.deleteSpentBySlotGreaterThan(slot);
+        jdbc.update("delete from tx_input where spent_at_slot > ?", slot);
     }
 
     private static List<String> unspentKeys() {
@@ -81,51 +110,33 @@ class UnspentUtxoTablePostgresIT {
     }
 
     @Test
-    void commitRollbackBackfillAndReconcileKeepTheTableEqualToTheAntiJoin() {
-        spend(hash(1), 0, 110);
-        output(hash(1), 0, 100);
-        output(hash(1), 1, 100);
-        service.applyCommit(100, 110);
+    void writesCommitsAndRollbacksKeepTheTableEqualToTheAntiJoin() {
+        storage.saveSpent(List.of(spend(hash(1), 0, 110)));
+        storage.saveUnspent(List.of(output(hash(1), 0, 100), output(hash(1), 1, 100)));
+        commit();
         assertThat(unspentKeys()).containsExactly(hash(1) + "#1").isEqualTo(expectedKeys());
 
-        spend(hash(1), 1, 200);
-        output(hash(2), 0, 200);
-        service.applyCommit(200, 200);
+        storage.saveSpent(List.of(spend(hash(1), 1, 200)));
+        storage.saveUnspent(List.of(output(hash(2), 0, 200)));
+        commit();
         assertThat(unspentKeys()).containsExactly(hash(2) + "#0").isEqualTo(expectedKeys());
 
-        service.rollbackTo(150);
-        jdbc.update("delete from address_utxo where slot > 150");
-        jdbc.update("delete from tx_input where spent_at_slot > 150");
+        rollbackTo(150);
         assertThat(unspentKeys()).containsExactly(hash(1) + "#1").isEqualTo(expectedKeys());
 
-        jdbc.update("delete from address_utxo_unspent");
-        for (int i = 0; i < 10; i++) {
-            output(hash(50 + i), 0, 300L + i);
-        }
-        assertThat(service.backfill(0, 400, 3)).isEqualTo(11);
-        spend(hash(52), 0, 500);
-        assertThat(service.reconcileSpentSince(450)).isEqualTo(1);
-        assertThat(unspentKeys()).hasSize(10).isEqualTo(expectedKeys());
-        assertThat(jdbc.queryForObject("select amounts::text from address_utxo_unspent where tx_hash = ?", String.class, hash(50)))
+        assertThat(jdbc.queryForObject("select amounts::text from address_utxo_unspent", String.class))
                 .contains("\"unit\": \"aa\"");
     }
 
     @Test
-    void theCommitDeleteIsDrivenFromTheBatchsSpendsNotAScanOfTheTable() {
-        for (int i = 0; i < 2000; i++) {
-            output(hash(1000 + i), 0, i);
-        }
-        service.backfill(0, 2000, 500);
-        spend(hash(1500), 0, 3000);
-        jdbc.execute("analyze address_utxo_unspent");
-        jdbc.execute("analyze tx_input");
+    void anUpsertOverwritesTheRow() {
+        storage.saveUnspent(List.of(output(hash(3), 0, 100)));
+        AddressUtxo resolved = output(hash(3), 0, 100);
+        resolved.setOwnerStakeAddr("stake_test1resolved");
+        storage.saveUnspent(List.of(resolved));
+        commit();
 
-        List<String> plan = jdbc.queryForList("""
-                explain delete from address_utxo_unspent
-                where (tx_hash, output_index) in
-                      (select tx_hash, output_index from tx_input where spent_at_slot between 3000 and 3000)""", String.class);
-
-        assertThat(String.join("\n", plan)).doesNotContain("Seq Scan on address_utxo_unspent");
-        assertThat(service.applyCommit(3000, 3000)[1]).isEqualTo(1);
+        assertThat(jdbc.queryForObject("select owner_stake_addr from address_utxo_unspent", String.class))
+                .isEqualTo("stake_test1resolved");
     }
 }

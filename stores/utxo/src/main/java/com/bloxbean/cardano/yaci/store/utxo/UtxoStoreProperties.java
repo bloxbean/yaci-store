@@ -35,7 +35,8 @@ public class UtxoStoreProperties {
     private boolean contentAwareRollback = false;
 
     /**
-     * Maintain address_utxo_unspent (the outputs with no tx_input row) at every commit.
+     * Maintain address_utxo_unspent (the outputs with no tx_input row): outputs are written with address_utxo,
+     * and spent outputs are deleted at each commit (see UtxoStorageImpl).
      */
     @Builder.Default
     private boolean unspentTableEnabled = false;

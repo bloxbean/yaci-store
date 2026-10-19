@@ -269,7 +269,7 @@ store.utxo.pruning-batch-size=3000
 `address_utxo` keeps every output ever created, and a spend is a row in `tx_input`. A query for an address's or an asset's current outputs therefore reads its whole history and drops the spent rows. The optional `address_utxo_unspent` table holds only the outputs that are not spent yet, so those queries cost the size of the unspent set instead.
 
 ```properties
-# Keep address_utxo_unspent up to date at every commit (default false)
+# Keep address_utxo_unspent up to date: outputs are written with address_utxo, spent ones removed at each commit (default false)
 store.utxo.unspent-table-enabled=true
 # Serve the unspent-output queries (utxo API, Blockfrost /assets/{asset}/addresses) from it (default false)
 store.utxo.unspent-table-read-enabled=true

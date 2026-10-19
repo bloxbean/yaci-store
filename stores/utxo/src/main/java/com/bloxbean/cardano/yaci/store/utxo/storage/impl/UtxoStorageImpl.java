@@ -6,6 +6,7 @@ import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.common.util.JsonUtil;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import com.bloxbean.cardano.yaci.store.plugin.aspect.Plugin;
+import com.bloxbean.cardano.yaci.store.utxo.UtxoStoreProperties;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.mapper.UtxoMapper;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.model.AddressUtxoEntity;
@@ -14,7 +15,11 @@ import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.TxInputRepos
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.UtxoRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.jooq.DSLContext;
+import org.jooq.Field;
 import org.jooq.JSON;
+import org.jooq.Query;
+import org.jooq.SelectFieldOrAsterisk;
+import org.jooq.Table;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -23,12 +28,38 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.*;
+import static org.jooq.impl.DSL.notExists;
 import static org.jooq.impl.DSL.row;
+import static org.jooq.impl.DSL.select;
+import static org.jooq.impl.DSL.selectOne;
 
+/**
+ * Writes address_utxo and tx_input, and, when {@code store.utxo.unspent-table-enabled} is on,
+ * keeps address_utxo_unspent equal to address_utxo minus tx_input.
+ *
+ * <p>address_utxo_unspent is written from the same calls as address_utxo, so plugin filters, Byron
+ * and genesis outputs apply to both tables alike:
+ * <ul>
+ *   <li>{@link #saveUnspent} upserts each output into both tables in the same transaction, which
+ *   in parallel mode is the block's own transaction, so nothing is read back;</li>
+ *   <li>{@link #saveSpent} only remembers the spent keys. They are deleted from
+ *   address_utxo_unspent at {@link #handleCommit}, when every output of the batch has been written
+ *   (in parallel mode a block's spends can be saved before the output they spend, which another
+ *   block of the same batch writes, and {@code UtxoProcessor} saves a block's spends before its
+ *   outputs);</li>
+ *   <li>a rollback deletes the rows created after the rollback point and restores the outputs
+ *   whose spend it removes, before tx_input is trimmed.</li>
+ * </ul>
+ */
 @Slf4j
 public class UtxoStorageImpl implements UtxoStorage {
     private static final String PLUGIN_UNSPENT = "utxo.unspent.save";
@@ -40,19 +71,26 @@ public class UtxoStorageImpl implements UtxoStorage {
     private final UtxoMapper mapper = UtxoMapper.INSTANCE;
     private final UtxoCache utxoCache;
     private final PlatformTransactionManager transactionManager;
+    private final UtxoStoreProperties utxoStoreProperties;
+
+    //Keys spent since the last commit, deleted from address_utxo_unspent at commit
+    private final Set<UtxoKey> pendingSpentKeys = ConcurrentHashMap.newKeySet();
 
     private TransactionTemplate transactionTemplate;
+    private TransactionTemplate commitTransactionTemplate;
 
     @Value("${store.utxo.pruning-batch-size:3000}")
     private int pruningBatchSize = 3000;
 
     public UtxoStorageImpl(UtxoRepository utxoRepository, TxInputRepository spentOutputRepository, DSLContext dsl,
-                           UtxoCache utxoCache, PlatformTransactionManager transactionManager) {
+                           UtxoCache utxoCache, PlatformTransactionManager transactionManager,
+                           UtxoStoreProperties utxoStoreProperties) {
         this.utxoRepository = utxoRepository;
         this.spentOutputRepository = spentOutputRepository;
         this.dsl = dsl;
         this.utxoCache = utxoCache;
         this.transactionManager = transactionManager;
+        this.utxoStoreProperties = utxoStoreProperties;
 
         init();
     }
@@ -60,6 +98,14 @@ public class UtxoStorageImpl implements UtxoStorage {
     public void init() {
         transactionTemplate = new TransactionTemplate(transactionManager);
         transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+
+        //Joins the block's transaction in sync mode, where the commit is part of it
+        commitTransactionTemplate = new TransactionTemplate(transactionManager);
+        commitTransactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
+    }
+
+    private boolean isUnspentTableEnabled() {
+        return utxoStoreProperties != null && utxoStoreProperties.isUnspentTableEnabled();
     }
 
     @Override
@@ -107,13 +153,48 @@ public class UtxoStorageImpl implements UtxoStorage {
     @Override
     @Transactional
     public int deleteUnspentBySlotGreaterThan(Long slot) {
+        if (isUnspentTableEnabled()) {
+            int deleted = dsl.deleteFrom(ADDRESS_UTXO_UNSPENT)
+                    .where(ADDRESS_UTXO_UNSPENT.SLOT.gt(slot))
+                    .execute();
+            log.info("Rollback -- {} address_utxo_unspent records", deleted);
+        }
+
         return utxoRepository.deleteBySlotGreaterThan(slot);
     }
 
     @Override
     @Transactional
     public int deleteSpentBySlotGreaterThan(Long slot) {
+        if (isUnspentTableEnabled()) {
+            //Must run before tx_input is trimmed: the outputs to restore are the ones whose spend is removed
+            int restored = restoreUnspentSpentAfter(slot);
+            log.info("Rollback -- {} address_utxo_unspent records restored", restored);
+
+            //Spends not yet committed belong to the blocks being rolled back
+            pendingSpentKeys.clear();
+        }
+
         return spentOutputRepository.deleteBySpentAtSlotGreaterThan(slot);
+    }
+
+    private int restoreUnspentSpentAfter(Long slot) {
+        List<SelectFieldOrAsterisk> addressUtxoColumns = Arrays.stream(ADDRESS_UTXO_UNSPENT.fields())
+                .map(field -> (SelectFieldOrAsterisk) ADDRESS_UTXO.field(field.getName()))
+                .toList();
+
+        return dsl.insertInto(ADDRESS_UTXO_UNSPENT, ADDRESS_UTXO_UNSPENT.fields())
+                .select(select(addressUtxoColumns)
+                        .from(TX_INPUT)
+                        .join(ADDRESS_UTXO)
+                        .on(ADDRESS_UTXO.TX_HASH.eq(TX_INPUT.TX_HASH))
+                        .and(ADDRESS_UTXO.OUTPUT_INDEX.eq(TX_INPUT.OUTPUT_INDEX))
+                        .where(TX_INPUT.SPENT_AT_SLOT.gt(slot))
+                        .and(ADDRESS_UTXO.SLOT.le(slot))
+                        .and(notExists(selectOne().from(ADDRESS_UTXO_UNSPENT)
+                                .where(ADDRESS_UTXO_UNSPENT.TX_HASH.eq(ADDRESS_UTXO.TX_HASH))
+                                .and(ADDRESS_UTXO_UNSPENT.OUTPUT_INDEX.eq(ADDRESS_UTXO.OUTPUT_INDEX)))))
+                .execute();
     }
 
     @Override
@@ -168,52 +249,54 @@ public class UtxoStorageImpl implements UtxoStorage {
 
         LocalDateTime localDateTime = LocalDateTime.now();
         var inserts = addressUtxoEntities.stream()
-                .map(addressUtxo -> dsl.insertInto(ADDRESS_UTXO)
-                                .set(ADDRESS_UTXO.TX_HASH, addressUtxo.getTxHash())
-                                .set(ADDRESS_UTXO.OUTPUT_INDEX, addressUtxo.getOutputIndex())
-                                .set(ADDRESS_UTXO.TX_INDEX, addressUtxo.getTxIndex())
-                                .set(ADDRESS_UTXO.SLOT, addressUtxo.getSlot())
-                                .set(ADDRESS_UTXO.BLOCK_HASH, addressUtxo.getBlockHash())
-                                .set(ADDRESS_UTXO.EPOCH, addressUtxo.getEpoch())
-                                .set(ADDRESS_UTXO.LOVELACE_AMOUNT, addressUtxo.getLovelaceAmount() != null ? addressUtxo.getLovelaceAmount().longValue() : 0L)
-                                .set(ADDRESS_UTXO.AMOUNTS, JSON.valueOf(JsonUtil.getJson(addressUtxo.getAmounts())))
-                                .set(ADDRESS_UTXO.DATA_HASH, addressUtxo.getDataHash())
-                                .set(ADDRESS_UTXO.INLINE_DATUM, addressUtxo.getInlineDatum())
-                                .set(ADDRESS_UTXO.OWNER_ADDR, addressUtxo.getOwnerAddr())
-                                .set(ADDRESS_UTXO.OWNER_ADDR_FULL, addressUtxo.getOwnerAddrFull())
-                                .set(ADDRESS_UTXO.OWNER_STAKE_ADDR, addressUtxo.getOwnerStakeAddr())
-                                .set(ADDRESS_UTXO.OWNER_PAYMENT_CREDENTIAL, addressUtxo.getOwnerPaymentCredential())
-                                .set(ADDRESS_UTXO.OWNER_STAKE_CREDENTIAL, addressUtxo.getOwnerStakeCredential())
-                                .set(ADDRESS_UTXO.SCRIPT_REF, addressUtxo.getScriptRef())
-                                .set(ADDRESS_UTXO.REFERENCE_SCRIPT_HASH, addressUtxo.getReferenceScriptHash())
-                                .set(ADDRESS_UTXO.IS_COLLATERAL_RETURN, addressUtxo.getIsCollateralReturn())
-                                .set(ADDRESS_UTXO.BLOCK, addressUtxo.getBlockNumber())
-                                .set(ADDRESS_UTXO.BLOCK_TIME, addressUtxo.getBlockTime())
-                                .set(ADDRESS_UTXO.UPDATE_DATETIME, localDateTime)
-                                .onDuplicateKeyUpdate()
-                                .set(ADDRESS_UTXO.TX_INDEX, addressUtxo.getTxIndex())
-                                .set(ADDRESS_UTXO.SLOT, addressUtxo.getSlot())
-                                .set(ADDRESS_UTXO.BLOCK_HASH, addressUtxo.getBlockHash())
-                                .set(ADDRESS_UTXO.EPOCH, addressUtxo.getEpoch())
-                                .set(ADDRESS_UTXO.LOVELACE_AMOUNT, addressUtxo.getLovelaceAmount() != null ? addressUtxo.getLovelaceAmount().longValue() : 0L)
-                                .set(ADDRESS_UTXO.AMOUNTS, JSON.valueOf(JsonUtil.getJson(addressUtxo.getAmounts())))
-                                .set(ADDRESS_UTXO.DATA_HASH, addressUtxo.getDataHash())
-                                .set(ADDRESS_UTXO.INLINE_DATUM, addressUtxo.getInlineDatum())
-                                .set(ADDRESS_UTXO.OWNER_ADDR, addressUtxo.getOwnerAddr())
-                                .set(ADDRESS_UTXO.OWNER_ADDR_FULL, addressUtxo.getOwnerAddrFull())
-                                .set(ADDRESS_UTXO.OWNER_STAKE_ADDR, addressUtxo.getOwnerStakeAddr())
-                                .set(ADDRESS_UTXO.OWNER_PAYMENT_CREDENTIAL, addressUtxo.getOwnerPaymentCredential())
-                                .set(ADDRESS_UTXO.OWNER_STAKE_CREDENTIAL, addressUtxo.getOwnerStakeCredential())
-                                .set(ADDRESS_UTXO.SCRIPT_REF, addressUtxo.getScriptRef())
-                                .set(ADDRESS_UTXO.REFERENCE_SCRIPT_HASH, addressUtxo.getReferenceScriptHash())
-                                .set(ADDRESS_UTXO.IS_COLLATERAL_RETURN, addressUtxo.getIsCollateralReturn())
-                                .set(ADDRESS_UTXO.BLOCK, addressUtxo.getBlockNumber())
-                                .set(ADDRESS_UTXO.BLOCK_TIME, addressUtxo.getBlockTime())
-                                .set(ADDRESS_UTXO.UPDATE_DATETIME, localDateTime)).toList();
+                .map(addressUtxo -> upsert(ADDRESS_UTXO, addressUtxo, localDateTime))
+                .toList();
 
         dsl.batch(inserts).execute();
 
+        if (isUnspentTableEnabled()) {
+            var unspentInserts = addressUtxoEntities.stream()
+                    .map(addressUtxo -> upsert(ADDRESS_UTXO_UNSPENT, addressUtxo, localDateTime))
+                    .toList();
+
+            dsl.batch(unspentInserts).execute();
+        }
+
         addressUtxoList.forEach(utxoCache::add);
+    }
+
+    /**
+     * Insert-or-update of one output into address_utxo or address_utxo_unspent, which have the same columns.
+     * An update overwrites every column, as the pointer-address resolution at commit re-saves outputs.
+     */
+    private Query upsert(Table<?> table, AddressUtxoEntity addressUtxo, LocalDateTime localDateTime) {
+        Map<Field<?>, Object> values = new LinkedHashMap<>();
+        values.put(table.field(ADDRESS_UTXO.TX_INDEX), addressUtxo.getTxIndex());
+        values.put(table.field(ADDRESS_UTXO.SLOT), addressUtxo.getSlot());
+        values.put(table.field(ADDRESS_UTXO.BLOCK_HASH), addressUtxo.getBlockHash());
+        values.put(table.field(ADDRESS_UTXO.EPOCH), addressUtxo.getEpoch());
+        values.put(table.field(ADDRESS_UTXO.LOVELACE_AMOUNT), addressUtxo.getLovelaceAmount() != null ? addressUtxo.getLovelaceAmount().longValue() : 0L);
+        values.put(table.field(ADDRESS_UTXO.AMOUNTS), JSON.valueOf(JsonUtil.getJson(addressUtxo.getAmounts())));
+        values.put(table.field(ADDRESS_UTXO.DATA_HASH), addressUtxo.getDataHash());
+        values.put(table.field(ADDRESS_UTXO.INLINE_DATUM), addressUtxo.getInlineDatum());
+        values.put(table.field(ADDRESS_UTXO.OWNER_ADDR), addressUtxo.getOwnerAddr());
+        values.put(table.field(ADDRESS_UTXO.OWNER_ADDR_FULL), addressUtxo.getOwnerAddrFull());
+        values.put(table.field(ADDRESS_UTXO.OWNER_STAKE_ADDR), addressUtxo.getOwnerStakeAddr());
+        values.put(table.field(ADDRESS_UTXO.OWNER_PAYMENT_CREDENTIAL), addressUtxo.getOwnerPaymentCredential());
+        values.put(table.field(ADDRESS_UTXO.OWNER_STAKE_CREDENTIAL), addressUtxo.getOwnerStakeCredential());
+        values.put(table.field(ADDRESS_UTXO.SCRIPT_REF), addressUtxo.getScriptRef());
+        values.put(table.field(ADDRESS_UTXO.REFERENCE_SCRIPT_HASH), addressUtxo.getReferenceScriptHash());
+        values.put(table.field(ADDRESS_UTXO.IS_COLLATERAL_RETURN), addressUtxo.getIsCollateralReturn());
+        values.put(table.field(ADDRESS_UTXO.BLOCK), addressUtxo.getBlockNumber());
+        values.put(table.field(ADDRESS_UTXO.BLOCK_TIME), addressUtxo.getBlockTime());
+        values.put(table.field(ADDRESS_UTXO.UPDATE_DATETIME), localDateTime);
+
+        return dsl.insertInto(table)
+                .set(table.field(ADDRESS_UTXO.TX_HASH), addressUtxo.getTxHash())
+                .set(table.field(ADDRESS_UTXO.OUTPUT_INDEX), addressUtxo.getOutputIndex())
+                .set(values)
+                .onDuplicateKeyUpdate()
+                .set(values);
     }
 
     @Override
@@ -237,10 +320,47 @@ public class UtxoStorageImpl implements UtxoStorage {
                                 .toList();
 
         dsl.batch(inserts).execute();
+
+        if (isUnspentTableEnabled()) {
+            txInputs.forEach(txInput -> pendingSpentKeys.add(new UtxoKey(txInput.getTxHash(), txInput.getOutputIndex())));
+        }
     }
 
+    @Override
     public void handleCommit(CommitEvent commitEvent) {
-        utxoCache.clear();
+        try {
+            if (isUnspentTableEnabled())
+                deletePendingSpentFromUnspentTable();
+        } finally {
+            utxoCache.clear();
+        }
+    }
+
+    /**
+     * Deletes the outputs spent since the last commit from address_utxo_unspent. By now every output of the
+     * batch is written, so each spent output is found whichever block of the batch wrote it.
+     * In sync mode this joins the block's transaction; in parallel mode it runs in its own.
+     */
+    private void deletePendingSpentFromUnspentTable() {
+        if (pendingSpentKeys.isEmpty())
+            return;
+
+        List<UtxoKey> spentKeys = List.copyOf(pendingSpentKeys);
+        commitTransactionTemplate.executeWithoutResult(status -> {
+            var deletes = spentKeys.stream()
+                    .map(utxoKey -> dsl.deleteFrom(ADDRESS_UTXO_UNSPENT)
+                            .where(ADDRESS_UTXO_UNSPENT.TX_HASH.eq(utxoKey.getTxHash()))
+                            .and(ADDRESS_UTXO_UNSPENT.OUTPUT_INDEX.eq(utxoKey.getOutputIndex())))
+                    .toList();
+
+            dsl.batch(deletes).execute();
+        });
+
+        //Only after the delete succeeded: on failure the keys stay for the next commit
+        pendingSpentKeys.removeAll(spentKeys);
+
+        if (log.isDebugEnabled())
+            log.debug("Deleted {} spent outputs from address_utxo_unspent", spentKeys.size());
     }
 
     @Override

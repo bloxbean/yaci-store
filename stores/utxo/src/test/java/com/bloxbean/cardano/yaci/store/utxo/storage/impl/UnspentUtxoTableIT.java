@@ -1,4 +1,4 @@
-package com.bloxbean.cardano.yaci.store.utxo.processor;
+package com.bloxbean.cardano.yaci.store.utxo.storage.impl;
 
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
@@ -7,10 +7,9 @@ import com.bloxbean.cardano.yaci.store.common.domain.TxInput;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
-import com.bloxbean.cardano.yaci.store.events.model.internal.BatchBlock;
 import com.bloxbean.cardano.yaci.store.utxo.UtxoStoreProperties;
+import com.bloxbean.cardano.yaci.store.utxo.processor.UtxoRollbackProcessor;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
-import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UnspentUtxoTableService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -19,30 +18,24 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.math.BigInteger;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.LongStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * The address_utxo_unspent table against a real H2 database with the module's Flyway
- * migrations: it must always equal address_utxo minus tx_input, whatever order the indexer
- * commits, replays or rolls back in.
+ * address_utxo_unspent against a real H2 database with the module's Flyway migrations: written by
+ * {@link UtxoStorage} together with address_utxo, it must equal address_utxo minus tx_input after
+ * every commit, whatever order the indexer saves, replays or rolls back in.
  */
 @SpringBootTest
-class UnspentUtxoTableProcessorIT {
+class UnspentUtxoTableIT {
 
     private static final String UNIT = "0254a6ffa78edb03ea8933dbd4ca078758dbfc0fc6bb0d28b7a9c89f4c454e4649";
 
     @Autowired
-    private UnspentUtxoTableProcessor processor;
-
-    @Autowired
     private UtxoRollbackProcessor utxoRollbackProcessor;
-
-    @Autowired
-    private UnspentUtxoTableService service;
 
     @Autowired
     private UtxoStorage utxoStorage;
@@ -60,6 +53,7 @@ class UnspentUtxoTableProcessorIT {
 
     @AfterEach
     void clean() {
+        commit();   // drop any spend a test left pending
         jdbc.update("delete from address_utxo_unspent");
         jdbc.update("delete from address_utxo");
         jdbc.update("delete from tx_input");
@@ -85,6 +79,9 @@ class UnspentUtxoTableProcessorIT {
                         Amt.builder().unit("lovelace").quantity(BigInteger.valueOf(1_000_000L)).build(),
                         Amt.builder().unit(UNIT).quantity(BigInteger.valueOf(7)).build()))
                 .dataHash("dh")
+                .inlineDatum("d87980")
+                .scriptRef("8200581c")
+                .referenceScriptHash("rsh")
                 .isCollateralReturn(false)
                 .build();
     }
@@ -104,12 +101,13 @@ class UnspentUtxoTableProcessorIT {
         return String.format("%064x", n);
     }
 
-    /** A commit of the blocks at these slots, as the parallel publisher emits it. */
-    private static CommitEvent<BatchBlock> commit(long... slots) {
-        List<BatchBlock> blocks = LongStream.of(slots)
-                .mapToObj(s -> new BatchBlock(EventMetadata.builder().slot(s).build(), null, null))
-                .toList();
-        return new CommitEvent<>(EventMetadata.builder().slot(slots[slots.length - 1]).build(), blocks);
+    /** The end of a batch, as both publishers emit it: UtxoProcessor.handleCommit ends with this call. */
+    private void commit() {
+        utxoStorage.handleCommit(new CommitEvent<>(EventMetadata.builder().build(), List.of()));
+    }
+
+    private void rollbackTo(long slot) {
+        utxoRollbackProcessor.handleRollbackEvent(RollbackEvent.builder().rollbackTo(new Point(slot, "bh" + slot)).build());
     }
 
     private List<String> unspentKeys() {
@@ -125,11 +123,12 @@ class UnspentUtxoTableProcessorIT {
     }
 
     @Test
-    void anOutputCreatedAndSpentInTheSameBatchNeverAppears() {
+    void anOutputCreatedAndSpentInTheSameBatchIsGoneAtCommit() {
         utxoStorage.saveSpent(List.of(spend(hash(1), 0, 110)));   // spends first, as UtxoProcessor does
         utxoStorage.saveUnspent(List.of(output(hash(1), 0, 100), output(hash(1), 1, 100)));
+        assertThat(unspentKeys()).containsExactly(hash(1) + "#0", hash(1) + "#1");   // written with address_utxo
 
-        processor.handleCommit(commit(100, 110));
+        commit();
 
         assertThat(unspentKeys()).containsExactly(hash(1) + "#1").isEqualTo(expectedKeys());
     }
@@ -137,36 +136,37 @@ class UnspentUtxoTableProcessorIT {
     @Test
     void anOutputSpentInALaterBatchIsRemovedAtThatBatchesCommit() {
         utxoStorage.saveUnspent(List.of(output(hash(2), 0, 100)));
-        processor.handleCommit(commit(100));
+        commit();
         assertThat(unspentKeys()).containsExactly(hash(2) + "#0");
 
         utxoStorage.saveSpent(List.of(spend(hash(2), 0, 200)));
         utxoStorage.saveUnspent(List.of(output(hash(3), 0, 200)));
-        processor.handleCommit(commit(200));
+        commit();
 
         assertThat(unspentKeys()).containsExactly(hash(3) + "#0").isEqualTo(expectedKeys());
     }
 
     @Test
-    void theCopyKeepsEveryColumnOfTheOutput() {
+    void theRowKeepsEveryColumnOfTheOutput() {
         utxoStorage.saveUnspent(List.of(output(hash(4), 3, 100)));
-        processor.handleCommit(commit(100));
+        commit();
 
         String columns = "tx_hash, output_index, slot, block_hash, epoch, lovelace_amount, cast(amounts as varchar) as amounts, "
-                + "data_hash, owner_addr, owner_stake_addr, owner_payment_credential, owner_stake_credential, "
-                + "is_collateral_return, block, block_time, tx_index";
+                + "data_hash, inline_datum, owner_addr, owner_addr_full, owner_stake_addr, owner_payment_credential, "
+                + "owner_stake_credential, script_ref, reference_script_hash, is_collateral_return, block, block_time, "
+                + "update_datetime, tx_index";
         Map<String, Object> original = jdbc.queryForMap("select " + columns + " from address_utxo");
         Map<String, Object> copy = jdbc.queryForMap("select " + columns + " from address_utxo_unspent");
         assertThat(copy).isEqualTo(original);
     }
 
     @Test
-    void replayingACommittedBatchIsHarmless() {
-        utxoStorage.saveSpent(List.of(spend(hash(5), 0, 110)));
-        utxoStorage.saveUnspent(List.of(output(hash(5), 0, 100), output(hash(5), 1, 110)));
-
-        processor.handleCommit(commit(100, 110));
-        processor.handleCommit(commit(100, 110));
+    void replayingABatchIsHarmless() {
+        for (int attempt = 0; attempt < 2; attempt++) {
+            utxoStorage.saveSpent(List.of(spend(hash(5), 0, 110)));
+            utxoStorage.saveUnspent(List.of(output(hash(5), 0, 100), output(hash(5), 1, 110)));
+            commit();
+        }
 
         assertThat(unspentKeys()).containsExactly(hash(5) + "#1").isEqualTo(expectedKeys());
     }
@@ -174,54 +174,88 @@ class UnspentUtxoTableProcessorIT {
     @Test
     void rollbackRemovesNewerOutputsAndRestoresOnesSpentAfterThePoint() {
         utxoStorage.saveUnspent(List.of(output(hash(6), 0, 100)));
-        processor.handleCommit(commit(100));
+        commit();
         utxoStorage.saveSpent(List.of(spend(hash(6), 0, 200)));
         utxoStorage.saveUnspent(List.of(output(hash(7), 0, 200)));
-        processor.handleCommit(commit(200));
+        commit();
         assertThat(unspentKeys()).containsExactly(hash(7) + "#0");
 
-        RollbackEvent rollback = RollbackEvent.builder().rollbackTo(new Point(150, "bh150")).build();
-        processor.handleRollback(rollback);          // runs before UtxoRollbackProcessor (ordered)
-        utxoRollbackProcessor.handleRollbackEvent(rollback);
+        rollbackTo(150);
 
         assertThat(unspentKeys()).containsExactly(hash(6) + "#0").isEqualTo(expectedKeys());
     }
 
     @Test
-    void nothingIsWrittenWhileTheTableIsDisabled() {
-        properties.setUnspentTableEnabled(false);
+    void spendsOfARolledBackBatchAreNotAppliedAtTheNextCommit() {
         utxoStorage.saveUnspent(List.of(output(hash(8), 0, 100)));
+        commit();
+        utxoStorage.saveSpent(List.of(spend(hash(8), 0, 200)));   // batch interrupted before its commit
 
-        processor.handleCommit(commit(100));
-        processor.handleRollback(RollbackEvent.builder().rollbackTo(new Point(50, "bh50")).build());
+        rollbackTo(150);
+        commit();
+
+        assertThat(unspentKeys()).containsExactly(hash(8) + "#0").isEqualTo(expectedKeys());
+    }
+
+    @Test
+    void reSavingAnOutputAtCommitUpdatesItsRow() {
+        utxoStorage.saveUnspent(List.of(output(hash(9), 0, 100)));
+        commit();
+
+        AddressUtxo resolved = output(hash(9), 0, 100);   // pointer address resolved at commit
+        resolved.setOwnerStakeAddr("stake_test1resolved");
+        utxoStorage.saveUnspent(List.of(resolved));
+        commit();
+
+        assertThat(jdbc.queryForObject("select owner_stake_addr from address_utxo_unspent", String.class))
+                .isEqualTo("stake_test1resolved");
+    }
+
+    @Test
+    void reSavingAnOutputSpentInTheSameBatchDoesNotBringItBack() {
+        utxoStorage.saveUnspent(List.of(output(hash(10), 0, 100)));
+        utxoStorage.saveSpent(List.of(spend(hash(10), 0, 110)));
+        utxoStorage.saveUnspent(List.of(output(hash(10), 0, 100)));   // pointer-address re-save runs before the delete
+
+        commit();
 
         assertThat(unspentKeys()).isEmpty();
+        assertThat(expectedKeys()).isEmpty();
     }
 
     @Test
-    void backfillCopiesTheUnspentOutputsOfARangeInChunksAndCanBeRepeated() {
-        for (int i = 0; i < 25; i++) {
-            utxoStorage.saveUnspent(List.of(output(hash(100 + i), 0, 10L * i)));
+    void genesisOutputsAreKept() {
+        utxoStorage.saveUnspent(List.of(output(hash(11), 0, -1)));
+        commit();
+
+        assertThat(unspentKeys()).containsExactly(hash(11) + "#0").isEqualTo(expectedKeys());
+    }
+
+    @Test
+    void aLargeBatchOfSpendsIsDeletedInOneCommit() {
+        List<AddressUtxo> outputs = new ArrayList<>();
+        List<TxInput> spends = new ArrayList<>();
+        for (int i = 0; i < 2500; i++) {
+            outputs.add(output(hash(10_000 + i), 0, 100));
+            if (i % 5 != 0)
+                spends.add(spend(hash(10_000 + i), 0, 200));
         }
-        utxoStorage.saveSpent(List.of(spend(hash(103), 0, 500), spend(hash(117), 0, 500)));
+        utxoStorage.saveUnspent(outputs);
+        commit();
+        utxoStorage.saveSpent(spends);
+        commit();
 
-        long copied = service.backfill(0, 240, 7);
-        long again = service.backfill(0, 240, 7);
-
-        assertThat(copied).isEqualTo(23);
-        assertThat(again).isZero();
-        assertThat(unspentKeys()).hasSize(23).isEqualTo(expectedKeys());
+        assertThat(unspentKeys()).hasSize(500).isEqualTo(expectedKeys());
     }
 
     @Test
-    void reconcileRemovesRowsABackfillCopiedBeforeTheirSpendWasWritten() {
-        utxoStorage.saveUnspent(List.of(output(hash(9), 0, 100), output(hash(10), 0, 100)));
-        service.backfill(0, 100, 50);                       // a backfill read both as unspent
-        utxoStorage.saveSpent(List.of(spend(hash(9), 0, 300)));   // the indexer then spent one
+    void nothingIsWrittenWhileTheTableIsDisabled() {
+        properties.setUnspentTableEnabled(false);
+        utxoStorage.saveUnspent(List.of(output(hash(12), 0, 100)));
+        utxoStorage.saveSpent(List.of(spend(hash(12), 0, 110)));
+        commit();
+        rollbackTo(50);
 
-        long removed = service.reconcileSpentSince(250);
-
-        assertThat(removed).isEqualTo(1);
-        assertThat(unspentKeys()).containsExactly(hash(10) + "#0").isEqualTo(expectedKeys());
+        assertThat(unspentKeys()).isEmpty();
     }
 }

@@ -30,7 +30,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
-import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -257,13 +256,10 @@ public class UtxoProcessor {
     }
 
     /**
-     * Resolve pointer address and update AddressUtxo with stake address and stake key hash.
-     * Ordered before {@link UnspentUtxoTableProcessor#handleCommit}, which copies the committed
-     * outputs from address_utxo and must see these updates.
+     * Resolve pointer address and update AddressUtxo with stake address and stake key hash
      * @param commitEvent
      */
     @EventListener
-    @Order(Ordered.LOWEST_PRECEDENCE - 100)
     public void handleCommit(CommitEvent commitEvent) {
 
         try {

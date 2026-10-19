@@ -45,8 +45,10 @@ public class UtxoStoreConfiguration {
                                    TxInputRepository spentOutputRepository,
                                    DSLContext dslContext,
                                    UtxoCache utxoCache,
-                                   PlatformTransactionManager transactionManager) {
-        return new UtxoStorageImpl(utxoRepository, spentOutputRepository, dslContext, utxoCache, transactionManager);
+                                   PlatformTransactionManager transactionManager,
+                                   UtxoStoreProperties utxoStoreProperties) {
+        return new UtxoStorageImpl(utxoRepository, spentOutputRepository, dslContext, utxoCache, transactionManager,
+                utxoStoreProperties);
     }
 
     @Bean

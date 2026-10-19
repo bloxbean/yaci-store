@@ -40,8 +40,8 @@ public class UtxoStoreAutoConfigProperties {
         private boolean contentAwareRollback = false;
 
         /**
-         * Maintain address_utxo_unspent, a copy of the outputs that are not spent yet, at every
-         * commit. Readers that need current outputs then read it instead of anti-joining
+         * Maintain address_utxo_unspent, a copy of the outputs that are not spent yet. Outputs are
+         * written together with address_utxo, and spent outputs are deleted at each commit. Readers that need current outputs then read it instead of anti-joining
          * address_utxo with tx_input over the whole history. Turning it on for an already synced
          * store needs a one-time backfill (admin-cli backfill-unspent-utxos).
          */
