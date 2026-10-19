@@ -20,7 +20,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
@@ -121,12 +120,88 @@ public class DeferredIndexes {
     /**
      * One unit of work for a rebuild connection: {@code entries} built in order on {@code table}, or,
      * with a {@code partition}, each entry's copy built on that partition alone. It starts once every
-     * latch in {@code after} is open and counts down {@code done} whether it ran, failed or was drained.
+     * latch in {@code after} is open and counts down {@code done} whether it ran, failed or was dropped.
+     *
+     * @param weight how long it is expected to take, compared with other tasks: the bytes it reads
+     * @param order  position in the order the tasks were planned, which breaks ties
      */
-    private record Task(String table, String partition, List<Entry> entries,
-                        List<CountDownLatch> after, List<CountDownLatch> done) {
+    record Task(String table, String partition, List<Entry> entries,
+                List<CountDownLatch> after, List<CountDownLatch> done, long weight, int order) {
         String label() {
             return partition == null ? entries.get(0).label() : entries.get(0).label() + ", partition " + partition;
+        }
+
+        boolean ready() {
+            return after.stream().allMatch(l -> l.getCount() == 0);
+        }
+    }
+
+    /**
+     * Hands each free connection the heaviest task whose prerequisites are done.
+     *
+     * <p>A fixed queue made a connection wait on a task it had taken but could not start, and kept
+     * long builds behind short ones: on mainnet the transaction indexes waited behind 1,365 reward
+     * partition copies, then ran with six connections idle. Here a task is only handed out once it can
+     * start, and the longest first, so the short ones fill the gaps.
+     */
+    static final class Scheduler {
+        private final java.util.PriorityQueue<Task> ready = new java.util.PriorityQueue<>(
+                Comparator.comparingLong(Task::weight).reversed().thenComparingInt(Task::order));
+        private final List<Task> waiting = new ArrayList<>();
+        private int running;
+        private boolean stopped;
+
+        Scheduler(List<Task> tasks) {
+            tasks.forEach(t -> (t.ready() ? ready : waiting).add(t));
+        }
+
+        /** The next task to run, waiting for one to become ready; null once there is nothing left to run. */
+        synchronized Task take() throws InterruptedException {
+            while (!stopped) {
+                Task task = ready.poll();
+                if (task != null) {
+                    running++;
+                    return task;
+                }
+                if (running == 0) {
+                    if (!waiting.isEmpty()) {
+                        throw new IllegalStateException(waiting.size() + " rebuild task(s) wait on tasks that"
+                                + " will never run, starting with " + waiting.get(0).label());
+                    }
+                    return null;
+                }
+                wait();
+            }
+            return null;
+        }
+
+        /** The heaviest ready task, without taking it. */
+        synchronized Task peek() {
+            return ready.peek();
+        }
+
+        /** Marks {@code task} done, whether it succeeded or not, and readies what waited on it. */
+        synchronized void finished(Task task) {
+            task.done().forEach(CountDownLatch::countDown);
+            running--;
+            for (java.util.Iterator<Task> it = waiting.iterator(); it.hasNext(); ) {
+                Task t = it.next();
+                if (t.ready()) {
+                    it.remove();
+                    ready.add(t);
+                }
+            }
+            notifyAll();
+        }
+
+        /** Hands out nothing more, after a failure; the tasks running now still finish. */
+        synchronized void stop() {
+            stopped = true;
+            ready.forEach(t -> t.done().forEach(CountDownLatch::countDown));
+            waiting.forEach(t -> t.done().forEach(CountDownLatch::countDown));
+            ready.clear();
+            waiting.clear();
+            notifyAll();
         }
     }
 
@@ -231,8 +306,8 @@ public class DeferredIndexes {
     }
 
     /**
-     * Rebuilds every entry not yet built: each table's keys first, then all indexes, largest tables
-     * first, on up to {@code workers} connections.
+     * Rebuilds every entry not yet built on up to {@code workers} connections: each table's keys before
+     * its other indexes, and of the builds that can start, the one that reads the most first.
      *
      * <p>Postgres hands out parallel workers when a build starts, from a pool shared by every build.
      * The first task, the largest table's key and the longest build, starts alone with up to
@@ -262,38 +337,40 @@ public class DeferredIndexes {
         // Keys of a table are rebuilt by one task, in order; a table's other indexes wait for them.
         // On a partitioned table, each partition's copy is its own task and the parent's build, which
         // waits for them, only attaches them: Postgres builds a parent's partitions one at a time.
-        Map<String, List<String>> partitions = leafPartitions(new ArrayList<>(rows.keySet()));
+        Map<String, Long> partitionBytes = new HashMap<>();
+        Map<String, List<String>> partitions = leafPartitions(new ArrayList<>(rows.keySet()), partitionBytes);
         Map<String, List<Entry>> keysByTable = new java.util.TreeMap<>(largestFirst);
         pending.stream().filter(Entry::key)
                 .forEach(e -> keysByTable.computeIfAbsent(e.table(), k -> new ArrayList<>()).add(e));
         Map<String, CountDownLatch> keysDone = new HashMap<>();
         keysByTable.keySet().forEach(t -> keysDone.put(t, new CountDownLatch(1)));
+        Set<String> indexed = new java.util.HashSet<>();
+        pending.stream().filter(e -> !e.key()).forEach(e -> indexed.add(e.table()));
 
         List<Task> tasks = new ArrayList<>();
         Map<String, Integer> copies = new HashMap<>();
+        // A key goes ahead of an index build of the same size: the table's indexes wait for it.
         keysByTable.forEach((table, keys) -> addTasks(tasks, table, keys, List.of(), keysDone.get(table),
-                partitions.get(table), copies));
+                partitions.get(table), rows.get(table), partitionBytes, indexed.contains(table) ? 2 : 1, copies));
         pending.stream().filter(e -> !e.key())
                 .sorted(Comparator.comparing(Entry::table, largestFirst).thenComparing(Entry::name))
                 .forEach(e -> addTasks(tasks, e.table(), List.of(e),
                         keysDone.containsKey(e.table()) ? List.of(keysDone.get(e.table())) : List.of(), null,
-                        partitions.get(e.table()), copies));
+                        partitions.get(e.table()), rows.get(e.table()), partitionBytes, 1, copies));
+        Scheduler scheduler = new Scheduler(tasks);
 
         int threads = Math.max(1, Math.min(workers, tasks.size()));
         say.accept(String.format("Rebuilding %d key(s) and index(es) on %d table(s) with %d connection(s)%s",
                 pending.size(), rows.size(), threads,
                 maintenanceWorkMem == null ? "" : ", maintenance_work_mem " + maintenanceWorkMem));
-        int leadWorkers = threads > 1 ? leadParallelWorkers() : 0;
+        int leadWorkers = threads > 1 && scheduler.peek() != null ? leadParallelWorkers() : 0;
         if (leadWorkers > 0) {
-            say.accept(String.format("Starting %s first, with up to %d parallel workers", tasks.get(0).label(),
+            say.accept(String.format("Starting %s first, with up to %d parallel workers", scheduler.peek().label(),
                     leadWorkers));
         }
         java.util.concurrent.atomic.AtomicInteger leadPid = new java.util.concurrent.atomic.AtomicInteger();
         CountDownLatch leadFirstTaskDone = new CountDownLatch(1);
 
-        // Every task's prerequisites come before it in the queue, so a connection waiting on them waits
-        // for work another connection has already taken.
-        ConcurrentLinkedQueue<Task> queue = new ConcurrentLinkedQueue<>(tasks);
         List<SQLException> failures = new ArrayList<>();
         Set<String> failedTables = java.util.concurrent.ConcurrentHashMap.newKeySet();
         Map<String, Long> firstCopyStarted = new java.util.concurrent.ConcurrentHashMap<>();
@@ -327,11 +404,8 @@ public class DeferredIndexes {
                     }
                     c.commit();
                     Task task;
-                    while ((task = queue.poll()) != null) {
+                    while ((task = scheduler.take()) != null) {
                         try {
-                            for (CountDownLatch prerequisite : task.after()) {
-                                prerequisite.await();
-                            }
                             if (!failedTables.contains(task.table())) {
                                 run(c, snapshotId, task, copies, firstCopyStarted, done, pending.size(), say);
                             }
@@ -340,9 +414,9 @@ public class DeferredIndexes {
                             synchronized (failures) {
                                 failures.add(e);
                             }
-                            drain(queue);
+                            scheduler.stop();
                         } finally {
-                            task.done().forEach(CountDownLatch::countDown);
+                            scheduler.finished(task);
                         }
                         if (lead && leadFirstTaskDone.getCount() > 0) {
                             try (Statement st = c.createStatement()) {
@@ -352,11 +426,11 @@ public class DeferredIndexes {
                             leadFirstTaskDone.countDown();
                         }
                     }
-                } catch (SQLException e) {
+                } catch (SQLException | RuntimeException e) {
                     synchronized (failures) {
-                        failures.add(e);
+                        failures.add(e instanceof SQLException sql ? sql : new SQLException(e.getMessage(), e));
                     }
-                    drain(queue);
+                    scheduler.stop();
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 } finally {
@@ -471,17 +545,20 @@ public class DeferredIndexes {
      * built partition by partition, one per partition and then the parent's, which attaches them.
      */
     private void addTasks(List<Task> tasks, String table, List<Entry> entries, List<CountDownLatch> after,
-                          CountDownLatch done, List<String> partitions, Map<String, Integer> copies) {
+                          CountDownLatch done, List<String> partitions, long tableBytes,
+                          Map<String, Long> partitionBytes, int factor, Map<String, Integer> copies) {
         List<CountDownLatch> finished = done == null ? List.of() : List.of(done);
         if (partitions == null || entries.stream().anyMatch(e -> e.partitionSql(schema, partitions.get(0)) == null)) {
-            tasks.add(new Task(table, null, entries, after, finished));
+            tasks.add(new Task(table, null, entries, after, finished, tableBytes * factor, tasks.size()));
             return;
         }
         CountDownLatch built = new CountDownLatch(partitions.size());
-        partitions.forEach(p -> tasks.add(new Task(table, p, entries, after, List.of(built))));
+        partitions.forEach(p -> tasks.add(new Task(table, p, entries, after, List.of(built),
+                partitionBytes.getOrDefault(p, 0L) * factor, tasks.size())));
         List<CountDownLatch> parentAfter = new ArrayList<>(after);
         parentAfter.add(built);
-        tasks.add(new Task(table, null, entries, parentAfter, finished));
+        // Only attaches the partitions' copies, and what waits on the table waits on it.
+        tasks.add(new Task(table, null, entries, parentAfter, finished, Long.MAX_VALUE, tasks.size()));
         entries.forEach(e -> copies.put(entryKey(e), partitions.size()));
     }
 
@@ -507,14 +584,6 @@ public class DeferredIndexes {
             synchronized (say) {
                 say.accept(line);
             }
-        }
-    }
-
-    /** Empties the queue after a failure, releasing anything waiting on a task that will not run. */
-    private static void drain(ConcurrentLinkedQueue<Task> queue) {
-        Task task;
-        while ((task = queue.poll()) != null) {
-            task.done().forEach(CountDownLatch::countDown);
         }
     }
 
@@ -565,13 +634,15 @@ public class DeferredIndexes {
 
     /**
      * Each partitioned table's partitions, largest first, when it has at least two and all of them are
-     * plain tables; a table partitioned again below is built from its parent as before.
+     * plain tables; a table partitioned again below is built from its parent as before. Puts each
+     * partition's heap size in {@code bytes}.
      */
-    private Map<String, List<String>> leafPartitions(List<String> tables) throws SQLException {
+    private Map<String, List<String>> leafPartitions(List<String> tables, Map<String, Long> bytes)
+            throws SQLException {
         Map<String, List<String>> out = new HashMap<>();
         Set<String> nested = new java.util.HashSet<>();
         String sql = """
-                SELECT p.relname, c.relname, c.relkind
+                SELECT p.relname, c.relname, c.relkind, pg_relation_size(c.oid)
                 FROM pg_inherits h
                 JOIN pg_class c ON c.oid = h.inhrelid
                 JOIN pg_class p ON p.oid = h.inhparent
@@ -588,6 +659,7 @@ public class DeferredIndexes {
                         nested.add(rs.getString(1));
                     }
                     out.computeIfAbsent(rs.getString(1), k -> new ArrayList<>()).add(rs.getString(2));
+                    bytes.put(rs.getString(2), rs.getLong(4));
                 }
             }
         }

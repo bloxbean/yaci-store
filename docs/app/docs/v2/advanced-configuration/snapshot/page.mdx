@@ -483,7 +483,12 @@ PostgreSQL builds a partitioned table's key or index one partition at a time. Th
 builds each partition's copy as a separate task, spread over the `--workers` connections, then
 creates the parent key or index, which attaches those copies without reading the rows again. The
 partitions' indexes get the same names as a build on the parent would give them. On mainnet,
-`reward_pkey` (455 partitions) was the longest single build of a pruned import, at about 30 minutes.
+`reward_pkey` (455 partitions) was the longest single build of a pruned import, at about 30 minutes;
+built this way it took 7.
+
+A table's indexes start as soon as its keys are built. Whenever a connection is free, it takes the
+build that reads the most data among those that can start, so the large single-table indexes are
+not left to the end while the small partition copies fill the gaps.
 
 Before the rebuild, the loaded tables are frozen (`VACUUM (FREEZE)`, one table per worker, largest
 first) while they still have no index. Otherwise every freshly loaded page is rewritten three more
