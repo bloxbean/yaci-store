@@ -15,6 +15,7 @@ import com.bloxbean.cardano.yaci.core.model.PlutusScriptType;
 import com.bloxbean.cardano.yaci.core.util.CborSerializationUtil;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
+import com.bloxbean.cardano.yaci.store.common.util.PlutusV4Script;
 import com.bloxbean.cardano.yaci.store.script.domain.Script;
 import com.bloxbean.cardano.yaci.store.script.domain.ScriptType;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -83,6 +84,8 @@ public class ScriptUtil {
             return ScriptType.PLUTUS_V2;
         } else if (cclScript.getScriptType() == 3) {
             return ScriptType.PLUTUS_V3;
+        } else if (cclScript.getScriptType() == PlutusV4Script.TYPE) {
+            return ScriptType.PLUTUS_V4;
         } else
             throw new IllegalArgumentException("Invalid script type: " + cclScript.getScriptType());
     }
