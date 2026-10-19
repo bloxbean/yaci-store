@@ -277,9 +277,9 @@ store.utxo.unspent-table-read-enabled=true
 
 On a new store, enable both before the first sync. On a store that is already synced:
 
-1. Set `store.utxo.unspent-table-enabled=true` and restart, so new blocks are kept from then on.
-2. Run `backfill-unspent-utxos` in the admin CLI. It copies the unspent outputs up to the current tip and then removes any that were spent while it ran. It can be stopped and resumed with `--from-slot`.
-3. Set `store.utxo.unspent-table-read-enabled=true` and restart.
+1. Stop the store.
+2. Run `backfill-unspent-utxos` in the admin CLI. It rebuilds the table from `address_utxo` and `tx_input`, one `output_index` at a time, and fails if the store's cursor moved while it ran. An interrupted run can be resumed with `--from-output-index` set to the last index it reported.
+3. Set both properties to `true` and start the store. It continues from the point where the table was built.
 
 The table's read indexes are optional, like those of `address_utxo`: they are in `index.yml`, `extra-index.yml` (GIN on `amounts`) and `blockfrost-index.yml`. UTxO pruning does not affect the table.
 

@@ -29,8 +29,8 @@ import static org.jooq.impl.DSL.field;
  * {@link UtxoStorageReaderImpl}: slot, tx_hash, output_index, in the requested direction.
  *
  * <p>Active only with {@code store.utxo.unspent-table-read-enabled}, which should be turned on
- * only once the table is complete (maintained from the start of the sync, or backfilled and
- * reconciled).
+ * only once the table is complete (maintained from the start of the sync, or built by
+ * admin-cli backfill-unspent-utxos).
  */
 public class UnspentTableUtxoStorageReader implements UtxoStorageReader {
 

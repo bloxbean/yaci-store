@@ -50,7 +50,7 @@ public class UtxoStoreAutoConfigProperties {
         /**
          * Serve the unspent-output queries (by address, payment credential, stake address, asset)
          * from address_utxo_unspent. Turn it on only once the table is complete: maintained since
-         * the start of the sync, or backfilled and reconciled.
+         * the start of the sync, or built by admin-cli backfill-unspent-utxos.
          */
         private boolean unspentTableReadEnabled = false;
     }
