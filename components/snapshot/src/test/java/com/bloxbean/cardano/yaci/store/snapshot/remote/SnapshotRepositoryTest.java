@@ -205,6 +205,30 @@ public class SnapshotRepositoryTest {
     }
 
     @Test
+    void aBrokenDownloadResumesWithARangeRequestOrReadsPastTheStartWhenTheServerIgnoresRanges() throws Exception {
+        Path bucket = tmp.resolve("bucket");
+        new SnapshotRepository(new LocalSnapshotStore(bucket)).publish(snapshot(tmp.resolve("s1"), ID1, 100, null), 1, true, null);
+        for (boolean honourRange : new boolean[]{true, false}) {
+            Path out = Files.createDirectories(tmp.resolve("download-" + honourRange));
+            try (var server = new TestHttpServer(bucket, true, honourRange);
+                 var http = new HttpSnapshotStore(java.net.URI.create(server.url()), java.time.Duration.ofSeconds(1))) {
+                var repo = new SnapshotRepository(http, java.time.Duration.ZERO);
+                var resolved = repo.resolve("preprod", "latest", null, x -> List.of(), null);
+                List<String> said = new java.util.concurrent.CopyOnWriteArrayList<>();
+
+                repo.downloadParts(resolved, out, p -> true, 2, said::add);
+
+                for (var p : resolved.manifest().parts()) {
+                    assertThat(Digests.sha256Hex(out.resolve(p.fileName()))).isEqualTo(p.sha256());
+                }
+                // Every part broke once and was resumed, not downloaded again.
+                assertThat(server.rangeRequests()).isEqualTo(resolved.manifest().parts().size());
+                assertThat(said).noneMatch(m -> m.contains("Retrying"));
+            }
+        }
+    }
+
+    @Test
     void aPublicHttpLocationIsReadAnonymouslyAndStreamsPartsIntoTheExtractor() throws Exception {
         Path bucket = tmp.resolve("bucket");
         new SnapshotRepository(new LocalSnapshotStore(bucket)).publish(snapshot(tmp.resolve("s1"), ID1, 100, null), 1, true, null);

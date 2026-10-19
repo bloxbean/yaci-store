@@ -729,8 +729,12 @@ is staged.
 The manifest and checksums are saved under the work directory. The parts the import needs (for a
 scoped target, only its stores' parts) are streamed straight into the extractor, several at once.
 They are not stored, so the work directory needs room for the extracted Parquet only. Every part and
-file is checked against the manifest as it arrives. A part that fails or stalls (no data for two
-minutes) is fetched again, up to three times.
+file is checked against the manifest as it arrives. When a part's connection drops or stalls (no
+data for two minutes), the read resumes from the next byte with an HTTP range request, so the bytes
+already read are not downloaded again. It gives up after five failures in a row at the same byte. A
+server that ignores range requests sends the whole part, and the bytes before the resume point are
+skipped. If the part still does not match the manifest, it is fetched again from the start, up to
+three times. `snapshot download` resumes the same way.
 
 #### Which snapshots a release can import
 

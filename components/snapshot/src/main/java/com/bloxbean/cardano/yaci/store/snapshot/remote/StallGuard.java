@@ -60,6 +60,21 @@ final class StallGuard extends FilterInputStream {
         return guarded(super.read(b, off, len));
     }
 
+    /** Skips by reading, so a long skip counts as activity and is stopped by a stall like a read. */
+    @Override
+    public long skip(long n) throws IOException {
+        byte[] buf = new byte[(int) Math.min(Math.max(n, 0), 1 << 16)];
+        long skipped = 0;
+        while (skipped < n) {
+            int k = read(buf, 0, (int) Math.min(buf.length, n - skipped));
+            if (k < 0) {
+                break;
+            }
+            skipped += k;
+        }
+        return skipped;
+    }
+
     private int guarded(int result) throws IOException {
         if (stalled) {
             throw new IOException(what + " stalled: no data for " + Duration.ofNanos(idleNanos).toSeconds() + "s");

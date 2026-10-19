@@ -154,7 +154,7 @@ class SnapshotImportIT {
     }
 
     @Test
-    void importsAPublishedSnapshotStreamedFromAPublicLocationRetryingABrokenRead() throws Exception {
+    void importsAPublishedSnapshotStreamedFromAPublicLocationResumingABrokenRead() throws Exception {
         var built = fixture();
         com.bloxbean.cardano.yaci.store.snapshot.archive.Checksums.write(built.manifest(), built.manifestPath());
         Path bucket = root.resolve("bucket");
@@ -165,7 +165,7 @@ class SnapshotImportIT {
         try (var server = new com.bloxbean.cardano.yaci.store.snapshot.remote.TestHttpServer(bucket, true);
              var http = new com.bloxbean.cardano.yaci.store.snapshot.remote.HttpSnapshotStore(
                      java.net.URI.create(server.url()), java.time.Duration.ofSeconds(2))) {
-            var repo = new com.bloxbean.cardano.yaci.store.snapshot.remote.SnapshotRepository(http);
+            var repo = new com.bloxbean.cardano.yaci.store.snapshot.remote.SnapshotRepository(http, java.time.Duration.ZERO);
             var resolved = repo.resolve("preprod", "latest", null,
                     m -> new com.bloxbean.cardano.yaci.store.snapshot.manifest.ManifestValidator(registry).validate(m), null);
             Path manifest = repo.downloadMetadata(resolved, root.resolve("work/snapshot"));
@@ -177,7 +177,9 @@ class SnapshotImportIT {
             importer.importSnapshot(options, messages::add);
 
             assertThat(messages).anyMatch(m -> m.contains("Downloading, verifying and extracting"));
-            assertThat(messages).anyMatch(m -> m.contains("Retrying " + built.manifest().parts().get(0).fileName()));
+            // Each part's broken read resumed from where it stopped instead of starting over.
+            assertThat(server.rangeRequests()).isEqualTo(built.manifest().parts().size());
+            assertThat(messages).noneMatch(m -> m.contains("Retrying "));
         }
         try (var conn = PostgresSupport.connect()) {
             assertThat(count(conn, "block")).isEqualTo(SnapshotFixture.POINT_BLOCK + 1);

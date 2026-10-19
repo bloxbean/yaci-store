@@ -168,6 +168,20 @@ public class S3SnapshotStore implements SnapshotStore {
     }
 
     @Override
+    public InputStream open(String k, long offset) throws IOException {
+        if (offset == 0) {
+            return open(k);
+        }
+        try {
+            return s3.getObject(GetObjectRequest.builder().bucket(bucket).key(key(k)).range("bytes=" + offset + "-").build());
+        } catch (NoSuchKeyException e) {
+            throw new NoSuchFileException(k + " is not in " + describe());
+        } catch (SdkException e) {
+            throw io("GET " + k, e);
+        }
+    }
+
+    @Override
     public Optional<Tagged> read(String k) throws IOException {
         try {
             var r = s3.getObjectAsBytes(GetObjectRequest.builder().bucket(bucket).key(key(k)).build());

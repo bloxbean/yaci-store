@@ -8,17 +8,28 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
- * Serves a directory over plain HTTP, as a public bucket would. With {@code breakFirstPartRead}, the
- * first GET of every {@code .zip} stalls half way, as a dropped connection does, so a client's stall
- * detection and retry are exercised.
+ * Serves a directory over plain HTTP, as a public bucket would, answering {@code Range: bytes=N-}
+ * requests unless told to ignore them. With {@code breakFirstPartRead}, the first GET of every
+ * {@code .zip} stalls half way, as a dropped connection does, so a client's stall detection and
+ * resume are exercised.
  */
 public final class TestHttpServer implements AutoCloseable {
 
+    private static final Pattern RANGE = Pattern.compile("bytes=(\\d+)-");
+
     private final HttpServer server;
+    private final AtomicInteger rangeRequests = new AtomicInteger();
 
     public TestHttpServer(Path root, boolean breakFirstPartRead) throws IOException {
+        this(root, breakFirstPartRead, true);
+    }
+
+    public TestHttpServer(Path root, boolean breakFirstPartRead, boolean honourRange) throws IOException {
         Set<String> broken = ConcurrentHashMap.newKeySet();
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", exchange -> {
@@ -31,7 +42,18 @@ public final class TestHttpServer implements AutoCloseable {
                     exchange.sendResponseHeaders(200, -1);
                 } else {
                     byte[] bytes = Files.readAllBytes(file);
-                    exchange.sendResponseHeaders(200, bytes.length);
+                    int from = 0;
+                    String range = exchange.getRequestHeaders().getFirst("Range");
+                    Matcher m = range == null ? null : RANGE.matcher(range);
+                    if (m != null && m.matches()) {
+                        rangeRequests.incrementAndGet();
+                        if (honourRange) {
+                            from = Integer.parseInt(m.group(1));
+                            exchange.getResponseHeaders().add("Content-Range",
+                                    "bytes " + from + "-" + (bytes.length - 1) + "/" + bytes.length);
+                        }
+                    }
+                    exchange.sendResponseHeaders(from > 0 ? 206 : 200, bytes.length - from);
                     try (var out = exchange.getResponseBody()) {
                         if (breakFirstPartRead && file.toString().endsWith(".zip") && broken.add(file.toString())) {
                             out.write(bytes, 0, bytes.length / 2);
@@ -40,7 +62,7 @@ public final class TestHttpServer implements AutoCloseable {
                             Thread.sleep(10_000);
                             throw new IOException("stalled");
                         }
-                        out.write(bytes);
+                        out.write(bytes, from, bytes.length - from);
                     }
                 }
             } catch (IOException | InterruptedException e) {
@@ -54,6 +76,11 @@ public final class TestHttpServer implements AutoCloseable {
 
     public String url() {
         return "http://127.0.0.1:" + server.getAddress().getPort() + "/";
+    }
+
+    /** GETs that asked for a range, whether or not it was honoured. */
+    public int rangeRequests() {
+        return rangeRequests.get();
     }
 
     @Override

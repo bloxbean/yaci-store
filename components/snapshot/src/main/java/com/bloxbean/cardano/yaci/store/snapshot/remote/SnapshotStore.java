@@ -33,6 +33,21 @@ public interface SnapshotStore extends AutoCloseable {
     /** The whole object, streamed. The caller closes it. */
     InputStream open(String key) throws IOException;
 
+    /**
+     * The object from byte {@code offset} to its end, to resume a read that failed. The default reads
+     * the object from the start and discards the bytes before {@code offset}.
+     */
+    default InputStream open(String key, long offset) throws IOException {
+        InputStream in = open(key);
+        try {
+            in.skipNBytes(offset);
+        } catch (IOException e) {
+            in.close();
+            throw e;
+        }
+        return in;
+    }
+
     /** A small object (an index, a manifest) and its entity tag; empty when it does not exist. */
     Optional<Tagged> read(String key) throws IOException;
 

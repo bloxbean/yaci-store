@@ -81,6 +81,40 @@ public class HttpSnapshotStore implements SnapshotStore {
         return new StallGuard(r.body(), stallTimeout, "GET " + uri(key));
     }
 
+    /** A range request; a server that ignores it sends the whole object, and the start is read past. */
+    @Override
+    public InputStream open(String key, long offset) throws IOException {
+        if (offset == 0) {
+            return open(key);
+        }
+        HttpResponse<InputStream> r = send(HttpRequest.newBuilder(uri(key)).header("Range", "bytes=" + offset + "-").GET(),
+                HttpResponse.BodyHandlers.ofInputStream());
+        if (r.statusCode() == 404 || r.statusCode() == 403) {
+            r.body().close();
+            throw new NoSuchFileException(key + " is not at " + base);
+        }
+        if (r.statusCode() == 206) {
+            String range = r.headers().firstValue("content-range").orElse("");
+            if (!range.startsWith("bytes " + offset + "-")) {
+                r.body().close();
+                throw new IOException("GET " + uri(key) + " returned range '" + range + "', not one from byte " + offset);
+            }
+            return new StallGuard(r.body(), stallTimeout, "GET " + uri(key));
+        }
+        if (r.statusCode() != 200) {
+            r.body().close();
+            throw new IOException("GET " + uri(key) + " returned HTTP " + r.statusCode());
+        }
+        InputStream in = new StallGuard(r.body(), stallTimeout, "GET " + uri(key));
+        try {
+            in.skipNBytes(offset);
+        } catch (IOException e) {
+            in.close();
+            throw e;
+        }
+        return in;
+    }
+
     @Override
     public Optional<Tagged> read(String key) throws IOException {
         HttpResponse<byte[]> r = send(HttpRequest.newBuilder(uri(key)).GET(), HttpResponse.BodyHandlers.ofByteArray());

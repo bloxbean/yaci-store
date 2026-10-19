@@ -52,10 +52,19 @@ public class SnapshotRepository {
     private static final int INDEX_ATTEMPTS = 5;
     private static final int DOWNLOAD_ATTEMPTS = 3;
 
+    /** Wait before reopening a remote part at the byte its read failed; doubled for each failure there. */
+    public static final java.time.Duration RESUME_BACKOFF = java.time.Duration.ofSeconds(2);
+
     private final SnapshotStore store;
+    private final java.time.Duration resumeBackoff;
 
     public SnapshotRepository(SnapshotStore store) {
+        this(store, RESUME_BACKOFF);
+    }
+
+    public SnapshotRepository(SnapshotStore store, java.time.Duration resumeBackoff) {
         this.store = store;
+        this.resumeBackoff = resumeBackoff;
     }
 
     public SnapshotStore store() {
@@ -450,7 +459,7 @@ public class SnapshotRepository {
         Path tmp = target.resolveSibling(target.getFileName() + ".download");
         MessageDigest md = Digests.sha256();
         long n = 0;
-        try (InputStream in = new DigestInputStream(store.open(r.directory() + p.fileName()), md);
+        try (InputStream in = new DigestInputStream(openPart(r, p), md);
              OutputStream out = Files.newOutputStream(tmp)) {
             byte[] buf = new byte[1 << 20];
             int k;
@@ -491,9 +500,16 @@ public class SnapshotRepository {
 
             @Override
             public InputStream open(SnapshotManifest.PartManifest part) throws IOException {
-                return store.open(r.directory() + part.fileName());
+                return openPart(r, part);
             }
         };
+    }
+
+    /** A part's bytes; a remote read that fails part way resumes from the next byte. */
+    private InputStream openPart(Resolved r, SnapshotManifest.PartManifest p) throws IOException {
+        String key = r.directory() + p.fileName();
+        return store instanceof LocalSnapshotStore ? store.open(key)
+                : new ResumingInputStream(store, key, p.size(), resumeBackoff);
     }
 
     /** One line per entry, for {@code snapshot list}. */

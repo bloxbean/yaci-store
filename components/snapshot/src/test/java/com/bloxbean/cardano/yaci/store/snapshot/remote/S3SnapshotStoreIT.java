@@ -85,6 +85,10 @@ class S3SnapshotStoreIT {
         try (InputStream in = store.open("a/large.bin")) {
             assertThat(Digests.sha256Hex(in.readAllBytes())).isEqualTo(Digests.sha256Hex(bytes));
         }
+        // A resumed read asks for the rest of the object only.
+        try (InputStream in = store.open("a/large.bin", 5_000_000)) {
+            assertThat(in.readAllBytes()).isEqualTo(java.util.Arrays.copyOfRange(bytes, 5_000_000, bytes.length));
+        }
         assertThat(store.list("a/")).containsExactly("a/large.bin", "a/small.bin");
         assertThat(store.head("a/missing")).isEmpty();
         assertThat(store.read("a/missing")).isEmpty();
