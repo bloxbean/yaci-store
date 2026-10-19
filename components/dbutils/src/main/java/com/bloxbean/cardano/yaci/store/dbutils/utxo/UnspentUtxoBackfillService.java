@@ -7,13 +7,13 @@ import org.springframework.stereotype.Service;
 /**
  * One-time fill of {@code address_utxo_unspent} for a store that was synced before
  * {@code store.utxo.unspent-table-enabled} was turned on. The utxo store keeps the table current
- * from then on (UnspentUtxoTableService in stores/utxo, whose backfill and reconcile steps these
- * two statements mirror; this copy is plain SQL so the admin CLI needs no store modules).
+ * from then on (UtxoStorageImpl in stores/utxo); these statements are plain SQL so the admin CLI
+ * needs no store modules.
  *
  * <p>Order of operations:
  * <ol>
  *   <li>turn {@code store.utxo.unspent-table-enabled} on and restart, so new commits are covered;</li>
- *   <li>{@link #tipSlot()}, then {@link #backfill} from slot 0 to that tip;</li>
+ *   <li>{@link #tipSlot()}, then {@link #backfill} from slot -1 (genesis outputs) to that tip;</li>
  *   <li>{@link #reconcileSpentAfter} that tip: a chunk can read an output as unspent just before
  *       the indexer commits its spend;</li>
  *   <li>only then turn {@code store.utxo.unspent-table-read-enabled} on.</li>
@@ -24,7 +24,7 @@ import org.springframework.stereotype.Service;
 @Slf4j
 public class UnspentUtxoBackfillService {
 
-    static final String COLUMNS = "tx_hash, output_index, slot, block_hash, epoch, lovelace_amount, amounts, "
+    public static final String COLUMNS = "tx_hash, output_index, slot, block_hash, epoch, lovelace_amount, amounts, "
             + "data_hash, inline_datum, owner_addr, owner_addr_full, owner_stake_addr, owner_payment_credential, "
             + "owner_stake_credential, script_ref, reference_script_hash, is_collateral_return, block, block_time, "
             + "update_datetime, tx_index";
@@ -33,6 +33,16 @@ public class UnspentUtxoBackfillService {
             + "select " + COLUMNS + " from address_utxo a "
             + "where a.slot between ? and ? "
             + "and not exists (select 1 from tx_input i where i.tx_hash = a.tx_hash and i.output_index = a.output_index) "
+            + "and not exists (select 1 from address_utxo_unspent u where u.tx_hash = a.tx_hash and u.output_index = a.output_index)";
+
+    /**
+     * Rollback of the table to {@code :slot}, after its rows with a later slot are deleted: the outputs created at
+     * or before the point whose spend is rolled back become unspent again. Must run before tx_input is trimmed.
+     */
+    public static final String RESTORE_SPENT_AFTER = "insert into address_utxo_unspent (" + COLUMNS + ") "
+            + "select " + COLUMNS.replaceAll("(\\w+)", "a.$1") + " "
+            + "from tx_input t join address_utxo a on a.tx_hash = t.tx_hash and a.output_index = t.output_index "
+            + "where t.spent_at_slot > :slot and a.slot <= :slot "
             + "and not exists (select 1 from address_utxo_unspent u where u.tx_hash = a.tx_hash and u.output_index = a.output_index)";
 
     static final String DELETE_SPENT_AFTER = "delete from address_utxo_unspent "

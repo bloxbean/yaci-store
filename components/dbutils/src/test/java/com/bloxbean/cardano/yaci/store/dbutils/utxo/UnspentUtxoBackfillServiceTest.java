@@ -4,6 +4,8 @@ import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 import java.util.List;
@@ -56,6 +58,25 @@ class UnspentUtxoBackfillServiceTest {
         assertThat(copied).isEqualTo(9);
         assertThat(removed).isEqualTo(1);
         assertThat(unspent()).containsExactly("addr0", "addr1", "addr2", "addr4", "addr6", "addr7", "addr8", "addr9");
+    }
+
+    @Test
+    void rollbackRestoresTheOutputsWhoseSpendIsRolledBack() {
+        output(1, 100);                             // spent after the rollback point: restored
+        output(2, 100);                             // spent before it: stays out
+        output(3, 100);                             // still unspent: already present, not duplicated
+        output(4, 200);                             // created after the point: not restored
+        spend(1, 300);
+        spend(2, 120);
+        spend(4, 300);
+        service.backfill(-1, 300, 1000);
+        assertThat(unspent()).containsExactly("addr3");
+
+        var params = new MapSqlParameterSource("slot", 150L);
+        int restored = new NamedParameterJdbcTemplate(jdbc).update(UnspentUtxoBackfillService.RESTORE_SPENT_AFTER, params);
+
+        assertThat(restored).isEqualTo(1);
+        assertThat(unspent()).containsExactly("addr1", "addr3");
     }
 
     @Test

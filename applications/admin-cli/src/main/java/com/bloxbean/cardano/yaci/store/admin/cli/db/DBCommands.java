@@ -162,7 +162,7 @@ public class DBCommands {
 
     @Command(description = "Fill address_utxo_unspent for a store synced before store.utxo.unspent-table-enabled was turned on")
     public void backfillUnspentUtxos(
-            @Option(longNames = "from-slot", defaultValue = "0", description = "First slot to copy (to resume an interrupted fill)") long fromSlot,
+            @Option(longNames = "from-slot", defaultValue = "-1", description = "First slot to copy; -1 includes the genesis outputs (to resume an interrupted fill, pass a later slot)") long fromSlot,
             @Option(longNames = "chunk-slots", defaultValue = "43200", description = "Slots copied per transaction") long chunkSlots) {
         if (!databaseUtils.tableExists("address_utxo_unspent")) {
             writeLn(error("Table address_utxo_unspent not found. Start the store once with this version so its migration runs."));
