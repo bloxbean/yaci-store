@@ -13,6 +13,24 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 public class AlonzoGenesisTest {
     public static final String GENESIS_CUSTOM_COSTMODEL_ALONZO_GENESIS_JSON = "/genesis/custom-costmodel-alonzo-genesis.json";
+    //Leios test network Musashi (network magic 164): executionPrices uses priceSteps / priceMemory
+    public static final String MUSASHI_ALONZO_GENESIS_JSON = "/genesis/musashi-alonzo-genesis.json";
+
+    @Test
+    void parseAlonzoGenesis_priceStepsAndPriceMemoryKeys() {
+        AlonzoGenesis alonzoGenesis = new AlonzoGenesis(this.getClass().getResourceAsStream(MUSASHI_ALONZO_GENESIS_JSON));
+        ProtocolParams protocolParams = alonzoGenesis.getProtocolParams();
+
+        assertThat(safeRatio(protocolParams.getPriceStep())).isEqualTo(BigDecimal.valueOf(0.0000721));
+        assertThat(safeRatio(protocolParams.getPriceMem())).isEqualTo(BigDecimal.valueOf(.0577));
+        assertThat(protocolParams.getAdaPerUtxoByte()).isEqualTo(BigInteger.valueOf(34482));
+        assertThat(protocolParams.getMaxTxExMem()).isEqualTo(BigInteger.valueOf(16500000));
+        assertThat(protocolParams.getMaxTxExSteps()).isEqualTo(BigInteger.valueOf(10000000000L));
+        assertThat(protocolParams.getMaxBlockExMem()).isEqualTo(BigInteger.valueOf(72000000L));
+        assertThat(protocolParams.getMaxBlockExSteps()).isEqualTo(BigInteger.valueOf(20000000000L));
+        assertThat(protocolParams.getCostModels().get("PlutusV1")).hasSize(166);
+    }
+
 
     @Test
     void parseAlonzoGenesis_mainnet_bundled() {
