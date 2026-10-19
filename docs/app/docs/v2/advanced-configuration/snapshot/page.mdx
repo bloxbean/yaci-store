@@ -479,6 +479,12 @@ During the import the loaded tables' keys and the indexes their migrations creat
 rebuilt after the load, autovacuum is kept off those tables until the end, and every loaded table
 is analyzed, so the application's first queries have planner statistics.
 
+PostgreSQL builds a partitioned table's key or index one partition at a time. The import instead
+builds each partition's copy as a separate task, spread over the `--workers` connections, then
+creates the parent key or index, which attaches those copies without reading the rows again. The
+partitions' indexes get the same names as a build on the parent would give them. On mainnet,
+`reward_pkey` (455 partitions) was the longest single build of a pruned import, at about 30 minutes.
+
 Before the rebuild, the loaded tables are frozen (`VACUUM (FREEZE)`, one table per worker, largest
 first) while they still have no index. Otherwise every freshly loaded page is rewritten three more
 times: the rebuild's scan sets its hint bits, and the first autovacuum freezes it and sets the
