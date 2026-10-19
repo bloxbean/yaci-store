@@ -290,7 +290,7 @@ The admin CLI can also build the table for an already synced store:
 
 The table is only correct if it has been kept since it was built. If `unspent-table-enabled` is turned off for a while and back on, rebuild the table with the admin CLI.
 
-The table's read indexes are optional, like those of `address_utxo`: they are in `index.yml`, `extra-index.yml` (GIN on `amounts`) and `blockfrost-index.yml`. UTxO pruning does not affect the table.
+The table's read indexes are optional, like those of `address_utxo`: they are in `index.yml`, `extra-index.yml` (GIN on `amounts`) and `blockfrost-index.yml`. When the table is built at the tip or with the admin CLI, apply them after the build: every index on the table slows down its copy. UTxO pruning does not affect the table.
 
 #### Transaction Pruning
 
