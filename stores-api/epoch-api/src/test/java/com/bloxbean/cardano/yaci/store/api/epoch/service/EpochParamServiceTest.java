@@ -1,18 +1,16 @@
 package com.bloxbean.cardano.yaci.store.api.epoch.service;
 
+import com.bloxbean.cardano.yaci.store.client.epoch.DummyEpochNonceClient;
+import com.bloxbean.cardano.yaci.store.client.epoch.EpochNonceClient;
 import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.epoch.domain.EpochParam;
 import com.bloxbean.cardano.yaci.store.epoch.dto.ProtocolParamsDto;
 import com.bloxbean.cardano.yaci.store.epoch.storage.EpochParamStorage;
-import com.bloxbean.cardano.yaci.store.epochnonce.domain.EpochNonce;
-import com.bloxbean.cardano.yaci.store.epochnonce.storage.EpochNonceStorageReader;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.beans.factory.ObjectProvider;
 
 import java.util.Optional;
 
@@ -31,25 +29,14 @@ class EpochParamServiceTest {
     private EraService eraService;
 
     @Mock
-    private ObjectProvider<EpochNonceStorageReader> epochNonceStorageReaderProvider;
-
-    @Mock
-    private EpochNonceStorageReader epochNonceStorageReader;
-
-    private EpochParamService epochParamService;
-
-    @BeforeEach
-    void setUp() {
-        epochParamService = new EpochParamService(epochParamStorage, eraService, epochNonceStorageReaderProvider);
-    }
+    private EpochNonceClient epochNonceClient;
 
     @Test
-    void getProtocolParams_setsNonceFromEpochNonceStore() {
+    void getProtocolParams_setsNonceFromEpochNonceClient() {
         givenEpochParam(100);
-        when(epochNonceStorageReaderProvider.getIfAvailable()).thenReturn(epochNonceStorageReader);
-        when(epochNonceStorageReader.findByEpoch(100)).thenReturn(Optional.of(EpochNonce.builder().epoch(100).nonce(NONCE).build()));
+        when(epochNonceClient.getEpochNonce(100)).thenReturn(Optional.of(NONCE));
 
-        ProtocolParamsDto dto = epochParamService.getProtocolParams(100).orElseThrow();
+        ProtocolParamsDto dto = service(epochNonceClient).getProtocolParams(100).orElseThrow();
 
         assertThat(dto.getEpoch()).isEqualTo(100);
         assertThat(dto.getNonce()).isEqualTo(NONCE);
@@ -59,30 +46,31 @@ class EpochParamServiceTest {
     void getLatestProtocolParams_setsNonceForMaxEpoch() {
         when(epochParamStorage.getMaxEpoch()).thenReturn(101);
         givenEpochParam(101);
-        when(epochNonceStorageReaderProvider.getIfAvailable()).thenReturn(epochNonceStorageReader);
-        when(epochNonceStorageReader.findByEpoch(101)).thenReturn(Optional.of(EpochNonce.builder().epoch(101).nonce(NONCE).build()));
+        when(epochNonceClient.getEpochNonce(101)).thenReturn(Optional.of(NONCE));
 
-        ProtocolParamsDto dto = epochParamService.getLatestProtocolParams().orElseThrow();
+        ProtocolParamsDto dto = service(epochNonceClient).getLatestProtocolParams().orElseThrow();
 
         assertThat(dto.getEpoch()).isEqualTo(101);
         assertThat(dto.getNonce()).isEqualTo(NONCE);
     }
 
     @Test
-    void getProtocolParams_nonceNullWhenNoNonceRow() {
+    void getProtocolParams_nonceNullWhenNoNonceForEpoch() {
         givenEpochParam(100);
-        when(epochNonceStorageReaderProvider.getIfAvailable()).thenReturn(epochNonceStorageReader);
-        when(epochNonceStorageReader.findByEpoch(100)).thenReturn(Optional.empty());
+        when(epochNonceClient.getEpochNonce(100)).thenReturn(Optional.empty());
 
-        assertThat(epochParamService.getProtocolParams(100).orElseThrow().getNonce()).isNull();
+        assertThat(service(epochNonceClient).getProtocolParams(100).orElseThrow().getNonce()).isNull();
     }
 
     @Test
-    void getProtocolParams_nonceNullWhenEpochNonceStoreDisabled() {
+    void getProtocolParams_nonceNullWithDummyClient() {
         givenEpochParam(100);
-        when(epochNonceStorageReaderProvider.getIfAvailable()).thenReturn(null);
 
-        assertThat(epochParamService.getProtocolParams(100).orElseThrow().getNonce()).isNull();
+        assertThat(service(new DummyEpochNonceClient()).getProtocolParams(100).orElseThrow().getNonce()).isNull();
+    }
+
+    private EpochParamService service(EpochNonceClient client) {
+        return new EpochParamService(epochParamStorage, eraService, client);
     }
 
     private void givenEpochParam(int epoch) {
