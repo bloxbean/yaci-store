@@ -103,7 +103,7 @@ public class S3SnapshotStore implements SnapshotStore {
     /** @param prefix key prefix inside the bucket, without leading or trailing slashes; may be empty */
     public S3SnapshotStore(String bucket, String prefix, Settings settings) {
         this.bucket = bucket;
-        this.prefix = prefix == null || prefix.isBlank() ? "" : prefix.replaceAll("^/+|/+$", "") + "/";
+        this.prefix = prefix == null || prefix.isBlank() ? "" : trimSlashes(prefix) + "/";
         this.settings = settings;
         AwsCredentialsProvider credentials = settings.accessKeyId() == null || settings.accessKeyId().isBlank()
                 ? DefaultCredentialsProvider.builder().build()
@@ -122,6 +122,19 @@ public class S3SnapshotStore implements SnapshotStore {
             builder.endpointOverride(URI.create(settings.endpoint()));
         }
         this.s3 = builder.build();
+    }
+
+    /** {@code value} without its leading and trailing slashes. */
+    static String trimSlashes(String value) {
+        int start = 0;
+        int end = value.length();
+        while (start < end && value.charAt(start) == '/') {
+            start++;
+        }
+        while (end > start && value.charAt(end - 1) == '/') {
+            end--;
+        }
+        return value.substring(start, end);
     }
 
     @Override

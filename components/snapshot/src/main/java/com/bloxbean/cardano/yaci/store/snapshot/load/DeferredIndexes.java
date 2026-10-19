@@ -54,12 +54,18 @@ public class DeferredIndexes {
     /** Parallel workers asked for by the first build, at most half the server's pool. */
     static final int LEAD_PARALLEL_WORKERS = 4;
 
+    /**
+     * A double-quoted identifier, {@code ""} standing for a quote. Possessive, so a long name cannot
+     * overflow the stack: a closing quote is always followed by a space or a dot, never by another quote.
+     */
+    private static final String QUOTED = "\"[^\"]*+(?:\"\"[^\"]*+)*+\"";
+
     /** Postgres prints an index on a partitioned table as {@code ON ONLY}, which builds no partitions. */
     private static final Pattern ON_ONLY =
-            Pattern.compile("^(CREATE (?:UNIQUE )?INDEX (?:\"(?:[^\"]|\"\")*\"|\\S+) ON )ONLY ");
+            Pattern.compile("^(CREATE (?:UNIQUE )?INDEX (?:" + QUOTED + "|\\S+) ON )ONLY ");
 
     /** An index definition's uniqueness and everything from {@code USING}, without its name and table. */
-    private static final String IDENTIFIER = "(?:\"(?:[^\"]|\"\")*\"|[^\\s.\"]+)";
+    private static final String IDENTIFIER = "(?:" + QUOTED + "|[^\\s.\"]+)";
     private static final Pattern INDEX_BODY = Pattern.compile("^CREATE (UNIQUE )?INDEX " + IDENTIFIER
             + " ON (?:ONLY )?(?:" + IDENTIFIER + "\\.)?" + IDENTIFIER + " (USING .+)$", Pattern.DOTALL);
 
@@ -213,6 +219,8 @@ public class DeferredIndexes {
 
     private final Connection conn;
     private final String schema;
+    /** Keeps the progress timer's and the workers' lines from interleaving. */
+    private final Object sayLock = new Object();
 
     public DeferredIndexes(Connection conn, String schema) {
         this.conn = conn;
@@ -381,7 +389,7 @@ public class DeferredIndexes {
         timer.scheduleAtFixedRate(() -> {
             String line = inFlight();
             if (line != null) {
-                synchronized (say) {
+                synchronized (sayLock) {
                     say.accept(String.format("%d/%d done, elapsed %s; %s", done.get(), pending.size(),
                             LoadProgress.duration(System.currentTimeMillis() - started), line));
                 }
@@ -581,7 +589,7 @@ public class DeferredIndexes {
             String line = String.format("%d/%d %s%s (%s)", done.incrementAndGet(), total, e.label(),
                     partitions == null ? "" : ", " + partitions + " partitions in parallel",
                     LoadProgress.duration(System.currentTimeMillis() - firstCopyStarted.getOrDefault(entryKey(e), t0)));
-            synchronized (say) {
+            synchronized (sayLock) {
                 say.accept(line);
             }
         }

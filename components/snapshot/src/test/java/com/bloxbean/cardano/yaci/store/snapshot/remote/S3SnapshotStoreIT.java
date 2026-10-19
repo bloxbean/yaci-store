@@ -46,6 +46,14 @@ class S3SnapshotStoreIT {
         return System.getenv(name);
     }
 
+    private static String withoutTrailingSlashes(String url) {
+        int end = url.length();
+        while (end > 0 && url.charAt(end - 1) == '/') {
+            end--;
+        }
+        return url.substring(0, end);
+    }
+
     @BeforeEach
     void open() {
         run = "it-" + System.currentTimeMillis();
@@ -53,7 +61,7 @@ class S3SnapshotStoreIT {
         var settings = new S3SnapshotStore.Settings(endpoint, env("SNAPSHOT_S3_IT_REGION"),
                 endpoint != null && !endpoint.isBlank(), env("SNAPSHOT_S3_IT_ACCESS_KEY_ID"),
                 env("SNAPSHOT_S3_IT_SECRET_ACCESS_KEY"), S3SnapshotStore.Settings.MIN_PIECE_BYTES, 3);
-        store = SnapshotLocations.open(env("SNAPSHOT_S3_IT_URL").replaceAll("/+$", "") + "/" + run, settings);
+        store = SnapshotLocations.open(withoutTrailingSlashes(env("SNAPSHOT_S3_IT_URL")) + "/" + run, settings);
     }
 
     @AfterEach
@@ -129,7 +137,7 @@ class S3SnapshotStoreIT {
 
         String publicUrl = env("SNAPSHOT_S3_IT_PUBLIC_URL");
         if (publicUrl != null && !publicUrl.isBlank()) {
-            try (var http = SnapshotLocations.open(publicUrl.replaceAll("/+$", "") + "/" + run, null)) {
+            try (var http = SnapshotLocations.open(withoutTrailingSlashes(publicUrl) + "/" + run, null)) {
                 var anonymous = new SnapshotRepository(http).resolve("preprod", "latest", null, m -> List.of(), null);
                 assertThat(anonymous.entry().snapshotId()).isEqualTo(resolved.entry().snapshotId());
             }
@@ -149,7 +157,7 @@ class S3SnapshotStoreIT {
         assertThat(repo.scan("preprod", null)).extracting(SnapshotIndex.Entry::snapshotId).containsExactly(id);
         String publicUrl = env("SNAPSHOT_S3_IT_PUBLIC_URL");
         if (publicUrl != null && !publicUrl.isBlank()) {
-            try (var http = SnapshotLocations.open(publicUrl.replaceAll("/+$", "") + "/" + run, null)) {
+            try (var http = SnapshotLocations.open(withoutTrailingSlashes(publicUrl) + "/" + run, null)) {
                 var anonymous = new SnapshotRepository(http);
                 assertThatThrownBy(() -> anonymous.resolve("preprod", "latest", m -> List.of(), null))
                         .hasMessageContaining("No live snapshot");

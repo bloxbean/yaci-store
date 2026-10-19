@@ -71,8 +71,7 @@ final class TableFreeze {
                     try (Connection c = connections.open(); Statement st = c.createStatement()) {
                         for (String table = queue.poll(); table != null; table = queue.poll()) {
                             running.add(table);
-                            st.execute("VACUUM (" + options + ") " + Identifiers.quote(schema) + "."
-                                    + Identifiers.quote(table));
+                            st.execute(vacuumSql(options, schema, table));
                             running.remove(table);
                             done.incrementAndGet();
                         }
@@ -95,6 +94,14 @@ final class TableFreeze {
         }
         say.accept("Froze " + sizes.size() + " table(s), " + Progress.bytes(total) + ", in "
                 + LoadProgress.duration(System.currentTimeMillis() - started));
+    }
+
+    /**
+     * {@code options} is {@code FREEZE}, optionally with the constant {@link #BUFFER_USAGE_LIMIT}; the
+     * table comes from {@code pg_class} and is quoted.
+     */
+    private static String vacuumSql(String options, String schema, String table) {
+        return "VACUUM (" + options + ") " + Identifiers.qualified(schema, table);
     }
 
     /** Leaf table to heap size, largest first. */

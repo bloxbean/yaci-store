@@ -2,8 +2,14 @@ package com.bloxbean.cardano.yaci.store.snapshot.remote;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.FileSystems;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileAttribute;
+import java.nio.file.attribute.PosixFilePermissions;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.function.LongConsumer;
 
@@ -20,7 +26,22 @@ public interface SnapshotStore extends AutoCloseable {
     record ObjectInfo(long size, String etag, String sha256) {}
 
     /** A small object's content and the entity tag to pass to {@link #putIfUnchanged}. */
-    record Tagged(byte[] bytes, String etag) {}
+    record Tagged(byte[] bytes, String etag) {
+        @Override
+        public boolean equals(Object o) {
+            return o instanceof Tagged t && Arrays.equals(bytes, t.bytes) && Objects.equals(etag, t.etag);
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * Arrays.hashCode(bytes) + Objects.hashCode(etag);
+        }
+
+        @Override
+        public String toString() {
+            return "Tagged[bytes=" + (bytes == null ? "null" : bytes.length + " bytes") + ", etag=" + etag + "]";
+        }
+    }
 
     /** The location, without credentials. */
     String describe();
@@ -74,13 +95,24 @@ public interface SnapshotStore extends AutoCloseable {
 
     /** Writes {@code bytes} at {@code key}, replacing what is there. */
     default void putBytes(String key, byte[] bytes) throws IOException {
-        Path tmp = java.nio.file.Files.createTempFile("yaci-snapshot-", ".tmp");
+        Path tmp = ownerOnlyTempFile();
         try {
-            java.nio.file.Files.write(tmp, bytes);
+            Files.write(tmp, bytes);
             put(key, tmp, com.bloxbean.cardano.yaci.store.snapshot.util.Digests.sha256Hex(bytes), n -> { });
         } finally {
-            java.nio.file.Files.deleteIfExists(tmp);
+            Files.deleteIfExists(tmp);
         }
+    }
+
+    /**
+     * A new file in the shared temp directory that only this user can read or write. On a file system
+     * without POSIX permissions (Windows) the temp directory is already the user's own.
+     */
+    private static Path ownerOnlyTempFile() throws IOException {
+        FileAttribute<?>[] ownerOnly = FileSystems.getDefault().supportedFileAttributeViews().contains("posix")
+                ? new FileAttribute<?>[]{PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------"))}
+                : new FileAttribute<?>[0];
+        return Files.createTempFile("yaci-snapshot-", ".tmp", ownerOnly);
     }
 
     @Override

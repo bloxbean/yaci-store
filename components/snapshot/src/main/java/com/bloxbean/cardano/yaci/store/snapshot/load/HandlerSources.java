@@ -87,11 +87,11 @@ final class HandlerSources {
                         + " files to rebuild the cursor and era from");
             }
             String scratch = PREFIX + spec.targetTable();
-            String qualified = Identifiers.quote(options.schema()) + "." + Identifiers.quote(scratch);
+            String qualified = Identifiers.qualified(
+                    Identifiers.requireSqlIdentifier(options.schema(), "target schema"), scratch);
             try (Statement st = pg.createStatement()) {
-                st.execute("DROP TABLE IF EXISTS " + qualified);
-                st.execute("CREATE UNLOGGED TABLE " + qualified
-                        + " (hash text, slot bigint, number bigint, era integer, prev_hash text)");
+                st.execute(dropSql(qualified));
+                st.execute(createSql(qualified));
             }
             Path spill = options.workDir().resolve("spill-sources");
             try {
@@ -119,8 +119,18 @@ final class HandlerSources {
     static void drop(Connection pg, Map<String, String> staged) throws SQLException {
         try (Statement st = pg.createStatement()) {
             for (String relation : staged.values()) {
-                st.execute("DROP TABLE IF EXISTS " + relation);
+                st.execute(dropSql(relation));
             }
         }
+    }
+
+    /** {@code relation} is a scratch table {@link #stage} qualified with {@link Identifiers#qualified}. */
+    private static String dropSql(String relation) {
+        return "DROP TABLE IF EXISTS " + relation;
+    }
+
+    private static String createSql(String relation) {
+        return "CREATE UNLOGGED TABLE " + relation
+                + " (hash text, slot bigint, number bigint, era integer, prev_hash text)";
     }
 }

@@ -19,9 +19,11 @@ import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.OptionalLong;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -309,6 +311,25 @@ public class SnapshotRepository {
 
     /** A snapshot chosen from the index (or, when staged, by its id), with its verified manifest. */
     public record Resolved(String network, SnapshotIndex.Entry entry, byte[] manifestBytes, SnapshotManifest manifest) {
+        @Override
+        public boolean equals(Object o) {
+            return o instanceof Resolved r && Objects.equals(network, r.network) && Objects.equals(entry, r.entry)
+                    && Arrays.equals(manifestBytes, r.manifestBytes) && Objects.equals(manifest, r.manifest);
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * (31 * (31 * Objects.hashCode(network) + Objects.hashCode(entry))
+                    + Arrays.hashCode(manifestBytes)) + Objects.hashCode(manifest);
+        }
+
+        /** The manifest bytes by their count; the parsed manifest is printed in full. */
+        @Override
+        public String toString() {
+            return "Resolved[network=" + network + ", entry=" + entry + ", manifestBytes="
+                    + (manifestBytes == null ? "null" : manifestBytes.length + " bytes") + ", manifest=" + manifest + "]";
+        }
+
         public String directory() {
             return network + "/" + entry.directory();
         }

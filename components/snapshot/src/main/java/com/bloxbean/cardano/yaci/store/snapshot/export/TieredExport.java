@@ -351,9 +351,8 @@ final class TieredExport {
         }
         String scan = DuckDb.readParquet(paths(files));
         for (String column : plan.spec().validation().bounds()) {
-            String q = Identifiers.quote(column);
             try (Statement st = duck.createStatement();
-                 ResultSet rs = st.executeQuery("SELECT CAST(min(" + q + ") AS VARCHAR), CAST(max(" + q + ") AS VARCHAR) FROM " + scan)) {
+                 ResultSet rs = st.executeQuery(boundsSql(column, scan))) {
                 if (rs.next() && rs.getString(1) != null) {
                     bounds.put(column + ".min", rs.getString(1));
                     bounds.put(column + ".max", rs.getString(2));
@@ -361,6 +360,12 @@ final class TieredExport {
             }
         }
         return bounds;
+    }
+
+    /** {@code scan} is a {@link DuckDb#readParquet} of quoted file literals; the column is validated and quoted. */
+    private static String boundsSql(String column, String scan) {
+        String q = Identifiers.quote(Identifiers.requireSqlIdentifier(column, "validation.bounds"));
+        return "SELECT CAST(min(" + q + ") AS VARCHAR), CAST(max(" + q + ") AS VARCHAR) FROM " + scan;
     }
 
     /** Epoch partitions older than the newest {@code epochs} are full-only; nothing is rewritten. */

@@ -71,10 +71,16 @@ public class ImportJournal {
                     + " started_at timestamp NOT NULL DEFAULT now(),"
                     + " updated_at timestamp NOT NULL DEFAULT now(),"
                     + " message text)");
-            st.execute("ALTER TABLE " + q(RUN_TABLE) + " ADD COLUMN IF NOT EXISTS scope_digest varchar(64)");
-            st.execute("ALTER TABLE " + q(RUN_TABLE) + " ADD COLUMN IF NOT EXISTS transforms text");
-            st.execute("ALTER TABLE " + q(RUN_TABLE) + " ADD COLUMN IF NOT EXISTS retention text");
+            st.execute(addRunColumnSql("scope_digest", "varchar(64)"));
+            st.execute(addRunColumnSql("transforms", "text"));
+            st.execute(addRunColumnSql("retention", "text"));
         }
+    }
+
+    /** Adds a column a newer release records to an older journal; {@code column} and {@code type} are constants. */
+    private String addRunColumnSql(String column, String type) {
+        return "ALTER TABLE " + q(RUN_TABLE) + " ADD COLUMN IF NOT EXISTS "
+                + Identifiers.quote(Identifiers.requireSqlIdentifier(column, "journal column")) + " " + type;
     }
 
     public boolean exists() throws SQLException {
@@ -115,11 +121,7 @@ public class ImportJournal {
         boolean hasScope = hasColumn("scope_digest");
         boolean hasRetention = hasColumn("retention");
         try (Statement st = conn.createStatement();
-             ResultSet rs = st.executeQuery("SELECT snapshot_id, manifest_digest, network, protocol_magic,"
-                     + " point_epoch, point_slot, point_block, point_hash, schema_fingerprint, status, message,"
-                     + (hasScope ? "scope_digest" : "NULL AS scope_digest")
-                     + (hasRetention ? ", retention" : ", NULL AS retention")
-                     + " FROM " + q(RUN_TABLE) + " ORDER BY started_at DESC LIMIT 1")) {
+             ResultSet rs = st.executeQuery(currentRunSql(hasScope, hasRetention))) {
             if (!rs.next()) {
                 return Optional.empty();
             }
@@ -127,6 +129,15 @@ public class ImportJournal {
                     rs.getInt(5), rs.getLong(6), rs.getLong(7), rs.getString(8), rs.getString(9),
                     rs.getString(10), rs.getString(11), rs.getString(12), rs.getString(13)));
         }
+    }
+
+    /** The newest run; a journal from before a column was added reads it as null. */
+    private String currentRunSql(boolean hasScope, boolean hasRetention) {
+        return "SELECT snapshot_id, manifest_digest, network, protocol_magic,"
+                + " point_epoch, point_slot, point_block, point_hash, schema_fingerprint, status, message,"
+                + (hasScope ? "scope_digest" : "NULL AS scope_digest")
+                + (hasRetention ? ", retention" : ", NULL AS retention")
+                + " FROM " + q(RUN_TABLE) + " ORDER BY started_at DESC LIMIT 1";
     }
 
     private boolean hasColumn(String column) throws SQLException {
@@ -141,13 +152,17 @@ public class ImportJournal {
         }
     }
 
-    public void startRun(Run run) throws SQLException {
-        String sql = "INSERT INTO " + q(RUN_TABLE) + " (snapshot_id, manifest_digest, network,"
+    /** Every value is a bind parameter; only the validated, quoted schema is part of the text. */
+    private String startRunSql() {
+        return "INSERT INTO " + q(RUN_TABLE) + " (snapshot_id, manifest_digest, network,"
                 + " protocol_magic, point_epoch, point_slot, point_block, point_hash,"
                 + " schema_fingerprint, status, scope_digest, retention)"
                 + " VALUES (?,?,?,?,?,?,?,?,?,?,?,?)"
                 + " ON CONFLICT (snapshot_id) DO UPDATE SET status = EXCLUDED.status, updated_at = now()";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+    }
+
+    public void startRun(Run run) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(startRunSql())) {
             ps.setString(1, run.snapshotId());
             ps.setString(2, run.manifestDigest());
             ps.setString(3, run.network());
