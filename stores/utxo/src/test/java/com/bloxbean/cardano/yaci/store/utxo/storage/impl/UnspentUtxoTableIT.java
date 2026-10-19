@@ -7,6 +7,11 @@ import com.bloxbean.cardano.yaci.store.common.domain.TxInput;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.jooq.DSLContext;
+import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.UtxoRepository;
+import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.TxInputRepository;
+import com.bloxbean.cardano.yaci.store.events.internal.PreBlockSyncEvent;
 import com.bloxbean.cardano.yaci.store.utxo.UtxoStoreProperties;
 import com.bloxbean.cardano.yaci.store.utxo.processor.UtxoRollbackProcessor;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
@@ -45,6 +50,18 @@ class UnspentUtxoTableIT {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private UtxoRepository utxoRepository;
+
+    @Autowired
+    private TxInputRepository txInputRepository;
+
+    @Autowired
+    private DSLContext dsl;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
 
     @BeforeEach
     void enable() {
@@ -257,5 +274,82 @@ class UnspentUtxoTableIT {
         rollbackTo(50);
 
         assertThat(unspentKeys()).isEmpty();
+    }
+
+    /** A store in backfill-at-tip mode, with its own table state so the shared beans stay in from-genesis mode. */
+    private record AtTip(UnspentUtxoTable table, UtxoStorageImpl storage) {
+        void commit() {
+            storage.handleCommit(new CommitEvent<>(EventMetadata.builder().build(), List.of()));
+        }
+
+        void reachTip() {
+            table.handlePreBlockSync(new PreBlockSyncEvent(new Point(0, "tip")));
+        }
+    }
+
+    private AtTip atTip() {
+        UtxoStoreProperties atTipProperties = UtxoStoreProperties.builder()
+                .unspentTableEnabled(true).unspentTableBackfillAtTip(true).unspentTableReadEnabled(true).build();
+        UnspentUtxoTable table = new UnspentUtxoTable(atTipProperties, dsl, transactionManager);
+        return new AtTip(table, new UtxoStorageImpl(utxoRepository, txInputRepository, dsl, new UtxoCache(), transactionManager, table));
+    }
+
+    @Test
+    void backfillAtTipWritesNothingDuringTheSyncThenBuildsAtTheTipAndKeepsTheTableCurrent() {
+        AtTip store = atTip();
+        store.storage().saveUnspent(List.of(output(hash(20), 0, -1), output(hash(20), 1, 100), output(hash(21), 0, 100), output(hash(21), 2, 100)));
+        store.storage().saveSpent(List.of(spend(hash(20), 1, 110)));
+        store.commit();
+        assertThat(unspentKeys()).isEmpty();
+        assertThat(store.table().isActive()).isFalse();
+        assertThat(store.table().isReadable()).isFalse();
+
+        store.reachTip();
+
+        assertThat(store.table().isActive()).isTrue();
+        assertThat(store.table().isReadable()).isTrue();
+        assertThat(unspentKeys()).hasSize(3).isEqualTo(expectedKeys());
+
+        store.storage().saveSpent(List.of(spend(hash(21), 2, 200)));   //the next block, kept by UtxoStorageImpl
+        store.storage().saveUnspent(List.of(output(hash(22), 0, 200)));
+        store.commit();
+        assertThat(unspentKeys()).hasSize(3).isEqualTo(expectedKeys());
+
+        store.reachTip();   //built already: a later sync start (restart, reconnect) changes nothing
+        assertThat(unspentKeys()).hasSize(3).isEqualTo(expectedKeys());
+    }
+
+    @Test
+    void backfillAtTipTreatsANonEmptyTableAsBuilt() {
+        utxoStorage.saveUnspent(List.of(output(hash(23), 0, 100)));   //written by the shared store, from genesis
+        commit();
+
+        AtTip store = atTip();
+        assertThat(store.table().isActive()).isTrue();
+        store.storage().saveSpent(List.of(spend(hash(23), 0, 200)));
+        store.commit();
+
+        assertThat(unspentKeys()).isEmpty();
+    }
+
+    @Test
+    void backfillAtTipCopiesMoreKeysThanOneBatchAcrossEveryTxHashSlice() {
+        List<AddressUtxo> outputs = new ArrayList<>();
+        List<TxInput> spends = new ArrayList<>();
+        int count = UnspentUtxoTable.COPY_BATCH_SIZE * 2 + 300;
+        for (int i = 0; i < count; i++) {
+            String txHash = Integer.toHexString(i % 16) + String.format("%063x", i);   //every first hex digit
+            outputs.add(output(txHash, i % 3, 100));
+            if (i % 7 == 0)
+                spends.add(spend(txHash, i % 3, 150));
+        }
+        AtTip store = atTip();
+        store.storage().saveUnspent(outputs);
+        store.storage().saveSpent(spends);
+        store.commit();
+
+        store.reachTip();
+
+        assertThat(unspentKeys()).hasSize(count - spends.size()).isEqualTo(expectedKeys());
     }
 }

@@ -6,7 +6,6 @@ import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.common.util.JsonUtil;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import com.bloxbean.cardano.yaci.store.plugin.aspect.Plugin;
-import com.bloxbean.cardano.yaci.store.utxo.UtxoStoreProperties;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.mapper.UtxoMapper;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.model.AddressUtxoEntity;
@@ -18,7 +17,6 @@ import org.jooq.DSLContext;
 import org.jooq.Field;
 import org.jooq.JSON;
 import org.jooq.Query;
-import org.jooq.SelectFieldOrAsterisk;
 import org.jooq.Table;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -28,7 +26,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -43,8 +40,8 @@ import static org.jooq.impl.DSL.select;
 import static org.jooq.impl.DSL.selectOne;
 
 /**
- * Writes address_utxo and tx_input, and, when {@code store.utxo.unspent-table-enabled} is on,
- * keeps address_utxo_unspent equal to address_utxo minus tx_input.
+ * Writes address_utxo and tx_input, and, while {@link UnspentUtxoTable#isActive() address_utxo_unspent
+ * is active}, keeps it equal to address_utxo minus tx_input.
  *
  * <p>address_utxo_unspent is written from the same calls as address_utxo, so plugin filters, Byron
  * and genesis outputs apply to both tables alike:
@@ -71,7 +68,7 @@ public class UtxoStorageImpl implements UtxoStorage {
     private final UtxoMapper mapper = UtxoMapper.INSTANCE;
     private final UtxoCache utxoCache;
     private final PlatformTransactionManager transactionManager;
-    private final UtxoStoreProperties utxoStoreProperties;
+    private final UnspentUtxoTable unspentUtxoTable;
 
     //Keys spent since the last commit, deleted from address_utxo_unspent at commit
     private final Set<UtxoKey> pendingSpentKeys = ConcurrentHashMap.newKeySet();
@@ -84,13 +81,13 @@ public class UtxoStorageImpl implements UtxoStorage {
 
     public UtxoStorageImpl(UtxoRepository utxoRepository, TxInputRepository spentOutputRepository, DSLContext dsl,
                            UtxoCache utxoCache, PlatformTransactionManager transactionManager,
-                           UtxoStoreProperties utxoStoreProperties) {
+                           UnspentUtxoTable unspentUtxoTable) {
         this.utxoRepository = utxoRepository;
         this.spentOutputRepository = spentOutputRepository;
         this.dsl = dsl;
         this.utxoCache = utxoCache;
         this.transactionManager = transactionManager;
-        this.utxoStoreProperties = utxoStoreProperties;
+        this.unspentUtxoTable = unspentUtxoTable;
 
         init();
     }
@@ -105,7 +102,7 @@ public class UtxoStorageImpl implements UtxoStorage {
     }
 
     private boolean isUnspentTableEnabled() {
-        return utxoStoreProperties != null && utxoStoreProperties.isUnspentTableEnabled();
+        return unspentUtxoTable != null && unspentUtxoTable.isActive();
     }
 
     @Override
@@ -179,12 +176,8 @@ public class UtxoStorageImpl implements UtxoStorage {
     }
 
     private int restoreUnspentSpentAfter(Long slot) {
-        List<SelectFieldOrAsterisk> addressUtxoColumns = Arrays.stream(ADDRESS_UTXO_UNSPENT.fields())
-                .map(field -> (SelectFieldOrAsterisk) ADDRESS_UTXO.field(field.getName()))
-                .toList();
-
         return dsl.insertInto(ADDRESS_UTXO_UNSPENT, ADDRESS_UTXO_UNSPENT.fields())
-                .select(select(addressUtxoColumns)
+                .select(select(UnspentUtxoTable.addressUtxoColumns())
                         .from(TX_INPUT)
                         .join(ADDRESS_UTXO)
                         .on(ADDRESS_UTXO.TX_HASH.eq(TX_INPUT.TX_HASH))

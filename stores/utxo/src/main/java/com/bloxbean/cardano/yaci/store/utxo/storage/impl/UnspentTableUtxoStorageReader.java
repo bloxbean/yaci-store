@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.BooleanSupplier;
 
 import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.ADDRESS_UTXO_UNSPENT;
 import static org.jooq.impl.DSL.field;
@@ -28,18 +29,28 @@ import static org.jooq.impl.DSL.field;
  * Every other query goes to the wrapped reader. Same rows, order and pages as
  * {@link UtxoStorageReaderImpl}: slot, tx_hash, output_index, in the requested direction.
  *
- * <p>Active only with {@code store.utxo.unspent-table-read-enabled}, which should be turned on
- * only once the table is complete (maintained from the start of the sync, or built by
- * admin-cli backfill-unspent-utxos).
+ * <p>Used with {@code store.utxo.unspent-table-read-enabled}, and only while the table is active
+ * ({@link UnspentUtxoTable#isReadable()}): until a backfill-at-tip build has run, queries go to the
+ * wrapped reader.
  */
 public class UnspentTableUtxoStorageReader implements UtxoStorageReader {
 
     private final UtxoStorageReader delegate;
     private final DSLContext dsl;
+    private final BooleanSupplier tableReadable;
 
     public UnspentTableUtxoStorageReader(UtxoStorageReader delegate, DSLContext dsl) {
+        this(delegate, dsl, () -> true);
+    }
+
+    /**
+     * @param tableReadable whether the table can serve reads now; while it cannot (not built yet), every query
+     *                      goes to the wrapped reader
+     */
+    public UnspentTableUtxoStorageReader(UtxoStorageReader delegate, DSLContext dsl, BooleanSupplier tableReadable) {
         this.delegate = delegate;
         this.dsl = dsl;
+        this.tableReadable = tableReadable;
     }
 
     private static List<SelectFieldOrAsterisk> columns() {
@@ -77,37 +88,51 @@ public class UnspentTableUtxoStorageReader implements UtxoStorageReader {
 
     @Override
     public List<AddressUtxo> findUtxoByAddress(@NonNull String address, int page, int count, Order order) {
-        return page(ADDRESS_UTXO_UNSPENT.OWNER_ADDR.eq(address), page, count, order);
+        return tableReadable.getAsBoolean()
+                ? page(ADDRESS_UTXO_UNSPENT.OWNER_ADDR.eq(address), page, count, order)
+                : delegate.findUtxoByAddress(address, page, count, order);
     }
 
     @Override
     public List<AddressUtxo> findUtxosByAsset(String unit, int page, int count, Order order) {
-        return page(unit(unit), page, count, order);
+        return tableReadable.getAsBoolean()
+                ? page(unit(unit), page, count, order)
+                : delegate.findUtxosByAsset(unit, page, count, order);
     }
 
     @Override
     public List<AddressUtxo> findUtxoByAddressAndAsset(String ownerAddress, String unit, int page, int count, Order order) {
-        return page(ADDRESS_UTXO_UNSPENT.OWNER_ADDR.eq(ownerAddress).and(unit(unit)), page, count, order);
+        return tableReadable.getAsBoolean()
+                ? page(ADDRESS_UTXO_UNSPENT.OWNER_ADDR.eq(ownerAddress).and(unit(unit)), page, count, order)
+                : delegate.findUtxoByAddressAndAsset(ownerAddress, unit, page, count, order);
     }
 
     @Override
     public List<AddressUtxo> findUtxoByPaymentCredential(@NonNull String paymentCredential, int page, int count, Order order) {
-        return page(ADDRESS_UTXO_UNSPENT.OWNER_PAYMENT_CREDENTIAL.eq(paymentCredential), page, count, order);
+        return tableReadable.getAsBoolean()
+                ? page(ADDRESS_UTXO_UNSPENT.OWNER_PAYMENT_CREDENTIAL.eq(paymentCredential), page, count, order)
+                : delegate.findUtxoByPaymentCredential(paymentCredential, page, count, order);
     }
 
     @Override
     public List<AddressUtxo> findUtxoByPaymentCredentialAndAsset(String paymentCredential, String unit, int page, int count, Order order) {
-        return page(ADDRESS_UTXO_UNSPENT.OWNER_PAYMENT_CREDENTIAL.eq(paymentCredential).and(unit(unit)), page, count, order);
+        return tableReadable.getAsBoolean()
+                ? page(ADDRESS_UTXO_UNSPENT.OWNER_PAYMENT_CREDENTIAL.eq(paymentCredential).and(unit(unit)), page, count, order)
+                : delegate.findUtxoByPaymentCredentialAndAsset(paymentCredential, unit, page, count, order);
     }
 
     @Override
     public List<AddressUtxo> findUtxoByStakeAddress(@NonNull String stakeAddress, int page, int count, Order order) {
-        return page(ADDRESS_UTXO_UNSPENT.OWNER_STAKE_ADDR.eq(stakeAddress), page, count, order);
+        return tableReadable.getAsBoolean()
+                ? page(ADDRESS_UTXO_UNSPENT.OWNER_STAKE_ADDR.eq(stakeAddress), page, count, order)
+                : delegate.findUtxoByStakeAddress(stakeAddress, page, count, order);
     }
 
     @Override
     public List<AddressUtxo> findUtxoByStakeAddressAndAsset(@NonNull String stakeAddress, String unit, int page, int count, Order order) {
-        return page(ADDRESS_UTXO_UNSPENT.OWNER_STAKE_ADDR.eq(stakeAddress.trim()).and(unit(unit)), page, count, order);
+        return tableReadable.getAsBoolean()
+                ? page(ADDRESS_UTXO_UNSPENT.OWNER_STAKE_ADDR.eq(stakeAddress.trim()).and(unit(unit)), page, count, order)
+                : delegate.findUtxoByStakeAddressAndAsset(stakeAddress, unit, page, count, order);
     }
 
     @Override

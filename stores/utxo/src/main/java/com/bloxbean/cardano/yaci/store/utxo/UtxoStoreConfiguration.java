@@ -8,6 +8,7 @@ import com.bloxbean.cardano.yaci.store.utxo.storage.impl.AddressStorageImpl;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UtxoCache;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UtxoStorageImpl;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UnspentTableUtxoStorageReader;
+import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UnspentUtxoTable;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UtxoStorageReaderImpl;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.TxInputRepository;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.UtxoRepository;
@@ -41,23 +42,31 @@ public class UtxoStoreConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
+    public UnspentUtxoTable unspentUtxoTable(UtxoStoreProperties utxoStoreProperties, DSLContext dslContext,
+                                             PlatformTransactionManager transactionManager) {
+        return new UnspentUtxoTable(utxoStoreProperties, dslContext, transactionManager);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
     public UtxoStorage utxoStorage(UtxoRepository utxoRepository,
                                    TxInputRepository spentOutputRepository,
                                    DSLContext dslContext,
                                    UtxoCache utxoCache,
                                    PlatformTransactionManager transactionManager,
-                                   UtxoStoreProperties utxoStoreProperties) {
+                                   UnspentUtxoTable unspentUtxoTable) {
         return new UtxoStorageImpl(utxoRepository, spentOutputRepository, dslContext, utxoCache, transactionManager,
-                utxoStoreProperties);
+                unspentUtxoTable);
     }
 
     @Bean
     @ConditionalOnMissingBean
     public UtxoStorageReader utxoStorageReader(UtxoRepository utxoRepository, DSLContext dslContext,
-                                               UtxoStoreProperties utxoStoreProperties) {
+                                               UtxoStoreProperties utxoStoreProperties,
+                                               UnspentUtxoTable unspentUtxoTable) {
         UtxoStorageReader reader = new UtxoStorageReaderImpl(utxoRepository, dslContext);
         return utxoStoreProperties.isUnspentTableReadEnabled()
-                ? new UnspentTableUtxoStorageReader(reader, dslContext)
+                ? new UnspentTableUtxoStorageReader(reader, dslContext, unspentUtxoTable::isReadable)
                 : reader;
     }
 

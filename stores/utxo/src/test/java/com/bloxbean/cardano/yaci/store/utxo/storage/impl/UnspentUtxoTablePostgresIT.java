@@ -54,9 +54,10 @@ class UnspentUtxoTablePostgresIT {
                 .load().migrate();
         jdbc = new JdbcTemplate(ds);
         DSLContext dsl = DSL.using(new TransactionAwareDataSourceProxy(ds), SQLDialect.POSTGRES);
+        var transactionManager = new DataSourceTransactionManager(ds);
         storage = new UtxoStorageImpl(mock(UtxoRepository.class), mock(TxInputRepository.class), dsl,
-                new UtxoCache(), new DataSourceTransactionManager(ds),
-                UtxoStoreProperties.builder().unspentTableEnabled(true).build());
+                new UtxoCache(), transactionManager,
+                new UnspentUtxoTable(UtxoStoreProperties.builder().unspentTableEnabled(true).build(), dsl, transactionManager));
     }
 
     @AfterEach

@@ -48,6 +48,13 @@ public class UtxoStoreAutoConfigProperties {
         private boolean unspentTableEnabled = false;
 
         /**
+         * With unspent-table-enabled: write nothing to address_utxo_unspent during the initial sync and
+         * build it once when the sync reaches the tip, then keep it current. Without it the table is
+         * written from the first block. Also builds the table on an existing store at its next start.
+         */
+        private boolean unspentTableBackfillAtTip = false;
+
+        /**
          * Serve the unspent-output queries (by address, payment credential, stake address, asset)
          * from address_utxo_unspent. Turn it on only once the table is complete: maintained since
          * the start of the sync, or built by admin-cli backfill-unspent-utxos.

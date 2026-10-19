@@ -271,15 +271,24 @@ store.utxo.pruning-batch-size=3000
 ```properties
 # Keep address_utxo_unspent up to date: outputs are written with address_utxo, spent ones removed at each commit (default false)
 store.utxo.unspent-table-enabled=true
-# Serve the unspent-output queries (utxo API, Blockfrost /assets/{asset}/addresses) from it (default false)
+# Write nothing to it during the initial sync; build it once when the sync reaches the tip, then keep it current (default false)
+store.utxo.unspent-table-backfill-at-tip=true
+# Serve the unspent-output queries (utxo API, Blockfrost /assets/{asset}/addresses) from it once it is active (default false)
 store.utxo.unspent-table-read-enabled=true
 ```
 
-On a new store, enable both before the first sync. On a store that is already synced:
+There are two ways to fill the table:
+
+- **From the first block** (`unspent-table-backfill-at-tip=false`): every output goes through the table during the initial sync, which costs sync time and WAL.
+- **At the tip** (`unspent-table-backfill-at-tip=true`): the initial sync runs at full speed without the table. When it reaches the tip, the store pauses, builds the table from `address_utxo` and `tx_input` in one transaction, and then keeps it current block by block. Until the build finishes, queries use `address_utxo` and `tx_input`. On an already synced store, the build runs at the next start.
+
+The admin CLI can also build the table for an already synced store:
 
 1. Stop the store.
 2. Run `backfill-unspent-utxos` in the admin CLI. It rebuilds the table from `address_utxo` and `tx_input`, one `output_index` at a time, and fails if the store's cursor moved while it ran. An interrupted run can be resumed with `--from-output-index` set to the last index it reported.
-3. Set both properties to `true` and start the store. It continues from the point where the table was built.
+3. Set `unspent-table-enabled` and `unspent-table-read-enabled` to `true` and start the store. It continues from the point where the table was built.
+
+The table is only correct if it has been kept since it was built. If `unspent-table-enabled` is turned off for a while and back on, rebuild the table with the admin CLI.
 
 The table's read indexes are optional, like those of `address_utxo`: they are in `index.yml`, `extra-index.yml` (GIN on `amounts`) and `blockfrost-index.yml`. UTxO pruning does not affect the table.
 
