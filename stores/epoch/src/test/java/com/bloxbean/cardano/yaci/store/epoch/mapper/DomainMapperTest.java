@@ -3,8 +3,11 @@ package com.bloxbean.cardano.yaci.store.epoch.mapper;
 import com.bloxbean.cardano.yaci.core.model.DrepVoteThresholds;
 import com.bloxbean.cardano.yaci.core.model.PoolVotingThresholds;
 import com.bloxbean.cardano.yaci.core.model.ProtocolParamUpdate;
+import com.bloxbean.cardano.yaci.core.types.NonNegativeInterval;
+import com.bloxbean.cardano.yaci.core.types.UnitInterval;
 import com.bloxbean.cardano.yaci.core.util.Tuple;
 import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
+import com.bloxbean.cardano.yaci.store.common.util.UnitIntervalUtil;
 import com.bloxbean.cardano.yaci.store.epoch.dto.ProtocolParamsDto;
 import org.junit.jupiter.api.Test;
 
@@ -30,10 +33,10 @@ class DomainMapperTest {
                 .maxEpoch(100)
                 .nOpt(200)
                 .minUtxo(BigInteger.valueOf(1000))
-                .poolPledgeInfluence(BigDecimal.valueOf(0.30))
-                .expansionRate(new BigDecimal("0.40"))
-                .treasuryGrowthRate(new BigDecimal("0.50"))
-                .decentralisationParam(new BigDecimal("0.60"))
+                .poolPledgeInfluence(NonNegativeInterval.fromString("30/100"))
+                .expansionRate(UnitInterval.fromString("40/100"))
+                .treasuryGrowthRate(UnitInterval.fromString("50/100"))
+                .decentralisationParam(UnitInterval.fromString("60/100"))
                 .extraEntropy(new Tuple<>(1, "0x5678"))
                 .protocolMajorVer(2)
                 .protocolMinorVer(3)
@@ -49,23 +52,23 @@ class DomainMapperTest {
                 .collateralPercent(9000)
                 .maxCollateralInputs(10000)
                 .poolVotingThresholds(PoolVotingThresholds.builder()
-                        .pvtCommitteeNormal(new BigDecimal("0.10"))
-                        .pvtCommitteeNoConfidence(new BigDecimal("0.20"))
-                        .pvtHardForkInitiation(new BigDecimal("0.30"))
-                        .pvtMotionNoConfidence(new BigDecimal("0.40"))
+                        .pvtCommitteeNormal(UnitInterval.fromString("10/100"))
+                        .pvtCommitteeNoConfidence(UnitInterval.fromString("20/100"))
+                        .pvtHardForkInitiation(UnitInterval.fromString("30/100"))
+                        .pvtMotionNoConfidence(UnitInterval.fromString("40/100"))
                     .build()
                 )
                 .drepVotingThresholds(DrepVoteThresholds.builder()
-                        .dvtMotionNoConfidence(new BigDecimal("0.10"))
-                        .dvtCommitteeNormal(new BigDecimal("0.20"))
-                        .dvtCommitteeNoConfidence(new BigDecimal("0.30"))
-                        .dvtUpdateToConstitution(new BigDecimal("0.40"))
-                        .dvtHardForkInitiation(new BigDecimal("0.50"))
-                        .dvtPPNetworkGroup(new BigDecimal("0.60"))
-                        .dvtPPEconomicGroup(new BigDecimal("0.70"))
-                        .dvtPPTechnicalGroup(new BigDecimal("0.80"))
-                        .dvtPPGovGroup(new BigDecimal("0.90"))
-                        .dvtTreasuryWithdrawal(new BigDecimal("0.100"))
+                        .dvtMotionNoConfidence(UnitInterval.fromString("10/100"))
+                        .dvtCommitteeNormal(UnitInterval.fromString("20/100"))
+                        .dvtCommitteeNoConfidence(UnitInterval.fromString("30/100"))
+                        .dvtUpdateToConstitution(UnitInterval.fromString("40/100"))
+                        .dvtHardForkInitiation(UnitInterval.fromString("50/100"))
+                        .dvtPPNetworkGroup(UnitInterval.fromString("60/100"))
+                        .dvtPPEconomicGroup(UnitInterval.fromString("70/100"))
+                        .dvtPPTechnicalGroup(UnitInterval.fromString("80/100"))
+                        .dvtPPGovGroup(UnitInterval.fromString("90/100"))
+                        .dvtTreasuryWithdrawal(UnitInterval.fromString("100/1000"))
                         .build()
                 )
                 .committeeMinSize(1000)
@@ -88,10 +91,10 @@ class DomainMapperTest {
         assertThat(protocolParams.getMaxEpoch()).isEqualTo(protocolParamUpdate.getMaxEpoch());
         assertThat(protocolParams.getNOpt()).isEqualTo(protocolParamUpdate.getNOpt());
         assertThat(protocolParams.getMinUtxo()).isEqualTo(protocolParamUpdate.getMinUtxo());
-        assertThat(protocolParams.getPoolPledgeInfluence()).isEqualTo(protocolParamUpdate.getPoolPledgeInfluence());
-        assertThat(protocolParams.getExpansionRate()).isEqualTo(protocolParamUpdate.getExpansionRate());
-        assertThat(protocolParams.getTreasuryGrowthRate()).isEqualTo(protocolParamUpdate.getTreasuryGrowthRate());
-        assertThat(protocolParams.getDecentralisationParam()).isEqualTo(protocolParamUpdate.getDecentralisationParam());
+        assertThat(protocolParams.getPoolPledgeInfluence()).isEqualTo(UnitIntervalUtil.toBigDecimal(protocolParamUpdate.getPoolPledgeInfluence()));
+        assertThat(protocolParams.getExpansionRate()).isEqualTo(UnitIntervalUtil.toBigDecimal(protocolParamUpdate.getExpansionRate()));
+        assertThat(protocolParams.getTreasuryGrowthRate()).isEqualTo(UnitIntervalUtil.toBigDecimal(protocolParamUpdate.getTreasuryGrowthRate()));
+        assertThat(protocolParams.getDecentralisationParam()).isEqualTo(UnitIntervalUtil.toBigDecimal(protocolParamUpdate.getDecentralisationParam()));
         assertThat(protocolParams.getProtocolMajorVer()).isEqualTo(protocolParamUpdate.getProtocolMajorVer());
         assertThat(protocolParams.getProtocolMinorVer()).isEqualTo(protocolParamUpdate.getProtocolMinorVer());
         assertThat(protocolParams.getMinPoolCost()).isEqualTo(protocolParamUpdate.getMinPoolCost());
@@ -104,21 +107,21 @@ class DomainMapperTest {
         assertThat(protocolParams.getCollateralPercent()).isEqualTo(protocolParamUpdate.getCollateralPercent());
         assertThat(protocolParams.getMaxCollateralInputs()).isEqualTo(protocolParamUpdate.getMaxCollateralInputs());
 
-        assertThat(protocolParams.getPoolVotingThresholds().getPvtCommitteeNormal()).isEqualTo(protocolParamUpdate.getPoolVotingThresholds().getPvtCommitteeNormal());
-        assertThat(protocolParams.getPoolVotingThresholds().getPvtCommitteeNoConfidence()).isEqualTo(protocolParamUpdate.getPoolVotingThresholds().getPvtCommitteeNoConfidence());
-        assertThat(protocolParams.getPoolVotingThresholds().getPvtHardForkInitiation()).isEqualTo(protocolParamUpdate.getPoolVotingThresholds().getPvtHardForkInitiation());
-        assertThat(protocolParams.getPoolVotingThresholds().getPvtMotionNoConfidence()).isEqualTo(protocolParamUpdate.getPoolVotingThresholds().getPvtMotionNoConfidence());
+        assertThat(protocolParams.getPoolVotingThresholds().getPvtCommitteeNormal()).isEqualTo(UnitIntervalUtil.toBigDecimal(protocolParamUpdate.getPoolVotingThresholds().getPvtCommitteeNormal()));
+        assertThat(protocolParams.getPoolVotingThresholds().getPvtCommitteeNoConfidence()).isEqualTo(UnitIntervalUtil.toBigDecimal(protocolParamUpdate.getPoolVotingThresholds().getPvtCommitteeNoConfidence()));
+        assertThat(protocolParams.getPoolVotingThresholds().getPvtHardForkInitiation()).isEqualTo(UnitIntervalUtil.toBigDecimal(protocolParamUpdate.getPoolVotingThresholds().getPvtHardForkInitiation()));
+        assertThat(protocolParams.getPoolVotingThresholds().getPvtMotionNoConfidence()).isEqualTo(UnitIntervalUtil.toBigDecimal(protocolParamUpdate.getPoolVotingThresholds().getPvtMotionNoConfidence()));
 
-        assertThat(protocolParams.getDrepVotingThresholds().getDvtMotionNoConfidence()).isEqualTo(protocolParamUpdate.getDrepVotingThresholds().getDvtMotionNoConfidence());
-        assertThat(protocolParams.getDrepVotingThresholds().getDvtCommitteeNormal()).isEqualTo(protocolParamUpdate.getDrepVotingThresholds().getDvtCommitteeNormal());
-        assertThat(protocolParams.getDrepVotingThresholds().getDvtCommitteeNoConfidence()).isEqualTo(protocolParamUpdate.getDrepVotingThresholds().getDvtCommitteeNoConfidence());
-        assertThat(protocolParams.getDrepVotingThresholds().getDvtUpdateToConstitution()).isEqualTo(protocolParamUpdate.getDrepVotingThresholds().getDvtUpdateToConstitution());
-        assertThat(protocolParams.getDrepVotingThresholds().getDvtHardForkInitiation()).isEqualTo(protocolParamUpdate.getDrepVotingThresholds().getDvtHardForkInitiation());
-        assertThat(protocolParams.getDrepVotingThresholds().getDvtPPNetworkGroup()).isEqualTo(protocolParamUpdate.getDrepVotingThresholds().getDvtPPNetworkGroup());
-        assertThat(protocolParams.getDrepVotingThresholds().getDvtPPEconomicGroup()).isEqualTo(protocolParamUpdate.getDrepVotingThresholds().getDvtPPEconomicGroup());
-        assertThat(protocolParams.getDrepVotingThresholds().getDvtPPTechnicalGroup()).isEqualTo(protocolParamUpdate.getDrepVotingThresholds().getDvtPPTechnicalGroup());
-        assertThat(protocolParams.getDrepVotingThresholds().getDvtPPGovGroup()).isEqualTo(protocolParamUpdate.getDrepVotingThresholds().getDvtPPGovGroup());
-        assertThat(protocolParams.getDrepVotingThresholds().getDvtTreasuryWithdrawal()).isEqualTo(protocolParamUpdate.getDrepVotingThresholds().getDvtTreasuryWithdrawal());
+        assertThat(protocolParams.getDrepVotingThresholds().getDvtMotionNoConfidence()).isEqualTo(UnitIntervalUtil.toBigDecimal(protocolParamUpdate.getDrepVotingThresholds().getDvtMotionNoConfidence()));
+        assertThat(protocolParams.getDrepVotingThresholds().getDvtCommitteeNormal()).isEqualTo(UnitIntervalUtil.toBigDecimal(protocolParamUpdate.getDrepVotingThresholds().getDvtCommitteeNormal()));
+        assertThat(protocolParams.getDrepVotingThresholds().getDvtCommitteeNoConfidence()).isEqualTo(UnitIntervalUtil.toBigDecimal(protocolParamUpdate.getDrepVotingThresholds().getDvtCommitteeNoConfidence()));
+        assertThat(protocolParams.getDrepVotingThresholds().getDvtUpdateToConstitution()).isEqualTo(UnitIntervalUtil.toBigDecimal(protocolParamUpdate.getDrepVotingThresholds().getDvtUpdateToConstitution()));
+        assertThat(protocolParams.getDrepVotingThresholds().getDvtHardForkInitiation()).isEqualTo(UnitIntervalUtil.toBigDecimal(protocolParamUpdate.getDrepVotingThresholds().getDvtHardForkInitiation()));
+        assertThat(protocolParams.getDrepVotingThresholds().getDvtPPNetworkGroup()).isEqualTo(UnitIntervalUtil.toBigDecimal(protocolParamUpdate.getDrepVotingThresholds().getDvtPPNetworkGroup()));
+        assertThat(protocolParams.getDrepVotingThresholds().getDvtPPEconomicGroup()).isEqualTo(UnitIntervalUtil.toBigDecimal(protocolParamUpdate.getDrepVotingThresholds().getDvtPPEconomicGroup()));
+        assertThat(protocolParams.getDrepVotingThresholds().getDvtPPTechnicalGroup()).isEqualTo(UnitIntervalUtil.toBigDecimal(protocolParamUpdate.getDrepVotingThresholds().getDvtPPTechnicalGroup()));
+        assertThat(protocolParams.getDrepVotingThresholds().getDvtPPGovGroup()).isEqualTo(UnitIntervalUtil.toBigDecimal(protocolParamUpdate.getDrepVotingThresholds().getDvtPPGovGroup()));
+        assertThat(protocolParams.getDrepVotingThresholds().getDvtTreasuryWithdrawal()).isEqualTo(UnitIntervalUtil.toBigDecimal(protocolParamUpdate.getDrepVotingThresholds().getDvtTreasuryWithdrawal()));
 
         assertThat(protocolParams.getCommitteeMinSize()).isEqualTo(protocolParamUpdate.getCommitteeMinSize());
         assertThat(protocolParams.getCommitteeMaxTermLength()).isEqualTo(protocolParamUpdate.getCommitteeMaxTermLength());

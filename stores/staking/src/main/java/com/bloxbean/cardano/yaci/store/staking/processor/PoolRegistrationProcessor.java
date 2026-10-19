@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.staking.processor;
 
 import com.bloxbean.cardano.yaci.core.model.certs.Certificate;
 import com.bloxbean.cardano.yaci.core.model.certs.CertificateType;
+import com.bloxbean.cardano.yaci.core.types.UnitInterval;
 import com.bloxbean.cardano.yaci.store.events.CertificateEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
@@ -90,19 +91,14 @@ public class PoolRegistrationProcessor {
         }
     }
 
-    private double poolMarginToDouble(String margin) {
-        String[] tokens = margin.split("/");
-        if(tokens.length == 2) {
-            //handle divide by zero
-            if(Double.parseDouble(tokens[1]) == 0) {
-                log.error("Invalid margin value: " + margin);
-                return 0.0;
-            }
-            return Double.parseDouble(tokens[0]) / Double.parseDouble(tokens[1]);
-        } else {
+    private double poolMarginToDouble(UnitInterval margin) {
+        //handle missing value and divide by zero
+        if (margin == null || margin.getNumerator() == null || margin.getDenominator() == null
+                || margin.getDenominator().signum() == 0) {
             log.error("Invalid margin value: " + margin);
             return 0.0;
         }
+        return margin.getNumerator().doubleValue() / margin.getDenominator().doubleValue();
     }
 
     @EventListener
