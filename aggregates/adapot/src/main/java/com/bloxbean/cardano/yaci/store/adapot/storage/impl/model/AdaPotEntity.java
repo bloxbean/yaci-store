@@ -54,6 +54,9 @@ public class AdaPotEntity {
     @Column(name = "pool_rewards_pot")
     private BigInteger poolRewardsPot;
 
+    @Column(name = "total_epoch_stake")
+    private BigInteger totalEpochStake;
+
     @UpdateTimestamp
     @Column(name = "update_datetime")
     private LocalDateTime updateDateTime;

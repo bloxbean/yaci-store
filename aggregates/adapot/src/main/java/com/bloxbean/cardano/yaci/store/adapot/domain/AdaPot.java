@@ -30,4 +30,5 @@ public class AdaPot extends BlockAwareDomain {
     private BigInteger undistributedRewards;
     private BigInteger rewardsPot;
     private BigInteger poolRewardsPot;
+    private BigInteger totalEpochStake;
 }
