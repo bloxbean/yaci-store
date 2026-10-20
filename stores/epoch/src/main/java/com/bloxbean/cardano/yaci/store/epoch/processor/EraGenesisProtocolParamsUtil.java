@@ -88,6 +88,20 @@ public class EraGenesisProtocolParamsUtil {
                         genesisProtocolParams.setCostModels(ppCostModels);
                     }
                 }
+            } else if (newEra == Era.Dijkstra) {
+                //Starting with Dijkstra era at slot = 0 (Leios Musashi: every era forks at epoch 0): the same
+                //params as a network starting with Conway
+                //TODO -- dijkstra-genesis.json (Leios, Peras, Plutus V4 cost model) is not read yet
+                if (prevEra == null) {
+                    ProtocolParams shelleyPP = getShelleyGenesisProtocolParams(protocolMagic);
+                    ProtocolParams alonzoPP = getAlonzoGenesisProtocolParams(protocolMagic);
+                    ProtocolParams conwayPP = getConwayGenesisProtocolParams(protocolMagic);
+
+                    genesisProtocolParams = new ProtocolParams();
+                    genesisProtocolParams.merge(shelleyPP);
+                    genesisProtocolParams.merge(alonzoPP);
+                    genesisProtocolParams.merge(conwayPP);
+                }
             } else {
                 log.warn("No genesis protocol parameters handled for era {}", newEra);
             }
