@@ -199,6 +199,11 @@ public class BFBlocksStorageReaderImpl implements BFBlocksStorageReader {
         var outputsSelect = dsl.select(outputAddressField, outputUtxo.TX_HASH.as("tx_hash"))
                 .from(outputUtxo)
                 .where(outputUtxo.BLOCK.eq(blockNumber))
+                // The slot index is always present. A block-only predicate can scan the
+                // entire output history when the optional block-number index is absent.
+                // Byron boundary blocks can share a block number with a main block.
+                .and(outputUtxo.SLOT.in(dsl.select(BLOCK.SLOT).from(BLOCK)
+                        .where(BLOCK.NUMBER.eq(blockNumber))))
                 .and(outputAddressExpr.isNotNull());
 
         var spentInput = TX_INPUT.as("spent_input");
