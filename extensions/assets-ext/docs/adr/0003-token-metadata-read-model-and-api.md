@@ -85,7 +85,8 @@ properties with `property` is no longer required to include `name` and `descript
 Every response has a **`validation_errors`** array (`[]` when the token follows its CIP): on the merged `Subject`, on `standards.cip26` and
 `standards.cip68`, and on the per-standard endpoints. Each entry has `cip`, `sub_standard` (the CIP-68 label; absent otherwise), `field_name`,
 `field_category` (`MANDATORY` or `OPTIONAL`), `code` and `error` (ADR 0006 decision 2). A client that wants the old guarantee can reject any
-token with a `MANDATORY` error. The array is not filtered by `property`: it describes the token, not the fields asked for.
+token with a `MANDATORY` error. `metadata.valid`, the flag the response has always had (name and description both present), stays so that the JSON a client
+already reads does not change; it no longer gates anything. The array is not filtered by `property`: it describes the token, not the fields asked for.
 
 *Why:* an index that hides a token because its datum is wrong tells the owner nothing (ADR 0006). *Trade-off:* a client can no longer rely on
 `name` and `description` being present, and a token that was a 404 is now a 200 with errors. This is the one change to the contract that is not
