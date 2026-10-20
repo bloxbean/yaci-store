@@ -24,4 +24,12 @@ public class TxScripts {
     private List<PlutusScript> plutusV3Scripts;
     private List<NativeScript> nativeScripts;
     //private List<PlutusScript> scriptRef;
+    //Dijkstra era (witness set key 8); null before
+    private List<PlutusScript> plutusV4Scripts;
+
+    public TxScripts(String txHash, List<PlutusScript> plutusV1Scripts, List<Datum> datums, List<Redeemer> redeemers,
+                     List<PlutusScript> plutusV2Scripts, List<PlutusScript> plutusV3Scripts,
+                     List<NativeScript> nativeScripts) {
+        this(txHash, plutusV1Scripts, datums, redeemers, plutusV2Scripts, plutusV3Scripts, nativeScripts, null);
+    }
 }

@@ -7,7 +7,6 @@ import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClient;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
-import com.bloxbean.cardano.yaci.store.common.util.PlutusV4Script;
 import com.bloxbean.cardano.yaci.store.common.util.ScriptReferenceUtil;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -57,6 +56,13 @@ public class TxScriptFinder {
                     .forEach(script -> scriptsMap.put(ScriptUtil.getPlutusScriptHash(script), script));
         }
 
+        //PlutusV4 scripts (Dijkstra era, witness set key 8)
+        if (transaction.getWitnesses().getPlutusV4Scripts() != null
+                && transaction.getWitnesses().getPlutusV4Scripts().size() > 0) {
+            transaction.getWitnesses().getPlutusV4Scripts()
+                    .forEach(script -> scriptsMap.put(ScriptUtil.getPlutusScriptHash(script), script));
+        }
+
         //Check if reference input is there, then resolve it if script_ref found for the input
         if (transaction.getBody().getReferenceInputs() != null
                 && transaction.getBody().getReferenceInputs().size() > 0) {
@@ -74,8 +80,7 @@ public class TxScriptFinder {
                                 log.error("Error while deserializing script ref: " + addressUtxo.getScriptRef(), e);
                             }
 
-                            //TODO -- Plutus V4 (Dijkstra) has no Yaci PlutusScriptType yet: a redeemer using a V4 reference script gets no script
-                            if (cclScript != null && cclScript.getScriptType() != 0 && cclScript.getScriptType() != PlutusV4Script.TYPE) {
+                            if (cclScript != null && cclScript.getScriptType() != 0) {
                                 PlutusScript plutusScript = ScriptUtil.toPlutusScript(cclScript);
                                 scriptsMap.put(ScriptUtil.getPlutusScriptHash(plutusScript), plutusScript);
                             }
@@ -98,8 +103,7 @@ public class TxScriptFinder {
                             log.error("Error while deserializing script ref: " + addressUtxo.getScriptRef(), e);
                         }
 
-                        //TODO -- Plutus V4 (Dijkstra) has no Yaci PlutusScriptType yet: a redeemer using a V4 reference script gets no script
-                        if (cclScript != null && cclScript.getScriptType() != 0 && cclScript.getScriptType() != PlutusV4Script.TYPE) {
+                        if (cclScript != null && cclScript.getScriptType() != 0) {
                             PlutusScript plutusScript = ScriptUtil.toPlutusScript(cclScript);
                             scriptsMap.put(ScriptUtil.getPlutusScriptHash(plutusScript), plutusScript);
                         }
