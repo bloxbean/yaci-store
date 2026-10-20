@@ -6,6 +6,7 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.StringPrope
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.Subject;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.service.TokenQueryService;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.service.TokenQueryService.BatchPrefetchData;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.validation.ValidationError;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -89,7 +90,7 @@ class TokenMetadataSubjectControllerTest {
         }
 
         @Test
-        void returns404WhenSubjectHasNoValidMetadata() throws Exception {
+        void returns404WhenNoStandardHasAnythingIndexedForTheSubject() throws Exception {
             when(tokenQueryService.querySubject(anyString(), anyList(), anyList(), anyBoolean()))
                     .thenReturn(Optional.empty());
 
@@ -110,11 +111,44 @@ class TokenMetadataSubjectControllerTest {
         }
 
         @Test
-        void returns400WhenPropertyFilterMissesRequiredFields() throws Exception {
-            // When filtering properties, 'name' and 'description' are required.
-            mockMvc.perform(get("/api/v1/tokens/subject/{subject}", VALID_SUBJECT)
-                            .param("property", "ticker"))
-                    .andExpect(status().isBadRequest());
+        void acceptsAPropertyFilterWithoutNameAndDescription() throws Exception {
+            // a token is returned as indexed: there is no gate on name and description any more (ADR 0006)
+            when(tokenQueryService.querySubject(anyString(), anyList(), anyList(), anyBoolean()))
+                    .thenReturn(Optional.of(subjectWithName(VALID_SUBJECT, "Nutcoin")));
+
+            mockMvc.perform(get("/api/v1/tokens/subject/{subject}", VALID_SUBJECT).param("property", "ticker"))
+                    .andExpect(status().isOk());
+        }
+
+        @Test
+        void returnsTheValidationErrorsOfATokenThatBreaksItsCip() throws Exception {
+            ValidationError error = ValidationError.mandatory("CIP-68", "333", "description", "missing_value",
+                    "description field is missing a mandatory value");
+            when(tokenQueryService.querySubject(anyString(), anyList(), anyList(), anyBoolean()))
+                    .thenReturn(Optional.of(new Subject(VALID_SUBJECT, Metadata.builder()
+                            .name(new StringProperty("Nutcoin", "CIP_68")).build(), null, List.of(error))));
+
+            mockMvc.perform(get("/api/v1/tokens/subject/{subject}", VALID_SUBJECT))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.subject.metadata.name.value").value("Nutcoin"))
+                    .andExpect(jsonPath("$.subject.metadata.description").doesNotExist())
+                    .andExpect(jsonPath("$.subject.validation_errors.length()").value(1))
+                    .andExpect(jsonPath("$.subject.validation_errors[0].cip").value("CIP-68"))
+                    .andExpect(jsonPath("$.subject.validation_errors[0].sub_standard").value("333"))
+                    .andExpect(jsonPath("$.subject.validation_errors[0].field_name").value("description"))
+                    .andExpect(jsonPath("$.subject.validation_errors[0].field_category").value("MANDATORY"))
+                    .andExpect(jsonPath("$.subject.validation_errors[0].code").value("missing_value"))
+                    .andExpect(jsonPath("$.subject.validation_errors[0].error").value("description field is missing a mandatory value"));
+        }
+
+        @Test
+        void alwaysReturnsAValidationErrorsArray() throws Exception {
+            when(tokenQueryService.querySubject(anyString(), anyList(), anyList(), anyBoolean()))
+                    .thenReturn(Optional.of(subjectWithName(VALID_SUBJECT, "Nutcoin")));
+
+            mockMvc.perform(get("/api/v1/tokens/subject/{subject}", VALID_SUBJECT))
+                    .andExpect(jsonPath("$.subject.validation_errors").isArray())
+                    .andExpect(jsonPath("$.subject.validation_errors.length()").value(0));
         }
 
         @Test
@@ -150,9 +184,9 @@ class TokenMetadataSubjectControllerTest {
             when(tokenQueryService.prefetchBatch(anyList(), anyList()))
                     .thenReturn(new BatchPrefetchData(Map.of(), Map.of(), Map.of()));
             when(tokenQueryService.querySubjectBatch(eq(VALID_SUBJECT), anyList(), anyList(), any(), anyBoolean()))
-                    .thenReturn(subjectWithName(VALID_SUBJECT, "Nutcoin"));
+                    .thenReturn(Optional.of(subjectWithName(VALID_SUBJECT, "Nutcoin")));
             when(tokenQueryService.querySubjectBatch(eq(VALID_SUBJECT_2), anyList(), anyList(), any(), anyBoolean()))
-                    .thenReturn(subjectWithName(VALID_SUBJECT_2, "FLDT"));
+                    .thenReturn(Optional.of(subjectWithName(VALID_SUBJECT_2, "FLDT")));
 
             String body = objectMapper.writeValueAsString(Map.of(
                     "subjects", List.of(VALID_SUBJECT, VALID_SUBJECT_2)));
@@ -167,11 +201,11 @@ class TokenMetadataSubjectControllerTest {
         }
 
         @Test
-        void filtersOutSubjectsWithEmptyMetadata() throws Exception {
+        void filtersOutSubjectsNoStandardKnows() throws Exception {
             when(tokenQueryService.prefetchBatch(anyList(), anyList()))
                     .thenReturn(new BatchPrefetchData(Map.of(), Map.of(), Map.of()));
             when(tokenQueryService.querySubjectBatch(eq(VALID_SUBJECT), anyList(), anyList(), any(), anyBoolean()))
-                    .thenReturn(new Subject(VALID_SUBJECT, Metadata.empty(), null));
+                    .thenReturn(Optional.empty());
 
             String body = objectMapper.writeValueAsString(Map.of("subjects", List.of(VALID_SUBJECT)));
 
@@ -218,7 +252,31 @@ class TokenMetadataSubjectControllerTest {
         }
 
         @Test
-        void returns400WhenPropertyFilterMissesRequiredFields() throws Exception {
+        void keepsATokenThatBreaksItsCipWithItsErrors() throws Exception {
+            ValidationError error = ValidationError.mandatory("CIP-26", null, "name", "missing_value", "name field is missing a mandatory value");
+            when(tokenQueryService.prefetchBatch(anyList(), anyList()))
+                    .thenReturn(new BatchPrefetchData(Map.of(), Map.of(), Map.of()));
+            when(tokenQueryService.querySubjectBatch(eq(VALID_SUBJECT), anyList(), anyList(), any(), anyBoolean()))
+                    .thenReturn(Optional.of(new Subject(VALID_SUBJECT, Metadata.empty(), null, List.of(error))));
+
+            String body = objectMapper.writeValueAsString(Map.of("subjects", List.of(VALID_SUBJECT)));
+
+            mockMvc.perform(post("/api/v1/tokens/subject/query")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.subjects.length()").value(1))
+                    .andExpect(jsonPath("$.subjects[0].validation_errors[0].field_name").value("name"))
+                    .andExpect(jsonPath("$.subjects[0].validation_errors[0].cip").value("CIP-26"))
+                    .andExpect(jsonPath("$.subjects[0].validation_errors[0].sub_standard").doesNotExist());
+        }
+
+        @Test
+        void acceptsAPropertyFilterWithoutNameAndDescription() throws Exception {
+            when(tokenQueryService.prefetchBatch(anyList(), anyList()))
+                    .thenReturn(new BatchPrefetchData(Map.of(), Map.of(), Map.of()));
+            when(tokenQueryService.querySubjectBatch(eq(VALID_SUBJECT), anyList(), anyList(), any(), anyBoolean()))
+                    .thenReturn(Optional.empty());
             String body = objectMapper.writeValueAsString(Map.of(
                     "subjects", List.of(VALID_SUBJECT),
                     "properties", List.of("ticker")));
@@ -226,7 +284,7 @@ class TokenMetadataSubjectControllerTest {
             mockMvc.perform(post("/api/v1/tokens/subject/query")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(body))
-                    .andExpect(status().isBadRequest());
+                    .andExpect(status().isOk());
         }
     }
 }

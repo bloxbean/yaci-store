@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl
 
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.Mapping;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.validation.ValidationError;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.annotation.Nullable;
 import jakarta.persistence.*;
 import lombok.EqualsAndHashCode;
@@ -109,6 +110,7 @@ public class Cip26Metadata {
      */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "validation_errors")
+    @JsonProperty("validation_errors")
     @Nullable
     private List<ValidationError> validationErrors;
 

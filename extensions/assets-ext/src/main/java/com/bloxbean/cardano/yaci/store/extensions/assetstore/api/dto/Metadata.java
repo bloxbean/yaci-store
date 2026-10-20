@@ -69,10 +69,6 @@ public record Metadata(@Nullable StringProperty name, @Nullable StringProperty d
         return this.equals(EMPTY_METADATA);
     }
 
-    public boolean isValid() {
-        return this.name != null && this.description != null;
-    }
-
     private static boolean include(String propertyName, List<String> properties) {
         return properties.isEmpty() || properties.contains(propertyName);
     }

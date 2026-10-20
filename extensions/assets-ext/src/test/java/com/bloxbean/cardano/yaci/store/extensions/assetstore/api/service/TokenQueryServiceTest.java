@@ -7,6 +7,7 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.Mapping
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.Cip26Metadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.Cip26StorageReader;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.validation.ValidationError;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.Cip68StorageReader;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -210,6 +211,88 @@ class TokenQueryServiceTest {
     }
 
     @Nested
+    @DisplayName("validation errors and tokens that break their CIP")
+    class ValidationErrors {
+
+        private static final String BROKEN_SUBJECT = "aa".repeat(28) + "0014df10" + "4e4654";
+
+        private final ValidationError cip68Error = ValidationError.mandatory("CIP-68", "333", "description", "missing_value",
+                "description field is missing a mandatory value");
+        private final ValidationError cip26Error = ValidationError.mandatory("CIP-26", null, "name", "missing_value",
+                "name field is missing a mandatory value");
+
+        private void cip68Only(FungibleTokenMetadata metadata) {
+            when(cip26StorageReader.findBySubject(BROKEN_SUBJECT)).thenReturn(Optional.empty());
+            when(cip68StorageReader.findBySubject(eq(BROKEN_SUBJECT), any())).thenReturn(Optional.of(metadata));
+        }
+
+        @Test
+        void aTokenWithoutNameAndDescriptionIsReturnedWithItsErrors() {
+            // it used to be a 404: a result needed both name and description
+            cip68Only(new FungibleTokenMetadata(null, null, null, null, "NFT", null, 1L, List.of(cip68Error)));
+
+            Subject result = service.querySubject(BROKEN_SUBJECT, DEFAULT_PRIORITY, List.of(), false).orElseThrow();
+
+            assertThat(result.metadata().name()).isNull();
+            assertThat(result.metadata().ticker().value()).isEqualTo("NFT");
+            assertThat(result.validationErrors()).containsExactly(cip68Error);
+        }
+
+        @Test
+        void aTokenWithErrorsAndNoValuesAtAllIsStillReturned() {
+            cip68Only(new FungibleTokenMetadata(null, null, null, null, null, null, null, List.of(cip68Error)));
+
+            Subject result = service.querySubject(BROKEN_SUBJECT, DEFAULT_PRIORITY, List.of(), true).orElseThrow();
+
+            assertThat(result.metadata().isEmpty()).isTrue();
+            assertThat(result.validationErrors()).containsExactly(cip68Error);
+            assertThat(result.standards().cip68().validationErrors()).containsExactly(cip68Error);
+        }
+
+        @Test
+        void theErrorsOfBothStandardsAreMergedInPriorityOrder() {
+            Cip26Metadata cip26 = new Cip26Metadata();
+            cip26.setSubject(BROKEN_SUBJECT);
+            cip26.setValidationErrors(List.of(cip26Error));
+            cip26.setProperties(new Mapping(BROKEN_SUBJECT, null, null, null, null, null, null, null));
+            when(cip26StorageReader.findBySubject(BROKEN_SUBJECT)).thenReturn(Optional.of(cip26));
+            when(cip26StorageReader.findLogoBySubject(BROKEN_SUBJECT)).thenReturn(Optional.empty());
+            when(cip68StorageReader.findBySubject(eq(BROKEN_SUBJECT), any()))
+                    .thenReturn(Optional.of(new FungibleTokenMetadata(null, null, null, "N", null, null, 1L, List.of(cip68Error))));
+
+            assertThat(service.querySubject(BROKEN_SUBJECT, List.of(QueryPriority.CIP_68, QueryPriority.CIP_26), List.of(), false)
+                    .orElseThrow().validationErrors()).containsExactly(cip68Error, cip26Error);
+            assertThat(service.querySubject(BROKEN_SUBJECT, List.of(QueryPriority.CIP_26, QueryPriority.CIP_68), List.of(), false)
+                    .orElseThrow().validationErrors()).containsExactly(cip26Error, cip68Error);
+        }
+
+        @Test
+        void aTokenThatFollowsItsCipsHasAnEmptyList() {
+            Subject result = service.querySubject(KNOWN_SUBJECT, DEFAULT_PRIORITY, List.of(), false).orElseThrow();
+
+            assertThat(result.validationErrors()).isEmpty();
+        }
+
+        @Test
+        void aPropertyFilterWithoutNameAndDescriptionStillReturnsTheToken() {
+            cip68Only(new FungibleTokenMetadata(null, null, null, "N", "TKR", null, 1L, List.of()));
+
+            Subject result = service.querySubject(BROKEN_SUBJECT, DEFAULT_PRIORITY, List.of("ticker"), false).orElseThrow();
+
+            assertThat(result.metadata().ticker().value()).isEqualTo("TKR");
+        }
+
+        @Test
+        void theBatchReturnsATokenWithErrorsToo() {
+            cip68Only(new FungibleTokenMetadata(null, null, null, null, null, null, null, List.of(cip68Error)));
+            TokenQueryService.BatchPrefetchData prefetch = service.prefetchBatch(List.of(BROKEN_SUBJECT), List.of());
+
+            assertThat(service.querySubjectBatch(BROKEN_SUBJECT, DEFAULT_PRIORITY, List.of(), prefetch, false))
+                    .hasValueSatisfying(subject -> assertThat(subject.validationErrors()).containsExactly(cip68Error));
+        }
+    }
+
+    @Nested
     @DisplayName("querySubjectBatch")
     class BatchQuery {
 
@@ -218,8 +301,8 @@ class TokenQueryServiceTest {
             TokenQueryService.BatchPrefetchData prefetchData = service.prefetchBatch(
                     List.of(KNOWN_SUBJECT, FLDT_SUBJECT), List.of());
 
-            Subject known = service.querySubjectBatch(KNOWN_SUBJECT, DEFAULT_PRIORITY, List.of(), prefetchData, false);
-            Subject fldt = service.querySubjectBatch(FLDT_SUBJECT, DEFAULT_PRIORITY, List.of(), prefetchData, false);
+            Subject known = service.querySubjectBatch(KNOWN_SUBJECT, DEFAULT_PRIORITY, List.of(), prefetchData, false).orElseThrow();
+            Subject fldt = service.querySubjectBatch(FLDT_SUBJECT, DEFAULT_PRIORITY, List.of(), prefetchData, false).orElseThrow();
 
             assertThat(known.subject()).isEqualTo(KNOWN_SUBJECT);
             assertThat(known.metadata().url().value()).isEqualTo("https://cip68-url.com/nutcoin");
@@ -229,12 +312,11 @@ class TokenQueryServiceTest {
         }
 
         @Test
-        void unknownSubjectReturnsEmptyMetadata() {
+        void unknownSubjectIsNotReturned() {
             TokenQueryService.BatchPrefetchData prefetchData = service.prefetchBatch(
                     List.of(UNKNOWN_SUBJECT), List.of());
 
-            Subject unknown = service.querySubjectBatch(UNKNOWN_SUBJECT, DEFAULT_PRIORITY, List.of(), prefetchData, false);
-            assertThat(unknown.metadata().isEmpty() || !unknown.metadata().isValid()).isTrue();
+            assertThat(service.querySubjectBatch(UNKNOWN_SUBJECT, DEFAULT_PRIORITY, List.of(), prefetchData, false)).isEmpty();
         }
     }
 }
