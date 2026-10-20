@@ -390,6 +390,7 @@ class BFGovernanceDescriptionTransformer {
                 case "0" -> "PlutusV1";
                 case "1" -> "PlutusV2";
                 case "2" -> "PlutusV3";
+                case "3" -> "PlutusV4";
                 default -> entry.getKey();
             }, transformCostModel(entry.getValue())));
             result.set("costModels", mappedCostModels);
