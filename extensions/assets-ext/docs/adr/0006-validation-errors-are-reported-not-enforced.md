@@ -78,7 +78,7 @@ The errors are computed by the parser, the validator and the processor, and stor
 `cip68_metadata` and `cip26_metadata` (`JSONB`, `JSON`, `TEXT` on H2; nullable). Reading a row costs nothing extra, and the batch
 API makes no new query. A row written before the column existed has `NULL`, which the API returns as `[]`; the tokens that were
 dropped before exist nowhere, so a **full resync is required** when upgrading: a database is never upgraded in place, and there is no
-backfill (issue #1280 was closed for that reason). The migration is additive (`V0_1700_2`).
+backfill. The migration is additive (`V0_1700_2`).
 
 *Alternative rejected:* computing the errors at read time from the stored datum or mapping. It needs no migration, but it runs the
 parser on every request, and it cannot bring back what was never stored.
