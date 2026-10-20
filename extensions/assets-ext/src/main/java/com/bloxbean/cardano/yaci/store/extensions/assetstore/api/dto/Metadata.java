@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto;
 
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.Cip26Metadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.annotation.Nullable;
 import lombok.Builder;
 
@@ -70,11 +71,11 @@ public record Metadata(@Nullable StringProperty name, @Nullable StringProperty d
     }
 
     /**
-     * Whether the metadata has both a {@code name} and a {@code description}. It is no longer a gate (a token is returned as
-     * indexed, whatever is wrong with it, see {@code validation_errors}), but it stays in the response so that the JSON
-     * a client already reads does not change: it was {@code true} for every token the API returned, and now says
-     * whether the two properties the CIPs ask for are there.
+     * Whether the metadata has both a {@code name} and a {@code description}. Not part of the JSON: it only mirrored the
+     * gate that no longer exists, and "is this token compliant" is answered by {@code validation_errors} (an empty list, or
+     * no {@code MANDATORY} entry).
      */
+    @JsonIgnore
     public boolean isValid() {
         return this.name != null && this.description != null;
     }
