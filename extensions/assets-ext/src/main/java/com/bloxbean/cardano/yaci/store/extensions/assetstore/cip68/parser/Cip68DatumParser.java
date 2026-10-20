@@ -8,8 +8,8 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.AssetTy
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Constants;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Uri;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.ParsedCip68Datum;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.Cip68Metadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.util.TokenDecimals;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.validation.ValidationError;
 import jakarta.annotation.Nullable;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,6 +24,17 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import static com.bloxbean.cardano.yaci.store.extensions.assetstore.validation.ValidationError.CIP_68;
+
+/**
+ * Reads a CIP-68 reference NFT datum.
+ * <p>
+ * The parser indexes what is on-chain and reports what departs from CIP-68: a value that breaks the CIP is kept as it
+ * was written, and a {@link ValidationError} says what is wrong with it. Whether the token has what its label requires
+ * is checked per label by {@link com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service.Cip68Validator}.
+ * A datum is left out only when it cannot be decoded, or when it is an obvious attack on the indexer: one nested so deep
+ * that it cannot be decoded, or a property nested more than {@value #MAX_PROPERTY_DEPTH} levels (see ADR 0006).
+ */
 @Component
 @Slf4j
 public class Cip68DatumParser {
@@ -51,24 +62,33 @@ public class Cip68DatumParser {
     public static final String MEDIA_TYPE  = "mediaType";
     public static final String FILES       = "files";
 
-    /** Largest {@code logo} or {@code image} accepted, in bytes. Same limit as the CIP-26 logo. */
-    public static final int URI_MAX_BYTES = 64 * 1024;
+    /** The codes of the validation errors the parser reports (the validator has its own for the fields a label requires). */
+    public static final String WRONG_TYPE = "wrong_type";
+    public static final String NOT_UTF8 = "not_utf8";
+    public static final String OUT_OF_RANGE = "out_of_range";
+    public static final String UNDEFINED_VERSION = "undefined_version";
+    public static final String PLUTUS_CONSTRUCTOR = "plutus_constructor";
+    public static final String UNSUPPORTED_KEY = "unsupported_key";
+    public static final String KEY_COLLISION = "key_collision";
+    public static final String TOO_DEEP = "too_deep";
+    public static final String INVALID_FILES_ENTRY = "invalid_files_entry";
+    public static final String NO_NESTED_ENTRY = "no_nested_entry";
 
     /**
      * Deepest nesting allowed in the value of an additional property (a list inside a list counts as two levels). The
      * value goes to a JSON column, and Jackson refuses to write or read a document nested deeper than 1000 levels, so
      * a deeper value would fail the insert and stop the sync. Real metadata nests a few levels; the datum is untrusted
-     * and only the transaction size bounds how deep it can be.
+     * and only the transaction size bounds how deep it can be. A deeper property is an obvious attack and is dropped,
+     * with a warning (https://github.com/bloxbean/yaci-store/issues/1240).
      */
     public static final int MAX_PROPERTY_DEPTH = 100;
 
     /** CIP-68 version 4 wraps the metadata in a CIP-25 style map: {"721": {policy_id: {asset_name: metadata}}}. */
     private static final BytesPlutusData NESTED_MAP_KEY = BytesPlutusData.of("721");
     /**
-     * The datum versions CIP-68 defines. A datum with another version is not indexed: {@link #isDefinedVersion} logs one
-     * warning that names the token and the version and counts the datum as skipped with the reason
-     * {@code invalid_version}. How a datum of version 1 to 4 is read does not depend on the version but on its structure
-     * (see {@link #isNested}), as the CIP's retrieval steps say. Update the upper bound when the CIP adds a version.
+     * The datum versions CIP-68 defines. A datum with another version is still indexed, with an error on the
+     * {@code version}. How a datum is read does not depend on the version but on its structure (see {@link #isNested}),
+     * as the CIP's retrieval steps say. Update the upper bound when the CIP adds a version.
      */
     static final long MIN_DEFINED_VERSION = 1;
     static final long MAX_DEFINED_VERSION = 4;
@@ -91,6 +111,8 @@ public class Cip68DatumParser {
     /**
      * Same as {@link #parse(String)}, but resolves a version 4 nested-map datum to the entry for
      * {@code referenceNft}. Without it, a nested map is only resolved when it has a single entry.
+     * <p>
+     * The result is empty for a datum that is not a CIP-68 datum or cannot be decoded.
      */
     public Optional<ParsedCip68Datum> parse(String inlineDatum, @Nullable AssetType referenceNft) {
         if (inlineDatum == null || inlineDatum.isBlank()) {
@@ -98,18 +120,16 @@ public class Cip68DatumParser {
         }
 
         try {
-            return extractDatumProperties(inlineDatum)
-                    .filter(parts -> isDefinedVersion(parts, referenceNft))
-                    .flatMap(parts -> resolveMetadata(parts, referenceNft)
-                            .map(metadata -> buildParsedDatum(metadata, parts.version(), referenceNft)));
+            return extractDatumProperties(inlineDatum).map(parts -> buildParsedDatum(parts, referenceNft));
         } catch (StackOverflowError e) {
             // TODO: temporary workaround. Remove once cardano-client-lib decodes CBOR without
             //  recursion (bloxbean/cardano-client-lib#681).
             // The CBOR decoder recurses once per nesting level, and the ledger bounds a datum only by
             // transaction size, so a valid on-chain datum can be nested deeper than the stack allows.
-            // StackOverflowError is an Error, not an Exception, so it needs its own catch: skip the
-            // datum like any other undecodable one.
-            log.warn("Skipping CIP-68 datum nested too deeply to decode ({} bytes)", inlineDatum.length() / 2);
+            // StackOverflowError is an Error, not an Exception, so it needs its own catch. A datum nested this
+            // deep is an obvious attack on the indexer: it is left out, like any undecodable one.
+            log.warn("Skipping CIP-68 datum nested too deeply to decode, this looks like an attack ({} bytes)",
+                    inlineDatum.length() / 2);
             metrics.parseFailure();
             return Optional.empty();
         } catch (Exception e) {
@@ -143,15 +163,7 @@ public class Cip68DatumParser {
             return Optional.empty();
         }
 
-        // version is required and stored as a long, but a datum integer is unbounded: reject values
-        // that don't fit rather than let longValue() silently wrap them (2^64 + 1 would become 1)
-        BigInteger versionValue = version.getValue();
-        if (versionValue.bitLength() >= Long.SIZE) {
-            log.warn("Ignoring CIP-68 datum with out-of-range version {}", versionValue);
-            return Optional.empty();
-        }
-
-        return Optional.of(new DatumParts(properties, versionValue.longValue()));
+        return Optional.of(new DatumParts(properties, version.getValue()));
     }
 
     /**
@@ -160,8 +172,7 @@ public class Cip68DatumParser {
      * bytes). A version 4 datum without the {@code "721"} key is read directly, as before.
      * <p>
      * A nested datum with no usable entry for the token (another policy, another asset name, or an entry that is not a
-     * map) is not indexed. It is a CIP-68 datum that is refused, so it leaves one warning and a count with the reason
-     * {@code no_nested_entry}, not a silent gap.
+     * map) has no metadata to read: the token is still indexed, with an error that says so.
      */
     private Optional<MapPlutusData> resolveMetadata(DatumParts parts, @Nullable AssetType referenceNft) {
         MapPlutusData properties = parts.properties();
@@ -170,56 +181,13 @@ public class Cip68DatumParser {
         }
         MapPlutusData byPolicy = (MapPlutusData) properties.getMap().get(NESTED_MAP_KEY);
 
-        Optional<MapPlutusData> entry;
         if (referenceNft == null) {
             // No asset context: only an unambiguous single entry can be resolved
-            entry = singleValue(byPolicy)
-                    .flatMap(Cip68DatumParser::singleValue);
-        } else {
-            String assetNameWithoutLabel = referenceNft.assetName().substring(Cip68Constants.REFERENCE_TOKEN_PREFIX.length());
-            entry = asMap(byPolicy.getMap().get(BytesPlutusData.of(HexUtil.decodeHexString(referenceNft.policyId()))))
-                    .flatMap(byAsset -> asMap(byAsset.getMap().get(BytesPlutusData.of(HexUtil.decodeHexString(assetNameWithoutLabel)))));
+            return singleValue(byPolicy).flatMap(Cip68DatumParser::singleValue);
         }
-        if (entry.isEmpty()) {
-            warnNoNestedEntry(referenceNft);
-        }
-        return entry;
-    }
-
-    private void warnNoNestedEntry(@Nullable AssetType referenceNft) {
-        if (referenceNft != null) {
-            log.warn("Skipping CIP-68 datum of {}/{}: its nested \"721\" metadata has no usable entry for this token "
-                            + "(a map under its policy id and asset name)",
-                    referenceNft.policyId(), referenceNft.assetName());
-        } else {
-            log.warn("Skipping CIP-68 datum: its nested \"721\" metadata has no single entry to read without a token");
-        }
-        metrics.noNestedEntry();
-    }
-
-    /**
-     * CIP-68 defines versions 1 to 4 (its CDDL lists them, and says a change that is not backwards-compatible adds a
-     * new version). A datum with another version is not indexed: the layout of a version the CIP does not define is
-     * a guess, and a new version is added here when the CIP adds it. One warning names the token and the version, and
-     * the datum is counted as skipped with the reason {@code invalid_version}. The layout of versions 1 to 4 still
-     * comes from the structure (the {@code "721"} key), not from the version.
-     *
-     * @return true if the version is one CIP-68 defines
-     */
-    private boolean isDefinedVersion(DatumParts parts, @Nullable AssetType referenceNft) {
-        long version = parts.version();
-        if (version >= MIN_DEFINED_VERSION && version <= MAX_DEFINED_VERSION) {
-            return true;
-        }
-        if (referenceNft != null) {
-            log.warn("Skipping CIP-68 datum of {}/{}: version {} is not one CIP-68 defines ({} to {})",
-                    referenceNft.policyId(), referenceNft.assetName(), version, MIN_DEFINED_VERSION, MAX_DEFINED_VERSION);
-        } else {
-            log.warn("Skipping CIP-68 datum: version {} is not one CIP-68 defines ({} to {})",
-                    version, MIN_DEFINED_VERSION, MAX_DEFINED_VERSION);
-        }
-        metrics.invalidVersion();
-        return false;
+        String assetNameWithoutLabel = referenceNft.assetName().substring(Cip68Constants.REFERENCE_TOKEN_PREFIX.length());
+        return asMap(byPolicy.getMap().get(BytesPlutusData.of(HexUtil.decodeHexString(referenceNft.policyId()))))
+                .flatMap(byAsset -> asMap(byAsset.getMap().get(BytesPlutusData.of(HexUtil.decodeHexString(assetNameWithoutLabel)))));
     }
 
     /**
@@ -257,18 +225,50 @@ public class Cip68DatumParser {
     }
 
     /** Build the typed {@link ParsedCip68Datum} from the unwrapped (Map, version) pair. */
-    private ParsedCip68Datum buildParsedDatum(MapPlutusData properties, long version, @Nullable AssetType referenceNft) {
-        return new ParsedCip68Datum(
-                getDecimalsProperty(properties).orElse(null),
-                getStringProperty(DESCRIPTION, properties).orElse(null),
-                getStringOrChunkedProperty(LOGO, properties).orElse(null),
-                getBoundedStringProperty(NAME, properties, Cip68Metadata.NAME_MAX_LENGTH).orElse(null),
-                getBoundedStringProperty(TICKER, properties, Cip68Metadata.TICKER_MAX_LENGTH).orElse(null),
-                getBoundedStringProperty(URL, properties, Cip68Metadata.URL_MAX_LENGTH).orElse(null),
-                version,
-                getStringOrChunkedProperty(IMAGE, properties).orElse(null),
-                getBoundedStringProperty(MEDIA_TYPE, properties, Cip68Metadata.MEDIA_TYPE_MAX_LENGTH).orElse(null),
-                buildPropertiesJson(properties, referenceNft));
+    private ParsedCip68Datum buildParsedDatum(DatumParts parts, @Nullable AssetType referenceNft) {
+        List<ValidationError> errors = new ArrayList<>();
+        Long version = readVersion(parts.version(), errors);
+
+        Optional<MapPlutusData> metadata = resolveMetadata(parts, referenceNft);
+        if (metadata.isEmpty()) {
+            errors.add(ValidationError.mandatory(CIP_68, null, "721", NO_NESTED_ENTRY,
+                    referenceNft != null
+                            ? "the nested \"721\" metadata has no usable entry for this token (a map under its policy id and asset name)"
+                            : "the nested \"721\" metadata has no single entry to read without a token"));
+            return new ParsedCip68Datum(null, null, null, null, null, null, version, null, null, null, errors);
+        }
+        MapPlutusData properties = metadata.get();
+
+        Long decimals = readDecimals(properties, errors);
+        String description = readText(DESCRIPTION, properties, errors);
+        String logo = readUri(LOGO, properties, errors);
+        String name = readText(NAME, properties, errors);
+        String ticker = readText(TICKER, properties, errors);
+        String url = readText(URL, properties, errors);
+        String image = readUri(IMAGE, properties, errors);
+        String mediaType = readText(MEDIA_TYPE, properties, errors);
+        Map<String, Object> json = buildPropertiesJson(properties, errors);
+        return new ParsedCip68Datum(decimals, description, logo, name, ticker, url, version, image, mediaType, json, errors);
+    }
+
+    /**
+     * The version is stored as a long, but a datum integer is unbounded: a value that does not fit is stored as no
+     * version (and reported), instead of letting {@code longValue()} silently wrap it ({@code 2^64 + 1} would become 1).
+     * A version that CIP-68 does not define is stored as it is, with an error.
+     */
+    @Nullable
+    private Long readVersion(BigInteger value, List<ValidationError> errors) {
+        if (value.bitLength() >= Long.SIZE) {
+            errors.add(ValidationError.mandatory(CIP_68, null, "version", OUT_OF_RANGE,
+                    "version " + abbreviate(value.toString()) + " does not fit a 64-bit integer, stored without a version"));
+            return null;
+        }
+        long version = value.longValue();
+        if (version < MIN_DEFINED_VERSION || version > MAX_DEFINED_VERSION) {
+            errors.add(ValidationError.mandatory(CIP_68, null, "version", UNDEFINED_VERSION,
+                    "version " + version + " is not one CIP-68 defines (" + MIN_DEFINED_VERSION + " to " + MAX_DEFINED_VERSION + ")"));
+        }
+        return version;
     }
 
     /**
@@ -277,9 +277,9 @@ public class Cip68DatumParser {
      * pure FT rows don't materialise an empty wrapper.
      */
     @Nullable
-    private Map<String, Object> buildPropertiesJson(MapPlutusData properties, @Nullable AssetType referenceNft) {
-        List<Map<String, Object>> files = parseFiles(properties, referenceNft);
-        Map<String, Object> additional = parseAdditionalProperties(properties, referenceNft);
+    private Map<String, Object> buildPropertiesJson(MapPlutusData properties, List<ValidationError> errors) {
+        List<Object> files = parseFiles(properties, errors);
+        Map<String, Object> additional = readEntries(properties, "properties.", true, errors);
 
         boolean hasFiles = !files.isEmpty();
         boolean hasAdditional = !additional.isEmpty();
@@ -297,42 +297,26 @@ public class Cip68DatumParser {
         return json;
     }
 
-    /** Internal record for the unwrapped CIP-68 envelope (properties Map, range-checked version). */
-    private record DatumParts(MapPlutusData properties, long version) {}
+    /** Internal record for the unwrapped CIP-68 envelope (properties Map, version as written). */
+    private record DatumParts(MapPlutusData properties, BigInteger version) {}
 
     /**
      * Reads a text property. CIP-68 says text is UTF-8, so valid UTF-8 is stored as text. Bytes that are
      * not valid UTF-8 are stored as hex, the same rule as for additional properties, instead of being
-     * decoded with replacement characters, which would lose the original bytes.
+     * decoded with replacement characters, which would lose the original bytes; the error says so. A value that is
+     * not a byte string is left out, with an error.
      */
-    private Optional<String> getStringProperty(String propertyName, MapPlutusData mapPlutusData) {
-        PlutusData property = mapPlutusData.getMap().get(BytesPlutusData.of(propertyName));
-        return switch (property) {
-            case BytesPlutusData bytes -> Optional.of(bytesToText(bytes.getValue()));
-            case null, default -> Optional.empty();
-        };
-    }
-
-    /**
-     * Reads a string property bound for a fixed-width column. Longer values are dropped, since an
-     * oversized value would fail the insert and stop the sync; for the required {@code name} that
-     * means the datum is then skipped by {@code Cip68TokenService.isValidMetadata}.
-     * <p>
-     * Length is counted in UTF-16 units ({@link String#length()}), not code points: H2 counts
-     * {@code VARCHAR(n)} that way, so 255 emoji (510 units) overflow a {@code VARCHAR(255)} there.
-     * Postgres and MySQL count code points, which is never more than UTF-16 units, so this bound
-     * is safe on every supported database, at the cost of rejecting some long non-BMP names that
-     * Postgres alone could have stored.
-     */
-    private Optional<String> getBoundedStringProperty(String propertyName, MapPlutusData mapPlutusData, int maxLength) {
-        return getStringProperty(propertyName, mapPlutusData).filter(value -> {
-            int length = value.length();
-            if (length > maxLength) {
-                log.warn("Ignoring CIP-68 '{}' of {} characters (max {})", propertyName, length, maxLength);
-                return false;
-            }
-            return true;
-        });
+    @Nullable
+    private String readText(String propertyName, MapPlutusData map, List<ValidationError> errors) {
+        PlutusData property = map.getMap().get(BytesPlutusData.of(propertyName));
+        if (property == null) {
+            return null;
+        }
+        if (!(property instanceof BytesPlutusData bytes)) {
+            errors.add(wrongType(propertyName));
+            return null;
+        }
+        return typedBytesToText(propertyName, bytes.getValue(), errors);
     }
 
     /**
@@ -340,29 +324,26 @@ public class Cip68DatumParser {
      * {@code image} and the FT {@code logo}: a value longer than 64 bytes, the most a Plutus byte string
      * holds, is split into a list of byte-string chunks, and this joins them back together. The chunks are
      * joined as bytes and decoded once, so a multi-byte character cut by a chunk boundary survives.
-     * Elements of the list that are not byte strings are ignored.
-     * <p>
-     * The value is capped at {@value #URI_MAX_BYTES} bytes (the CIP-26 logo has the same limit): an
-     * over-long value is dropped with a warning and the rest of the datum is kept. The scheme is not
-     * checked here; {@code Cip68TokenService#invalidReason} checks the image of a 222 or 444 token and the logo of a 333 token.
+     * Elements of the list that are not byte strings are ignored. There is no size cap: a datum is at most one
+     * transaction, 16 KB. The scheme is checked by the validator.
      */
-    private Optional<String> getStringOrChunkedProperty(String propertyName, MapPlutusData mapPlutusData) {
-        PlutusData property = mapPlutusData.getMap().get(BytesPlutusData.of(propertyName));
-
+    @Nullable
+    private String readUri(String propertyName, MapPlutusData map, List<ValidationError> errors) {
+        PlutusData property = map.getMap().get(BytesPlutusData.of(propertyName));
         byte[] value = switch (property) {
             case BytesPlutusData bytes -> bytes.getValue();
             case ListPlutusData list -> joinChunks(list);
-            case null, default -> null;
+            case null -> null;
+            default -> {
+                errors.add(wrongType(propertyName));
+                yield null;
+            }
         };
         if (value == null) {
-            return Optional.empty();
-        }
-        if (value.length > URI_MAX_BYTES) {
-            log.warn("Ignoring CIP-68 '{}' of {} bytes (max {})", propertyName, value.length, URI_MAX_BYTES);
-            return Optional.empty();
+            return null;
         }
         // a single byte string keeps an empty value ("" is what some NFTs declare); an empty list is nothing
-        return property instanceof ListPlutusData && value.length == 0 ? Optional.empty() : Optional.of(bytesToText(value));
+        return property instanceof ListPlutusData && value.length == 0 ? null : typedBytesToText(propertyName, value, errors);
     }
 
     private static byte[] joinChunks(ListPlutusData list) {
@@ -375,58 +356,88 @@ public class Cip68DatumParser {
         return joined.toByteArray();
     }
 
+    private static String typedBytesToText(String propertyName, byte[] bytes, List<ValidationError> errors) {
+        if (!StringUtil.isValidUTF8(bytes)) {
+            errors.add(ValidationError.optional(CIP_68, null, propertyName, NOT_UTF8,
+                    propertyName + " is not valid UTF-8, stored as hex"));
+        }
+        return bytesToText(bytes);
+    }
+
+    /** {@code name} is required by every label; the rest of the typed fields are required, if at all, by some labels only. */
+    private static ValidationError wrongType(String propertyName) {
+        String error = propertyName + " is not a byte string, left out";
+        return NAME.equals(propertyName)
+                ? ValidationError.mandatory(CIP_68, null, propertyName, WRONG_TYPE, error)
+                : ValidationError.optional(CIP_68, null, propertyName, WRONG_TYPE, error);
+    }
+
     /**
-     * Reads {@code decimals} from the datum. The value is an unbounded on-chain integer, so values that
-     * don't fit in a {@code long} are rejected before narrowing: {@code longValue()} alone would
-     * silently wrap values above {@code 2^63} into a plausible-looking number. An out-of-range value
-     * is dropped (the rest of the metadata is kept) rather than stored.
+     * Reads {@code decimals} from the datum. The value is an unbounded on-chain integer, so a value that doesn't fit
+     * in a {@code long} is stored as no value (and reported) instead of being narrowed: {@code longValue()} alone
+     * would silently wrap values above {@code 2^63} into a plausible-looking number. A value that fits a long but is
+     * outside the range CIP-68 allows is stored as written, with an error.
      */
-    private Optional<Long> getDecimalsProperty(MapPlutusData mapPlutusData) {
-        PlutusData property = mapPlutusData.getMap().get(BytesPlutusData.of(DECIMALS));
+    @Nullable
+    private Long readDecimals(MapPlutusData map, List<ValidationError> errors) {
+        PlutusData property = map.getMap().get(BytesPlutusData.of(DECIMALS));
+        if (property == null) {
+            return null;
+        }
         if (!(property instanceof BigIntPlutusData bigInt)) {
-            return Optional.empty();
+            errors.add(ValidationError.optional(CIP_68, null, DECIMALS, WRONG_TYPE, "decimals is not an integer, left out"));
+            return null;
         }
 
         BigInteger value = bigInt.getValue();
         // bitLength guard first: longValue() is only exact when the value fits in a long
-        if (value.bitLength() >= Long.SIZE || !TokenDecimals.isInRange(value.longValue())) {
-            log.warn("Ignoring out-of-range CIP-68 decimals {} (allowed {})", value, TokenDecimals.RANGE);
-            return Optional.empty();
+        if (value.bitLength() >= Long.SIZE) {
+            errors.add(ValidationError.optional(CIP_68, null, DECIMALS, OUT_OF_RANGE,
+                    "decimals " + abbreviate(value.toString()) + " is outside the range CIP-68 allows " + TokenDecimals.RANGE
+                            + ", left out"));
+            return null;
         }
-
-        return Optional.of(value.longValue());
+        if (!TokenDecimals.isInRange(value.longValue())) {
+            errors.add(ValidationError.optional(CIP_68, null, DECIMALS, OUT_OF_RANGE,
+                    "decimals " + value + " is outside the range CIP-68 allows " + TokenDecimals.RANGE));
+        }
+        return value.longValue();
     }
 
     /**
-     * Walk the {@code files} key (if present) and return a list of file descriptors.
+     * Walk the {@code files} key (if present) and return a list of file descriptors, as written.
      * Each element is a {@code Map<String, Object>} with keys {@code name}, {@code mediaType},
      * {@code src} where present. Unknown keys inside a file entry are preserved verbatim.
      * <p>
-     * {@code files} is optional, so one that breaks the CIP-68 definition is left out as a whole, with a warning, and
-     * the rest of the datum is kept: every entry has to be a map with a {@code mediaType} byte string and a
-     * {@code src} that is a URI with one of the allowed schemes. Returns an empty list when there is no usable
-     * {@code files}, never {@code null}.
+     * {@code files} is optional. An entry that breaks the CIP-68 definition is kept, with one error for it: every
+     * entry has to be a map with a {@code mediaType} byte string and a {@code src} that is a URI with one of the
+     * allowed schemes. Returns an empty list when there is no {@code files}, never {@code null}.
      */
-    private List<Map<String, Object>> parseFiles(MapPlutusData properties, @Nullable AssetType referenceNft) {
+    private List<Object> parseFiles(MapPlutusData properties, List<ValidationError> errors) {
         PlutusData filesProp = properties.getMap().get(BytesPlutusData.of(FILES));
         if (!(filesProp instanceof ListPlutusData filesList)) {
+            if (filesProp != null) {
+                errors.add(ValidationError.optional(CIP_68, null, FILES, WRONG_TYPE, "files is not a list, left out"));
+            }
             return List.of();
         }
+        List<Object> result = new ArrayList<>();
+        int index = 0;
         for (PlutusData item : filesList.getPlutusDataList()) {
-            Optional<String> invalid = invalidFileReason(item);
-            if (invalid.isPresent()) {
-                warnFilesDropped(invalid.get(), referenceNft);
-                return List.of();
-            }
-        }
-        List<Map<String, Object>> result = new ArrayList<>();
-        for (PlutusData item : filesList.getPlutusDataList()) {
+            invalidFileReason(item).ifPresent(reason ->
+                    errors.add(ValidationError.optional(CIP_68, null, FILES, INVALID_FILES_ENTRY, reason)));
             if (item instanceof MapPlutusData fileMap) {
-                Map<String, Object> file = readEntries(fileMap, "files[]", false, referenceNft);
+                Map<String, Object> file = readEntries(fileMap, "files[].", false, errors);
                 if (!file.isEmpty()) {
                     result.add(file);
                 }
+            } else {
+                Object value = unwrapPlutusValue(item, "files[" + index + "]", errors);
+                if (value != null) {
+                    result.add(value);
+                }
             }
+            index++;
         }
         return result;
     }
@@ -439,69 +450,51 @@ public class Cip68DatumParser {
         if (!(file.getMap().get(BytesPlutusData.of(MEDIA_TYPE)) instanceof BytesPlutusData)) {
             return Optional.of("an entry of 'files' has no mediaType");
         }
-        Optional<String> src = getStringOrChunkedProperty("src", file);
-        if (src.isEmpty() || src.get().isBlank()) {
+        // reading the src here must not add errors of its own: this only decides whether the entry is valid
+        String src = readUri("src", file, new ArrayList<>());
+        if (src == null || src.isBlank()) {
             return Optional.of("an entry of 'files' has no usable src");
         }
-        if (!Cip68Uri.hasAllowedScheme(src.get())) {
-            String shown = src.get().length() <= 60 ? src.get() : src.get().substring(0, 60) + "...";
-            return Optional.of("the src '" + shown + "' of an entry of 'files' is not a URI with one of the schemes CIP-68 allows ("
+        if (!Cip68Uri.hasAllowedScheme(src)) {
+            return Optional.of("the src '" + abbreviate(src) + "' of an entry of 'files' is not a URI with one of the schemes CIP-68 allows ("
                     + Cip68Uri.ALLOWED_SCHEMES + ")");
         }
         return Optional.empty();
     }
 
-    private void warnFilesDropped(String reason, @Nullable AssetType referenceNft) {
-        metrics.propertyDropped(Cip68Metrics.INVALID_FILES);
-        if (referenceNft != null) {
-            log.warn("CIP-68 datum of {}/{}: dropping property 'files' and keeping the rest, because {}",
-                    referenceNft.policyId(), referenceNft.assetName(), reason);
-        } else {
-            log.warn("CIP-68 datum: dropping property 'files' and keeping the rest, because {}", reason);
-        }
-    }
-
     /**
-     * Collect every key in the metadata map that isn't one of the well-known typed scalars
-     * or {@code files}. These project-specific properties (attributes, traits, royalties...)
-     * go into {@code properties.additional_properties} for downstream consumers.
+     * Converts the entries of a metadata map to JSON-ready values, keyed by the text of the key. {@code prefix} names
+     * the map in errors ({@code properties.} for additional properties, {@code files[].} for the entries of a file);
+     * {@code skipTypedKeys} leaves out the keys that have a typed column.
      */
-    private Map<String, Object> parseAdditionalProperties(MapPlutusData properties, @Nullable AssetType referenceNft) {
-        return readEntries(properties, "additional property", true, referenceNft);
-    }
-
-    /**
-     * Converts the entries of a metadata map to JSON-ready values, keyed by the text of the key. {@code where} names
-     * the map in warnings ({@code files[]} entries are reported as {@code files[].<key>}); {@code skipTypedKeys} leaves
-     * out the keys that have a typed column.
-     */
-    private Map<String, Object> readEntries(MapPlutusData map, String where, boolean skipTypedKeys, @Nullable AssetType referenceNft) {
+    private Map<String, Object> readEntries(MapPlutusData map, String prefix, boolean skipTypedKeys, List<ValidationError> errors) {
         Map<String, Object> result = new LinkedHashMap<>();
         for (Map.Entry<PlutusData, PlutusData> e : byteStringKeysFirst(map)) {
-            readEntry(result, e, where, skipTypedKeys, referenceNft);
+            readEntry(result, e, prefix, skipTypedKeys, errors);
         }
         return result;
     }
 
-    private void readEntry(Map<String, Object> result, Map.Entry<PlutusData, PlutusData> entry, String where,
-                           boolean skipTypedKeys, @Nullable AssetType referenceNft) {
+    private void readEntry(Map<String, Object> result, Map.Entry<PlutusData, PlutusData> entry, String prefix,
+                           boolean skipTypedKeys, List<ValidationError> errors) {
         String key = keyText(entry.getKey());
         if (key == null) {
-            warnKeyLeftOut(where, entry.getKey(), referenceNft);
+            errors.add(ValidationError.optional(CIP_68, null, prefix + "*", UNSUPPORTED_KEY,
+                    "an entry has a " + keyKind(entry.getKey()) + " as key, which has no text form, left out"));
             return;
         }
-        String reportedKey = skipTypedKeys ? key : where + "." + key;
         if (skipTypedKeys && TYPED_KEYS.contains(key)) {
             return;
         }
-        // the depth check comes first: it is bounded, while the constructor check recurses as deep as the value goes
-        if (dropsTooDeepProperty(reportedKey, entry.getValue(), referenceNft) || dropsConstructorProperty(reportedKey, entry.getValue(), referenceNft)) {
+        String field = prefix + abbreviate(key);
+        // a property nested this deep is an obvious attack: it is dropped, and so is nothing else. The check is
+        // bounded, while unwrapping recurses as deep as the value goes, so it comes first.
+        if (dropsTooDeepProperty(field, entry.getValue(), errors)) {
             return;
         }
-        // Check before storing: an unsupported value must drop only this property, not the datum
-        Object value = unwrapPlutusValue(entry.getValue());
+        Object value = unwrapPlutusValue(entry.getValue(), field, errors);
         if (value != null) {
-            putFirst(result, key, value, referenceNft);
+            putFirst(result, key, value, field, errors);
         }
     }
 
@@ -511,7 +504,8 @@ public class Cip68DatumParser {
      * as its decimal string, which is what Lucid and Blockfrost do. A list, map or constructor key has no sensible text
      * form: {@code null}, and the entry is left out.
      */
-    private static String keyText(PlutusData key) {
+    @Nullable
+    private static String keyText(@Nullable PlutusData key) {
         return switch (key) {
             case BytesPlutusData bytes -> bytesToText(bytes.getValue());
             case BigIntPlutusData integer -> integer.getValue().toString();
@@ -519,20 +513,13 @@ public class Cip68DatumParser {
         };
     }
 
-    private void warnKeyLeftOut(String where, PlutusData key, @Nullable AssetType referenceNft) {
-        metrics.propertyDropped("key_unsupported");
-        String kind = switch (key) {
+    private static String keyKind(@Nullable PlutusData key) {
+        return switch (key) {
             case ListPlutusData ignored -> "list";
             case MapPlutusData ignored -> "map";
             case ConstrPlutusData ignored -> "constructor";
-            case null, default -> "unsupported";
+            case null, default -> "value of an unsupported kind";
         };
-        if (referenceNft != null) {
-            log.warn("CIP-68 datum of {}/{}: leaving out a {} entry whose key is a {}, which has no text form",
-                    referenceNft.policyId(), referenceNft.assetName(), where, kind);
-        } else {
-            log.warn("CIP-68 datum: leaving out a {} entry whose key is a {}, which has no text form", where, kind);
-        }
     }
 
     /**
@@ -546,62 +533,27 @@ public class Cip68DatumParser {
     }
 
     /** Two keys that read the same (the byte string "1" and the integer 1): the byte string key stays. */
-    private void putFirst(Map<String, Object> target, String key, Object value, @Nullable AssetType referenceNft) {
+    private void putFirst(Map<String, Object> target, String key, Object value, String field, List<ValidationError> errors) {
         if (target.putIfAbsent(key, value) != null) {
-            metrics.propertyDropped("key_collision");
-            if (referenceNft != null) {
-                log.warn("CIP-68 datum of {}/{}: two keys read as '{}', keeping the byte string key",
-                        referenceNft.policyId(), referenceNft.assetName(), key.length() <= 60 ? key : key.substring(0, 60) + "...");
-            } else {
-                log.warn("CIP-68 datum: two keys read as '{}', keeping the byte string key", key.length() <= 60 ? key : key.substring(0, 60) + "...");
-            }
+            errors.add(ValidationError.optional(CIP_68, null, field, KEY_COLLISION,
+                    "two keys read as '" + abbreviate(key) + "', kept the byte string key"));
         }
     }
 
     /**
-     * The generic CIP-68 definition allows a metadata value to be a map, a list, an integer or a byte string, and
-     * Plutus data of any kind only in {@code extra}. A property whose value holds a constructor, however deep, is
-     * therefore not valid metadata: it is dropped with a warning, and the rest of the datum, and the token, are
-     * kept. (Before, the constructor was stored as {@code {"constructor": n, "fields": [...]}}, a form the CIP does
-     * not define.)
-     *
-     * @return true if the property was dropped
+     * Drops a property whose value is nested deeper than {@link #MAX_PROPERTY_DEPTH}: that is an obvious attack on the
+     * indexer (https://github.com/bloxbean/yaci-store/issues/1240), not metadata. One warning and a count, and an error
+     * so that the owner is told; the rest of the datum is indexed.
      */
-    private boolean dropsConstructorProperty(String key, PlutusData value, @Nullable AssetType referenceNft) {
-        if (!containsConstructor(value)) {
-            return false;
-        }
-        metrics.propertyDropped("constructor");
-        String shortKey = key.length() <= 60 ? key : key.substring(0, 60) + "...";
-        if (referenceNft != null) {
-            log.warn("CIP-68 datum of {}/{}: dropping property '{}' and keeping the rest, because its value holds a Plutus "
-                            + "constructor, which CIP-68 metadata does not allow",
-                    referenceNft.policyId(), referenceNft.assetName(), shortKey);
-        } else {
-            log.warn("CIP-68 datum: dropping property '{}' and keeping the rest, because its value holds a Plutus "
-                    + "constructor, which CIP-68 metadata does not allow", shortKey);
-        }
-        return true;
-    }
-
-    /**
-     * Drops a property whose value is nested deeper than {@link #MAX_PROPERTY_DEPTH}, with a warning and a count; the
-     * rest of the datum is kept.
-     */
-    private boolean dropsTooDeepProperty(String key, PlutusData value, @Nullable AssetType referenceNft) {
+    private boolean dropsTooDeepProperty(String field, PlutusData value, List<ValidationError> errors) {
         if (!isNestedDeeperThan(value, MAX_PROPERTY_DEPTH)) {
             return false;
         }
         metrics.propertyDropped(Cip68Metrics.TOO_DEEP);
-        String shortKey = key.length() <= 60 ? key : key.substring(0, 60) + "...";
-        if (referenceNft != null) {
-            log.warn("CIP-68 datum of {}/{}: dropping property '{}' and keeping the rest, because its value is nested "
-                            + "deeper than {} levels",
-                    referenceNft.policyId(), referenceNft.assetName(), shortKey, MAX_PROPERTY_DEPTH);
-        } else {
-            log.warn("CIP-68 datum: dropping property '{}' and keeping the rest, because its value is nested deeper "
-                    + "than {} levels", shortKey, MAX_PROPERTY_DEPTH);
-        }
+        log.warn("CIP-68 datum: dropping property '{}' and keeping the rest, because its value is nested deeper than {} "
+                + "levels, this looks like an attack", field, MAX_PROPERTY_DEPTH);
+        errors.add(ValidationError.optional(CIP_68, null, field, TOO_DEEP,
+                "the value is nested deeper than " + MAX_PROPERTY_DEPTH + " levels, dropped"));
         return true;
     }
 
@@ -626,30 +578,22 @@ public class Cip68DatumParser {
         return levels == 0 || children.stream().anyMatch(child -> isNestedDeeperThan(child, levels - 1));
     }
 
-    private static boolean containsConstructor(@Nullable PlutusData data) {
-        return switch (data) {
-            case ConstrPlutusData ignored -> true;
-            case ListPlutusData list -> list.getPlutusDataList().stream().anyMatch(Cip68DatumParser::containsConstructor);
-            case MapPlutusData map -> map.getMap().entrySet().stream()
-                    .anyMatch(e -> containsConstructor(e.getKey()) || containsConstructor(e.getValue()));
-            case null, default -> false;
-        };
-    }
-
     /**
      * Unwrap a Plutus value into a Java type suitable for JSONB serialization. Recurses into maps
-     * and lists. Bytes become text via {@link #bytesToText}; ints become {@link BigInteger}. A constructor
-     * has no place in CIP-68 metadata, so it never gets here: {@link #dropsConstructorProperty} drops the
-     * property that holds one before the value is converted.
+     * and lists. Bytes become text via {@link #bytesToText}; ints become {@link BigInteger}. The generic CIP-68
+     * definition allows Plutus data of any kind only in {@code extra}, so a constructor is not valid metadata, but it
+     * is kept: it is stored as {@code {"constructor": n, "fields": [...]}} and reported once for the property, so the
+     * owner can fix it and nothing on-chain is hidden. The depth is bounded by {@link #dropsTooDeepProperty}.
      */
-    private Object unwrapPlutusValue(PlutusData data) {
+    @Nullable
+    private Object unwrapPlutusValue(@Nullable PlutusData data, String field, List<ValidationError> errors) {
         return switch (data) {
             case BytesPlutusData b   -> bytesToText(b.getValue());
             case BigIntPlutusData i  -> i.getValue();
             case ListPlutusData list -> {
                 List<Object> items = new ArrayList<>();
                 for (PlutusData inner : list.getPlutusDataList()) {
-                    Object u = unwrapPlutusValue(inner);
+                    Object u = unwrapPlutusValue(inner, field, errors);
                     if (u != null) items.add(u);
                 }
                 yield items;
@@ -658,15 +602,44 @@ public class Cip68DatumParser {
                 Map<String, Object> out = new LinkedHashMap<>();
                 for (Map.Entry<PlutusData, PlutusData> entry : byteStringKeysFirst(map)) {
                     String key = keyText(entry.getKey());
-                    if (key == null) continue;
-                    Object u = unwrapPlutusValue(entry.getValue());
+                    if (key == null) {
+                        errors.add(ValidationError.optional(CIP_68, null, field, UNSUPPORTED_KEY,
+                                "a nested entry has a " + keyKind(entry.getKey()) + " as key, which has no text form, left out"));
+                        continue;
+                    }
+                    Object u = unwrapPlutusValue(entry.getValue(), field, errors);
                     if (u != null) out.putIfAbsent(key, u);
                 }
+                yield out;
+            }
+            case ConstrPlutusData constr -> {
+                reportConstructorOnce(field, errors);
+                List<Object> fields = new ArrayList<>();
+                for (PlutusData inner : constr.getData().getPlutusDataList()) {
+                    Object u = unwrapPlutusValue(inner, field, errors);
+                    if (u != null) fields.add(u);
+                }
+                Map<String, Object> out = new LinkedHashMap<>();
+                out.put("constructor", constr.getAlternative());
+                out.put("fields", fields);
                 yield out;
             }
             case null -> null;
             default -> null;
         };
+    }
+
+    private static void reportConstructorOnce(String field, List<ValidationError> errors) {
+        boolean reported = errors.stream().anyMatch(e -> PLUTUS_CONSTRUCTOR.equals(e.code()) && field.equals(e.fieldName()));
+        if (!reported) {
+            errors.add(ValidationError.optional(CIP_68, null, field, PLUTUS_CONSTRUCTOR,
+                    "the value holds a Plutus constructor, which CIP-68 metadata does not allow, stored as {constructor, fields}"));
+        }
+    }
+
+    private static String abbreviate(String value) {
+        String oneLine = value.replaceAll("\\s+", " ");
+        return oneLine.length() <= 60 ? oneLine : oneLine.substring(0, 60) + "...";
     }
 
     private static String bytesToString(byte[] bytes) {

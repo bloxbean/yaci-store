@@ -71,8 +71,14 @@ class Cip68PropertyDepthTest {
         assertThat(parsed.description()).isEqualTo("d");
         assertThat(parsed.properties()).isNull();
         assertThat(warnings()).singleElement().satisfies(w -> assertThat(w)
-                .contains("dropping property 'foo' and keeping the rest").contains("nested deeper than " + LIMIT + " levels"));
+                .contains("dropping property 'properties.foo' and keeping the rest").contains("nested deeper than " + LIMIT + " levels"));
         assertThat(dropped()).isEqualTo(1);
+        // the owner is told too: an error with the field and the limit
+        assertThat(parsed.validationErrors()).singleElement().satisfies(e -> {
+            assertThat(e.fieldName()).isEqualTo("properties.foo");
+            assertThat(e.code()).isEqualTo("too_deep");
+            assertThat(e.error()).contains("deeper than " + LIMIT + " levels");
+        });
     }
 
     @Test

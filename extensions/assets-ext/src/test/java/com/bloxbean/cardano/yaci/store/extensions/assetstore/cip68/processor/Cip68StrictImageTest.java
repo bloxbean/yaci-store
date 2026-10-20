@@ -40,10 +40,11 @@ import static org.mockito.Mockito.verify;
 
 /**
  * CIP-68 requires {@code image} for the 222 NFT and the 444 RFT, as a URI with one of the schemes {@code https},
- * {@code ipfs}, {@code ar} or {@code data}. Parsing is strict about it: a token without an image, or with an
- * image of another scheme (live tokens use {@code iagon://}, and even free text), is not indexed and a warning
- * says which token was dropped and why. The 333 fungible token has no {@code image}; its {@code logo} is optional,
- * so one that is not a URI with one of the same schemes is left out with a warning and the token is still indexed.
+ * {@code ipfs}, {@code ar} or {@code data}. A token without an image, or with an image of another scheme (live
+ * tokens use {@code iagon://}, and even free text), is still indexed and served as written, with a MANDATORY error
+ * that names the label and says what is wrong (ADR 0006). The 333 fungible token has no {@code image}; its
+ * {@code logo} is optional, so one that is not a URI with one of the same schemes is kept as written, with an
+ * OPTIONAL error.
  * <p>
  * Runs the real parser, token service and processor; only the repository is mocked.
  */
@@ -88,56 +89,67 @@ class Cip68StrictImageTest {
         processorLogger.detachAppender(logs);
     }
 
-    @Test
-    void dropsTheRealSensorNftWithAnEmptyImageAndWarns() {
-        assertThat(index(DID_SENSOR_DATUM, DID_SENSOR_POLICY, DID_SENSOR_BASE, Cip68Constants.NFT_TOKEN_PREFIX)).isEmpty();
-
-        assertThat(warnings()).singleElement().satisfies(w -> assertThat(w)
-                .contains("Skipping CIP-68 datum").contains(DID_SENSOR_POLICY).contains("000643b0" + DID_SENSOR_BASE)
-                .contains("(label 222)").contains("no image"));
+    private static void assertImageError(Optional<Cip68Metadata> saved, String label, String code, String... messageParts) {
+        assertThat(saved).isPresent();
+        assertThat(saved.get().getValidationErrors()).singleElement().satisfies(e -> {
+            assertThat(e.cip()).isEqualTo("CIP-68");
+            assertThat(e.subStandard()).isEqualTo(label);
+            assertThat(e.fieldName()).isEqualTo("image");
+            assertThat(e.fieldCategory().name()).isEqualTo("MANDATORY");
+            assertThat(e.code()).isEqualTo(code);
+            for (String part : messageParts) {
+                assertThat(e.error()).contains(part);
+            }
+        });
     }
 
     @Test
-    void dropsAnNftWithoutAnImageKeyAndWarns() {
-        assertThat(index(datum("name", "Plain NFT"), POLICY, BASE, Cip68Constants.NFT_TOKEN_PREFIX)).isEmpty();
+    void indexesTheRealSensorNftWithAnEmptyImageAndReportsIt() {
+        Optional<Cip68Metadata> saved = index(DID_SENSOR_DATUM, DID_SENSOR_POLICY, DID_SENSOR_BASE, Cip68Constants.NFT_TOKEN_PREFIX);
 
-        assertThat(warnings()).singleElement().satisfies(w -> assertThat(w).contains("no image").contains("(label 222)"));
-    }
-
-    @Test
-    void dropsAnRftWithoutAnImageAndWarns() {
-        assertThat(index(datum("name", "Rich token"), POLICY, BASE, Cip68Constants.RICH_FUNGIBLE_TOKEN_PREFIX)).isEmpty();
-
-        assertThat(warnings()).singleElement().satisfies(w -> assertThat(w).contains("no image").contains("(label 444)"));
-    }
-
-    @Test
-    void keepsAFungibleTokenWithoutAnImageWithoutWarning() {
-        // 333 uses logo, not image
-        Optional<Cip68Metadata> saved = index(datum("name", "Coin", "description", "A coin"), POLICY, BASE, Cip68Constants.FUNGIBLE_TOKEN_PREFIX);
-
-        assertThat(saved).get().extracting(Cip68Metadata::getLabel).isEqualTo(Cip68Constants.LABEL_FT);
+        assertImageError(saved, "222", "missing_value", "image field is missing a mandatory value");
+        assertThat(saved.get().getMediaType()).isEqualTo("image/svg+xml");
         assertThat(warnings()).isEmpty();
     }
 
     @Test
-    void dropsAnIagonImageAndSaysWhy() {
-        // live mainnet wine NFTs; wallets follow the CIP and cannot show iagon://, so Iagon would have to take it to the CIP
-        String image = "iagon://675816de7e3fc1.26175981_ReserveChardonnayPG";
-
-        assertThat(index(datum("name", "Wine", "image", image), POLICY, BASE, Cip68Constants.NFT_TOKEN_PREFIX)).isEmpty();
-
-        assertThat(warnings()).singleElement().satisfies(w -> assertThat(w)
-                .contains("Skipping CIP-68 datum").contains(POLICY).contains("(label 222)")
-                .contains(image).contains("not a URI with one of the schemes CIP-68 allows (https, ipfs, ar, data)"));
+    void indexesAnNftWithoutAnImageKeyAndReportsIt() {
+        assertImageError(index(datum("name", "Plain NFT"), POLICY, BASE, Cip68Constants.NFT_TOKEN_PREFIX), "222", "missing_value");
     }
 
     @Test
-    void dropsFreeTextImageAndSaysWhy() {
-        // seen on mainnet: an image that is not a URI at all
-        assertThat(index(datum("name", "Odd", "image", "image IPFS here"), POLICY, BASE, Cip68Constants.NFT_TOKEN_PREFIX)).isEmpty();
+    void indexesAnRftWithoutAnImageAndReportsIt() {
+        assertImageError(index(datum("name", "Rich token"), POLICY, BASE, Cip68Constants.RICH_FUNGIBLE_TOKEN_PREFIX), "444", "missing_value");
+    }
 
-        assertThat(warnings()).singleElement().satisfies(w -> assertThat(w).contains("image IPFS here").contains("not a URI"));
+    @Test
+    void keepsAFungibleTokenWithoutAnImageWithoutAnError() {
+        // 333 uses logo, not image
+        Optional<Cip68Metadata> saved = index(datum("name", "Coin", "description", "A coin"), POLICY, BASE, Cip68Constants.FUNGIBLE_TOKEN_PREFIX);
+
+        assertThat(saved).get().extracting(Cip68Metadata::getLabel).isEqualTo(Cip68Constants.LABEL_FT);
+        assertThat(saved.get().getValidationErrors()).isEmpty();
+        assertThat(warnings()).isEmpty();
+    }
+
+    @Test
+    void indexesAnIagonImageAsWrittenAndSaysWhy() {
+        // live mainnet wine NFTs; wallets follow the CIP and cannot show iagon://, so Iagon would have to take it to the CIP
+        String image = "iagon://675816de7e3fc1.26175981_ReserveChardonnayPG";
+
+        Optional<Cip68Metadata> saved = index(datum("name", "Wine", "image", image), POLICY, BASE, Cip68Constants.NFT_TOKEN_PREFIX);
+
+        assertImageError(saved, "222", "invalid_uri_scheme", image, "not a URI with one of the schemes CIP-68 allows (https, ipfs, ar, data)");
+        assertThat(saved.get().getImage()).isEqualTo(image);
+    }
+
+    @Test
+    void indexesFreeTextImageAsWrittenAndSaysWhy() {
+        // seen on mainnet: an image that is not a URI at all
+        Optional<Cip68Metadata> saved = index(datum("name", "Odd", "image", "image IPFS here"), POLICY, BASE, Cip68Constants.NFT_TOKEN_PREFIX);
+
+        assertImageError(saved, "222", "invalid_uri_scheme", "image IPFS here", "not a URI");
+        assertThat(saved.get().getImage()).isEqualTo("image IPFS here");
     }
 
     @Test
@@ -148,6 +160,7 @@ class Cip68StrictImageTest {
             Optional<Cip68Metadata> saved = index(datum("name", "Ok", "image", image), POLICY, BASE, Cip68Constants.NFT_TOKEN_PREFIX);
 
             assertThat(saved).as(image).get().extracting(Cip68Metadata::getImage).isEqualTo(image);
+            assertThat(saved.get().getValidationErrors()).as(image).isEmpty();
         }
         assertThat(warnings()).isEmpty();
     }
@@ -167,27 +180,32 @@ class Cip68StrictImageTest {
     }
 
     @Test
-    void keepsAFungibleTokenWhoseLogoHasAnotherSchemeButLeavesTheLogoOut() {
-        assertLogoLeftOut("iagon://6911e6dd275fee62fb8917ba");
+    void keepsAFungibleTokenWhoseLogoHasAnotherSchemeAndReportsTheLogo() {
+        assertLogoKeptWithError("iagon://6911e6dd275fee62fb8917ba");
     }
 
     @Test
-    void keepsAFungibleTokenWhoseLogoIsABareIpfsHashButLeavesTheLogoOut() {
-        assertLogoLeftOut("QmZPgijpUjVjHbwJyTWW76nBrRzeMescSk4VUeL1ahbs8j");
+    void keepsAFungibleTokenWhoseLogoIsABareIpfsHashAndReportsTheLogo() {
+        assertLogoKeptWithError("QmZPgijpUjVjHbwJyTWW76nBrRzeMescSk4VUeL1ahbs8j");
     }
 
-    private void assertLogoLeftOut(String logo) {
+    private void assertLogoKeptWithError(String logo) {
         Optional<Cip68Metadata> saved = index(datum("name", "Coin", "description", "A coin", "logo", logo),
                 POLICY, BASE, Cip68Constants.FUNGIBLE_TOKEN_PREFIX);
 
         assertThat(saved).get().satisfies(row -> {
-            assertThat(row.getLogo()).isNull();
+            assertThat(row.getLogo()).isEqualTo(logo);
             assertThat(row.getName()).isEqualTo("Coin");
             assertThat(row.getDescription()).isEqualTo("A coin");
             assertThat(row.getLabel()).isEqualTo(Cip68Constants.LABEL_FT);
+            assertThat(row.getValidationErrors()).singleElement().satisfies(e -> {
+                assertThat(e.fieldName()).isEqualTo("logo");
+                assertThat(e.fieldCategory().name()).isEqualTo("OPTIONAL");
+                assertThat(e.code()).isEqualTo("invalid_uri_scheme");
+                assertThat(e.error()).contains("logo '" + logo + "'").contains("not a URI");
+            });
         });
-        assertThat(warnings()).singleElement().satisfies(w -> assertThat(w)
-                .contains("dropping the logo and keeping the rest").contains("its logo '" + logo + "'").contains("not a URI"));
+        assertThat(warnings()).isEmpty();
     }
 
     @Test

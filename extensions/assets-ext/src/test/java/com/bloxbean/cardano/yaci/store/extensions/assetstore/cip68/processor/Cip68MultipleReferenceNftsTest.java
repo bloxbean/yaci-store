@@ -94,13 +94,20 @@ class Cip68MultipleReferenceNftsTest {
     }
 
     @Test
-    void indexesOnlyTheReferenceNftsThatHaveAnEntry() {
+    void indexesEveryReferenceNftAndReportsTheOneWithoutAnEntry() {
         // three reference NFTs in the output, but the datum has an entry for two of them
         String datum = nestedDatum(Map.of(A, nft("Token A"), C, nft("Token C")));
 
         List<Cip68Metadata> rows = index(output(datum, refUnit(A), refUnit(B), refUnit(C)));
 
-        assertThat(rows).extracting(Cip68Metadata::getName).containsExactlyInAnyOrder("Token A", "Token C");
+        // the one without an entry is indexed with no metadata, and the error says why
+        assertThat(rows).extracting(Cip68Metadata::getName).containsExactlyInAnyOrder("Token A", null, "Token C");
+        assertThat(rows).filteredOn(row -> row.getName() == null).singleElement().satisfies(row -> {
+            assertThat(row.getAssetName()).isEqualTo(REF + B);
+            assertThat(row.getValidationErrors()).extracting(e -> e.code()).contains("no_nested_entry");
+        });
+        assertThat(rows).filteredOn(row -> row.getName() != null)
+                .allSatisfy(row -> assertThat(row.getValidationErrors()).extracting(e -> e.code()).doesNotContain("no_nested_entry"));
     }
 
     @Test

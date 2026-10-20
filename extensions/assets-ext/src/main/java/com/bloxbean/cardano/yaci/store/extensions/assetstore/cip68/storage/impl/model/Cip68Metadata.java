@@ -25,13 +25,6 @@ import java.util.Map;
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 public class Cip68Metadata {
 
-    // Widths of the fixed-length text columns. The datum is unbounded on-chain input, so the
-    // parser drops longer values rather than letting the insert fail and stop the sync.
-    public static final int NAME_MAX_LENGTH = 255;
-    public static final int TICKER_MAX_LENGTH = 32;
-    public static final int URL_MAX_LENGTH = 250;
-    public static final int MEDIA_TYPE_MAX_LENGTH = 255;
-
     /** Policy id: exactly 28 bytes = 56 hex chars (Blake2b-224). Protocol-bounded. */
     @Id
     @Column(name = "policy_id", length = 56, nullable = false)
@@ -79,8 +72,9 @@ public class Cip68Metadata {
     @Column(nullable = false)
     private Integer label;
 
-    /** CIP-68 metadata 'name': variable UTF-8 string from the datum. */
-    @Column(length = NAME_MAX_LENGTH)
+    /** CIP-68 metadata 'name': variable UTF-8 string from the datum. Unbounded: what is on-chain is stored, a datum is at most one transaction (16 KB). */
+    @Column(columnDefinition = "TEXT")
+    @Nullable
     private String name;
 
     /** CIP-68 'description': arbitrary multi-sentence text; stored as TEXT. */
@@ -89,12 +83,12 @@ public class Cip68Metadata {
     private String description;
 
     /** CIP-68 'ticker': short symbol (typically only label 333/444). */
-    @Column(length = TICKER_MAX_LENGTH)
+    @Column(columnDefinition = "TEXT")
     @Nullable
     private String ticker;
 
-    /** CIP-68 'url': aligns with CIP-26 url cap of 250 chars. */
-    @Column(length = URL_MAX_LENGTH)
+    /** CIP-68 'url'. */
+    @Column(columnDefinition = "TEXT")
     @Nullable
     private String url;
 
@@ -123,7 +117,7 @@ public class Cip68Metadata {
     private String image;
 
     /** CIP-68 NFT 'mediaType': MIME type of the image (e.g. image/png). */
-    @Column(name = "media_type", length = MEDIA_TYPE_MAX_LENGTH)
+    @Column(name = "media_type", columnDefinition = "TEXT")
     @Nullable
     private String mediaType;
 

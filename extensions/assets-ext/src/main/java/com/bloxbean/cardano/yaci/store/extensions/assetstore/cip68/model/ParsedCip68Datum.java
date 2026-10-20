@@ -1,7 +1,9 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model;
 
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.validation.ValidationError;
 import jakarta.annotation.Nullable;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -22,6 +24,10 @@ import java.util.Map;
  * }</pre>
  * Either key may be absent. The {@link #properties} field as a whole may be {@code null}
  * if the datum has no files and no additional properties beyond the well-known scalars.
+ * <p>
+ * {@link #validationErrors} are the ways the datum departs from CIP-68 that do not depend on the label of the token
+ * (a wrong type, a version CIP-68 does not define, a Plutus constructor in a property, ...). What a label requires
+ * is checked later, by {@code Cip68Validator}.
  */
 public record ParsedCip68Datum(
         @Nullable Long decimals,
@@ -30,14 +36,19 @@ public record ParsedCip68Datum(
         @Nullable String name,
         @Nullable String ticker,
         @Nullable String url,
-        Long version,
+        @Nullable Long version,
         @Nullable String image,
         @Nullable String mediaType,
-        @Nullable Map<String, Object> properties
+        @Nullable Map<String, Object> properties,
+        List<ValidationError> validationErrors
 ) {
-    /** The same datum without its {@code logo}. */
-    public ParsedCip68Datum withoutLogo() {
-        return new ParsedCip68Datum(decimals, description, null, name, ticker, url, version, image, mediaType, properties);
+
+    /** A datum that departs from nothing the parser checks (tests and callers that do not care about errors). */
+    public ParsedCip68Datum(@Nullable Long decimals, @Nullable String description, @Nullable String logo,
+                            @Nullable String name, @Nullable String ticker, @Nullable String url,
+                            @Nullable Long version, @Nullable String image, @Nullable String mediaType,
+                            @Nullable Map<String, Object> properties) {
+        this(decimals, description, logo, name, ticker, url, version, image, mediaType, properties, List.of());
     }
 
     /**

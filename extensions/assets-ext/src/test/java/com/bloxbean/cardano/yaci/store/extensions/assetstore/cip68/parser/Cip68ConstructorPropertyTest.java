@@ -28,8 +28,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * The generic CIP-68 definition allows a metadata value to be a map, a list, an integer or a byte string; Plutus
  * data of any kind is allowed only in {@code extra}. A property whose value holds a constructor is therefore not
- * valid metadata. It is dropped with a warning that names the token and the property, and the rest of the datum,
- * and the token, are kept.
+ * valid metadata, but it is not dropped: it is stored as {@code {"constructor": n, "fields": [...]}} and reported once
+ * with a {@code plutus_constructor} error, so the owner can fix it (ADR 0006).
  */
 class Cip68ConstructorPropertyTest {
 
@@ -55,52 +55,63 @@ class Cip68ConstructorPropertyTest {
     }
 
     @Test
-    void dropsAConstructorPropertyKeepsTheRestAndWarns() {
+    void keepsAConstructorPropertyAndReportsIt() {
         ParsedCip68Datum parsed = parse(properties(
                 text("name", "Voucher"), text("description", "d"), text("image", "ipfs://Qm"),
-                entry("owner", constr(0, BytesPlutusData.of(new byte[]{1, 2, 3}))),
+                entry("owner", constr(0, BytesPlutusData.of(new byte[]{(byte) 0xff, 1, 2}))),
                 entry("tokens", BigIntPlutusData.of(5)),
                 text("note", "kept")));
 
         assertThat(parsed.name()).isEqualTo("Voucher");
-        assertThat(additional(parsed)).containsOnlyKeys("tokens", "note");
+        assertThat(additional(parsed)).containsOnlyKeys("owner", "tokens", "note");
         assertThat(additional(parsed)).containsEntry("tokens", BigInteger.valueOf(5)).containsEntry("note", "kept");
-        assertThat(warnings()).singleElement().satisfies(w -> assertThat(w)
-                .contains(POLICY).contains(ASSET_NAME).contains("'owner'").contains("constructor"));
+        // a constructor is stored as {constructor, fields}; the bytes that are not text stay hex
+        assertThat(additional(parsed).get("owner")).isEqualTo(Map.of("constructor", 0L, "fields", List.of("ff0102")));
+        assertThat(parsed.validationErrors()).singleElement().satisfies(e -> {
+            assertThat(e.cip()).isEqualTo("CIP-68");
+            assertThat(e.fieldName()).isEqualTo("properties.owner");
+            assertThat(e.fieldCategory().name()).isEqualTo("OPTIONAL");
+            assertThat(e.code()).isEqualTo("plutus_constructor");
+        });
+        assertThat(warnings()).isEmpty();
     }
 
     @Test
-    void dropsThePropertyWhenTheConstructorIsInsideAList() {
+    void keepsAPropertyWhoseConstructorIsInsideAList() {
         ParsedCip68Datum parsed = parse(properties(
                 text("name", "N"), entry("holders", ListPlutusData.of(BigIntPlutusData.of(1), constr(1))), text("kept", "yes")));
 
-        assertThat(additional(parsed)).containsOnlyKeys("kept");
-        assertThat(warnings()).singleElement().satisfies(w -> assertThat(w).contains("'holders'"));
+        assertThat(additional(parsed)).containsOnlyKeys("holders", "kept");
+        assertThat(additional(parsed).get("holders"))
+                .isEqualTo(List.of(BigInteger.ONE, Map.of("constructor", 1L, "fields", List.of())));
+        assertThat(parsed.validationErrors()).singleElement().satisfies(e -> assertThat(e.fieldName()).isEqualTo("properties.holders"));
     }
 
     @Test
-    void dropsThePropertyWhenTheConstructorIsInsideAMap() {
+    void keepsAPropertyWhoseConstructorIsInsideAMap() {
         MapPlutusData inner = new MapPlutusData();
         inner.put(BytesPlutusData.of("a"), BigIntPlutusData.of(1));
         inner.put(BytesPlutusData.of("b"), constr(0));
 
         ParsedCip68Datum parsed = parse(properties(text("name", "N"), entry("nested", inner), text("kept", "yes")));
 
-        assertThat(additional(parsed)).containsOnlyKeys("kept");
-        assertThat(warnings()).singleElement().satisfies(w -> assertThat(w).contains("'nested'"));
+        assertThat(additional(parsed)).containsOnlyKeys("nested", "kept");
+        assertThat(parsed.validationErrors()).singleElement().satisfies(e -> assertThat(e.fieldName()).isEqualTo("properties.nested"));
     }
 
     @Test
-    void dropsOneWarningPerDroppedProperty() {
+    void reportsOneErrorPerPropertyThatHoldsAConstructor() {
         ParsedCip68Datum parsed = parse(properties(
-                text("name", "N"), entry("seed", constr(0)), entry("owner", constr(0)), text("kept", "yes")));
+                text("name", "N"), entry("seed", constr(0, constr(0))), entry("owner", constr(0)), text("kept", "yes")));
 
-        assertThat(additional(parsed)).containsOnlyKeys("kept");
-        assertThat(warnings()).hasSize(2);
+        assertThat(additional(parsed)).containsOnlyKeys("seed", "owner", "kept");
+        // a constructor inside a constructor is still one error for the property
+        assertThat(parsed.validationErrors()).extracting(e -> e.fieldName())
+                .containsExactlyInAnyOrder("properties.seed", "properties.owner");
     }
 
     @Test
-    void dropsAConstructorPropertyOfAFileEntryAndKeepsTheFile() {
+    void keepsAConstructorPropertyOfAFileEntryAndReportsIt() {
         MapPlutusData file = new MapPlutusData();
         file.put(BytesPlutusData.of("src"), BytesPlutusData.of("ipfs://Qm"));
         file.put(BytesPlutusData.of("mediaType"), BytesPlutusData.of("image/png"));
@@ -112,13 +123,13 @@ class Cip68ConstructorPropertyTest {
         List<Map<String, Object>> files = (List<Map<String, Object>>) parsed.properties().get("files");
         assertThat(files).singleElement().satisfies(f -> {
             assertThat(f).containsEntry("src", "ipfs://Qm").containsEntry("mediaType", "image/png");
-            assertThat(f).doesNotContainKey("extra");
+            assertThat(f).containsEntry("extra", Map.of("constructor", 0L, "fields", List.of()));
         });
-        assertThat(warnings()).singleElement().satisfies(w -> assertThat(w).contains("files[].extra"));
+        assertThat(parsed.validationErrors()).singleElement().satisfies(e -> assertThat(e.fieldName()).isEqualTo("files[].extra"));
     }
 
     @Test
-    void keepsEverythingTheCipAllowsWithoutWarning() {
+    void keepsEverythingTheCipAllowsWithoutAnError() {
         MapPlutusData map = new MapPlutusData();
         map.put(BytesPlutusData.of("k"), BigIntPlutusData.of(1));
 
@@ -131,26 +142,28 @@ class Cip68ConstructorPropertyTest {
 
         assertThat(additional(parsed)).containsOnlyKeys("int", "list", "map", "bytes");
         assertThat(additional(parsed).get("int")).isEqualTo(new BigInteger("123456789012345678901234567890"));
+        assertThat(parsed.validationErrors()).isEmpty();
         assertThat(warnings()).isEmpty();
     }
 
     @Test
-    void aLongPropertyNameIsCutInTheWarning() {
+    void aLongPropertyNameIsCutInTheError() {
         String key = "k".repeat(300);
 
-        parse(properties(text("name", "N"), entry(key, constr(0))));
+        ParsedCip68Datum parsed = parse(properties(text("name", "N"), entry(key, constr(0))));
 
-        assertThat(warnings()).singleElement().satisfies(w -> assertThat(w).contains("k".repeat(60) + "...").doesNotContain("k".repeat(61)));
+        assertThat(parsed.validationErrors()).singleElement().satisfies(e ->
+                assertThat(e.fieldName()).contains("k".repeat(60) + "...").doesNotContain("k".repeat(61)));
     }
 
     @Test
-    void warnsWithoutATokenWhenThereIsNone() {
+    void reportsTheConstructorWithoutATokenWhenThereIsNone() {
         // parse(datum) without the reference NFT, as the single-argument overload does
         String hex = datum(properties(text("name", "N"), entry("seed", constr(0))));
         ParsedCip68Datum parsed = parser.parse(hex).orElseThrow();
 
-        assertThat(additional(parsed)).isNull();
-        assertThat(warnings()).singleElement().satisfies(w -> assertThat(w).contains("'seed'"));
+        assertThat(additional(parsed)).containsOnlyKeys("seed");
+        assertThat(parsed.validationErrors()).singleElement().satisfies(e -> assertThat(e.fieldName()).isEqualTo("properties.seed"));
     }
 
     // ---------- helpers ----------

@@ -70,37 +70,38 @@ class Cip68ProcessorH2IT {
     }
 
     @Test
-    void storesNameAtColumnWidth() {
-        processAndFlush("N".repeat(Cip68Metadata.NAME_MAX_LENGTH));
+    void storesAnythingTheChainHoldsWithoutALengthCap() {
+        // the columns are TEXT: a long name, and one whose characters take two UTF-16 units each, are stored as written
+        String longName = "N".repeat(5_000) + "🚀".repeat(300);
+        processAndFlush(longName);
 
         assertThat(repository.findAll())
                 .singleElement()
-                .satisfies(m -> assertThat(m.getName()).hasSize(Cip68Metadata.NAME_MAX_LENGTH));
+                .satisfies(m -> assertThat(m.getName()).isEqualTo(longName));
     }
 
     @Test
-    void skipsDatumWithOversizedNameWithoutFailingTheInsert() {
-        assertThatCode(() -> processAndFlush("N".repeat(Cip68Metadata.NAME_MAX_LENGTH + 1)))
-                .doesNotThrowAnyException();
+    void storesTheValidationErrorsAsJsonAndReadsThemBack() {
+        // no description on a 333 token: indexed, with the error
+        processor.processTransaction(eventWithDatum(datum("A name", false)));
+        entityManager.flush();
+        entityManager.clear();
 
-        assertThat(repository.count()).isZero();
-    }
-
-    @Test
-    void skipsDatumWhoseNameOverflowsH2InUtf16Units() {
-        // 128 emoji = 128 code points but 256 UTF-16 units: fits a Postgres VARCHAR(255), not H2's
-        assertThatCode(() -> processAndFlush("🚀".repeat(128)))
-                .doesNotThrowAnyException();
-
-        assertThat(repository.count()).isZero();
+        assertThat(repository.findAll()).singleElement().satisfies(m ->
+                assertThat(m.getValidationErrors()).singleElement().satisfies(e -> {
+                    assertThat(e.cip()).isEqualTo("CIP-68");
+                    assertThat(e.subStandard()).isEqualTo("333");
+                    assertThat(e.fieldName()).isEqualTo("description");
+                    assertThat(e.fieldCategory().name()).isEqualTo("MANDATORY");
+                }));
     }
 
     private void processAndFlush(String name) {
-        processor.processTransaction(eventWithDatum(name));
+        processor.processTransaction(eventWithDatum(datum(name, true)));
         entityManager.flush();
     }
 
-    private static AddressUtxoEvent eventWithDatum(String name) {
+    private static AddressUtxoEvent eventWithDatum(String inlineDatum) {
         Amt refNft = Amt.builder()
                 .unit(POLICY_ID + REF_NFT_ASSET_NAME)
                 .quantity(BigInteger.ONE)
@@ -109,7 +110,7 @@ class Cip68ProcessorH2IT {
         AddressUtxo utxo = AddressUtxo.builder()
                 .txHash(TX_HASH)
                 .txIndex(0)
-                .inlineDatum(datum(name))
+                .inlineDatum(inlineDatum)
                 .amounts(List.of(refNft))
                 .build();
 
@@ -119,10 +120,12 @@ class Cip68ProcessorH2IT {
                 .build();
     }
 
-    private static String datum(String name) {
+    private static String datum(String name, boolean withDescription) {
         MapPlutusData properties = new MapPlutusData();
         properties.put(BytesPlutusData.of("name"), BytesPlutusData.of(name));
-        properties.put(BytesPlutusData.of("description"), BytesPlutusData.of("Desc"));
+        if (withDescription) {
+            properties.put(BytesPlutusData.of("description"), BytesPlutusData.of("Desc"));
+        }
 
         ConstrPlutusData datum = ConstrPlutusData.of(0, properties, BigIntPlutusData.of(1));
         try {

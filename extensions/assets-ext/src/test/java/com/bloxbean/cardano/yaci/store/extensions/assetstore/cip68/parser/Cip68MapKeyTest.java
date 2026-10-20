@@ -97,18 +97,24 @@ class Cip68MapKeyTest {
     }
 
     @Test
-    void aListMapOrConstructorKeyIsLeftOutWithAWarning() {
+    void aListMapOrConstructorKeyIsLeftOutWithAnError() {
         MapPlutusData props = name();
         props.put(ListPlutusData.of(BigIntPlutusData.of(1)), BytesPlutusData.of("a"));
         props.put(new MapPlutusData(), BytesPlutusData.of("b"));
         props.put(ConstrPlutusData.of(0), BytesPlutusData.of("c"));
         props.put(BytesPlutusData.of("kept"), BytesPlutusData.of("yes"));
 
-        assertThat(additional(parse(props))).containsOnlyKeys("kept");
-        assertThat(warnings()).hasSize(3);
-        assertThat(warnings()).anySatisfy(w -> assertThat(w).contains(TOKEN.policyId()).contains("key is a list"));
-        assertThat(warnings()).anySatisfy(w -> assertThat(w).contains("key is a map"));
-        assertThat(warnings()).anySatisfy(w -> assertThat(w).contains("key is a constructor"));
+        ParsedCip68Datum parsed = parse(props);
+
+        assertThat(additional(parsed)).containsOnlyKeys("kept");
+        assertThat(parsed.validationErrors()).hasSize(3).allSatisfy(e -> {
+            assertThat(e.code()).isEqualTo("unsupported_key");
+            assertThat(e.fieldCategory().name()).isEqualTo("OPTIONAL");
+        });
+        assertThat(parsed.validationErrors()).anySatisfy(e -> assertThat(e.error()).contains("list as key"));
+        assertThat(parsed.validationErrors()).anySatisfy(e -> assertThat(e.error()).contains("map as key"));
+        assertThat(parsed.validationErrors()).anySatisfy(e -> assertThat(e.error()).contains("constructor as key"));
+        assertThat(warnings()).isEmpty();
     }
 
     @Test
@@ -117,8 +123,13 @@ class Cip68MapKeyTest {
         props.put(BytesPlutusData.of("1"), BytesPlutusData.of("from bytes"));
         props.put(BigIntPlutusData.of(1), BytesPlutusData.of("from integer"));
 
-        assertThat(additional(parse(props))).containsEntry("1", "from bytes");
-        assertThat(warnings()).singleElement().satisfies(w -> assertThat(w).contains("two keys read as '1'").contains("byte string key"));
+        ParsedCip68Datum parsed = parse(props);
+
+        assertThat(additional(parsed)).containsEntry("1", "from bytes");
+        assertThat(parsed.validationErrors()).singleElement().satisfies(e -> {
+            assertThat(e.code()).isEqualTo("key_collision");
+            assertThat(e.error()).contains("two keys read as '1'").contains("byte string key");
+        });
     }
 
     @Test

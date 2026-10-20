@@ -27,8 +27,9 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * CIP-68 defines datum versions 1 to 4. A datum with another version is not indexed: one warning names the token and
- * the version, and the datum is counted as skipped with the reason {@code invalid_version}. For versions 1 to 4 the
+ * CIP-68 defines datum versions 1 to 4. A datum with another version is still indexed, with a MANDATORY error on the
+ * {@code version} that says which versions the CIP defines (ADR 0006): Greenland Reserve Coin has version 0 and is a
+ * live token. For versions 1 to 4 the
  * layout still comes from the structure, as the CIP's retrieval steps say: a "721" key means nested metadata. The two
  * real datums are the only ones on mainnet that were not version 1, 2 or 3, and both are plain flat metadata maps.
  */
@@ -87,56 +88,80 @@ class Cip68VersionTest {
         assertThat(warnings()).isEmpty();
     }
 
+    private static void assertUndefinedVersion(ParsedCip68Datum parsed, long version) {
+        assertThat(parsed.version()).isEqualTo(version);
+        assertThat(parsed.validationErrors()).singleElement().satisfies(e -> {
+            assertThat(e.cip()).isEqualTo("CIP-68");
+            assertThat(e.fieldName()).isEqualTo("version");
+            assertThat(e.fieldCategory().name()).isEqualTo("MANDATORY");
+            assertThat(e.code()).isEqualTo("undefined_version");
+            assertThat(e.error()).contains("version " + version).contains("is not one CIP-68 defines (1 to 4)");
+        });
+    }
+
     @Test
-    void rejectsVersionsTheCipDoesNotDefineWithOneWarningEach() throws Exception {
+    void indexesVersionsTheCipDoesNotDefineWithAnError() throws Exception {
         for (long version : new long[]{0, 5, 100, -1, Long.MAX_VALUE}) {
-            logs.list.clear();
+            ParsedCip68Datum parsed = parser.parse(datum(version), REF).orElseThrow();
 
-            assertThat(parser.parse(datum(version), REF)).as("version %d", version).isEmpty();
-
-            assertThat(warnings()).as("version %d", version).singleElement().satisfies(w -> assertThat(w)
-                    .contains("Skipping CIP-68 datum").contains("version " + version).contains(POLICY).contains(REF.assetName())
-                    .contains("is not one CIP-68 defines (1 to 4)"));
+            assertUndefinedVersion(parsed, version);
+            assertThat(parsed.name()).isEqualTo("Token");
         }
-        assertThat(invalidVersions()).isEqualTo(5);
+        assertThat(warnings()).isEmpty();
     }
 
     @Test
-    void namesNoTokenWhenThereIsNoReferenceNft() throws Exception {
-        assertThat(parser.parse(datum(7))).isEmpty();
-
-        assertThat(warnings()).singleElement().satisfies(w -> assertThat(w).contains("version 7"));
+    void indexesAnUndefinedVersionWhenThereIsNoReferenceNft() throws Exception {
+        assertUndefinedVersion(parser.parse(datum(7)).orElseThrow(), 7);
     }
 
     @Test
-    void doesNotCountTheVersionsItAccepts() throws Exception {
+    void definedVersionsHaveNoErrorAndCountNothing() throws Exception {
         for (long version = 1; version <= 4; version++) {
-            parser.parse(datum(version), REF);
+            assertThat(parser.parse(datum(version), REF).orElseThrow().validationErrors()).as("version %d", version).isEmpty();
         }
-
-        assertThat(invalidVersions()).isZero();
     }
 
     @Test
-    void rejectsTheRealMainnetVersion100Datum() {
+    void indexesTheRealMainnetVersion100Datum() {
         // a test mint, replaced about 44,700 slots later by a valid version 1 datum and then burned
         AssetType ref = new AssetType(HOSKY_VERSION_100_POLICY, HOSKY_VERSION_100_ASSET);
 
-        assertThat(parser.parse(HOSKY_VERSION_100_DATUM, ref)).isEmpty();
+        ParsedCip68Datum parsed = parser.parse(HOSKY_VERSION_100_DATUM, ref).orElseThrow();
 
-        assertThat(warnings()).singleElement().satisfies(w -> assertThat(w)
-                .contains("version 100").contains(HOSKY_VERSION_100_POLICY).contains(HOSKY_VERSION_100_ASSET));
+        assertUndefinedVersion(parsed, 100);
+        assertThat(parsed.name()).isEqualTo("HOSKY 10K NFT 0002");
     }
 
     @Test
-    void rejectsTheRealMainnetVersion0Datum() {
-        // Greenland Reserve Coin, a live fungible token; it is served from CIP-26 instead
+    void indexesTheRealMainnetVersion0Datum() {
+        // Greenland Reserve Coin, a live fungible token: it is returned, with the version error
         AssetType ref = new AssetType(GNRC_VERSION_0_POLICY, GNRC_VERSION_0_ASSET);
 
-        assertThat(parser.parse(GNRC_VERSION_0_DATUM, ref)).isEmpty();
+        ParsedCip68Datum parsed = parser.parse(GNRC_VERSION_0_DATUM, ref).orElseThrow();
 
-        assertThat(warnings()).singleElement().satisfies(w -> assertThat(w)
-                .contains("version 0").contains(GNRC_VERSION_0_POLICY));
+        assertUndefinedVersion(parsed, 0);
+        assertThat(parsed.name()).isEqualTo("Greenland Reserve Coin");
+        assertThat(parsed.ticker()).isEqualTo("GNRC");
+        assertThat(parsed.decimals()).isEqualTo(6);
+    }
+
+    @Test
+    void indexesAVersionThatDoesNotFitALongWithoutAVersionAndAnError() throws Exception {
+        for (BigInteger version : new BigInteger[]{BigInteger.TWO.pow(63), BigInteger.TWO.pow(64).add(BigInteger.ONE)}) {
+            MapPlutusData properties = new MapPlutusData();
+            properties.put(BytesPlutusData.of("name"), BytesPlutusData.of("Token"));
+            String hex = HexUtil.encodeHexString(CborSerializationUtil.serialize(
+                    ConstrPlutusData.of(0, properties, BigIntPlutusData.of(version)).serialize()));
+
+            ParsedCip68Datum parsed = parser.parse(hex, REF).orElseThrow();
+
+            assertThat(parsed.version()).isNull();
+            assertThat(parsed.validationErrors()).singleElement().satisfies(e -> {
+                assertThat(e.fieldName()).isEqualTo("version");
+                assertThat(e.code()).isEqualTo("out_of_range");
+            });
+        }
     }
 
     @Test
@@ -150,9 +175,11 @@ class Cip68VersionTest {
     }
 
     @Test
-    void rejectsANestedDatumOfAVersionTheCipDoesNotDefine() throws Exception {
-        assertThat(parser.parse(nestedDatum(5), REF)).isEmpty();
-        assertThat(warnings()).singleElement().satisfies(w -> assertThat(w).contains("version 5"));
+    void indexesANestedDatumOfAVersionTheCipDoesNotDefineWithAnError() throws Exception {
+        ParsedCip68Datum parsed = parser.parse(nestedDatum(5), REF).orElseThrow();
+
+        assertUndefinedVersion(parsed, 5);
+        assertThat(parsed.name()).isEqualTo("Nested");
     }
 
     @Test
@@ -160,11 +187,6 @@ class Cip68VersionTest {
         assertThat(parser.hasNestedMetadata(datum(4))).isFalse();
         assertThat(parser.parse(datum(4), REF).orElseThrow().name()).isEqualTo("Token");
         assertThat(warnings()).isEmpty();
-    }
-
-    private double invalidVersions() {
-        var counter = registry.find(Cip68Metrics.SKIPPED).tag("label", "unknown").tag("reason", "invalid_version").counter();
-        return counter == null ? 0 : counter.count();
     }
 
     private List<String> warnings() {
