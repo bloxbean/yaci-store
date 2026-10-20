@@ -175,8 +175,4 @@ class AssetsReaderTest {
         return new Subject(subjectId, metadata, null);
     }
 
-    private static Subject subjectWithoutMetadata(String subjectId) {
-        // no name → Metadata.isValid() = false → batch facade filters this out
-        return new Subject(subjectId, Metadata.empty(), null);
-    }
 }

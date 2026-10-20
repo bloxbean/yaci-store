@@ -155,8 +155,7 @@ public class Cip68Processor {
             errors.addAll(labelErrors);
 
             int label = labels.getFirst();
-            Cip68Metadata entity = buildCip68Metadata(parsed, errors, refNft, output.getInlineDatum(), slot,
-                    output.getTxHash(), output.getTxIndex(), label);
+            Cip68Metadata entity = buildCip68Metadata(parsed, errors, refNft, output, slot, label);
             requireSerializableProperties(entity);
             metrics.datumIndexed(label);
             // what the datum itself gets wrong is the same for every reference NFT of a shared flat datum: count it once
@@ -326,17 +325,15 @@ public class Cip68Processor {
     private Cip68Metadata buildCip68Metadata(ParsedCip68Datum parsed,
                                              List<ValidationError> validationErrors,
                                              AssetType assetType,
-                                             String datum,
+                                             AddressUtxo output,
                                              Long slot,
-                                             String txHash,
-                                             Integer txIndex,
                                              int label) {
         return Cip68Metadata.builder()
                 .policyId(assetType.policyId())
                 .assetName(assetType.assetName())
                 .slot(slot)
-                .txHash(txHash)
-                .txIndex(txIndex)
+                .txHash(output.getTxHash())
+                .txIndex(output.getTxIndex())
                 .label(label)
                 .name(parsed.name())
                 .description(parsed.description())
@@ -347,7 +344,7 @@ public class Cip68Processor {
                 .image(parsed.image())
                 .mediaType(parsed.mediaType())
                 .version(parsed.version())
-                .datum(datum)
+                .datum(output.getInlineDatum())
                 .properties(parsed.properties())
                 .validationErrors(validationErrors)
                 .lastSyncedAt(LocalDateTime.now())
