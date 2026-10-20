@@ -29,7 +29,7 @@ input: a transaction with a 1,100-level datum was accepted into a block by `card
 failure is Jackson's, before any SQL is sent, so it does not depend on the database (the test ran on H2; it has not been run
 on PostgreSQL). It was fixed at the source
 (ADR 0002 decision 6: such a property is dropped at a depth of 100), but any other failure of the same kind stops the sync
-the same way. The parser already turns the failures it knows into WARNs and skips (ADR 0002 decision 9); this record is about
+the same way. The parser already turns what departs from the CIP into validation errors, and drops only an obvious attack, with a WARN (ADR 0002 decisions 6 and 8, ADR 0006); this record is about
 the ones it does not know.
 
 Two facts about the transaction make a simple fix insufficient:
@@ -78,7 +78,7 @@ solves more but costs a new extension point that no other module needs.
 *What is skipped is reported, not hidden.* A skipped datum is the case where a person must be able to find out:
 
 - One WARN with the policy id, the asset name, the exception class and message, and the datum hex, so that the datum can be
-  reproduced in a test. The stack trace goes to DEBUG, the same rule as for parse failures (ADR 0002 decision 9).
+  reproduced in a test. The stack trace goes to DEBUG, the same rule as for parse failures (ADR 0002 decision 8).
 - The counter `datums.skipped` with a new reason `processing_failure` (label `unknown`, as for `parse_failure`), so that an
   alert can use `increase()` and a rate rises visibly when something new appears on chain. Unlike the other skip reasons,
   which are expected bad data, this one means something nobody foresaw, so it is the one to alert on.
@@ -90,8 +90,9 @@ to make. One behaviour is documented instead.
 
 ## Consequences
 
-- The sync no longer stops for a CIP-68 datum. A token whose datum fails is not indexed from that datum, so what the API
-  returns for it follows the same rule as any other skipped datum: the earlier row stays (ADR 0003 decision 5).
+- The sync no longer stops for a CIP-68 datum. A token whose datum fails unexpectedly is not indexed from that datum, so the earlier
+  row of the token stays the latest (the one case, with a datum dropped as an attack, where the API still serves an earlier row,
+  ADR 0003 decision 5).
 - A skipped datum is not retried. As with the other skips, it is applied again only when the datum is processed again (a
   resync). Finding it needs the WARN or the counter, so the alert on `processing_failure` matters.
 - The savepoint costs a little on every block that has a CIP-68 datum, and the fallback costs one write per entity of the
@@ -117,6 +118,7 @@ to make. One behaviour is documented instead.
 
 - #1243 (the issue, closed by PR #1220 for failures in memory), #1265 (the remainder and this decision), #1240 and PR #1220
   (the case that exposed it)
-- ADR 0002 decisions 6 and 9: bounded values and what is reported
+- ADR 0002 decisions 6 and 8: what is dropped and what is reported
+- ADR 0006: why a datum is otherwise indexed, whatever is wrong with it
 - ADR 0003 decision 5: what the API returns when a datum is skipped
 - `Cip68Processor.processTransaction`, `BlockFetchService.stopSyncOnError`

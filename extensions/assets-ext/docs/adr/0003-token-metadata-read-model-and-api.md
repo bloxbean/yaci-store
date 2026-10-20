@@ -4,19 +4,20 @@
 
 Proposed
 
-This record describes behaviour that is on `main`. The effect of a rejected CIP-68 datum on what the API returns
-(decision 5) follows from the rules of ADR 0002, which are implemented in PR #1220 (open).
+Rewritten on 2026-10-20 for ADR 0006 (validation errors are reported, not enforced). Decisions 3, 4 and 5 and the
+`validation_errors` field are implemented on branch `feat/assets-ext-validation-errors`; before that this record described
+`main`, where a result needed a `name` and a `description` and a skipped CIP-68 update left the earlier row in the answer.
 
 ## Date
 
-2026-10-14
+2026-10-14, rewritten 2026-10-20
 
 ## Context
 
 `assets-ext` stores token metadata from two unrelated sources: CIP-26 (an off-chain registry read from Git, ADR 0001) and
 CIP-68 (on-chain datums, ADR 0002). A client does not care where a name or a logo came from. It asks for a token and
 expects one answer. The module therefore has to decide how the two sources are combined, what counts as a token that
-has metadata, which CIP-68 rows the API may serve, and which endpoints exist.
+is known, which CIP-68 rows the API may serve, how it says that a token breaks its CIP, and which endpoints exist.
 
 Two facts shape everything below:
 
@@ -27,14 +28,13 @@ Two facts shape everything below:
 
 **Not covered: CIP-25.** The metadata of NFTs minted with CIP-25 (the transaction metadata standard, label 721) is not
 indexed and not served. CIP-25 appears in the module's code only as a format that CIP-68 borrows: the nested `"721"` map
-of a version 4 datum and the splitting of long strings into chunks of at most 64 bytes (ADR 0002 decisions 5 and 7). A
+of a version 4 datum and the splitting of long strings into chunks of at most 64 bytes (ADR 0002 decisions 1 and 5). A
 token with CIP-25 metadata and no CIP-26 or CIP-68 metadata has no answer from this API.
 
 **NFT support is an initial version, not full support.** The module indexes and stores CIP-68 NFTs (label 222) and RFTs
-(label 444), with the rules of ADR 0002, so that the data exists and the rules can change before anything depends on them.
-It does not serve them (decision 4), and it has no NFT-specific DTO, service method or endpoint (the storage reader's own
-comment says they are for a later release). This record is about
-fungible tokens; read "token" in it as a fungible token unless it says otherwise.
+(label 444), with the rules of ADR 0002. It serves the RFTs, as fungible tokens (decision 4), and not the NFTs, so that the data
+exists and the rules can change before anything depends on them; it has no NFT-specific DTO, service method or endpoint. This
+record is about fungible tokens; read "token" in it as a fungible or rich fungible token unless it says otherwise.
 
 ## Decisions
 
@@ -45,7 +45,9 @@ fungible tokens; read "token" in it as a fungible token unless it says otherwise
 | `GET /subject/{subject}` | The merged metadata of one subject |
 | `POST /subject/query` | The merged metadata of up to 100 subjects |
 | `GET /cip26/{subject}` and `/cip26/{policyId}/{assetName}` | The CIP-26 row only |
-| `GET /cip68/ft/{subject}` and `/cip68/ft/{policyId}/{rawAssetName}` | The CIP-68 fungible token metadata only |
+| `GET /cip68/ft/{subject}` and `/cip68/ft/{policyId}/{rawAssetName}` | The CIP-68 fungible and rich fungible token metadata only |
+
+Every one of them returns `validation_errors` (decision 3).
 
 The merged endpoint is the one clients are meant to use. The per-standard endpoints exist so that a client, or an
 operator who suspects a wrong answer, can see what one source holds without the merge. A subject is the policy id plus
@@ -69,38 +71,50 @@ trust source, separate from the chain, which is also why it is off by default. *
 two sources, for example the name from the chain and the logo from the registry, and they need not agree with each other.
 A client that needs one source asks for it with `query_priority` or uses the per-standard endpoint.
 
-### 3. A token has metadata only if it has a name and a description
+The `validation_errors` are not merged per property: the errors of **every** source that has the token are returned, in the same
+priority order, and each names its `cip` (and, for CIP-68, its `sub_standard`). A value from one source can come with an error
+about the other source's value, which is what the client wants to know.
 
-After the merge, a result without both `name` and `description` is treated as not found: the single endpoint answers 404,
-and the batch endpoint leaves the subject out of its 200 response. `name` and `description` are therefore the two properties a
-client can rely on. When a request filters the properties with `property`, it must include both or the answer is a 400, since
-a filtered answer without them could never be valid.
+### 3. A token is returned as indexed, with the errors it has
 
-*Why:* both CIP-26 and CIP-68 fungible tokens require them (ADR 0001, ADR 0002 decision 3), so a merged result without them is
-a gap in the data, not a token with little metadata. *Trade-off:* a token that only has a `ticker` and `decimals` on chain is
-reported as unknown instead of partially known.
+After the merge, a subject is **found** if any standard has something indexed for it, and it is returned whatever is wrong with it:
+no `name` or `description` is required, and a token that breaks its CIP is a 200, not a 404. The single endpoint answers 404 only when
+no standard knows the subject, and the batch endpoint leaves such a subject out of its 200 response. A request that filters the
+properties with `property` is no longer required to include `name` and `description` (it was a 400 before).
 
-### 4. Only fungible tokens from CIP-68 are served
+Every response has a **`validation_errors`** array (`[]` when the token follows its CIP): on the merged `Subject`, on `standards.cip26` and
+`standards.cip68`, and on the per-standard endpoints. Each entry has `cip`, `sub_standard` (the CIP-68 label; absent otherwise), `field_name`,
+`field_category` (`MANDATORY` or `OPTIONAL`), `code` and `error` (ADR 0006 decision 2). A client that wants the old guarantee can reject any
+token with a `MANDATORY` error. The array is not filtered by `property`: it describes the token, not the fields asked for.
 
-The CIP-68 table stores rows for labels 222, 333 and 444, but the API reads fungible tokens only. A subject with the fungible
-prefix `0014df10` is mapped to its reference NFT (prefix `000643b0`) and the latest row of that reference NFT is returned.
-NFT and RFT rows are stored and not exposed.
+*Why:* an index that hides a token because its datum is wrong tells the owner nothing (ADR 0006). *Trade-off:* a client can no longer rely on
+`name` and `description` being present, and a token that was a 404 is now a 200 with errors. This is the one change to the contract that is not
+purely additive, and it is why the README lists it; the `validation_errors` field itself is additive.
+
+### 4. Fungible and rich fungible tokens from CIP-68 are served
+
+The CIP-68 table stores rows for labels 222, 333 and 444. A subject with the fungible prefix `0014df10`, or the rich fungible prefix `001bc280`,
+is mapped to its reference NFT (prefix `000643b0`) and the latest row of that reference NFT is returned. NFT rows are stored and not exposed.
+A rich fungible token has no `logo` in CIP-68; its `image` is served as `metadata.logo` (source `CIP_68`), as cf-token-metadata-registry does,
+and its `description` is optional (not an error). An image whose scheme the CIP does not allow is served as written, with an `invalid_uri_scheme`
+error, so a wallet can decide.
 
 The latest row is chosen **whatever its label**. A reference NFT can be updated in a transaction that also mints a user
 token of another label, so its newest row may carry label 222 although the token is fungible; filtering by label would then
-return an older row, which is worse than an unexpected label. The label decides which fields the datum must have when it is
-indexed (ADR 0002 decision 3), not what the API returns.
+return an older row, which is worse than an unexpected label. The label decides which fields are mandatory for the token (ADR 0002
+decision 3), not what the API returns.
 
-*Why fungible only:* the public API surface is fungible-token focused today, and storing NFT and RFT rows while not exposing
-them means their rules can change without a breaking API change (ADR 0002 consequences). *Trade-off:* clients that want NFT metadata
-cannot get it from this module yet.
+*Why these two:* the public API surface is fungible-token focused today, and the registry serves RFTs since cf-token-metadata-registry
+#110, so the two implementations stay comparable. Storing NFT rows while not exposing them means their rules can change without a
+breaking API change. *Trade-off:* clients that want NFT metadata cannot get it from this module yet.
 
-### 5. A skipped CIP-68 update leaves the previous row in the answer
+### 5. The newest datum is the one served
 
-The API serves the latest **stored** row. When a CIP-68 datum is skipped, nothing is written, so the row of the earlier datum
-stays the latest and is served as if it were current. The response does not say that a newer datum was refused. The full
-description, the mainnet numbers and the alternatives that were rejected are in ADR 0002 decision 10. This record only makes the
-consequence visible from the read side: **the API answers "the last accepted metadata", not "the metadata of the newest datum"**.
+The API serves the latest **stored** row, and every datum that can be decoded writes a row (ADR 0002), so the newest datum is the one
+returned, with its own errors. An update is never rejected, so there is no longer a case where the row of an earlier datum is served as if
+it were current. (Under the earlier, strict rules a skipped datum wrote nothing, and the API answered "the last accepted metadata"; that is
+gone.) A datum that is dropped as an attack (ADR 0006 decision 3) still writes nothing, so the row of the earlier datum stays; that is the one
+remaining case, and it is logged.
 
 ### 6. A batch is read with a fixed number of queries
 
@@ -116,19 +130,19 @@ the other.
 
 ## Consequences
 
-- A client can rely on `name` and `description` being present in any answer, and on each property naming its source.
+- A client can rely on each property naming its source and on `validation_errors` being there, but not on `name` and `description`:
+  it checks the errors.
 - Two clients that ask with a different `query_priority` can get different answers for the same token. That is intended.
 - The same data can answer differently before and after a CIP-26 sync, because the registry is read periodically
   (ADR 0001), while CIP-68 is updated block by block.
-- NFTs and RFTs have no API. When one is added it needs its own rules for what is served and in which shape.
-- Whatever makes a CIP-68 datum not indexed (ADR 0002) changes what this API returns only if the token had no earlier row. A
-  token with an earlier row keeps answering with it (decision 5).
+- NFTs have no API. When one is added it needs its own rules for what is served and in which shape.
+- Rows indexed before `validation_errors` existed answer with `[]`, whatever their datum; a resync computes the errors and brings in the
+  tokens that were dropped.
 
 ## Open questions
 
-- Should the response say when the CIP-68 row it serves is older than a datum that was refused? The module has the
-  information (the skip is logged and counted) but does not store it, so answering would need a record of refused datums.
-- Should NFTs and RFTs be exposed, and under which endpoint? Nothing reads them today.
+- Should the errors be limited to the fields a `property` filter asks for? Today all of them are returned.
+- Should NFTs be exposed, and under which endpoint? Nothing reads them today.
 - Should CIP-25 metadata become a third source? It would need an indexer for transaction metadata, its own rules for what is
   valid (the standard has more than one version), a place in the priority order, and an ADR of its own. Nothing in the module prepares for it.
 - Should the merged endpoint report which sources were consulted when a token is not found, so that a 404 for a registry that
@@ -136,6 +150,6 @@ the other.
 
 ## References
 
-- ADR 0001 (CIP-26 ingestion) and ADR 0002 (CIP-68 datum handling): what is stored and when a row is skipped
+- ADR 0001 (CIP-26 ingestion), ADR 0002 (CIP-68 datum handling) and ADR 0006 (validation errors): what is stored and what is reported
 - `TokenMetadataSubjectController`, `TokenQueryService`, `Metadata`, `Standards`, `Cip68StorageReaderImpl`,
   `Cip68MetadataRepository`

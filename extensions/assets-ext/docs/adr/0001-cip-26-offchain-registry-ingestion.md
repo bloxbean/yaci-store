@@ -2,11 +2,12 @@
 
 ## Status
 
-Proposed
+Proposed. Decisions 3, 4 and 5 were rewritten on 2026-10-20 for ADR 0006 (validation errors are reported, not enforced): an entry that
+breaks CIP-26 is stored with `validation_errors` instead of being rejected. Implemented on branch `feat/assets-ext-validation-errors`.
 
 ## Date
 
-2026-10-07
+2026-10-07, decisions 3 to 5 rewritten 2026-10-20
 
 ## Context
 
@@ -18,7 +19,8 @@ and still reflect removals.
 
 This ADR does not restate CIP-26. It records the choices the module made where the standard or the
 data left room, and why. For how CIP-26 and CIP-68 are combined when a subject has both, see
-[ADR 0002](0002-cip-68-onchain-datum-handling.md), section "Read model".
+[ADR 0002](0002-cip-68-onchain-datum-handling.md), section "Read model". For what the module does with an entry that does
+not follow CIP-26, see [ADR 0006](0006-validation-errors-are-reported-not-enforced.md).
 
 ## Decisions
 
@@ -57,8 +59,8 @@ sync state lives in the database next to the data.
 
 ### 3. A bad entry never blocks the sync, a recoverable failure does
 
-Each file ends in one of: inserted, skipped (no mapping, filename mismatch, rejected by
-validation), permanently failed, or transiently failed. The stored commit advances only if **no**
+Each file ends in one of: inserted (with its validation errors, if any), skipped (no mapping, filename mismatch, a subject that
+cannot be a key, a logo far beyond any real size), permanently failed, or transiently failed. The stored commit advances only if **no**
 entry failed transiently, so those entries are retried on the next run. Permanent skips do not
 hold it back.
 
@@ -70,42 +72,51 @@ unknown error were treated as permanent a recoverable problem would silently dro
 *Trade-off:* an unclassified error that is really permanent is retried on every run and shows up
 in the logs each time; it needs a person to look at it.
 
-### 4. What is accepted
+### 4. What is checked: errors for the CIP, a drop only for what cannot be stored
 
-An entry is stored only if all of these hold. Each rejection is a WARN with the subject.
+An entry is **stored as written** whatever is wrong with it, and what is wrong is kept in its `validation_errors` (ADR 0006). The checks are
+the rules of the shared `cf-tokens-cip26` library (the registry's validator) and the module's range check of `decimals`; each finding is one
+entry `{cip: "CIP-26", field_name, field_category, code, error}` (there is no `sub_standard` for CIP-26), and is returned by the API.
 
-- **The filename is the subject.** The file `<subject>.json` must contain that same `subject`.
-  Otherwise the file is skipped. Preprod's registry has 5,008 such files (about 90% of it), mostly
-  copies of one test token under padded filenames; mainnet has none.
-- **The rules of the shared `cf-tokens-cip26` library**, which is the registry's validator: `name` and
-  `description` are required, length limits apply, the subject is 56 to 120 hex characters (an even count).
-  Note that CIP-26 itself requires only the `subject`: its JSON schema lists `subject` as the one required
-  property, and `name` (at most 50 characters), `description` (at most 500), `ticker`, `decimals`, `url` and
-  `logo` are well-known properties whose values must be well-formed if present. The requirement of `name` and
-  `description` comes from the library and the registry, not from the CIP text.
-- **`decimals` is in [0, 255]** (`TokenDecimals`). The library only checks `>= 0` and does so on an
-  `int`, so the module range-checks the stored `long` first; otherwise 4294967301 would pass as 5.
-- **`name` and `description` are both required.** This is the one place where the module is
-  deliberately strict and has no leniency: a token without either has nothing useful to show and is
-  not indexed. The API enforces the same on what it returns (see ADR 0002).
+- **`name` and `description` are the two properties the registry requires**, so they are `MANDATORY`: a missing one is a `missing_value` error, and
+  one that breaks a limit (`name` over 50 characters, `description` over 500) is an `invalid_length` error on a mandatory field. Note that CIP-26
+  itself requires only the `subject`: its JSON schema lists `subject` as the one required property, and `name`, `description`, `ticker`,
+  `decimals`, `url` and `logo` are well-known properties whose values must be well-formed if present. The requirement of `name` and `description`
+  comes from the library and the registry, not from the CIP text, and it is what `field_category` reports.
+- **`ticker` (2 to 9 characters), `url` (250), `decimals`, `logo`** are `OPTIONAL`: a value outside its limit is an `invalid_length`, `wrong_type`
+  or `out_of_range` error, and the value is stored as written.
+- **`decimals` is in [0, 255]** (`TokenDecimals`). The library only checks `>= 0` and does so on an `int`, so the module range-checks the stored
+  `long` first (4294967301 would otherwise pass as 5); a value outside the range is stored and reported as `out_of_range`. A `decimals` that is
+  not a number is stored as no value, with a `wrong_type` error that quotes it (the raw string stays in the mapping).
+- **The columns have no length limit** (`TEXT`): the CIP-26 limits are reported, not enforced, so a long `name` does not fail the insert.
 
-*Why strict here:* the registry is curated input that anyone can submit to, and the shared library
-the registry itself uses already rejects an entry without them, so being lenient would mean overriding the
-registry's own validator. (The CIP does not require them; the rule is the registry's, and we follow it.) *Trade-off:* a valid-looking entry with a typo in its subject is simply absent. On preprod
-that is correct (a "Diffusion" entry with a dropped hex digit is rejected while the correct entry
-is stored), but it also means a registry mistake can hide a token: the only registry entry for the preprod
-USDM token under policy `d8906ca5…` has the policy id pasted twice (128 characters) and is not
-indexed.
+What is still dropped, with one WARN:
 
-### 5. The logo is validated and stored separately
+- **The filename is the subject.** The file `<subject>.json` must contain that same `subject`. Otherwise the file is skipped. Preprod's registry has
+  5,008 such files (about 90% of it), mostly copies of one test token under padded filenames; mainnet has none. They are spam or orphans, and the
+  rows would collide (last write wins), so they are not indexed.
+- **A subject that cannot be a key**: missing, not an even-length hex string, or not 56 to 120 characters. Nothing could look the entry up.
+- **An unparseable file** (not JSON, or not a mapping).
 
-Metadata and logo are two steps. The logo must be valid base64 and at most 64 KiB decoded; the
-image format (PNG, SVG) is not checked, so the module is not stricter than the library. A bad
-logo is skipped and the metadata is still saved. A logo with no metadata row (an orphan logo) is
-skipped.
+*Why this and not the strict rule of the first version* (which rejected an entry for any failure, including an optional field, "deliberately
+strict, with no leniency"): the entry is from the registry, which is the maintainers' own curated source, and the owners of a token whose entry
+is rejected see nothing; with errors they see what to fix. The registry also validates entries on GitHub before they are merged (the maintainers'
+statement), so few errors are expected, and those that do arrive are better returned than hidden. *Trade-off:* a registry entry with a typo
+in its subject is still absent (the subject is what keys it). On preprod that is correct (a "Diffusion" entry with a dropped hex digit is
+rejected while the correct entry is stored), but it also means a registry mistake can hide a token: the only registry entry for the preprod USDM
+token under policy `d8906ca5…` has the policy id pasted twice (128 characters) and is not indexed.
 
-*Why:* a token with good metadata and an oversized logo is still worth serving.
-*Trade-off:* a stored token can have no logo although the registry has one.
+### 5. The logo is checked and stored separately
+
+Metadata and logo are two steps. The logo should be valid base64 and at most 64 KiB decoded; the image format (PNG, SVG) is not checked, so the
+module is not stricter than the library. A logo that is not valid base64, or is over 64 KiB, is **kept as written** with an `OPTIONAL` error
+(`invalid_base64`, `too_large`) added to the row. Only a logo far beyond any real size (over about 1.4 million characters, about 1 MiB) is
+dropped, with a WARN that says it looks like an attack: the logo is then missing, and the metadata is still saved. A logo with no metadata row
+(an orphan logo) is skipped.
+
+*Why:* the registry is curated, so an oversized logo is more likely a mistake to fix than an attack, and a token with good metadata and a big
+logo is still worth serving. *Trade-off:* a stored token can have a logo that no client can show, which the error says; and a logo between 64 KiB
+and 1 MiB is stored in the row.
 
 ### 6. Removals are followed, with a guard
 
@@ -129,8 +140,9 @@ CF registry's V1 API cannot be reproduced from it.
 
 ## Consequences
 
-- A registry file that fails any of the above is logged and left out. The WARN lines are the only
-  record, so they are the first place to look when a token is missing.
+- A registry file that is dropped (a subject mismatch, an unusable subject, an unparseable file, an attack-sized logo) is logged and left out. The
+  WARN lines are the only record, so they are the first place to look when a token is missing. An entry that breaks CIP-26 is not dropped: it is in
+  the API with its errors, so the API is the first place to look for what is wrong with a token that is there.
 - Preprod logs thousands of "Skipping ... filename does not match" lines on the first sync. That
   is expected.
 
@@ -144,8 +156,8 @@ CF registry's V1 API cannot be reproduced from it.
   subjects that are gone) when either commit does not resolve. It is not done.
 - A known registry mistake (such as the USDM entry above) cannot be fixed on our side without
   overriding the registry; today the answer is to fix it upstream.
-- Whether a failed validation should be counted and exposed (for example through the health
-  indicator) rather than only logged.
+- Whether the errors of CIP-26 entries should also be counted (a Micrometer counter by code, as for CIP-68). They are in the rows now, so a count
+  can also be read from the database; the sync logs only a tally of what it dropped.
 
 ## References
 
