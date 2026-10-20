@@ -133,6 +133,7 @@ class UnspentUtxoTablePostgresIT {
     @Test
     void anUpsertOverwritesTheRow() {
         storage.saveUnspent(List.of(output(hash(3), 0, 100)));
+        commit();   // the row exists, so the next commit's write is an update on conflict
         AddressUtxo resolved = output(hash(3), 0, 100);
         resolved.setOwnerStakeAddr("stake_test1resolved");
         storage.saveUnspent(List.of(resolved));

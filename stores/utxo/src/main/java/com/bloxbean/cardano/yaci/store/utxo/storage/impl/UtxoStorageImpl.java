@@ -44,15 +44,18 @@ import static org.jooq.impl.DSL.selectOne;
  * is active}, keeps it equal to address_utxo minus tx_input.
  *
  * <p>address_utxo_unspent is written from the same calls as address_utxo, so plugin filters, Byron
- * and genesis outputs apply to both tables alike:
+ * and genesis outputs apply to both tables alike. The batch is settled at {@link #handleCommit}, when
+ * every block of it has been processed (in parallel mode a block's spends can be saved before the output
+ * they spend, which another block of the same batch writes, and {@code UtxoProcessor} saves a block's
+ * spends before its outputs):
  * <ul>
- *   <li>{@link #saveUnspent} upserts each output into both tables in the same transaction, which
- *   in parallel mode is the block's own transaction, so nothing is read back;</li>
- *   <li>{@link #saveSpent} only remembers the spent keys. They are deleted from
- *   address_utxo_unspent at {@link #handleCommit}, when every output of the batch has been written
- *   (in parallel mode a block's spends can be saved before the output they spend, which another
- *   block of the same batch writes, and {@code UtxoProcessor} saves a block's spends before its
- *   outputs). The same transaction records the batch's last block as the block the table is kept to;</li>
+ *   <li>{@link #saveUnspent} writes address_utxo and remembers the outputs, and {@link #saveSpent}
+ *   writes tx_input and remembers the spent keys;</li>
+ *   <li>at commit, the outputs the batch did not spend are upserted into address_utxo_unspent, and
+ *   the spent outputs created by earlier batches are deleted. An output created and spent within the
+ *   batch, a large share during the initial sync, is never written. Nothing is read back: the outputs
+ *   are the objects {@link UtxoCache} holds until the commit anyway. The same transaction records the
+ *   batch's last block as the block the table is kept to;</li>
  *   <li>a rollback deletes the rows created after the rollback point and restores the outputs
  *   whose spend it removes, before tx_input is trimmed, and moves that record back to the point.</li>
  * </ul>
@@ -61,6 +64,7 @@ import static org.jooq.impl.DSL.selectOne;
 public class UtxoStorageImpl implements UtxoStorage {
     private static final String PLUGIN_UNSPENT = "utxo.unspent.save";
     private static final String PLUGIN_SPENT = "utxo.spent.save";
+    private static final int UNSPENT_WRITE_BATCH_SIZE = 1000;
 
     private final UtxoRepository utxoRepository;
     private final TxInputRepository spentOutputRepository;
@@ -70,8 +74,12 @@ public class UtxoStorageImpl implements UtxoStorage {
     private final PlatformTransactionManager transactionManager;
     private final UnspentUtxoTable unspentUtxoTable;
 
-    //Keys spent since the last commit, deleted from address_utxo_unspent at commit
+    //Outputs saved and keys spent since the last commit, settled in address_utxo_unspent at commit
+    private final Map<UtxoKey, PendingOutput> pendingOutputs = new ConcurrentHashMap<>();
     private final Set<UtxoKey> pendingSpentKeys = ConcurrentHashMap.newKeySet();
+
+    private record PendingOutput(AddressUtxo addressUtxo, LocalDateTime savedAt) {
+    }
 
     private TransactionTemplate transactionTemplate;
     private TransactionTemplate commitTransactionTemplate;
@@ -168,7 +176,8 @@ public class UtxoStorageImpl implements UtxoStorage {
             int restored = restoreUnspentSpentAfter(slot);
             log.info("Rollback -- {} address_utxo_unspent records restored", restored);
 
-            //Spends not yet committed belong to the blocks being rolled back
+            //Outputs and spends not yet committed belong to the blocks being rolled back
+            pendingOutputs.clear();
             pendingSpentKeys.clear();
             unspentUtxoTable.rolledBackTo(slot, true);
         } else if (unspentUtxoTable != null) {
@@ -251,11 +260,9 @@ public class UtxoStorageImpl implements UtxoStorage {
         dsl.batch(inserts).execute();
 
         if (isUnspentTableEnabled()) {
-            var unspentInserts = addressUtxoEntities.stream()
-                    .map(addressUtxo -> upsert(ADDRESS_UTXO_UNSPENT, addressUtxo, localDateTime))
-                    .toList();
-
-            dsl.batch(unspentInserts).execute();
+            //A later save of the same output (pointer-address resolution at commit) replaces it
+            addressUtxoList.forEach(addressUtxo -> pendingOutputs.put(
+                    new UtxoKey(addressUtxo.getTxHash(), addressUtxo.getOutputIndex()), new PendingOutput(addressUtxo, localDateTime)));
         }
 
         addressUtxoList.forEach(utxoCache::add);
@@ -333,32 +340,47 @@ public class UtxoStorageImpl implements UtxoStorage {
     }
 
     /**
-     * Deletes the outputs spent since the last commit from address_utxo_unspent and records the table as kept
-     * to the batch's last block, in one transaction. By now every output of the batch is written, so each spent
-     * output is found whichever block of the batch wrote it.
+     * Settles the batch in address_utxo_unspent and records the table as kept to the batch's last block, in one
+     * transaction: the outputs the batch did not spend are upserted, and the spent outputs of earlier batches deleted.
      * In sync mode this joins the block's transaction; in parallel mode it runs in its own.
      */
     private void commitUnspentTable(CommitEvent commitEvent) {
-        List<UtxoKey> spentKeys = List.copyOf(pendingSpentKeys);
+        Map<UtxoKey, PendingOutput> outputs = Map.copyOf(pendingOutputs);
+        Set<UtxoKey> spentKeys = Set.copyOf(pendingSpentKeys);
+
+        List<PendingOutput> unspent = outputs.entrySet().stream()
+                .filter(entry -> !spentKeys.contains(entry.getKey()))
+                .map(Map.Entry::getValue)
+                .toList();
+        List<UtxoKey> spentEarlier = spentKeys.stream()
+                .filter(utxoKey -> !outputs.containsKey(utxoKey))
+                .toList();
+
         commitTransactionTemplate.executeWithoutResult(status -> {
-            if (!spentKeys.isEmpty()) {
-                var deletes = spentKeys.stream()
+            for (int from = 0; from < unspent.size(); from += UNSPENT_WRITE_BATCH_SIZE) {
+                dsl.batch(unspent.subList(from, Math.min(from + UNSPENT_WRITE_BATCH_SIZE, unspent.size())).stream()
+                        .map(output -> upsert(ADDRESS_UTXO_UNSPENT, mapper.toAddressUtxoEntity(output.addressUtxo()), output.savedAt()))
+                        .toList()).execute();
+            }
+
+            for (int from = 0; from < spentEarlier.size(); from += UNSPENT_WRITE_BATCH_SIZE) {
+                dsl.batch(spentEarlier.subList(from, Math.min(from + UNSPENT_WRITE_BATCH_SIZE, spentEarlier.size())).stream()
                         .map(utxoKey -> dsl.deleteFrom(ADDRESS_UTXO_UNSPENT)
                                 .where(ADDRESS_UTXO_UNSPENT.TX_HASH.eq(utxoKey.getTxHash()))
                                 .and(ADDRESS_UTXO_UNSPENT.OUTPUT_INDEX.eq(utxoKey.getOutputIndex())))
-                        .toList();
-
-                dsl.batch(deletes).execute();
+                        .toList()).execute();
             }
 
             unspentUtxoTable.keptTo(commitEvent.getMetadata());
         });
 
-        //Only after the delete succeeded: on failure the keys stay for the next commit
+        //Only after the transaction succeeded: on failure the batch stays for the next commit
+        pendingOutputs.keySet().removeAll(outputs.keySet());
         pendingSpentKeys.removeAll(spentKeys);
 
         if (log.isDebugEnabled())
-            log.debug("Deleted {} spent outputs from address_utxo_unspent", spentKeys.size());
+            log.debug("address_utxo_unspent: {} outputs written, {} spent in the same batch, {} spent outputs deleted",
+                    unspent.size(), outputs.size() - unspent.size(), spentEarlier.size());
     }
 
     @Override

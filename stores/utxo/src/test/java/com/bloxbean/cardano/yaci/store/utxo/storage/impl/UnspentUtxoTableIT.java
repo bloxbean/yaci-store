@@ -160,10 +160,10 @@ class UnspentUtxoTableIT {
     }
 
     @Test
-    void anOutputCreatedAndSpentInTheSameBatchIsGoneAtCommit() {
+    void anOutputCreatedAndSpentInTheSameBatchIsNeverWritten() {
         utxoStorage.saveSpent(List.of(spend(hash(1), 0, 110)));   // spends first, as UtxoProcessor does
         utxoStorage.saveUnspent(List.of(output(hash(1), 0, 100), output(hash(1), 1, 100)));
-        assertThat(unspentKeys()).containsExactly(hash(1) + "#0", hash(1) + "#1");   // written with address_utxo
+        assertThat(unspentKeys()).isEmpty();   // the batch is settled at commit
 
         commit();
 
@@ -258,6 +258,38 @@ class UnspentUtxoTableIT {
 
         assertThat(unspentKeys()).isEmpty();
         assertThat(expectedKeys()).isEmpty();
+    }
+
+    @Test
+    void outputsOfARolledBackBatchAreNotWrittenAtTheNextCommit() {
+        utxoStorage.saveUnspent(List.of(output(hash(41), 0, 100)));
+        commit();
+        utxoStorage.saveUnspent(List.of(output(hash(42), 0, 200)));   // batch interrupted before its commit
+
+        rollbackTo(150);
+        commit();
+
+        assertThat(unspentKeys()).containsExactly(hash(41) + "#0").isEqualTo(expectedKeys());
+    }
+
+    @Test
+    void aLargeBatchWithOutputsSpentInItIsSettledInOneCommit() {
+        List<AddressUtxo> outputs = new ArrayList<>();
+        List<TxInput> spends = new ArrayList<>();
+        for (int i = 0; i < 2500; i++) {
+            outputs.add(output(hash(20_000 + i), 0, 100));
+            if (i % 5 != 0)
+                spends.add(spend(hash(20_000 + i), 0, 110));
+        }
+        utxoStorage.saveUnspent(List.of(output(hash(19_999), 0, 50)));
+        commit();
+        spends.add(spend(hash(19_999), 0, 110));   // an output of the previous batch
+
+        utxoStorage.saveSpent(spends);
+        utxoStorage.saveUnspent(outputs);
+        commit();
+
+        assertThat(unspentKeys()).hasSize(500).isEqualTo(expectedKeys());
     }
 
     @Test
