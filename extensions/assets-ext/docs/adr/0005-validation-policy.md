@@ -2,13 +2,11 @@
 
 ## Status
 
-Proposed. Decisions 1, 2 and 4 describe the policy of ADR 0006 (validation errors are reported, not enforced); they replace the
-policy this record first stated (a mandatory property dropped the token, an optional one dropped the property, and CIP-26 dropped the
-whole entry). Decision 3 is unchanged.
+Proposed. It applies ADR 0006 (validation errors are reported, not enforced) and is implemented in PR #1220 (open).
 
 ## Date
 
-2026-10-14, rewritten 2026-10-20
+2026-10-14
 
 ## Context
 

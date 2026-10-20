@@ -2,12 +2,12 @@
 
 ## Status
 
-Proposed. Decisions 3, 4 and 5 were rewritten on 2026-10-20 for ADR 0006 (validation errors are reported, not enforced): an entry that
-breaks CIP-26 is stored with `validation_errors` instead of being rejected. Implemented on branch `feat/assets-ext-validation-errors`.
+Proposed. Implemented in PR #1220. An entry that breaks CIP-26 is stored with `validation_errors` instead of being rejected (decisions
+3 to 5, ADR 0006).
 
 ## Date
 
-2026-10-07, decisions 3 to 5 rewritten 2026-10-20
+2026-10-07
 
 ## Context
 
@@ -98,9 +98,8 @@ What is still dropped, with one WARN:
 - **A subject that cannot be a key**: missing, not an even-length hex string, or not 56 to 120 characters. Nothing could look the entry up.
 - **An unparseable file** (not JSON, or not a mapping).
 
-*Why this and not the strict rule of the first version* (which rejected an entry for any failure, including an optional field, "deliberately
-strict, with no leniency"): the entry is from the registry, which is the maintainers' own curated source, and the owners of a token whose entry
-is rejected see nothing; with errors they see what to fix. The registry also validates entries on GitHub before they are merged (the maintainers'
+*Why report and not reject* (the alternative is to reject an entry for any failure, including an optional field): the entry is from the registry,
+which is the maintainers' own curated source, and the owners of a token whose entry is rejected see nothing; with errors they see what to fix. The registry also validates entries on GitHub before they are merged (the maintainers'
 statement), so few errors are expected, and those that do arrive are better returned than hidden. *Trade-off:* a registry entry with a typo
 in its subject is still absent (the subject is what keys it). On preprod that is correct (a "Diffusion" entry with a dropped hex digit is
 rejected while the correct entry is stored), but it also means a registry mistake can hide a token: the only registry entry for the preprod USDM

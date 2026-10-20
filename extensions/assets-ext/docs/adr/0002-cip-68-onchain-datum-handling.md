@@ -2,14 +2,12 @@
 
 ## Status
 
-Proposed. Rewritten on 2026-10-20 for ADR 0006 (validation errors are reported, not enforced); it replaces the version that
-dropped a token or a property when it broke the CIP. Implemented on branch `feat/assets-ext-validation-errors`. Decisions 1, 2 and 5 are
-implemented in PR #1220 (open, not merged; issues #1221, #1222, #1225 to #1228, #1231 to #1238 and #1240) and carry over
-unchanged; the rest follows ADR 0006. Decision 9 describes behaviour that is on `main` in part.
+Proposed. Implemented in PR #1220 (open, not merged; issues #1221, #1222, #1225, #1226, #1228, #1231, #1232, #1234 to #1238 and #1240). Decisions 3
+to 9 apply ADR 0006 (validation errors are reported, not enforced).
 
 ## Date
 
-2026-10-07, rewritten 2026-10-20
+2026-10-07
 
 ## Context
 
@@ -138,8 +136,7 @@ NFT. It was not done. *Trade-offs and known gaps:*
   but the datum is checked against **all** of them (#1238): it needs a `name`, a `description` if 333 is among
   them, and an `image` with an allowed scheme if 222 or 444 is. Whatever it lacks for a label is a validation error that
   names that label (`sub_standard`); the datum is indexed either way, since the metadata is shared by every token of that
-  reference NFT. Before, only the first label was checked, and under the strict rules a datum that failed one label was not
-  indexed at all. A multi-label token is logged at INFO when it is indexed, and counted in
+  reference NFT. Checking only the first label would index a datum without a description although it is also a fungible token. A multi-label token is logged at INFO when it is indexed, and counted in
   `yaci.store.assets.cip68.datums.multi_label{labels}` (decision 8). *Considered and not done:* recording every label (a
   `labels` column or a row per label): nothing reads it today, and a row per label would duplicate the datum; it can be added
   later with a resync.
@@ -202,15 +199,15 @@ rejects such a token, and now it can tell why. The index does not hide it. If a 
 is the CIP process: a proposal to add `iagon` and to make `image` optional for some uses is open as cardano-foundation/CIPs#1288, and when the CIP
 changes, so does the check (the error disappears; no data is lost).
 
-*History, measured under the earlier, strict rule* (which dropped the token), on a full mainnet index (build `ebb9daa37`, read on 2026-10-14): the
+*Measured on a full mainnet index made with rules that drop the token, to size what is at stake* (build `ebb9daa37`, read on 2026-10-14): the
 `image` rule skipped 4,683 datums of **3,113 distinct tokens from 6 policies**, all label 222. One policy accounts for 3,091 of them (a collection
 whose `image` is a bare IPFS CID, `Qm...`); 3,102 of the 3,113 have a bare CID in `image`. The other 11 are 6 `iagon://` wine NFTs, 3 free-text values,
 `asdas` and one placeholder text. Another 100 tokens from 38 policies have no `image` at all (mostly test tokens such as `SecurityTest` and
 `NFT1`). 260 datums of 217 fungible tokens had a `logo` that is not a URI with an allowed scheme (216 a bare IPFS CID, `Qm...` or `baf...`; one a raw base64
 PNG), and 86 tokens from 16 policies (89 datums) a `files` entry that breaks the definition: 38 with no usable `src`, 30 with a `src` that is not a URI with
-an allowed scheme, 15 with no `mediaType` and 3 with an entry that is not a map. All of these are indexed now, with the errors above.
+an allowed scheme, 15 with no `mediaType` and 3 with an entry that is not a map. All of these are indexed, with the errors above.
 
-*Considered and rejected:* dropping the token, or only the property, as the strict rule did (ADR 0006); and repairing the value.
+*Considered and rejected:* dropping the token, or only the property (ADR 0006); and repairing the value.
 
 ### 5. A logo or image given as a list of chunks is joined as bytes (#1226)
 
@@ -236,7 +233,7 @@ characters; CIP-68 has no equivalent, and a CIP-26 limit is reported, not enforc
 | Input | Rule | Effect |
 |---|---|---|
 | `version` | an integer that does not fit a `long` | the datum is indexed with no version and an `out_of_range` error (narrowing it would wrap `2^64 + 1` into 1) |
-| `version` | not 1 to 4 | indexed as written, with an `undefined_version` error (decision 7 of the earlier version of this ADR, reversed) |
+| `version` | not 1 to 4 | indexed as written, with an `undefined_version` error |
 | nesting depth of the datum | the CBOR decoder recurses; a `StackOverflowError` is caught | **dropped** with a WARN that says it looks like an attack |
 | a datum that cannot be decoded | | **dropped** with a WARN with the datum, so the case can be reproduced (`parse_failure`) |
 | nesting depth of an additional property (#1240) | at most 100 levels of lists, maps and constructors | the **property is dropped** with a WARN and `properties.dropped{kind="too_deep"}`, the datum is indexed, with a `too_deep` error |
@@ -266,10 +263,10 @@ a preprod sync, about 0.4%; not measured on mainnet).
 Keys other than the typed ones go to the `properties` column (`files` and `additional_properties`). The generic CIP-68 definition allows a metadata value to be a
 map, a list, an integer or a byte string, and Plutus data of any kind only in `extra`. **A property whose value holds a constructor, however deep, is not valid
 metadata, but it is kept**: it is stored as `{"constructor": n, "fields": [...]}` (the form #1209 introduced) and reported once, per property, with an `OPTIONAL`
-`plutus_constructor` error. The same applies to a property of a `files` entry. The full datum stays in `cip68_metadata.datum`. History: #1209 fixed #1159 (a
-constructor made the parser throw and dropped the whole token: 448 warnings for 434 distinct datums on a mainnet sync of the earlier code) by storing the
-constructor in this form; #1233 then dropped such properties with a WARN, as the CIP does not define the form; and this decision reverses that, since the
-error now tells the owner, and nothing on-chain is hidden. On mainnet 142 indexed tokens under 11 policies are affected (132 PBG voucher tokens with
+`plutus_constructor` error. The same applies to a property of a `files` entry. The full datum stays in `cip68_metadata.datum`. #1209 fixed #1159 (a constructor made the parser throw and dropped the
+whole token: 448 warnings for 434 distinct datums on a mainnet sync of the earlier code) by storing the constructor in this form. *Considered and
+rejected:* dropping such a property with a WARN, since the CIP does not define the form (#1233): the error now tells the owner, and nothing on-chain is
+hidden. On mainnet 142 indexed tokens under 11 policies are affected (132 PBG voucher tokens with
 `owner`, 8 wrapped assets with `seed`, two with `contractData` and `isDyn`), and a further 203 datums of NFT collections carry `contractData`. How the CIP
 could define a JSON form, or move such data to `extra`, is being discussed in cardano-foundation/CIPs#1289.
 
@@ -320,8 +317,8 @@ counted again; they suit `rate()` and `increase()`, not a historical total.
 property in the response names its `source`, and `show_cips_details` adds the raw metadata of each source (ADR 0003).
 
 **An update is never rejected.** The API reads the latest stored row (decision 1), and every datum that can be decoded writes one, so the newest datum is the one
-served, with its errors. This replaces the earlier behaviour, in which a skipped datum left the earlier row in place and served it as if it were current, with
-no trace in the API (on a full mainnet index, 2,508 of the 3,113 tokens skipped for a bad `image` still had an older row).
+served, with its errors. A design that skipped bad datums would instead leave the earlier row in place and serve it as if it were current, with no trace in the API (on a
+full mainnet index made with rules that drop the token, 2,508 of the 3,113 tokens skipped for a bad `image` still had an older row).
 
 ## Consequences
 
@@ -344,11 +341,20 @@ Decisions that are still open:
 - Should the CIP fix its 444 definition (`3 / 4`), which contradicts its changelog and mainnet, and say whether a consumer should accept a datum whose version
   it does not know? The module accepts it and reports `undefined_version`; neither point is raised in the CIPs repository yet.
 
-Measured on a full mainnet index built with the strict rules (`ebb9daa37`, read on 2026-10-14; it has to be measured again with this decision):
+Measured on a full mainnet index made before this decision (`ebb9daa37`, read on 2026-10-14; to be measured again with PR #1220):
 
 - 8,918 outputs hold several reference NFTs with a flat datum: 6,645 hold two, the largest holds 178.
 - 10 datums were skipped because their reference NFT is paired with user tokens of labels 222 and 333; none of that kind was indexed, so the
   one-label-per-row question above has no live case yet.
+
+Measured with this decision, on a full preprod sync from genesis (2026-10-20, tip at block 5,314,454; 0 errors, 0 `processing_failure`):
+
+- 76,101 rows: 64,927 without errors and 11,174 with some. Latest row per token: 222 = 52,694, 333 = 2,163, 444 = 454. Of the served 333 and 444 tokens,
+  1,678 follow their CIP completely, 326 have only optional errors and 613 have a mandatory one.
+- Errors by kind: `missing_value` on a mandatory field (222: 5,803, 333: 1,892, 444: 162), `invalid_uri_scheme` on an image (2,022), `plutus_constructor` (1,574),
+  `wrong_type` (1,261), `invalid_files_entry` (471), `invalid_uri_scheme` on a logo (378), `not_utf8` (110), `undefined_version` (36), `no_nested_entry` (2).
+- Rules that drop a token that breaks the CIP skip 8,197 datums on the same chain (3,410 with no image, 1,968 with an image scheme the CIP does not allow,
+  1,643 with no name, 1,138 with no description, 38 for a version or nested entry). Here they are all indexed; 32 rows have version 0.
 
 Not measured yet:
 

@@ -4,13 +4,12 @@
 
 Proposed
 
-Rewritten on 2026-10-20 for ADR 0006 (validation errors are reported, not enforced). Decisions 3, 4 and 5 and the
-`validation_errors` field are implemented on branch `feat/assets-ext-validation-errors`; before that this record described
-`main`, where a result needed a `name` and a `description` and a skipped CIP-68 update left the earlier row in the answer.
+Decisions 3, 4 and 5 and the `validation_errors` field apply ADR 0006 (validation errors are reported, not enforced) and are implemented in
+PR #1220 (open).
 
 ## Date
 
-2026-10-14, rewritten 2026-10-20
+2026-10-14
 
 ## Context
 
@@ -115,8 +114,7 @@ breaking API change. *Trade-off:* clients that want NFT metadata cannot get it f
 
 The API serves the latest **stored** row, and every datum that can be decoded writes a row (ADR 0002), so the newest datum is the one
 returned, with its own errors. An update is never rejected, so there is no longer a case where the row of an earlier datum is served as if
-it were current. (Under the earlier, strict rules a skipped datum wrote nothing, and the API answered "the last accepted metadata"; that is
-gone.) A datum that is dropped as an attack (ADR 0006 decision 3) still writes nothing, so the row of the earlier datum stays; that is the one
+it were current. (A design that skipped bad datums would write nothing, and the API would answer "the last accepted metadata".) A datum that is dropped as an attack (ADR 0006 decision 3) still writes nothing, so the row of the earlier datum stays; that is the one
 remaining case, and it is logged.
 
 ### 6. A batch is read with a fixed number of queries

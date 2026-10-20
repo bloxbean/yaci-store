@@ -2,9 +2,7 @@
 
 ## Status
 
-Proposed. Implemented on branch `feat/assets-ext-validation-errors` (not yet a pull request). It reverses the policy that
-PR #1220 and ADRs 0001 to 0005 first described: a token that breaks its CIP was dropped. It is meant for yaci-store 3 and
-is not backported to 2.x (see decision 8).
+Proposed. Implemented in PR #1220 (open). It is meant for yaci-store 3 and is not backported to 2.x (see decision 8).
 
 ## Date
 
@@ -14,7 +12,7 @@ is not backported to 2.x (see decision 8).
 
 Until now the module enforced CIP-26 and CIP-68 by **dropping**: a CIP-68 datum without a mandatory property was not indexed, an
 optional property that did not fit was left out, a datum with a version CIP-68 does not define was skipped, and a CIP-26 entry
-that failed the registry's validator was not stored (ADR 0001 decision 4, ADR 0002 decisions 3, 4, 7 and 8 of its first version, ADR 0005). The API
+that failed the registry's validator was not stored (the behaviour of the module before this decision). The API
 then refused to serve a token whose merged metadata had no `name` and `description`.
 
 The team decided, after a call, that the module should not enforce standards that way:
@@ -110,9 +108,9 @@ but not served. This follows cf-token-metadata-registry ADR-018, since for now b
 
 ### 8. Where it ships
 
-yaci-store 3 only. The 2.x line keeps the strict behaviour. The new rows and the `validation_errors` column need a resync to be
+yaci-store 3 only. The 2.x line keeps its current behaviour. The new rows and the `validation_errors` column need a resync to be
 complete, and a partial backport (the field and the migration, with old rows `NULL`) would give mixed results. The backport PR #1242
-of the strict rules is on hold.
+of rules that drop a token is on hold.
 
 ## Consequences
 
@@ -142,7 +140,7 @@ of the strict rules is on hold.
 
 ## References
 
-- ADR 0001 to 0005, superseded in part: decisions 3, 4, 5 of ADR 0001; 3 to 9 of ADR 0002 (rewritten); 2, 3, 5 of ADR 0003 (rewritten); 1, 2, 4 of ADR 0005 (rewritten)
+- ADRs that follow from this decision: 3 to 5 of ADR 0001; 3 to 9 of ADR 0002; 2, 3 and 5 of ADR 0003; 1, 2 and 4 of ADR 0005
 - cf-token-metadata-registry ADR-018 (rich fungible tokens) and PR #110
 - Issues #1221 to #1243, #1265
 - `Cip68DatumParser`, `Cip68Validator`, `Cip26MetadataValidator`, `ValidationError`
