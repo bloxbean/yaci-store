@@ -1,4 +1,5 @@
-ARG JDK_TAG=25.0.4.1_1-jre-ubi10-minimal
+#Ubuntu 24.04: UBI 10 (RHEL 10) needs an x86-64-v3 CPU
+ARG JDK_TAG=25.0.4.1_1-jre-noble
 
 FROM eclipse-temurin:${JDK_TAG} AS build
 WORKDIR /app

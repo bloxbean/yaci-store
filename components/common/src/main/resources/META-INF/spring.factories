@@ -1,2 +1,2 @@
 org.springframework.boot.EnvironmentPostProcessor=\
-com.bloxbean.cardano.yaci.store.common.config.JacksonDefaultsEnvironmentPostProcessor
+com.bloxbean.cardano.yaci.store.common.config.SpringBoot4DefaultsEnvironmentPostProcessor
