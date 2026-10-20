@@ -67,16 +67,11 @@ class ValidationErrorJsonTest {
     }
 
     @Test
-    void theMetadataKeepsItsValidFlagSoTheExistingJsonDoesNotChange() throws Exception {
-        JsonNode complete = mapper.readTree(mapper.writeValueAsString(Metadata.builder()
-                .name(new com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.StringProperty("n", "CIP_68"))
-                .description(new com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.StringProperty("d", "CIP_68")).build()));
-        JsonNode incomplete = mapper.readTree(mapper.writeValueAsString(Metadata.builder()
+    void theMetadataHasNoValidFlagComplianceIsInTheErrors() throws Exception {
+        JsonNode json = mapper.readTree(mapper.writeValueAsString(Metadata.builder()
                 .name(new com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.StringProperty("n", "CIP_68")).build()));
 
-        assertThat(complete.get("valid").asBoolean()).isTrue();
-        assertThat(incomplete.get("valid").asBoolean()).isFalse();
-        assertThat(complete.has("empty")).isTrue();
+        assertThat(json.has("valid")).isFalse();
     }
 
     @Test
