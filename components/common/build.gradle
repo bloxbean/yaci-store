@@ -20,6 +20,7 @@ dependencies {
     //JsonColumnCloner: loaded by hypersistence-utils only where a store uses it
     compileOnly(libs.hibernate.types)
     testImplementation(libs.hibernate.types)
+    testImplementation 'jakarta.servlet:jakarta.servlet-api'
 
     api 'org.springframework.boot:spring-boot-starter-actuator'
     runtimeOnly 'io.micrometer:micrometer-registry-prometheus'

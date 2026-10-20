@@ -12,7 +12,6 @@ import org.jooq.DSLContext;
 import org.springframework.batch.core.job.Job;
 import org.springframework.batch.core.step.Step;
 import org.springframework.batch.core.job.builder.JobBuilder;
-import org.springframework.batch.core.job.parameters.RunIdIncrementer;
 import org.springframework.batch.core.partition.Partitioner;
 import org.springframework.batch.core.partition.support.TaskExecutorPartitionHandler;
 import org.springframework.batch.core.repository.JobRepository;
@@ -44,7 +43,7 @@ public class UtxoAccountBatchConfiguration {
     @Bean
     public Job utxoAccountBalanceJob() {
         return new JobBuilder("utxoAddressAggregationJob", jobRepository)
-                .incrementer(new RunIdIncrementer())
+                //No incrementer: Spring Batch 6 JobOperator.start would replace the snapshot parameters with run.id
                 .start(createStakeAddressStep())
                 .next(accountBalanceMasterStep())
                 .next(stakeAddressBalanceMasterStep())

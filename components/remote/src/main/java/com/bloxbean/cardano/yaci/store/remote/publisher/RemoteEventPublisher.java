@@ -3,21 +3,31 @@ package com.bloxbean.cardano.yaci.store.remote.publisher;
 import com.bloxbean.cardano.yaci.store.events.*;
 import com.bloxbean.cardano.yaci.store.remote.RemoteProperties;
 import com.bloxbean.cardano.yaci.store.remote.common.RemoteBindingConstant;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.cloud.stream.function.StreamBridge;
 import org.springframework.context.event.EventListener;
+import org.springframework.messaging.Message;
+import org.springframework.messaging.MessageHeaders;
+import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.stereotype.Component;
+import org.springframework.util.MimeTypeUtils;
 
 @Component
 @Slf4j
 public class RemoteEventPublisher {
     private final StreamBridge streamBridge;
     private final RemoteProperties remoteProperties;
+    private final ObjectMapper objectMapper;
 
-    public RemoteEventPublisher(StreamBridge streamBridge, RemoteProperties remoteProperties) {
+    public RemoteEventPublisher(StreamBridge streamBridge, RemoteProperties remoteProperties,
+                                ObjectProvider<ObjectMapper> objectMapper) {
         this.streamBridge = streamBridge;
         this.remoteProperties = remoteProperties;
+        this.objectMapper = objectMapper.getIfAvailable(ObjectMapper::new);
 
         log.info("<< RemoteEventPublisher initialized >>");
         log.info("<< Events Enabled For Remote Publish : " + remoteProperties.getPublisherEvents() + " >>");
@@ -31,7 +41,25 @@ public class RemoteEventPublisher {
         if (log.isDebugEnabled())
             log.debug("Publishing event to : " + topic);
 
-        streamBridge.send(topic + "-out-0", event);
+        streamBridge.send(topic + "-out-0", toJsonMessage(event));
+    }
+
+    /**
+     * Events as Jackson 2 JSON, as before Spring Boot 4: Spring Cloud Stream 5 would serialize them with Jackson 3,
+     * which ignores the Jackson 2 annotations on the event models. The payload is already JSON, so it is sent as is.
+     */
+    byte[] toJson(Object event) {
+        try {
+            return objectMapper.writeValueAsBytes(event);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("Unable to serialize event " + event.getClass().getSimpleName(), e);
+        }
+    }
+
+    private Message<byte[]> toJsonMessage(Object event) {
+        return MessageBuilder.withPayload(toJson(event))
+                .setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.APPLICATION_JSON_VALUE)
+                .build();
     }
 
     @EventListener(condition = "#event.getMetadata().isRemotePublish() == false")

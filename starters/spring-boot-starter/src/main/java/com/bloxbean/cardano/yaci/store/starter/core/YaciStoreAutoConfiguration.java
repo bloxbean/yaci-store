@@ -11,12 +11,14 @@ import com.bloxbean.cardano.yaci.store.client.utxo.DummyUtxoClient;
 import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClient;
 import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClientImpl;
 import com.bloxbean.cardano.yaci.store.common.executor.ParallelExecutor;
+import com.bloxbean.cardano.yaci.store.common.util.Jackson2RestTemplate;
 import com.bloxbean.cardano.yaci.store.core.StoreConfiguration;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import com.bloxbean.cardano.yaci.store.core.service.ApplicationStartListener;
 import com.bloxbean.cardano.yaci.store.core.service.BlockFinder;
 import com.bloxbean.cardano.yaci.store.core.service.local.LocalClientProviderPoolObjectFactory;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.pool2.impl.GenericObjectPool;
@@ -24,6 +26,7 @@ import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
 import org.jooq.conf.RenderQuotedNames;
 import org.jooq.impl.DefaultConfiguration;
 import org.jooq.jpa.extensions.DefaultAnnotatedPojoMemberProvider;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -155,8 +158,9 @@ public class YaciStoreAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public RestTemplate restTemplate() {
-        return new RestTemplate();
+    public RestTemplate restTemplate(ObjectProvider<ObjectMapper> objectMapper) {
+        //Used by the remote utxo client: its JSON uses Jackson 2 annotations (snake_case)
+        return Jackson2RestTemplate.useJackson2(new RestTemplate(), objectMapper.getIfAvailable(ObjectMapper::new));
     }
 
     @Bean
