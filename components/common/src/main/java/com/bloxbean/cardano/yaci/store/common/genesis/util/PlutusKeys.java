@@ -4,4 +4,5 @@ public class PlutusKeys {
     public static final String PLUTUS_V1 = "PlutusV1";
     public static final String PLUTUS_V2 = "PlutusV2";
     public static final String PLUTUS_V3 = "PlutusV3";
+    public static final String PLUTUS_V4 = "PlutusV4"; //Dijkstra era (cost model language 3)
 }
