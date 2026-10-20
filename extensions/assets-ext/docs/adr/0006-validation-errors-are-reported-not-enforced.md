@@ -78,7 +78,8 @@ There are no length caps on text: a datum is at most one transaction (16 KB), so
 The errors are computed by the parser, the validator and the processor, and stored in a new `validation_errors` JSON column of
 `cip68_metadata` and `cip26_metadata` (`JSONB`, `JSON`, `TEXT` on H2; nullable). Reading a row costs nothing extra, and the batch
 API makes no new query. A row written before the column existed has `NULL`, which the API returns as `[]`; the tokens that were
-dropped before exist nowhere, so a **resync** is how an existing database gets them. The migration is additive (`V0_1700_2`).
+dropped before exist nowhere, so a **full resync is required** when upgrading: a database is never upgraded in place, and there is no
+backfill (issue #1280 was closed for that reason). The migration is additive (`V0_1700_2`).
 
 *Alternative rejected:* computing the errors at read time from the stored datum or mapping. It needs no migration, but it runs the
 parser on every request, and it cannot bring back what was never stored.
@@ -135,7 +136,6 @@ of the strict rules is on hold.
 
 - Whether the `code` list should be fixed in the API documentation as an enumeration.
 - Whether the errors of a property filter (`property=ticker`) should be limited to the fields asked for. Today all errors are returned.
-- How a client tells "no errors" from "errors not computed yet" on a row written before the column existed: both are `[]` today.
 - Whether CIP-26 entries whose file name differs from the subject should also be indexed under the file name with an error. They are
   dropped today, since the registry has thousands of them and last-write-wins would make the data ambiguous.
 
