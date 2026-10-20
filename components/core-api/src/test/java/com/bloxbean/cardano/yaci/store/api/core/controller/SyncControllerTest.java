@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -26,6 +27,8 @@ class SyncControllerTest {
     @BeforeEach
     void setup() {
         mockMvc = MockMvcBuilders.standaloneSetup(new SyncController(syncStatusService))
+                //As in the app: Jackson 2 (Spring Framework 7 would pick Jackson 3 here)
+                .setMessageConverters(new MappingJackson2HttpMessageConverter())
                 .addPlaceholderValue("apiPrefix", "/api/v1")
                 .build();
     }

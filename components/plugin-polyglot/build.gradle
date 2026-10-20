@@ -7,7 +7,7 @@ dependencies {
 
     compileOnly libs.apache.commons.pool
 
-    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test-classic'
     testImplementation project(":components:plugin")
     testImplementation libs.apache.commons.pool
 }

@@ -15,8 +15,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.util.Pair;
-import org.springframework.shell.command.annotation.Command;
-import org.springframework.shell.command.annotation.Option;
+import org.springframework.shell.core.command.annotation.Command;
+import org.springframework.shell.core.command.annotation.CommandGroup;
+import org.springframework.shell.core.command.annotation.Option;
+import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -25,7 +27,8 @@ import java.util.stream.Collectors;
 
 import static com.bloxbean.cardano.yaci.store.admin.cli.common.ConsoleWriter.*;
 
-@Command(group = Groups.DB_CMD_GROUP)
+@Component //Spring Shell 4 finds commands on beans; @CommandScan is gone
+@CommandGroup(name = Groups.DB_CMD_GROUP)
 @RequiredArgsConstructor
 @Slf4j
 public class DBCommands {
@@ -68,7 +71,7 @@ public class DBCommands {
     private boolean accountPruningEnabled;
 
     @Command(description = "Apply the default indexes required for read operations.")
-    public void applyIndexes(@Option(longNames = "skip-extra-indexes", defaultValue = "false", description = "Skip additional optional indexes.") boolean skipExtraIndexes) {
+    public void applyIndexes(@Option(longName = "skip-extra-indexes", defaultValue = "false", description = "Skip additional optional indexes.") boolean skipExtraIndexes) {
         writeLn(info("Start to apply index ..."));
         applyIndexesFromFiles(INDEX_FILE);
 
@@ -86,24 +89,22 @@ public class DBCommands {
 
     @Command(description = "Apply one or more optional index definitions")
     public void applyOptionalIndexes(
-            @Option(longNames = "indexes", label = "indexes",
-                    description = "Comma-separated optional index names (e.g., 'blockfrost-index,asset-ext-index')")
+            @Option(longName = "indexes", description = "Comma-separated optional index names (e.g., 'blockfrost-index,asset-ext-index')")
             String indexes,
-            @Option(longNames = "index-files", label = "index-files",
-                    description = "Comma-separated index definition file paths (e.g., 'file:///path/to/index.yml')")
+            @Option(longName = "index-files", description = "Comma-separated index definition file paths (e.g., 'file:///path/to/index.yml')")
             String indexFiles) {
         writeLn(info("Start to apply optional indexes ..."));
         applyIndexesFromFiles(getIndexFiles(indexes, indexFiles));
     }
 
     @Command(description = "Rollback data to a previous epoch")
-    public void rollbackData(@Option(longNames = "epoch", required = true, description = "Epoch to rollback to") int epoch,
-                         @Option(longNames = "event-publisher-id", defaultValue = "1", description = "Event Publisher ID") long eventPublisherId,
-                         @Option(longNames = "rollback-files", description = "Comma-separated list of rollback YAML files to override default configuration") String rollbackFiles,
-                         @Option(longNames = "block", description = "Block number for rollback point (required when block table is not available)") Long block,
-                         @Option(longNames = "block-hash", description = "Block hash for rollback point (required when block table is not available)") String blockHash,
-                         @Option(longNames = "slot", description = "Slot number for rollback point (required when block table is not available)") Long slot,
-                         @Option(longNames = "era", description = "Era for rollback point (required when block table is not available)") Integer era) {
+    public void rollbackData(@Option(longName = "epoch", required = true, description = "Epoch to rollback to") int epoch,
+                         @Option(longName = "event-publisher-id", defaultValue = "1", description = "Event Publisher ID") long eventPublisherId,
+                         @Option(longName = "rollback-files", description = "Comma-separated list of rollback YAML files to override default configuration") String rollbackFiles,
+                         @Option(longName = "block", description = "Block number for rollback point (required when block table is not available)") Long block,
+                         @Option(longName = "block-hash", description = "Block hash for rollback point (required when block table is not available)") String blockHash,
+                         @Option(longName = "slot", description = "Slot number for rollback point (required when block table is not available)") Long slot,
+                         @Option(longName = "era", description = "Era for rollback point (required when block table is not available)") Integer era) {
         writeLn(info("Start to rollback data ..."));
         validatePruningConfiguration();
 
@@ -127,7 +128,7 @@ public class DBCommands {
     }
 
     @Command(description = "Rollback ledger state data to a previous epoch")
-    public void rollbackLedgerStateData(@Option(longNames = "epoch", required = true, description = "Epoch to rollback to") int epoch) {
+    public void rollbackLedgerStateData(@Option(longName = "epoch", required = true, description = "Epoch to rollback to") int epoch) {
 
         writeLn(info("Start to rollback data ..."));
         if (isRollbackEpochValid(epoch)) {

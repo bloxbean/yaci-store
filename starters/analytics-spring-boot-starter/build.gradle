@@ -1,5 +1,5 @@
 dependencies {
-    implementation 'org.springframework.boot:spring-boot-starter'
+    implementation 'org.springframework.boot:spring-boot-starter-classic'
     api project(":aggregates:analytics-store")
     api project(":aggregates:analytics-query")
     api project(":aggregates:mcp-server")

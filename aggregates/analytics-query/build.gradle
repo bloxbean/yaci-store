@@ -2,10 +2,10 @@ dependencies {
     api project(":aggregates:analytics-store")
 
     implementation(libs.duckdb.jdbc)
-    implementation 'org.springframework.boot:spring-boot-starter'
+    implementation 'org.springframework.boot:spring-boot-starter-classic'
     compileOnly 'org.springframework.boot:spring-boot-starter-web'
 
-    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test-classic'
 }
 
 publishing {

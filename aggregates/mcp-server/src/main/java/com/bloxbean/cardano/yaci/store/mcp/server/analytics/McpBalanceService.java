@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.mcp.server.analytics;
 
 import com.bloxbean.cardano.yaci.store.analytics.config.AnalyticsStoreProperties;
 import com.bloxbean.cardano.yaci.store.analytics.query.executor.AnalyticsQueryExecutor;
+import com.bloxbean.cardano.yaci.store.mcp.server.config.Jackson2ToolCallResultConverter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
@@ -108,7 +109,8 @@ public class McpBalanceService {
             LIMIT %d
             """;
 
-    @Tool(name = "analytics-address-balance",
+    @Tool(resultConverter = Jackson2ToolCallResultConverter.class,
+          name = "analytics-address-balance",
             description = "Get the REAL-TIME balance of a Cardano address from live PostgreSQL. " +
                     "Returns ADA balance and all native token balances held by the address. " +
                     "This queries the live blockchain database directly — data is current (not delayed). " +
@@ -143,7 +145,8 @@ public class McpBalanceService {
         return result;
     }
 
-    @Tool(name = "analytics-top-balances",
+    @Tool(resultConverter = Jackson2ToolCallResultConverter.class,
+          name = "analytics-top-balances",
             description = "Get the top N addresses by ADA balance on Cardano. " +
                     "Scans the entire unspent UTXO set from Parquet data (1-2 days old). " +
                     "Data is NOT real-time — it reflects balances as of yesterday. " +

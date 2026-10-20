@@ -6,6 +6,8 @@ dependencies {
     api project(":components:plugin")
 
     implementation 'org.springframework.boot:spring-boot-starter-web'
+    //@EnableCaching: Spring Boot 4 moved the CacheManager auto-configuration to spring-boot-cache
+    implementation 'org.springframework.boot:spring-boot-cache'
 
     implementation libs.cardano.client.backend
 }
