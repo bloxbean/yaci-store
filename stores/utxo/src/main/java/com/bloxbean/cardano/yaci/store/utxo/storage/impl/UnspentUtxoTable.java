@@ -128,7 +128,9 @@ public class UnspentUtxoTable {
         if (properties == null || !properties.isUnspentTableEnabled() || storeStateService == null || isActive())
             return;
 
-        log.info("Building address_utxo_unspent at the tip before the sync continues from {} ...", event.getFrom());
+        log.info("Building address_utxo_unspent at the tip before the sync continues from {}. The sync waits for the build "
+                + "(about 10 minutes on preprod, 1 to 2 hours on mainnet); meanwhile queries use address_utxo and tx_input. "
+                + "Progress is logged as it goes ...", event.getFrom());
         long start = System.currentTimeMillis();
         try {
             long copied = build();
@@ -170,14 +172,19 @@ public class UnspentUtxoTable {
                 return 0L;
 
             long copied = 0;
-            long lastLog = System.currentTimeMillis();
+            long start = System.currentTimeMillis();
+            long lastLog = start;
             for (int outputIndex = 0; outputIndex <= maxOutputIndex; outputIndex++) {
                 for (int slice = 0; slice < SLICE_BOUNDS.length; slice++) {
                     copied += copy(outputIndex, unspentKeys(outputIndex, slice));
-                }
-                if (System.currentTimeMillis() - lastLog >= PROGRESS_LOG_INTERVAL_MS) {
-                    log.info("address_utxo_unspent build: output_index {} of {} done, {} rows copied", outputIndex, maxOutputIndex, copied);
-                    lastLog = System.currentTimeMillis();
+
+                    //Per slice, not per output_index: most outputs have index 0, which alone takes about half the build
+                    long now = System.currentTimeMillis();
+                    if (now - lastLog >= PROGRESS_LOG_INTERVAL_MS) {
+                        log.info("address_utxo_unspent build: output_index {} of {}, tx_hash slice {} of {}, {} rows copied, {} s elapsed",
+                                outputIndex, maxOutputIndex, slice + 1, SLICE_BOUNDS.length, copied, (now - start) / 1000);
+                        lastLog = now;
+                    }
                 }
             }
             return copied;
