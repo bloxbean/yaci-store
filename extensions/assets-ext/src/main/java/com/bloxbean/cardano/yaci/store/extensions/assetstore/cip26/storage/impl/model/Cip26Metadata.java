@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model;
 
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.Mapping;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.validation.ValidationError;
 import jakarta.annotation.Nullable;
 import jakarta.persistence.*;
 import lombok.EqualsAndHashCode;
@@ -10,6 +11,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Entity
 @Table(name = "cip26_metadata")
@@ -98,6 +100,15 @@ public class Cip26Metadata {
 
     @JdbcTypeCode(SqlTypes.JSON)
     private Mapping properties;
+
+    /**
+     * How the registry entry departs from CIP-26. The entry is stored and served anyway; see ADR 0006.
+     * Null on rows written before the column existed.
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "validation_errors")
+    @Nullable
+    private List<ValidationError> validationErrors;
 
     @Temporal(TemporalType.TIMESTAMP)
     private LocalDateTime lastSyncedAt;
