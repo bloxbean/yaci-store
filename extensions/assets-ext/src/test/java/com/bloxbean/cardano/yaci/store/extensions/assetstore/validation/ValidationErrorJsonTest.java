@@ -69,14 +69,15 @@ class ValidationErrorJsonTest {
     @Test
     void theMetadataKeepsItsValidAndEmptyFlagsSoTheExistingJsonDoesNotChange() throws Exception {
         var name = new com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.StringProperty("n", "CIP_68");
-        var description = new com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.StringProperty("d", "CIP_68");
-        JsonNode complete = mapper.readTree(mapper.writeValueAsString(Metadata.builder().name(name).description(description).build()));
-        JsonNode incomplete = mapper.readTree(mapper.writeValueAsString(Metadata.builder().name(name).build()));
 
-        // valid is name and description both present: always true before, since it was the gate; it can be false now
-        assertThat(complete.get("valid").asBoolean()).isTrue();
-        assertThat(incomplete.get("valid").asBoolean()).isFalse();
-        assertThat(complete.get("empty").asBoolean()).isFalse();
+        JsonNode valid = mapper.readTree(mapper.writeValueAsString(Metadata.builder().name(name).valid(true).build()));
+        JsonNode invalid = mapper.readTree(mapper.writeValueAsString(Metadata.builder().name(name).build()));
+
+        // both are in the JSON where they have always been; valid is set from the errors of the token (TokenQueryService)
+        assertThat(valid.get("valid").asBoolean()).isTrue();
+        assertThat(invalid.get("valid").asBoolean()).isFalse();
+        assertThat(valid.get("empty").asBoolean()).isFalse();
+        assertThat(mapper.readTree(mapper.writeValueAsString(Metadata.empty())).get("empty").asBoolean()).isTrue();
     }
 
     @Test

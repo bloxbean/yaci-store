@@ -87,7 +87,7 @@ GET /api/v1/subject/<policyId>0014df10<name>      # a 333 token with no descript
 `validation_errors` is also on `standards.cip26` and `standards.cip68` (with `show_cips_details=true`), and on `/cip68/ft/...` and `/cip26/...`.
 It is the one thing a client has to adapt to: a token that was `404` because its `name` or `description` was missing, or because
 its version, `image` or `logo` did not follow CIP-68, is now `200` with errors, so `name` and `description` are no longer
-guaranteed to be there. The `metadata.valid` flag the response always had stays: it is `true` when both are there (it was `true` for every token before, because a token without them was a 404), and it can now be `false`; `validation_errors` has the detail. Only an obvious attack is still dropped (a datum or property nested so deep that it cannot be decoded, a CIP-26
+guaranteed to be there. The `metadata.valid` flag the response always had stays. It is `true` when `validation_errors` is empty, that is when the token follows its CIP completely, optional fields included. It used to mean "name and description are both there" and was the gate of the API, so it was `true` for every token returned; now it can be `false`, and `validation_errors` has the detail. Only an obvious attack is still dropped (a datum or property nested so deep that it cannot be decoded, a CIP-26
 entry whose subject cannot be a key, a logo far beyond any real size), with a warning in the log.
 
 **Rich fungible tokens (CIP-68 label 444)** are served like fungible tokens, by their own `001bc280…` subject. They have no `logo`: their

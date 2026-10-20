@@ -113,6 +113,20 @@ class TokenApiEndToEndTest {
     }
 
     @Test
+    void validMeansNoErrorsAtAllAnOptionalErrorMakesTheTokenInvalidToo() throws Exception {
+        ValidationError optional = ValidationError.optional("CIP-68", null, "logo", "invalid_uri_scheme",
+                "logo 'Qm…' is not a URI with one of the schemes CIP-68 allows (https, ipfs, ar, data)");
+        store(row(333).name("Coin").description("A coin").logo("QmBareHash").validationErrors(List.of(optional)).build());
+
+        mockMvc.perform(get("/api/v1/tokens/subject/{s}", FT_SUBJECT))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.subject.metadata.name.value").value("Coin"))
+                .andExpect(jsonPath("$.subject.metadata.description.value").value("A coin"))
+                .andExpect(jsonPath("$.subject.metadata.valid").value(false))
+                .andExpect(jsonPath("$.subject.validation_errors[0].field_category").value("OPTIONAL"));
+    }
+
+    @Test
     void aRowIndexedBeforeTheColumnExistedHasAnEmptyList() throws Exception {
         store(row(333).name("Old").description("Indexed before validation_errors").build());
 
@@ -155,6 +169,7 @@ class TokenApiEndToEndTest {
         mockMvc.perform(get("/api/v1/tokens/subject/{s}", RFT_SUBJECT))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.subject.metadata.description").doesNotExist())
+                .andExpect(jsonPath("$.subject.metadata.valid").value(true))
                 .andExpect(jsonPath("$.subject.validation_errors.length()").value(0));
     }
 

@@ -267,10 +267,31 @@ class TokenQueryServiceTest {
         }
 
         @Test
-        void aTokenThatFollowsItsCipsHasAnEmptyList() {
+        void aTokenThatFollowsItsCipsHasAnEmptyListAndIsValid() {
             Subject result = service.querySubject(KNOWN_SUBJECT, DEFAULT_PRIORITY, List.of(), false).orElseThrow();
 
             assertThat(result.validationErrors()).isEmpty();
+            assertThat(result.metadata().valid()).isTrue();
+        }
+
+        @Test
+        void validIsFalseWhenAnyStandardHasAnError() {
+            Cip26Metadata cip26 = new Cip26Metadata();
+            cip26.setSubject(BROKEN_SUBJECT);
+            cip26.setName("N");
+            cip26.setDescription("D");
+            cip26.setValidationErrors(List.of(ValidationError.optional("CIP-26", null, "ticker", "invalid_length", "ticker too long")));
+            cip26.setProperties(new Mapping(BROKEN_SUBJECT, null, null, null, null, null, null, null));
+            when(cip26StorageReader.findBySubject(BROKEN_SUBJECT)).thenReturn(Optional.of(cip26));
+            when(cip26StorageReader.findLogoBySubject(BROKEN_SUBJECT)).thenReturn(Optional.empty());
+            // CIP-68 is clean, CIP-26 has an optional error: the merged token is not valid
+            when(cip68StorageReader.findBySubject(eq(BROKEN_SUBJECT), any()))
+                    .thenReturn(Optional.of(new FungibleTokenMetadata(null, "d", null, "N", null, null, 1L, List.of())));
+
+            Subject result = service.querySubject(BROKEN_SUBJECT, DEFAULT_PRIORITY, List.of(), false).orElseThrow();
+
+            assertThat(result.validationErrors()).hasSize(1);
+            assertThat(result.metadata().valid()).isFalse();
         }
 
         @Test
