@@ -247,6 +247,49 @@ class AccountBalanceStorageImplTest {
 
 
     @Test
+    void testRefreshCurrentAddressBalance_picksLatestRowPerUnitAndDropsUnitsWithoutOne() {
+        String address = generateRandomAddressAndUnit().getKey();
+        String unitMany = "many" + generateRandomAddressAndUnit().getValue();
+        String unitMixed = "mixed" + generateRandomAddressAndUnit().getValue();
+        String unitLate = "late" + generateRandomAddressAndUnit().getValue();
+        String unitUntouched = "untouched" + generateRandomAddressAndUnit().getValue();
+
+        AddressBalance many1 = balance(address, unitMany, "1", 2L);
+        AddressBalance many2 = balance(address, unitMany, "2", 4L);
+        AddressBalance many3 = balance(address, unitMany, "3", 6L);
+        AddressBalance mixed1 = balance(address, unitMixed, "10", 3L);
+        AddressBalance mixed2 = balance(address, unitMixed, "20", 9L);
+        AddressBalance late1 = balance(address, unitLate, "100", 8L);
+        AddressBalance untouched1 = balance(address, unitUntouched, "7", 9L);
+
+        accountBalanceStorage.saveAddressBalances(List.of(many1, many2, many3, mixed1, mixed2, late1, untouched1));
+        accountBalanceStorage.saveCurrentAddressBalances(List.of(many3, mixed2, late1, untouched1));
+
+        accountBalanceStorage.refreshCurrentAddressBalance(address, Set.of(unitMany, unitMixed, unitLate), 6L);
+
+        List<AddressBalance> current = accountBalanceStorage.getCurrentAddressBalance(address);
+        assertEquals(3, current.size());
+        AddressBalance many = current.stream().filter(ab -> ab.getUnit().equals(unitMany)).findFirst().orElseThrow();
+        assertEquals(new BigInteger("3"), many.getQuantity());
+        assertEquals(6L, many.getSlot());
+        AddressBalance mixed = current.stream().filter(ab -> ab.getUnit().equals(unitMixed)).findFirst().orElseThrow();
+        assertEquals(new BigInteger("10"), mixed.getQuantity());
+        assertEquals(3L, mixed.getSlot());
+        assertTrue(current.stream().noneMatch(ab -> ab.getUnit().equals(unitLate)));
+        assertEquals(new BigInteger("7"),
+                current.stream().filter(ab -> ab.getUnit().equals(unitUntouched)).findFirst().orElseThrow().getQuantity());
+    }
+
+    private static AddressBalance balance(String address, String unit, String quantity, long slot) {
+        AddressBalance balance = new AddressBalance();
+        balance.setAddress(address);
+        balance.setUnit(unit);
+        balance.setQuantity(new BigInteger(quantity));
+        balance.setSlot(slot);
+        return balance;
+    }
+
+    @Test
     void testRefreshCurrentStakeAddressBalanceWithStakeAddresses() {
         String stakeAddress1 = "stake_test1uqfu602nvxp7j5wkr2ngeq3pzusengw6anv9el6z4hqweuc4pvuq5";
         String stakeAddress2 = "stake_test1zp6cmg4vl8qkv6nvmcxyd7nvlj8q2htyj6nzemxadfqj8vspy8cck";
