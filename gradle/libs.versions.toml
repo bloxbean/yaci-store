@@ -1,5 +1,6 @@
 [libraries]
-yaci = "com.bloxbean.cardano:yaci:0.4.7"
+#Leios w42: local build of bloxbean/yaci PR #223 (feat/leios_w42), not published
+yaci = "com.bloxbean.cardano:yaci:0.5.0-leios-w42-4ababce-SNAPSHOT"
 cardano-client-lib = "com.bloxbean.cardano:cardano-client-lib:0.8.0-pre4"
 cardano-client-backend = "com.bloxbean.cardano:cardano-client-backend:0.8.0-pre4"
 cardano-client-backend-ogmios = "com.bloxbean.cardano:cardano-client-backend-ogmios:0.8.0-pre4"

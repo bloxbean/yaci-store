@@ -236,6 +236,7 @@ public abstract class BFScriptsMapperDecorator implements BFScriptsMapper {
             case "PLUTUS_V1"     -> "plutusV1";
             case "PLUTUS_V2"     -> "plutusV2";
             case "PLUTUS_V3"     -> "plutusV3";
+            case "PLUTUS_V4"     -> "plutusV4";
             default              -> dbType.toLowerCase();
         };
     }
