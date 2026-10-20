@@ -45,6 +45,7 @@ class UnspentUtxoTablePostgresIT {
 
     private static JdbcTemplate jdbc;
     private static UtxoStorageImpl storage;
+    private static UnspentUtxoTable table;
 
     @BeforeAll
     static void setUp() {
@@ -55,10 +56,10 @@ class UnspentUtxoTablePostgresIT {
         jdbc = new JdbcTemplate(ds);
         DSLContext dsl = DSL.using(new TransactionAwareDataSourceProxy(ds), SQLDialect.POSTGRES);
         var transactionManager = new DataSourceTransactionManager(ds);
+        table = new UnspentUtxoTable(UtxoStoreProperties.builder().unspentTableEnabled(true).build(), dsl, transactionManager,
+                new InMemoryStoreStateService(), null);
         storage = new UtxoStorageImpl(mock(UtxoRepository.class), mock(TxInputRepository.class), dsl,
-                new UtxoCache(), transactionManager,
-                new UnspentUtxoTable(UtxoStoreProperties.builder().unspentTableEnabled(true).build(), dsl, transactionManager,
-                        new InMemoryStoreStateService(), null));
+                new UtxoCache(), transactionManager, table);
     }
 
     @AfterEach
@@ -141,5 +142,16 @@ class UnspentUtxoTablePostgresIT {
 
         assertThat(jdbc.queryForObject("select owner_stake_addr from address_utxo_unspent", String.class))
                 .isEqualTo("stake_test1resolved");
+    }
+
+    @Test
+    void aRebuildReplacesTheWholeTable() {
+        storage.saveUnspent(List.of(output(hash(4), 0, 100), output(hash(5), 0, 100)));
+        commit();
+        jdbc.update("insert into tx_input (tx_hash, output_index, spent_at_slot) values (?, 0, 200)", hash(4));   //a spend the table missed
+
+        assertThat(table.build()).isEqualTo(1);   //truncated, not deleted, on PostgreSQL
+
+        assertThat(unspentKeys()).containsExactly(hash(5) + "#0").isEqualTo(expectedKeys());
     }
 }

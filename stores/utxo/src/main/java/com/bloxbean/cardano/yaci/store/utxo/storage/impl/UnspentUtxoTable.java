@@ -10,6 +10,7 @@ import com.bloxbean.cardano.yaci.store.utxo.UtxoStoreProperties;
 import lombok.extern.slf4j.Slf4j;
 import org.jooq.Condition;
 import org.jooq.DSLContext;
+import org.jooq.SQLDialect;
 import org.jooq.SelectFieldOrAsterisk;
 import org.springframework.context.event.EventListener;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -148,7 +149,12 @@ public class UnspentUtxoTable {
      */
     long build() {
         Long result = buildTransactionTemplate.execute(status -> {
-            dsl.deleteFrom(ADDRESS_UTXO_UNSPENT).execute();
+            //A rebuild replaces a whole table: a delete would leave every old row behind as a dead tuple. TRUNCATE is
+            //transactional only on PostgreSQL (H2 and MySQL commit at it), so the others delete.
+            if (dsl.dialect().family() == SQLDialect.POSTGRES)
+                dsl.truncate(ADDRESS_UTXO_UNSPENT).execute();
+            else
+                dsl.deleteFrom(ADDRESS_UTXO_UNSPENT).execute();
 
             Optional<Cursor> cursor = cursorService != null ? cursorService.getCursor() : Optional.empty();
             storeStateService.saveState(StoreState.builder()
