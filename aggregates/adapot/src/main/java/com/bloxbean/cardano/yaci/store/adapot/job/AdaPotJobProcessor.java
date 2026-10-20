@@ -244,7 +244,7 @@ public class AdaPotJobProcessor {
             ensureCurrentJob(job, cancelled);
             stakeSnapshotService.takeStakeSnapshot(epoch - 1);
 
-            //Store the snapshot total (active stake of epoch + 1) so readers don't have to sum epoch_stake
+            //Store the snapshot total (active stake of epoch + 1)
             ensureCurrentJob(job, cancelled);
             var totalEpochStake = epochStakeStorageReader.getTotalActiveStakeByEpoch(epoch + 1).orElse(null);
             adaPotService.updateTotalEpochStake(epoch, totalEpochStake);
