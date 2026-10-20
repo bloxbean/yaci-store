@@ -85,9 +85,10 @@ properties with `property` is no longer required to include `name` and `descript
 Every response has a **`validation_errors`** array (`[]` when the token follows its CIP): on the merged `Subject`, on `standards.cip26` and
 `standards.cip68`, and on the per-standard endpoints. Each entry has `cip`, `sub_standard` (the CIP-68 label; absent otherwise), `field_name`,
 `field_category` (`MANDATORY` or `OPTIONAL`), `code` and `error` (ADR 0006 decision 2). A client that wants the old guarantee can reject any
-token with a `MANDATORY` error. The `metadata.valid` flag stays in the JSON (it has always been there, as the result of `isValid()`: name and description both present):
-it was the gate, so it was `true` for every token the API returned, and now it can be `false`. It says nothing about the other errors; for
-that a client reads `validation_errors` (an empty list, or no `MANDATORY` entry). The array is not filtered by `property`: it describes the token, not the fields asked for.
+token with a `MANDATORY` error. The `metadata.valid` flag stays in the JSON where it has always been. It used to be `name` and `description` both present, which was the gate, so it
+was `true` for every token the API returned. It is now `true` when `validation_errors` is empty: the token follows its CIP completely, optional
+fields included (an optional field that is broken is a defect the owner should fix too). It is set after the merge, from the errors of every
+standard that has the token, so it can now be `false`. A client that only cares about the mandatory fields looks for a `MANDATORY` entry. The array is not filtered by `property`: it describes the token, not the fields asked for.
 
 *Why:* an index that hides a token because its datum is wrong tells the owner nothing (ADR 0006). *Trade-off:* a client can no longer rely on
 `name` and `description` being present, and a token that was a 404 is now a 200 with errors. This is the one change to the contract that is not

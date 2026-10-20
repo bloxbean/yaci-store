@@ -52,7 +52,8 @@ Every response that carries token metadata has a `validation_errors` array, empt
 | `code` | A stable reason for programs: `missing_value`, `wrong_type`, `invalid_uri_scheme`, `invalid_length`, `out_of_range`, `undefined_version`, `plutus_constructor`, `not_utf8`, `invalid_files_entry`, `no_nested_entry`, `too_deep`, `unsupported_key`, `key_collision`, `invalid_base64`, `too_large`. |
 | `error` | A message for people, for example `description field is missing a mandatory value`. |
 
-The field is **additive**: no existing field is renamed or removed. It is on the merged `Subject` (the union of the errors of every
+The field is **additive**: no existing field is renamed or removed. `metadata.valid`, which the response always had, stays and is now
+`true` exactly when `validation_errors` is empty. It is on the merged `Subject` (the union of the errors of every
 standard that has the token, in query priority order), on `standards.cip26` and `standards.cip68`, on `/cip68/ft/**` and on
 `/cip26/**`. The wire name is snake_case, as in the team's example; the rest of the module's JSON is camelCase, so the name is
 set explicitly. The `code` and the `sub_standard` were added to the team's example so that a program does not parse messages; new
