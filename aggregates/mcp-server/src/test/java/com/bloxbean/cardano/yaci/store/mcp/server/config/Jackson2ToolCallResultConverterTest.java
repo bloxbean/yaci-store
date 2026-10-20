@@ -19,6 +19,12 @@ class Jackson2ToolCallResultConverterTest {
     }
 
     @Test
+    void stringResultsAsInSpringAi1() {
+        assertThat(converter.convert("{\"a\":1}", String.class)).isEqualTo("{\"a\":1}");
+        assertThat(converter.convert("plain text", String.class)).isEqualTo("\"plain text\"");
+    }
+
+    @Test
     void voidResultIsDone() {
         assertThat(converter.convert(null, Void.TYPE)).isEqualTo("\"Done\"");
     }

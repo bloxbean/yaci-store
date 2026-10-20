@@ -22,6 +22,13 @@ class AdminCliShellRunnerTest {
     }
 
     @Test
+    void quotesArgumentsWithSpaces() throws Exception {
+        runner.run(new DefaultApplicationArguments("rollback-data", "--rollback-files", "file:/my dir/r.yml"));
+
+        verify(command).run(new String[]{"rollback-data", "--rollback-files", "\"file:/my dir/r.yml\""});
+    }
+
+    @Test
     void opensTheShellWithoutArguments() throws Exception {
         runner.run(new DefaultApplicationArguments());
 

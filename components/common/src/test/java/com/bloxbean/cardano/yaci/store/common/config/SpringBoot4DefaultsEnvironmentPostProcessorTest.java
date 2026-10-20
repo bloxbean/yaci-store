@@ -49,6 +49,22 @@ class SpringBoot4DefaultsEnvironmentPostProcessorTest {
     }
 
     @Test
+    void doesNotCopyFeaturesOnlyJackson3Has() {
+        StandardEnvironment environment = postProcess(Map.of(
+                "spring.jackson.datatype.enum.write-enums-using-to-string", "true", //Jackson 3 only
+                "spring.jackson.mapper.detect-parameter-names", "true", //Jackson 3 only
+                "spring.jackson.mapper.accept-case-insensitive-properties", "true",
+                "spring.jackson.serialization.WRITE_DATES_AS_TIMESTAMPS", "false"));
+
+        assertThat(environment.containsProperty("spring.jackson2.datatype.enum.write-enums-using-to-string")).isFalse();
+        assertThat(environment.containsProperty("spring.jackson2.mapper.detect-parameter-names")).isFalse();
+        assertThat(environment.getProperty("spring.jackson2.mapper.accept-case-insensitive-properties"))
+                .isEqualTo("true");
+        assertThat(environment.getProperty("spring.jackson2.serialization.WRITE_DATES_AS_TIMESTAMPS"))
+                .isEqualTo("false");
+    }
+
+    @Test
     void isRegisteredWithSpringBoot() throws Exception {
         Properties factories = new Properties();
         try (InputStream in = getClass().getResourceAsStream("/META-INF/spring.factories")) {

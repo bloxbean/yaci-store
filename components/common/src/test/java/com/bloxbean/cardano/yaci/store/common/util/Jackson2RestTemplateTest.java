@@ -2,7 +2,6 @@ package com.bloxbean.cardano.yaci.store.common.util;
 
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
@@ -19,7 +18,7 @@ class Jackson2RestTemplateTest {
 
     @Test
     void readsAndWritesSnakeCaseJsonAsBeforeSpringBoot4() {
-        RestTemplate restTemplate = Jackson2RestTemplate.useJackson2(new RestTemplate(), new ObjectMapper());
+        RestTemplate restTemplate = Jackson2RestTemplate.useJackson2(new RestTemplate());
         MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
         server.expect(requestTo("/utxos"))
                 .andExpect(content().json("[{\"tx_hash\":\"abc\",\"output_index\":1}]", true))

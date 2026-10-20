@@ -4,10 +4,12 @@ import com.bloxbean.cardano.yaci.store.events.*;
 import com.bloxbean.cardano.yaci.store.remote.RemoteProperties;
 import com.bloxbean.cardano.yaci.store.remote.common.RemoteBindingConstant;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.cloud.stream.function.StreamBridge;
 import org.springframework.context.event.EventListener;
 import org.springframework.messaging.Message;
@@ -19,15 +21,18 @@ import org.springframework.util.MimeTypeUtils;
 @Component
 @Slf4j
 public class RemoteEventPublisher {
+    //The mapper Spring Cloud Function 4.1 (Spring Boot 3) serialized the events with
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper()
+            .registerModule(new JavaTimeModule())
+            .configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false)
+            .configure(DeserializationFeature.FAIL_ON_TRAILING_TOKENS, true);
+
     private final StreamBridge streamBridge;
     private final RemoteProperties remoteProperties;
-    private final ObjectMapper objectMapper;
 
-    public RemoteEventPublisher(StreamBridge streamBridge, RemoteProperties remoteProperties,
-                                ObjectProvider<ObjectMapper> objectMapper) {
+    public RemoteEventPublisher(StreamBridge streamBridge, RemoteProperties remoteProperties) {
         this.streamBridge = streamBridge;
         this.remoteProperties = remoteProperties;
-        this.objectMapper = objectMapper.getIfAvailable(ObjectMapper::new);
 
         log.info("<< RemoteEventPublisher initialized >>");
         log.info("<< Events Enabled For Remote Publish : " + remoteProperties.getPublisherEvents() + " >>");
@@ -50,7 +55,7 @@ public class RemoteEventPublisher {
      */
     byte[] toJson(Object event) {
         try {
-            return objectMapper.writeValueAsBytes(event);
+            return OBJECT_MAPPER.writeValueAsBytes(event);
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("Unable to serialize event " + event.getClass().getSimpleName(), e);
         }

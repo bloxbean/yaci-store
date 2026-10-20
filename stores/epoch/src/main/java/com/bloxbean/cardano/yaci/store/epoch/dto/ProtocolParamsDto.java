@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
@@ -31,9 +32,15 @@ public class ProtocolParamsDto {
     private Integer maxBlockHeaderSize;
     private String keyDeposit;
     private String poolDeposit;
+    //Also on the getter: Jackson 2.18+ no longer joins getEMax() ("emax") with the field, and would
+    //write the value a second time as "emax"
     @JsonProperty("e_max")
+    @Getter(onMethod_ = @JsonProperty("e_max"))
     private Integer eMax;
+    //Also on the getter: Jackson 2.18+ no longer joins getNOpt() ("nopt") with the field, and would
+    //write the value a second time as "nopt"
     @JsonProperty("n_opt")
+    @Getter(onMethod_ = @JsonProperty("n_opt"))
     private Integer nOpt;
     private BigDecimal a0;
     private BigDecimal rho;

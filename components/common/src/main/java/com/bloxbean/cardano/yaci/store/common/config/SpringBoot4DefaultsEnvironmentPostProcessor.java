@@ -1,5 +1,12 @@
 package com.bloxbean.cardano.yaci.store.common.config;
 
+import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.MapperFeature;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.cfg.EnumFeature;
+import com.fasterxml.jackson.databind.cfg.JsonNodeFeature;
 import org.springframework.boot.EnvironmentPostProcessor;
 import org.springframework.boot.SpringApplication;
 import org.springframework.core.env.ConfigurableEnvironment;
@@ -7,8 +14,10 @@ import org.springframework.core.env.EnumerablePropertySource;
 import org.springframework.core.env.MapPropertySource;
 import org.springframework.core.env.PropertySource;
 
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -19,8 +28,9 @@ import java.util.Map;
  *     {@code @JsonSerialize}, {@code @JsonNaming}) on Yaci Store, Yaci and CCL models, so the REST output would
  *     change. {@code spring.http.converters.preferred-json-mapper=jackson2} keeps Jackson 2.</li>
  *     <li>{@code spring.jackson.*} settings now configure Jackson 3; the Jackson 2 mapper reads
- *     {@code spring.jackson2.*}. Each {@code spring.jackson.*} setting that also exists for Jackson 2 is copied
- *     there, so it still applies to the REST output.</li>
+ *     {@code spring.jackson2.*}. A {@code spring.jackson.*} setting (from a properties or YAML file, not an
+ *     environment variable) that Jackson 2 also has is copied there, so it still applies to the Jackson 2 mapper.
+ *     Features only Jackson 3 has are not copied, as they would fail Jackson 2 binding.</li>
  *     <li>Spring Batch: with {@code @EnableBatchProcessing}, Spring Boot 3 never ran jobs at startup. Spring Boot 4
  *     does unless {@code spring.batch.job.enabled=false}. Yaci Store starts its jobs itself.</li>
  * </ul>
@@ -33,9 +43,18 @@ public class SpringBoot4DefaultsEnvironmentPostProcessor implements EnvironmentP
     private static final String JACKSON = "spring.jackson.";
     private static final String JACKSON2 = "spring.jackson2.";
     //Properties of spring.jackson2 (Spring Boot 4.1), the same names Spring Boot 3 used under spring.jackson
-    private static final List<String> JACKSON2_PROPERTIES = List.of("constructor-detector", "datatype.",
-            "date-format", "default-leniency", "default-property-inclusion", "deserialization.", "generator.",
-            "locale", "mapper.", "parser.", "property-naming-strategy", "serialization.", "time-zone", "visibility.");
+    private static final List<String> JACKSON2_PROPERTIES = List.of("constructor-detector", "date-format",
+            "default-leniency", "default-property-inclusion", "locale", "property-naming-strategy", "time-zone",
+            "visibility.");
+    //Feature maps of spring.jackson2: copied only when the feature exists in Jackson 2
+    private static final Map<String, Class<? extends Enum<?>>> JACKSON2_FEATURES = Map.of(
+            "serialization.", SerializationFeature.class,
+            "deserialization.", DeserializationFeature.class,
+            "mapper.", MapperFeature.class,
+            "parser.", JsonParser.Feature.class,
+            "generator.", JsonGenerator.Feature.class,
+            "datatype.enum.", EnumFeature.class,
+            "datatype.json-node.", JsonNodeFeature.class);
 
     @Override
     public void postProcessEnvironment(ConfigurableEnvironment environment, SpringApplication application) {
@@ -53,13 +72,26 @@ public class SpringBoot4DefaultsEnvironmentPostProcessor implements EnvironmentP
                     continue;
                 String suffix = name.substring(JACKSON.length());
                 String jackson2Name = JACKSON2 + suffix;
-                if (JACKSON2_PROPERTIES.stream().anyMatch(p -> p.endsWith(".") ? suffix.startsWith(p) : suffix.equals(p))
-                        && !environment.containsProperty(jackson2Name) && !defaults.containsKey(jackson2Name))
+                if (isJackson2Property(suffix) && !environment.containsProperty(jackson2Name)
+                        && !defaults.containsKey(jackson2Name))
                     defaults.put(jackson2Name, environment.getProperty(name));
             }
         }
 
         if (!defaults.isEmpty())
             environment.getPropertySources().addLast(new MapPropertySource(PROPERTY_SOURCE_NAME, defaults));
+    }
+
+    static boolean isJackson2Property(String suffix) {
+        if (JACKSON2_PROPERTIES.stream().anyMatch(p -> p.endsWith(".") ? suffix.startsWith(p) : suffix.equals(p)))
+            return true;
+        for (Map.Entry<String, Class<? extends Enum<?>>> feature : JACKSON2_FEATURES.entrySet()) {
+            if (!suffix.startsWith(feature.getKey()))
+                continue;
+            //write-dates-as-timestamps or WRITE_DATES_AS_TIMESTAMPS -> WRITE_DATES_AS_TIMESTAMPS
+            String name = suffix.substring(feature.getKey().length()).replace('-', '_').toUpperCase(Locale.ROOT);
+            return Arrays.stream(feature.getValue().getEnumConstants()).anyMatch(c -> c.name().equals(name));
+        }
+        return false;
     }
 }
