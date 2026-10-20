@@ -5,6 +5,8 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.Mapping
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.Cip26Metadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.repository.Cip26MetadataRepository;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.util.Cip26MetadataValidator;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.util.Cip26Validation;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.validation.ValidationError;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -16,6 +18,7 @@ import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.dao.DataIntegrityViolationException;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -53,7 +56,7 @@ class Cip26MetadataServiceTest {
 
         @Test
         void returnsInsertedOnHappyPath() {
-            when(cip26MetadataValidator.validate(any())).thenReturn(true);
+            when(cip26MetadataValidator.validate(any(), any())).thenReturn(Cip26Validation.of(List.of()));
 
             InsertOutcome outcome = service.insertMapping(
                     mapping("subject1"), LocalDateTime.now(), "author@test.com");
@@ -63,10 +66,23 @@ class Cip26MetadataServiceTest {
         }
 
         @Test
-        void returnsPermanentlySkippedWhenValidationFails() {
-            // The validator (yaci wrapper around cf-tokens-cip26) rejects the row.
-            // Retrying the same row will reject again — must not block the cursor.
-            when(cip26MetadataValidator.validate(any())).thenReturn(false);
+        void storesTheValidationErrorsWithTheRow() {
+            ValidationError error = ValidationError.mandatory("CIP-26", null, "name", "missing_value", "name field is missing a mandatory value");
+            when(cip26MetadataValidator.validate(any(), any())).thenReturn(Cip26Validation.of(List.of(error)));
+
+            InsertOutcome outcome = service.insertMapping(mapping("subject1"), LocalDateTime.now(), "author@test.com");
+
+            assertThat(outcome).isEqualTo(InsertOutcome.INSERTED);
+            org.mockito.ArgumentCaptor<Cip26Metadata> saved = org.mockito.ArgumentCaptor.forClass(Cip26Metadata.class);
+            verify(cip26MetadataRepository).save(saved.capture());
+            assertThat(saved.getValue().getValidationErrors()).containsExactly(error);
+        }
+
+        @Test
+        void returnsPermanentlySkippedWhenTheEntryIsDroppedAsUnstorable() {
+            // The validator drops an entry whose subject cannot be a key (it is not CIP-26 metadata at all).
+            // Retrying the same row will drop it again — must not block the cursor.
+            when(cip26MetadataValidator.validate(any(), any())).thenReturn(Cip26Validation.dropped("the subject is missing or blank"));
 
             InsertOutcome outcome = service.insertMapping(
                     mapping("subject1"), LocalDateTime.now(), "author@test.com");
@@ -79,7 +95,7 @@ class Cip26MetadataServiceTest {
         void returnsPermanentlySkippedOnNonTransientDataAccessException() {
             // Constraint violation, value too long, encoding error. The same insert
             // would fail again — advance past it instead of looping forever.
-            when(cip26MetadataValidator.validate(any())).thenReturn(true);
+            when(cip26MetadataValidator.validate(any(), any())).thenReturn(Cip26Validation.of(List.of()));
             when(cip26MetadataRepository.save(any(Cip26Metadata.class)))
                     .thenThrow(new DataIntegrityViolationException("value too long for column"));
 
@@ -93,7 +109,7 @@ class Cip26MetadataServiceTest {
         void returnsTransientlyFailedOnTransientDataAccessException() {
             // Lock timeout, lost connection — likely to succeed next time. Block
             // the cursor advance so the next sync retries this entry.
-            when(cip26MetadataValidator.validate(any())).thenReturn(true);
+            when(cip26MetadataValidator.validate(any(), any())).thenReturn(Cip26Validation.of(List.of()));
             when(cip26MetadataRepository.save(any(Cip26Metadata.class)))
                     .thenThrow(new CannotAcquireLockException("lock timeout"));
 
@@ -108,7 +124,7 @@ class Cip26MetadataServiceTest {
             // Conservative default: anything we can't classify is treated as
             // transient so we don't silently drop. Recurring failures will show
             // up in logs every sync and need human investigation.
-            when(cip26MetadataValidator.validate(any())).thenReturn(true);
+            when(cip26MetadataValidator.validate(any(), any())).thenReturn(Cip26Validation.of(List.of()));
             when(cip26MetadataRepository.save(any(Cip26Metadata.class)))
                     .thenThrow(new RuntimeException("something unexpected"));
 
@@ -127,7 +143,7 @@ class Cip26MetadataServiceTest {
         void updatesLogoOnExistingRow() {
             Cip26Metadata existing = new Cip26Metadata();
             existing.setSubject("subject1");
-            when(cip26MetadataValidator.validateLogo(any(), any())).thenReturn(true);
+            when(cip26MetadataValidator.validateLogo(any(), any())).thenReturn(Cip26Validation.of(List.of()));
             when(cip26MetadataRepository.findById("subject1")).thenReturn(Optional.of(existing));
 
             InsertOutcome outcome = service.insertLogo(mapping("subject1"));
@@ -139,11 +155,37 @@ class Cip26MetadataServiceTest {
         }
 
         @Test
+        void addsTheLogoErrorsToTheRowAndKeepsItsOtherErrors() {
+            ValidationError nameError = ValidationError.mandatory("CIP-26", null, "name", "missing_value", "name field is missing a mandatory value");
+            ValidationError oldLogoError = ValidationError.optional("CIP-26", null, "logo", "too_large", "old");
+            ValidationError logoError = ValidationError.optional("CIP-26", null, "logo", "invalid_base64", "logo is not valid base64");
+            Cip26Metadata existing = new Cip26Metadata();
+            existing.setSubject("subject1");
+            existing.setValidationErrors(List.of(nameError, oldLogoError));
+            when(cip26MetadataValidator.validateLogo(any(), any())).thenReturn(Cip26Validation.of(List.of(logoError)));
+            when(cip26MetadataRepository.findById("subject1")).thenReturn(Optional.of(existing));
+
+            service.insertLogo(mapping("subject1"));
+
+            // the logo is kept as written, and its errors replace the earlier logo errors
+            assertThat(existing.getLogo()).isEqualTo("data:image/png;base64,iVBOR...");
+            assertThat(existing.getValidationErrors()).containsExactly(nameError, logoError);
+        }
+
+        @Test
+        void permanentlySkipsAnOversizedLogoThatLooksLikeAnAttack() {
+            when(cip26MetadataValidator.validateLogo(any(), any())).thenReturn(Cip26Validation.dropped("the logo has 2000000 characters"));
+
+            assertThat(service.insertLogo(mapping("subject1"))).isEqualTo(InsertOutcome.PERMANENTLY_SKIPPED);
+            verify(cip26MetadataRepository, never()).save(any(Cip26Metadata.class));
+        }
+
+        @Test
         void permanentlySkipsWhenNoMetadataRowExists() {
             // Orphan logo — the registry has a logo file but no metadata file. Skip
             // permanently because retrying won't change the registry's state and an
             // orphan row would have nowhere to surface in the API.
-            when(cip26MetadataValidator.validateLogo(any(), any())).thenReturn(true);
+            when(cip26MetadataValidator.validateLogo(any(), any())).thenReturn(Cip26Validation.of(List.of()));
             when(cip26MetadataRepository.findById("subject1")).thenReturn(Optional.empty());
 
             InsertOutcome outcome = service.insertLogo(mapping("subject1"));
@@ -156,7 +198,7 @@ class Cip26MetadataServiceTest {
         void returnsPermanentlySkippedOnNonTransientDataAccessException() {
             Cip26Metadata existing = new Cip26Metadata();
             existing.setSubject("subject1");
-            when(cip26MetadataValidator.validateLogo(any(), any())).thenReturn(true);
+            when(cip26MetadataValidator.validateLogo(any(), any())).thenReturn(Cip26Validation.of(List.of()));
             when(cip26MetadataRepository.findById("subject1")).thenReturn(Optional.of(existing));
             when(cip26MetadataRepository.save(any(Cip26Metadata.class)))
                     .thenThrow(new DataIntegrityViolationException("logo too large"));
@@ -170,7 +212,7 @@ class Cip26MetadataServiceTest {
         void returnsTransientlyFailedOnTransientDataAccessException() {
             Cip26Metadata existing = new Cip26Metadata();
             existing.setSubject("subject1");
-            when(cip26MetadataValidator.validateLogo(any(), any())).thenReturn(true);
+            when(cip26MetadataValidator.validateLogo(any(), any())).thenReturn(Cip26Validation.of(List.of()));
             when(cip26MetadataRepository.findById("subject1")).thenReturn(Optional.of(existing));
             when(cip26MetadataRepository.save(any(Cip26Metadata.class)))
                     .thenThrow(new CannotAcquireLockException("lock timeout"));

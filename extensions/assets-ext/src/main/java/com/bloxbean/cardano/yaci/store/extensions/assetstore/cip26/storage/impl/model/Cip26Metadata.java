@@ -60,26 +60,28 @@ public class Cip26Metadata {
     @Nullable
     private String policy;
 
-    /** CIP-26 name: max 50 chars (enforced by cf-tokens-cip26 validator). */
-    @Column(length = 50)
+    /** CIP-26 name: max 50 chars per spec. A longer one is stored as written and reported in {@link #validationErrors}. */
+    @Column(columnDefinition = "TEXT")
+    @Nullable
     private String name;
 
-    /** CIP-26 ticker: 2-9 chars (enforced by cf-tokens-cip26 validator). */
-    @Column(length = 9)
+    /** CIP-26 ticker: 2-9 chars per spec. Out-of-spec values are stored as written and reported. */
+    @Column(columnDefinition = "TEXT")
     @Nullable
     private String ticker;
 
-    /** CIP-26 url: max 250 chars (enforced by cf-tokens-cip26 validator). */
-    @Column(length = 250)
+    /** CIP-26 url: max 250 chars per spec. Out-of-spec values are stored as written and reported. */
+    @Column(columnDefinition = "TEXT")
     @Nullable
     private String url;
 
-    /** CIP-26 description: max 500 chars per spec. */
-    @Column(length = 500)
+    /** CIP-26 description: max 500 chars per spec. Out-of-spec values are stored as written and reported. */
+    @Column(columnDefinition = "TEXT")
+    @Nullable
     private String description;
 
-    /** CIP-26 decimals (well-known property 'decimals'): 0–19 in practice; the write path rejects
-     *  anything outside {@link com.bloxbean.cardano.yaci.store.extensions.assetstore.util.TokenDecimals}. */
+    /** CIP-26 decimals (well-known property 'decimals'): 0–19 in practice. A value outside
+     *  {@link com.bloxbean.cardano.yaci.store.extensions.assetstore.util.TokenDecimals} is stored as written and reported. */
     @Nullable
     private Long decimals;
 
