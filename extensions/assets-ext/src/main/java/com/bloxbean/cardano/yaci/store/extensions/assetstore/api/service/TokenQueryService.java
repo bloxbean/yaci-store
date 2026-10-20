@@ -79,8 +79,9 @@ public class TokenQueryService {
     }
 
     private static Subject toSubject(String subject, ResolvedMetadata resolved, boolean showCipsDetails) {
-        return new Subject(subject, resolved.metadata(), showCipsDetails ? resolved.standards() : null,
-                resolved.validationErrors());
+        // valid: the token follows its CIP completely, mandatory and optional fields alike
+        Metadata metadata = resolved.metadata().toBuilder().valid(resolved.validationErrors().isEmpty()).build();
+        return new Subject(subject, metadata, showCipsDetails ? resolved.standards() : null, resolved.validationErrors());
     }
 
     /**

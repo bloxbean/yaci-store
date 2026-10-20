@@ -7,11 +7,26 @@ import lombok.Builder;
 
 import java.util.List;
 
+/**
+ * The merged display metadata of a token.
+ * <p>
+ * {@code valid} says whether the token follows its CIP completely: {@code true} when its {@code validation_errors} are empty,
+ * mandatory and optional fields alike. It is in the JSON where it has always been. It used to mean "name and description are both
+ * there" and was the gate of the API, so it was {@code true} for every token returned; there is no gate any more, so it can be
+ * {@code false}, and it is set from the errors of every standard that has the token, after the merge.
+ */
 @Builder(toBuilder = true)
 public record Metadata(@Nullable StringProperty name, @Nullable StringProperty description,
                        @Nullable StringProperty ticker, @Nullable LongProperty decimals,
                        @Nullable StringProperty logo, @Nullable StringProperty url,
-                       @Nullable LongProperty version) {
+                       @Nullable LongProperty version, boolean valid) {
+
+    /** Metadata whose validity is set later, from the errors of the token. */
+    public Metadata(@Nullable StringProperty name, @Nullable StringProperty description, @Nullable StringProperty ticker,
+                    @Nullable LongProperty decimals, @Nullable StringProperty logo, @Nullable StringProperty url,
+                    @Nullable LongProperty version) {
+        this(name, description, ticker, decimals, logo, url, version, false);
+    }
 
     private static final Metadata EMPTY_METADATA = Metadata.builder().build();
 
@@ -26,7 +41,8 @@ public record Metadata(@Nullable StringProperty name, @Nullable StringProperty d
                 decimals != null ? decimals : that.decimals(),
                 logo != null ? logo : that.logo(),
                 url != null ? url : that.url(),
-                version != null ? version : that.version());
+                version != null ? version : that.version(),
+                valid);
     }
 
     /**
@@ -65,18 +81,10 @@ public record Metadata(@Nullable StringProperty name, @Nullable StringProperty d
         return new Metadata(nameProp, descProp, tickerProp, decimalsProp, logoProp, urlProp, versionProp);
     }
 
+    /** True when no property has a value (the {@code valid} flag is not a property). */
     public boolean isEmpty() {
-        return this.equals(EMPTY_METADATA);
-    }
-
-    /**
-     * Whether the metadata has both a {@code name} and a {@code description}. It is in the JSON as {@code valid}, where it has
-     * always been: it was the gate of the API (a token without both was a 404), so it was {@code true} for every token
-     * returned. It no longer gates anything: a token is returned as indexed, so {@code valid} can now be {@code false}. The
-     * detail of what is wrong is in {@code validation_errors}.
-     */
-    public boolean isValid() {
-        return this.name != null && this.description != null;
+        return name == null && description == null && ticker == null && decimals == null
+                && logo == null && url == null && version == null;
     }
 
     private static boolean include(String propertyName, List<String> properties) {
