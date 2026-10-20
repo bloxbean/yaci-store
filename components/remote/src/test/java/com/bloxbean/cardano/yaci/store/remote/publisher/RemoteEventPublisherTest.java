@@ -4,9 +4,10 @@ import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.remote.RemoteProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.cloud.stream.function.StreamBridge;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageHeaders;
@@ -25,13 +26,11 @@ class RemoteEventPublisherTest {
     @SuppressWarnings("unchecked")
     void publishesJackson2JsonThatTheConsumerReads() throws Exception {
         StreamBridge streamBridge = mock(StreamBridge.class);
-        ObjectMapper objectMapper = new ObjectMapper();
-        StaticListableBeanFactory beans = new StaticListableBeanFactory();
-        beans.addBean("objectMapper", objectMapper);
+        ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule())
+                .configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false);
         RemoteProperties properties = new RemoteProperties();
         properties.setPublisherEvents(List.of("rollbackEvent"));
-        RemoteEventPublisher publisher = new RemoteEventPublisher(streamBridge, properties,
-                beans.getBeanProvider(ObjectMapper.class));
+        RemoteEventPublisher publisher = new RemoteEventPublisher(streamBridge, properties);
         RollbackEvent event = RollbackEvent.builder()
                 .rollbackTo(new Point(100, "aa"))
                 .currentPoint(new Point(200, "bb"))

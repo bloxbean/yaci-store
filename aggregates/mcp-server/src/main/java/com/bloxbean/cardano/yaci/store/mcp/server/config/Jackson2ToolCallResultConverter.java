@@ -31,10 +31,23 @@ public class Jackson2ToolCallResultConverter implements ToolCallResultConverter 
         if (returnType == Void.TYPE || result instanceof java.awt.image.RenderedImage)
             return defaultConverter.convert(result, returnType);
 
+        //As Spring AI 1.x: a String that already is JSON is returned as is
+        if (result instanceof String str && isValidJson(str))
+            return str;
+
         try {
             return OBJECT_MAPPER.writeValueAsString(result);
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("Conversion from Object to JSON failed", e);
+        }
+    }
+
+    private static boolean isValidJson(String input) {
+        try {
+            OBJECT_MAPPER.readTree(input);
+            return true;
+        } catch (JsonProcessingException e) {
+            return false;
         }
     }
 }
