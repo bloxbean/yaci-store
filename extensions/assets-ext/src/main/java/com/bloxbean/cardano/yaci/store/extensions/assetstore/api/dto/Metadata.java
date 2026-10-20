@@ -69,6 +69,16 @@ public record Metadata(@Nullable StringProperty name, @Nullable StringProperty d
         return this.equals(EMPTY_METADATA);
     }
 
+    /**
+     * Whether the metadata has both a {@code name} and a {@code description}. It is no longer a gate (a token is returned as
+     * indexed, whatever is wrong with it, see {@code validation_errors}), but it stays in the response so that the JSON
+     * a client already reads does not change: it was {@code true} for every token the API returned, and now says
+     * whether the two properties the CIPs ask for are there.
+     */
+    public boolean isValid() {
+        return this.name != null && this.description != null;
+    }
+
     private static boolean include(String propertyName, List<String> properties) {
         return properties.isEmpty() || properties.contains(propertyName);
     }
