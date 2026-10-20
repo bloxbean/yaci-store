@@ -26,8 +26,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * {@code files} is optional in CIP-68, and each entry has to match {@code files_details}: a {@code mediaType} byte
- * string and a {@code src} that is a URI (https, ipfs, ar or data). When an entry does not, the {@code files} property is
- * left out as a whole, with a warning and a count, and the rest of the datum is kept.
+ * string and a {@code src} that is a URI (https, ipfs, ar or data). An entry that does not is kept as it was written,
+ * and one {@code invalid_files_entry} error says what is wrong with it; the datum and its other entries are indexed
+ * as they are (ADR 0006).
  */
 class Cip68FilesTest {
 
@@ -56,8 +57,8 @@ class Cip68FilesTest {
         ParsedCip68Datum parsed = parse(files(file("image/png", "ipfs://Qm1"), file("image/svg+xml", "https://x/y.svg")));
 
         assertThat(parsed.properties()).containsKey("files");
+        assertThat(parsed.validationErrors()).isEmpty();
         assertThat(warnings()).isEmpty();
-        assertThat(dropped()).isZero();
     }
 
     @Test
@@ -66,50 +67,71 @@ class Cip68FilesTest {
         file.put(BytesPlutusData.of("mediaType"), BytesPlutusData.of("text/html"));
         file.put(BytesPlutusData.of("src"), ListPlutusData.of(BytesPlutusData.of("data:text/html;base64,"), BytesPlutusData.of("PGh0bWw+")));
 
-        assertThat(parse(files(file)).properties()).containsKey("files");
-        assertThat(warnings()).isEmpty();
+        ParsedCip68Datum parsed = parse(files(file));
+
+        assertThat(parsed.properties()).containsKey("files");
+        assertThat(parsed.validationErrors()).isEmpty();
     }
 
     @Test
-    void dropsFilesButKeepsTheTokenWhenASrcIsABareIpfsHash() {
+    void keepsFilesAndReportsASrcThatIsABareIpfsHash() {
         ParsedCip68Datum parsed = parse(files(file("image/png", "ipfs://Qm1"), file("image/png", "QmZPgijpUjVjHbwJyTWW76nBrRzeMescSk4VUeL1ahbs8j")));
 
-        assertDroppedAndTokenKept(parsed, "QmZPgijpUjVjHbwJyTWW76nBrRzeMescSk4VUeL1ahbs8j", "not a URI");
+        assertKeptWithOneError(parsed, 2, "QmZPgijpUjVjHbwJyTWW76nBrRzeMescSk4VUeL1ahbs8j", "not a URI");
     }
 
     @Test
-    void dropsFilesWhenASrcIsEmpty() {
-        assertDroppedAndTokenKept(parse(files(file("image/png", ""))), "", "no usable src");
+    void keepsFilesAndReportsASrcThatIsEmpty() {
+        assertKeptWithOneError(parse(files(file("image/png", ""))), 1, "", "no usable src");
     }
 
     @Test
-    void dropsFilesWhenAnEntryHasNoMediaType() {
+    void keepsFilesAndReportsAnEntryWithNoMediaType() {
         MapPlutusData file = new MapPlutusData();
         file.put(BytesPlutusData.of("src"), BytesPlutusData.of("ipfs://Qm"));
 
-        assertDroppedAndTokenKept(parse(files(file)), "", "has no mediaType");
+        assertKeptWithOneError(parse(files(file)), 1, "", "has no mediaType");
     }
 
     @Test
-    void dropsFilesWhenAnEntryHasNoSrc() {
+    void keepsFilesAndReportsAnEntryWithNoSrc() {
         MapPlutusData file = new MapPlutusData();
         file.put(BytesPlutusData.of("mediaType"), BytesPlutusData.of("image/png"));
 
-        assertDroppedAndTokenKept(parse(files(file)), "", "no usable src");
+        assertKeptWithOneError(parse(files(file)), 1, "", "no usable src");
     }
 
     @Test
-    void dropsFilesWhenAnEntryIsNotAMap() {
-        assertDroppedAndTokenKept(parse(files(BigIntPlutusData.of(1))), "", "is not a map");
+    void keepsFilesAndReportsAnEntryThatIsNotAMap() {
+        ParsedCip68Datum parsed = parse(files(BigIntPlutusData.of(1)));
+
+        assertThat(parsed.properties()).containsKey("files");
+        assertThat(parsed.validationErrors()).singleElement().satisfies(e -> {
+            assertThat(e.fieldName()).isEqualTo("files");
+            assertThat(e.code()).isEqualTo("invalid_files_entry");
+            assertThat(e.error()).contains("is not a map");
+        });
     }
 
-    private void assertDroppedAndTokenKept(ParsedCip68Datum parsed, String value, String reason) {
+    @Test
+    void reportsOneErrorPerBadEntry() {
+        ParsedCip68Datum parsed = parse(files(file("image/png", ""), file("image/png", "ipfs://ok"), file("image/png", "Qm")));
+
+        assertThat(parsed.validationErrors()).hasSize(2).allSatisfy(e -> assertThat(e.code()).isEqualTo("invalid_files_entry"));
+    }
+
+    private void assertKeptWithOneError(ParsedCip68Datum parsed, int entries, String value, String reason) {
         assertThat(parsed.name()).isEqualTo("N");
         assertThat(parsed.image()).isEqualTo("ipfs://img");
-        assertThat(parsed.properties() == null || !parsed.properties().containsKey("files")).isTrue();
-        assertThat(warnings()).singleElement().satisfies(w -> assertThat(w)
-                .contains("dropping property 'files' and keeping the rest").contains(value).contains(reason));
-        assertThat(dropped()).isEqualTo(1);
+        assertThat((List<?>) parsed.properties().get("files")).hasSize(entries);
+        assertThat(parsed.validationErrors()).singleElement().satisfies(e -> {
+            assertThat(e.cip()).isEqualTo("CIP-68");
+            assertThat(e.fieldName()).isEqualTo("files");
+            assertThat(e.fieldCategory().name()).isEqualTo("OPTIONAL");
+            assertThat(e.code()).isEqualTo("invalid_files_entry");
+            assertThat(e.error()).contains(value).contains(reason);
+        });
+        assertThat(warnings()).isEmpty();
     }
 
     // ---------- helpers ----------
@@ -137,11 +159,6 @@ class Cip68FilesTest {
         } catch (Exception e) {
             throw new IllegalStateException(e);
         }
-    }
-
-    private double dropped() {
-        var counter = registry.find(Cip68Metrics.DROPPED_PROPERTIES).tag("kind", Cip68Metrics.INVALID_FILES).counter();
-        return counter == null ? 0 : counter.count();
     }
 
     private List<String> warnings() {

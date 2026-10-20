@@ -252,31 +252,65 @@ class Cip68DatumParserTest {
                     .hasValueSatisfying(m -> assertThat(m.decimals()).isEqualTo(255L));
         }
 
-        @Test
-        void shouldDropDecimalsAboveUpperBoundButKeepMetadata() throws Exception {
-            assertThat(parseWithDecimals(BigInteger.valueOf(256))).hasValueSatisfying(m -> {
-                assertThat(m.name()).isEqualTo("Token");
-                assertThat(m.decimals()).isNull();
+        private void assertDecimalsError(ParsedCip68Datum m) {
+            assertThat(m.validationErrors()).singleElement().satisfies(e -> {
+                assertThat(e.cip()).isEqualTo("CIP-68");
+                assertThat(e.fieldName()).isEqualTo("decimals");
+                assertThat(e.fieldCategory().name()).isEqualTo("OPTIONAL");
+                assertThat(e.code()).isEqualTo("out_of_range");
+                assertThat(e.error()).contains("outside the range CIP-68 allows");
             });
         }
 
         @Test
-        void shouldDropDecimalsBeyondIntRange() throws Exception {
-            assertThat(parseWithDecimals(BigInteger.TWO.pow(40)))
-                    .hasValueSatisfying(m -> assertThat(m.decimals()).isNull());
+        void shouldKeepDecimalsAboveUpperBoundAndReportThem() throws Exception {
+            assertThat(parseWithDecimals(BigInteger.valueOf(256))).hasValueSatisfying(m -> {
+                assertThat(m.name()).isEqualTo("Token");
+                assertThat(m.decimals()).isEqualTo(256L);
+                assertDecimalsError(m);
+            });
         }
 
         @Test
-        void shouldDropDecimalsThatWouldWrapWhenNarrowedToLong() throws Exception {
+        void shouldKeepDecimalsBeyondIntRangeAndReportThem() throws Exception {
+            assertThat(parseWithDecimals(BigInteger.TWO.pow(40))).hasValueSatisfying(m -> {
+                assertThat(m.decimals()).isEqualTo(1L << 40);
+                assertDecimalsError(m);
+            });
+        }
+
+        @Test
+        void shouldStoreNoDecimalsWhenTheyWouldWrapWhenNarrowedToLong() throws Exception {
             // 2^64 + 3: longValue() gives 3, which would otherwise look valid.
-            assertThat(parseWithDecimals(BigInteger.TWO.pow(64).add(BigInteger.valueOf(3))))
-                    .hasValueSatisfying(m -> assertThat(m.decimals()).isNull());
+            assertThat(parseWithDecimals(BigInteger.TWO.pow(64).add(BigInteger.valueOf(3)))).hasValueSatisfying(m -> {
+                assertThat(m.decimals()).isNull();
+                assertDecimalsError(m);
+            });
         }
 
         @Test
-        void shouldDropNegativeDecimals() throws Exception {
-            assertThat(parseWithDecimals(BigInteger.valueOf(-1)))
-                    .hasValueSatisfying(m -> assertThat(m.decimals()).isNull());
+        void shouldKeepNegativeDecimalsAndReportThem() throws Exception {
+            assertThat(parseWithDecimals(BigInteger.valueOf(-1))).hasValueSatisfying(m -> {
+                assertThat(m.decimals()).isEqualTo(-1L);
+                assertDecimalsError(m);
+            });
+        }
+
+        @Test
+        void shouldReportDecimalsThatAreNotAnInteger() throws Exception {
+            MapPlutusData properties = new MapPlutusData();
+            properties.put(BytesPlutusData.of("name"), BytesPlutusData.of("Token"));
+            properties.put(BytesPlutusData.of("decimals"), BytesPlutusData.of("six"));
+            ConstrPlutusData datum = ConstrPlutusData.of(0, properties, BigIntPlutusData.of(1));
+
+            assertThat(parser.parse(HexUtil.encodeHexString(CborSerializationUtil.serialize(datum.serialize()))))
+                    .hasValueSatisfying(m -> {
+                        assertThat(m.decimals()).isNull();
+                        assertThat(m.validationErrors()).singleElement().satisfies(e -> {
+                            assertThat(e.code()).isEqualTo("wrong_type");
+                            assertThat(e.fieldName()).isEqualTo("decimals");
+                        });
+                    });
         }
     }
 
@@ -309,51 +343,50 @@ class Cip68DatumParserTest {
         }
 
         @Test
-        void shouldDropStringsWiderThanColumnButKeepMetadata() throws Exception {
+        void shouldKeepStringsWiderThanTheOldColumnsAndReportNothing() throws Exception {
+            // the columns are TEXT and a datum is at most one transaction: what is on-chain is stored as written
             assertThat(parse("ticker", "T".repeat(33))).hasValueSatisfying(m -> {
-                assertThat(m.ticker()).isNull();
+                assertThat(m.ticker()).hasSize(33);
                 assertThat(m.name()).isEqualTo("Token");
+                assertThat(m.validationErrors()).isEmpty();
             });
-            assertThat(parse("url", "u".repeat(251)))
-                    .hasValueSatisfying(m -> assertThat(m.url()).isNull());
-            assertThat(parse("mediaType", "m".repeat(256)))
-                    .hasValueSatisfying(m -> assertThat(m.mediaType()).isNull());
+            assertThat(parse("url", "u".repeat(251))).hasValueSatisfying(m -> assertThat(m.url()).hasSize(251));
+            assertThat(parse("mediaType", "m".repeat(256))).hasValueSatisfying(m -> assertThat(m.mediaType()).hasSize(256));
         }
 
         @Test
-        void shouldDropOversizedNameSoDatumFailsRequiredFieldCheck() throws Exception {
-            assertThat(parse("name", "N".repeat(256)))
-                    .hasValueSatisfying(m -> assertThat(m.name()).isNull());
+        void shouldKeepALongNameWhateverItsCharacters() throws Exception {
+            assertThat(parse("name", "N".repeat(256))).hasValueSatisfying(m -> assertThat(m.name()).hasSize(256));
+            // 300 emoji = 600 UTF-16 units
+            assertThat(parse("name", "🚀".repeat(300))).hasValueSatisfying(m -> assertThat(m.name()).isEqualTo("🚀".repeat(300)));
         }
 
         @Test
-        void shouldCountUtf16UnitsNotCodePoints() throws Exception {
-            // 128 emoji = 128 code points but 256 UTF-16 units, which H2 rejects for VARCHAR(255)
-            assertThat(parse("name", "🚀".repeat(128)))
-                    .hasValueSatisfying(m -> assertThat(m.name()).isNull());
-            // 127 emoji = 254 UTF-16 units: fits on every database
-            assertThat(parse("name", "🚀".repeat(127)))
-                    .hasValueSatisfying(m -> assertThat(m.name()).hasSize(254));
-        }
-
-        @Test
-        void shouldRejectDatumWhoseVersionWouldWrapWhenNarrowedToLong() throws Exception {
+        void shouldIndexADatumWhoseVersionWouldWrapWhenNarrowedToLongWithoutAVersion() throws Exception {
             // 2^64 + 1: longValue() gives 1, which would otherwise look like a valid version
-            assertThat(parse("ticker", "TT", BigInteger.TWO.pow(64).add(BigInteger.ONE))).isEmpty();
+            assertThat(parse("ticker", "TT", BigInteger.TWO.pow(64).add(BigInteger.ONE))).hasValueSatisfying(m -> {
+                assertThat(m.version()).isNull();
+                assertThat(m.ticker()).isEqualTo("TT");
+                assertThat(m.validationErrors()).singleElement().satisfies(e -> assertThat(e.code()).isEqualTo("out_of_range"));
+            });
         }
 
         @Test
-        void shouldOnlyAcceptTheVersionsCip68Defines() throws Exception {
+        void shouldIndexEveryVersionAndReportTheOnesCip68DoesNotDefine() throws Exception {
             for (long version = 1; version <= 4; version++) {
                 final long v = version;
-                assertThat(parse("ticker", "TT", BigInteger.valueOf(v)))
-                        .hasValueSatisfying(m -> assertThat(m.version()).isEqualTo(v));
+                assertThat(parse("ticker", "TT", BigInteger.valueOf(v))).hasValueSatisfying(m -> {
+                    assertThat(m.version()).isEqualTo(v);
+                    assertThat(m.validationErrors()).isEmpty();
+                });
             }
-            // anything else is not indexed, whether it fits a long or not
-            assertThat(parse("ticker", "TT", BigInteger.ZERO)).isEmpty();
-            assertThat(parse("ticker", "TT", BigInteger.valueOf(5))).isEmpty();
-            assertThat(parse("ticker", "TT", BigInteger.valueOf(Long.MAX_VALUE))).isEmpty();
-            assertThat(parse("ticker", "TT", BigInteger.TWO.pow(63))).isEmpty();
+            for (BigInteger version : new BigInteger[]{BigInteger.ZERO, BigInteger.valueOf(5), BigInteger.valueOf(Long.MAX_VALUE)}) {
+                assertThat(parse("ticker", "TT", version)).hasValueSatisfying(m -> {
+                    assertThat(m.version()).isEqualTo(version.longValue());
+                    assertThat(m.validationErrors()).singleElement().satisfies(e -> assertThat(e.code()).isEqualTo("undefined_version"));
+                });
+            }
+            assertThat(parse("ticker", "TT", BigInteger.TWO.pow(63))).hasValueSatisfying(m -> assertThat(m.version()).isNull());
         }
     }
 
@@ -447,50 +480,51 @@ class Cip68DatumParserTest {
                     .hasValueSatisfying(m -> assertThat(m.name()).isEqualTo("Mine"));
         }
 
-        @Test
-        void shouldReturnEmptyWhenNestedMapHasNoEntryForReferenceNft() throws Exception {
-            String datum = datum(nested(OTHER_POLICY_ID, ASSET_NAME_HEX, metadata("Foreign")), 4);
-
-            assertThat(parser.parse(datum, REFERENCE_NFT)).isEmpty();
+        private void assertNoNestedEntry(java.util.Optional<ParsedCip68Datum> parsed) {
+            assertThat(parsed).hasValueSatisfying(m -> {
+                assertThat(m.name()).isNull();
+                assertThat(m.properties()).isNull();
+                assertThat(m.validationErrors()).singleElement().satisfies(e -> {
+                    assertThat(e.code()).isEqualTo("no_nested_entry");
+                    assertThat(e.fieldName()).isEqualTo("721");
+                    assertThat(e.fieldCategory().name()).isEqualTo("MANDATORY");
+                });
+            });
         }
 
         @Test
-        void shouldCountANestedDatumWithoutAUsableEntryAsSkipped() throws Exception {
-            SimpleMeterRegistry registry = new SimpleMeterRegistry();
-            Cip68DatumParser counting = new Cip68DatumParser(new Cip68Metrics(registry));
+        void shouldIndexANestedDatumWithoutAnEntryForTheReferenceNftWithAnError() throws Exception {
+            // the token is indexed with no metadata, and the error says why (ADR 0006)
+            String datum = datum(nested(OTHER_POLICY_ID, ASSET_NAME_HEX, metadata("Foreign")), 4);
 
-            // an entry that is there and valid, and a flat datum: neither is counted
-            assertThat(counting.parse(datum(nested(POLICY_ID, ASSET_NAME_HEX, metadata("Mine")), 4), REFERENCE_NFT)).isPresent();
-            assertThat(counting.parse(datum(metadata("Flat"), 4), REFERENCE_NFT)).isPresent();
-            assertThat(noNestedEntryCount(registry)).isZero();
+            assertNoNestedEntry(parser.parse(datum, REFERENCE_NFT));
+        }
+
+        @Test
+        void shouldReportNoNestedEntryOnlyWhenTheEntryIsMissing() throws Exception {
+            // an entry that is there and valid, and a flat datum: no error
+            assertThat(parser.parse(datum(nested(POLICY_ID, ASSET_NAME_HEX, metadata("Mine")), 4), REFERENCE_NFT))
+                    .hasValueSatisfying(m -> assertThat(m.validationErrors()).isEmpty());
+            assertThat(parser.parse(datum(metadata("Flat"), 4), REFERENCE_NFT))
+                    .hasValueSatisfying(m -> assertThat(m.validationErrors()).isEmpty());
 
             // another policy
-            assertThat(counting.parse(datum(nested(OTHER_POLICY_ID, ASSET_NAME_HEX, metadata("Foreign")), 4), REFERENCE_NFT)).isEmpty();
-            assertThat(noNestedEntryCount(registry)).isEqualTo(1);
+            assertNoNestedEntry(parser.parse(datum(nested(OTHER_POLICY_ID, ASSET_NAME_HEX, metadata("Foreign")), 4), REFERENCE_NFT));
 
             // the right policy, another asset name
-            assertThat(counting.parse(datum(nested(POLICY_ID, HexUtil.encodeHexString("Other".getBytes()), metadata("Other")), 4),
-                    REFERENCE_NFT)).isEmpty();
-            assertThat(noNestedEntryCount(registry)).isEqualTo(2);
+            assertNoNestedEntry(parser.parse(datum(nested(POLICY_ID, HexUtil.encodeHexString("Other".getBytes()), metadata("Other")), 4),
+                    REFERENCE_NFT));
 
             // an entry that is not a map
-            assertThat(counting.parse(datum(nestedEntry(POLICY_ID, ASSET_NAME_HEX, BytesPlutusData.of("not a map")), 4),
-                    REFERENCE_NFT)).isEmpty();
-            assertThat(noNestedEntryCount(registry)).isEqualTo(3);
+            assertNoNestedEntry(parser.parse(datum(nestedEntry(POLICY_ID, ASSET_NAME_HEX, BytesPlutusData.of("not a map")), 4),
+                    REFERENCE_NFT));
 
             // more than one entry and no token to choose by
             MapPlutusData root = nested(POLICY_ID, ASSET_NAME_HEX, metadata("A"));
             MapPlutusData byPolicy = (MapPlutusData) root.getMap().get(BytesPlutusData.of("721"));
             MapPlutusData byAsset = (MapPlutusData) byPolicy.getMap().get(BytesPlutusData.of(HexUtil.decodeHexString(POLICY_ID)));
             byAsset.put(BytesPlutusData.of("Other".getBytes()), metadata("B"));
-            assertThat(counting.parse(datum(root, 4))).isEmpty();
-            assertThat(noNestedEntryCount(registry)).isEqualTo(4);
-        }
-
-        private static double noNestedEntryCount(SimpleMeterRegistry registry) {
-            var counter = registry.find(Cip68Metrics.SKIPPED).tag("label", "unknown")
-                    .tag("reason", Cip68Metrics.NO_NESTED_ENTRY).counter();
-            return counter == null ? 0 : counter.count();
+            assertNoNestedEntry(parser.parse(datum(root, 4)));
         }
 
         @Test
@@ -628,23 +662,29 @@ class Cip68DatumParserTest {
         }
 
         @Test
-        void shouldKeepTheTokenAndDropThePropertyWhenItIsAConstructor() {
+        void shouldKeepTheTokenAndThePropertyAndReportWhenItIsAConstructor() {
             assertThat(parser.parse(NFT_WITH_CONSTRUCTOR_PROPERTY)).hasValueSatisfying(m -> {
                 assertThat(m.name()).isEqualTo("NFT #1");
-                // contractData was the only additional property
-                assertThat(m.properties()).isNull();
+                // contractData is the only additional property: kept, in the {constructor, fields} form
+                assertThat(additionalProperties(m)).containsOnlyKeys("contractData");
+                assertThat(additionalProperties(m).get("contractData")).asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.MAP).containsKeys("constructor", "fields");
+                assertThat(m.validationErrors()).singleElement().satisfies(e -> {
+                    assertThat(e.fieldName()).isEqualTo("properties.contractData");
+                    assertThat(e.code()).isEqualTo("plutus_constructor");
+                });
             });
         }
 
         @Test
-        void shouldKeepFungibleTokenMetadataAndDropOnlyTheConstructorProperty() {
+        void shouldKeepFungibleTokenMetadataAndReportTheConstructorProperty() {
             assertThat(parser.parse(FT_WITH_CONSTRUCTOR_PROPERTY)).hasValueSatisfying(m -> {
                 assertThat(m.name()).isEqualTo("Wrapped pUSDC");
                 assertThat(m.ticker()).isEqualTo("pUSDC");
                 assertThat(m.decimals()).isEqualTo(6L);
 
                 Map<String, Object> additional = additionalProperties(m);
-                assertThat(additional).doesNotContainKey("seed");
+                assertThat(additional).containsKey("seed");
+                assertThat(m.validationErrors()).singleElement().satisfies(e -> assertThat(e.fieldName()).isEqualTo("properties.seed"));
                 assertThat(additional.get("oracles")).isEqualTo(List.of(
                         "80edfa909a3d40a54fca4c3ee852c7ba2a79391738911dc363580dc2",
                         "ab25d3b9476a3e3343a2f353b08b40913c573de7d286ef37ac4013e0",
@@ -654,14 +694,14 @@ class Cip68DatumParserTest {
         }
 
         @Test
-        void shouldKeepMainnetVouchersAndDropTheirConstructorOwner() {
+        void shouldKeepMainnetVouchersWithTheirConstructorOwnerAndReportIt() {
             MAINNET_VOUCHERS_WITH_CONSTRUCTOR_OWNER.forEach((datum, name) ->
                     assertThat(parser.parse(datum)).as(name).hasValueSatisfying(m -> {
                         assertThat(m.name()).isEqualTo(name);
                         assertThat(m.version()).isEqualTo(1L);
                         assertThat(m.url()).isEqualTo("https://pbg.io/vouchers");
-                        assertThat(additionalProperties(m)).containsKeys("datum", "tokens", "period", "price")
-                                .doesNotContainKey("owner");
+                        assertThat(additionalProperties(m)).containsKeys("datum", "tokens", "period", "price", "owner");
+                        assertThat(m.validationErrors()).singleElement().satisfies(e -> assertThat(e.fieldName()).isEqualTo("properties.owner"));
                     }));
         }
 

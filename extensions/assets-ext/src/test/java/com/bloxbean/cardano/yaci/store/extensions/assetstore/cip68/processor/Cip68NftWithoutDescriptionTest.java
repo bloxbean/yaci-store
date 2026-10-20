@@ -27,7 +27,8 @@ import static org.mockito.Mockito.verify;
 /**
  * CIP-68 declares {@code ? description} for the 222 NFT and the 444 RFT, but {@code description}
  * (no {@code ?}) for the 333 FT. The datums below are real mainnet NFT datums with a name and an
- * image but no description; they used to be skipped, because every label was required to have one.
+ * image but no description; they used to be skipped, because every label was required to have one. A 222 or 444 token
+ * without a description has no error; a 333 token without one is indexed with a MANDATORY error.
  * <p>
  * Runs the real parser, token service and processor; only the repository is mocked.
  */
@@ -89,11 +90,18 @@ class Cip68NftWithoutDescriptionTest {
     }
 
     @Test
-    void dropsAnNftWhoseImageIsEmpty() {
-        // no description is fine for an NFT, but CIP-68 requires an image and this datum's is empty
+    void indexesAnNftWhoseImageIsEmptyWithAMandatoryError() {
+        // no description is fine for an NFT, but CIP-68 requires an image and this datum's is empty: indexed with the error
         processor.processTransaction(event(NFT_NO_DESCRIPTION_EMPTY_IMAGE, "000de140"));
 
-        verify(repository, never()).saveAll(any());
+        Cip68Metadata saved = savedRow();
+        assertThat(saved.getName()).isEqualTo("NFT #1");
+        // (the datum also has a constructor property, reported as an error of its own)
+        assertThat(saved.getValidationErrors()).filteredOn(e -> e.fieldName().equals("image")).singleElement().satisfies(e -> {
+            assertThat(e.subStandard()).isEqualTo("222");
+            assertThat(e.fieldCategory().name()).isEqualTo("MANDATORY");
+            assertThat(e.code()).isEqualTo("missing_value");
+        });
     }
 
     @Test
@@ -108,12 +116,21 @@ class Cip68NftWithoutDescriptionTest {
     }
 
     @Test
-    void stillSkipsFungibleTokensWithoutDescription() {
-        // 333 requires a description, so the same datum is dropped when it belongs to an FT
+    void indexesFungibleTokensWithoutDescriptionWithAMandatoryError() {
+        // 333 requires a description: the same datum is indexed when it belongs to an FT, with the error for the 333 label
         NFT_DATUMS_WITHOUT_DESCRIPTION.forEach((datum, name) -> {
+            org.mockito.Mockito.clearInvocations(repository);
+
             processor.processTransaction(event(datum, "0014df10"));
 
-            verify(repository, never()).saveAll(any());
+            Cip68Metadata saved = savedRow();
+            assertThat(saved.getName()).as(name).isEqualTo(name);
+            assertThat(saved.getLabel()).as(name).isEqualTo(Cip68Constants.LABEL_FT);
+            assertThat(saved.getValidationErrors()).as(name).filteredOn(e -> e.fieldName().equals("description"))
+                    .singleElement().satisfies(e -> {
+                        assertThat(e.subStandard()).isEqualTo("333");
+                        assertThat(e.fieldCategory().name()).isEqualTo("MANDATORY");
+                    });
         });
     }
 

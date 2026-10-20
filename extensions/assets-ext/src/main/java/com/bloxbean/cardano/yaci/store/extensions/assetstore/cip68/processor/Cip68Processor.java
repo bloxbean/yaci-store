@@ -5,12 +5,13 @@ import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.AssetType;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.metrics.Cip68Metrics;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Constants;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.DatumRejection;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.ParsedCip68Datum;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.parser.Cip68DatumParser;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service.Cip68TokenService;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service.Cip68Validator;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.Cip68Metadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.repository.Cip68MetadataRepository;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.validation.ValidationError;
 import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxoEvent;
 import com.bloxbean.cardano.yaci.store.utxo.domain.TxInputOutput;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -126,35 +127,54 @@ public class Cip68Processor {
     }
 
     /**
-     * The row for one reference NFT of an output, or empty if its datum cannot be parsed or is not valid for its labels.
-     * {@code shared} is set when the datum is a flat one that the output's several reference NFTs have in common.
+     * The row for one reference NFT of an output, or empty if its datum cannot be parsed. A datum is stored whatever
+     * is wrong with it: what departs from CIP-68 is kept in the row as {@code validation_errors}, and the API returns
+     * it (ADR 0006). {@code shared} is set when the datum is a flat one that the output's several reference NFTs
+     * have in common.
      */
     private Optional<Cip68Metadata> toEntity(AddressUtxo output, AssetType refNft, Set<String> assetUnitsInTx, Long slot,
                                              @Nullable SharedDatum shared) {
         Optional<ParsedCip68Datum> parsedDatum = shared != null
                 ? shared.parsed
                 : cip68DatumParser.parse(output.getInlineDatum(), refNft);
-        return parsedDatum.flatMap(parsed -> {
+        return parsedDatum.map(parsed -> {
             // The labels come first: which fields a datum must have depends on them. A reference NFT can have user
-            // tokens of several labels (the CIP allows it), and then the datum has to satisfy the requirements of
-            // every one of them.
+            // tokens of several labels (the CIP allows it), and then the datum is checked against every one of them.
             List<Integer> labels = deriveLabels(refNft, assetUnitsInTx, parsed);
-            if (!satisfiesEveryLabel(parsed, refNft, labels)) {
-                return Optional.empty();
+            // what is wrong with the datum itself does not depend on the label (the parser's errors, and the logo)
+            List<ValidationError> datumErrors = new ArrayList<>(parsed.validationErrors());
+            ValidationError logoError = Cip68Validator.validateLogo(parsed);
+            if (logoError != null) {
+                datumErrors.add(logoError);
             }
-            ParsedCip68Datum stored = withoutInvalidLogo(parsed, refNft, shared);
+            List<ValidationError> labelErrors = new ArrayList<>();
+            for (int candidate : labels) {
+                labelErrors.addAll(Cip68Validator.validate(parsed, candidate));
+            }
+            List<ValidationError> errors = new ArrayList<>(datumErrors);
+            errors.addAll(labelErrors);
+
             int label = labels.getFirst();
-            Cip68Metadata entity = buildCip68Metadata(stored, refNft, output.getInlineDatum(), slot,
+            Cip68Metadata entity = buildCip68Metadata(parsed, errors, refNft, output.getInlineDatum(), slot,
                     output.getTxHash(), output.getTxIndex(), label);
             requireSerializableProperties(entity);
             metrics.datumIndexed(label);
+            // what the datum itself gets wrong is the same for every reference NFT of a shared flat datum: count it once
+            if (shared == null || shared.markReported()) {
+                metrics.validationErrors(datumErrors);
+            }
+            metrics.validationErrors(labelErrors);
+            if (!errors.isEmpty()) {
+                log.debug("CIP-68 datum of {}/{} (label {}) is indexed with {} validation errors: {}",
+                        refNft.policyId(), refNft.assetName(), label, errors.size(), errors);
+            }
             if (labels.size() > 1) {
-                metrics.multiLabel(labels, Cip68Metrics.INDEXED_OUTCOME);
-                log.info("CIP-68 reference NFT {}/{} has user tokens for labels {}; the datum satisfies all of them, "
+                metrics.multiLabel(labels);
+                log.info("CIP-68 reference NFT {}/{} has user tokens for labels {}; the datum is checked against all of them, "
                                 + "stored with label {}",
                         refNft.policyId(), refNft.assetName(), labels, label);
             }
-            return Optional.of(entity);
+            return entity;
         });
     }
 
@@ -186,40 +206,16 @@ public class Cip68Processor {
     }
 
     /**
-     * The logo is optional, so a bad one costs only the logo: it is left out with a warning and the rest of the datum
-     * is indexed. The logo of a datum that several reference NFTs share is left out of each of their rows, but
-     * reported (warning and count) once.
-     */
-    private ParsedCip68Datum withoutInvalidLogo(ParsedCip68Datum parsed, AssetType refNft, @Nullable SharedDatum shared) {
-        Optional<String> reason = cip68TokenService.invalidLogoReason(parsed);
-        if (reason.isEmpty()) {
-            return parsed;
-        }
-        if (shared == null) {
-            log.warn("CIP-68 datum of {}/{}: dropping the logo and keeping the rest, because {}",
-                    refNft.policyId(), refNft.assetName(), reason.get());
-            metrics.propertyDropped(Cip68Metrics.BAD_LOGO_SCHEME);
-        } else if (!shared.logoReported) {
-            shared.logoReported = true;
-            log.warn("Output {}#{}: dropping the logo of the flat datum shared by its {} reference NFTs and keeping the rest, "
-                            + "because {}",
-                    shared.output.getTxHash(), shared.output.getOutputIndex(), shared.referenceNfts, reason.get());
-            metrics.propertyDropped(Cip68Metrics.BAD_LOGO_SCHEME);
-        }
-        return parsed.withoutLogo();
-    }
-
-    /**
      * The flat datum of an output that holds several reference NFTs. It is the metadata of each of them and is the same
-     * for all, so it is parsed once, and what it loses (a dropped property, an undecodable datum, an undefined version)
-     * is reported once for the output instead of once per reference NFT. The rows, the {@code indexed} count and the
+     * for all, so it is parsed once, and what is wrong with it (an undefined version, a wrong type, a Plutus constructor)
+     * is counted once for the output instead of once per reference NFT. The rows, the {@code indexed} count and the
      * checks against the labels stay per reference NFT, since each has its own row and its own user tokens.
      */
     private final class SharedDatum {
         private final AddressUtxo output;
         private final int referenceNfts;
         private final Optional<ParsedCip68Datum> parsed;
-        private boolean logoReported;
+        private boolean reported;
 
         private SharedDatum(AddressUtxo output, int referenceNfts) {
             this.output = output;
@@ -227,25 +223,13 @@ public class Cip68Processor {
             // Parsed here, once, without a reference NFT: the datum is not specific to one of them.
             this.parsed = cip68DatumParser.parse(output.getInlineDatum());
         }
-    }
 
-    /**
-     * Checks the datum against the requirements of each label in turn. The first label it fails gives the warning
-     * and the metric, and the datum is not indexed.
-     */
-    private boolean satisfiesEveryLabel(ParsedCip68Datum parsed, AssetType refNft, List<Integer> labels) {
-        for (int candidate : labels) {
-            Optional<DatumRejection> rejection = cip68TokenService.rejection(parsed, candidate);
-            if (rejection.isPresent()) {
-                warnSkipped(refNft, labels, candidate, rejection.get().message());
-                metrics.datumSkipped(candidate, rejection.get().reason());
-                if (labels.size() > 1) {
-                    metrics.multiLabel(labels, Cip68Metrics.SKIPPED_OUTCOME);
-                }
-                return false;
-            }
+        /** True the first time it is called: the errors of the shared datum are counted by the first reference NFT. */
+        private boolean markReported() {
+            boolean first = !reported;
+            reported = true;
+            return first;
         }
-        return true;
     }
 
     /**
@@ -339,21 +323,8 @@ public class Cip68Processor {
                 refNfts.stream().map(Amt::getUnit).collect(Collectors.joining(", ")));
     }
 
-    /**
-     * A datum that is not indexed because it breaks what CIP-68 requires leaves a trace, not a silent gap. With
-     * several labels, the warning also says which of them the datum fails.
-     */
-    private void warnSkipped(AssetType refNftAssetType, List<Integer> labels, int failedLabel, String reason) {
-        if (labels.size() == 1) {
-            log.warn("Skipping CIP-68 datum of {}/{} (label {}): {}",
-                    refNftAssetType.policyId(), refNftAssetType.assetName(), failedLabel, reason);
-        } else {
-            log.warn("Skipping CIP-68 datum of {}/{} (labels {}): it is not valid as label {}, because {}",
-                    refNftAssetType.policyId(), refNftAssetType.assetName(), labels, failedLabel, reason);
-        }
-    }
-
     private Cip68Metadata buildCip68Metadata(ParsedCip68Datum parsed,
+                                             List<ValidationError> validationErrors,
                                              AssetType assetType,
                                              String datum,
                                              Long slot,
@@ -378,6 +349,7 @@ public class Cip68Processor {
                 .version(parsed.version())
                 .datum(datum)
                 .properties(parsed.properties())
+                .validationErrors(validationErrors)
                 .lastSyncedAt(LocalDateTime.now())
                 .build();
     }

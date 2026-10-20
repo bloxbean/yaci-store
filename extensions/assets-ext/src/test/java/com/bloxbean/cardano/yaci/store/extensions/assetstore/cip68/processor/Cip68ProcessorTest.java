@@ -7,7 +7,6 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.metrics.Cip68
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Constants;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.Cip68Metadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
-import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.DatumRejection;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.ParsedCip68Datum;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.parser.Cip68DatumParser;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.repository.Cip68MetadataRepository;
@@ -145,7 +144,7 @@ class Cip68ProcessorTest {
         }
 
         @Test
-        void skipsWhenMetadataInvalid() {
+        void indexesAnInvalidDatumWithItsValidationErrors() {
             String datum = "d8799fa34446756e6e";
             ParsedCip68Datum metadata = new ParsedCip68Datum(
                     null, null, null, null, null, null, null, null, null, null);
@@ -164,12 +163,17 @@ class Cip68ProcessorTest {
 
             when(cip68TokenService.extractReferenceNfts(utxo)).thenReturn(List.of(refNftAmt));
             when(cip68DatumParser.parse(eq(datum), any())).thenReturn(Optional.of(metadata));
-            when(cip68TokenService.rejection(metadata, Cip68Constants.LABEL_FT)).thenReturn(Optional.of(
-                    new DatumRejection(DatumRejection.Reason.NO_NAME, "it has no name")));
 
             processor.processTransaction(buildEvent(100L, utxo));
 
-            verifyNoInteractions(metadataReferenceNftRepository);
+            ArgumentCaptor<Iterable<Cip68Metadata>> captor = ArgumentCaptor.forClass(Iterable.class);
+            verify(metadataReferenceNftRepository).saveAll(captor.capture());
+            assertThat(captor.getValue()).singleElement().satisfies(entity -> {
+                assertThat(entity.getLabel()).isEqualTo(Cip68Constants.LABEL_FT);
+                assertThat(entity.getValidationErrors())
+                        .extracting(e -> e.fieldName() + ":" + e.subStandard() + ":" + e.code())
+                        .containsExactly("name:333:missing_value", "description:333:missing_value");
+            });
         }
     }
 

@@ -42,10 +42,10 @@ import static org.mockito.Mockito.verify;
 
 /**
  * CIP-68 allows several user tokens for one reference NFT, for example a 222 and a 333 with the same policy and base
- * name. The row is stored with the first label (222, then 333, then 444), and the datum has to satisfy the
+ * name. The row is stored with the first label (222, then 333, then 444), and the datum is checked against the
  * requirements of every label the transaction pairs it with: a token that is also a fungible token needs a
- * description, one that is also an NFT needs an image. A datum that fails one of them is not indexed, and the warning
- * says which label it fails.
+ * description, one that is also an NFT needs an image. A datum that fails one of them is still indexed, and each
+ * error names the label it was found for.
  */
 class Cip68MultiLabelTest {
 
@@ -80,52 +80,65 @@ class Cip68MultiLabelTest {
         processorLogger.detachAppender(logs);
     }
 
+    private static List<String> errorsOf(Cip68Metadata row) {
+        return row.getValidationErrors().stream()
+                .map(e -> e.subStandard() + ":" + e.fieldName() + ":" + e.fieldCategory() + ":" + e.code()).toList();
+    }
+
     @Test
     void indexesADatumThatSatisfiesEveryLabelWithTheFirstOne() {
         Optional<Cip68Metadata> saved = index(datum("name", "LP", "description", "A pool token", "image", "ipfs://Qm"), NFT, FT);
 
         assertThat(saved).get().extracting(Cip68Metadata::getLabel).isEqualTo(Cip68Constants.LABEL_NFT);
+        assertThat(saved.get().getValidationErrors()).isEmpty();
         assertThat(warnings()).isEmpty();
         assertThat(infos()).singleElement().satisfies(i -> assertThat(i)
                 .contains(POLICY).contains("[222, 333]").contains("stored with label 222"));
-        assertThat(multiLabel("222+333", "indexed")).isEqualTo(1);
+        assertThat(multiLabel("222+333")).isEqualTo(1);
     }
 
     @Test
-    void dropsTheDatumWhenItFailsTheSecondLabel() {
+    void indexesTheDatumAndReportsTheSecondLabelItFails() {
         // valid as a 222 (name and image), but a 333 needs a description
         Optional<Cip68Metadata> saved = index(datum("name", "LP", "image", "ipfs://Qm"), NFT, FT);
 
-        assertThat(saved).isEmpty();
-        assertThat(warnings()).singleElement().satisfies(w -> assertThat(w)
-                .contains("Skipping CIP-68 datum").contains(POLICY).contains("(labels [222, 333])")
-                .contains("not valid as label 333").contains("no description"));
-        assertThat(skipped(333, "no_description")).isEqualTo(1);
-        assertThat(multiLabel("222+333", "skipped")).isEqualTo(1);
+        assertThat(saved).get().extracting(Cip68Metadata::getLabel).isEqualTo(Cip68Constants.LABEL_NFT);
+        assertThat(errorsOf(saved.get())).containsExactly("333:description:MANDATORY:missing_value");
+        assertThat(warnings()).isEmpty();
+        assertThat(multiLabel("222+333")).isEqualTo(1);
+        assertThat(registry.find(Cip68Metrics.SKIPPED).counters()).isEmpty();
     }
 
     @Test
-    void dropsTheDatumWhenItFailsTheFirstLabel() {
+    void indexesTheDatumAndReportsTheFirstLabelItFails() {
         // valid as a 333 (name and description), but a 222 needs an image
         Optional<Cip68Metadata> saved = index(datum("name", "LP", "description", "A pool token"), NFT, FT);
 
-        assertThat(saved).isEmpty();
-        assertThat(warnings()).singleElement().satisfies(w -> assertThat(w)
-                .contains("not valid as label 222").contains("no image"));
-        assertThat(skipped(222, "no_image")).isEqualTo(1);
-        assertThat(multiLabel("222+333", "skipped")).isEqualTo(1);
+        assertThat(saved).get().extracting(Cip68Metadata::getLabel).isEqualTo(Cip68Constants.LABEL_NFT);
+        assertThat(errorsOf(saved.get())).containsExactly("222:image:MANDATORY:missing_value");
     }
 
     @Test
-    void aBadFungibleLogoDoesNotRejectATokenThatIsAlsoAnNft() {
+    void reportsEveryLabelThatFailsWithItsOwnSubStandard() {
+        // a 222 + 333 + 444 datum with nothing but a name: 222 and 444 miss the image, 333 misses the description
+        Optional<Cip68Metadata> saved = index(datum("name", "X"), NFT, FT, RFT);
+
+        assertThat(errorsOf(saved.orElseThrow())).containsExactly(
+                "222:image:MANDATORY:missing_value", "333:description:MANDATORY:missing_value", "444:image:MANDATORY:missing_value");
+    }
+
+    @Test
+    void aBadFungibleLogoIsKeptAndReportedOnATokenThatIsAlsoAnNft() {
         Optional<Cip68Metadata> saved = index(
                 datum("name", "LP", "description", "d", "image", "ipfs://Qm", "logo", "iagon://logo"), NFT, FT);
 
         assertThat(saved).get().satisfies(row -> {
             assertThat(row.getLabel()).isEqualTo(Cip68Constants.LABEL_NFT);
-            assertThat(row.getLogo()).isNull();
+            assertThat(row.getLogo()).isEqualTo("iagon://logo");
+            // the logo does not depend on the label, so its error carries no sub_standard
+            assertThat(errorsOf(row)).containsExactly("null:logo:OPTIONAL:invalid_uri_scheme");
         });
-        assertThat(multiLabel("222+333", "indexed")).isEqualTo(1);
+        assertThat(multiLabel("222+333")).isEqualTo(1);
     }
 
     @Test
@@ -133,14 +146,17 @@ class Cip68MultiLabelTest {
         Optional<Cip68Metadata> saved = index(datum("name", "X", "description", "d", "image", "ipfs://Qm"), NFT, FT, RFT);
 
         assertThat(saved).get().extracting(Cip68Metadata::getLabel).isEqualTo(Cip68Constants.LABEL_NFT);
-        assertThat(multiLabel("222+333+444", "indexed")).isEqualTo(1);
+        assertThat(saved.get().getValidationErrors()).isEmpty();
+        assertThat(multiLabel("222+333+444")).isEqualTo(1);
     }
 
     @Test
-    void aFungibleAndRichFungiblePairNeedsDescriptionAndImage() {
-        // 333 + 444: stored as 333, and it must also have the 444 image
-        assertThat(index(datum("name", "X", "description", "d"), FT, RFT)).isEmpty();
-        assertThat(skipped(444, "no_image")).isEqualTo(1);
+    void aFungibleAndRichFungiblePairReportsAMissingImageForTheRichFungibleLabel() {
+        // 333 + 444: stored as 333, and the 444 image is missing
+        Optional<Cip68Metadata> saved = index(datum("name", "X", "description", "d"), FT, RFT);
+
+        assertThat(saved).get().extracting(Cip68Metadata::getLabel).isEqualTo(Cip68Constants.LABEL_FT);
+        assertThat(errorsOf(saved.get())).containsExactly("444:image:MANDATORY:missing_value");
     }
 
     @Test
@@ -153,21 +169,17 @@ class Cip68MultiLabelTest {
     }
 
     @Test
-    void aSingleLabelWarningKeepsTheOldFormat() {
-        index(datum("name", "N"), NFT);
+    void aSingleLabelWithAMissingFieldIsIndexedWithTheErrorForThatLabel() {
+        Optional<Cip68Metadata> saved = index(datum("name", "N"), NFT);
 
-        assertThat(warnings()).singleElement().satisfies(w -> assertThat(w).contains("(label 222)").doesNotContain("labels"));
+        assertThat(errorsOf(saved.orElseThrow())).containsExactly("222:image:MANDATORY:missing_value");
+        assertThat(warnings()).isEmpty();
     }
 
     // ---------- helpers ----------
 
-    private double skipped(int label, String reason) {
-        var c = registry.find(Cip68Metrics.SKIPPED).tag("label", String.valueOf(label)).tag("reason", reason).counter();
-        return c == null ? 0 : c.count();
-    }
-
-    private double multiLabel(String labels, String outcome) {
-        var c = registry.find(Cip68Metrics.MULTI_LABEL).tag("labels", labels).tag("outcome", outcome).counter();
+    private double multiLabel(String labels) {
+        var c = registry.find(Cip68Metrics.MULTI_LABEL).tag("labels", labels).counter();
         return c == null ? 0 : c.count();
     }
 

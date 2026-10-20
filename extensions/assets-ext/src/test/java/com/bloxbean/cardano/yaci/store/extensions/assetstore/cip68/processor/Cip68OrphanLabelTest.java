@@ -46,7 +46,7 @@ import static org.mockito.Mockito.verify;
  * {@code files} mean an NFT (222), or an RFT (444) when {@code decimals} is there too; otherwise 333. An exact
  * pairing always wins over this guess.
  * <p>
- * A datum that is skipped for a missing required field leaves a warning.
+ * A datum with a missing required field is still indexed, with a MANDATORY error for the label it was inferred as.
  * <p>
  * Runs the real parser, token service and processor with the log captured; only the repository is mocked.
  */
@@ -104,13 +104,17 @@ class Cip68OrphanLabelTest {
     }
 
     @Test
-    void realNftDatumWithAnEmptyImageIsDroppedAndWarns() {
+    void realNftDatumWithAnEmptyImageIsIndexedWithAMandatoryImageError() {
         // the datum of #1159 has `image` as an empty byte string; CIP-68 requires an image for an NFT
         Optional<Cip68Metadata> saved = index(NFT_NO_DESCRIPTION, POLICY, BASE, null);
 
-        assertThat(saved).isEmpty();
-        assertThat(warnings()).singleElement().satisfies(w -> assertThat(w)
-                .contains("Skipping CIP-68 datum").contains("(label 222)").contains("no image"));
+        assertThat(saved).get().satisfies(row -> {
+            assertThat(row.getLabel()).isEqualTo(Cip68Constants.LABEL_NFT);
+            // the datum also has a constructor property, which is an error of its own
+            assertThat(errors(row)).containsExactly("null:properties.contractData:OPTIONAL:plutus_constructor",
+                    "222:image:MANDATORY:missing_value");
+        });
+        assertThat(warnings()).isEmpty();
     }
 
     @Test
@@ -122,7 +126,7 @@ class Cip68OrphanLabelTest {
     }
 
     @Test
-    void filesAloneMakeAnNftThatIsDroppedWithoutAnImage() {
+    void filesAloneMakeAnNftThatIsIndexedWithAMissingImageError() {
         MapPlutusData file = new MapPlutusData();
         file.put(BytesPlutusData.of("mediaType"), BytesPlutusData.of("image/png"));
         file.put(BytesPlutusData.of("src"), BytesPlutusData.of("ipfs://Qm"));
@@ -130,16 +134,20 @@ class Cip68OrphanLabelTest {
                 POLICY, BASE, null);
 
         // inferred as 222, which CIP-68 requires an image for
-        assertThat(saved).isEmpty();
-        assertThat(warnings()).singleElement().satisfies(w -> assertThat(w).contains("(label 222)").contains("no image"));
+        assertThat(saved).get().satisfies(row -> {
+            assertThat(row.getLabel()).isEqualTo(Cip68Constants.LABEL_NFT);
+            assertThat(errors(row)).containsExactly("222:image:MANDATORY:missing_value");
+        });
     }
 
     @Test
-    void mediaTypeAloneMakesAnNftThatIsDroppedWithoutAnImage() {
+    void mediaTypeAloneMakesAnNftThatIsIndexedWithAMissingImageError() {
         Optional<Cip68Metadata> saved = index(datum(text("name", "Typed"), text("mediaType", "image/png")), POLICY, BASE, null);
 
-        assertThat(saved).isEmpty();
-        assertThat(warnings()).singleElement().satisfies(w -> assertThat(w).contains("(label 222)").contains("no image"));
+        assertThat(saved).get().satisfies(row -> {
+            assertThat(row.getLabel()).isEqualTo(Cip68Constants.LABEL_NFT);
+            assertThat(errors(row)).containsExactly("222:image:MANDATORY:missing_value");
+        });
     }
 
     @Test
@@ -177,35 +185,44 @@ class Cip68OrphanLabelTest {
         assertThat(saved).get().extracting(Cip68Metadata::getLabel).isEqualTo(Cip68Constants.LABEL_NFT);
     }
 
-    // ---------- a skipped datum is reported ----------
+    // ---------- what is wrong with a datum is reported in the row ----------
 
     @Test
-    void warnsWhenAFungibleTokenHasNoDescription() {
+    void aFungibleTokenWithoutADescriptionIsIndexedWithAMandatoryError() {
         Optional<Cip68Metadata> saved = index(datum(text("name", "Coin"), text("ticker", "COIN")), POLICY, BASE, null);
 
-        assertThat(saved).isEmpty();
-        assertThat(warnings()).singleElement().satisfies(w -> assertThat(w)
-                .contains("Skipping CIP-68 datum").contains(POLICY).contains("000643b0" + BASE)
-                .contains("no description").contains("fungible token"));
+        assertThat(saved).get().satisfies(row -> {
+            assertThat(row.getLabel()).isEqualTo(Cip68Constants.LABEL_FT);
+            assertThat(errors(row)).containsExactly("333:description:MANDATORY:missing_value");
+            assertThat(row.getValidationErrors().getFirst().error()).isEqualTo("description field is missing a mandatory value");
+        });
     }
 
     @Test
-    void warnsWhenThereIsNoName() {
+    void aDatumWithoutANameIsIndexedWithAMandatoryNameError() {
         Optional<Cip68Metadata> saved = index(datum(text("description", "no name here"), text("image", "ipfs://Qm")),
                 POLICY, BASE, Cip68Constants.NFT_TOKEN_PREFIX);
 
-        assertThat(saved).isEmpty();
-        assertThat(warnings()).singleElement().satisfies(w -> assertThat(w).contains("Skipping CIP-68 datum").contains("no name"));
+        assertThat(saved).get().satisfies(row -> {
+            assertThat(row.getName()).isNull();
+            assertThat(errors(row)).containsExactly("222:name:MANDATORY:missing_value");
+        });
     }
 
     @Test
-    void doesNotWarnForADatumThatIsIndexed() {
-        index(datum(text("name", "Fine"), text("description", "d"), text("ticker", "FIN")), POLICY, BASE, null);
+    void aDatumThatIsIndexedWithoutErrorsHasAnEmptyList() {
+        Optional<Cip68Metadata> saved = index(datum(text("name", "Fine"), text("description", "d"), text("ticker", "FIN")), POLICY, BASE, null);
 
+        assertThat(saved).get().satisfies(row -> assertThat(row.getValidationErrors()).isEmpty());
         assertThat(warnings()).isEmpty();
     }
 
     // ---------- helpers ----------
+
+    private static List<String> errors(Cip68Metadata row) {
+        return row.getValidationErrors().stream()
+                .map(e -> e.subStandard() + ":" + e.fieldName() + ":" + e.fieldCategory() + ":" + e.code()).toList();
+    }
 
     private List<String> warnings() {
         return logs.list.stream().filter(e -> e.getLevel() == Level.WARN).map(ILoggingEvent::getFormattedMessage).toList();

@@ -134,49 +134,36 @@ class Cip68DatumParserTextTest {
         assertThat(parse(noChunks).orElseThrow().image()).isNull();
     }
 
-    // ---------- size cap ----------
+    // ---------- no size cap ----------
 
     @Test
-    void keepsALogoAndAnImageAtTheLimit() throws Exception {
+    void keepsALogoAndAnImageOfAnySizeAndReportsNothing() throws Exception {
+        // a datum is at most one transaction (16 KB), so there is nothing to cap: what is on-chain is indexed
+        int size = 64 * 1024 + 1;
         MapPlutusData properties = props("name", "n");
-        properties.put(BytesPlutusData.of("logo"), chunks(Cip68DatumParser.URI_MAX_BYTES));
-        properties.put(BytesPlutusData.of("image"), chunks(Cip68DatumParser.URI_MAX_BYTES));
+        properties.put(BytesPlutusData.of("logo"), chunks(size));
+        properties.put(BytesPlutusData.of("image"), chunks(size));
 
         ParsedCip68Datum parsed = parse(properties).orElseThrow();
 
-        assertThat(parsed.logo()).hasSize(Cip68DatumParser.URI_MAX_BYTES);
-        assertThat(parsed.image()).hasSize(Cip68DatumParser.URI_MAX_BYTES);
+        assertThat(parsed.logo()).hasSize(size);
+        assertThat(parsed.image()).hasSize(size);
+        assertThat(parsed.validationErrors()).isEmpty();
         assertThat(warnings()).isEmpty();
     }
 
     @Test
-    void dropsALogoAndAnImageOverTheLimitButKeepsTheDatum() throws Exception {
-        MapPlutusData properties = props("name", "Big", "description", "has a huge logo");
-        properties.put(BytesPlutusData.of("logo"), chunks(Cip68DatumParser.URI_MAX_BYTES + 1));
-        properties.put(BytesPlutusData.of("image"), chunks(Cip68DatumParser.URI_MAX_BYTES + 1));
-
-        ParsedCip68Datum parsed = parse(properties).orElseThrow();
-
-        assertThat(parsed.logo()).isNull();
-        assertThat(parsed.image()).isNull();
-        assertThat(parsed.name()).isEqualTo("Big");
-        assertThat(parsed.description()).isEqualTo("has a huge logo");
-        assertThat(warnings()).hasSize(2).allSatisfy(w -> assertThat(w).contains("Ignoring CIP-68").contains("max 65536"));
-    }
-
-    @Test
-    void appliesTheLimitToASingleByteStringToo() throws Exception {
-        // not a list of chunks: one byte string over the limit (the CBOR encoder splits it on the wire)
-        byte[] big = new byte[Cip68DatumParser.URI_MAX_BYTES + 1];
+    void keepsASingleByteStringOfAnySizeToo() throws Exception {
+        byte[] big = new byte[64 * 1024 + 1];
         Arrays.fill(big, (byte) 'a');
         MapPlutusData properties = props("name", "n");
         properties.put(BytesPlutusData.of("image"), BytesPlutusData.of(big));
 
         ParsedCip68Datum parsed = parse(properties).orElseThrow();
 
-        assertThat(parsed.image()).isNull();
+        assertThat(parsed.image()).hasSize(big.length);
         assertThat(parsed.name()).isEqualTo("n");
-        assertThat(warnings()).singleElement().satisfies(w -> assertThat(w).contains("'image'").contains("65537 bytes"));
+        assertThat(warnings()).isEmpty();
     }
 
     // ---------- helpers ----------
