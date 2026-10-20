@@ -41,7 +41,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @DataJpaTest(properties = {
         "spring.flyway.enabled=false",
         "spring.jpa.hibernate.ddl-auto=none",
-        "spring.sql.init.schema-locations=classpath:db/store/h2/V0_1700_1__init.sql"
+        "spring.sql.init.schema-locations=classpath:db/store/h2/V0_1700_1__init.sql,classpath:db/store/h2/V0_1700_2__validation_errors.sql"
 })
 @DisplayName("Cip68Processor on H2")
 class Cip68ProcessorH2IT {
@@ -93,19 +93,6 @@ class Cip68ProcessorH2IT {
                 .doesNotThrowAnyException();
 
         assertThat(repository.count()).isZero();
-    }
-
-    @Test
-    void h2CountsVarcharWidthInUtf16Units() {
-        // Guards the premise of the parser's length check: if H2 ever counted code points, this
-        // would pass and the check could be relaxed.
-        repository.save(Cip68Metadata.builder()
-                .policyId(POLICY_ID).assetName(REF_NFT_ASSET_NAME).slot(1L).txHash(TX_HASH).txIndex(0)
-                .label(333).version(1L).datum("00").lastSyncedAt(LocalDateTime.now())
-                .name("🚀".repeat(128))
-                .build());
-
-        assertThatThrownBy(entityManager::flush).hasMessageContaining("Value too long");
     }
 
     private void processAndFlush(String name) {

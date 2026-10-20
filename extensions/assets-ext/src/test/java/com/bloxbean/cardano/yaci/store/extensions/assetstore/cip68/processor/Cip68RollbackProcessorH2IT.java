@@ -41,7 +41,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @DataJpaTest(properties = {
         "spring.flyway.enabled=false",
         "spring.jpa.hibernate.ddl-auto=none",
-        "spring.sql.init.schema-locations=classpath:db/store/h2/V0_1700_1__init.sql"
+        "spring.sql.init.schema-locations=classpath:db/store/h2/V0_1700_1__init.sql,classpath:db/store/h2/V0_1700_2__validation_errors.sql"
 })
 @DisplayName("Cip68RollbackProcessor on H2")
 class Cip68RollbackProcessorH2IT {

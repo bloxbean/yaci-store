@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model;
 
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.validation.ValidationError;
 import jakarta.annotation.Nullable;
 import jakarta.persistence.*;
 import lombok.*;
@@ -7,6 +8,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 
 @Entity
@@ -125,7 +127,8 @@ public class Cip68Metadata {
     @Nullable
     private String mediaType;
 
-    @Column(nullable = false)
+    /** The CIP-68 version. Null when the datum holds a version that is not an integer in the range of a long. */
+    @Nullable
     private Long version;
 
     /** Full CBOR hex of the inline datum. Variable length; kept for re-parsing/auditing.
@@ -143,6 +146,15 @@ public class Cip68Metadata {
     @JdbcTypeCode(SqlTypes.JSON)
     @Nullable
     private Map<String, Object> properties;
+
+    /**
+     * How the datum departs from CIP-68, per label it was checked for. The token is indexed and served
+     * anyway; see ADR 0006. Null on rows written before the column existed.
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "validation_errors")
+    @Nullable
+    private List<ValidationError> validationErrors;
 
     @Temporal(TemporalType.TIMESTAMP)
     private LocalDateTime lastSyncedAt;
