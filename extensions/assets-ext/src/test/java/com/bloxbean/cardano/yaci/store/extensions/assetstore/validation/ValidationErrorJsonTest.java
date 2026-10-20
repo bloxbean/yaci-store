@@ -67,11 +67,16 @@ class ValidationErrorJsonTest {
     }
 
     @Test
-    void theMetadataHasNoValidFlagComplianceIsInTheErrors() throws Exception {
-        JsonNode json = mapper.readTree(mapper.writeValueAsString(Metadata.builder()
-                .name(new com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.StringProperty("n", "CIP_68")).build()));
+    void theMetadataKeepsItsValidAndEmptyFlagsSoTheExistingJsonDoesNotChange() throws Exception {
+        var name = new com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.StringProperty("n", "CIP_68");
+        var description = new com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.StringProperty("d", "CIP_68");
+        JsonNode complete = mapper.readTree(mapper.writeValueAsString(Metadata.builder().name(name).description(description).build()));
+        JsonNode incomplete = mapper.readTree(mapper.writeValueAsString(Metadata.builder().name(name).build()));
 
-        assertThat(json.has("valid")).isFalse();
+        // valid is name and description both present: always true before, since it was the gate; it can be false now
+        assertThat(complete.get("valid").asBoolean()).isTrue();
+        assertThat(incomplete.get("valid").asBoolean()).isFalse();
+        assertThat(complete.get("empty").asBoolean()).isFalse();
     }
 
     @Test

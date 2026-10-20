@@ -33,7 +33,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * The API as a client sees it, with the real controllers, {@link TokenQueryService}, the storage readers and
  * {@link Cip68TokenService}; only the two repositories are mocked. It pins what the unit tests of each layer cannot: that a
  * token that breaks its CIP is returned with its errors, that rich fungible tokens are served with the image as the logo, that
- * NFTs are not served, and the JSON a client reads: compliance is the list of {@code validation_errors}, there is no separate valid flag.
+ * NFTs are not served, and the JSON a client reads, including the {@code metadata.valid} flag it always had.
  */
 class TokenApiEndToEndTest {
 
@@ -82,7 +82,7 @@ class TokenApiEndToEndTest {
     }
 
     @Test
-    void aTokenThatFollowsItsCipIsReturnedWithNoErrors() throws Exception {
+    void aTokenThatFollowsItsCipIsReturnedWithNoErrorsAndIsValid() throws Exception {
         store(row(333).name("Coin").description("A coin").ticker("COIN").decimals(6L).logo("ipfs://QmLogo")
                 .validationErrors(List.of()).build());
 
@@ -90,7 +90,7 @@ class TokenApiEndToEndTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.subject.metadata.name.value").value("Coin"))
                 .andExpect(jsonPath("$.subject.metadata.logo.value").value("ipfs://QmLogo"))
-                .andExpect(jsonPath("$.subject.metadata.valid").doesNotExist())
+                .andExpect(jsonPath("$.subject.metadata.valid").value(true))
                 .andExpect(jsonPath("$.subject.validation_errors").isArray())
                 .andExpect(jsonPath("$.subject.validation_errors.length()").value(0));
     }
@@ -105,6 +105,7 @@ class TokenApiEndToEndTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.subject.metadata.name.value").value("Coin"))
                 .andExpect(jsonPath("$.subject.metadata.description").doesNotExist())
+                .andExpect(jsonPath("$.subject.metadata.valid").value(false))
                 .andExpect(jsonPath("$.subject.validation_errors.length()").value(1))
                 .andExpect(jsonPath("$.subject.validation_errors[0].sub_standard").value("333"))
                 .andExpect(jsonPath("$.subject.validation_errors[0].field_category").value("MANDATORY"))
