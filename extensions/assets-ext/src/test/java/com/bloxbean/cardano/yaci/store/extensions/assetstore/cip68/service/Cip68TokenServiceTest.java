@@ -7,6 +7,7 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Co
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.ParsedCip68Datum;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.Cip68Metadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.validation.ValidationError;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.repository.Cip68MetadataRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -76,6 +77,16 @@ class Cip68TokenServiceTest {
             assertThat(result.get().assetName().substring(8)).isEqualTo(BASE_NAME);
             // Prefix should be reference NFT, not fungible token
             assertThat(result.get().assetName().substring(0, 8)).isEqualTo("000643b0");
+        }
+
+        @Test
+        void convertsARichFungibleTokenSubjectToItsReferenceNft() {
+            String rftSubject = POLICY_ID + "001bc280" + BASE_NAME;
+
+            Optional<AssetType> result = service.getReferenceNftSubject(rftSubject);
+
+            assertThat(result).isPresent();
+            assertThat(result.get().toUnit()).isEqualTo(POLICY_ID + "000643b0" + BASE_NAME);
         }
 
         @Test
@@ -368,6 +379,67 @@ class Cip68TokenServiceTest {
                     .thenReturn(Optional.empty());
 
             assertThat(service.findSubject(POLICY, REF_NAME, List.of())).isEmpty();
+        }
+
+        @Test
+        void returnsATokenThatBreaksCip68WithItsValidationErrors() {
+            ValidationError error = ValidationError.mandatory("CIP-68", "333", "description", "missing_value",
+                    "description field is missing a mandatory value");
+            Cip68Metadata row = Cip68Metadata.builder()
+                    .policyId(POLICY).assetName(REF_NAME).slot(200L).label(333)
+                    .name("No description").version(1L).validationErrors(List.of(error)).build();
+            when(repository.findFirstByPolicyIdAndAssetNameOrderBySlotDescTxIndexDesc(POLICY, REF_NAME))
+                    .thenReturn(Optional.of(row));
+
+            FungibleTokenMetadata result = service.findSubject(POLICY, REF_NAME, List.of()).orElseThrow();
+
+            assertThat(result.name()).isEqualTo("No description");
+            assertThat(result.description()).isNull();
+            assertThat(result.validationErrors()).containsExactly(error);
+        }
+
+        @Test
+        void aRowWithoutErrorsHasAnEmptyList() {
+            Cip68Metadata row = Cip68Metadata.builder()
+                    .policyId(POLICY).assetName(REF_NAME).slot(200L).label(333).name("Fine").description("d").version(1L).build();
+            when(repository.findFirstByPolicyIdAndAssetNameOrderBySlotDescTxIndexDesc(POLICY, REF_NAME))
+                    .thenReturn(Optional.of(row));
+
+            assertThat(service.findSubject(POLICY, REF_NAME, List.of()).orElseThrow().validationErrors()).isEmpty();
+        }
+
+        @Test
+        void servesTheImageOfARichFungibleTokenAsItsLogo() {
+            Cip68Metadata rft = Cip68Metadata.builder()
+                    .policyId(POLICY).assetName(REF_NAME).slot(200L).label(444)
+                    .name("Edition").image("ipfs://QmImage").version(1L).build();
+            when(repository.findFirstByPolicyIdAndAssetNameOrderBySlotDescTxIndexDesc(POLICY, REF_NAME))
+                    .thenReturn(Optional.of(rft));
+
+            assertThat(service.findSubject(POLICY, REF_NAME, List.of()).orElseThrow().logo()).isEqualTo("ipfs://QmImage");
+        }
+
+        @Test
+        void servesTheImageAsWrittenEvenWhenItsSchemeIsNotAllowed() {
+            Cip68Metadata rft = Cip68Metadata.builder()
+                    .policyId(POLICY).assetName(REF_NAME).slot(200L).label(444)
+                    .name("Edition").image("iagon://x").version(1L).build();
+            when(repository.findFirstByPolicyIdAndAssetNameOrderBySlotDescTxIndexDesc(POLICY, REF_NAME))
+                    .thenReturn(Optional.of(rft));
+
+            // the validation errors of the row say the scheme is not allowed; the value is not hidden
+            assertThat(service.findSubject(POLICY, REF_NAME, List.of()).orElseThrow().logo()).isEqualTo("iagon://x");
+        }
+
+        @Test
+        void aFungibleTokensOwnLogoIsNotReplacedByItsImage() {
+            Cip68Metadata ft = Cip68Metadata.builder()
+                    .policyId(POLICY).assetName(REF_NAME).slot(200L).label(333)
+                    .name("Coin").logo("ipfs://QmLogo").image("ipfs://QmImage").version(1L).build();
+            when(repository.findFirstByPolicyIdAndAssetNameOrderBySlotDescTxIndexDesc(POLICY, REF_NAME))
+                    .thenReturn(Optional.of(ft));
+
+            assertThat(service.findSubject(POLICY, REF_NAME, List.of()).orElseThrow().logo()).isEqualTo("ipfs://QmLogo");
         }
     }
 

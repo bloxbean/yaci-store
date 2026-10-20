@@ -6,6 +6,11 @@ import jakarta.annotation.Nullable;
 
 public record Standards(@Nullable Cip26TokenMetadata cip26, @Nullable FungibleTokenMetadata cip68) {
 
+    /** True when neither standard has anything for the subject. */
+    public boolean isEmpty() {
+        return cip26 == null && cip68 == null;
+    }
+
     public static Standards empty() {
         return new Standards(null, null);
     }

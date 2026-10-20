@@ -9,7 +9,7 @@ query a single yaci-store instance and get merged metadata transparently.
 | Standard | Source | Description |
 |----------|--------|-------------|
 | CIP-26 | Off-chain (GitHub [cardano-token-registry](https://github.com/cardano-foundation/cardano-token-registry)) | Fungible token metadata synced periodically from Git |
-| CIP-68 | On-chain (reference NFT inline datums, label 333) | Fungible token metadata parsed from blockchain |
+| CIP-68 | On-chain (reference NFT inline datums; fungible tokens, label 333, and rich fungible tokens, label 444) | Token metadata parsed from blockchain. NFTs (label 222) are indexed but not served. |
 
 ## REST API
 
@@ -27,7 +27,7 @@ standard provides the data. Response-compatible with cf-token-metadata-registry'
 
 **Query parameters:**
 
-- `property` (optional, repeatable) — filter which properties to return. When used, `name` and `description` are required.
+- `property` (optional, repeatable) — filter which properties to return.
 - `query_priority` (optional, repeatable) — CIP priority order, e.g. `?query_priority=CIP_68&query_priority=CIP_26`. Default: `CIP_68,CIP_26` (on-chain preferred).
 - `show_cips_details` (optional, default `false`) — include raw per-standard metadata in the response.
 
@@ -45,11 +45,56 @@ GET /api/v1/subject/577f0b1342f8f8f4aed3388b80a8535812950c7a892495c0ecdf0f1e0014
       "ticker": { "value": "FLDT", "source": "CIP_26" },
       "decimals": { "value": 6, "source": "CIP_68" },
       "url": { "value": "https://fluidtokens.com", "source": "CIP_26" }
-    }
+    },
+    "validation_errors": []
   },
   "queryPriority": ["CIP_68", "CIP_26"]
 }
 ```
+
+### Validation errors
+
+A token is **returned as it is indexed**, whatever is wrong with its metadata: nothing is dropped for breaking a CIP. Instead, every
+response has a `validation_errors` array (empty when the token follows its CIP) that says how it departs from it, so that the
+owner can fix the datum or the registry entry, and a wallet can decide whether to accept the token (for example, reject any token with a
+`MANDATORY` error).
+
+```
+GET /api/v1/subject/<policyId>0014df10<name>      # a 333 token with no description
+
+{
+  "subject": {
+    "subject": "…",
+    "metadata": { "name": { "value": "Coin", "source": "CIP_68" } },
+    "validation_errors": [
+      { "cip": "CIP-68", "sub_standard": "333", "field_name": "description", "field_category": "MANDATORY",
+        "code": "missing_value", "error": "description field is missing a mandatory value" }
+    ]
+  },
+  "queryPriority": ["CIP_68", "CIP_26"]
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `cip` | `CIP-26` or `CIP-68`. The errors of every standard that has the token are listed, in query priority order. |
+| `sub_standard` | For CIP-68, the label the rule was checked for (`222`, `333`, `444`). A reference NFT with user tokens of several labels is checked against each of them. Absent for CIP-26 and for a rule that does not depend on a label. |
+| `field_name` | The metadata field, for example `description`, `image`, `properties.owner`, `files`. |
+| `field_category` | `MANDATORY` if the CIP requires the field, `OPTIONAL` otherwise. |
+| `code` | A stable reason: `missing_value`, `wrong_type`, `invalid_uri_scheme`, `invalid_length`, `out_of_range`, `undefined_version`, `plutus_constructor`, `not_utf8`, `invalid_files_entry`, `no_nested_entry`, `too_deep`, `unsupported_key`, `key_collision`, `invalid_base64`, `too_large`. |
+| `error` | A human-readable message. |
+
+`validation_errors` is also on `standards.cip26` and `standards.cip68` (with `show_cips_details=true`), and on `/cip68/ft/...` and `/cip26/...`.
+It is the one thing a client has to adapt to: a token that was `404` because its `name` or `description` was missing, or because
+its version, `image` or `logo` did not follow CIP-68, is now `200` with errors, so `name` and `description` are no longer
+guaranteed to be there. Only an obvious attack is still dropped (a datum or property nested so deep that it cannot be decoded, a CIP-26
+entry whose subject cannot be a key, a logo far beyond any real size), with a warning in the log.
+
+**Rich fungible tokens (CIP-68 label 444)** are served like fungible tokens, by their own `001bc280…` subject. They have no `logo`: their
+`image` is served as `metadata.logo`, as cf-token-metadata-registry does, and `description` is optional for them.
+
+Rows indexed before `validation_errors` existed have none: a full resync is needed to index the tokens that used to be dropped and
+to compute the errors of the rest.
 
 **Batch request:**
 
@@ -69,7 +114,7 @@ For advanced users who want to query a specific standard directly.
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/cip26/{subject}` | CIP-26 off-chain metadata only |
-| `GET` | `/cip68/ft/{policyId}/{assetName}` | CIP-68 fungible token metadata only |
+| `GET` | `/cip68/ft/{policyId}/{assetName}` | CIP-68 fungible and rich fungible token metadata only |
 
 
 ## Configuration
@@ -86,7 +131,7 @@ store:
       sync-interval-minutes: 60
 
     cip68:
-      enabled: true                    # Fungible token support (label 333)
+      enabled: true                    # Fungible (333) and rich fungible (444) token support
 
     query:
       priority: "CIP_68,CIP_26"       # Default merge priority
@@ -96,12 +141,11 @@ store:
 
 | Table | Description |
 |-------|-------------|
-| `ft_offchain_metadata` | CIP-26 fungible token metadata (subject as PK) |
-| `ft_offchain_logo` | CIP-26 token logos (separated for performance) |
-| `off_chain_sync_state` | GitHub sync progress tracking |
-| `metadata_reference_nft` | CIP-68 on-chain reference NFT metadata (composite PK: policy_id, asset_name, slot). `label` column discriminates FT (333) vs NFT (222) for future use. |
+| `cip26_metadata` | CIP-26 token metadata, logo included (subject as PK), with `validation_errors` |
+| `cip26_sync_state` | GitHub sync progress tracking |
+| `cip68_metadata` | CIP-68 on-chain reference NFT metadata (composite PK: policy_id, asset_name, slot, tx_hash). `label` is 222, 333 or 444; `validation_errors` says what the datum breaks. |
 
-All tables include a `last_synced_at` timestamp for monitoring.
+All tables include a `last_synced_at` timestamp for monitoring. See [`db/store/README.md`](src/main/resources/db/store/README.md).
 
 ## Health Indicators
 

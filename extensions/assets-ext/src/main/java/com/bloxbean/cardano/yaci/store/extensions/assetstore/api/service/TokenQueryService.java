@@ -7,6 +7,7 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.Cip26
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.Cip26Metadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.Cip68StorageReader;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.validation.ValidationError;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -27,7 +28,7 @@ import java.util.stream.Collectors;
 @Slf4j
 public class TokenQueryService {
 
-    private static final ResolvedMetadata IDENTITY = new ResolvedMetadata(Metadata.empty(), Standards.empty());
+    private static final ResolvedMetadata IDENTITY = new ResolvedMetadata(Metadata.empty(), Standards.empty(), List.of());
 
     private final Cip26StorageReader cip26StorageReader;
     private final Cip68StorageReader cip68StorageReader;
@@ -39,7 +40,8 @@ public class TokenQueryService {
      * @param queryPriority   ordered list of CIP standards to query
      * @param queryProperties list of properties to include (empty means all)
      * @param showCipsDetails whether to include raw per-standard metadata
-     * @return the merged Subject, or empty if no valid metadata found
+     * @return the merged Subject, or empty if no standard has anything indexed for it. A subject that is indexed is
+     *         returned as indexed, whatever is wrong with it: {@code validationErrors} says what
      */
     public Optional<Subject> querySubject(String subject,
                                           List<QueryPriority> queryPriority,
@@ -49,29 +51,36 @@ public class TokenQueryService {
         ResolvedMetadata resolved = queryPriority.stream()
                 .reduce(IDENTITY, combineStandards(subject, queryProperties), aggregateResults());
 
-        if (resolved.metadata().isEmpty() || !resolved.metadata().isValid()) {
+        if (resolved.standards().isEmpty()) {
             return Optional.empty();
         }
 
-        return Optional.of(new Subject(subject, resolved.metadata(),
-                showCipsDetails ? resolved.standards() : null));
+        return Optional.of(toSubject(subject, resolved, showCipsDetails));
     }
 
     /**
      * Query and merge metadata for a single subject in batch context,
      * using pre-fetched data maps to avoid N+1 queries.
+     *
+     * @return the merged Subject, or empty if no standard has anything indexed for it
      */
-    public Subject querySubjectBatch(String subject,
-                                     List<QueryPriority> queryPriority,
-                                     List<String> queryProperties,
-                                     BatchPrefetchData prefetchData,
-                                     boolean showCipsDetails) {
+    public Optional<Subject> querySubjectBatch(String subject,
+                                               List<QueryPriority> queryPriority,
+                                               List<String> queryProperties,
+                                               BatchPrefetchData prefetchData,
+                                               boolean showCipsDetails) {
 
         ResolvedMetadata resolved = queryPriority.stream()
                 .reduce(IDENTITY, combineStandardsBatch(subject, queryProperties, prefetchData), aggregateResults());
 
-        return new Subject(subject, resolved.metadata(),
-                showCipsDetails ? resolved.standards() : null);
+        return resolved.standards().isEmpty()
+                ? Optional.empty()
+                : Optional.of(toSubject(subject, resolved, showCipsDetails));
+    }
+
+    private static Subject toSubject(String subject, ResolvedMetadata resolved, boolean showCipsDetails) {
+        return new Subject(subject, resolved.metadata(), showCipsDetails ? resolved.standards() : null,
+                resolved.validationErrors());
     }
 
     /**
@@ -120,9 +129,11 @@ public class TokenQueryService {
                     String logo = (properties.isEmpty() || properties.contains("logo"))
                             ? cip26StorageReader.findLogoBySubject(subject).orElse(null)
                             : null;
+                    Cip26TokenMetadata cip26 = Cip26TokenMetadata.from(entity, logo);
                     return new ResolvedMetadata(
                             Metadata.from(entity, logo, properties),
-                            new Standards(Cip26TokenMetadata.from(entity, logo), null));
+                            new Standards(cip26, null),
+                            cip26.getValidationErrors());
                 });
     }
 
@@ -130,31 +141,24 @@ public class TokenQueryService {
         return cip68StorageReader.findBySubject(subject, properties)
                 .map(cip68TokenMetadata -> new ResolvedMetadata(
                         Metadata.from(cip68TokenMetadata),
-                        new Standards(null, cip68TokenMetadata)));
+                        new Standards(null, cip68TokenMetadata),
+                        cip68TokenMetadata.validationErrors()));
     }
 
     private static BinaryOperator<ResolvedMetadata> aggregateResults() {
-        return (thisPair, thatPair) -> {
-            Metadata metadata = thisPair.metadata().merge(thatPair.metadata());
-            Standards standards = thisPair.standards().merge(thatPair.standards());
-            return new ResolvedMetadata(metadata, standards);
-        };
+        return ResolvedMetadata::merge;
     }
 
     private BiFunction<ResolvedMetadata, QueryPriority, ResolvedMetadata> combineStandards(String subject, List<String> properties) {
         return (accumulated, priority) -> findMetadata(subject, properties, priority)
-                .map(found -> new ResolvedMetadata(
-                        accumulated.metadata().merge(found.metadata()),
-                        accumulated.standards().merge(found.standards())))
+                .map(accumulated::merge)
                 .orElse(accumulated);
     }
 
     private BiFunction<ResolvedMetadata, QueryPriority, ResolvedMetadata> combineStandardsBatch(
             String subject, List<String> properties, BatchPrefetchData prefetchData) {
         return (accumulated, priority) -> findMetadataBatch(subject, properties, priority, prefetchData)
-                .map(found -> new ResolvedMetadata(
-                        accumulated.metadata().merge(found.metadata()),
-                        accumulated.standards().merge(found.standards())))
+                .map(accumulated::merge)
                 .orElse(accumulated);
     }
 
@@ -175,9 +179,11 @@ public class TokenQueryService {
         String logo = (properties.isEmpty() || properties.contains("logo"))
                 ? prefetchData.cip26LogoMap().get(subject)
                 : null;
+        Cip26TokenMetadata cip26 = Cip26TokenMetadata.from(entity, logo);
         return Optional.of(new ResolvedMetadata(
                 Metadata.from(entity, logo, properties),
-                new Standards(Cip26TokenMetadata.from(entity, logo), null)));
+                new Standards(cip26, null),
+                cip26.getValidationErrors()));
     }
 
     /**
@@ -192,7 +198,8 @@ public class TokenQueryService {
 
         return Optional.of(new ResolvedMetadata(
                 Metadata.from(cip68TokenMetadata),
-                new Standards(null, cip68TokenMetadata)));
+                new Standards(null, cip68TokenMetadata),
+                cip68TokenMetadata.validationErrors()));
     }
 
     /**
@@ -201,7 +208,14 @@ public class TokenQueryService {
      * its role (the resolved metadata for a subject) rather than "pair" so the accessors
      * {@link #metadata()} and {@link #standards()} read at call sites.
      */
-    private record ResolvedMetadata(Metadata metadata, Standards standards) {
+    private record ResolvedMetadata(Metadata metadata, Standards standards, List<ValidationError> validationErrors) {
+
+        /** The metadata of the first standard wins per property; the validation errors of every standard are kept. */
+        ResolvedMetadata merge(ResolvedMetadata that) {
+            List<ValidationError> errors = new ArrayList<>(validationErrors);
+            errors.addAll(that.validationErrors());
+            return new ResolvedMetadata(metadata.merge(that.metadata()), standards.merge(that.standards()), errors);
+        }
     }
 
 }
