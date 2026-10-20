@@ -7,6 +7,7 @@ import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClient;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
+import com.bloxbean.cardano.yaci.store.common.util.PlutusV4Script;
 import com.bloxbean.cardano.yaci.store.common.util.ScriptReferenceUtil;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -73,7 +74,8 @@ public class TxScriptFinder {
                                 log.error("Error while deserializing script ref: " + addressUtxo.getScriptRef(), e);
                             }
 
-                            if (cclScript != null && cclScript.getScriptType() != 0) {
+                            //TODO -- Plutus V4 (Dijkstra) has no Yaci PlutusScriptType yet: a redeemer using a V4 reference script gets no script
+                            if (cclScript != null && cclScript.getScriptType() != 0 && cclScript.getScriptType() != PlutusV4Script.TYPE) {
                                 PlutusScript plutusScript = ScriptUtil.toPlutusScript(cclScript);
                                 scriptsMap.put(ScriptUtil.getPlutusScriptHash(plutusScript), plutusScript);
                             }
@@ -96,7 +98,8 @@ public class TxScriptFinder {
                             log.error("Error while deserializing script ref: " + addressUtxo.getScriptRef(), e);
                         }
 
-                        if (cclScript != null && cclScript.getScriptType() != 0) {
+                        //TODO -- Plutus V4 (Dijkstra) has no Yaci PlutusScriptType yet: a redeemer using a V4 reference script gets no script
+                        if (cclScript != null && cclScript.getScriptType() != 0 && cclScript.getScriptType() != PlutusV4Script.TYPE) {
                             PlutusScript plutusScript = ScriptUtil.toPlutusScript(cclScript);
                             scriptsMap.put(ScriptUtil.getPlutusScriptHash(plutusScript), plutusScript);
                         }
