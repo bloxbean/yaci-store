@@ -47,7 +47,7 @@
 
 ## Quick Start
 
-**Pre-requisites:** Java 21
+**Pre-requisites:** Java 25
 
 ### Option 1: Download Release
 

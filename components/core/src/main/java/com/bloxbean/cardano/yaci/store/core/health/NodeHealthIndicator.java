@@ -3,8 +3,8 @@ package com.bloxbean.cardano.yaci.store.core.health;
 import com.bloxbean.cardano.yaci.store.common.domain.HealthStatus;
 import com.bloxbean.cardano.yaci.store.core.service.HealthService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.boot.actuate.health.Health;
-import org.springframework.boot.actuate.health.HealthIndicator;
+import org.springframework.boot.health.contributor.Health;
+import org.springframework.boot.health.contributor.HealthIndicator;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.stereotype.Component;
 

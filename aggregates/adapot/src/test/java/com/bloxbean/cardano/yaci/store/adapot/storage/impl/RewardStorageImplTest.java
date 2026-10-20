@@ -14,10 +14,9 @@ import com.bloxbean.cardano.yaci.store.events.domain.RewardRestType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 
 import java.util.List;
-import java.util.UUID;
 
 import static com.bloxbean.cardano.client.common.ADAConversionUtil.adaToLovelace;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -44,7 +43,6 @@ class RewardStorageImplTest {
     @Test
     void findTreasuryWithdrawals() {
         RewardRestEntity rewardRestEntity1 = RewardRestEntity.builder()
-                .id(UUID.randomUUID())
                 .address("stake_test1urqntq4wexjylnrdnp97qq79qkxxvrsa9lcnwr7ckjd6w0cr04y4p")
                 .amount(adaToLovelace(100000))
                 .type(RewardRestType.proposal_refund)
@@ -53,7 +51,6 @@ class RewardStorageImplTest {
                 .build();
 
         RewardRestEntity rewardRestEntity2= RewardRestEntity.builder()
-                .id(UUID.randomUUID())
                 .address("stake_test1vwqntq4wexjylnrdnp97qq79qkxxvrsa9lcnwr7ckjd6w0cr04y41")
                 .amount(adaToLovelace(20))
                 .type(RewardRestType.treasury)
@@ -62,7 +59,6 @@ class RewardStorageImplTest {
                 .build();
 
         RewardRestEntity rewardRestEntity3= RewardRestEntity.builder()
-                .id(UUID.randomUUID())
                 .address("stake_test1vwqntq4wexjylnrdnp97qq79qkxxvrsa9lcnwr7ckjd6w0cr04y41")
                 .amount(adaToLovelace(10))
                 .type(RewardRestType.treasury)
@@ -71,7 +67,6 @@ class RewardStorageImplTest {
                 .build();
 
         RewardRestEntity rewardRestEntity4= RewardRestEntity.builder()
-                .id(UUID.randomUUID())
                 .address("stake_test1vwqntq4wexjylnrdnp97qq79qkxxvrsa9lcnwr7ckjd6w0cr04y41")
                 .amount(adaToLovelace(90))
                 .type(RewardRestType.treasury)
@@ -92,7 +87,6 @@ class RewardStorageImplTest {
     @Test
     void deleteRewardRest() {
         RewardRestEntity rewardRestEntity1 = RewardRestEntity.builder()
-                .id(UUID.randomUUID())
                 .address("stake_test1urqntq4wexjylnrdnp97qq79qkxxvrsa9lcnwr7ckjd6w0cr04y4p")
                 .amount(adaToLovelace(100000))
                 .type(RewardRestType.proposal_refund)
@@ -101,7 +95,6 @@ class RewardStorageImplTest {
                 .build();
 
         RewardRestEntity rewardRestEntity2= RewardRestEntity.builder()
-                .id(UUID.randomUUID())
                 .address("stake_test1vwqntq4wexjylnrdnp97qq79qkxxvrsa9lcnwr7ckjd6w0cr04y41")
                 .amount(adaToLovelace(20))
                 .type(RewardRestType.treasury)
@@ -110,7 +103,6 @@ class RewardStorageImplTest {
                 .build();
 
         RewardRestEntity rewardRestEntity3= RewardRestEntity.builder()
-                .id(UUID.randomUUID())
                 .address("stake_test1vwqntq4wexjylnrdnp97qq79qkxxvrsa9lcnwr7ckjd6w0cr04y41")
                 .amount(adaToLovelace(10))
                 .type(RewardRestType.treasury)
@@ -119,7 +111,6 @@ class RewardStorageImplTest {
                 .build();
 
         RewardRestEntity rewardRestEntity4= RewardRestEntity.builder()
-                .id(UUID.randomUUID())
                 .address("stake_test1vwqntq4wexjylnrdnp97qq79qkxxvrsa9lcnwr7ckjd6w0cr04y41")
                 .amount(adaToLovelace(90))
                 .type(RewardRestType.treasury)
@@ -128,7 +119,6 @@ class RewardStorageImplTest {
                 .build();
 
         RewardRestEntity rewardRestEntity5= RewardRestEntity.builder()
-                .id(UUID.randomUUID())
                 .address("stake_test1dwqntq4wexjylnrdnp97qq79qkxxvrsa9lcnwr7ckjd6w0cr04y41")
                 .amount(adaToLovelace(70))
                 .type(RewardRestType.treasury)
@@ -137,7 +127,6 @@ class RewardStorageImplTest {
                 .build();
 
         RewardRestEntity rewardRestEntity6= RewardRestEntity.builder()
-                .id(UUID.randomUUID())
                 .address("stake_test1ewqntq4wexjylnrdnp97qq79qkxxvrsa9lcnwr7ckjd6w0cr04y41")
                 .amount(adaToLovelace(80))
                 .type(RewardRestType.proposal_refund)
@@ -164,7 +153,6 @@ class RewardStorageImplTest {
     @Test
     void deleteUnclaimedRewardRest() {
         UnclaimedRewardRestEntity rewardRestEntity1 = UnclaimedRewardRestEntity.builder()
-                .id(UUID.randomUUID())
                 .address("stake_test1urqntq4wexjylnrdnp97qq79qkxxvrsa9lcnwr7ckjd6w0cr04y4p")
                 .amount(adaToLovelace(100000))
                 .type(RewardRestType.proposal_refund)
@@ -173,7 +161,6 @@ class RewardStorageImplTest {
                 .build();
 
         UnclaimedRewardRestEntity rewardRestEntity2= UnclaimedRewardRestEntity.builder()
-                .id(UUID.randomUUID())
                 .address("stake_test1vwqntq4wexjylnrdnp97qq79qkxxvrsa9lcnwr7ckjd6w0cr04y41")
                 .amount(adaToLovelace(20))
                 .type(RewardRestType.treasury)
@@ -182,7 +169,6 @@ class RewardStorageImplTest {
                 .build();
 
         UnclaimedRewardRestEntity rewardRestEntity3= UnclaimedRewardRestEntity.builder()
-                .id(UUID.randomUUID())
                 .address("stake_test1vwqntq4wexjylnrdnp97qq79qkxxvrsa9lcnwr7ckjd6w0cr04y41")
                 .amount(adaToLovelace(10))
                 .type(RewardRestType.treasury)
@@ -191,7 +177,6 @@ class RewardStorageImplTest {
                 .build();
 
         UnclaimedRewardRestEntity rewardRestEntity4= UnclaimedRewardRestEntity.builder()
-                .id(UUID.randomUUID())
                 .address("stake_test1vwqntq4wexjylnrdnp97qq79qkxxvrsa9lcnwr7ckjd6w0cr04y41")
                 .amount(adaToLovelace(90))
                 .type(RewardRestType.treasury)
@@ -200,7 +185,6 @@ class RewardStorageImplTest {
                 .build();
 
         UnclaimedRewardRestEntity rewardRestEntity5= UnclaimedRewardRestEntity.builder()
-                .id(UUID.randomUUID())
                 .address("stake_test1dwqntq4wexjylnrdnp97qq79qkxxvrsa9lcnwr7ckjd6w0cr04y41")
                 .amount(adaToLovelace(70))
                 .type(RewardRestType.treasury)
@@ -209,7 +193,6 @@ class RewardStorageImplTest {
                 .build();
 
         UnclaimedRewardRestEntity rewardRestEntity6= UnclaimedRewardRestEntity.builder()
-                .id(UUID.randomUUID())
                 .address("stake_test1ewqntq4wexjylnrdnp97qq79qkxxvrsa9lcnwr7ckjd6w0cr04y41")
                 .amount(adaToLovelace(80))
                 .type(RewardRestType.proposal_refund)

@@ -8,7 +8,7 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.util.Constant
  * <p>The current value is exposed through {@code SyncStatus} on
  * {@code Cip26MetadataSyncService} and consumed by
  * {@code OffchainSyncHealthIndicator}, which maps each value to a Spring Boot
- * {@link org.springframework.boot.actuate.health.Health} status used by
+ * {@link org.springframework.boot.health.contributor.Health} status used by
  * liveness/readiness probes.
  */
 public enum SyncStatusEnum {

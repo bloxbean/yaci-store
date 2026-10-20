@@ -1,5 +1,5 @@
 dependencies {
-    implementation 'org.springframework.boot:spring-boot-starter'
+    implementation 'org.springframework.boot:spring-boot-starter-classic'
     api project(":stores:mir")
     api project(":stores-api:mir-api")
 

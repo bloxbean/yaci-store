@@ -23,12 +23,13 @@ import org.apache.commons.pool2.impl.GenericObjectPool;
 import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
 import org.jooq.conf.RenderQuotedNames;
 import org.jooq.impl.DefaultConfiguration;
+import org.jooq.jpa.extensions.DefaultAnnotatedPojoMemberProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.boot.autoconfigure.domain.EntityScan;
-import org.springframework.boot.autoconfigure.jooq.DefaultConfigurationCustomizer;
+import org.springframework.boot.persistence.autoconfigure.EntityScan;
+import org.springframework.boot.jooq.autoconfigure.DefaultConfigurationCustomizer;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.*;
 import org.springframework.core.env.Environment;
@@ -160,10 +161,14 @@ public class YaciStoreAutoConfiguration {
 
     @Bean
     public DefaultConfigurationCustomizer configurationCustomiser() {
-        return (DefaultConfiguration c) -> c.settings()
-                .withRenderQuotedNames(
-                        RenderQuotedNames.NEVER
-                );
+        return (DefaultConfiguration c) -> {
+            c.settings()
+                    .withRenderQuotedNames(
+                            RenderQuotedNames.NEVER
+                    );
+            //jOOQ 3.20+ maps records into JPA-annotated entities (fetchInto) only with an explicit provider
+            c.set(new DefaultAnnotatedPojoMemberProvider());
+        };
     }
 
     @Bean

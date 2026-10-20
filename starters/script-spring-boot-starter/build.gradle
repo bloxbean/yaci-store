@@ -1,5 +1,5 @@
 dependencies {
-    implementation 'org.springframework.boot:spring-boot-starter'
+    implementation 'org.springframework.boot:spring-boot-starter-classic'
     api project(":stores:script")
     api project(":stores-api:script-api")
 

@@ -1,4 +1,4 @@
-ARG JDK_TAG=24.0.1_9-jre-ubi9-minimal
+ARG JDK_TAG=25.0.4.1_1-jre-ubi10-minimal
 
 FROM eclipse-temurin:${JDK_TAG} AS build
 WORKDIR /app

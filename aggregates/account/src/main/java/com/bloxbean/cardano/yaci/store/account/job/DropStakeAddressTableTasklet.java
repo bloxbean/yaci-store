@@ -3,10 +3,10 @@ package com.bloxbean.cardano.yaci.store.account.job;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jooq.DSLContext;
-import org.springframework.batch.core.StepContribution;
+import org.springframework.batch.core.step.StepContribution;
 import org.springframework.batch.core.scope.context.ChunkContext;
 import org.springframework.batch.core.step.tasklet.Tasklet;
-import org.springframework.batch.repeat.RepeatStatus;
+import org.springframework.batch.infrastructure.repeat.RepeatStatus;
 
 import static com.bloxbean.cardano.yaci.store.account.job.AccountJobConstants.STAKE_ADDRESS_TEMP_TABLE;
 

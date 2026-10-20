@@ -8,11 +8,11 @@ import com.bloxbean.cardano.yaci.store.core.service.StartService;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.jooq.DSLContext;
-import org.springframework.batch.core.Job;
-import org.springframework.batch.core.JobExecution;
-import org.springframework.batch.core.JobParameters;
-import org.springframework.batch.core.JobParametersBuilder;
-import org.springframework.batch.core.launch.JobLauncher;
+import org.springframework.batch.core.job.Job;
+import org.springframework.batch.core.job.JobExecution;
+import org.springframework.batch.core.job.parameters.JobParameters;
+import org.springframework.batch.core.job.parameters.JobParametersBuilder;
+import org.springframework.batch.core.launch.JobOperator;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -35,7 +35,7 @@ public class BalanceSnapshotService {
     private final AccountStoreProperties accountStoreProperties;
     private DSLContext dsl;
 
-    private final JobLauncher jobLauncher;
+    private final JobOperator jobOperator;
     private final Job accountBalanceJob;
     private final Job utxoAccountBalanceJob;
 
@@ -44,7 +44,7 @@ public class BalanceSnapshotService {
                                   EraService eraService,
                                   AccountStoreProperties accountStoreProperties,
                                   DSLContext dsl,
-                                  JobLauncher jobLauncher,
+                                  JobOperator jobOperator,
                                   @Autowired(required = false) Job accountBalanceJob,
                                   @Autowired(required = false) Job utxoAccountBalanceJob) {
         this.cursorService = cursorService;
@@ -53,7 +53,7 @@ public class BalanceSnapshotService {
         this.accountStoreProperties = accountStoreProperties;
         this.dsl = dsl;
 
-        this.jobLauncher = jobLauncher;
+        this.jobOperator = jobOperator;
         this.accountBalanceJob = accountBalanceJob;
         this.utxoAccountBalanceJob = utxoAccountBalanceJob;
     }
@@ -171,11 +171,11 @@ public class BalanceSnapshotService {
                 return;
             }
 
-            JobExecution jobExecution = jobLauncher.run(utxoAccountBalanceJob, jobParameters);
+            JobExecution jobExecution = jobOperator.start(utxoAccountBalanceJob, jobParameters);
             log.info("Job Execution Status: " + jobExecution.getStatus());
         } else if (accountStoreProperties.getBalanceCalcBatchMode().equals(TX_AMOUNT_BATCH_MODE)) {
             log.info("Running TX_AMOUNT balance snapshot job >>");
-            JobExecution jobExecution = jobLauncher.run(accountBalanceJob, jobParameters);
+            JobExecution jobExecution = jobOperator.start(accountBalanceJob, jobParameters);
             log.info("Job Execution Status: " + jobExecution.getStatus());
         } else {
             log.error("Invalid balance-calc-batch-mode : {}. Skipping balance snapshot", accountStoreProperties.getBalanceCalcBatchMode());

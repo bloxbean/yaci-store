@@ -1,5 +1,5 @@
 ext {
-    springAiVersion = '1.1.2'
+    springAiVersion = '2.0.1'
 }
 
 dependencyManagement {
@@ -16,7 +16,7 @@ dependencies {
     implementation "org.springframework.ai:spring-ai-starter-mcp-server-webmvc:${springAiVersion}"
     implementation 'org.springframework.boot:spring-boot-starter-web'
 
-    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test-classic'
 }
 
 publishing {
