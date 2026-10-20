@@ -273,7 +273,7 @@ store.utxo.pruning-batch-size=3000
 store.utxo.unspent-table-enabled=true
 # Write nothing to it during the initial sync; build it once when the sync reaches the tip, then keep it current (default false)
 store.utxo.unspent-table-backfill-at-tip=true
-# Serve the unspent-output queries (utxo API, Blockfrost /assets/{asset}/addresses) from it once it is active (default false)
+# Serve the unspent-output queries (utxo API; Blockfrost /addresses/{address}, /addresses/{address}/utxos and /assets/{asset}/addresses) from it once it is active (default false)
 store.utxo.unspent-table-read-enabled=true
 ```
 
