@@ -164,8 +164,8 @@ public class DBCommands {
     @Command(description = "Build address_utxo_unspent for a store synced before store.utxo.unspent-table-enabled was turned on. Stop the store first.")
     public void backfillUnspentUtxos(
             @Option(longNames = "from-output-index", defaultValue = "0", description = "0 rebuilds the table from scratch; to resume an interrupted run, pass the output_index it last reported") int fromOutputIndex) {
-        if (!databaseUtils.tableExists("address_utxo_unspent")) {
-            writeLn(error("Table address_utxo_unspent not found. Start the store once with this version so its migration runs."));
+        if (!databaseUtils.tableExists("address_utxo_unspent") || !databaseUtils.tableExists("store_state")) {
+            writeLn(error("Table address_utxo_unspent or store_state not found. Start the store once with this version so its migrations run."));
             return;
         }
 
@@ -187,6 +187,7 @@ public class DBCommands {
             return;
         }
 
+        unspentUtxoBackfillService.markCurrentAtCursor();
         writeLn(success("Copied %d unspent outputs.", copied));
         writeLn(info("Now start the store with store.utxo.unspent-table-enabled=true (it keeps the table current from slot %s) "
                 + "and store.utxo.unspent-table-read-enabled=true.", cursorAfter));

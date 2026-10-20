@@ -68,6 +68,9 @@ class RollbackServiceTest {
         var inOrder = inOrder(jdbcTemplate);
         inOrder.verify(jdbcTemplate).update(eq("DELETE FROM address_utxo_unspent WHERE slot > :slot"), any(SqlParameterSource.class));
         inOrder.verify(jdbcTemplate).update(eq(UnspentUtxoBackfillService.RESTORE_SPENT_AFTER), any(SqlParameterSource.class));
+        inOrder.verify(jdbcTemplate).update(eq(UnspentUtxoBackfillService.STATE_AFTER_ROLLBACK), argThat((SqlParameterSource params) ->
+                Long.valueOf(1000L).equals(params.getValue("slot")) && Long.valueOf(2000L).equals(params.getValue("block"))
+                        && "block_hash_123".equals(params.getValue("block_hash"))));
         inOrder.verify(jdbcTemplate).update(eq("DELETE FROM tx_input WHERE spent_at_slot > :slot"), any(SqlParameterSource.class));
     }
 

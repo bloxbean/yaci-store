@@ -1,6 +1,8 @@
 package com.bloxbean.cardano.yaci.store.utxo;
 
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
+import com.bloxbean.cardano.yaci.store.common.service.CursorService;
+import com.bloxbean.cardano.yaci.store.common.service.StoreStateService;
 import com.bloxbean.cardano.yaci.store.utxo.storage.AddressStorage;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorageReader;
@@ -13,6 +15,7 @@ import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UtxoStorageReaderImpl;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.TxInputRepository;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.UtxoRepository;
 import org.jooq.DSLContext;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
@@ -43,8 +46,11 @@ public class UtxoStoreConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public UnspentUtxoTable unspentUtxoTable(UtxoStoreProperties utxoStoreProperties, DSLContext dslContext,
-                                             PlatformTransactionManager transactionManager) {
-        return new UnspentUtxoTable(utxoStoreProperties, dslContext, transactionManager);
+                                             PlatformTransactionManager transactionManager,
+                                             ObjectProvider<StoreStateService> storeStateService,
+                                             ObjectProvider<CursorService> cursorService) {
+        return new UnspentUtxoTable(utxoStoreProperties, dslContext, transactionManager,
+                storeStateService.getIfAvailable(), cursorService.getIfAvailable());
     }
 
     @Bean

@@ -3,11 +3,15 @@ package com.bloxbean.cardano.yaci.store.utxo.storage.impl;
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
+import com.bloxbean.cardano.yaci.store.common.domain.Cursor;
 import com.bloxbean.cardano.yaci.store.common.domain.TxInput;
+import com.bloxbean.cardano.yaci.store.common.service.CursorService;
+import com.bloxbean.cardano.yaci.store.common.service.StoreStateService;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.jooq.DSLContext;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.UtxoRepository;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.TxInputRepository;
@@ -26,8 +30,11 @@ import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * address_utxo_unspent against a real H2 database with the module's Flyway migrations: written by
@@ -63,6 +70,9 @@ class UnspentUtxoTableIT {
     @Autowired
     private PlatformTransactionManager transactionManager;
 
+    @Autowired
+    private StoreStateService storeStateService;
+
     @BeforeEach
     void enable() {
         properties.setUnspentTableEnabled(true);
@@ -74,6 +84,7 @@ class UnspentUtxoTableIT {
         jdbc.update("delete from address_utxo_unspent");
         jdbc.update("delete from address_utxo");
         jdbc.update("delete from tx_input");
+        jdbc.update("delete from store_state");
         properties.setUnspentTableEnabled(false);
     }
 
@@ -121,6 +132,15 @@ class UnspentUtxoTableIT {
     /** The end of a batch, as both publishers emit it: UtxoProcessor.handleCommit ends with this call. */
     private void commit() {
         utxoStorage.handleCommit(new CommitEvent<>(EventMetadata.builder().build(), List.of()));
+    }
+
+    /** The end of a batch whose last block is at {@code slot}. */
+    private static CommitEvent<?> commitAt(long slot) {
+        return new CommitEvent<>(EventMetadata.builder().slot(slot).block(slot / 10).blockHash("bh" + slot).build(), List.of());
+    }
+
+    private Map<String, Object> state() {
+        return jdbc.queryForMap("select status, slot, block, block_hash from store_state where state_id = ?", UnspentUtxoTable.STATE_ID);
     }
 
     private void rollbackTo(long slot) {
@@ -276,27 +296,56 @@ class UnspentUtxoTableIT {
         assertThat(unspentKeys()).isEmpty();
     }
 
-    /** A store in backfill-at-tip mode, with its own table state so the shared beans stay in from-genesis mode. */
-    private record AtTip(UnspentUtxoTable table, UtxoStorageImpl storage) {
+    /** A store with its own table and cursor, so the shared beans stay in from-genesis mode with no cursor. */
+    private record Store(UnspentUtxoTable table, UtxoStorageImpl storage, TransactionTemplate tx) {
         void commit() {
             storage.handleCommit(new CommitEvent<>(EventMetadata.builder().build(), List.of()));
+        }
+
+        void commit(long slot) {
+            storage.handleCommit(commitAt(slot));
         }
 
         void reachTip() {
             table.handlePreBlockSync(new PreBlockSyncEvent(new Point(0, "tip")));
         }
+
+        /** As UtxoRollbackProcessor does, in a transaction: this storage is not a Spring proxy. */
+        void rollbackTo(long slot) {
+            tx.executeWithoutResult(status -> {
+                storage.deleteUnspentBySlotGreaterThan(slot);
+                storage.deleteSpentBySlotGreaterThan(slot);
+            });
+        }
     }
 
-    private AtTip atTip() {
-        UtxoStoreProperties atTipProperties = UtxoStoreProperties.builder()
-                .unspentTableEnabled(true).unspentTableBackfillAtTip(true).unspentTableReadEnabled(true).build();
-        UnspentUtxoTable table = new UnspentUtxoTable(atTipProperties, dsl, transactionManager);
-        return new AtTip(table, new UtxoStorageImpl(utxoRepository, txInputRepository, dsl, new UtxoCache(), transactionManager, table));
+    private Store store(UtxoStoreProperties storeProperties, Long cursorSlot) {
+        CursorService cursorService = mock(CursorService.class);
+        when(cursorService.getCursor()).thenReturn(cursorSlot == null ? Optional.empty()
+                : Optional.of(Cursor.builder().slot(cursorSlot).block(cursorSlot / 10).blockHash("bh" + cursorSlot).build()));
+        UnspentUtxoTable table = new UnspentUtxoTable(storeProperties, dsl, transactionManager, storeStateService, cursorService);
+        return new Store(table, new UtxoStorageImpl(utxoRepository, txInputRepository, dsl, new UtxoCache(), transactionManager, table),
+                new TransactionTemplate(transactionManager));
+    }
+
+    private Store atTip() {
+        return store(UtxoStoreProperties.builder()
+                .unspentTableEnabled(true).unspentTableBackfillAtTip(true).unspentTableReadEnabled(true).build(), null);
+    }
+
+    /** A store kept from genesis whose cursor is at {@code cursorSlot}. */
+    private Store fromGenesisAt(Long cursorSlot) {
+        return store(UtxoStoreProperties.builder().unspentTableEnabled(true).unspentTableReadEnabled(true).build(), cursorSlot);
+    }
+
+    /** The same store running with the table turned off. */
+    private Store tableOff() {
+        return store(UtxoStoreProperties.builder().build(), null);
     }
 
     @Test
     void backfillAtTipWritesNothingDuringTheSyncThenBuildsAtTheTipAndKeepsTheTableCurrent() {
-        AtTip store = atTip();
+        Store store = atTip();
         store.storage().saveUnspent(List.of(output(hash(20), 0, -1), output(hash(20), 1, 100), output(hash(21), 0, 100), output(hash(21), 2, 100)));
         store.storage().saveSpent(List.of(spend(hash(20), 1, 110)));
         store.commit();
@@ -320,11 +369,11 @@ class UnspentUtxoTableIT {
     }
 
     @Test
-    void backfillAtTipTreatsANonEmptyTableAsBuilt() {
+    void aTableRecordedAsCurrentIsUsedAsIs() {
         utxoStorage.saveUnspent(List.of(output(hash(23), 0, 100)));   //written by the shared store, from genesis
         commit();
 
-        AtTip store = atTip();
+        Store store = atTip();
         assertThat(store.table().isActive()).isTrue();
         store.storage().saveSpent(List.of(spend(hash(23), 0, 200)));
         store.commit();
@@ -343,7 +392,7 @@ class UnspentUtxoTableIT {
             if (i % 7 == 0)
                 spends.add(spend(txHash, i % 3, 150));
         }
-        AtTip store = atTip();
+        Store store = atTip();
         store.storage().saveUnspent(outputs);
         store.storage().saveSpent(spends);
         store.commit();
@@ -351,5 +400,88 @@ class UnspentUtxoTableIT {
         store.reachTip();
 
         assertThat(unspentKeys()).hasSize(count - spends.size()).isEqualTo(expectedKeys());
+    }
+
+    @Test
+    void eachCommitRecordsTheBatchsLastBlock() {
+        utxoStorage.saveUnspent(List.of(output(hash(30), 0, 100)));
+        utxoStorage.handleCommit(commitAt(120));
+
+        assertThat(state()).containsEntry("STATUS", "CURRENT").containsEntry("SLOT", 120L)
+                .containsEntry("BLOCK", 12L).containsEntry("BLOCK_HASH", "bh120");
+    }
+
+    @Test
+    void aTableBehindTheCursorIsNotUsedAndIsBuiltAgainAtTheTip() {
+        utxoStorage.saveUnspent(List.of(output(hash(31), 0, 100), output(hash(32), 0, 100)));
+        utxoStorage.handleCommit(commitAt(100));
+
+        Store off = tableOff();   //the store runs on to slot 200 with the table off
+        off.storage().saveSpent(List.of(spend(hash(31), 0, 200)));
+        off.storage().saveUnspent(List.of(output(hash(33), 0, 200)));
+        off.commit(200);
+        assertThat(unspentKeys()).containsExactly(hash(31) + "#0", hash(32) + "#0");   //kept to 100 only
+
+        Store on = fromGenesisAt(200L);   //turned back on
+        assertThat(on.table().isActive()).isFalse();
+        assertThat(on.table().isReadable()).isFalse();
+        on.storage().saveUnspent(List.of(output(hash(34), 0, 210)));   //not written while not current
+        on.commit(210);
+        assertThat(unspentKeys()).containsExactly(hash(31) + "#0", hash(32) + "#0");
+
+        on.reachTip();
+
+        assertThat(on.table().isActive()).isTrue();
+        assertThat(on.table().isReadable()).isTrue();
+        assertThat(unspentKeys()).hasSize(3).isEqualTo(expectedKeys());
+        assertThat(state()).containsEntry("STATUS", "CURRENT").containsEntry("SLOT", 200L);
+    }
+
+    @Test
+    void aCommitAheadOfTheCursorKeepsTheTable() {
+        utxoStorage.saveUnspent(List.of(output(hash(35), 0, 100)));
+        utxoStorage.handleCommit(commitAt(200));   //a crash before the cursor moved: the batch is replayed
+
+        assertThat(fromGenesisAt(100L).table().isActive()).isTrue();
+    }
+
+    @Test
+    void aRollbackWithTheTableOnMovesItsStateToThePoint() {
+        utxoStorage.saveUnspent(List.of(output(hash(36), 0, 100)));
+        utxoStorage.handleCommit(commitAt(200));
+
+        rollbackTo(150);
+
+        assertThat(state()).containsEntry("STATUS", "CURRENT").containsEntry("SLOT", 150L);
+        assertThat(fromGenesisAt(150L).table().isActive()).isTrue();
+    }
+
+    @Test
+    void aRollbackWhileTheTableIsOffMarksItStale() {
+        utxoStorage.saveUnspent(List.of(output(hash(37), 0, 100), output(hash(38), 0, 180)));
+        utxoStorage.handleCommit(commitAt(200));
+
+        tableOff().rollbackTo(150);   //hash(38) is gone from address_utxo but not from the table
+
+        assertThat(state()).containsEntry("STATUS", "STALE").containsEntry("SLOT", 200L);
+        assertThat(fromGenesisAt(150L).table().isActive()).isFalse();
+    }
+
+    @Test
+    void aRollbackWhileTheTableIsOffLeavesAStateBeforeThePointAlone() {
+        utxoStorage.saveUnspent(List.of(output(hash(39), 0, 100)));
+        utxoStorage.handleCommit(commitAt(100));
+
+        tableOff().rollbackTo(150);
+
+        assertThat(state()).containsEntry("STATUS", "CURRENT").containsEntry("SLOT", 100L);
+    }
+
+    @Test
+    void rowsWithoutAStateAreNotTrusted() {
+        jdbc.update("insert into address_utxo_unspent (tx_hash, output_index, slot) values (?, 0, 100)", hash(40));
+
+        assertThat(fromGenesisAt(null).table().isActive()).isFalse();
+        assertThat(fromGenesisAt(500L).table().isActive()).isFalse();
     }
 }

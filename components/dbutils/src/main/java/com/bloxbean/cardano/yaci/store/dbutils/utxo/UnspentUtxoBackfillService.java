@@ -16,7 +16,9 @@ import java.util.List;
  *
  * <p>The store must be stopped for the whole run: the table is then exact at the store's cursor, and
  * the store continues from that point once it starts with {@code store.utxo.unspent-table-enabled=true}.
- * {@link #cursorSlot()} lets the caller check that the cursor did not move while the build ran.
+ * {@link #cursorSlot()} lets the caller check that the cursor did not move while the build ran, and
+ * {@link #markCurrentAtCursor()} then records the table as current in store_state, which the store
+ * checks at startup. Until then the table's state row is absent, so an interrupted run is never used.
  *
  * <p>The unspent outputs are found one {@code output_index} at a time, in {@link #SLICE_BOUNDS
  * tx_hash slices}. Both tables have the primary key {@code (output_index, tx_hash)}, so each slice is
@@ -42,6 +44,17 @@ public class UnspentUtxoBackfillService {
             + "where t.spent_at_slot > :slot and a.slot <= :slot "
             + "and not exists (select 1 from address_utxo_unspent u where u.tx_hash = a.tx_hash and u.output_index = a.output_index)";
 
+    /** The table's row in store_state. UnspentUtxoTable in stores/utxo uses the same id and statuses. */
+    public static final String STATE_ID = "utxo.unspent_table";
+
+    /**
+     * Moves the table's state to the rollback point {@code :slot} after the table is rolled back: a table that was
+     * current at or after the point is current there. A table behind the point stays behind, so the store rebuilds it.
+     */
+    public static final String STATE_AFTER_ROLLBACK = "update store_state "
+            + "set slot = :slot, block = :block, block_hash = :block_hash, update_datetime = current_timestamp "
+            + "where state_id = '" + STATE_ID + "' and status = 'CURRENT' and slot >= :slot";
+
     /** Lower bounds of the tx_hash slices of one output_index; the last slice has no upper bound. */
     static final String[] SLICE_BOUNDS = {"", "1", "2", "3", "4", "5", "6", "7", "8", "9", "a", "b", "c", "d", "e", "f"};
 
@@ -66,6 +79,14 @@ public class UnspentUtxoBackfillService {
         return jdbc.queryForObject("select max(slot) from cursor_", Long.class);
     }
 
+    /** Records the table as current at the store's cursor, once a rebuild has finished with the store stopped. */
+    public void markCurrentAtCursor() {
+        jdbc.update("delete from store_state where state_id = ?", STATE_ID);
+        jdbc.update("insert into store_state (state_id, status, slot, block, block_hash, update_datetime) "
+                + "select ?, 'CURRENT', slot, block_number, block_hash, current_timestamp from cursor_ "
+                + "order by slot desc limit 1", STATE_ID);
+    }
+
     /** The highest output_index in address_utxo, or -1 for an empty store. */
     public int maxOutputIndex() {
         Integer index = jdbc.queryForObject("select max(output_index) from address_utxo", Integer.class);
@@ -83,6 +104,8 @@ public class UnspentUtxoBackfillService {
         if (fromOutputIndex < 0) {
             throw new IllegalArgumentException("fromOutputIndex must not be negative");
         }
+        //Not current until the whole run has finished and markCurrentAtCursor is called
+        jdbc.update("delete from store_state where state_id = ?", STATE_ID);
         if (fromOutputIndex == 0) {
             jdbc.execute("truncate table address_utxo_unspent");
         } else {

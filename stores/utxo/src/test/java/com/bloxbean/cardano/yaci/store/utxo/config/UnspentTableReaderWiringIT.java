@@ -26,7 +26,7 @@ class UnspentTableReaderWiringIT {
     private Object readerWith(boolean readEnabled) {
         UtxoStoreProperties properties = UtxoStoreProperties.builder().unspentTableReadEnabled(readEnabled).build();
         return new UtxoStoreConfiguration().utxoStorageReader(utxoRepository, dsl, properties,
-                new UnspentUtxoTable(properties, dsl, null));
+                new UnspentUtxoTable(properties, dsl, null, null, null));
     }
 
     @Test

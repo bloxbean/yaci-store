@@ -56,12 +56,19 @@ public class RollbackService {
             }
 
             //address_utxo_unspent also restores the outputs whose spend is rolled back. It is listed before
-            //tx_input in rollback.yml, so those spends are still there.
+            //tx_input in rollback.yml, so those spends are still there. Its store_state row then moves to the point.
             if (UNSPENT_UTXO_TABLE.equalsIgnoreCase(tableName) && "DELETE".equalsIgnoreCase(tableDef.getOperation())) {
-                for (String unspentSql : List.of(buildDeleteSql(tableDef), UnspentUtxoBackfillService.RESTORE_SPENT_AFTER)) {
+                List<String> unspentSqls = new ArrayList<>(List.of(buildDeleteSql(tableDef), UnspentUtxoBackfillService.RESTORE_SPENT_AFTER));
+                if (databaseUtils.tableExists("store_state"))
+                    unspentSqls.add(UnspentUtxoBackfillService.STATE_AFTER_ROLLBACK);
+
+                var unspentParams = new MapSqlParameterSource(params.getValues())
+                        .addValue("block", rollbackBlock.getNumber())
+                        .addValue("block_hash", rollbackBlock.getHash());
+                for (String unspentSql : unspentSqls) {
                     log.info("Executing rollback on table '{}': {}", tableName, unspentSql);
                     try {
-                        jdbcTemplate.update(unspentSql, params);
+                        jdbcTemplate.update(unspentSql, unspentParams);
                     } catch (Exception e) {
                         log.error("Failed to execute rollback on table '{}': {}", tableName, e.getMessage());
                         failedRollbackActions.add(new TableRollbackAction(tableName, unspentSql));

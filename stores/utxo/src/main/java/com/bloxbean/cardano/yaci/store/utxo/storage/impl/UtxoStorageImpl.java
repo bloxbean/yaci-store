@@ -52,9 +52,9 @@ import static org.jooq.impl.DSL.selectOne;
  *   address_utxo_unspent at {@link #handleCommit}, when every output of the batch has been written
  *   (in parallel mode a block's spends can be saved before the output they spend, which another
  *   block of the same batch writes, and {@code UtxoProcessor} saves a block's spends before its
- *   outputs);</li>
+ *   outputs). The same transaction records the batch's last block as the block the table is kept to;</li>
  *   <li>a rollback deletes the rows created after the rollback point and restores the outputs
- *   whose spend it removes, before tx_input is trimmed.</li>
+ *   whose spend it removes, before tx_input is trimmed, and moves that record back to the point.</li>
  * </ul>
  */
 @Slf4j
@@ -170,6 +170,9 @@ public class UtxoStorageImpl implements UtxoStorage {
 
             //Spends not yet committed belong to the blocks being rolled back
             pendingSpentKeys.clear();
+            unspentUtxoTable.rolledBackTo(slot, true);
+        } else if (unspentUtxoTable != null) {
+            unspentUtxoTable.rolledBackTo(slot, false);
         }
 
         return spentOutputRepository.deleteBySpentAtSlotGreaterThan(slot);
@@ -323,30 +326,32 @@ public class UtxoStorageImpl implements UtxoStorage {
     public void handleCommit(CommitEvent commitEvent) {
         try {
             if (isUnspentTableEnabled())
-                deletePendingSpentFromUnspentTable();
+                commitUnspentTable(commitEvent);
         } finally {
             utxoCache.clear();
         }
     }
 
     /**
-     * Deletes the outputs spent since the last commit from address_utxo_unspent. By now every output of the
-     * batch is written, so each spent output is found whichever block of the batch wrote it.
+     * Deletes the outputs spent since the last commit from address_utxo_unspent and records the table as kept
+     * to the batch's last block, in one transaction. By now every output of the batch is written, so each spent
+     * output is found whichever block of the batch wrote it.
      * In sync mode this joins the block's transaction; in parallel mode it runs in its own.
      */
-    private void deletePendingSpentFromUnspentTable() {
-        if (pendingSpentKeys.isEmpty())
-            return;
-
+    private void commitUnspentTable(CommitEvent commitEvent) {
         List<UtxoKey> spentKeys = List.copyOf(pendingSpentKeys);
         commitTransactionTemplate.executeWithoutResult(status -> {
-            var deletes = spentKeys.stream()
-                    .map(utxoKey -> dsl.deleteFrom(ADDRESS_UTXO_UNSPENT)
-                            .where(ADDRESS_UTXO_UNSPENT.TX_HASH.eq(utxoKey.getTxHash()))
-                            .and(ADDRESS_UTXO_UNSPENT.OUTPUT_INDEX.eq(utxoKey.getOutputIndex())))
-                    .toList();
+            if (!spentKeys.isEmpty()) {
+                var deletes = spentKeys.stream()
+                        .map(utxoKey -> dsl.deleteFrom(ADDRESS_UTXO_UNSPENT)
+                                .where(ADDRESS_UTXO_UNSPENT.TX_HASH.eq(utxoKey.getTxHash()))
+                                .and(ADDRESS_UTXO_UNSPENT.OUTPUT_INDEX.eq(utxoKey.getOutputIndex())))
+                        .toList();
 
-            dsl.batch(deletes).execute();
+                dsl.batch(deletes).execute();
+            }
+
+            unspentUtxoTable.keptTo(commitEvent.getMetadata());
         });
 
         //Only after the delete succeeded: on failure the keys stay for the next commit

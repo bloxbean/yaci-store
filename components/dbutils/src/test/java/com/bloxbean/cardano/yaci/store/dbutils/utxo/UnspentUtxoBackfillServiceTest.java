@@ -9,6 +9,7 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -23,7 +24,8 @@ class UnspentUtxoBackfillServiceTest {
     void setUp() {
         DriverManagerDataSource ds = new DriverManagerDataSource("jdbc:h2:mem:" + UUID.randomUUID() + ";DB_CLOSE_DELAY=-1", "sa", "");
         Flyway.configure().dataSource(ds)
-                .locations("filesystem:../../stores/utxo/src/main/resources/db/store/h2")
+                .locations("filesystem:../../stores/utxo/src/main/resources/db/store/h2",
+                        "filesystem:../../components/core/src/main/resources/db/store/h2")   // cursor_, store_state
                 .load().migrate();
         jdbc = new JdbcTemplate(ds);
         service = new UnspentUtxoBackfillService(jdbc);
@@ -111,15 +113,67 @@ class UnspentUtxoBackfillServiceTest {
         assertThat(unspent()).isEqualTo(expected());
     }
 
+    private void cursor(long slot) {
+        jdbc.update("insert into cursor_ (id, block_hash, slot, block_number) values (1, ?, ?, ?)", "bh" + slot, slot, slot / 10);
+    }
+
+    private Map<String, Object> state() {
+        return jdbc.queryForMap("select status, slot, block, block_hash from store_state where state_id = ?", UnspentUtxoBackfillService.STATE_ID);
+    }
+
+    private int stateRows() {
+        return jdbc.queryForObject("select count(*) from store_state", Integer.class);
+    }
+
     @Test
     void reportsTheCursorAndAnEmptyStore() {
-        jdbc.execute("create table cursor_ (id integer, slot bigint)");
         assertThat(service.cursorSlot()).isNull();
         assertThat(service.maxOutputIndex()).isEqualTo(-1);
         assertThat(service.rebuild(0)).isZero();
 
-        jdbc.update("insert into cursor_ (id, slot) values (1, 500), (1, 520)");
+        cursor(500);
+        cursor(520);
         assertThat(service.cursorSlot()).isEqualTo(520);
+    }
+
+    @Test
+    void aFinishedRebuildIsRecordedAsCurrentAtTheCursor() {
+        output(1, 0, 10);
+        cursor(500);
+        cursor(520);
+
+        service.rebuild(0);
+        assertThat(stateRows()).isZero();   //not current until the caller has checked the cursor did not move
+        service.markCurrentAtCursor();
+
+        assertThat(state()).containsEntry("STATUS", "CURRENT").containsEntry("SLOT", 520L)
+                .containsEntry("BLOCK", 52L).containsEntry("BLOCK_HASH", "bh520");
+    }
+
+    @Test
+    void aRebuildDropsTheStateUntilItFinishes() {
+        cursor(500);
+        service.markCurrentAtCursor();
+        assertThat(stateRows()).isOne();
+
+        service.rebuild(3);   //a resumed run that is interrupted again leaves no state
+
+        assertThat(stateRows()).isZero();
+    }
+
+    @Test
+    void rollbackMovesACurrentStateToThePointAndLeavesOneBehindIt() {
+        var named = new NamedParameterJdbcTemplate(jdbc);
+        var params = new MapSqlParameterSource("slot", 150L).addValue("block", 15L).addValue("block_hash", "bh150");
+
+        cursor(200);
+        service.markCurrentAtCursor();
+        named.update(UnspentUtxoBackfillService.STATE_AFTER_ROLLBACK, params);
+        assertThat(state()).containsEntry("STATUS", "CURRENT").containsEntry("SLOT", 150L).containsEntry("BLOCK_HASH", "bh150");
+
+        jdbc.update("update store_state set slot = 100");   //kept only to slot 100: behind the point, so not moved
+        named.update(UnspentUtxoBackfillService.STATE_AFTER_ROLLBACK, params);
+        assertThat(state()).containsEntry("SLOT", 100L);
     }
 
     @Test

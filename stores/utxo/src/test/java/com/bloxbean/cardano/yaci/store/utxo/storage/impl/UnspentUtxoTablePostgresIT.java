@@ -57,7 +57,8 @@ class UnspentUtxoTablePostgresIT {
         var transactionManager = new DataSourceTransactionManager(ds);
         storage = new UtxoStorageImpl(mock(UtxoRepository.class), mock(TxInputRepository.class), dsl,
                 new UtxoCache(), transactionManager,
-                new UnspentUtxoTable(UtxoStoreProperties.builder().unspentTableEnabled(true).build(), dsl, transactionManager));
+                new UnspentUtxoTable(UtxoStoreProperties.builder().unspentTableEnabled(true).build(), dsl, transactionManager,
+                        new InMemoryStoreStateService(), null));
     }
 
     @AfterEach
