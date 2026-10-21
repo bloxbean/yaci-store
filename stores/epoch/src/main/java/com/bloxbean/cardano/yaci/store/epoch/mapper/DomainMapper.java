@@ -1,17 +1,25 @@
 package com.bloxbean.cardano.yaci.store.epoch.mapper;
 
 import com.bloxbean.cardano.yaci.core.model.ProtocolParamUpdate;
+import com.bloxbean.cardano.yaci.core.types.UnitInterval;
 import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
+import com.bloxbean.cardano.yaci.store.common.util.UnitIntervalUtil;
 import com.bloxbean.cardano.yaci.store.epoch.dto.ProtocolParamsDto;
 import org.mapstruct.DecoratedWith;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.factory.Mappers;
 
+import java.math.BigDecimal;
+
 @Mapper
 @DecoratedWith(DomainMapperDecorator.class)
 public interface DomainMapper {
     DomainMapper INSTANCE = Mappers.getMapper(DomainMapper.class);
+
+    default BigDecimal map(UnitInterval value) {
+        return UnitIntervalUtil.toBigDecimal(value);
+    }
 
     @Mapping(target = "costModels", ignore = true) //TODO
     @Mapping(target = "extraEntropy", ignore = true)
