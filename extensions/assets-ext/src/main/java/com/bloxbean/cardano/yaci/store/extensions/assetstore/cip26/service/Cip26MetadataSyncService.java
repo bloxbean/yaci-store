@@ -28,6 +28,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class Cip26MetadataSyncService {
 
+    private static final String JSON_EXTENSION = ".json";
+
     private final GitService gitService;
     private final Cip26MetadataService tokenMetadataService;
     private final TokenMappingService tokenMappingService;
@@ -196,7 +198,7 @@ public class Cip26MetadataSyncService {
     }
 
     private void recordFileProblem(File mappingFile, String reasonCode, String reason, String innerSubject) {
-        invalidTokenRecorder.record(InvalidTokenReport.builder()
+        invalidTokenRecorder.report(InvalidTokenReport.builder()
                 .standard(InvalidTokenReason.CIP_26)
                 .reasonCode(reasonCode)
                 .reason(reason)
@@ -287,8 +289,8 @@ public class Cip26MetadataSyncService {
     }
 
     private static String stripJsonExtension(String fileName) {
-        return fileName.endsWith(".json")
-                ? fileName.substring(0, fileName.length() - ".json".length())
+        return fileName.endsWith(JSON_EXTENSION)
+                ? fileName.substring(0, fileName.length() - JSON_EXTENSION.length())
                 : fileName;
     }
 
@@ -351,7 +353,7 @@ public class Cip26MetadataSyncService {
         int deleted = 0;
         int permanentlyFailed = 0;
         for (String subject : subjectsToDelete) {
-            invalidTokenRecorder.forgetOrigin(InvalidTokenReason.CIP_26, subject + ".json");
+            invalidTokenRecorder.forgetOrigin(InvalidTokenReason.CIP_26, subject + JSON_EXTENSION);
             switch (tokenMetadataService.deleteMapping(subject)) {
                 case DELETED -> {
                     deleted++;

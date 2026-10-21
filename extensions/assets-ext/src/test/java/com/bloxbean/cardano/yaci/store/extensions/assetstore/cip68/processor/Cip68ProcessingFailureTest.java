@@ -143,7 +143,7 @@ class Cip68ProcessingFailureTest {
                 userToken("01"), userToken("02"), userToken("03"))));
 
         ArgumentCaptor<InvalidTokenReport> recorded = ArgumentCaptor.forClass(InvalidTokenReport.class);
-        verify(recorder).record(recorded.capture());
+        verify(recorder).report(recorded.capture());
         assertThat(recorded.getValue().reasonCode()).isEqualTo(InvalidTokenReason.PROCESSING_FAILURE);
         assertThat(recorded.getValue().assetName()).isEqualTo(Cip68Constants.REFERENCE_TOKEN_PREFIX + "02");
     }

@@ -100,11 +100,11 @@ class InvalidTokenH2IT {
     @Test
     @DisplayName("a rollback deletes the rows after the slot and keeps the ones from the CIP-26 registry")
     void rollbackKeepsOffChainRows() {
-        recorder.record(InvalidTokenReport.builder().standard(InvalidTokenReason.CIP_68).reasonCode(InvalidTokenReason.DATUM_UNDECODABLE)
+        recorder.report(InvalidTokenReport.builder().standard(InvalidTokenReason.CIP_68).reasonCode(InvalidTokenReason.DATUM_UNDECODABLE)
                 .reason("old").txHash(TX_HASH).outputIndex(0).slot(50L).build());
-        recorder.record(InvalidTokenReport.builder().standard(InvalidTokenReason.CIP_68).reasonCode(InvalidTokenReason.DATUM_UNDECODABLE)
+        recorder.report(InvalidTokenReport.builder().standard(InvalidTokenReason.CIP_68).reasonCode(InvalidTokenReason.DATUM_UNDECODABLE)
                 .reason("new").txHash(TX_HASH).outputIndex(1).slot(200L).build());
-        recorder.record(InvalidTokenReport.builder().standard(InvalidTokenReason.CIP_26)
+        recorder.report(InvalidTokenReport.builder().standard(InvalidTokenReason.CIP_26)
                 .reasonCode(InvalidTokenReason.FILENAME_SUBJECT_MISMATCH).reason("registry").origin("x.json")
                 .details(Map.of("inner_subject", "y")).build());
         entityManager.flush();
@@ -121,7 +121,7 @@ class InvalidTokenH2IT {
     @DisplayName("forgetting a file removes only that file's rows")
     void forgetOrigin() {
         for (String file : List.of("a.json", "b.json")) {
-            recorder.record(InvalidTokenReport.builder().standard(InvalidTokenReason.CIP_26)
+            recorder.report(InvalidTokenReport.builder().standard(InvalidTokenReason.CIP_26)
                     .reasonCode(InvalidTokenReason.UNPARSEABLE_MAPPING).reason("bad").origin(file).build());
         }
         entityManager.flush();

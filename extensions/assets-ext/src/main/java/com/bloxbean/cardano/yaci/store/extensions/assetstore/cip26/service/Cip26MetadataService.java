@@ -56,7 +56,7 @@ public class Cip26MetadataService {
         if (validation.isDropped()) {
             // Validator already logged the specific reason at WARN. The file is named after the subject here (the sync
             // drops a mismatch before this call), so the file name is the origin.
-            invalidTokenRecorder.record(InvalidTokenReport.builder()
+            invalidTokenRecorder.report(InvalidTokenReport.builder()
                     .standard(InvalidTokenReason.CIP_26)
                     .reasonCode(InvalidTokenReason.UNUSABLE_SUBJECT)
                     .reason(validation.byzantineReason())

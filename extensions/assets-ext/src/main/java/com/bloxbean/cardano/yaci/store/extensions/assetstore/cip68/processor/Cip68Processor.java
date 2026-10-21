@@ -179,19 +179,20 @@ public class Cip68Processor {
         details.put("exception", e.getClass().getName());
         details.put("message", String.valueOf(e.getMessage()));
         details.put("datum_prefix", abbreviateDatum(output.getInlineDatum()));
-        invalidTokenRecorder.record(droppedReport(output, slot, refNft, InvalidTokenReason.PROCESSING_FAILURE,
+        invalidTokenRecorder.report(droppedReport(output, slot, refNft, InvalidTokenReason.PROCESSING_FAILURE,
                 "indexing the output failed unexpectedly: " + e.getClass().getSimpleName() + ": " + e.getMessage(), details));
     }
 
     /** A datum that is dropped as unusable or an attack is recorded for the reference NFT it was read for (ADR 0007). */
-    private void recordDropped(AddressUtxo output, Long slot, AssetType refNft, ParseOutcome.Dropped dropped, @Nullable SharedDatum shared) {
+    private void recordDropped(AddressUtxo output, Long slot, AssetType refNft, String reasonCode, String message,
+                               @Nullable SharedDatum shared) {
         Map<String, Object> details = new LinkedHashMap<>();
         details.put("datum_prefix", abbreviateDatum(output.getInlineDatum()));
         details.put("datum_bytes", output.getInlineDatum() == null ? 0 : output.getInlineDatum().length() / 2);
         if (shared != null) {
             details.put("reference_nfts_in_output", shared.referenceNfts);
         }
-        invalidTokenRecorder.record(droppedReport(output, slot, refNft, dropped.reasonCode(), dropped.message(), details));
+        invalidTokenRecorder.report(droppedReport(output, slot, refNft, reasonCode, message, details));
     }
 
     private static InvalidTokenReport droppedReport(AddressUtxo output, Long slot, @Nullable AssetType refNft, String reasonCode,
@@ -230,50 +231,51 @@ public class Cip68Processor {
         ParseOutcome outcome = shared != null
                 ? shared.outcome
                 : cip68DatumParser.parseDetailed(output.getInlineDatum(), refNft);
-        if (outcome instanceof ParseOutcome.Dropped dropped) {
-            // a datum shared by several reference NFTs is dropped once for the output: recorded once, for the first
-            if (shared == null || shared.markReported()) {
-                recordDropped(output, slot, refNft, dropped, shared);
-            }
-            return Optional.empty();
+        if (outcome instanceof ParseOutcome.Parsed(ParsedCip68Datum parsed)) {
+            return Optional.of(indexDatum(parsed, output, refNft, assetUnitsInTx, slot, shared));
         }
-        Optional<ParsedCip68Datum> parsedDatum = outcome instanceof ParseOutcome.Parsed p ? Optional.of(p.datum()) : Optional.empty();
-        return parsedDatum.map(parsed -> {
-            // The labels come first: which fields a datum must have depends on them. A reference NFT can have user
-            // tokens of several labels (the CIP allows it), and then the datum is checked against every one of them.
-            List<Integer> labels = deriveLabels(refNft, assetUnitsInTx, parsed);
-            // what is wrong with the datum itself does not depend on the label (the parser's errors, and the logo)
-            List<ValidationError> datumErrors = new ArrayList<>(parsed.validationErrors());
-            ValidationError logoError = Cip68Validator.validateLogo(parsed);
-            if (logoError != null) {
-                datumErrors.add(logoError);
-            }
-            List<ValidationError> labelErrors = new ArrayList<>();
-            for (int candidate : labels) {
-                labelErrors.addAll(Cip68Validator.validate(parsed, candidate));
-            }
-            List<ValidationError> errors = new ArrayList<>(datumErrors);
-            errors.addAll(labelErrors);
+        // a datum shared by several reference NFTs is dropped once for the output: recorded once, for the first
+        if (outcome instanceof ParseOutcome.Dropped(String reasonCode, String message) && (shared == null || shared.markReported())) {
+            recordDropped(output, slot, refNft, reasonCode, message, shared);
+        }
+        return Optional.empty();
+    }
 
-            int label = labels.getFirst();
-            Cip68Metadata entity = buildCip68Metadata(parsed, errors, refNft, output, slot, label);
-            requireSerializableProperties(entity);
-            metrics.datumIndexed(label);
-            // what the datum itself gets wrong is the same for every reference NFT of a shared flat datum: warn once
-            if (shared == null || shared.markReported()) {
-                warnPropertiesDroppedAsAttack(output, refNft, datumErrors);
-            }
-            if (!errors.isEmpty()) {
-                log.debug("CIP-68 datum of {}/{} (label {}) is indexed with {} validation errors: {}",
-                        refNft.policyId(), refNft.assetName(), label, errors.size(), errors);
-            }
-            if (labels.size() > 1) {
-                log.info("CIP-68 reference NFT {}/{} has user tokens for labels {}; the datum is checked against all of them, "
-                                + "stored with label {}",
-                        refNft.policyId(), refNft.assetName(), labels, label);
-            }
-            return entity;
-        });
+    /** The row for a datum that was read: its labels, the errors it gets for each, and what is reported about it. */
+    private Cip68Metadata indexDatum(ParsedCip68Datum parsed, AddressUtxo output, AssetType refNft, Set<String> assetUnitsInTx,
+                                     Long slot, @Nullable SharedDatum shared) {
+        // The labels come first: which fields a datum must have depends on them. A reference NFT can have user
+        // tokens of several labels (the CIP allows it), and then the datum is checked against every one of them.
+        List<Integer> labels = deriveLabels(refNft, assetUnitsInTx, parsed);
+        // what is wrong with the datum itself does not depend on the label (the parser's errors, and the logo)
+        List<ValidationError> datumErrors = new ArrayList<>(parsed.validationErrors());
+        ValidationError logoError = Cip68Validator.validateLogo(parsed);
+        if (logoError != null) {
+            datumErrors.add(logoError);
+        }
+        List<ValidationError> errors = new ArrayList<>(datumErrors);
+        for (int candidate : labels) {
+            errors.addAll(Cip68Validator.validate(parsed, candidate));
+        }
+
+        int label = labels.getFirst();
+        Cip68Metadata entity = buildCip68Metadata(parsed, errors, refNft, output, slot, label);
+        requireSerializableProperties(entity);
+        metrics.datumIndexed(label);
+        // what the datum itself gets wrong is the same for every reference NFT of a shared flat datum: warn once
+        if (shared == null || shared.markReported()) {
+            warnPropertiesDroppedAsAttack(output, refNft, datumErrors);
+        }
+        if (!errors.isEmpty()) {
+            log.debug("CIP-68 datum of {}/{} (label {}) is indexed with {} validation errors: {}",
+                    refNft.policyId(), refNft.assetName(), label, errors.size(), errors);
+        }
+        if (labels.size() > 1) {
+            log.info("CIP-68 reference NFT {}/{} has user tokens for labels {}; the datum is checked against all of them, "
+                            + "stored with label {}",
+                    refNft.policyId(), refNft.assetName(), labels, label);
+        }
+        return entity;
     }
 
     /**
