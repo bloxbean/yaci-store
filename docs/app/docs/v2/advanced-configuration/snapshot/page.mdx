@@ -1107,19 +1107,13 @@ for its history; a schema migrated in place from a release without it has NULLs 
 
 ### Widening an exporter
 
-The DuckLake writer creates a relation once with `CREATE TABLE AS SELECT ... LIMIT 0` and inserts
-into it thereafter, so adding a column to an exporter does not change an existing relation. To pick
-up the new columns, drop that relation and its export state so it is rebuilt:
-
-```sql
--- against the analytics catalog
-DROP TABLE ducklake_catalog.pool_registration;
--- against the operational database
-DELETE FROM analytics_export_state WHERE table_name = 'pool_registration';
-```
-
-The next export run recreates the relation with the wider schema and re-exports its partitions.
-The size depends on the network and retained history; plan the re-export accordingly.
+When a release adds a column to an exporter, the DuckLake writer adds it to the existing relation
+(`ALTER TABLE ... ADD COLUMN`) on the first export after the upgrade and inserts by column name, so
+nothing has to be dropped. Partitions exported before the upgrade keep their files and read the new
+column as NULL; a snapshot scan matches columns by name, so it reads old and new files together.
+`snapshot inspect` and `export` list each such column with the number of files that predate it, and
+the manifest records it as a limitation. To fill the column for older days, re-export those
+partitions (each re-export replaces its day).
 
 A snapshot with a non-empty limitations list is a development snapshot. `snapshot export` refuses to
 package one unless `--allow-incomplete` is given.
