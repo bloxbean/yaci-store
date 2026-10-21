@@ -283,6 +283,7 @@ not UTF-8, where it used to return garbled text.
 
 - **The errors are the report**, and they are returned by the API (decision 9, ADR 0006). A datum indexed with errors is a DEBUG line, not a WARN: there is
   one per token, and mainnet has tens of thousands.
+- What is dropped is also a row in `invalid_token` (ADR 0007), except a property dropped for being too deep, which is a `too_deep` error of its token's row.
 - A WARN is for what is dropped: a parse failure (one line with the exception and the datum hex, so the case can be reproduced; the stack trace at DEBUG
   only), a datum nested too deeply to decode, and a property nested more than 100 levels.
 - An output with a flat datum and several reference NFTs is one **INFO** line with the number found and their units (decision 1). It is a valid case that the CIP

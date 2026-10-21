@@ -90,7 +90,7 @@ entry `{cip: "CIP-26", field_name, field_category, code, error}` (there is no `s
   not a number is stored as no value, with a `wrong_type` error that quotes it (the raw string stays in the mapping).
 - **The columns have no length limit** (`TEXT`): the CIP-26 limits are reported, not enforced, so a long `name` does not fail the insert.
 
-What is still dropped, with one WARN:
+What is still dropped, with one WARN and one row in `invalid_token` (ADR 0007):
 
 - **The filename is the subject.** The file `<subject>.json` must contain that same `subject`. Otherwise the file is skipped. Preprod's registry has
   5,008 such files (about 90% of it), mostly copies of one test token under padded filenames; mainnet has none. They are spam or orphans, and the
@@ -140,7 +140,8 @@ CF registry's V1 API cannot be reproduced from it.
 ## Consequences
 
 - A registry file that is dropped (a subject mismatch, an unusable subject, an unparseable file, an attack-sized logo) is logged and left out. The
-  WARN lines are the only record, so they are the first place to look when a token is missing. An entry that breaks CIP-26 is not dropped: it is in
+  WARN lines and the `invalid_token` table (ADR 0007: `filename_subject_mismatch`, `unusable_subject`, `unparseable_mapping`, `missing_git_history`; a
+  row is replaced each time the file is processed and removed when the file is deleted) are the record, so they are the first place to look when a token is missing. An entry that breaks CIP-26 is not dropped: it is in
   the API with its errors, so the API is the first place to look for what is wrong with a token that is there.
 - Preprod logs thousands of "Skipping ... filename does not match" lines on the first sync. That
   is expected.

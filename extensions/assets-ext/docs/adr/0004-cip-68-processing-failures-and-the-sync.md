@@ -79,6 +79,9 @@ solves more but costs a new extension point that no other module needs.
 
 - One WARN with the policy id, the asset name, the exception class and message, and the datum hex, so that the datum can be
   reproduced in a test. The stack trace goes to DEBUG, the same rule as for parse failures (ADR 0002 decision 8).
+- One row in `invalid_token` for each reference NFT of the output, with the exception class and message and a prefix of the datum (ADR 0007). It is
+  written in the same transaction, bounded and idempotent, and a failure of the write is itself only a WARN, so it cannot become a new reason to stop
+  the sync.
 - The counter `datums.skipped` with a new reason `processing_failure` (label `unknown`, as for `parse_failure`), so that an
   alert can use `increase()` and a rate rises visibly when something new appears on chain. Unlike the other skip reasons,
   which are expected bad data, this one means something nobody foresaw, so it is the one to alert on.
@@ -94,7 +97,7 @@ to make. One behaviour is documented instead.
   row of the token stays the latest (the one case, with a datum dropped as an attack, where the API still serves an earlier row,
   ADR 0003 decision 5).
 - A skipped datum is not retried. As with the other skips, it is applied again only when the datum is processed again (a
-  resync). Finding it needs the WARN or the counter, so the alert on `processing_failure` matters.
+  resync). Finding it needs the WARN, the counter or the `invalid_token` table, so the alert on `processing_failure` matters.
 - The savepoint costs a little on every block that has a CIP-68 datum, and the fallback costs one write per entity of the
   failed batch. Neither is measured (a full mainnet index holds 250,876 rows, and the fallback runs only after a failure).
 - The change has to be tested on PostgreSQL, not only on H2. It is the reason the issue was split from the fix for #1240.

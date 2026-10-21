@@ -81,7 +81,7 @@ no `name` or `description` is required, and a token that breaks its CIP is a 200
 no standard knows the subject, and the batch endpoint leaves such a subject out of its 200 response. A request that filters the
 properties with `property` is no longer required to include `name` and `description` (it was a 400 before).
 
-Every response has a **`validation_errors`** array (`[]` when the token follows its CIP): on the merged `Subject`, on `standards.cip26` and
+Every response has a **`validation_errors`** array (`[]` when the token follows its CIP; left out for a row indexed before the field existed, see below): on the merged `Subject`, on `standards.cip26` and
 `standards.cip68`, and on the per-standard endpoints. Each entry has `cip`, `sub_standard` (the CIP-68 label; absent otherwise), `field_name`,
 `field_category` (`MANDATORY` or `OPTIONAL`), `code` and `error` (ADR 0006 decision 2). A client that wants the old guarantee can reject any
 token with a `MANDATORY` error. The `metadata.valid` flag stays in the JSON where it has always been. It used to be `name` and `description` both present, which was the gate, so it
@@ -137,8 +137,12 @@ the other.
 - The same data can answer differently before and after a CIP-26 sync, because the registry is read periodically
   (ADR 0001), while CIP-68 is updated block by block.
 - NFTs have no API. When one is added it needs its own rules for what is served and in which shape.
-- Rows indexed before `validation_errors` existed answer with `[]`, whatever their datum; a resync computes the errors and brings in the
-  tokens that were dropped.
+- Rows indexed before `validation_errors` existed have `NULL`, which means *never checked* and is not `[]`: the field is left out, and
+  `metadata.valid` falls back to the rule it had before (name and description both present). A resync computes the errors and brings in the
+  tokens that were dropped (ADR 0006 decision 4).
+- **`?validation=ALL|MANDATORY_ONLY|STRICT`** (default `ALL`) chooses which tokens are returned: `MANDATORY_ONLY` those with no `MANDATORY` error,
+  `STRICT` those with no error at all. A token that is not accepted is a `404`, or left out of a batch; the errors of a returned token are never
+  filtered. It is applied in Java to the rows already read, so it needs no native query (ADR 0006 decision 5).
 
 ## Open questions
 

@@ -58,7 +58,7 @@ lets through; new rules have to be written in code and tested there.
 
 - Every way a token departs from its CIP is a `validation_errors` entry, stored with the row and returned by the API. That is the
   report.
-- A WARN is for what is dropped (decision 2). A token indexed with errors is a DEBUG line, since there is one per token and
+- A WARN is for what is dropped (decision 2), which is also a row in `invalid_token` (ADR 0007). A token indexed with errors is a DEBUG line, since there is one per token and
   mainnet has tens of thousands.
 - CIP-68 has Micrometer counters for the errors, by label, code and category (ADR 0006 decision 7). CIP-26 has none: its entries
   are checked on GitHub before they are merged (the maintainers' statement), and the sync logs a tally at INFO every 500 files and at
