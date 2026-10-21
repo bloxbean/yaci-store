@@ -169,7 +169,7 @@ class Cip68ProcessingFailureTest {
     }
 
     private double processingFailures() {
-        var c = registry.find(Cip68Metrics.SKIPPED).tag("label", "unknown")
+        var c = registry.find(Cip68Metrics.SKIPPED)
                 .tag("reason", Cip68Metrics.PROCESSING_FAILURE).counter();
         return c == null ? 0 : c.count();
     }

@@ -242,18 +242,15 @@ public class Cip68Processor {
             Cip68Metadata entity = buildCip68Metadata(parsed, errors, refNft, output, slot, label);
             requireSerializableProperties(entity);
             metrics.datumIndexed(label);
-            // what the datum itself gets wrong is the same for every reference NFT of a shared flat datum: count it once
+            // what the datum itself gets wrong is the same for every reference NFT of a shared flat datum: warn once
             if (shared == null || shared.markReported()) {
-                metrics.validationErrors(datumErrors);
                 warnPropertiesDroppedAsAttack(output, refNft, datumErrors);
             }
-            metrics.validationErrors(labelErrors);
             if (!errors.isEmpty()) {
                 log.debug("CIP-68 datum of {}/{} (label {}) is indexed with {} validation errors: {}",
                         refNft.policyId(), refNft.assetName(), label, errors.size(), errors);
             }
             if (labels.size() > 1) {
-                metrics.multiLabel(labels);
                 log.info("CIP-68 reference NFT {}/{} has user tokens for labels {}; the datum is checked against all of them, "
                                 + "stored with label {}",
                         refNft.policyId(), refNft.assetName(), labels, label);
