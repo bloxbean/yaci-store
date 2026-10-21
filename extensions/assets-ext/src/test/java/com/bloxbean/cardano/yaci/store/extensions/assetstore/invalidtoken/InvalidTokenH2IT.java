@@ -24,6 +24,8 @@ import org.springframework.boot.SpringBootConfiguration;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigInteger;
 import java.util.List;
@@ -115,6 +117,23 @@ class InvalidTokenH2IT {
         entityManager.clear();
 
         assertThat(repository.findAll()).extracting(InvalidToken::getReason).containsExactlyInAnyOrder("old", "registry");
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    @DisplayName("forgetting a file works outside a transaction, which is how the CIP-26 sync calls it")
+    void forgetOriginOutsideATransaction() {
+        try {
+            recorder.report(InvalidTokenReport.builder().standard(InvalidTokenReason.CIP_26)
+                    .reasonCode(InvalidTokenReason.UNPARSEABLE_MAPPING).reason("bad").origin("c.json").build());
+            assertThat(repository.findAll()).hasSize(1);
+
+            recorder.forgetOrigin(InvalidTokenReason.CIP_26, "c.json");
+
+            assertThat(repository.findAll()).isEmpty();
+        } finally {
+            repository.deleteAll();
+        }
     }
 
     @Test
