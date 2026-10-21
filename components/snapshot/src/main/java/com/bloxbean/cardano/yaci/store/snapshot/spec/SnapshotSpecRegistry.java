@@ -216,6 +216,27 @@ public class SnapshotSpecRegistry {
         return selected;
     }
 
+    /**
+     * Leaves out the optional tables (ADR 0006) that {@code settings} do not turn on: the source does not
+     * write them, or the target does not want them. They stay known, so a target's are checked to be
+     * empty, and a manifest that lists them is still understood.
+     *
+     * @param settings a store setting's value, by property name
+     */
+    public SnapshotSpecRegistry withoutDisabledOptionalTables(java.util.function.Function<String, Boolean> settings) {
+        Set<String> off = all().stream().filter(s -> !s.enabledIn(settings)).map(SnapshotTableSpec::id)
+                .collect(java.util.stream.Collectors.toSet());
+        if (off.isEmpty()) {
+            return this;
+        }
+        SnapshotSpecRegistry selected = new SnapshotSpecRegistry();
+        byId.values().forEach(s -> selected.register(s, isBuiltIn(s)));
+        selected.selectedIds = byId.values().stream().filter(s -> isSelected(s.id()) && !off.contains(s.id()))
+                .map(SnapshotTableSpec::id).collect(java.util.stream.Collectors.toSet());
+        selected.checkSelection();
+        return selected;
+    }
+
     private void checkSelection() {
         for (SnapshotTableSpec spec : all()) {
             for (String dependency : spec.importSpec().dependencies()) {

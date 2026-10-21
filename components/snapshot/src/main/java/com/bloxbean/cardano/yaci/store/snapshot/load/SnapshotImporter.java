@@ -154,6 +154,7 @@ public class SnapshotImporter {
                     + ". A network mismatch is never overridable.");
         }
         blockers.addAll(retentionBlockers(manifest, options));
+        blockers.addAll(matchingSettingBlockers(manifest, options));
 
         ImportJournal.Run existing = null;
         try (Connection pg = connect(options)) {
@@ -264,6 +265,31 @@ public class SnapshotImporter {
                         + "%s=true, or it would present partial history as complete.", table, key, value, setting));
             }
         });
+        return problems;
+    }
+
+    /**
+     * An optional table holds what the source's settings made it hold, e.g. whole transactions or only
+     * their bodies in {@code transaction_cbor}; a target that expects the other form is refused.
+     */
+    private List<String> matchingSettingBlockers(SnapshotManifest manifest, ImportOptions options) {
+        List<String> problems = new ArrayList<>();
+        Map<String, String> source = manifest.pruningSettings() == null ? Map.of() : manifest.pruningSettings();
+        for (SnapshotTableSpec spec : registry.importedTables()) {
+            SnapshotManifest.TableManifest t = manifest.table(spec.id());
+            if (t == null || t.rowCount() == 0) {
+                continue;
+            }
+            for (String setting : spec.mustMatch()) {
+                String exported = source.getOrDefault(setting, "false");
+                String wanted = options.targetSettings().getOrDefault(setting, "false");
+                if (!exported.equalsIgnoreCase(wanted)) {
+                    problems.add(String.format("%s was exported with %s=%s, but the target runs with %s=%s. Use the"
+                            + " same setting, or turn %s off on the target.", spec.targetTable(), setting, exported,
+                            setting, wanted, spec.targetTable()));
+                }
+            }
+        }
         return problems;
     }
 

@@ -38,8 +38,44 @@ public record SnapshotTableSpec(
          */
         String digest,
         /** Where the spec came from, for diagnostics only. Never written to a manifest. */
-        String origin
+        String origin,
+        /**
+         * Store settings that turn this table on, for a table a store writes only when asked, such as
+         * {@code transaction_cbor}. Empty for a table that is always written. An optional table is
+         * exported only when the source has one of them set, and imported only when the target does
+         * (ADR 0006). Its files go in parts of their own, so a target without it never downloads them.
+         */
+        List<String> enabledBy,
+        /**
+         * Store settings whose value must be the same on the source (recorded in the manifest) and the
+         * target, because they change what the table holds: {@code store.transaction.save-full-tx-cbor}
+         * decides between whole transactions and bodies.
+         */
+        List<String> mustMatch
 ) {
+
+    public SnapshotTableSpec(String id, int specVersion, String module, TableKind kind, RestoreMode restore,
+                             String reason, Source source, Consistency consistency, Import importSpec,
+                             Validation validation, Map<String, String> lossy, String lossyNote, String digest,
+                             String origin) {
+        this(id, specVersion, module, kind, restore, reason, source, consistency, importSpec, validation, lossy,
+                lossyNote, digest, origin, List.of(), List.of());
+    }
+
+    public SnapshotTableSpec {
+        enabledBy = enabledBy == null ? List.of() : List.copyOf(enabledBy);
+        mustMatch = mustMatch == null ? List.of() : List.copyOf(mustMatch);
+    }
+
+    /** True for a table a store writes only when one of {@link #enabledBy} is set. */
+    public boolean optional() {
+        return !enabledBy.isEmpty();
+    }
+
+    /** Whether {@code settings} (true/false by property name) turn this table on. Always true for a non-optional one. */
+    public boolean enabledIn(java.util.function.Function<String, Boolean> settings) {
+        return !optional() || enabledBy.stream().anyMatch(p -> Boolean.TRUE.equals(settings.apply(p)));
+    }
 
     /** Stable registry key. */
     public String key() {
@@ -101,6 +137,13 @@ public record SnapshotTableSpec(
         }
         new java.util.TreeMap<>(lossy == null ? Map.of() : lossy).forEach((c, r) -> line(sb, "lossy." + c, r));
         line(sb, "lossy-note", lossyNote);
+        // Only when set, so the contract of every table that is always written stays as it was.
+        if (!enabledBy.isEmpty()) {
+            line(sb, "enabled-by", String.join(",", enabledBy));
+        }
+        if (!mustMatch.isEmpty()) {
+            line(sb, "must-match", String.join(",", mustMatch));
+        }
         return com.bloxbean.cardano.yaci.store.snapshot.util.Digests.sha256Hex(sb.toString());
     }
 

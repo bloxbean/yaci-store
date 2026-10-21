@@ -34,7 +34,8 @@ public class SnapshotSpecLoader {
 
     private static final Set<String> ROOT_KEYS =
             Set.of("id", "spec-version", "module", "kind", "restore", "reason",
-                    "source", "consistency", "import", "validation", "lossy", "lossy-note");
+                    "source", "consistency", "import", "validation", "lossy", "lossy-note",
+                    "enabled-by", "must-match");
     private static final Set<String> SOURCE_KEYS = Set.of("exporter-id", "ducklake-relation", "partition");
     private static final Set<String> PARTITION_KEYS = Set.of("strategy", "column", "include-byron-epochs");
     private static final Set<String> CONSISTENCY_KEYS = Set.of("completed-epoch", "cutoff", "coverage");
@@ -110,8 +111,13 @@ public class SnapshotSpecLoader {
             digest = Digests.sha256Hex(digest + "\n"
                     + Digests.sha256Hex(readTransform(importSpec.selectResource(), origin)));
         }
+        List<String> enabledBy = stringList(n, "enabled-by", origin);
+        List<String> mustMatch = stringList(n, "must-match", origin);
+        if (!mustMatch.isEmpty() && enabledBy.isEmpty()) {
+            throw new SpecException(origin + ": 'must-match' is only for an optional table, with 'enabled-by'");
+        }
         SnapshotTableSpec spec = new SnapshotTableSpec(id, specVersion, module, kind, restore, reason,
-                source, consistency, importSpec, validation, lossy, lossyNote, digest, origin);
+                source, consistency, importSpec, validation, lossy, lossyNote, digest, origin, enabledBy, mustMatch);
         validateSemantics(spec, origin);
         return spec;
     }

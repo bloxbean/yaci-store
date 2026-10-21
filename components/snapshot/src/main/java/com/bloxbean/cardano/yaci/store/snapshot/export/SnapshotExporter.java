@@ -291,8 +291,10 @@ public class SnapshotExporter {
                     entries.add(fe);
                     allEntries.add(fe);
                     owners.add(plan.spec().id());
-                    // Each tier goes in parts of its own, so an import that skips it skips whole parts.
-                    modules.add(plan.spec().module() + (fileTier == null ? "" : "/" + fileTier));
+                    // Each tier, and each optional table (ADR 0006), goes in parts of its own, so an import
+                    // that skips it skips whole parts.
+                    modules.add(plan.spec().module() + (plan.spec().optional() ? "/" + plan.spec().targetTable() : "")
+                            + (fileTier == null ? "" : "/" + fileTier));
                     crcs.put(f.relativePath(), d.crc32());
                 }
                 tableManifests.add(toTableManifest(plan, entries, tier == null ? null : tier.split()));

@@ -96,7 +96,7 @@ class SnapshotImportIT {
     @Test
     void scopedRestoreLoadsOnlyEnabledStoresIntoSmallerSchemaAndValidates() throws Exception {
         var built = fixtureWithTableSchemas();
-        var selected = registry.selectModules(java.util.Set.of("core", "blocks"));
+        var selected = registry.selectModules(java.util.Set.of("core", "blocks")).withoutDisabledOptionalTables(setting -> false);
         try (var conn = PostgresSupport.connect(); var st = conn.createStatement()) {
             st.execute("DROP TABLE " + schema + ".address_utxo");
             st.execute("DROP TABLE " + schema + ".adapot");
@@ -116,7 +116,7 @@ class SnapshotImportIT {
     @Test
     void scopedRestoreRejectsMissingEnabledTableAndChangedTargetDefinition() throws Exception {
         var built = fixtureWithTableSchemas();
-        var importer = new SnapshotImporter(registry.selectModules(java.util.Set.of("core", "blocks")));
+        var importer = new SnapshotImporter(registry.selectModules(java.util.Set.of("core", "blocks")).withoutDisabledOptionalTables(setting -> false));
         try (var conn = PostgresSupport.connect(); var st = conn.createStatement()) {
             st.execute("ALTER TABLE " + schema + ".block ADD COLUMN unexpected INTEGER");
             assertThat(importer.preflight(options(built.manifestPath(), 1)).blockers())
@@ -130,11 +130,11 @@ class SnapshotImportIT {
     @Test
     void scopedRestoreLeavesDisabledTablesEmptyAndRejectsScopeChangeOnResume() throws Exception {
         var built = fixtureWithTableSchemas();
-        var selected = registry.selectModules(java.util.Set.of("core", "blocks"));
+        var selected = registry.selectModules(java.util.Set.of("core", "blocks")).withoutDisabledOptionalTables(setting -> false);
         assertThatThrownBy(() -> new SnapshotImporter(selected).importSnapshot(options(built.manifestPath(), 1), p -> {
             if (p.startsWith("block +")) throw new IllegalStateException("interrupt scoped import");
         })).hasMessageContaining("interrupt scoped import");
-        var changed = registry.selectModules(java.util.Set.of("core", "blocks", "utxo"));
+        var changed = registry.selectModules(java.util.Set.of("core", "blocks", "utxo")).withoutDisabledOptionalTables(setting -> false);
         assertThat(new SnapshotImporter(changed).preflight(options(built.manifestPath(), 1)).blockers())
                 .anyMatch(p -> p.contains("Import scope does not match"));
         new SnapshotImporter(selected).importSnapshot(options(built.manifestPath(), 1), null);
@@ -209,7 +209,7 @@ class SnapshotImportIT {
         try (var conn = PostgresSupport.connect(); var st = conn.createStatement()) {
             st.execute("DROP TABLE " + schema + ".address_utxo");
         }
-        assertThat(new SnapshotImporter(registry.selectModules(java.util.Set.of("core", "blocks", "epoch-aggr", "adapot")))
+        assertThat(new SnapshotImporter(registry.selectModules(java.util.Set.of("core", "blocks", "epoch-aggr", "adapot")).withoutDisabledOptionalTables(setting -> false))
                 .preflight(options(built.manifestPath(), 1, java.util.Map.of(),
                         java.util.Map.of("store.adapot.epoch-stake-pruning-enabled", "true"))).blockers())
                 .noneMatch(b -> b.contains("store.utxo.pruning-enabled"));
@@ -275,6 +275,58 @@ class SnapshotImportIT {
     }
 
     @Test
+    void transactionCborLoadsByteForByteIntoATargetThatSavesIt() throws Exception {
+        var built = fixture();
+        var importer = new SnapshotImporter(registry);
+        var saves = java.util.Map.of("store.transaction.save-cbor", "true");
+        assertThat(importer.preflight(options(built.manifestPath(), 1, java.util.Map.of(), saves)).blockers()).isEmpty();
+
+        importer.importSnapshot(options(built.manifestPath(), 1, java.util.Map.of(), saves), null);
+
+        // Blocks 5 to the point carry one transaction each; the CBOR is 84a4, the block number, then n x ff00c3.
+        int rows = SnapshotFixture.POINT_BLOCK - 5 + 1;
+        try (var conn = PostgresSupport.connect(); Statement st = conn.createStatement(); ResultSet rs = st.executeQuery(
+                "SELECT count(*), count(*) FILTER (WHERE length(cbor_data) = cbor_size),"
+                        + " count(*) FILTER (WHERE encode(cbor_data, 'hex') = '84a4' || lpad(to_hex(slot / 20), 8, '0')"
+                        + " || repeat('ff00c3', (slot / 20)::int)), min(slot), max(slot)"
+                        + " FROM " + Identifiers.quote(schema) + ".transaction_cbor")) {
+            rs.next();
+            assertThat(rs.getLong(1)).isEqualTo(rows);
+            assertThat(rs.getLong(2)).isEqualTo(rows);
+            assertThat(rs.getLong(3)).isEqualTo(rows);
+            assertThat(rs.getLong(5)).isEqualTo(SnapshotFixture.slotOf(SnapshotFixture.POINT_BLOCK));
+        }
+        try (var conn = PostgresSupport.connect()) {
+            for (var report : new SnapshotValidator(registry).validateAll(conn, schema, built.manifest(), 1, 10)) {
+                assertThat(report.passed()).withFailMessage(report.toString()).isTrue();
+            }
+        }
+    }
+
+    @Test
+    void aTargetWithoutCborNeverReadsItsPartsAndAnotherFormIsRefused() throws Exception {
+        var built = fixture();
+        var view = com.bloxbean.cardano.yaci.store.snapshot.manifest.Retention.apply(built.manifest(), java.util.Map.of());
+        var layout = com.bloxbean.cardano.yaci.store.snapshot.archive.PartLayout.of(built.manifest());
+        assertThat(layout.exact()).isTrue();
+        var cborParts = built.manifest().parts().stream().filter(p -> p.tables().contains("transaction-cbor")).toList();
+        assertThat(cborParts).isNotEmpty().allMatch(p -> p.tables().equals(List.of("transaction-cbor")));
+
+        var with = new SnapshotImporter(registry).selection(built.manifest(), view);
+        var without = new SnapshotImporter(registry.withoutDisabledOptionalTables(setting -> false))
+                .selection(built.manifest(), view);
+        assertThat(with.parts()).containsAll(cborParts);
+        assertThat(without.files()).noneMatch(f -> f.startsWith("main/transaction_cbor/"));
+        assertThat(without.parts()).doesNotContainAnyElementsOf(cborParts);
+
+        // The snapshot holds transaction bodies (the source ran without save-full-tx-cbor).
+        assertThat(new SnapshotImporter(registry).preflight(options(built.manifestPath(), 1, java.util.Map.of(),
+                java.util.Map.of("store.transaction.save-full-tx-cbor", "true"))).blockers())
+                .anyMatch(b -> b.contains("transaction_cbor was exported with store.transaction.save-full-tx-cbor=false")
+                        && b.contains("target runs with store.transaction.save-full-tx-cbor=true"));
+    }
+
+    @Test
     void aTrustedSignatureReplacesAllowUnsignedAndABadOneIsNeverAccepted() throws Exception {
         var built = fixture();
         com.bloxbean.cardano.yaci.store.snapshot.archive.Checksums.write(built.manifest(), built.manifestPath());
@@ -302,7 +354,7 @@ class SnapshotImportIT {
     @Test
     void scopedImportReadsOnlyThePartsThatCarryItsTables() throws Exception {
         var built = fixtureWithTableSchemas();
-        var selected = registry.selectModules(java.util.Set.of("core", "blocks"));
+        var selected = registry.selectModules(java.util.Set.of("core", "blocks")).withoutDisabledOptionalTables(setting -> false);
         try (var conn = PostgresSupport.connect(); var st = conn.createStatement()) {
             st.execute("DROP TABLE " + schema + ".address_utxo");
             st.execute("DROP TABLE " + schema + ".adapot");

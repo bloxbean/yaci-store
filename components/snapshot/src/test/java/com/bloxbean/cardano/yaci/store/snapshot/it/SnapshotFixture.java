@@ -41,7 +41,7 @@ final class SnapshotFixture {
     record Built(Path archiveDir, Path manifestPath, SnapshotManifest manifest) {}
 
     static final List<String> ALL_TABLES = List.of("block", "epoch", "address-utxo", "adapot", "rollback",
-            "epoch-stake");
+            "epoch-stake", "transaction-cbor");
 
     /** {@code epoch_stake} rows per epoch partition; the partitions are epochs 0 to {@link #POINT_EPOCH}. */
     static final int STAKE_ROWS_PER_EPOCH = 5;
@@ -77,6 +77,7 @@ final class SnapshotFixture {
             writeAdaPot(st, dataDir);
             writeRollback(st, dataDir);
             writeEpochStake(st, dataDir);
+            writeTransactionCbor(st, dataDir);
         }
 
         SnapshotSpecRegistry registry = SnapshotSpecRegistry.builtIn();
@@ -112,7 +113,8 @@ final class SnapshotFixture {
             for (SnapshotManifest.FileEntry f : files) {
                 allFiles.add(f);
                 owners.add(specId);
-                modules.add(spec.module() + (f.tier() == null ? "" : "/" + f.tier()));
+                modules.add(spec.module() + (spec.optional() ? "/" + spec.targetTable() : "")
+                        + (f.tier() == null ? "" : "/" + f.tier()));
             }
             long rows = expectedRows(dataDir, spec, files.stream().filter(f -> !f.prunedOnly()).toList());
             tables.add(new SnapshotManifest.TableManifest(spec.id(), spec.specVersion(), spec.digest(),
@@ -188,6 +190,8 @@ final class SnapshotFixture {
                     "rewards_pot", "decimal(38,0)", "pool_rewards_pot", "decimal(38,0)");
             case "epoch_stake" -> ordered("epoch", "int32", "address", "varchar", "amount", "decimal(38,0)",
                     "pool_id", "varchar", "delegation_epoch", "int32", "active_epoch", "int32");
+            case "transaction_cbor" -> ordered("tx_hash", "varchar", "cbor_data", "blob", "cbor_size", "int32",
+                    "slot", "int64", "block", "int64", "epoch", "int32", "block_time", "timestamptz", "date", "date");
             case "rollback" -> ordered("id", "int64", "rollback_to_block_hash", "varchar",
                     "rollback_to_slot", "int64", "current_block_hash", "varchar",
                     "current_slot", "int64", "current_block", "int64",
@@ -401,6 +405,29 @@ final class SnapshotFixture {
                     + " CAST(" + epoch + " AS INTEGER) AS delegation_epoch,"
                     + " CAST(" + epoch + " AS INTEGER) AS active_epoch"
                     + " FROM range(0, " + STAKE_ROWS_PER_EPOCH + ") t(n))"
+                    + " TO '" + target + "' (FORMAT PARQUET)");
+        }
+    }
+
+    /**
+     * One transaction per block from 5 to {@link #BLOCKS}, whose CBOR is distinct binary bytes of a
+     * different length each, including bytes that are not valid UTF-8, across two daily partitions.
+     */
+    private static void writeTransactionCbor(Statement st, Path dataDir) throws SQLException, IOException {
+        for (int part = 0; part < 2; part++) {
+            long from = part == 0 ? 5 : BLOCKS / 2L;
+            long to = part == 0 ? BLOCKS / 2L : BLOCKS;
+            String target = parquetTarget(dataDir.resolve("main/transaction_cbor/date=2026-01-0" + (part + 1)));
+            st.execute("COPY (SELECT"
+                    + " printf('%064x', n + 90000) AS tx_hash,"
+                    + " unhex('84a4' || printf('%08x', n) || repeat('ff00c3', CAST(n AS INTEGER))) AS cbor_data,"
+                    + " CAST(6 + 3 * n AS INTEGER) AS cbor_size,"
+                    + " CAST(n * 20 AS BIGINT) AS slot,"
+                    + " CAST(n AS BIGINT) AS block,"
+                    + " CAST(n / 10 AS INTEGER) AS epoch,"
+                    + " to_timestamp(1700000000 + n * 20) AS block_time,"
+                    + " CAST(to_timestamp(1700000000 + n * 20) AS DATE) AS date"
+                    + " FROM range(" + from + ", " + to + ") t(n))"
                     + " TO '" + target + "' (FORMAT PARQUET)");
         }
     }
