@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service;
 
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Uri;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.ParsedCip68Datum;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.validation.ValidationCode;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.validation.ValidationError;
 import jakarta.annotation.Nullable;
 
@@ -26,8 +27,8 @@ import static com.bloxbean.cardano.yaci.store.extensions.assetstore.validation.V
  */
 public final class Cip68Validator {
 
-    public static final String MISSING_VALUE = "missing_value";
-    public static final String INVALID_URI_SCHEME = "invalid_uri_scheme";
+    public static final String MISSING_VALUE = ValidationCode.MISSING_VALUE;
+    public static final String INVALID_URI_SCHEME = ValidationCode.INVALID_URI_SCHEME;
 
     private Cip68Validator() {
     }

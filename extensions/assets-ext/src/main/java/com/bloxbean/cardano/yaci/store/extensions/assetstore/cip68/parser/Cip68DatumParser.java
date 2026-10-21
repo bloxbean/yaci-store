@@ -11,6 +11,7 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.ParseOu
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.ParsedCip68Datum;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.invalidtoken.InvalidTokenReason;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.util.TokenDecimals;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.validation.ValidationCode;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.validation.ValidationError;
 import jakarta.annotation.Nullable;
 import lombok.extern.slf4j.Slf4j;
@@ -65,16 +66,16 @@ public class Cip68DatumParser {
     public static final String FILES       = "files";
 
     /** The codes of the validation errors the parser reports (the validator has its own for the fields a label requires). */
-    public static final String WRONG_TYPE = "wrong_type";
+    public static final String WRONG_TYPE = ValidationCode.WRONG_TYPE;
     public static final String NOT_UTF8 = "not_utf8";
-    public static final String OUT_OF_RANGE = "out_of_range";
-    public static final String UNDEFINED_VERSION = "undefined_version";
-    public static final String PLUTUS_CONSTRUCTOR = "plutus_constructor";
-    public static final String UNSUPPORTED_KEY = "unsupported_key";
-    public static final String KEY_COLLISION = "key_collision";
-    public static final String TOO_DEEP = "too_deep";
-    public static final String INVALID_FILES_ENTRY = "invalid_files_entry";
-    public static final String NO_NESTED_ENTRY = "no_nested_entry";
+    public static final String OUT_OF_RANGE = ValidationCode.OUT_OF_RANGE;
+    public static final String UNDEFINED_VERSION = ValidationCode.UNDEFINED_VERSION;
+    public static final String PLUTUS_CONSTRUCTOR = ValidationCode.PLUTUS_CONSTRUCTOR;
+    public static final String UNSUPPORTED_KEY = ValidationCode.UNSUPPORTED_KEY;
+    public static final String KEY_COLLISION = ValidationCode.KEY_COLLISION;
+    public static final String TOO_DEEP = ValidationCode.TOO_DEEP;
+    public static final String INVALID_FILES_ENTRY = ValidationCode.INVALID_FILES_ENTRY;
+    public static final String NO_NESTED_ENTRY = ValidationCode.NO_NESTED_ENTRY;
 
     /**
      * Deepest nesting allowed in the value of an additional property (a list inside a list counts as two levels). The

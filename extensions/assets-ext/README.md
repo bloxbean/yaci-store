@@ -84,6 +84,8 @@ GET /api/v1/subject/<policyId>0014df10<name>      # a 333 token with no descript
 | `code` | A stable reason: `missing_value`, `wrong_type`, `invalid_uri_scheme`, `invalid_length`, `out_of_range`, `undefined_version`, `plutus_constructor`, `not_utf8`, `invalid_files_entry`, `no_nested_entry`, `too_deep`, `unsupported_key`, `key_collision`, `invalid_base64`, `too_large`. |
 | `error` | A human-readable message. |
 
+Every `code` is described in the OpenAPI documentation of `validation_errors` (Swagger UI), and listed as the allowed values of the `code` field.
+
 `validation_errors` is also on `standards.cip26` and `standards.cip68` (with `show_cips_details=true`), and on `/cip68/ft/...` and `/cip26/...`.
 It is the one thing a client has to adapt to: a token that was `404` because its `name` or `description` was missing, or because
 its version, `image` or `logo` did not follow CIP-68, is now `200` with errors, so `name` and `description` are no longer

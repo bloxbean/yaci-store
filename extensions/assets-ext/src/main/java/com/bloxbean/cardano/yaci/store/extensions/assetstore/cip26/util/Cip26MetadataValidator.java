@@ -4,6 +4,7 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.Mapping
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.Cip26Metadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.util.TokenDecimals;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.validation.FieldCategory;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.validation.ValidationCode;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.validation.ValidationError;
 import jakarta.annotation.Nullable;
 import lombok.extern.slf4j.Slf4j;
@@ -32,13 +33,13 @@ import static com.bloxbean.cardano.yaci.store.extensions.assetstore.validation.V
 @Slf4j
 public class Cip26MetadataValidator {
 
-    public static final String MISSING_VALUE = "missing_value";
-    public static final String WRONG_TYPE = "wrong_type";
-    public static final String INVALID_LENGTH = "invalid_length";
-    public static final String OUT_OF_RANGE = "out_of_range";
-    public static final String INVALID_VALUE = "invalid_value";
+    public static final String MISSING_VALUE = ValidationCode.MISSING_VALUE;
+    public static final String WRONG_TYPE = ValidationCode.WRONG_TYPE;
+    public static final String INVALID_LENGTH = ValidationCode.INVALID_LENGTH;
+    public static final String OUT_OF_RANGE = ValidationCode.OUT_OF_RANGE;
+    public static final String INVALID_VALUE = ValidationCode.INVALID_VALUE;
     public static final String INVALID_BASE64 = "invalid_base64";
-    public static final String TOO_LARGE = "too_large";
+    public static final String TOO_LARGE = ValidationCode.TOO_LARGE;
 
     /** The CIP-26 {@code subject} column: {@code VARCHAR(120)}, the CIP's own maximum (policy id and asset name, hex). */
     private static final int SUBJECT_MAX_LENGTH = 120;
