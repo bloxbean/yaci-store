@@ -15,6 +15,7 @@ import org.springframework.stereotype.Component;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
@@ -50,15 +51,23 @@ public class InvalidTokenRecorder {
     @Nullable
     private final InvalidTokenRepository repository;
     private final MeterRegistry registry;
+    private final Clock clock;
 
     @Autowired
-    public InvalidTokenRecorder(InvalidTokenRepository repository, ObjectProvider<MeterRegistry> registry) {
-        this(repository, registry.getIfAvailable(SimpleMeterRegistry::new));
+    public InvalidTokenRecorder(InvalidTokenRepository repository, ObjectProvider<MeterRegistry> registry,
+                                ObjectProvider<Clock> clock) {
+        this(repository, registry.getIfAvailable(SimpleMeterRegistry::new), clock.getIfAvailable(Clock::systemDefaultZone));
     }
 
     public InvalidTokenRecorder(@Nullable InvalidTokenRepository repository, MeterRegistry registry) {
+        this(repository, registry, Clock.systemDefaultZone());
+    }
+
+    /** {@code clock} gives {@code first_seen_at}: the system clock and zone by default, as the other timestamps of the module; a fixed one in tests. */
+    public InvalidTokenRecorder(@Nullable InvalidTokenRepository repository, MeterRegistry registry, Clock clock) {
         this.repository = repository;
         this.registry = registry;
+        this.clock = clock;
     }
 
     /** A recorder that records nothing, for code built without a database (tests). */
@@ -96,8 +105,6 @@ public class InvalidTokenRecorder {
         }
     }
 
-    // java:S8688: the module stores LocalDateTime.now() in the system time zone everywhere (first_seen_at is informational), so this follows it
-    @SuppressWarnings("java:S8688")
     InvalidToken toRow(InvalidTokenReport r) {
         return InvalidToken.builder()
                 .id(idOf(r))
@@ -114,7 +121,7 @@ public class InvalidTokenRecorder {
                 .outputIndex(r.outputIndex())
                 .origin(cut(r.origin(), MAX_ORIGIN_CHARS))
                 .details(boundedDetails(r.details()))
-                .firstSeenAt(LocalDateTime.now())
+                .firstSeenAt(LocalDateTime.now(clock))
                 .build();
     }
 

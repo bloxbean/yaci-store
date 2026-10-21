@@ -8,6 +8,10 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -60,6 +64,15 @@ class InvalidTokenRecorderTest {
         assertThat(row.getValue().getFirstSeenAt()).isNotNull();
         assertThat(meters.counter(InvalidTokenRecorder.COUNTER, "standard", "CIP-68", "reason_code", "datum_undecodable").count())
                 .isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName("first_seen_at comes from the clock it is given")
+    void firstSeenAtComesFromTheClock() {
+        Clock fixed = Clock.fixed(Instant.parse("2026-10-21T12:00:00Z"), ZoneOffset.UTC);
+        InvalidTokenRecorder withClock = new InvalidTokenRecorder(repository, meters, fixed);
+
+        assertThat(withClock.toRow(report().build()).getFirstSeenAt()).isEqualTo(LocalDateTime.of(2026, 10, 21, 12, 0));
     }
 
     @Test
