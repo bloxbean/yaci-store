@@ -94,6 +94,20 @@ class Cip68MetricsTest {
     }
 
     @Test
+    void indexesADatumWithoutAVersion() throws Exception {
+        // a constructor with the metadata map and nothing else: the version is missing, which is a mandatory error on the row
+        MapPlutusData props = new MapPlutusData();
+        props.put(BytesPlutusData.of("name"), BytesPlutusData.of("N"));
+        props.put(BytesPlutusData.of("image"), BytesPlutusData.of("ipfs://Qm"));
+        String hex = HexUtil.encodeHexString(CborSerializationUtil.serialize(ConstrPlutusData.of(0, props).serialize()));
+
+        processor.processTransaction(event(hex, Cip68Constants.NFT_TOKEN_PREFIX));
+
+        assertThat(indexed(222)).isEqualTo(1);
+        assertThat(registry.find(Cip68Metrics.SKIPPED).counters()).isEmpty();
+    }
+
+    @Test
     void indexesANestedDatumWithoutAnEntryForTheToken() {
         MapPlutusData entry = new MapPlutusData();
         entry.put(BytesPlutusData.of("name"), BytesPlutusData.of("N"));

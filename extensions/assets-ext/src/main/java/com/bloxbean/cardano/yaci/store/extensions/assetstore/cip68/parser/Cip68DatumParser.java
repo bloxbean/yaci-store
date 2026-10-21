@@ -159,9 +159,10 @@ public class Cip68DatumParser {
     }
 
     /**
-     * Strip the CIP-68 datum envelope: a Constr containing a {@code (Map, BigInt)} pair
-     * (the metadata properties map and the version integer). Returns empty for any datum
-     * that doesn't fit this shape.
+     * Strip the CIP-68 datum envelope: a Constr whose first field is the metadata map, followed by the version integer.
+     * A datum with the map but without an integer version is still read (the CIP requires the version, so that is a
+     * {@code MANDATORY} error on the row, not a reason to hide the token). Returns empty for any datum that is not a
+     * Constr with a map first.
      */
     private Optional<DatumParts> extractDatumProperties(String inlineDatum) throws com.bloxbean.cardano.client.exception.CborDeserializationException {
         PlutusData plutusData = PlutusData.deserialize(HexUtil.decodeHexString(inlineDatum));
@@ -171,15 +172,18 @@ public class Cip68DatumParser {
         }
 
         List<PlutusData> dataList = cip68Data.getData().getPlutusDataList();
-        if (dataList.size() < 2 || !(dataList.getFirst() instanceof MapPlutusData properties)) {
+        if (dataList.isEmpty() || !(dataList.getFirst() instanceof MapPlutusData properties)) {
             return Optional.empty();
         }
 
+        if (dataList.size() < 2) {
+            return Optional.of(new DatumParts(properties, null, ABSENT));
+        }
         if (!(dataList.get(1) instanceof BigIntPlutusData version)) {
-            return Optional.empty();
+            return Optional.of(new DatumParts(properties, null, typeOf(dataList.get(1))));
         }
 
-        return Optional.of(new DatumParts(properties, version.getValue()));
+        return Optional.of(new DatumParts(properties, version.getValue(), null));
     }
 
     /**
@@ -243,7 +247,7 @@ public class Cip68DatumParser {
     /** Build the typed {@link ParsedCip68Datum} from the unwrapped (Map, version) pair. */
     private ParsedCip68Datum buildParsedDatum(DatumParts parts, @Nullable AssetType referenceNft) {
         List<ValidationError> errors = new ArrayList<>();
-        Long version = readVersion(parts.version(), errors);
+        Long version = readVersion(parts, errors);
 
         Optional<MapPlutusData> metadata = resolveMetadata(parts, referenceNft);
         if (metadata.isEmpty()) {
@@ -273,7 +277,16 @@ public class Cip68DatumParser {
      * A version that CIP-68 does not define is stored as it is, with an error.
      */
     @Nullable
-    private Long readVersion(BigInteger value, List<ValidationError> errors) {
+    private Long readVersion(DatumParts parts, List<ValidationError> errors) {
+        BigInteger value = parts.version();
+        if (value == null) {
+            // the CIP requires the version: a datum without an integer one is read and flagged, not hidden
+            errors.add(ABSENT.equals(parts.versionProblem())
+                    ? ValidationError.mandatory(CIP_68, null, "version", ValidationCode.MISSING_VALUE, "version field is missing a mandatory value")
+                    : ValidationError.mandatory(CIP_68, null, "version", WRONG_TYPE,
+                            "version is " + parts.versionProblem() + ", not an integer, stored without a version"));
+            return null;
+        }
         if (value.bitLength() >= Long.SIZE) {
             errors.add(ValidationError.mandatory(CIP_68, null, "version", OUT_OF_RANGE,
                     "version " + abbreviate(value.toString()) + " does not fit a 64-bit integer, stored without a version"));
@@ -314,7 +327,23 @@ public class Cip68DatumParser {
     }
 
     /** Internal record for the unwrapped CIP-68 envelope (properties Map, version as written). */
-    private record DatumParts(MapPlutusData properties, BigInteger version) {}
+    private record DatumParts(MapPlutusData properties, @Nullable BigInteger version, @Nullable String versionProblem) {}
+
+    /** {@code versionProblem} of a datum that has no second field. */
+    private static final String ABSENT = "absent";
+
+    private static String typeOf(PlutusData data) {
+        if (data instanceof BytesPlutusData) {
+            return "bytes";
+        } else if (data instanceof MapPlutusData) {
+            return "a map";
+        } else if (data instanceof ListPlutusData) {
+            return "a list";
+        } else if (data instanceof ConstrPlutusData) {
+            return "a constructor";
+        }
+        return "not an integer";
+    }
 
     /**
      * Reads a text property. CIP-68 says text is UTF-8, so valid UTF-8 is stored as text. Bytes that are
