@@ -19,14 +19,21 @@ import jakarta.annotation.Nullable;
  * @param error         a human-readable message
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
-@Schema(description = "A way in which the token's metadata does not follow its CIP. The token is still served.")
+@Schema(description = "A way in which the token's metadata does not follow its CIP. The token is still served.\n\n**Codes**\n\n" + ValidationCode.DOCUMENTATION)
 public record ValidationError(
         @JsonProperty("cip") @Schema(description = "The standard the rule comes from.", example = "CIP-68") String cip,
         @JsonProperty("sub_standard") @Nullable
         @Schema(description = "The CIP-68 label the rule was checked for; absent for CIP-26.", example = "333") String subStandard,
         @JsonProperty("field_name") @Schema(description = "The metadata field.", example = "description") String fieldName,
         @JsonProperty("field_category") @Schema(description = "Whether the CIP requires the field.") FieldCategory fieldCategory,
-        @JsonProperty("code") @Schema(description = "Stable machine-readable reason.", example = "missing_value") String code,
+        @JsonProperty("code") @Schema(description = "Stable machine-readable reason. New codes may be added; an existing one is never changed.",
+                example = "missing_value",
+                allowableValues = {ValidationCode.MISSING_VALUE, ValidationCode.WRONG_TYPE, ValidationCode.INVALID_URI_SCHEME,
+                        ValidationCode.INVALID_LENGTH, ValidationCode.INVALID_VALUE, ValidationCode.OUT_OF_RANGE,
+                        ValidationCode.UNDEFINED_VERSION, ValidationCode.PLUTUS_CONSTRUCTOR, ValidationCode.NOT_UTF8,
+                        ValidationCode.INVALID_FILES_ENTRY, ValidationCode.NO_NESTED_ENTRY, ValidationCode.TOO_DEEP,
+                        ValidationCode.UNSUPPORTED_KEY, ValidationCode.KEY_COLLISION, ValidationCode.INVALID_BASE64,
+                        ValidationCode.TOO_LARGE}) String code,
         @JsonProperty("error") @Schema(description = "Human-readable message.") String error) {
 
     public static final String CIP_26 = "CIP-26";
