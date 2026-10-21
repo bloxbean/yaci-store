@@ -90,7 +90,7 @@ entry `{cip: "CIP-26", field_name, field_category, code, error}` (there is no `s
   not a number is stored as no value, with a `wrong_type` error that quotes it (the raw string stays in the mapping).
 - **The columns have no length limit** (`TEXT`): the CIP-26 limits are reported, not enforced, so a long `name` does not fail the insert.
 
-What is still dropped, with one WARN and one row in `invalid_token` (ADR 0007):
+What is still dropped, with one row in `invalid_token` (ADR 0007) and a WARN where it looks like an attack (a file whose name differs from its subject is a DEBUG line, since a registry can have thousands; the sync tally counts them):
 
 - **The filename is the subject.** The file `<subject>.json` must contain that same `subject`. Otherwise the file is skipped. Preprod's registry has
   5,008 such files (about 90% of it), mostly copies of one test token under padded filenames; mainnet has none. They are spam or orphans, and the
