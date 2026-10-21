@@ -4,6 +4,7 @@ import com.bloxbean.cardano.client.crypto.Bech32;
 import com.bloxbean.cardano.client.util.HexUtil;
 import com.bloxbean.cardano.yaci.core.util.Constants;
 import com.bloxbean.cardano.yaci.store.blockfrost.common.util.AmountsJsonUtil;
+import com.bloxbean.cardano.yaci.store.blockfrost.common.util.DatumHashUtil;
 import com.bloxbean.cardano.yaci.store.blockfrost.transaction.dto.*;
 import com.bloxbean.cardano.yaci.store.blockfrost.transaction.storage.impl.model.*;
 import com.bloxbean.cardano.yaci.store.mir.domain.MirPot;
@@ -136,7 +137,7 @@ public abstract class BFTransactionMapper {
                                 : buildAmounts(i.getLovelaceAmount(), i.getAmountsJson()))
                         .txHash(i.getTxHash())
                         .outputIndex(i.getOutputIndex())
-                        .dataHash(i.getDataHash())
+                        .dataHash(DatumHashUtil.resolveDataHash(i.getDataHash(), i.getInlineDatum()))
                         .inlineDatum(i.getInlineDatum())
                         .referenceScriptHash(i.getReferenceScriptHash())
                         .collateral(i.isCollateral())
@@ -149,7 +150,7 @@ public abstract class BFTransactionMapper {
                         .address(o.getAddress())
                         .amount(buildAmounts(o.getLovelaceAmount(), o.getAmountsJson()))
                         .outputIndex(o.getOutputIndex())
-                        .dataHash(o.getDataHash())
+                        .dataHash(DatumHashUtil.resolveDataHash(o.getDataHash(), o.getInlineDatum()))
                         .inlineDatum(o.getInlineDatum())
                         .referenceScriptHash(o.getReferenceScriptHash())
                         .collateral(!txInvalid && Boolean.TRUE.equals(o.getIsCollateralReturn()))
@@ -304,10 +305,10 @@ public abstract class BFTransactionMapper {
                     ? refNode.path("output_index").asInt() : null;
             String address = jsonNode.path("address").asText(null);
             List<BFAmountDto> amounts = parseCollateralReturnAmounts(jsonNode.path("amounts"));
-            String dataHash = jsonNode.path("dataHash").isNull()
-                    ? null : jsonNode.path("dataHash").asText(null);
             String inlineDatum = jsonNode.path("inlineDatum").isNull()
                     ? null : jsonNode.path("inlineDatum").asText(null);
+            String dataHash = DatumHashUtil.resolveDataHash(jsonNode.path("dataHash").isNull()
+                    ? null : jsonNode.path("dataHash").asText(null), inlineDatum);
             String refScriptHash = jsonNode.path("referenceScriptHash").isNull()
                     ? null : jsonNode.path("referenceScriptHash").asText(null);
             return Optional.of(BFTxOutputDto.builder()
