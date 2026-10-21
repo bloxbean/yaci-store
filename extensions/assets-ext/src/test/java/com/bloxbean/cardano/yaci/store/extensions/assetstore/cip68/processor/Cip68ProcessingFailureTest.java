@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.processor;
 
+import java.time.Clock;
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
@@ -134,7 +135,7 @@ class Cip68ProcessingFailureTest {
     @Test
     void onlyTheReferenceNftThatFailedIsRecordedInInvalidToken() {
         InvalidTokenRecorder recorder = mock(InvalidTokenRecorder.class);
-        processor = new Cip68Processor(new Cip68TokenService(repository), parser, repository, new Cip68Metrics(registry), recorder);
+        processor = new Cip68Processor(new Cip68TokenService(repository), parser, repository, new Cip68Metrics(registry), recorder, Clock.systemDefaultZone());
         doReturn(true).when(parser).hasNestedMetadata(any());
         doThrow(new IllegalStateException("boom")).when(parser)
                 .parseDetailed(any(), eq(AssetType.fromUnit(POLICY + Cip68Constants.REFERENCE_TOKEN_PREFIX + "02")));

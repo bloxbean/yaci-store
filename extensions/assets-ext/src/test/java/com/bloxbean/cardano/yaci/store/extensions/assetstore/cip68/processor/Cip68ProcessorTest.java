@@ -1,5 +1,10 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.processor;
 
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.invalidtoken.InvalidTokenRecorder;
+import org.junit.jupiter.api.BeforeEach;
+import java.time.ZoneOffset;
+import java.time.Instant;
+import java.time.Clock;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
@@ -19,7 +24,6 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Spy;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -52,8 +56,15 @@ class Cip68ProcessorTest {
     @Spy
     private Cip68Metrics metrics = Cip68Metrics.noop();
 
-    @InjectMocks
+    private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-10-21T12:00:00Z"), ZoneOffset.UTC);
+
     private Cip68Processor processor;
+
+    @BeforeEach
+    void setUp() {
+        processor = new Cip68Processor(cip68TokenService, cip68DatumParser, metadataReferenceNftRepository, metrics,
+                InvalidTokenRecorder.noop(), CLOCK);
+    }
 
     @Nested
     @DisplayName("Valid reference NFT UTxOs")
@@ -92,6 +103,7 @@ class Cip68ProcessorTest {
             assertThat(saved.getSlot()).isEqualTo(100L);
             assertThat(saved.getTxHash()).isEqualTo(TX_HASH);
             assertThat(saved.getTxIndex()).isEqualTo(TX_INDEX);
+            assertThat(saved.getLastSyncedAt()).isEqualTo(java.time.LocalDateTime.of(2026, 10, 21, 12, 0));
             assertThat(saved.getName()).isEqualTo("TestToken");
             assertThat(saved.getDescription()).isEqualTo("A test token");
             assertThat(saved.getTicker()).isEqualTo("TST");

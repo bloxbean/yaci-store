@@ -66,7 +66,7 @@ class InvalidTokenH2IT {
     void setUp() {
         SimpleMeterRegistry meters = new SimpleMeterRegistry();
         recorder = new InvalidTokenRecorder(repository, meters);
-        processor = new Cip68Processor(new Cip68TokenService(cip68Repository), new Cip68DatumParser(), cip68Repository, com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.metrics.Cip68Metrics.noop(), recorder);
+        processor = new Cip68Processor(new Cip68TokenService(cip68Repository), new Cip68DatumParser(), cip68Repository, com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.metrics.Cip68Metrics.noop(), recorder, java.time.Clock.systemDefaultZone());
     }
 
     @Test
