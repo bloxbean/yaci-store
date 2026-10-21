@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.api.service;
 
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.QueryPriority;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.ValidationScope;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.Subject;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.Item;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.Mapping;
@@ -370,6 +371,81 @@ class TokenQueryServiceTest {
 
             assertThat(result.validationErrors()).containsExactly(cip68Error);
             assertThat(result.metadata().valid()).isFalse();
+        }
+
+        // ?validation=: which tokens are returned
+
+        private final ValidationError optionalError = ValidationError.optional("CIP-68", null, "logo", "invalid_uri_scheme", "bad logo");
+
+        private Optional<Subject> query(ValidationScope scope) {
+            return service.querySubject(BROKEN_SUBJECT, DEFAULT_PRIORITY, List.of(), false, scope);
+        }
+
+        @Test
+        void allReturnsATokenWithAMandatoryError() {
+            cip68Only(new FungibleTokenMetadata(null, null, null, "N", null, null, 1L, List.of(cip68Error)));
+
+            assertThat(query(ValidationScope.ALL)).isPresent();
+        }
+
+        @Test
+        void mandatoryOnlyLeavesOutATokenWithAMandatoryErrorAndKeepsOneWithOnlyOptionalErrors() {
+            cip68Only(new FungibleTokenMetadata(null, null, null, "N", null, null, 1L, List.of(cip68Error)));
+            assertThat(query(ValidationScope.MANDATORY_ONLY)).isEmpty();
+
+            cip68Only(new FungibleTokenMetadata(null, "d", null, "N", null, null, 1L, List.of(optionalError)));
+            Subject kept = query(ValidationScope.MANDATORY_ONLY).orElseThrow();
+            assertThat(kept.validationErrors()).containsExactly(optionalError);
+            assertThat(kept.metadata().valid()).isFalse();
+        }
+
+        @Test
+        void strictKeepsOnlyATokenWithNoErrorAtAll() {
+            cip68Only(new FungibleTokenMetadata(null, "d", null, "N", null, null, 1L, List.of(optionalError)));
+            assertThat(query(ValidationScope.STRICT)).isEmpty();
+
+            cip68Only(new FungibleTokenMetadata(null, "d", null, "N", null, null, 1L, List.of()));
+            assertThat(query(ValidationScope.STRICT)).isPresent();
+        }
+
+        @Test
+        void aMandatoryErrorOfEitherStandardLeavesOutTheMergedTokenInMandatoryOnly() {
+            Cip26Metadata cip26 = new Cip26Metadata();
+            cip26.setSubject(BROKEN_SUBJECT);
+            cip26.setName("N");
+            cip26.setDescription("D");
+            cip26.setValidationErrors(List.of(cip26Error));
+            cip26.setProperties(new Mapping(BROKEN_SUBJECT, null, null, null, null, null, null, null));
+            when(cip26StorageReader.findBySubject(BROKEN_SUBJECT)).thenReturn(Optional.of(cip26));
+            when(cip26StorageReader.findLogoBySubject(BROKEN_SUBJECT)).thenReturn(Optional.empty());
+            when(cip68StorageReader.findBySubject(eq(BROKEN_SUBJECT), any()))
+                    .thenReturn(Optional.of(new FungibleTokenMetadata(null, "d", null, "N", null, null, 1L, List.of())));
+
+            assertThat(query(ValidationScope.MANDATORY_ONLY)).isEmpty();
+            assertThat(query(ValidationScope.ALL)).isPresent();
+        }
+
+        @Test
+        void aTokenNeverCheckedIsJudgedByNameAndDescriptionInMandatoryOnlyAndStrict() {
+            cip68Only(new FungibleTokenMetadata(null, "d", null, "N", null, null, 1L, null));
+            assertThat(query(ValidationScope.MANDATORY_ONLY)).isPresent();
+            assertThat(query(ValidationScope.STRICT)).isPresent();
+
+            cip68Only(new FungibleTokenMetadata(null, null, null, "N", null, null, 1L, null));
+            assertThat(query(ValidationScope.MANDATORY_ONLY)).isEmpty();
+            assertThat(query(ValidationScope.STRICT)).isEmpty();
+            assertThat(query(ValidationScope.ALL)).isPresent();
+        }
+
+        @Test
+        void theBatchLeavesOutATokenThatIsNotAccepted() {
+            cip68Only(new FungibleTokenMetadata(null, null, null, "N", null, null, 1L, List.of(cip68Error)));
+            TokenQueryService.BatchPrefetchData prefetch = service.prefetchBatch(List.of(BROKEN_SUBJECT), List.of());
+
+            assertThat(service.querySubjectBatch(BROKEN_SUBJECT, DEFAULT_PRIORITY, List.of(), prefetch, false, ValidationScope.MANDATORY_ONLY))
+                    .isEmpty();
+            assertThat(service.querySubjectBatch(BROKEN_SUBJECT, DEFAULT_PRIORITY, List.of(), prefetch, false, ValidationScope.ALL))
+                    .isPresent();
         }
 
         @Test

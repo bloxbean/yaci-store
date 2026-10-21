@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -241,5 +242,85 @@ class TokenApiEndToEndTest {
                 .andExpect(jsonPath("$.subjects[0].validation_errors.length()").value(1))
                 .andExpect(jsonPath("$.subjects[1].metadata.logo.value").value("ipfs://QmImage"))
                 .andExpect(jsonPath("$.subjects[1].validation_errors.length()").value(0));
+    }
+
+    // ?validation=
+
+    private static final ValidationError MANDATORY_ERROR = ValidationError.mandatory("CIP-68", "333", "description", "missing_value",
+            "description field is missing a mandatory value");
+    private static final ValidationError OPTIONAL_ERROR = ValidationError.optional("CIP-68", null, "logo", "invalid_uri_scheme", "bad logo");
+
+    private int statusOf(String path, String validation) throws Exception {
+        return mockMvc.perform(get(path, FT_SUBJECT).param("validation", validation)).andReturn().getResponse().getStatus();
+    }
+
+    @Test
+    void validationAllIsTheDefaultAndReturnsATokenWithAMandatoryError() throws Exception {
+        store(row(333).name("Coin").validationErrors(List.of(MANDATORY_ERROR)).build());
+
+        mockMvc.perform(get("/api/v1/tokens/subject/{s}", FT_SUBJECT)).andExpect(status().isOk());
+        mockMvc.perform(get("/api/v1/tokens/subject/{s}", FT_SUBJECT).param("validation", "ALL")).andExpect(status().isOk());
+    }
+
+    @Test
+    void validationMandatoryOnlyIs404ForAMandatoryErrorAndKeepsOptionalOnes() throws Exception {
+        store(row(333).name("Coin").validationErrors(List.of(MANDATORY_ERROR)).build());
+        assertThat(statusOf("/api/v1/tokens/subject/{s}", "MANDATORY_ONLY")).isEqualTo(404);
+
+        store(row(333).name("Coin").description("d").logo("QmBare").validationErrors(List.of(OPTIONAL_ERROR)).build());
+        mockMvc.perform(get("/api/v1/tokens/subject/{s}", FT_SUBJECT).param("validation", "MANDATORY_ONLY"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.subject.validation_errors.length()").value(1));
+    }
+
+    @Test
+    void validationStrictIs404ForAnyErrorAndKeepsACleanToken() throws Exception {
+        store(row(333).name("Coin").description("d").logo("QmBare").validationErrors(List.of(OPTIONAL_ERROR)).build());
+        assertThat(statusOf("/api/v1/tokens/subject/{s}", "STRICT")).isEqualTo(404);
+
+        store(row(333).name("Coin").description("d").validationErrors(List.of()).build());
+        mockMvc.perform(get("/api/v1/tokens/subject/{s}", FT_SUBJECT).param("validation", "STRICT"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.subject.metadata.valid").value(true));
+    }
+
+    @Test
+    void anOldRowIsJudgedByNameAndDescriptionWhenAScopeIsAsked() throws Exception {
+        store(row(333).name("Old").description("d").build());
+        mockMvc.perform(get("/api/v1/tokens/subject/{s}", FT_SUBJECT).param("validation", "STRICT")).andExpect(status().isOk());
+
+        store(row(333).name("Old").build());
+        assertThat(statusOf("/api/v1/tokens/subject/{s}", "STRICT")).isEqualTo(404);
+        assertThat(statusOf("/api/v1/tokens/subject/{s}", "ALL")).isEqualTo(200);
+    }
+
+    @Test
+    void anUnknownValidationValueIsABadRequest() throws Exception {
+        store(row(333).name("Coin").description("d").validationErrors(List.of()).build());
+
+        assertThat(statusOf("/api/v1/tokens/subject/{s}", "LOOSE")).isEqualTo(400);
+    }
+
+    @Test
+    void theBatchLeavesOutATokenThatIsNotAccepted() throws Exception {
+        store(row(333).name("Coin").validationErrors(List.of(MANDATORY_ERROR)).build());
+        String body = new ObjectMapper().writeValueAsString(Map.of("subjects", List.of(FT_SUBJECT)));
+
+        mockMvc.perform(post("/api/v1/tokens/subject/query").param("validation", "MANDATORY_ONLY")
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.subjects.length()").value(0));
+        mockMvc.perform(post("/api/v1/tokens/subject/query").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.subjects.length()").value(1));
+    }
+
+    @Test
+    void theCip68FungibleTokenEndpointTakesTheSameParameter() throws Exception {
+        store(row(333).name("Coin").validationErrors(List.of(MANDATORY_ERROR)).build());
+
+        assertThat(statusOf("/api/v1/tokens/cip68/ft/{s}", "MANDATORY_ONLY")).isEqualTo(404);
+        assertThat(statusOf("/api/v1/tokens/cip68/ft/{s}", "ALL")).isEqualTo(200);
+        mockMvc.perform(get("/api/v1/tokens/cip68/ft/{s}", FT_SUBJECT)).andExpect(status().isOk());
     }
 }

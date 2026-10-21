@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.api.service;
 
 import jakarta.annotation.Nullable;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.QueryPriority;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.ValidationScope;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.*;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.cip26.Cip26TokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.Cip26StorageReader;
@@ -48,6 +49,17 @@ public class TokenQueryService {
                                           List<QueryPriority> queryPriority,
                                           List<String> queryProperties,
                                           boolean showCipsDetails) {
+        return querySubject(subject, queryPriority, queryProperties, showCipsDetails, ValidationScope.ALL);
+    }
+
+    /**
+     * Like {@link #querySubject(String, List, List, boolean)}, but empty also when the token is not accepted by {@code scope}.
+     */
+    public Optional<Subject> querySubject(String subject,
+                                          List<QueryPriority> queryPriority,
+                                          List<String> queryProperties,
+                                          boolean showCipsDetails,
+                                          ValidationScope scope) {
 
         ResolvedMetadata resolved = queryPriority.stream()
                 .reduce(IDENTITY, combineStandards(subject, queryProperties), aggregateResults());
@@ -56,7 +68,7 @@ public class TokenQueryService {
             return Optional.empty();
         }
 
-        return Optional.of(toSubject(subject, resolved, showCipsDetails));
+        return Optional.of(toSubject(subject, resolved, showCipsDetails)).filter(scope::accepts);
     }
 
     /**
@@ -70,13 +82,25 @@ public class TokenQueryService {
                                                List<String> queryProperties,
                                                BatchPrefetchData prefetchData,
                                                boolean showCipsDetails) {
+        return querySubjectBatch(subject, queryPriority, queryProperties, prefetchData, showCipsDetails, ValidationScope.ALL);
+    }
+
+    /**
+     * Like the overload without a scope, but empty also when the token is not accepted by {@code scope}.
+     */
+    public Optional<Subject> querySubjectBatch(String subject,
+                                               List<QueryPriority> queryPriority,
+                                               List<String> queryProperties,
+                                               BatchPrefetchData prefetchData,
+                                               boolean showCipsDetails,
+                                               ValidationScope scope) {
 
         ResolvedMetadata resolved = queryPriority.stream()
                 .reduce(IDENTITY, combineStandardsBatch(subject, queryProperties, prefetchData), aggregateResults());
 
         return resolved.standards().isEmpty()
                 ? Optional.empty()
-                : Optional.of(toSubject(subject, resolved, showCipsDetails));
+                : Optional.of(toSubject(subject, resolved, showCipsDetails)).filter(scope::accepts);
     }
 
     private static Subject toSubject(String subject, ResolvedMetadata resolved, boolean showCipsDetails) {

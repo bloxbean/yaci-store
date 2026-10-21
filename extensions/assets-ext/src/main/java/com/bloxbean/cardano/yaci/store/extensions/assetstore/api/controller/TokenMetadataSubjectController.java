@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.api.controller;
 
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.QueryPriority;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.ValidationScope;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.*;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.service.TokenQueryService;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.AssetsExtStoreProperties;
@@ -81,7 +82,12 @@ public class TokenMetadataSubjectController {
             @Parameter(description = "the CIP priority: if the same property is present in multiple standards, the one with highest priority is returned")
             @RequestParam(value = "query_priority", required = false) List<QueryPriority> priorities,
             @Parameter(description = "whether all the CIP specific properties should be returned in the response. False by default")
-            @RequestParam(value = "show_cips_details", defaultValue = "false", required = false) Boolean showCipsDetails) {
+            @RequestParam(value = "show_cips_details", defaultValue = "false", required = false) Boolean showCipsDetails,
+            @Parameter(description = "which tokens are returned by how well their metadata follows its CIP: ALL (default) returns every indexed token; "
+                    + "MANDATORY_ONLY only tokens with no mandatory validation error; STRICT only tokens with no validation error at all. "
+                    + "A token that is not accepted is a 404 (or left out of a batch). A token indexed before validation existed is judged by "
+                    + "the old rule: name and description present.")
+            @RequestParam(value = "validation", defaultValue = "ALL", required = false) ValidationScope validation) {
 
         // Per-request line at DEBUG, not INFO — at any real RPS the previous INFO level
         // floods logs without operator value (the request is also recorded by the access log
@@ -97,7 +103,7 @@ public class TokenMetadataSubjectController {
         boolean includeCipsDetails = Boolean.TRUE.equals(showCipsDetails);
 
         List<String> stringPriorities = queryPriority.stream().map(QueryPriority::name).toList();
-        return tokenQueryService.querySubject(subject, queryPriority, queryProperties, includeCipsDetails)
+        return tokenQueryService.querySubject(subject, queryPriority, queryProperties, includeCipsDetails, validation)
                 .map(result -> ResponseEntity.ok(new SubjectResponse(result, stringPriorities)))
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
@@ -113,7 +119,12 @@ public class TokenMetadataSubjectController {
             @Parameter(description = "the CIP priority: if the same property is present in multiple standards, the one with highest priority is returned")
             @RequestParam(value = "query_priority", required = false) List<QueryPriority> priorities,
             @Parameter(description = "whether all the CIP specific properties should be returned in the response. False by default")
-            @RequestParam(value = "show_cips_details", defaultValue = "false", required = false) Boolean showCipsDetails) {
+            @RequestParam(value = "show_cips_details", defaultValue = "false", required = false) Boolean showCipsDetails,
+            @Parameter(description = "which tokens are returned by how well their metadata follows its CIP: ALL (default) returns every indexed token; "
+                    + "MANDATORY_ONLY only tokens with no mandatory validation error; STRICT only tokens with no validation error at all. "
+                    + "A token that is not accepted is a 404 (or left out of a batch). A token indexed before validation existed is judged by "
+                    + "the old rule: name and description present.")
+            @RequestParam(value = "validation", defaultValue = "ALL", required = false) ValidationScope validation) {
 
         List<String> queryProperties = body.getProperties() != null ? body.getProperties() : ALL_PROPERTIES;
         List<QueryPriority> queryPriority = priorities != null ? priorities : defaultQueryPriority;
@@ -124,7 +135,7 @@ public class TokenMetadataSubjectController {
         List<Subject> subjects = body.getSubjects()
                 .stream()
                 .map(subject -> tokenQueryService.querySubjectBatch(
-                        subject, queryPriority, queryProperties, prefetchData, includeCipsDetails))
+                        subject, queryPriority, queryProperties, prefetchData, includeCipsDetails, validation))
                 .flatMap(Optional::stream)
                 .toList();
 
