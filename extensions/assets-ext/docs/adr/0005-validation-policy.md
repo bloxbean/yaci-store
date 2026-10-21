@@ -75,8 +75,6 @@ lets through; new rules have to be written in code and tested there.
 
 ## Open questions
 
-- Whether CIP-26 ever needs Micrometer counters like the CIP-68 ones. Its errors are now in the rows, so a count by code can also
-  be read from the database.
 
 ## References
 

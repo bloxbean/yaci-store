@@ -139,6 +139,8 @@ CF registry's V1 API cannot be reproduced from it.
 
 ## Consequences
 
+- The errors of CIP-26 entries are not counted by a Micrometer counter (the CIP-68 error counter was removed for the same reason): they are in the
+  rows, so a count by code is a query, and what is dropped is counted by `invalid_tokens{standard,reason_code}` (ADR 0007).
 - A file whose name differs from its inner subject is never indexed, under either name; it is recorded in `invalid_token` with the subject it
   claims (`details.inner_subject`), so it can be found and reported to the registry. This is a decision, not an open question.
 - A registry file that is dropped (a subject mismatch, an unusable subject, an unparseable file, an attack-sized logo) is logged and left out. The
@@ -158,8 +160,6 @@ CF registry's V1 API cannot be reproduced from it.
   subjects that are gone) when either commit does not resolve. It is not done.
 - A known registry mistake (such as the USDM entry above) cannot be fixed on our side without
   overriding the registry; today the answer is to fix it upstream.
-- Whether the errors of CIP-26 entries should also be counted (a Micrometer counter by code, as for CIP-68). They are in the rows now, so a count
-  can also be read from the database; the sync logs only a tally of what it dropped.
 
 ## References
 

@@ -102,6 +102,9 @@ to make. One behaviour is documented instead.
 - The savepoint costs a little on every block that has a CIP-68 datum, and the fallback costs one write per entity of the
   failed batch. Neither is measured (a full mainnet index holds 250,876 rows, and the fallback runs only after a failure).
 - The change has to be tested on PostgreSQL, not only on H2. It is the reason the issue was split from the fix for #1240.
+- **A failure skips only the reference NFT that caused it.** The `try/catch` of B is around each reference NFT, so the others of the output are
+  indexed and only the failing one is counted as `processing_failure` and recorded in `invalid_token` (ADR 0007). A failure before any of them is read
+  (listing them, or parsing the datum they share) skips the whole output.
 - `Cip68RollbackProcessor` is a separate listener and is not covered. A failure in a rollback is not a skipped datum, and
   stopping there is the safer behaviour, so it keeps option A.
 
@@ -115,8 +118,6 @@ to make. One behaviour is documented instead.
 - What an unexpected failure that is not about one datum should do: for example the database being unavailable. That is not
   a bad datum and must still stop the sync, so the skip has to be limited to failures that come from the entity. For B in
   PR #1220 this does not arise, because the `try` holds no database call. For C it does.
-- Whether the rest of an output should be skipped when one token of it fails (B in PR #1220 does that), or only the token.
-  Only a failure caused by an attacker's datum reaches it, so the simpler behaviour was kept.
 
 ## References
 

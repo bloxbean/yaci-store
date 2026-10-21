@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed. Implemented in PR #1220 (open). It is meant for yaci-store 3 and is not backported to 2.x (see decision 8).
+Proposed. Implemented in PR #1220 (open). It is meant for yaci-store 3; decision 8 says what a 2.x backport would need.
 
 ## Date
 
@@ -98,7 +98,12 @@ one served, with its errors.
 
 A client that wants a stricter view asks for it with `?validation=ALL|MANDATORY_ONLY|STRICT` (default `ALL`): `MANDATORY_ONLY` returns only
 tokens with no `MANDATORY` error and `STRICT` only tokens with no error at all. A token that is not accepted is a `404` (left out of a
-batch); the errors of a returned token are never filtered. The check is made in Java on the row already read, so it needs no native query.
+batch); the errors of a returned token are never filtered. The check is made in Java on the row already read, so it needs no native query. It is on
+`GET /tokens/subject/{subject}`, `POST /tokens/subject/query`, `/tokens/cip68/ft/**` and `/tokens/cip26/**`. *Why a `404` and not a filtered error list:* a
+client that asks for a stricter view wants to know that the token does not pass, and an empty or shortened `validation_errors` would read as "it does". The `404`
+is the same answer the client already handles for an unknown token. *Trade-off:* a `404` then means "unknown" or "filtered out", and the client can tell them
+apart by asking again without the parameter. A token indexed before validation existed (no errors recorded) is judged by the rule it had before, name and
+description present.
 
 ### 6. Rich fungible tokens are served
 
