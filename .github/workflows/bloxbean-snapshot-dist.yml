@@ -1,0 +1,243 @@
+# From the release-ops standard (templates/workflows/bloxbean-snapshot-dist.yml, 2026-10-04), adapted for yaci-store:
+# the JVM zip and the Docker Compose zip, plus the native image zips when the run's `native` input is ticked or
+# snapshot_dist_native is true in gradle.properties.
+name: Publish snapshot distributions
+
+# Builds the distribution files of a snapshot commit and, once a release owner approves, publishes exactly those
+# files to the BloxBean repository bucket, read anonymously at https://repo.bloxbean.org/dist/snapshots/yaci-store/.
+# Independent of the GitHub release workflow and of the Maven snapshot repository. See bloxbean/release-ops
+# docs/12-bloxbean-maven-repository.md, Snapshot distributions.
+#
+# Each commit gets <version>/ with its zips, SHA256SUMS and manifest.json; latest.json names the most recently
+# published one. A version directory is never overwritten: manifest.json, uploaded last, marks it as published.
+# Every project writes only dist/snapshots/<project>/; one bucket lifecycle rule on dist/snapshots/ expires them.
+#
+# The Docker Compose zip's compose/.env names the snapshot version, for which no Docker image is published: use it
+# with images built locally from the same commit.
+
+on:
+  workflow_dispatch:
+    inputs:
+      native:
+        description: 'Also build and publish the native image zips (always on when snapshot_dist_native is true)'
+        type: boolean
+        default: false
+
+permissions: {}
+
+jobs:
+  # Fails before the build: only a -SNAPSHOT commit whose push CI passed, the same rule as the Maven snapshots
+  # (bloxbean-snapshot.yml), is published.
+  check:
+    if: >-
+      github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      native: ${{ steps.version.outputs.native }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Require green CI for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CI_WORKFLOWS: build.yml
+        run: bash .github/scripts/require-green-ci.sh
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'liberica'
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+      # build.gradle inserts the short commit id into the subprojects' -SNAPSHOT version (not the root's), and the
+      # zips carry it, e.g. yaci-store-3.0.0-beta6-1a2b3c4-SNAPSHOT.zip.
+      - name: Require a SNAPSHOT version and decide on the native zips
+        id: version
+        env:
+          NATIVE_INPUT: ${{ inputs.native }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION=$(./gradlew -q :components:common:properties -PskipSigning=true | awk '/^version:/ { print $2; exit }')
+          if [[ "$VERSION" != *-"${GITHUB_SHA:0:7}"*-SNAPSHOT ]]; then
+            echo "::error::Snapshot distributions require a -SNAPSHOT version of commit ${GITHUB_SHA:0:7}. Got: $VERSION" >&2
+            exit 1
+          fi
+          NATIVE=$(./gradlew -q properties -PskipSigning=true | awk '/^snapshot_dist_native:/ { print $2; exit }')
+          if [[ "$NATIVE_INPUT" == true ]]; then
+            NATIVE=true
+          fi
+          {
+            echo "version=$VERSION"
+            echo "native=${NATIVE:-false}"
+          } >> "$GITHUB_OUTPUT"
+          echo "Snapshot $VERSION, native zips: ${NATIVE:-false}"
+
+  build-jvm:
+    needs: check
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'liberica'
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+      # The push CI already ran the tests on this commit.
+      - name: Build the JVM and Docker Compose zips
+        run: |
+          echo "tag=${VERSION}" > docker/compose/.env
+          ./gradlew clean distZip dockerZip -PskipSigning=true --stacktrace
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-jvm
+          path: |
+            applications/build/dist/yaci-store-${{ env.VERSION }}.zip
+            applications/build/dist/yaci-store-docker-${{ env.VERSION }}.zip
+          if-no-files-found: error
+          retention-days: 7
+
+  build-native:
+    needs: check
+    if: needs.check.outputs.native == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/native-build.yml
+    with:
+      version: ${{ needs.check.outputs.version }}
+      artifact-prefix: dist-native
+
+  # The approval gate, after the build so the reviewer approves zips that were built. The `release` environment
+  # holds no secrets; its reviewers are the release-owners team, and the person who started the run can't approve
+  # it. Waiting for approval costs no runner time.
+  approve:
+    needs: [check, build-jvm, build-native]
+    if: >-
+      !cancelled() && needs.build-jvm.result == 'success' &&
+      (needs.build-native.result == 'success' || needs.build-native.result == 'skipped')
+    runs-on: ubuntu-24.04
+    environment: release
+    steps:
+      - name: Approved
+        run: echo "Publishing the snapshot distributions of $GITHUB_SHA approved."
+
+  publish:
+    needs: [check, approve]
+    if: ${{ !cancelled() && needs.approve.result == 'success' }}
+    # The bucket credentials are secrets of this environment, which only accepts main, release/** and v* tags.
+    environment: release-staging
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    # Only latest.json is shared between runs; serialize the uploads so it names the most recently published build.
+    concurrency:
+      group: bloxbean-snapshot-dist
+      cancel-in-progress: false
+    env:
+      BUCKET: ${{ vars.R2_BUCKET }}
+      PREFIX: dist/snapshots/yaci-store
+      PUBLIC_URL: https://repo.bloxbean.org
+      DIST_DIR: dist
+      AWS_ENDPOINT_URL: ${{ vars.R2_ENDPOINT }}
+      AWS_DEFAULT_REGION: auto
+      # AWS CLI 2.23+ sends request checksums R2 does not accept by default; send them only when an API needs one.
+      AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+      AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Download the built distributions
+        uses: actions/download-artifact@v4
+        with:
+          pattern: 'dist-*'
+          path: dist
+          merge-multiple: true
+
+      # Exactly this commit's files: the JVM and Docker Compose zips, and with native zips every platform the
+      # release ships. The musl zips are best effort (native-build.yml), so they may be missing but nothing else may.
+      - name: Verify the distributions
+        id: dist
+        env:
+          VERSION: ${{ needs.check.outputs.version }}
+          NATIVE: ${{ needs.check.outputs.native }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist
+          expected=("yaci-store-$VERSION.zip" "yaci-store-docker-$VERSION.zip")
+          optional=()
+          if [[ "$NATIVE" == true ]]; then
+            for platform in linux-x64-n2c linux-x64-all macos-arm64-n2c macos-arm64-all windows-x64-all; do
+              expected+=("yaci-store-$VERSION-$platform.zip")
+            done
+            optional=("yaci-store-$VERSION-linux-musl-x64-n2c.zip" "yaci-store-$VERSION-linux-musl-x64-all.zip")
+          fi
+          found=$(find . -maxdepth 1 -type f -printf '%f\n' | sort)
+          # Everything found except the optional zips must be exactly the expected set.
+          required=$(grep -vxF -f <(printf '%s\n' "${optional[@]}") <<< "$found" || true)
+          if [[ "$required" != "$(printf '%s\n' "${expected[@]}" | sort)" ]]; then
+            echo "::error::Unexpected distribution set: $(tr '\n' ' ' <<< "$found")" >&2
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Write the manifest
+        env:
+          VERSION: ${{ steps.dist.outputs.version }}
+        run: bash .github/scripts/bloxbean-dist.sh manifest
+
+      # Files and SHA256SUMS first, then manifest.json, which marks the build as published, then latest.json. A
+      # published build is never overwritten, so its URLs and checksums stay valid until it expires; a run that
+      # stopped before the manifest is completed by running again.
+      - name: Upload to the bucket
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          VERSION: ${{ steps.dist.outputs.version }}
+        run: bash .github/scripts/bloxbean-dist.sh upload
+
+      - name: Verify the public files
+        env:
+          VERSION: ${{ steps.dist.outputs.version }}
+        run: bash .github/scripts/bloxbean-dist.sh verify
+
+      - name: Record the publication
+        env:
+          VERSION: ${{ steps.dist.outputs.version }}
+        run: bash .github/scripts/bloxbean-dist.sh summary
+
+  # Updates the "Development snapshot" pre-release (tag `snapshot`) on the Releases page, so users find the newest
+  # snapshot. Its own job: the only one with a write token, and it never sees the bucket credentials.
+  github-snapshot:
+    needs: publish
+    if: ${{ !cancelled() && needs.publish.result == 'success' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Update the Development snapshot release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MAVEN_METADATA_URL: https://repo.bloxbean.org/maven/snapshots/com/bloxbean/cardano/yaci-store-spring-boot-starter/maven-metadata.xml
+          MAVEN_COORDINATE: com.bloxbean.cardano:yaci-store-spring-boot-starter
+          MAVEN_REPOSITORY_URL: https://repo.bloxbean.org/maven/snapshots
+          DIST_LATEST_URL: https://repo.bloxbean.org/dist/snapshots/yaci-store/latest.json
+        run: bash .github/scripts/update-snapshot-release.sh
