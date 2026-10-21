@@ -33,10 +33,12 @@ class DuckPgSessionTest {
     @Test
     void loadConnectionsCommitAsynchronouslyAndKeepUserOptions() {
         assertThat(DuckPgSession.withLoadSettings("host='h' dbname='d'"))
-                .isEqualTo("host='h' dbname='d' options='-c synchronous_commit=off'");
+                .isEqualTo("host='h' dbname='d' options='-c synchronous_commit=off -c tcp_keepalives_count=6"
+                        + " -c tcp_keepalives_idle=60 -c tcp_keepalives_interval=10'");
         String merged = DuckPgSession.withLoadSettings(DuckPgSession.pgConnectionString(options(
                 "jdbc:postgresql://localhost/db?options=-c%20search_path%3Dx", "secret")));
-        assertThat(merged).contains("options='-c synchronous_commit=off -c search_path=x'")
+        assertThat(merged).contains("options='-c synchronous_commit=off -c tcp_keepalives_count=6"
+                        + " -c tcp_keepalives_idle=60 -c tcp_keepalives_interval=10 -c search_path=x'")
                 .containsOnlyOnce("options=");
     }
 

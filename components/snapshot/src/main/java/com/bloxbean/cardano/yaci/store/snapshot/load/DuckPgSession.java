@@ -51,12 +51,23 @@ public class DuckPgSession implements AutoCloseable {
     }
 
     /**
+     * Server-side TCP keepalives: when an importer dies without closing its connections (a killed
+     * container, a lost host), PostgreSQL ends their sessions within about two minutes instead of the
+     * operating system's default of two hours, so they stop holding the locks a resume needs.
+     */
+    static final Map<String, String> CLIENT_KEEPALIVE = Map.of(
+            "tcp_keepalives_idle", "60", "tcp_keepalives_interval", "10", "tcp_keepalives_count", "6");
+
+    /**
      * Asynchronous commit for the load connections. Each batch commits its rows and its journal entry
      * in one transaction, so a crash can only lose whole recent batches, which a resume reloads. The
-     * libpq options parameter applies it to every connection DuckDB opens for the attachment.
+     * libpq options parameter applies it, and {@link #CLIENT_KEEPALIVE}, to every connection DuckDB
+     * opens for the attachment.
      */
     static String withLoadSettings(String connectionString) {
-        String setting = "-c synchronous_commit=off";
+        StringBuilder settings = new StringBuilder("-c synchronous_commit=off");
+        new TreeMap<>(CLIENT_KEEPALIVE).forEach((name, value) -> settings.append(" -c ").append(name).append('=').append(value));
+        String setting = settings.toString();
         int at = connectionString.indexOf("options='");
         if (at < 0) {
             return (connectionString + " options='" + setting + "'").trim();

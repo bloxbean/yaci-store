@@ -26,6 +26,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -63,8 +64,14 @@ public class SnapshotImporter {
     /** Reads of one remote part before the import gives up; every attempt starts the part again. */
     static final int PART_ATTEMPTS = 3;
 
-    /** PostgreSQL advisory lock key, so two imports cannot run against one schema. */
+    /**
+     * PostgreSQL advisory lock key for the database. Every import holds it shared; one that changes
+     * server settings ({@code --tune-postgres}) holds it exclusively, as the settings are not per schema.
+     */
     private static final long ADVISORY_LOCK_KEY = 0x59414349_534E4150L;
+
+    /** Advisory lock class for the target schema, paired with the schema name's hash: one import per schema. */
+    private static final int SCHEMA_LOCK_CLASS = 0x59534E50;
 
     private final SnapshotSpecRegistry registry;
     private final ConverterRegistry converters = new ConverterRegistry();
@@ -402,7 +409,7 @@ public class SnapshotImporter {
         List<String> warnings = new ArrayList<>(pre.warnings());
 
         try (Connection pg = connect(options)) {
-            acquireAdvisoryLock(pg);
+            acquireAdvisoryLocks(pg, options.schema(), options.tunePostgres());
             // Recheck database state after acquiring the lock: another importer may have finished
             // since preflight. Resume is bound to the entire manifest.
             ImportJournal.Run current = new ImportJournal(pg, options.schema()).currentRun().orElse(null);
@@ -912,17 +919,43 @@ public class SnapshotImporter {
 
     private Connection connect(ImportOptions options) throws SQLException {
         try {
-            return DriverManager.getConnection(options.jdbcUrl(), options.user(), options.password());
+            Connection pg = DriverManager.getConnection(options.jdbcUrl(), options.user(), options.password());
+            try (Statement st = pg.createStatement()) {
+                for (Map.Entry<String, String> setting : new TreeMap<>(DuckPgSession.CLIENT_KEEPALIVE).entrySet()) {
+                    st.execute("SET " + setting.getKey() + " = " + setting.getValue());
+                }
+            } catch (SQLException e) {
+                pg.close();
+                throw e;
+            }
+            return pg;
         } catch (SQLException e) {
             throw new SQLException(DuckPgSession.redact(e.getMessage(), options.password()), e.getSQLState());
         }
     }
 
-    private void acquireAdvisoryLock(Connection pg) throws SQLException {
+    /**
+     * Imports into different schemas of one database run side by side; two into one schema do not, and
+     * an import that tunes the server runs alone. Session locks, released when {@code pg} closes.
+     */
+    static void acquireAdvisoryLocks(Connection pg, String schema, boolean tunesServer) throws SQLException {
         try (Statement st = pg.createStatement();
-             ResultSet rs = st.executeQuery("SELECT pg_try_advisory_lock(" + ADVISORY_LOCK_KEY + ")")) {
+             ResultSet rs = st.executeQuery("SELECT pg_try_advisory_lock" + (tunesServer ? "" : "_shared")
+                     + "(" + ADVISORY_LOCK_KEY + ")")) {
             if (!rs.next() || !rs.getBoolean(1)) {
-                throw new SQLException("Another snapshot import holds the advisory lock on this database");
+                throw new SQLException(tunesServer
+                        ? "Another snapshot import is running on this database; --tune-postgres changes server"
+                                + " settings, so it runs alone"
+                        : "A snapshot import with --tune-postgres is running on this database");
+            }
+        }
+        try (PreparedStatement ps = pg.prepareStatement(
+                "SELECT pg_try_advisory_lock(" + SCHEMA_LOCK_CLASS + ", hashtext(?))")) {
+            ps.setString(1, schema);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next() || !rs.getBoolean(1)) {
+                    throw new SQLException("Another snapshot import is running on schema '" + schema + "'");
+                }
             }
         }
     }
