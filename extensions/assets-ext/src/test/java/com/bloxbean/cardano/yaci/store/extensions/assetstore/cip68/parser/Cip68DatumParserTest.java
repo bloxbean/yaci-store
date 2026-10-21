@@ -766,7 +766,8 @@ class Cip68DatumParserTest {
         }
 
         @Test
-        void shouldReturnEmptyWhenDataListTooSmall() throws Exception {
+        void shouldIndexADatumWithoutAVersionAndReportItAsMandatory() throws Exception {
+            // the CIP requires the version: the datum is read (its metadata is there) and flagged, not hidden
             MapPlutusData properties = new MapPlutusData();
             properties.put(BytesPlutusData.of("name"), BytesPlutusData.of("Test"));
 
@@ -776,7 +777,24 @@ class Cip68DatumParserTest {
 
             Optional<ParsedCip68Datum> result = parser.parse(hexDatum);
 
-            assertThat(result).isEmpty();
+            assertThat(result).hasValueSatisfying(m -> {
+                assertThat(m.name()).isEqualTo("Test");
+                assertThat(m.version()).isNull();
+                assertThat(m.validationErrors()).singleElement().satisfies(e -> {
+                    assertThat(e.fieldName()).isEqualTo("version");
+                    assertThat(e.fieldCategory().name()).isEqualTo("MANDATORY");
+                    assertThat(e.code()).isEqualTo("missing_value");
+                });
+            });
+        }
+
+        @Test
+        void shouldStillReturnEmptyForAnEmptyConstructor() throws Exception {
+            ConstrPlutusData datum = ConstrPlutusData.of(0);
+
+            String hexDatum = HexUtil.encodeHexString(CborSerializationUtil.serialize(datum.serialize()));
+
+            assertThat(parser.parse(hexDatum)).isEmpty();
         }
 
         @Test
@@ -793,7 +811,7 @@ class Cip68DatumParserTest {
         }
 
         @Test
-        void shouldReturnEmptyWhenVersionIsNotBigInt() throws Exception {
+        void shouldIndexADatumWhoseVersionIsNotAnIntegerAndReportItAsMandatory() throws Exception {
             MapPlutusData properties = new MapPlutusData();
             properties.put(BytesPlutusData.of("name"), BytesPlutusData.of("Test"));
             properties.put(BytesPlutusData.of("description"), BytesPlutusData.of("Desc"));
@@ -806,7 +824,33 @@ class Cip68DatumParserTest {
 
             Optional<ParsedCip68Datum> result = parser.parse(hexDatum);
 
-            assertThat(result).isEmpty();
+            assertThat(result).hasValueSatisfying(m -> {
+                assertThat(m.name()).isEqualTo("Test");
+                assertThat(m.description()).isEqualTo("Desc");
+                assertThat(m.version()).isNull();
+                assertThat(m.validationErrors()).singleElement().satisfies(e -> {
+                    assertThat(e.fieldName()).isEqualTo("version");
+                    assertThat(e.fieldCategory().name()).isEqualTo("MANDATORY");
+                    assertThat(e.code()).isEqualTo("wrong_type");
+                    assertThat(e.error()).contains("bytes");
+                });
+            });
+        }
+
+        @Test
+        void shouldReportAVersionThatIsAMapOrAListWithItsType() throws Exception {
+            for (PlutusData version : new PlutusData[]{new MapPlutusData(), ListPlutusData.of(BigIntPlutusData.of(1))}) {
+                MapPlutusData properties = new MapPlutusData();
+                properties.put(BytesPlutusData.of("name"), BytesPlutusData.of("Test"));
+                String hexDatum = HexUtil.encodeHexString(CborSerializationUtil.serialize(
+                        ConstrPlutusData.of(0, properties, version).serialize()));
+
+                assertThat(parser.parse(hexDatum)).hasValueSatisfying(m ->
+                        assertThat(m.validationErrors()).singleElement().satisfies(e -> {
+                            assertThat(e.code()).isEqualTo("wrong_type");
+                            assertThat(e.fieldCategory().name()).isEqualTo("MANDATORY");
+                        }));
+            }
         }
 
         @Test
