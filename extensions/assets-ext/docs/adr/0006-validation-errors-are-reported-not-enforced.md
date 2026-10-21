@@ -103,7 +103,7 @@ batch); the errors of a returned token are never filtered. The check is made in 
 client that asks for a stricter view wants to know that the token does not pass, and an empty or shortened `validation_errors` would read as "it does". The `404`
 is the same answer the client already handles for an unknown token. *Trade-off:* a `404` then means "unknown" or "filtered out", and the client can tell them
 apart by asking again without the parameter. A token indexed before validation existed (no errors recorded) is judged by the rule it had before, name and
-description present.
+description present. When a request asks for some properties (`?property=`), the errors, `metadata.valid` and this gate are about those properties only (ADR 0003).
 
 ### 6. Rich fungible tokens are served
 
@@ -149,7 +149,6 @@ that drop a token is on hold.
 ## Open questions
 
 - Whether the `code` list should be fixed in the API documentation as an enumeration.
-- Whether the errors of a property filter (`property=ticker`) should be limited to the fields asked for. Today all errors are returned.
 
 ## References
 

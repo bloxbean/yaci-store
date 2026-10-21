@@ -140,13 +140,17 @@ the other.
 - Rows indexed before `validation_errors` existed have `NULL`, which means *never checked* and is not `[]`: the field is left out, and
   `metadata.valid` falls back to the rule it had before (name and description both present). A resync computes the errors and brings in the
   tokens that were dropped (ADR 0006 decision 4).
+- **A `property` filter limits the errors to the requested properties.** `validation_errors`, `metadata.valid` and the `?validation=` gate then
+  describe what the client reads: `?property=ticker` does not report a broken `image`. An `image` error counts for `logo` (a rich fungible token's image is
+  served as its logo), the `no_nested_entry` error (field `721`) is always kept because it concerns every property, and errors about what the merged
+  endpoint cannot return (`files`, extra properties, keys) are dropped under a filter. A row with no errors recorded (`NULL`) stays so. *Trade-off:* a client
+  that asks for one property no longer learns that another is broken; it asks again without the filter.
 - **`?validation=ALL|MANDATORY_ONLY|STRICT`** (default `ALL`) chooses which tokens are returned: `MANDATORY_ONLY` those with no `MANDATORY` error,
   `STRICT` those with no error at all. A token that is not accepted is a `404`, or left out of a batch; the errors of a returned token are never
   filtered. It is applied in Java to the rows already read, so it needs no native query (ADR 0006 decision 5).
 
 ## Open questions
 
-- Should the errors be limited to the fields a `property` filter asks for? Today all of them are returned.
 - Should NFTs be exposed, and under which endpoint? Nothing reads them today.
 - Should CIP-25 metadata become a third source? It would need an indexer for transaction metadata, its own rules for what is
   valid (the standard has more than one version), a place in the priority order, and an ADR of its own. Nothing in the module prepares for it.
