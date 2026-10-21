@@ -96,6 +96,8 @@ public class InvalidTokenRecorder {
         }
     }
 
+    // java:S8688: the module stores LocalDateTime.now() in the system time zone everywhere (first_seen_at is informational), so this follows it
+    @SuppressWarnings("java:S8688")
     InvalidToken toRow(InvalidTokenReport r) {
         return InvalidToken.builder()
                 .id(idOf(r))
