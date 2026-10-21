@@ -281,8 +281,7 @@ public class Cip68DatumParser {
         }
         long version = value.longValue();
         if (version < MIN_DEFINED_VERSION || version > MAX_DEFINED_VERSION) {
-            // OPTIONAL: the version is there and the datum is read by its structure, so the token is usable; only the value is not a defined one
-            errors.add(ValidationError.optional(CIP_68, null, "version", UNDEFINED_VERSION,
+            errors.add(ValidationError.mandatory(CIP_68, null, "version", UNDEFINED_VERSION,
                     "version " + version + " is not one CIP-68 defines (" + MIN_DEFINED_VERSION + " to " + MAX_DEFINED_VERSION + ")"));
         }
         return version;
