@@ -136,8 +136,7 @@ NFT. It was not done. *Trade-offs and known gaps:*
   but the datum is checked against **all** of them (#1238): it needs a `name`, a `description` if 333 is among
   them, and an `image` with an allowed scheme if 222 or 444 is. Whatever it lacks for a label is a validation error that
   names that label (`sub_standard`); the datum is indexed either way, since the metadata is shared by every token of that
-  reference NFT. Checking only the first label would index a datum without a description although it is also a fungible token. A multi-label token is logged at INFO when it is indexed, and counted in
-  `yaci.store.assets.cip68.datums.multi_label{labels}` (decision 8). *Considered and not done:* recording every label (a
+  reference NFT. Checking only the first label would index a datum without a description although it is also a fungible token. A multi-label token is logged at INFO when it is indexed (decision 8); it is not a metric, since it needs no action. *Considered and not done:* recording every label (a
   `labels` column or a row per label): nothing reads it today, and a row per label would duplicate the datum; it can be added
   later with a resync.
 - The opposite error (an NFT stored as 333) was possible before and is not measured.
@@ -295,10 +294,10 @@ not UTF-8, where it used to return garbled text.
   carry arbitrary datums, and it would be noise.
 
 **Metrics (#1237).** Micrometer counters, read from `/actuator/prometheus`: `yaci.store.assets.cip68.datums.indexed` (tag `label`: 222, 333, 444);
-`yaci.store.assets.cip68.datums.validation_errors` (tags `sub_standard`, the label or `none`, `code` and `category`; the field is not a tag, because property
-names come from the chain); `yaci.store.assets.cip68.datums.skipped` (tags `label` and `reason`, only `parse_failure` and `processing_failure`, both with label
-`unknown`); `yaci.store.assets.cip68.datums.multi_label` (tag `labels`, for example `222+333`); and `yaci.store.assets.cip68.properties.dropped` (tag `kind`,
-only `too_deep`). The tags have a small fixed set of values. They are registered with the CIP-68 processor and need no property; without a `MeterRegistry` bean
+`yaci.store.assets.cip68.datums.skipped` (tag `reason`, only `parse_failure` and `processing_failure`); and
+`yaci.store.assets.cip68.properties.dropped` (tag `kind`, only `too_deep`). What is wrong with a stored token is not a counter: it is the
+`validation_errors` of its row, in the API and in SQL, where it is exact and survives a restart; a counter of it would reset on restart and count a replayed
+block again. The drops of both standards are also counted by `yaci.store.assets.invalid_tokens{standard,reason_code}` (ADR 0007). The tags have a small fixed set of values. They are registered with the CIP-68 processor and need no property; without a `MeterRegistry` bean
 they go to a private registry and nothing is exposed. *Why metrics and not a health indicator:* a token with errors is not a failing service, and mainnet will
 always have some, so a health indicator would be permanently degraded or need an arbitrary threshold. `processing_failure` is the one to alert on: it means
 something nobody foresaw. *Trade-offs:* the counters start at zero on every restart and count datums processed, so a block replayed after a chain rollback is

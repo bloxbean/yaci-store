@@ -109,10 +109,10 @@ but not served. This follows cf-token-metadata-registry ADR-018, since for now b
 
 - The errors are the report: they are in the API. A datum that is indexed with errors is not a WARN (there would be a line per
   token, and tens of thousands on mainnet); it is a DEBUG line. A WARN is for what is dropped.
-- Metrics: `datums.indexed{label}` counts every stored datum; `datums.validation_errors{sub_standard,code,category}` counts the
-  errors (the field is not a tag, since property names come from the chain); `datums.skipped{reason}` is only for `parse_failure` and
-  `processing_failure`; `properties.dropped{kind}` is only `too_deep`. Errors that depend on the datum, not on a label, are counted
-  once per output when several reference NFTs share a flat datum.
+- Metrics: `datums.indexed{label}` counts every stored datum; `datums.skipped{reason}` is only for `parse_failure` and
+  `processing_failure`; `properties.dropped{kind}` is only `too_deep`; `invalid_tokens{standard,reason_code}` counts the rows written to
+  `invalid_token` (ADR 0007). The validation errors are not counted: they are data (the API and SQL give exact numbers), and a counter would
+  reset on restart and count a replayed block again.
 
 ### 8. Where it ships
 

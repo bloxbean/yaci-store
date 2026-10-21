@@ -82,7 +82,7 @@ solves more but costs a new extension point that no other module needs.
 - One row in `invalid_token` for each reference NFT of the output, with the exception class and message and a prefix of the datum (ADR 0007). It is
   written in the same transaction, bounded and idempotent, and a failure of the write is itself only a WARN, so it cannot become a new reason to stop
   the sync.
-- The counter `datums.skipped` with a new reason `processing_failure` (label `unknown`, as for `parse_failure`), so that an
+- The counter `datums.skipped` with a new reason `processing_failure` (tag `reason`, as for `parse_failure`), so that an
   alert can use `increase()` and a rate rises visibly when something new appears on chain. Unlike the other skip reasons,
   which are expected bad data, this one means something nobody foresaw, so it is the one to alert on.
 
