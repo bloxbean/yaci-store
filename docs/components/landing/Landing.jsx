@@ -458,7 +458,7 @@ const RUN_OPTIONS = [
     desc: "GraalVM native binaries per OS and architecture. No JVM to install.",
     file: "terminal",
     code: [
-      ["c", "# From a v<version> release, download"],
+      ["c", "# From a rel-native-<version> release, download"],
       ["c", "# yaci-store-<version>-<os>-<arch>-all.zip, unzip, then:"],
       ["p", "./yaci-store"],
       ["", ""],

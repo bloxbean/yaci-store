@@ -1,6 +1,6 @@
 # From the release-ops standard (templates/workflows/release.yml, 2026-10-04), adapted for yaci-store: the GitHub
-# release carries the JVM and Docker Compose zips and, with native_release, the native image zips; the Docker
-# images are pushed by their own job, gated by docker_publish.
+# release carries the JVM and Docker Compose zips; the native image zips get a release of their own
+# (rel-native-<version>); the Docker images are pushed by their own job, gated by docker_publish.
 name: Release
 
 # A v* tag, created by tag-release.yml after a code-owner-approved version bump merges, builds and signs every module
@@ -13,10 +13,12 @@ name: Release
 # first, so a Central failure (e.g. its quota) leaves the release there.
 #
 # The other release side effects are gated by flags in gradle.properties too, and run after the Maven artifacts:
-#   native_release  builds the native image zips (native-build.yml), for the GitHub release
-#   github_release  the GitHub release with the JVM zip, the Docker Compose zip and the native zips. It is the only
-#                   job with a write token, and it never sees the release secrets.
+#   github_release  the GitHub release v<version> with the JVM zip and the Docker Compose zip
+#   native_release  builds the native image zips (native-build.yml); with github_release they go to a separate
+#                   pre-release, rel-native-<version>, so the main release page stays JVM-only. A failed native
+#                   build never holds back the Maven artifacts, the Docker images or the v<version> release.
 #   docker_publish  pushes the Docker images, with the Docker Hub credentials of release-staging
+# The two GitHub release jobs are the only ones with a write token, and they never see the release secrets.
 
 on:
   push:
@@ -288,8 +290,8 @@ jobs:
             fi
             echo
             echo "Release side effects of this tag, which do not wait for the Central deployment:"
-            echo "- native image zips (native_release, next job): $NATIVE_RELEASE"
-            echo "- GitHub release (github_release, after the native zips): $GITHUB_RELEASE"
+            echo "- GitHub release v$VERSION (github_release): $GITHUB_RELEASE"
+            echo "- native image zips (native_release), released as rel-native-$VERSION with github_release: $NATIVE_RELEASE"
             echo "- Docker images (docker_publish, next job): $DOCKER_PUBLISH"
             if [[ "$BLOXBEAN_REPO_PUBLISH$GITHUB_RELEASE$DOCKER_PUBLISH" != *true* ]]; then
               echo
@@ -321,13 +323,10 @@ jobs:
       artifact-prefix: release-native
 
   github-release:
-    needs: [publish, native]
-    # Gated by github_release in gradle.properties. Runs only after the Maven artifacts are published or staged and
-    # the native zips (with native_release) are built; on failure it can be re-run on its own without touching
-    # Central.
-    if: >-
-      !cancelled() && needs.publish.result == 'success' && needs.publish.outputs.github_release == 'true' &&
-      (needs.native.result == 'success' || needs.native.result == 'skipped')
+    needs: publish
+    # Gated by github_release in gradle.properties. Runs once the Maven artifacts are published or staged, without
+    # waiting for the native zips; on failure it can be re-run on its own without touching Central.
+    if: needs.publish.outputs.github_release == 'true'
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -335,9 +334,8 @@ jobs:
       - name: Download release assets
         uses: actions/download-artifact@v4
         with:
-          pattern: release-*
+          name: release-jvm
           path: dist
-          merge-multiple: true
 
       - name: List release assets
         run: ls -la dist/
@@ -354,6 +352,43 @@ jobs:
           # Latest is decided by semantic version and date, so a maintenance release (e.g. 2.0.8 after
           # 3.0.0) does not take the Latest badge.
           make_latest: legacy
+
+  github-release-native:
+    needs: [publish, native]
+    # Gated by github_release and native_release. A native build that failed skips only this job: re-run the failed
+    # native jobs, which re-runs this one, or ship native zips with a patch version.
+    if: >-
+      !cancelled() && needs.publish.outputs.github_release == 'true' && needs.native.result == 'success'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.publish.outputs.version }}
+    steps:
+      - name: Download the native zips
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-native-*
+          path: dist
+          merge-multiple: true
+
+      - name: List release assets
+        run: ls -la dist/
+
+      # A pre-release of its own, as before the release-ops pipeline: the native zips are a preview, and the v<version>
+      # page stays JVM-only. The action creates the rel-native-<version> tag on the released commit; that tag
+      # triggers no workflow. It never becomes Latest.
+      - name: Create the native GitHub release
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        with:
+          tag_name: rel-native-${{ env.VERSION }}
+          target_commitish: ${{ github.sha }}
+          name: ${{ env.VERSION }}-native
+          body: 'Native binaries for release: https://github.com/${{ github.repository }}/releases/tag/v${{ env.VERSION }}'
+          files: dist/*
+          fail_on_unmatched_files: true
+          prerelease: true
+          make_latest: false
 
   docker:
     needs: publish
