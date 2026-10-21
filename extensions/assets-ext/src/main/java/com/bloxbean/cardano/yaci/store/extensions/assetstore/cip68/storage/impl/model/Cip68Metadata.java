@@ -22,6 +22,13 @@ import java.util.Map;
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 public class Cip68Metadata {
 
+    // Widths of the fixed-length text columns. The datum is unbounded on-chain input, so the
+    // parser drops longer values rather than letting the insert fail and stop the sync.
+    public static final int NAME_MAX_LENGTH = 255;
+    public static final int TICKER_MAX_LENGTH = 32;
+    public static final int URL_MAX_LENGTH = 250;
+    public static final int MEDIA_TYPE_MAX_LENGTH = 255;
+
     /** Policy id: exactly 28 bytes = 56 hex chars (Blake2b-224). Protocol-bounded. */
     @Id
     @Column(name = "policy_id", length = 56, nullable = false)
@@ -70,7 +77,7 @@ public class Cip68Metadata {
     private Integer label;
 
     /** CIP-68 metadata 'name': variable UTF-8 string from the datum. */
-    @Column(length = 255)
+    @Column(length = NAME_MAX_LENGTH)
     private String name;
 
     /** CIP-68 'description': arbitrary multi-sentence text; stored as TEXT. */
@@ -78,14 +85,15 @@ public class Cip68Metadata {
     private String description;
 
     /** CIP-68 'ticker': short symbol (typically only label 333/444). */
-    @Column(length = 32)
+    @Column(length = TICKER_MAX_LENGTH)
     private String ticker;
 
     /** CIP-68 'url': aligns with CIP-26 url cap of 250 chars. */
-    @Column(length = 250)
+    @Column(length = URL_MAX_LENGTH)
     private String url;
 
-    /** CIP-68 'decimals': unsigned integer from the datum. In practice 0–19 per CIP-26 convention.
+    /** CIP-68 'decimals': unsigned integer from the datum. In practice 0–19 per CIP-26 convention;
+     *  the parser drops values outside {@link com.bloxbean.cardano.yaci.store.extensions.assetstore.util.TokenDecimals}.
      *  Long to match the {@code BIGINT} column and the rest of the pipeline (ParsedCip68Datum,
      *  FungibleTokenMetadata, LongProperty) — uniform type avoids boundary conversions. */
     private Long decimals;
@@ -106,7 +114,7 @@ public class Cip68Metadata {
     private String image;
 
     /** CIP-68 NFT 'mediaType': MIME type of the image (e.g. image/png). */
-    @Column(name = "media_type", length = 255)
+    @Column(name = "media_type", length = MEDIA_TYPE_MAX_LENGTH)
     private String mediaType;
 
     @Column(nullable = false)

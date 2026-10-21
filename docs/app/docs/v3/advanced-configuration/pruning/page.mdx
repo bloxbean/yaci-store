@@ -1,0 +1,88 @@
+import { Callout } from 'nextra/components'
+
+# Pruning Configuration
+
+Sometimes you may not want to store all historical data in a store. If you are using yaci-store as a library, you can customize it
+to only store specific data in your own custom storage implementation. However, if you want to delete historical data from a store database, you can use the pruning configuration.
+
+Currently, pruning configuration is only supported for the following stores. In the future, we will add support for other stores as well.
+- utxo
+- transaction
+
+<Callout>
+**By default, pruning is disabled for all stores.**
+</Callout>
+
+## Utxo Pruning
+
+To enable utxo pruning, you can set the following configurations in the `application.properties` file.
+
+```properties
+store.utxo.pruning-enabled=true
+store.utxo.pruning-interval=600
+```
+
+The above configuration will run utxo pruning every 600 seconds.
+
+There is also another configuration, `store.utxo.pruning-safe-blocks`, which can be used to specify the number of safe blocks to keep in the store.
+By default, this is set to 2160 blocks, same as the security parameter in Cardano mainnet.
+
+## Transaction Pruning
+
+To enable transaction pruning, you can set the following configurations in the `application.properties` file.
+
+```properties
+store.transaction.pruning-enabled=true
+store.transaction.pruning-interval=86400
+```
+
+## Epoch Stake Pruning
+
+To enable epoch stake pruning, you can set the following configurations in the `application.properties` file.
+
+```properties
+store.adapot.epoch-stake-pruning-enabled=true
+store.adapot.epoch-stake-pruning-interval=86400
+```
+
+The above configuration will run transaction pruning every 86400 seconds or 1 day.
+
+There is also another configuration, `store.adapot.epoch-stake-safe-epochs`, which can be used to specify the number of safe epochs to keep in the store.
+By default, this is set to 8 epochs.
+
+## Reward Pruning
+
+To enable reward pruning, add the following configurations to your `application.properties` file:
+
+```properties
+store.adapot.reward-pruning-enabled=true
+store.adapot.reward-pruning-interval=86400
+```
+
+The above configuration will run reward pruning every 86400 seconds (1 day).
+
+You can also specify how many safe slots to keep in the reward table using:
+
+```properties
+store.adapot.reward-pruning-safe-slots=43200
+```
+
+By default, this is set to 43200 slots. Reward records are only eligible for pruning if:
+- The reward's slot is less than or equal to the latest completed reward calculation job slot minus this safe slot threshold.
+- There exists a withdrawal for the same address, where the withdrawal's slot is **greater than** the reward's slot and **less than** the current pruning slot.
+
+Rewards that have not been withdrawn (i.e., do not have a matching withdrawal after their slot) will never be pruned.
+
+<Callout>
+Reward pruning will only remove reward records that have already been withdrawn (i.e., there is a withdrawal after the reward's slot for the same address). Rewards that have not been withdrawn will never be pruned.
+</Callout>
+
+## Transaction Witness Saving
+
+The transaction store supports configurable saving of witness data. This feature allows you to enable or disable the saving of transaction witnesses in the database,
+which can help reduce storage requirements if witness data is not required for your use case.
+By default, saving of transaction witness data is disabled.
+
+```properties
+store.transaction.save-witness=false
+```

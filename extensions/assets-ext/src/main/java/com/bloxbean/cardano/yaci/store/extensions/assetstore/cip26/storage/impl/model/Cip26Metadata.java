@@ -72,7 +72,8 @@ public class Cip26Metadata {
     @Column(length = 500)
     private String description;
 
-    /** CIP-26 decimals: spec range [0, 19] inclusive (well-known property 'decimals'). */
+    /** CIP-26 decimals (well-known property 'decimals'): 0–19 in practice; the write path rejects
+     *  anything outside {@link com.bloxbean.cardano.yaci.store.extensions.assetstore.util.TokenDecimals}. */
     private Long decimals;
 
     /**

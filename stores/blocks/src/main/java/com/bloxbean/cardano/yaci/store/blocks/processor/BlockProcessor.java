@@ -4,6 +4,7 @@ import com.bloxbean.cardano.yaci.core.model.BlockHeader;
 import com.bloxbean.cardano.yaci.core.model.TransactionBody;
 import com.bloxbean.cardano.yaci.core.model.TransactionOutput;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
+import com.bloxbean.cardano.yaci.core.util.Tuple;
 import com.bloxbean.cardano.yaci.store.blocks.BlocksStoreProperties;
 import com.bloxbean.cardano.yaci.store.blocks.domain.Block;
 import com.bloxbean.cardano.yaci.store.blocks.domain.BlockCbor;
@@ -13,14 +14,17 @@ import com.bloxbean.cardano.yaci.store.blocks.storage.BlockStorage;
 import com.bloxbean.cardano.yaci.store.blocks.util.BlockUtil;
 import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClient;
 import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
+import com.bloxbean.cardano.yaci.store.common.util.ErrorCode;
 import com.bloxbean.cardano.yaci.store.common.util.TransactionFeeUtil;
 import com.bloxbean.cardano.yaci.store.events.BlockEvent;
+import com.bloxbean.cardano.yaci.store.events.ErrorEvent;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
 import jakarta.validation.constraints.NotNull;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,19 +48,20 @@ public class BlockProcessor {
     private final BlockCborStorage blockCborStorage;
     private final BlocksStoreProperties blocksStoreProperties;
     private final UtxoClient utxoClient;
-    private final List<PendingBlock> pendingBlocks = Collections.synchronizedList(new ArrayList<>());
-
-    private record PendingBlock(Block block, List<TransactionBody> bodies, Set<Integer> invalidTransactions) {
-    }
+    private final ApplicationEventPublisher publisher;
+    private final List<Tuple<Block, com.bloxbean.cardano.yaci.core.model.Block>> pendingBlocks =
+            Collections.synchronizedList(new ArrayList<>());
 
     public BlockProcessor(BlockStorage blockStorage,
                           BlockCborStorage blockCborStorage,
                           BlocksStoreProperties blocksStoreProperties,
-                          UtxoClient utxoClient) {
+                          UtxoClient utxoClient,
+                          ApplicationEventPublisher publisher) {
         this.blockStorage = blockStorage;
         this.blockCborStorage = blockCborStorage;
         this.blocksStoreProperties = blocksStoreProperties;
         this.utxoClient = utxoClient;
+        this.publisher = publisher;
     }
 
     @EventListener
@@ -104,13 +109,12 @@ public class BlockProcessor {
 
         handleTransaction(block, blockEvent.getBlock().getTransactionBodies(), invalidTransactions);
 
-        var pendingBlock = new PendingBlock(block, blockEvent.getBlock().getTransactionBodies(), invalidTransactions);
-        if (resolveFees(pendingBlock, false)) {
+        if (resolveFees(block, blockEvent.getBlock(), false)) {
             blockStorage.save(block);
         } else {
             // A collateral output may be produced by another block still processing in this batch.
             // Defer saving the block until precommit so its fee is resolved before it becomes visible.
-            pendingBlocks.add(pendingBlock);
+            pendingBlocks.add(new Tuple<>(block, blockEvent.getBlock()));
         }
 
         if (blocksStoreProperties.isSaveCbor()) {
@@ -173,20 +177,23 @@ public class BlockProcessor {
         return body.getCollateralReturn() == null ? List.of() : List.of(body.getCollateralReturn());
     }
 
-    private boolean resolveFees(PendingBlock pendingBlock, boolean useDeclaredFeeIfUnresolved) {
-        if (pendingBlock.invalidTransactions().isEmpty())
+    private boolean resolveFees(Block block, com.bloxbean.cardano.yaci.core.model.Block source,
+                                boolean useDeclaredFeeIfUnresolved) {
+        var invalidTransactions = source.getInvalidTransactions();
+        if (invalidTransactions == null || invalidTransactions.isEmpty())
             return true;
 
+        var bodies = source.getTransactionBodies();
         BigInteger totalFees = BigInteger.ZERO;
-        for (int i = 0; i < pendingBlock.bodies().size(); i++) {
-            var body = pendingBlock.bodies().get(i);
+        for (int i = 0; i < bodies.size(); i++) {
+            var body = bodies.get(i);
             BigInteger fee;
             try {
-                fee = TransactionFeeUtil.resolveFee(body, pendingBlock.invalidTransactions().contains(i),
+                fee = TransactionFeeUtil.resolveFee(body, invalidTransactions.contains(i),
                         utxoClient::getUtxosByIds);
             } catch (RestClientException e) {
                 log.debug("Collateral UTxO lookup failed for transaction {} in block {}",
-                        body.getTxHash(), pendingBlock.block().getHash(), e);
+                        body.getTxHash(), block.getHash(), e);
                 fee = null;
             }
             if (fee == null) {
@@ -199,11 +206,17 @@ public class BlockProcessor {
                 fee = body.getFee();
                 log.warn("Collateral fee unresolved for transaction {} in block {} at slot {}; "
                                 + "using declared fee {}. Block and epoch total fees may be inaccurate.",
-                        body.getTxHash(), pendingBlock.block().getHash(), pendingBlock.block().getSlot(), fee);
+                        body.getTxHash(), block.getHash(), block.getSlot(), fee);
+                publisher.publishEvent(ErrorEvent.builder()
+                        .block(block.getNumber())
+                        .errorCode(ErrorCode.DATA_MISSING_ERROR.name())
+                        .reason("Collateral fee unresolved; declared fee used in block total fees")
+                        .details("tx_hash: " + body.getTxHash() + ", block_hash: " + block.getHash())
+                        .build());
             }
             totalFees = totalFees.add(fee);
         }
-        pendingBlock.block().setTotalFees(totalFees);
+        block.setTotalFees(totalFees);
         return true;
     }
 
@@ -212,8 +225,8 @@ public class BlockProcessor {
     public void handleCollateralFees(PreCommitEvent event) {
         try {
             for (var pendingBlock : pendingBlocks) {
-                resolveFees(pendingBlock, true);
-                blockStorage.save(pendingBlock.block());
+                resolveFees(pendingBlock._1, pendingBlock._2, true);
+                blockStorage.save(pendingBlock._1);
             }
         } finally {
             pendingBlocks.clear();

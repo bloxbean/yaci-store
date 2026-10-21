@@ -24,8 +24,8 @@
 
 ### Latest Releases
 
-- **Stable Release**: [v2.0.2](https://github.com/bloxbean/yaci-store/releases/tag/v2.0.2) - Production-ready release
-- **Pre-release**: [v3.0.0-beta3](https://github.com/bloxbean/yaci-store/releases/tag/v3.0.0-beta3) - Latest pre-release with new features and improvements
+- **Stable Release**: [v2.0.7](https://github.com/bloxbean/yaci-store/releases/tag/v2.0.7) - Production-ready release
+- **Pre-release**: [v3.0.0-beta5](https://github.com/bloxbean/yaci-store/releases/tag/v3.0.0-beta5) - Latest pre-release with new features and improvements
 
 ### Core Stores
 
@@ -119,9 +119,8 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 
 ## Branching & releases
 
-- `main` → active development for the next minor release (2.1.x)
-- `release/2.0.x` → patch fixes for the 2.0.x line
-- `next` → development of the next major version (3.0)
+- `main` → active development for the 3.0.x line (currently 3.0.0-beta pre-releases)
+- `release/2.0.x` → patch fixes for the 2.0.x stable line
 
 Please open pull requests against the `main` branch unless advised otherwise.
 

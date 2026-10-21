@@ -8,13 +8,16 @@ import com.bloxbean.cardano.yaci.store.blocks.domain.BlockCbor;
 
 import com.bloxbean.cardano.yaci.store.blocks.storage.BlockCborStorage;
 import com.bloxbean.cardano.yaci.store.blocks.storage.BlockStorage;
+import com.bloxbean.cardano.yaci.store.common.util.ErrorCode;
 import com.bloxbean.cardano.yaci.store.events.BlockEvent;
+import com.bloxbean.cardano.yaci.store.events.ErrorEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
 import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClient;
 import com.bloxbean.cardano.yaci.store.client.utxo.DummyUtxoClient;
+import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClientImpl;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,8 +26,12 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.boot.test.system.OutputCaptureExtension;
+import org.springframework.http.HttpStatus;
+import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.client.RestTemplate;
 
 import java.math.BigInteger;
 import java.util.ArrayList;
@@ -34,6 +41,10 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
+import static org.springframework.test.web.client.ExpectedCount.twice;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withNoContent;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 
 @ExtendWith(MockitoExtension.class)
 class BlockProcessorTest {
@@ -45,6 +56,8 @@ class BlockProcessorTest {
     private BlocksStoreProperties blocksStoreProperties;
     @Mock
     private UtxoClient utxoClient;
+    @Mock
+    private ApplicationEventPublisher publisher;
     @InjectMocks
     private BlockProcessor blockProcessor;
     @Captor
@@ -271,11 +284,20 @@ class BlockProcessorTest {
         assertThat(blockArgCaptor.getValue().getTotalFees()).isEqualTo(4_694_944);
         assertThat(output).contains("Collateral fee unresolved for transaction missing")
                 .contains("using declared fee 200000. Block and epoch total fees may be inaccurate.");
+
+        var eventCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(publisher).publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getValue()).isInstanceOfSatisfying(ErrorEvent.class, errorEvent -> {
+            assertThat(errorEvent.getBlock()).isEqualTo(200);
+            assertThat(errorEvent.getErrorCode()).isEqualTo(ErrorCode.DATA_MISSING_ERROR.name());
+            assertThat(errorEvent.getDetails()).contains("tx_hash: missing")
+                    .contains("block_hash: " + blockArgCaptor.getValue().getHash());
+        });
     }
 
     @Test
     void dummyUtxoClientDoesNotStopBlockProcessing() {
-        var processor = new BlockProcessor(blockStorage, blockCborStorage, blocksStoreProperties, new DummyUtxoClient());
+        var processor = new BlockProcessor(blockStorage, blockCborStorage, blocksStoreProperties, new DummyUtxoClient(), publisher);
         var event = blockEvent(List.of(collateralTransaction("alonzo", 200_000, null, null)), List.of(0));
 
         processor.handleBlockHeaderEvent(event);
@@ -312,6 +334,43 @@ class BlockProcessorTest {
         verify(blockStorage).save(blockArgCaptor.capture());
         assertThat(blockArgCaptor.getValue().getTotalFees()).isEqualTo(3_000_000);
         assertThat(output).doesNotContain("using declared fee");
+        verifyNoInteractions(publisher);
+    }
+
+    @Test
+    void noContentFromRemoteUtxoClientUsesDeclaredFeeAtPreCommit() {
+        var restTemplate = new RestTemplate();
+        var server = MockRestServiceServer.bindTo(restTemplate).build();
+        server.expect(twice(), requestTo("http://utxo-store/api/v1/utxos")).andRespond(withNoContent());
+        var processor = new BlockProcessor(blockStorage, blockCborStorage, blocksStoreProperties,
+                new UtxoClientImpl(restTemplate, "http://utxo-store/api/v1"), publisher);
+        var event = blockEvent(List.of(collateralTransaction("remote", 200_000, null, null)), List.of(0));
+
+        processor.handleBlockHeaderEvent(event);
+        verify(blockStorage, never()).save(any());
+        processor.handleCollateralFees(new PreCommitEvent(event.getMetadata()));
+
+        verify(blockStorage).save(blockArgCaptor.capture());
+        assertThat(blockArgCaptor.getValue().getTotalFees()).isEqualTo(200_000);
+        server.verify();
+    }
+
+    @Test
+    void notFoundFromRemoteUtxoClientUsesDeclaredFeeAtPreCommit() {
+        var restTemplate = new RestTemplate();
+        var server = MockRestServiceServer.bindTo(restTemplate).build();
+        server.expect(twice(), requestTo("http://utxo-store/api/v1/utxos")).andRespond(withStatus(HttpStatus.NOT_FOUND));
+        var processor = new BlockProcessor(blockStorage, blockCborStorage, blocksStoreProperties,
+                new UtxoClientImpl(restTemplate, "http://utxo-store/api/v1"), publisher);
+        var event = blockEvent(List.of(collateralTransaction("remote", 200_000, null, null)), List.of(0));
+
+        processor.handleBlockHeaderEvent(event);
+        verify(blockStorage, never()).save(any());
+        processor.handleCollateralFees(new PreCommitEvent(event.getMetadata()));
+
+        verify(blockStorage).save(blockArgCaptor.capture());
+        assertThat(blockArgCaptor.getValue().getTotalFees()).isEqualTo(200_000);
+        server.verify();
     }
 
     @Test
