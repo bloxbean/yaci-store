@@ -173,7 +173,9 @@ public class Cip26MetadataSyncService {
         // one file per subject (filenames are unique) and full determinism.
         String filenameSubject = stripJsonExtension(mappingFile.getName());
         if (!filenameSubject.equals(mapping.get().subject())) {
-            log.warn("Skipping '{}': filename does not match inner subject '{}'",
+            // DEBUG, not WARN: a registry can have thousands of these (5,000 on preprod). Each is a row of invalid_token (ADR 0007) and the
+            // tally at the end of the sync counts them.
+            log.debug("Skipping '{}': filename does not match inner subject '{}'",
                     mappingFile.getName(), mapping.get().subject());
             recordFileProblem(mappingFile, InvalidTokenReason.FILENAME_SUBJECT_MISMATCH,
                     "The file name does not match the subject inside the file", mapping.get().subject());
