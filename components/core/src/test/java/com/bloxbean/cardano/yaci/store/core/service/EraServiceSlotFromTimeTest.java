@@ -185,4 +185,46 @@ class EraServiceSlotFromTimeTest {
         assertEquals(expected, slot,
                 "When Shelley starts at slot 0 (preprod/preview), Shelley formula (1s slots) should be used");
     }
+
+    @Test
+    void slotAtOrAfterTime_ByronMidnight_SkipsTheSlotThatStartsBeforeMidnight() {
+        // Mainnet Byron slots start at hh:mm:11, :31 and :51, so the slot before midnight starts
+        // at 23:59:51. slotFromTime rounds to it; the day's first slot is the one at 00:00:11.
+        long midnight = ZonedDateTime.of(2018, 3, 1, 0, 0, 0, 0, ZoneId.of("UTC")).toEpochSecond();
+
+        long slot = eraService.slotAtOrAfterTime(midnight);
+
+        assertEquals(midnight + 11, eraService.blockTime(Era.Byron, slot));
+        assertEquals(midnight - 9, eraService.blockTime(Era.Byron, slot - 1));
+        assertEquals(slot - 1, eraService.slotFromTime(midnight));
+    }
+
+    @Test
+    void slotAtOrAfterTime_ExactSlotStart_ReturnsThatSlot() {
+        long byronSlot = 2000000L;
+        long byronTime = eraService.blockTime(Era.Byron, byronSlot);
+        assertEquals(byronSlot, eraService.slotAtOrAfterTime(byronTime));
+        assertEquals(byronSlot + 1, eraService.slotAtOrAfterTime(byronTime + 1));
+
+        long shelleySlot = 100000000L;
+        assertEquals(shelleySlot, eraService.slotAtOrAfterTime(eraService.blockTime(Era.Shelley, shelleySlot)));
+    }
+
+    @Test
+    void slotAtOrAfterTime_ByronToShelleyTransition() {
+        // The first Shelley slot starts 20s after the last Byron slot
+        long shelleyStart = eraService.blockTime(Era.Shelley, SHELLEY_START_SLOT);
+        assertEquals(SHELLEY_START_SLOT, eraService.slotAtOrAfterTime(shelleyStart));
+        assertEquals(SHELLEY_START_SLOT, eraService.slotAtOrAfterTime(shelleyStart - 19));
+        assertEquals(SHELLEY_START_SLOT - 1, eraService.slotAtOrAfterTime(shelleyStart - 20));
+        assertEquals(SHELLEY_START_SLOT + 1, eraService.slotAtOrAfterTime(shelleyStart + 1));
+    }
+
+    @Test
+    void slotAtOrAfterTime_GenesisDay() {
+        assertEquals(0L, eraService.slotAtOrAfterTime(MAINNET_GENESIS_TIME));
+        // Midnight before genesis maps to a negative slot (DatePartition clamps it to -1)
+        long genesisMidnight = ZonedDateTime.of(2017, 9, 23, 0, 0, 0, 0, ZoneId.of("UTC")).toEpochSecond();
+        assertEquals(-3914L, eraService.slotAtOrAfterTime(genesisMidnight));
+    }
 }

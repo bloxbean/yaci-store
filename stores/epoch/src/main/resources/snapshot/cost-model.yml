@@ -1,0 +1,37 @@
+snapshot-table:
+  id: cost-model
+  spec-version: 1
+  module: epoch
+  kind: DERIVED_DATA
+  restore: IMPORT
+
+  source:
+    exporter-id: cost_model
+    ducklake-relation: cost_model
+    partition:
+      strategy: DAILY
+      column: block_time
+
+  consistency:
+    cutoff:
+      type: SLOT_LTE
+      column: slot
+
+  import:
+    target-table: cost_model
+    mode: MAPPED
+    columns:
+      costs:
+        source: costs
+        converter: "varchar-to-jsonb"
+      block_time:
+        source: block_time
+        converter: "timestamp-to-epoch-seconds"
+    ignore-source-columns: [date]
+    use-target-defaults: [update_datetime]
+    batch-boundary: SINGLE_BATCH
+
+  validation:
+    key: [hash]
+    bounds: [slot]
+    required-columns: [hash]

@@ -1,0 +1,43 @@
+snapshot-table:
+  id: reward
+  spec-version: 2
+  module: adapot
+  kind: DERIVED_DATA
+  restore: IMPORT
+
+  source:
+    exporter-id: reward
+    ducklake-relation: reward
+    partition:
+      strategy: EPOCH
+      column: epoch
+
+  # Cut by slot, not by earned epoch: member and leader rewards for epoch N are written at the first
+  # block of N+2, but pool deposit refunds are written at the first block of the retirement epoch
+  # itself. slot <= point keeps exactly the rows that existed at the point. Partitions are therefore
+  # required through the point epoch, which reward partition N reaches only after AdaPot job N+2.
+  consistency:
+    completed-epoch:
+      type: MAX_EPOCH
+      column: epoch
+    cutoff:
+      type: SLOT_LTE
+      column: slot
+
+  import:
+    target-table: reward
+    mode: MAPPED
+    columns:
+      earned_epoch:
+        source: epoch
+    use-target-defaults: [update_datetime]
+    batch-boundary: WHOLE_PARTITION
+    batch-size: 1
+    target-partitioning:
+      column: spendable_epoch
+      partition-prefix: reward_p
+
+  validation:
+    key: [address, earned_epoch, type, pool_id, spendable_epoch]
+    bounds: [epoch, spendable_epoch]
+    required-columns: [address, earned_epoch, type, pool_id, spendable_epoch]

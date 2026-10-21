@@ -1,0 +1,35 @@
+snapshot-table:
+  id: pool
+  spec-version: 1
+  module: staking
+  kind: CHAIN_DATA
+  restore: IMPORT
+
+  source:
+    exporter-id: pool
+    ducklake-relation: pool
+    partition:
+      strategy: DAILY
+      column: block_time
+
+  consistency:
+    cutoff:
+      type: SLOT_LTE
+      column: slot
+
+  import:
+    target-table: pool
+    mode: MAPPED
+    columns:
+      block_time:
+        source: block_time
+        converter: "timestamp-to-epoch-seconds"
+    ignore-source-columns: [date]
+    use-target-defaults: [update_datetime]
+    batch-boundary: FILE_SET
+    batch-size: 64
+
+  validation:
+    key: [pool_id, tx_hash, cert_index, slot]
+    bounds: [slot, epoch]
+    required-columns: [pool_id, tx_hash, cert_index, slot]

@@ -1,0 +1,13 @@
+snapshot-table:
+  id: account-config
+  spec-version: 1
+  module: account
+  kind: CONTROL_STATE
+  restore: HANDLER
+  reason: >-
+    the account balance watermark is set to the snapshot point, which is the block up to which
+    account data was imported
+
+  import:
+    target-table: account_config
+    handler: account-config
