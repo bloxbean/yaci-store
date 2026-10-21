@@ -15,6 +15,7 @@ yaci-store is modular and these decisions only concern this module.
 | [0004](0004-cip-68-processing-failures-and-the-sync.md) | A CIP-68 processing failure and the sync |
 | [0005](0005-validation-policy.md) | Validation policy: what is checked, where the checks live, and what is reported |
 | [0006](0006-validation-errors-are-reported-not-enforced.md) | Validation errors are reported, not enforced |
+| [0007](0007-invalid-token-table.md) | A table for what is dropped (`invalid_token`) |
 
 A record has a status (`Proposed`, `Accepted`, `Superseded`), a date, the context, the decisions with their
 trade-offs, the consequences and the open questions. When a decision changes, add a new record that supersedes

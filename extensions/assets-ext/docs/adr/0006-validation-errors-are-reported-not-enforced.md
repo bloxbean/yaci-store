@@ -69,6 +69,8 @@ A datum or entry is dropped, with one WARN that says it looks like an attack, on
 - a CIP-26 logo far beyond any real size (over about 1 MiB; the CIP's limit is 64 KiB, so anything between is kept with an error);
 - an output whose indexing throws something unexpected (`processing_failure`, ADR 0004).
 
+What is dropped is recorded in the `invalid_token` table (ADR 0007).
+
 There are no length caps on text: a datum is at most one transaction (16 KB), so what is stored is bounded, and the columns are
 `TEXT`. A version that is an integer outside the range of a `BIGINT` is stored as no version, with an error.
 
