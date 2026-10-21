@@ -161,6 +161,7 @@ public class Cip68Processor {
             // what the datum itself gets wrong is the same for every reference NFT of a shared flat datum: count it once
             if (shared == null || shared.markReported()) {
                 metrics.validationErrors(datumErrors);
+                warnPropertiesDroppedAsAttack(output, refNft, datumErrors);
             }
             metrics.validationErrors(labelErrors);
             if (!errors.isEmpty()) {
@@ -175,6 +176,21 @@ public class Cip68Processor {
             }
             return entity;
         });
+    }
+
+    /**
+     * A property nested more than 100 levels is dropped as an attack (ADR 0006): one WARN per property names the token and the
+     * transaction, so that the attempt can be found afterwards. The parser only counts it, since it does not know either.
+     */
+    private void warnPropertiesDroppedAsAttack(AddressUtxo output, AssetType refNft, List<ValidationError> datumErrors) {
+        for (ValidationError error : datumErrors) {
+            if (Cip68DatumParser.TOO_DEEP.equals(error.code())) {
+                log.warn("Output {}#{}: dropping property '{}' of the CIP-68 datum of {}/{} and keeping the rest, because its value is "
+                                + "nested deeper than {} levels, this looks like an attack",
+                        output.getTxHash(), output.getOutputIndex(), error.fieldName(), refNft.policyId(), refNft.assetName(),
+                        Cip68DatumParser.MAX_PROPERTY_DEPTH);
+            }
+        }
     }
 
     /**
