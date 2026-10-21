@@ -73,7 +73,7 @@ The registry is synchronised outside the block transaction. At the start of each
 judged again, and when a file is deleted its rows go, so a file that was fixed upstream stops appearing. A row without a slot is not touched by a
 chain rollback.
 
-### 5. Rollback and API
+### 5. Rollback and API (no endpoint for now)
 
 Rows with a `slot` greater than the rollback slot are deleted (`InvalidTokenRollbackProcessor`, and `rollback.yml` for the DB utilities). There
 is no API: the table is read with SQL and in the sync report, and the counter `yaci.store.assets.invalid_tokens{standard,reason_code}` counts
@@ -99,7 +99,6 @@ the rows written.
 ## Open questions
 
 - Whether `jail_without_token` is a failure row or a finding only in the report.
-- Whether a read endpoint is wanted once there is more than a handful of rows.
 - How long CIP-26 rows are kept for a file that disappears and comes back.
 
 ## References

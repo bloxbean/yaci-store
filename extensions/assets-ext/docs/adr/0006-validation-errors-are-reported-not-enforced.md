@@ -55,7 +55,7 @@ The field is **additive**: no existing field is renamed or removed. `metadata.va
 standard that has the token, in query priority order), on `standards.cip26` and `standards.cip68`, on `/cip68/ft/**` and on
 `/cip26/**`. The wire name is snake_case, as in the team's example; the rest of the module's JSON is camelCase, so the name is
 set explicitly. The `code` and the `sub_standard` were added to the team's example so that a program does not parse messages; new
-codes may be added, existing ones are not changed.
+codes may be added, existing ones are not changed. The codes are documented with their meaning in the OpenAPI description of `validation_errors` and as the allowed values of `code` (`ValidationCode`); a test keeps that in step with the code.
 
 ### 3. What is still dropped: only what looks like an attack, or cannot be stored
 

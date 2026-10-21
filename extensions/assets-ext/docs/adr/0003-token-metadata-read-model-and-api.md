@@ -136,7 +136,7 @@ the other.
 - Two clients that ask with a different `query_priority` can get different answers for the same token. That is intended.
 - The same data can answer differently before and after a CIP-26 sync, because the registry is read periodically
   (ADR 0001), while CIP-68 is updated block by block.
-- NFTs have no API. When one is added it needs its own rules for what is served and in which shape.
+- NFTs have no API, and none is planned for now. When one is added it needs its own rules for what is served and in which shape.
 - Rows indexed before `validation_errors` existed have `NULL`, which means *never checked* and is not `[]`: the field is left out, and
   `metadata.valid` falls back to the rule it had before (name and description both present). A resync computes the errors and brings in the
   tokens that were dropped (ADR 0006 decision 4).
@@ -151,7 +151,6 @@ the other.
 
 ## Open questions
 
-- Should NFTs be exposed, and under which endpoint? Nothing reads them today.
 - Should CIP-25 metadata become a third source? It would need an indexer for transaction metadata, its own rules for what is
   valid (the standard has more than one version), a place in the priority order, and an ADR of its own. Nothing in the module prepares for it.
 - Should the merged endpoint report which sources were consulted when a token is not found, so that a 404 for a registry that
