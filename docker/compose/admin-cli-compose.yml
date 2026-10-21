@@ -1,15 +1,20 @@
 services:
   admin-cli:
-    image: bloxbean/yaci-store-admin-cli:${tag}
+    # ADMIN_CLI_TAG (unset by default) runs another admin-cli build against this instance.
+    image: bloxbean/yaci-store-admin-cli:${ADMIN_CLI_TAG:-${tag}}
+    # The same environment and mounts as the yaci-store service (yaci-store.yml), so the CLI sees exactly
+    # what the application sees: config/env and its Spring profiles, every profile file in config/, the
+    # data/ folder (analytics export), logs and plugins. Snapshot output and work files go under data/,
+    # e.g. --output /app/data/snapshots/out --work-dir /app/data/snapshots/work.
     env_file:
       - ../config/env
     volumes:
-      # The same config/ and data/ as the yaci-store container: the profile files selected by
-      # SPRING_PROFILES_ACTIVE in config/env, and the analytics export that snapshot commands read.
-      - ../config:/app/config
+      - ../logs:/app/logs/
       - ../data:/app/data
-      # Snapshot parts, manifests and import work files: pass paths under /app/snapshots.
-      - ../snapshots:/app/snapshots
+      - ../config:/app/config
+      - ../plugins/scripts:/app/plugins/scripts/
+      - ../plugins/ext-jars:/app/plugins/ext-jars/
+      - ../plugins/files:/app/plugins/files/
     stdin_open: true
     tty: true
     networks:

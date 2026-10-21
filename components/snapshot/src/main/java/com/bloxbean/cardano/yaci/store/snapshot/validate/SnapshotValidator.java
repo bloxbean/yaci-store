@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.snapshot.validate;
 
 import com.bloxbean.cardano.yaci.store.snapshot.manifest.ManifestCodec;
 import com.bloxbean.cardano.yaci.store.snapshot.manifest.ManifestValidator;
+import com.bloxbean.cardano.yaci.store.snapshot.manifest.Retention;
 import com.bloxbean.cardano.yaci.store.snapshot.load.Autovacuum;
 import com.bloxbean.cardano.yaci.store.snapshot.load.DeferredIndexes;
 import com.bloxbean.cardano.yaci.store.snapshot.load.ImportJournal;
@@ -48,7 +49,8 @@ public class SnapshotValidator {
     /** Level 2: schema and load validation. */
     public ValidationReport validateLoad(Connection pg, String schema, SnapshotManifest manifest)
             throws SQLException {
-        return validateLoad(pg, schema, manifest, new Scans(pg, schema, manifest, null, 1, m -> { }));
+        SnapshotManifest view = importView(pg, schema, manifest);
+        return validateLoad(pg, schema, view, new Scans(pg, schema, view, null, 1, m -> { }));
     }
 
     private ValidationReport validateLoad(Connection pg, String schema, SnapshotManifest manifest, Scans scans)
@@ -166,14 +168,23 @@ public class SnapshotValidator {
         ValidationReport.Builder b = new ValidationReport.Builder("semantic");
         ConsistencyPoint point = manifest.point();
 
-        long maxBlock = scalar(pg, "SELECT COALESCE(max(number), -1) FROM " + qt(schema, "block"));
-        b.check("point-is-last-block", maxBlock == point.blockNumber(),
-                "max(block.number)=" + maxBlock + ", manifest point=" + point.blockNumber());
+        // Without the blocks store there is no block table to check the point against: the cursor and
+        // era were rebuilt from the snapshot's block files, and the cursor is checked against the point.
+        boolean blocks = registry.byId("block").map(s -> registry.isSelected(s.id())).orElse(true);
+        long maxBlock = point.blockNumber();
+        if (blocks) {
+            maxBlock = scalar(pg, "SELECT COALESCE(max(number), -1) FROM " + qt(schema, "block"));
+            b.check("point-is-last-block", maxBlock == point.blockNumber(),
+                    "max(block.number)=" + maxBlock + ", manifest point=" + point.blockNumber());
 
-        String hashAtPoint = string(pg, "SELECT hash FROM " + qt(schema, "block") + " WHERE number = "
-                + point.blockNumber());
-        b.check("point-hash-matches", point.blockHash().equals(hashAtPoint),
-                "block " + point.blockNumber() + " hash " + hashAtPoint);
+            String hashAtPoint = string(pg, "SELECT hash FROM " + qt(schema, "block") + " WHERE number = "
+                    + point.blockNumber());
+            b.check("point-hash-matches", point.blockHash().equals(hashAtPoint),
+                    "block " + point.blockNumber() + " hash " + hashAtPoint);
+        } else {
+            b.pass("block-not-imported", "the blocks store is disabled; cursor and era were rebuilt from the"
+                    + " snapshot's block files and are checked against the manifest point");
+        }
 
         try (PreparedStatement ps = pg.prepareStatement("SELECT block_hash, slot, block_number"
                 + " FROM " + qt(schema, "cursor_") + " WHERE id = ? ORDER BY slot DESC LIMIT 1")) {
@@ -205,15 +216,17 @@ public class SnapshotValidator {
                 eventPublisherId);
         b.check("cursor-tail-chain", chainBreaks == 0, chainBreaks + " prev-hash discontinuity(ies)");
 
-        long blockChainBreaks = scalar(pg,
-                "SELECT count(*) FROM (SELECT b.number, b.prev_hash,"
-                        + " lag(b.hash) OVER (ORDER BY b.number) AS previous_hash"
-                        + " FROM " + qt(schema, "block") + " b"
-                        + " WHERE b.number > " + (point.blockNumber() - cursorBlocksToKeep)
-                        + "   AND b.number <= " + point.blockNumber() + ") t"
-                        + " WHERE previous_hash IS NOT NULL AND previous_hash <> prev_hash");
-        b.check("block-tail-chain", blockChainBreaks == 0,
-                blockChainBreaks + " prev-hash discontinuity(ies) in the retained block tail");
+        if (blocks) {
+            long blockChainBreaks = scalar(pg,
+                    "SELECT count(*) FROM (SELECT b.number, b.prev_hash,"
+                            + " lag(b.hash) OVER (ORDER BY b.number) AS previous_hash"
+                            + " FROM " + qt(schema, "block") + " b"
+                            + " WHERE b.number > " + (point.blockNumber() - cursorBlocksToKeep)
+                            + "   AND b.number <= " + point.blockNumber() + ") t"
+                            + " WHERE previous_hash IS NOT NULL AND previous_hash <> prev_hash");
+            b.check("block-tail-chain", blockChainBreaks == 0,
+                    blockChainBreaks + " prev-hash discontinuity(ies) in the retained block tail");
+        }
 
         PgSchema pgs = new PgSchema(pg, schema);
         for (SnapshotTableSpec spec : registry.importedTables()) {
@@ -237,11 +250,17 @@ public class SnapshotValidator {
 
         long eraRows = scalar(pg, "SELECT count(*) FROM " + qt(schema, "era"));
         b.check("era-reconstructed", eraRows > 0, eraRows + " era transition(s)");
-        long eraMismatch = scalar(pg, "SELECT count(*) FROM " + qt(schema, "era") + " e"
-                + " LEFT JOIN " + qt(schema, "block") + " b ON b.number = e.block"
-                + " WHERE b.hash IS NULL OR b.hash <> e.block_hash OR b.slot <> e.start_slot"
-                + "    OR b.era <> e.era");
-        b.check("era-points-at-real-blocks", eraMismatch == 0, eraMismatch + " inconsistent era row(s)");
+        if (blocks) {
+            long eraMismatch = scalar(pg, "SELECT count(*) FROM " + qt(schema, "era") + " e"
+                    + " LEFT JOIN " + qt(schema, "block") + " b ON b.number = e.block"
+                    + " WHERE b.hash IS NULL OR b.hash <> e.block_hash OR b.slot <> e.start_slot"
+                    + "    OR b.era <> e.era");
+            b.check("era-points-at-real-blocks", eraMismatch == 0, eraMismatch + " inconsistent era row(s)");
+        } else {
+            long eraAfterPoint = scalar(pg, "SELECT count(*) FROM " + qt(schema, "era")
+                    + " WHERE block > " + point.blockNumber() + " OR start_slot > " + point.slot());
+            b.check("era-before-point", eraAfterPoint == 0, eraAfterPoint + " era row(s) after the snapshot point");
+        }
 
         // A Byron era row breaks EraService.getEraForEpoch(), which walks every era row and cannot
         // derive an epoch from a Byron slot. A normally synced database has no such row.
@@ -457,6 +476,7 @@ public class SnapshotValidator {
                                               DeferredIndexes.ConnectionFactory connections, int workers,
                                               Consumer<String> progress)
             throws SQLException {
+        manifest = importView(pg, schema, manifest);
         Scans scans = new Scans(pg, schema, manifest, connections, workers, progress);
         List<ValidationReport> reports = new ArrayList<>();
         Progress.phase(progress, "Schema and load checks (one scan of each loaded table)");
@@ -464,5 +484,18 @@ public class SnapshotValidator {
         Progress.phase(progress, "Semantic checks");
         reports.add(validateSemantics(pg, schema, manifest, eventPublisherId, cursorBlocksToKeep, scans));
         return reports;
+    }
+
+    /**
+     * The manifest as the import saw it: reduced by the retention the import added, which its journal
+     * records, so the counts expected here are the ones the import loaded.
+     */
+    static SnapshotManifest importView(Connection pg, String schema, SnapshotManifest manifest) throws SQLException {
+        ImportJournal journal = new ImportJournal(pg, schema);
+        if (!journal.exists()) {
+            return manifest;
+        }
+        String retention = journal.currentRun().map(ImportJournal.Run::retention).orElse(null);
+        return Retention.apply(manifest, Retention.parse(retention));
     }
 }

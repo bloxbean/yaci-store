@@ -225,7 +225,9 @@ public class SnapshotSpecRegistry {
                 }
             }
         }
-        for (String required : List.of("block", "cursor", "era")) {
+        // The block table itself is optional: without the blocks store, the cursor and era handlers
+        // read the block tail they need from the snapshot's files instead.
+        for (String required : List.of("cursor", "era")) {
             if (byId.containsKey(required) && !isSelected(required)) {
                 throw new SpecException("Snapshot resume requires specification '" + required + "'");
             }

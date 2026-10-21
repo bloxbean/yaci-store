@@ -145,6 +145,265 @@ class SnapshotImportIT {
         }
     }
 
+    private ImportOptions options(Path manifest, int workers, java.util.Map<String, String> retention,
+                                  java.util.Map<String, String> targetSettings) {
+        return new ImportOptions(manifest, manifest.getParent(), root.resolve("work"),
+                PostgresSupport.schemaUrl(), PostgresSupport.user(), PostgresSupport.password(),
+                schema, "preprod", 1, 1, 10, workers, "512MB", 0,
+                true, false, List.of(), false, false, false, retention, targetSettings);
+    }
+
+    @Test
+    void importsAPublishedSnapshotStreamedFromAPublicLocationResumingABrokenRead() throws Exception {
+        var built = fixture();
+        com.bloxbean.cardano.yaci.store.snapshot.archive.Checksums.write(built.manifest(), built.manifestPath());
+        Path bucket = root.resolve("bucket");
+        var local = new com.bloxbean.cardano.yaci.store.snapshot.remote.SnapshotRepository(
+                new com.bloxbean.cardano.yaci.store.snapshot.remote.LocalSnapshotStore(bucket));
+        local.publish(built.manifestPath(), 2, true, null);
+
+        try (var server = new com.bloxbean.cardano.yaci.store.snapshot.remote.TestHttpServer(bucket, true);
+             var http = new com.bloxbean.cardano.yaci.store.snapshot.remote.HttpSnapshotStore(
+                     java.net.URI.create(server.url()), java.time.Duration.ofSeconds(2))) {
+            var repo = new com.bloxbean.cardano.yaci.store.snapshot.remote.SnapshotRepository(http, java.time.Duration.ZERO);
+            var resolved = repo.resolve("preprod", "latest", null,
+                    m -> new com.bloxbean.cardano.yaci.store.snapshot.manifest.ManifestValidator(registry).validate(m), null);
+            Path manifest = repo.downloadMetadata(resolved, root.resolve("work/snapshot"));
+            var options = options(manifest, 2).withPartSource(repo.partSource(resolved));
+            var importer = new SnapshotImporter(registry);
+            assertThat(importer.preflight(options).blockers()).isEmpty();
+
+            List<String> messages = new java.util.concurrent.CopyOnWriteArrayList<>();
+            importer.importSnapshot(options, messages::add);
+
+            assertThat(messages).anyMatch(m -> m.contains("Downloading, verifying and extracting"));
+            // Each part's broken read resumed from where it stopped instead of starting over.
+            assertThat(server.rangeRequests()).isEqualTo(built.manifest().parts().size());
+            assertThat(messages).noneMatch(m -> m.contains("Retrying "));
+        }
+        try (var conn = PostgresSupport.connect()) {
+            assertThat(count(conn, "block")).isEqualTo(SnapshotFixture.POINT_BLOCK + 1);
+            for (var report : new SnapshotValidator(registry).validateAll(conn, schema, built.manifest(), 1, 10)) {
+                assertThat(report.passed()).withFailMessage(report.toString()).isTrue();
+            }
+        }
+    }
+
+    @Test
+    void aPrunedSnapshotNeedsATargetThatPrunesTheSameTables() throws Exception {
+        var built = fixture();
+        var m = built.manifest();
+        var pruned = m.withTables(m.tables(), SnapshotManifest.FLAVOR_PRUNED,
+                java.util.Map.of("address_utxo.spent-safe-blocks", "2160", "epoch_stake.epochs", "8"));
+        new ManifestCodec().writeAtomically(pruned, built.manifestPath());
+        var importer = new SnapshotImporter(registry);
+
+        assertThat(importer.preflight(options(built.manifestPath(), 1, java.util.Map.of(),
+                java.util.Map.of("store.adapot.epoch-stake-pruning-enabled", "true"))).blockers())
+                .anyMatch(b -> b.contains("store.utxo.pruning-enabled=true"))
+                .noneMatch(b -> b.contains("epoch-stake-pruning-enabled"));
+        assertThat(importer.preflight(options(built.manifestPath(), 1, java.util.Map.of(), java.util.Map.of(
+                "store.utxo.pruning-enabled", "true", "store.adapot.epoch-stake-pruning-enabled", "true"))).blockers())
+                .isEmpty();
+        // A scoped target without the UTxO store does not care how the snapshot pruned it.
+        try (var conn = PostgresSupport.connect(); var st = conn.createStatement()) {
+            st.execute("DROP TABLE " + schema + ".address_utxo");
+        }
+        assertThat(new SnapshotImporter(registry.selectModules(java.util.Set.of("core", "blocks", "epoch-aggr", "adapot")))
+                .preflight(options(built.manifestPath(), 1, java.util.Map.of(),
+                        java.util.Map.of("store.adapot.epoch-stake-pruning-enabled", "true"))).blockers())
+                .noneMatch(b -> b.contains("store.utxo.pruning-enabled"));
+    }
+
+    private SnapshotFixture.Built fixtureWithUtxoHistory() throws Exception {
+        try (Connection conn = PostgresSupport.connect()) {
+            PgSchema pgs = new PgSchema(conn, schema);
+            return SnapshotFixture.build(root, pgs.fingerprint(), pgs.flywayFingerprint(), SnapshotFixture.ALL_TABLES,
+                    "it-fixture-snapshot", true);
+        }
+    }
+
+    @Test
+    void aPruningTargetSkipsTheHistoryPartsOfTheSameSnapshot() throws Exception {
+        var built = fixtureWithUtxoHistory();
+        var split = built.manifest().table("address-utxo").historySplit();
+        var pruning = java.util.Map.of("store.utxo.pruning-enabled", "true");
+        var importer = new SnapshotImporter(registry);
+        var pre = importer.preflight(options(built.manifestPath(), 1, java.util.Map.of(), pruning));
+        assertThat(pre.blockers()).isEmpty();
+        assertThat(pre.warnings()).anyMatch(w -> w.startsWith("address_utxo: current rows only"));
+        assertThat(pre.manifest().retention()).containsEntry("address_utxo.spent-safe-blocks", "2160");
+        var selection = importer.selection(pre.archive(), pre.manifest());
+        assertThat(selection.files()).filteredOn(f -> f.startsWith("main/address_utxo/"))
+                .containsExactly(SnapshotFixture.UTXO_PRUNED_PARTITION + "/pruned_copy.parquet");
+        var layout = com.bloxbean.cardano.yaci.store.snapshot.archive.PartLayout.of(built.manifest());
+        assertThat(layout.exact()).isTrue();
+        assertThat(selection.parts()).hasSizeLessThan(built.manifest().parts().size())
+                .noneMatch(p -> layout.files(p.partNumber()).stream()
+                        .anyMatch(f -> f.startsWith("main/address_utxo/") && !f.endsWith("pruned_copy.parquet")));
+
+        importer.importSnapshot(options(built.manifestPath(), 1, java.util.Map.of(), pruning), null);
+
+        try (var conn = PostgresSupport.connect()) {
+            assertThat(count(conn, "address_utxo")).isEqualTo(split.rowCount());
+            for (var report : new SnapshotValidator(registry).validateAll(conn, schema, built.manifest(), 1, 10)) {
+                assertThat(report.passed()).withFailMessage(report.toString()).isTrue();
+            }
+        }
+    }
+
+    @Test
+    void aFullTargetAndAWiderPruningWindowLoadTheHistoryToo() throws Exception {
+        var built = fixtureWithUtxoHistory();
+        var importer = new SnapshotImporter(registry);
+        var wider = java.util.Map.of("store.utxo.pruning-enabled", "true", "store.utxo.pruning-safe-blocks", "5000");
+        var pre = importer.preflight(options(built.manifestPath(), 1, java.util.Map.of(), wider));
+        assertThat(pre.blockers()).isEmpty();
+        assertThat(pre.warnings()).anyMatch(w -> w.startsWith("address_utxo: full history, because"));
+        // A full import never loads the pruned copy, so no output is loaded twice.
+        assertThat(importer.selection(pre.archive(), pre.manifest()).files()).noneMatch(f -> f.endsWith("pruned_copy.parquet"));
+
+        importer.importSnapshot(options(built.manifestPath(), 1, java.util.Map.of(), java.util.Map.of()), null);
+
+        try (var conn = PostgresSupport.connect()) {
+            assertThat(count(conn, "address_utxo")).isEqualTo(built.manifest().table("address-utxo").rowCount())
+                    .isGreaterThan(built.manifest().table("address-utxo").historySplit().rowCount());
+            for (var report : new SnapshotValidator(registry).validateAll(conn, schema, built.manifest(), 1, 10)) {
+                assertThat(report.passed()).withFailMessage(report.toString()).isTrue();
+            }
+        }
+    }
+
+    @Test
+    void aTrustedSignatureReplacesAllowUnsignedAndABadOneIsNeverAccepted() throws Exception {
+        var built = fixture();
+        com.bloxbean.cardano.yaci.store.snapshot.archive.Checksums.write(built.manifest(), built.manifestPath());
+        var keys = com.bloxbean.cardano.yaci.store.snapshot.manifest.SnapshotSignature.generate(root.resolve("keys"), "pub");
+        var other = com.bloxbean.cardano.yaci.store.snapshot.manifest.SnapshotSignature.generate(root.resolve("keys"), "other");
+        var pub = com.bloxbean.cardano.yaci.store.snapshot.manifest.SnapshotSignature.readPublicKey(keys.publicKey());
+        var otherPub = com.bloxbean.cardano.yaci.store.snapshot.manifest.SnapshotSignature.readPublicKey(other.publicKey());
+        com.bloxbean.cardano.yaci.store.snapshot.manifest.SnapshotSignature.sign(built.manifestPath(),
+                com.bloxbean.cardano.yaci.store.snapshot.manifest.SnapshotSignature.readPrivateKey(keys.privateKey()), pub);
+        var importer = new SnapshotImporter(registry);
+        var strict = new ImportOptions(built.manifestPath(), built.archiveDir(), root.resolve("work"),
+                PostgresSupport.schemaUrl(), PostgresSupport.user(), PostgresSupport.password(),
+                schema, "preprod", 1, 1, 10, 1, "512MB", 0, false, false, List.of(), false, false);
+
+        var trusted = importer.preflight(strict.withTrustedKeys(List.of(pub)));
+        assertThat(trusted.blockers()).isEmpty();
+        assertThat(trusted.signature().trusted()).isTrue();
+        assertThat(importer.preflight(strict).blockers()).anyMatch(b -> b.contains("store.snapshot.trusted-keys"));
+        assertThat(importer.preflight(strict.withTrustedKeys(List.of(otherPub))).blockers())
+                .anyMatch(b -> b.contains("signature verification failed"));
+        assertThat(importer.preflight(options(built.manifestPath(), 1).withTrustedKeys(List.of(otherPub))).blockers())
+                .anyMatch(b -> b.contains("signature verification failed"));
+    }
+
+    @Test
+    void scopedImportReadsOnlyThePartsThatCarryItsTables() throws Exception {
+        var built = fixtureWithTableSchemas();
+        var selected = registry.selectModules(java.util.Set.of("core", "blocks"));
+        try (var conn = PostgresSupport.connect(); var st = conn.createStatement()) {
+            st.execute("DROP TABLE " + schema + ".address_utxo");
+            st.execute("DROP TABLE " + schema + ".adapot");
+            st.execute("DROP TABLE " + schema + ".epoch");
+            st.execute("DROP TABLE " + schema + ".epoch_stake CASCADE");
+        }
+        var importer = new SnapshotImporter(selected);
+        var pre = importer.preflight(options(built.manifestPath(), 2));
+        assertThat(pre.blockers()).isEmpty();
+        var selection = importer.selection(pre.archive(), pre.manifest());
+        assertThat(selection.parts()).hasSizeLessThan(built.manifest().parts().size());
+        assertThat(selection.files()).allMatch(f -> f.startsWith("main/block/") || f.startsWith("main/rollback/"));
+        assertThat(pre.warnings()).anyMatch(w -> w.startsWith("Reading " + selection.parts().size() + " of "));
+
+        List<String> messages = new java.util.concurrent.CopyOnWriteArrayList<>();
+        importer.importSnapshot(options(built.manifestPath(), 2), messages::add);
+        assertThat(messages).anyMatch(m -> m.contains("Extracted " + selection.files().size() + " files from "
+                + selection.parts().size() + " parts"));
+        try (var conn = PostgresSupport.connect()) {
+            for (var report : new SnapshotValidator(selected).validateAll(conn, schema, built.manifest(), 1, 10)) {
+                assertThat(report.passed()).withFailMessage(report.toString()).isTrue();
+            }
+        }
+    }
+
+    @Test
+    void aTargetWithoutTheBlocksStoreRebuildsTheSameCursorAndErasFromTheBlockFiles() throws Exception {
+        var built = fixtureWithTableSchemas();
+        String cursorRows = "SELECT block_number || ':' || block_hash || ':' || slot || ':' || era || ':'"
+                + " || prev_block_hash FROM " + qt("cursor_") + " ORDER BY block_number";
+        String eraRows = "SELECT era || ':' || start_slot || ':' || block || ':' || block_hash FROM "
+                + qt("era") + " ORDER BY era";
+        List<String> cursor;
+        List<String> eras;
+        new SnapshotImporter(registry).importSnapshot(options(built.manifestPath(), 1), null);
+        try (var conn = PostgresSupport.connect()) {
+            cursor = rows(conn, cursorRows);
+            eras = rows(conn, eraRows);
+            PostgresSupport.resetSchema(conn);
+        }
+
+        var selected = registry.selectModules(java.util.Set.of("core", "epoch-aggr"));
+        var importer = new SnapshotImporter(selected);
+        var pre = importer.preflight(options(built.manifestPath(), 2));
+        assertThat(pre.blockers()).isEmpty();
+        // The block files are read for the handlers, though no block row is loaded.
+        assertThat(importer.selection(pre.archive(), pre.manifest()).files())
+                .anyMatch(f -> f.startsWith("main/block/"));
+        importer.importSnapshot(options(built.manifestPath(), 2), null);
+        try (var conn = PostgresSupport.connect()) {
+            assertThat(count(conn, "block")).isZero();
+            assertThat(count(conn, "epoch")).isEqualTo(3);
+            assertThat(rows(conn, cursorRows)).hasSize(10).isEqualTo(cursor);
+            assertThat(rows(conn, eraRows)).hasSize(3).isEqualTo(eras);
+            assertThat(scalarLong(conn, "SELECT count(*) FROM pg_tables WHERE schemaname = '" + schema
+                    + "' AND tablename LIKE '\\_yaci\\_snapshot\\_import\\_src\\_%'")).isZero();
+            for (var report : new SnapshotValidator(selected).validateAll(conn, schema, built.manifest(), 1, 10)) {
+                assertThat(report.passed()).withFailMessage(report.toString()).isTrue();
+            }
+        }
+    }
+
+    @Test
+    void epochStakeRetentionLoadsOnlyTheNewestEpochsAndValidates() throws Exception {
+        var built = fixture();
+        var pruning = java.util.Map.of("store.adapot.epoch-stake-pruning-enabled", "true");
+        var retention = java.util.Map.of("epoch_stake.epochs", "2");
+        var importer = new SnapshotImporter(registry);
+        assertThat(importer.preflight(options(built.manifestPath(), 1, retention, pruning)).blockers()).isEmpty();
+
+        importer.importSnapshot(options(built.manifestPath(), 1, retention, pruning), null);
+
+        try (var conn = PostgresSupport.connect()) {
+            assertThat(count(conn, "epoch_stake")).isEqualTo(2L * SnapshotFixture.STAKE_ROWS_PER_EPOCH);
+            try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery(
+                    "SELECT min(epoch) FROM " + Identifiers.quote(schema) + ".epoch_stake")) {
+                rs.next();
+                assertThat(rs.getInt(1)).isEqualTo(SnapshotFixture.POINT_EPOCH - 1);
+            }
+            for (var report : new SnapshotValidator(registry).validateAll(conn, schema, built.manifest(), 1, 10)) {
+                assertThat(report.passed()).withFailMessage(report.toString()).isTrue();
+            }
+        }
+    }
+
+    @Test
+    void epochStakeRetentionNeedsThePruningServiceOnTheTargetAndTheSameRetentionToResume() throws Exception {
+        var built = fixture();
+        var retention = java.util.Map.of("epoch_stake.epochs", "2");
+        var importer = new SnapshotImporter(registry);
+        assertThat(importer.preflight(options(built.manifestPath(), 1, retention, java.util.Map.of())).blockers())
+                .anyMatch(b -> b.contains("store.adapot.epoch-stake-pruning-enabled=true"));
+
+        var pruning = java.util.Map.of("store.adapot.epoch-stake-pruning-enabled", "true");
+        assertThatThrownBy(() -> importer.importSnapshot(options(built.manifestPath(), 1, retention, pruning), p -> {
+            if (p.startsWith("block +")) throw new IllegalStateException("interrupt");
+        })).hasMessageContaining("interrupt");
+        assertThat(importer.preflight(options(built.manifestPath(), 1, java.util.Map.of(), pruning)).blockers())
+                .anyMatch(b -> b.contains("Import retention does not match"));
+    }
+
     private ImportOptions options(Path manifest, int workers) {
         return new ImportOptions(manifest, manifest.getParent(), root.resolve("work"),
                 PostgresSupport.schemaUrl(), PostgresSupport.user(), PostgresSupport.password(),
@@ -177,6 +436,10 @@ class SnapshotImportIT {
                     + " WHERE number = 0")).isEqualTo(1700000000L);
             assertThat(scalarString(conn, "SELECT jsonb_typeof(leader_vrf) FROM " + qt("block")
                     + " WHERE number = 0")).isEqualTo("object");
+
+            // Frozen before the rebuild: every page all-visible (only VACUUM sets it), nothing left for autovacuum.
+            assertThat(scalarString(conn, "SELECT relpages > 0 AND relallvisible = relpages FROM pg_class"
+                    + " WHERE oid = '" + qt("block") + "'::regclass")).isEqualTo("t");
 
             // MAPPED with a rename: epoch.number comes from the export's epoch column.
             assertThat(count(conn, "epoch")).isEqualTo(3);
@@ -274,11 +537,12 @@ class SnapshotImportIT {
         assertThat(banners.get(1)).startsWith("Preparing");
         assertThat(banners.get(2)).startsWith("Loading " + String.format("%,d", built.manifest().tables().stream()
                 .filter(t -> registry.isSelected(t.specId())).mapToLong(SnapshotManifest.TableManifest::rowCount).sum()));
-        assertThat(banners.get(3)).startsWith("Rebuilding");
-        assertThat(banners.get(4)).startsWith("Analyzing");
-        assertThat(banners.get(5)).startsWith("Control state");
-        assertThat(banners.get(6)).startsWith("Schema and load checks");
-        assertThat(banners.get(7)).startsWith("Semantic checks");
+        assertThat(banners.get(3)).startsWith("Freezing");
+        assertThat(banners.get(4)).startsWith("Rebuilding");
+        assertThat(banners.get(5)).startsWith("Analyzing");
+        assertThat(banners.get(6)).startsWith("Control state");
+        assertThat(banners.get(7)).startsWith("Schema and load checks");
+        assertThat(banners.get(8)).startsWith("Semantic checks");
     }
 
     @Test
@@ -581,6 +845,16 @@ class SnapshotImportIT {
         try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery(sql)) {
             return rs.next() ? rs.getLong(1) : -1;
         }
+    }
+
+    private static List<String> rows(Connection conn, String sql) throws SQLException {
+        List<String> out = new java.util.ArrayList<>();
+        try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery(sql)) {
+            while (rs.next()) {
+                out.add(rs.getString(1));
+            }
+        }
+        return out;
     }
 
     private static String scalarString(Connection conn, String sql) throws SQLException {

@@ -38,13 +38,19 @@ public class ArchiveWriter {
     private static final Logger log = LoggerFactory.getLogger(ArchiveWriter.class);
     public static final long DEFAULT_PART_SIZE = 8L * 1024 * 1024 * 1024;
 
-    private final Path dataDir;
+    private final java.util.function.Function<String, Path> source;
     private final Path outputDir;
     private final String baseName;
     private final long partSizeBytes;
 
     public ArchiveWriter(Path dataDir, Path outputDir, String baseName, long partSizeBytes) {
-        this.dataDir = dataDir;
+        this(dataDir::resolve, outputDir, baseName, partSizeBytes);
+    }
+
+    /** @param source where each file is, by its path in the snapshot */
+    public ArchiveWriter(java.util.function.Function<String, Path> source, Path outputDir, String baseName,
+                         long partSizeBytes) {
+        this.source = source;
         this.outputDir = outputDir;
         this.baseName = baseName;
         this.partSizeBytes = partSizeBytes > 0 ? partSizeBytes : DEFAULT_PART_SIZE;
@@ -74,8 +80,22 @@ public class ArchiveWriter {
     public List<SnapshotManifest.PartManifest> write(List<SnapshotManifest.FileEntry> files,
                                                      List<String> owners, Map<String, Long> crcs,
                                                      int threads, Consumer<String> progress) throws IOException {
-        if (files.size() != owners.size()) {
-            throw new IllegalArgumentException("files and owners must be the same length");
+        return write(files, owners, null, crcs, threads, progress);
+    }
+
+    /**
+     * As {@link #write(List, List, Map, int, Consumer)}, and a new part also starts wherever the group
+     * changes. The exporter groups files by store module, so an import that skips a module never
+     * needs a part that only carries its tables.
+     *
+     * @param groups parallel to {@code files}, or null for no group boundaries
+     */
+    public List<SnapshotManifest.PartManifest> write(List<SnapshotManifest.FileEntry> files,
+                                                     List<String> owners, List<String> groups,
+                                                     Map<String, Long> crcs, int threads,
+                                                     Consumer<String> progress) throws IOException {
+        if (files.size() != owners.size() || (groups != null && groups.size() != files.size())) {
+            throw new IllegalArgumentException("files, owners and groups must be the same length");
         }
         Files.createDirectories(outputDir);
 
@@ -85,7 +105,8 @@ public class ArchiveWriter {
         long uncompressed = 0;
         for (int i = 0; i < files.size(); i++) {
             long size = files.get(i).size();
-            if (i > start && uncompressed + size > partSizeBytes) {
+            boolean newGroup = groups != null && i > 0 && !groups.get(i).equals(groups.get(i - 1));
+            if (i > start && (newGroup || uncompressed + size > partSizeBytes)) {
                 ranges.add(new int[]{start, i});
                 start = i;
                 uncompressed = 0;
@@ -132,16 +153,16 @@ public class ArchiveWriter {
     }
 
     private void addStored(ZipOutputStream zip, SnapshotManifest.FileEntry fe, Long knownCrc) throws IOException {
-        Path source = dataDir.resolve(fe.path());
+        Path file = source.apply(fe.path());
         ZipEntry entry = new ZipEntry(fe.path());
         entry.setMethod(ZipEntry.STORED);
         entry.setSize(fe.size());
         entry.setCompressedSize(fe.size());
-        entry.setCrc(knownCrc != null ? knownCrc : crc32(source));
+        entry.setCrc(knownCrc != null ? knownCrc : crc32(file));
         // Fixed timestamp keeps repeated exports of the same file set byte-comparable.
         entry.setTime(0L);
         zip.putNextEntry(entry);
-        try (InputStream in = Files.newInputStream(source)) {
+        try (InputStream in = Files.newInputStream(file)) {
             in.transferTo(zip);
         }
         // ZipOutputStream checks the stored CRC and size against the bytes written.

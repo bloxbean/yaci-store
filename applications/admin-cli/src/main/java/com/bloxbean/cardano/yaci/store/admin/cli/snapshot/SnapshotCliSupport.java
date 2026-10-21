@@ -4,6 +4,10 @@ import com.bloxbean.cardano.yaci.store.snapshot.export.ExportOptions;
 import com.bloxbean.cardano.yaci.store.snapshot.load.ImportOptions;
 import com.bloxbean.cardano.yaci.store.snapshot.load.PgSchema;
 import com.bloxbean.cardano.yaci.store.snapshot.load.TargetTable;
+import com.bloxbean.cardano.yaci.store.snapshot.manifest.SnapshotSignature;
+import com.bloxbean.cardano.yaci.store.snapshot.remote.S3SnapshotStore;
+import com.bloxbean.cardano.yaci.store.snapshot.remote.SnapshotLocations;
+import com.bloxbean.cardano.yaci.store.snapshot.remote.SnapshotStore;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.SnapshotSpecRegistry;
 import lombok.RequiredArgsConstructor;
 import com.bloxbean.cardano.yaci.store.common.config.StoreModuleConfig;
@@ -90,6 +94,31 @@ public class SnapshotCliSupport {
         return environment.getProperty("yaci.store.version",
                 getClass().getPackage().getImplementationVersion() != null
                         ? getClass().getPackage().getImplementationVersion() : "unknown");
+    }
+
+    /**
+     * The git commit this build was made from, or null when unknown. A snapshot build's version
+     * already names its commit ({@code 3.0.0-beta6-5e97d04ca-SNAPSHOT}), taken from the checkout it was
+     * built in, and that wins: in a git worktree, {@code git.properties} describes the main checkout's
+     * HEAD instead. A release version names none, so it comes from {@code git.properties}.
+     */
+    public String yaciStoreCommit() {
+        java.util.regex.Matcher inVersion = java.util.regex.Pattern.compile("-([0-9a-f]{7,40})-SNAPSHOT$")
+                .matcher(yaciStoreVersion());
+        if (inVersion.find()) {
+            return inVersion.group(1);
+        }
+        try (java.io.InputStream in = getClass().getResourceAsStream("/git.properties")) {
+            if (in == null) {
+                return null;
+            }
+            java.util.Properties p = new java.util.Properties();
+            p.load(in);
+            String commit = p.getProperty("git.commit.id.abbrev");
+            return commit == null || commit.isBlank() ? null : commit.trim();
+        } catch (java.io.IOException e) {
+            return null;
+        }
     }
 
     public Connection connect() throws SQLException {
@@ -205,12 +234,46 @@ public class SnapshotCliSupport {
                 parseSize(partSize), targetEpoch, minConfirmations, allowIncomplete, unsigned,
                 yaciStoreVersion(), enabledModules(), pruningSettings(),
                 schemaFingerprint, flywayFingerprint, completedPartitions, tableSchemaFingerprints,
-                memoryLimit, targetTables);
+                memoryLimit, targetTables).withCommit(yaciStoreCommit());
     }
 
     public ImportOptions importOptions(String manifest, String workDir, int workers, String memoryLimit,
                                        long minFreeDiskGb, boolean allowUnsigned, String specFile,
                                        boolean allowCustomSpecs, boolean keepExtracted, boolean tunePostgres) {
+        return importOptions(manifest, workDir, workers, memoryLimit, minFreeDiskGb, allowUnsigned, specFile,
+                allowCustomSpecs, keepExtracted, tunePostgres, 0);
+    }
+
+    /**
+     * The target's settings an import's retention depends on: whether it prunes a table, and how much
+     * it keeps ({@code Retention.forTarget}).
+     */
+    public Map<String, String> targetSettings() {
+        Map<String, String> out = new LinkedHashMap<>(pruningSettings());
+        out.put("store.utxo.pruning-safe-blocks", environment.getProperty("store.utxo.pruning-safe-blocks", "2160"));
+        out.put("store.adapot.epoch-stake-safe-epochs", environment.getProperty("store.adapot.epoch-stake-safe-epochs", "8"));
+        return out;
+    }
+
+    /**
+     * The newest epochs of {@code epoch_stake} an import loads: {@code requested} when positive, otherwise
+     * the target's own {@code store.adapot.epoch-stake-safe-epochs} when it prunes epoch_stake, otherwise
+     * 0 for every epoch.
+     */
+    public int epochStakeEpochs(int requested) {
+        if (requested > 0) {
+            return requested;
+        }
+        Map<String, String> settings = targetSettings();
+        return "true".equalsIgnoreCase(settings.get("store.adapot.epoch-stake-pruning-enabled"))
+                ? Integer.parseInt(settings.get("store.adapot.epoch-stake-safe-epochs").trim()) : 0;
+    }
+
+    /** @param epochStakeEpochs keep only the newest N epochs of {@code epoch_stake}; 0 keeps every epoch */
+    public ImportOptions importOptions(String manifest, String workDir, int workers, String memoryLimit,
+                                       long minFreeDiskGb, boolean allowUnsigned, String specFile,
+                                       boolean allowCustomSpecs, boolean keepExtracted, boolean tunePostgres,
+                                       int epochStakeEpochs) {
         Path manifestPath = Path.of(manifest).toAbsolutePath().normalize();
         List<Path> custom = new ArrayList<>();
         if (specFile != null && !specFile.isBlank()) {
@@ -222,7 +285,76 @@ public class SnapshotCliSupport {
                 Path.of(workDir).toAbsolutePath().normalize(),
                 jdbcUrl(), dbUser(), dbPassword(), schema(), network(), protocolMagic(),
                 eventPublisherId(), cursorBlocksToKeep(), workers, memoryLimit, minFreeDiskGb,
-                allowUnsigned, allowCustomSpecs, custom, keepExtracted, false, tunePostgres);
+                allowUnsigned, allowCustomSpecs, custom, keepExtracted, false, tunePostgres,
+                com.bloxbean.cardano.yaci.store.snapshot.manifest.Retention.epochStake(epochStakeEpochs),
+                targetSettings());
+    }
+
+    /**
+     * S3 settings from {@code store.snapshot.remote.*}. Credentials come from configuration or the
+     * environment ({@code STORE_SNAPSHOT_REMOTE_ACCESS_KEY_ID}, ...), never from command arguments;
+     * unset means the AWS default credential chain.
+     */
+    public S3SnapshotStore.Settings s3Settings() {
+        String endpoint = environment.getProperty("store.snapshot.remote.endpoint");
+        boolean custom = endpoint != null && !endpoint.isBlank();
+        return new S3SnapshotStore.Settings(endpoint,
+                environment.getProperty("store.snapshot.remote.region", custom ? "auto" : "us-east-1"),
+                environment.getProperty("store.snapshot.remote.path-style", Boolean.class, custom),
+                environment.getProperty("store.snapshot.remote.access-key-id"),
+                environment.getProperty("store.snapshot.remote.secret-access-key"),
+                parseSize(environment.getProperty("store.snapshot.remote.piece-size", "64MiB")),
+                environment.getProperty("store.snapshot.remote.upload-threads", Integer.class,
+                        S3SnapshotStore.Settings.DEFAULT_UPLOAD_THREADS));
+    }
+
+    /** The store at {@code location}, or at {@code store.snapshot.remote.url} when it is blank. */
+    public SnapshotStore remoteStore(String location) {
+        String url = location != null && !location.isBlank() ? location
+                : environment.getProperty("store.snapshot.remote.url");
+        return SnapshotLocations.open(url, s3Settings());
+    }
+
+    /**
+     * The signing key: {@code option}, or {@code store.snapshot.signing-key}; null when neither is set.
+     * Its public half is {@code store.snapshot.signing-public-key}, or the same path ending in {@code .pub}.
+     */
+    public SigningKey signingKey(String option) throws java.io.IOException {
+        String path = option != null && !option.isBlank() ? option : environment.getProperty("store.snapshot.signing-key");
+        if (path == null || path.isBlank()) {
+            return null;
+        }
+        Path priv = Path.of(path.trim()).toAbsolutePath().normalize();
+        String pubProperty = environment.getProperty("store.snapshot.signing-public-key");
+        Path pub = pubProperty != null && !pubProperty.isBlank() && (option == null || option.isBlank())
+                ? Path.of(pubProperty.trim())
+                : priv.resolveSibling(priv.getFileName().toString().replaceFirst("\\.pem$", "") + ".pub");
+        if (!Files.isRegularFile(pub)) {
+            throw new IllegalArgumentException("No public key at " + pub + " for signing key " + priv
+                    + "; write it with 'openssl pkey -in <key> -pubout -out " + pub.getFileName() + "'");
+        }
+        return new SigningKey(SnapshotSignature.readPrivateKey(priv), SnapshotSignature.readPublicKey(pub));
+    }
+
+    public record SigningKey(java.security.PrivateKey privateKey, java.security.PublicKey publicKey) {
+        @Override
+        public String toString() {
+            return "SigningKey[" + SnapshotSignature.keyId(publicKey) + "]";
+        }
+    }
+
+    /** Public keys from {@code option}, or {@code store.snapshot.trusted-keys}: comma-separated PEM files. */
+    public List<java.security.PublicKey> trustedKeys(String option) throws java.io.IOException {
+        String paths = option != null && !option.isBlank() ? option : environment.getProperty("store.snapshot.trusted-keys");
+        List<java.security.PublicKey> keys = new ArrayList<>();
+        if (paths != null) {
+            for (String p : paths.split(",")) {
+                if (!p.isBlank()) {
+                    keys.add(SnapshotSignature.readPublicKey(Path.of(p.trim())));
+                }
+            }
+        }
+        return keys;
     }
 
     public static void ensureDirectory(Path path) {

@@ -92,6 +92,22 @@ create table adapot
     update_datetime         timestamp
 );
 
+-- From aggregates/adapot V0_1300_1__init.sql: partitioned by epoch, with a default partition.
+create table epoch_stake
+(
+    epoch              integer,
+    address            varchar(255),
+    amount             numeric(38),
+    pool_id            varchar(56),
+    delegation_epoch   integer,
+    active_epoch       integer,
+    create_datetime    timestamp,
+    primary key (epoch, address)
+) partition by range (epoch);
+
+create table epoch_stake_default
+    partition of epoch_stake default;
+
 create table adapot_jobs
 (
     epoch  integer primary key,

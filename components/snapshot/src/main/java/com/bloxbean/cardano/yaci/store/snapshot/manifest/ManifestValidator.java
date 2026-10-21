@@ -43,6 +43,11 @@ public final class ManifestValidator {
                 problems.add("Duplicate manifest specification '" + t.specId() + "'");
             }
             SnapshotTableSpec spec = registry.byId(t.specId()).orElse(null);
+            // A table with no rows and no files carries nothing to load: a specification removed since
+            // the export (e.g. cip113-registry-node) must not make the snapshot unimportable.
+            if (spec == null && t.rowCount() == 0 && (t.files() == null || t.files().isEmpty())) {
+                continue;
+            }
             if (spec == null && !registry.isScoped()) {
                 problems.add("Snapshot references specification '" + t.specId() + "' not installed locally");
                 continue;

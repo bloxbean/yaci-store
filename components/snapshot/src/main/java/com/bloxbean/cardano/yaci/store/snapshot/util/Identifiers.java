@@ -37,6 +37,11 @@ public final class Identifiers {
         return "\"" + identifier.replace("\"", "\"\"") + "\"";
     }
 
+    /** {@code schema.table}, each part double-quoted; quoting escapes any embedded quote. */
+    public static String qualified(String schema, String table) {
+        return quote(schema) + "." + quote(table);
+    }
+
     /** Single-quote a string literal for embedding in generated SQL. */
     public static String literal(String value) {
         return "'" + value.replace("'", "''") + "'";

@@ -10,7 +10,15 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
 @RequiredArgsConstructor
@@ -57,6 +65,107 @@ public class IndexService {
         }
 
         return Pair.of(success, failure);
+    }
+
+    /**
+     * Applies the indexes on up to {@code parallelism} connections. With one, this is
+     * {@link #applyIndexes(List)}. Otherwise the indexes of the largest tables start first, so the
+     * longest builds do not begin last; PostgreSQL builds several indexes on one table at the same time
+     * (each {@code CREATE INDEX} takes a share lock). Results keep the definitions' order.
+     */
+    public Pair<List<IndexDefinition.Index>, List<IndexDefinition.Index>> applyIndexes(List<IndexDefinition> indexDefinitions,
+                                                                                    int parallelism) {
+        if (parallelism <= 1) {
+            return applyIndexes(indexDefinitions);
+        }
+        var dbTypeOpt = DatabaseUtils.getDbType(jdbcTemplate.getDataSource());
+        if (dbTypeOpt.isEmpty()) {
+            log.error("Apply Index failure. Couldn't detect database type.");
+            return Pair.of(List.of(), List.of());
+        }
+        log.info("Db type : {}, applying indexes on {} connections", dbTypeOpt.get(), parallelism);
+
+        record Task(int order, String table, IndexDefinition.Index index, String sql) {}
+        List<Task> tasks = new ArrayList<>();
+        Map<String, Long> sizes = new HashMap<>();
+        for (IndexDefinition indexDefinition : indexDefinitions) {
+            String tableName = indexDefinition.getTable();
+            if (!databaseUtils.tableExists(tableName)) {
+                continue;
+            }
+            sizes.computeIfAbsent(tableName, t -> tableSize(t, dbTypeOpt.get()));
+            for (IndexDefinition.Index index : indexDefinition.getIndexes()) {
+                tasks.add(new Task(tasks.size(), tableName, index, generateCreateIndexSQL(tableName, index, dbTypeOpt.get())));
+            }
+        }
+        List<Task> ordered = new ArrayList<>(tasks);
+        ordered.sort(Comparator.comparingLong((Task t) -> sizes.getOrDefault(t.table(), 0L)).reversed()
+                .thenComparingInt(Task::order));
+
+        boolean[] applied = new boolean[tasks.size()];
+        AtomicInteger done = new AtomicInteger();
+        long started = System.currentTimeMillis();
+        ExecutorService pool = Executors.newFixedThreadPool(Math.min(parallelism, Math.max(1, ordered.size())));
+        try {
+            List<Future<?>> futures = new ArrayList<>();
+            for (Task task : ordered) {
+                futures.add(pool.submit(() -> {
+                    if (task.sql() == null) {
+                        log.warn("Failed to apply index on table {}, index name {} ", task.table(), task.index().getName());
+                        log.warn("Index query is null");
+                        return;
+                    }
+                    long t0 = System.currentTimeMillis();
+                    log.info("Applying index on table {}, index name {} ", task.table(), task.index().getName());
+                    try {
+                        log.debug(task.sql());
+                        jdbcTemplate.execute(task.sql());
+                        applied[task.order()] = true;
+                        log.info("Applied index {} on {} in {}s ({}/{} done)", task.index().getName(), task.table(),
+                                (System.currentTimeMillis() - t0) / 1000, done.incrementAndGet(), ordered.size());
+                    } catch (Exception e) {
+                        done.incrementAndGet();
+                        log.warn("Failed to apply index on table {}, index name {} ", task.table(), task.index().getName());
+                        log.warn("Index query: {}", task.sql());
+                    }
+                }));
+            }
+            for (Future<?> f : futures) {
+                f.get();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted while applying indexes", e);
+        } catch (ExecutionException e) {
+            throw new IllegalStateException("Applying indexes failed", e.getCause());
+        } finally {
+            pool.shutdownNow();
+        }
+
+        List<IndexDefinition.Index> success = new ArrayList<>();
+        List<IndexDefinition.Index> failure = new ArrayList<>();
+        for (Task task : tasks) {
+            (applied[task.order()] ? success : failure).add(task.index());
+        }
+        log.info("Applied {} index(es), {} failed, in {}s", success.size(), failure.size(),
+                (System.currentTimeMillis() - started) / 1000);
+        return Pair.of(success, failure);
+    }
+
+    /** Bytes on disk of a table, partitions included; 0 when unknown. */
+    private long tableSize(String tableName, DatabaseUtils.DbType dbType) {
+        if (dbType != DatabaseUtils.DbType.postgres) {
+            return 0;
+        }
+        try {
+            Long size = jdbcTemplate.queryForObject("SELECT COALESCE(sum(pg_total_relation_size(c.oid)), 0)"
+                    + " FROM pg_class c WHERE c.oid = to_regclass(?)"
+                    + " OR c.oid IN (SELECT inhrelid FROM pg_inherits WHERE inhparent = to_regclass(?))",
+                    Long.class, tableName, tableName);
+            return size == null ? 0 : size;
+        } catch (Exception e) {
+            return 0;
+        }
     }
 
     private String generateCreateIndexSQL(String tableName, IndexDefinition.Index index, DatabaseUtils.DbType dbType) {

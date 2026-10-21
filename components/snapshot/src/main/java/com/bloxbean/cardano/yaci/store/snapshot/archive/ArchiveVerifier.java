@@ -61,15 +61,46 @@ public class ArchiveVerifier {
         return check(manifest, archiveDir, true, false, null);
     }
 
+    /**
+     * The parts a (possibly scoped) import reads, and the files it needs from them. A part outside
+     * {@code parts} is never read, so it is not checked; its digest is still pinned by the manifest.
+     */
+    public record Selection(List<SnapshotManifest.PartManifest> parts, Set<String> files) {
+        public static Selection all(SnapshotManifest manifest) {
+            Set<String> files = new TreeSet<>();
+            manifest.tables().forEach(t -> t.files().forEach(f -> files.add(f.path())));
+            return new Selection(manifest.parts(), files);
+        }
+    }
+
+    public Result verify(SnapshotManifest manifest, Path archiveDir, boolean deepEntryScan, LongConsumer hashed,
+                         Selection selection) {
+        return check(manifest, archiveDir, deepEntryScan, true, hashed, selection);
+    }
+
+    public Result inspect(SnapshotManifest manifest, Path archiveDir, Selection selection) {
+        return check(manifest, archiveDir, false, false, null, selection);
+    }
+
+    public Result structure(SnapshotManifest manifest, Path archiveDir, Selection selection) {
+        return check(manifest, archiveDir, true, false, null, selection);
+    }
+
     private Result check(SnapshotManifest manifest, Path archiveDir, boolean deepEntryScan,
                          boolean hashParts, LongConsumer hashed) {
+        return check(manifest, archiveDir, deepEntryScan, hashParts, hashed, Selection.all(manifest));
+    }
+
+    private Result check(SnapshotManifest manifest, Path archiveDir, boolean deepEntryScan,
+                         boolean hashParts, LongConsumer hashed, Selection selection) {
         List<String> problems = new ArrayList<>();
         long bytes = 0;
 
         Set<String> declaredFiles = new TreeSet<>();
         manifest.tables().forEach(t -> t.files().forEach(f -> declaredFiles.add(f.path())));
+        boolean everyPart = selection.parts().size() == manifest.parts().size();
 
-        List<PartCheck> checks = Parallel.map(manifest.parts(), hashParts ? threads : 1,
+        List<PartCheck> checks = Parallel.map(selection.parts(), hashParts ? threads : 1,
                 part -> checkPart(part, archiveDir.resolve(part.fileName()), deepEntryScan, hashParts, hashed));
 
         // Merged in manifest order, so duplicate reports are deterministic.
@@ -86,7 +117,7 @@ public class ArchiveVerifier {
         }
 
         if (deepEntryScan) {
-            Set<String> missing = new TreeSet<>(declaredFiles);
+            Set<String> missing = new TreeSet<>(everyPart ? declaredFiles : selection.files());
             missing.removeAll(coveredFiles);
             if (!missing.isEmpty()) {
                 problems.add("Files declared in the manifest but absent from every part: "

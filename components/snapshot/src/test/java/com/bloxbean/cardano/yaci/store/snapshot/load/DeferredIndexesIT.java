@@ -80,6 +80,48 @@ class DeferredIndexesIT {
         assertThat(count("SELECT count(*) FROM pg_index x JOIN pg_class c ON c.oid = x.indexrelid"
                 + " WHERE c.relnamespace = '" + schema + "'::regnamespace AND NOT x.indisvalid")).isZero();
         assertThat(said).anyMatch(s -> s.startsWith("Rebuilt 5 key(s) and index(es)"));
+        // The partitions' copies were built one by one and attached to the parent's key and index.
+        assertThat(said).anyMatch(s -> s.contains("key stake_pkey on stake, 2 partitions in parallel"))
+                .anyMatch(s -> s.contains("index idx_stake_address on stake, 2 partitions in parallel"));
+        assertThat(count("SELECT count(*) FROM pg_constraint WHERE connamespace = '" + schema + "'::regnamespace"
+                + " AND contype = 'p' AND conparentid <> 0")).isEqualTo(2);
+    }
+
+    @Test
+    void aCopyLeftOnAPartitionByAnInterruptedRunIsAttachedNotBuiltAgain() throws Exception {
+        Map<String, String> before = definitions();
+        DeferredIndexes deferred = new DeferredIndexes(pg, schema);
+        deferred.defer("s1", List.of("stake"), said::add);
+        exec("CREATE TABLE " + schema + ".stake_2 PARTITION OF " + schema + ".stake FOR VALUES FROM (2) TO (3)",
+                "INSERT INTO " + schema + ".stake SELECT 1 + g % 2, 'a' || g, g FROM generate_series(1, 1000) g",
+                // What a run stopped after stake_1's copies were built leaves behind.
+                "ALTER TABLE " + schema + ".stake_1 ADD PRIMARY KEY (epoch, address)",
+                "CREATE INDEX ON " + schema + ".stake_1 USING btree (address)");
+        long stake1Key = count("SELECT relfilenode FROM pg_class WHERE relname = 'stake_1_pkey'"
+                + " AND relnamespace = '" + schema + "'::regnamespace");
+
+        new DeferredIndexes(pg, schema).defer("s1", List.of("stake"), said::add);
+        deferred.rebuild("s1", 3, null, this::connect, said::add);
+
+        assertThat(definitions()).containsAllEntriesOf(before).hasSize(before.size() + 2);
+        assertThat(count("SELECT relfilenode FROM pg_class WHERE relname = 'stake_1_pkey'"
+                + " AND relnamespace = '" + schema + "'::regnamespace")).isEqualTo(stake1Key);
+        assertThat(deferred.problems("s1")).isEmpty();
+    }
+
+    @Test
+    void duplicateRowsInOnePartitionFailOnTheParentsKey() throws Exception {
+        DeferredIndexes deferred = new DeferredIndexes(pg, schema);
+        deferred.defer("s1", List.of("stake"), said::add);
+        exec("CREATE TABLE " + schema + ".stake_2 PARTITION OF " + schema + ".stake FOR VALUES FROM (2) TO (3)",
+                "INSERT INTO " + schema + ".stake VALUES (1, 'a', 1), (2, 'b', 1), (2, 'b', 2)");
+
+        assertThatThrownBy(() -> deferred.rebuild("s1", 3, null, this::connect, said::add))
+                .isInstanceOf(SQLException.class)
+                .hasMessageContaining("stake_pkey on stake")
+                .hasMessageContaining("duplicate keys");
+        assertThat(deferred.problems("s1")).anyMatch(p -> p.contains("stake_pkey") && p.contains("not been rebuilt"))
+                .anyMatch(p -> p.contains("idx_stake_address") && p.contains("not been rebuilt"));
     }
 
     @Test
