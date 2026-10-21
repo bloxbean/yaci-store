@@ -14,7 +14,10 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.invalidtoken.InvalidTokenReason;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.invalidtoken.InvalidTokenReport;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.io.IOException;
@@ -42,6 +45,7 @@ class Cip26MetadataSyncServiceTest {
     @Mock private TokenMappingService tokenMappingService;
     @Mock private Cip26SyncStateRepository syncStateRepository;
     @Mock private Cip26NetworkDefaults networkDefaults;
+    @Mock private com.bloxbean.cardano.yaci.store.extensions.assetstore.invalidtoken.InvalidTokenRecorder invalidTokenRecorder;
 
     private AssetsExtStoreProperties assetsStoreProperties;
     private Cip26MetadataSyncService service;
@@ -51,7 +55,8 @@ class Cip26MetadataSyncServiceTest {
         assetsStoreProperties = new AssetsExtStoreProperties();
         service = new Cip26MetadataSyncService(
                 gitService, tokenMetadataService, tokenMappingService,
-                syncStateRepository, networkDefaults, assetsStoreProperties);
+                syncStateRepository, networkDefaults, assetsStoreProperties,
+                invalidTokenRecorder);
     }
 
     @Nested
@@ -342,6 +347,34 @@ class Cip26MetadataSyncServiceTest {
             // Only the legit file's mapping made it through to insertMapping.
             verify(tokenMetadataService, times(1)).insertMapping(any(), any(), any());
             verify(syncStateRepository).save(any(Cip26SyncState.class));
+
+            // and the dropped file is recorded, with the subject it claimed (ADR 0007)
+            ArgumentCaptor<InvalidTokenReport> recorded = ArgumentCaptor.forClass(InvalidTokenReport.class);
+            verify(invalidTokenRecorder).record(recorded.capture());
+            assertThat(recorded.getValue().reasonCode()).isEqualTo(InvalidTokenReason.FILENAME_SUBJECT_MISMATCH);
+            assertThat(recorded.getValue().origin()).isEqualTo("garbage.json");
+            assertThat(recorded.getValue().details()).containsEntry("inner_subject", "legit");
+            // every file is forgotten first, so a file that was fixed loses its old row
+            verify(invalidTokenRecorder).forgetOrigin(InvalidTokenReason.CIP_26, "legit.json");
+            verify(invalidTokenRecorder).forgetOrigin(InvalidTokenReason.CIP_26, "garbage.json");
+        }
+
+        @Test
+        void recordsAFileThatCannotBeParsedAndAFileWithoutGitHistory() throws IOException {
+            Files.writeString(repoDir.resolve("broken.json"), "{");
+            Files.writeString(repoDir.resolve("nohistory.json"), "{}");
+            when(gitService.getAllMappingDetails(any())).thenReturn(Map.of());
+            when(tokenMappingService.parseMappings(argThat(f -> f != null && f.getName().equals("broken.json"))))
+                    .thenReturn(Optional.empty());
+            when(tokenMappingService.parseMappings(argThat(f -> f != null && f.getName().equals("nohistory.json"))))
+                    .thenReturn(Optional.of(new Mapping("nohistory", null, null, null, null, null, null, null)));
+
+            service.synchronizeDatabase();
+
+            ArgumentCaptor<InvalidTokenReport> recorded = ArgumentCaptor.forClass(InvalidTokenReport.class);
+            verify(invalidTokenRecorder, times(2)).record(recorded.capture());
+            assertThat(recorded.getAllValues()).extracting(InvalidTokenReport::reasonCode)
+                    .containsExactlyInAnyOrder(InvalidTokenReason.UNPARSEABLE_MAPPING, InvalidTokenReason.MISSING_GIT_HISTORY);
         }
     }
 

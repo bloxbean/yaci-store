@@ -6,6 +6,9 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.util.MappingsUtil;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.util.Cip26MetadataValidator;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.util.Cip26Validation;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.invalidtoken.InvalidTokenReason;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.invalidtoken.InvalidTokenRecorder;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.invalidtoken.InvalidTokenReport;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.validation.ValidationError;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +31,7 @@ public class Cip26MetadataService {
 
     private final Cip26MetadataRepository cip26MetadataRepository;
     private final Cip26MetadataValidator cip26MetadataValidator;
+    private final InvalidTokenRecorder invalidTokenRecorder;
 
     /**
      * Checks and inserts CIP-26 metadata for one mapping. An entry that breaks CIP-26 is stored as written, with the
@@ -50,7 +54,15 @@ public class Cip26MetadataService {
 
         Cip26Validation validation = cip26MetadataValidator.validate(mapping, cip26Metadata);
         if (validation.isDropped()) {
-            // Validator already logged the specific reason at WARN.
+            // Validator already logged the specific reason at WARN. The file is named after the subject here (the sync
+            // drops a mismatch before this call), so the file name is the origin.
+            invalidTokenRecorder.record(InvalidTokenReport.builder()
+                    .standard(InvalidTokenReason.CIP_26)
+                    .reasonCode(InvalidTokenReason.UNUSABLE_SUBJECT)
+                    .reason(validation.byzantineReason())
+                    .subject(mapping.subject())
+                    .origin(mapping.subject() + ".json")
+                    .build());
             return InsertOutcome.PERMANENTLY_SKIPPED;
         }
         cip26Metadata.setValidationErrors(validation.errors());

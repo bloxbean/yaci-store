@@ -7,7 +7,9 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.metrics.Cip68
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.AssetType;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Constants;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Uri;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.ParseOutcome;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.ParsedCip68Datum;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.invalidtoken.InvalidTokenReason;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.util.TokenDecimals;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.validation.ValidationError;
 import jakarta.annotation.Nullable;
@@ -115,12 +117,24 @@ public class Cip68DatumParser {
      * The result is empty for a datum that is not a CIP-68 datum or cannot be decoded.
      */
     public Optional<ParsedCip68Datum> parse(String inlineDatum, @Nullable AssetType referenceNft) {
+        return parseDetailed(inlineDatum, referenceNft) instanceof ParseOutcome.Parsed parsed
+                ? Optional.of(parsed.datum())
+                : Optional.empty();
+    }
+
+    /**
+     * Same as {@link #parse(String, AssetType)}, but says why there is no result: the datum is not a CIP-68 datum (ignored), or it is dropped
+     * because it cannot be decoded or is nested too deeply to be decoded (counted and warned about here, recorded by the caller).
+     */
+    public ParseOutcome parseDetailed(String inlineDatum, @Nullable AssetType referenceNft) {
         if (inlineDatum == null || inlineDatum.isBlank()) {
-            return Optional.empty();
+            return new ParseOutcome.NotCip68();
         }
 
         try {
-            return extractDatumProperties(inlineDatum).map(parts -> buildParsedDatum(parts, referenceNft));
+            return extractDatumProperties(inlineDatum)
+                    .<ParseOutcome>map(parts -> new ParseOutcome.Parsed(buildParsedDatum(parts, referenceNft)))
+                    .orElseGet(ParseOutcome.NotCip68::new);
         } catch (StackOverflowError e) {
             // TODO: temporary workaround. Remove once cardano-client-lib decodes CBOR without
             //  recursion (bloxbean/cardano-client-lib#681).
@@ -131,14 +145,15 @@ public class Cip68DatumParser {
             log.warn("Skipping the CIP-68 datum of {}, nested too deeply to decode, this looks like an attack ({} bytes): {}",
                     describe(referenceNft), inlineDatum.length() / 2, abbreviateDatum(inlineDatum));
             metrics.parseFailure();
-            return Optional.empty();
+            return new ParseOutcome.Dropped(InvalidTokenReason.DATUM_TOO_DEEP_TO_DECODE,
+                    "the datum is nested too deeply to decode (" + inlineDatum.length() / 2 + " bytes), this looks like an attack");
         } catch (Exception e) {
             // One line per failure, with the datum for reproduction; the stack trace only at DEBUG,
             // so a run of unparseable datums doesn't flood the sync log.
             log.warn("Skipping the unparseable CIP-68 datum of {} ({}): {}", describe(referenceNft), e, inlineDatum);
             log.debug("CIP-68 datum parse failure", e);
             metrics.parseFailure();
-            return Optional.empty();
+            return new ParseOutcome.Dropped(InvalidTokenReason.DATUM_UNDECODABLE, "the datum cannot be decoded: " + e);
         }
     }
 
