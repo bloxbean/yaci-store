@@ -56,19 +56,13 @@ jobs:
       github_release: ${{ steps.version.outputs.github_release }}
       native_release: ${{ steps.version.outputs.native_release }}
       docker_publish: ${{ steps.version.outputs.docker_publish }}
+      bloxbean_uploaded: ${{ steps.bloxbean.outcome == 'success' }}
+      artifacts: ${{ steps.discover.outputs.artifacts }}
     env:
       GROUP_PATH: com/bloxbean/cardano
       BUCKET: ${{ vars.R2_BUCKET }}
       REPOSITORY_PREFIX: maven/releases
       PUBLIC_REPOSITORY_URL: https://repo.bloxbean.org/maven/releases
-      # What the Gradle consumer check resolves, and which of this build's jars it must get. yaci-store publishes no
-      # BOM, and modules built on Spring Boot starters leave those versions to the consumer's Spring Boot BOM, so
-      # the check resolves the modules whose dependency graph is fully versioned. verify-public still checks every
-      # artifact's metadata and POM.
-      CONSUMER_DEPENDENCIES: >-
-        com.bloxbean.cardano:yaci-store-events com.bloxbean.cardano:yaci-store-plugin-api
-        com.bloxbean.cardano:yaci-store-plugin-polyglot
-      CONSUMER_REQUIRED: yaci-store-events yaci-store-plugin-api yaci-store-plugin-polyglot
       # Absolute, because the stagingRepository hook resolves it against each project's own directory.
       STAGING_DIR: ${{ github.workspace }}/build/bloxbean-maven
       AWS_ENDPOINT_URL: ${{ vars.R2_ENDPOINT }}
@@ -233,20 +227,16 @@ jobs:
           fi
           echo "deployment-id=$id" >> "$GITHUB_OUTPUT"
 
-      # The BloxBean copy is checked even when the Central upload failed: then it is the release's only copy.
-      - name: Verify the BloxBean repository
+      # The public checks of the uploaded files run in verify-bloxbean, against exactly these staged files. Kept even
+      # when the Central upload failed: then the BloxBean copy is the release's only one.
+      - name: Keep the staged repository for verify-bloxbean
         if: ${{ !cancelled() && steps.bloxbean.outcome == 'success' }}
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
-          ARTIFACTS: ${{ steps.discover.outputs.artifacts }}
-        run: bash .github/scripts/bloxbean-maven.sh verify-public
-
-      - name: Resolve from the BloxBean repository with a Gradle consumer
-        if: ${{ !cancelled() && steps.bloxbean.outcome == 'success' }}
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
-          ARTIFACTS: ${{ steps.discover.outputs.artifacts }}
-        run: bash .github/scripts/bloxbean-maven.sh consume
+        uses: actions/upload-artifact@v4
+        with:
+          name: bloxbean-staged-${{ steps.version.outputs.version }}
+          path: build/bloxbean-maven
+          retention-days: 7
+          if-no-files-found: error
 
       # Reports what actually happened, including on failure, so a partly published release is never mistaken for
       # a complete one.
@@ -270,7 +260,8 @@ jobs:
             if [[ "$BLOXBEAN_REPO_PUBLISH" != true ]]; then
               echo "BloxBean repository: not published (bloxbean_repo_publish=false)."
             elif [[ "$BLOXBEAN_OUTCOME" == success ]]; then
-              echo "**BloxBean repository: published** at $PUBLIC_REPOSITORY_URL (public and permanent)."
+              echo "**BloxBean repository: published** at $PUBLIC_REPOSITORY_URL (public and permanent); the"
+              echo "verify-bloxbean job checks what it serves."
             else
               echo "**BloxBean repository: NOT published** - the upload failed or did not run."
             fi
@@ -312,6 +303,51 @@ jobs:
             applications/build/dist/yaci-store-docker-${{ steps.version.outputs.version }}.zip
           if-no-files-found: error
           retention-days: 7
+
+  # The public checks of the BloxBean repository, in a job of their own. Once the version is in the repository, a
+  # re-run of publish is refused (seed never replaces a release), so a slow CDN or a flaky resolve must fail only
+  # this job: "Re-run failed jobs" repeats just the checks, against the files publish staged and uploaded. The
+  # GitHub release, native and Docker jobs don't wait for it. Runs even when the Central upload failed.
+  verify-bloxbean:
+    needs: publish
+    if: ${{ !cancelled() && needs.publish.outputs.bloxbean_uploaded == 'true' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    env:
+      GROUP_PATH: com/bloxbean/cardano
+      PUBLIC_REPOSITORY_URL: https://repo.bloxbean.org/maven/releases
+      STAGING_DIR: ${{ github.workspace }}/build/bloxbean-maven
+      VERSION: ${{ needs.publish.outputs.version }}
+      ARTIFACTS: ${{ needs.publish.outputs.artifacts }}
+      # What the Gradle consumer check resolves, and which of this build's jars it must get. yaci-store publishes no
+      # BOM, and modules built on Spring Boot starters leave those versions to the consumer's Spring Boot BOM, so
+      # the check resolves the modules whose dependency graph is fully versioned. verify-public still checks every
+      # artifact's metadata and POM.
+      CONSUMER_DEPENDENCIES: >-
+        com.bloxbean.cardano:yaci-store-events com.bloxbean.cardano:yaci-store-plugin-api
+        com.bloxbean.cardano:yaci-store-plugin-polyglot
+      CONSUMER_REQUIRED: yaci-store-events yaci-store-plugin-api yaci-store-plugin-polyglot
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'liberica'
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+      - name: Download the staged repository
+        uses: actions/download-artifact@v4
+        with:
+          name: bloxbean-staged-${{ env.VERSION }}
+          path: build/bloxbean-maven
+      - name: Verify the BloxBean repository
+        run: bash .github/scripts/bloxbean-maven.sh verify-public
+      - name: Resolve from the BloxBean repository with a Gradle consumer
+        run: bash .github/scripts/bloxbean-maven.sh consume
 
   native:
     needs: publish
