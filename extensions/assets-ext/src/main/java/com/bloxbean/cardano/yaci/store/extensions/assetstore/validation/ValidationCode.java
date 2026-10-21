@@ -34,7 +34,7 @@ public final class ValidationCode {
             | `invalid_length` | a CIP-26 text is shorter or longer than CIP-26 allows (for example a `name` over 50 characters) |
             | `invalid_value` | a CIP-26 value breaks a rule of the registry's validator that is not a type, a length or a range |
             | `out_of_range` | a number is outside the range allowed: `decimals`, or a `version` that does not fit a 64-bit integer (stored without a version) |
-            | `undefined_version` | the CIP-68 `version` is not one CIP-68 defines (1 to 4); the datum is read by its structure and kept |
+            | `undefined_version` | the CIP-68 `version` is not one CIP-68 defines (1 to 4); the datum is read by its structure and kept, so this error is `OPTIONAL` |
             | `plutus_constructor` | a property holds a Plutus constructor, which CIP-68 metadata does not allow; it is kept as `{constructor, fields}` |
             | `not_utf8` | a text is not valid UTF-8; it is kept as hex |
             | `invalid_files_entry` | an entry of `files` breaks the CIP-68 definition (for example no `mediaType` or `src`); the entry is kept |
