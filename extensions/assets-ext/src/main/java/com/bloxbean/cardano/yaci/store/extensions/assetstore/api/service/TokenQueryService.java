@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.api.service;
 
+import jakarta.annotation.Nullable;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.QueryPriority;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.*;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.cip26.Cip26TokenMetadata;
@@ -79,8 +80,13 @@ public class TokenQueryService {
     }
 
     private static Subject toSubject(String subject, ResolvedMetadata resolved, boolean showCipsDetails) {
-        // valid: the token follows its CIP completely, mandatory and optional fields alike
-        Metadata metadata = resolved.metadata().toBuilder().valid(resolved.validationErrors().isEmpty()).build();
+        // valid: the token follows its CIP completely, mandatory and optional fields alike. A row indexed before validation
+        // existed has no errors to look at (null, not empty): the rule it always had applies, name and description present.
+        List<ValidationError> errors = resolved.validationErrors();
+        boolean valid = errors != null
+                ? errors.isEmpty()
+                : resolved.metadata().name() != null && resolved.metadata().description() != null;
+        Metadata metadata = resolved.metadata().toBuilder().valid(valid).build();
         return new Subject(subject, metadata, showCipsDetails ? resolved.standards() : null, resolved.validationErrors());
     }
 
@@ -209,13 +215,21 @@ public class TokenQueryService {
      * its role (the resolved metadata for a subject) rather than "pair" so the accessors
      * {@link #metadata()} and {@link #standards()} read at call sites.
      */
-    private record ResolvedMetadata(Metadata metadata, Standards standards, List<ValidationError> validationErrors) {
+    private record ResolvedMetadata(Metadata metadata, Standards standards, @Nullable List<ValidationError> validationErrors) {
 
         /** The metadata of the first standard wins per property; the validation errors of every standard are kept. */
         ResolvedMetadata merge(ResolvedMetadata that) {
-            List<ValidationError> errors = new ArrayList<>(validationErrors);
-            errors.addAll(that.validationErrors());
-            return new ResolvedMetadata(metadata.merge(that.metadata()), standards.merge(that.standards()), errors);
+            List<ValidationError> errors = new ArrayList<>();
+            if (validationErrors != null) {
+                errors.addAll(validationErrors);
+            }
+            if (that.validationErrors() != null) {
+                errors.addAll(that.validationErrors());
+            }
+            // unchecked (null) when a standard has no errors recorded and nothing else reports any: "no errors" would be a claim
+            boolean unchecked = validationErrors == null || that.validationErrors() == null;
+            return new ResolvedMetadata(metadata.merge(that.metadata()), standards.merge(that.standards()),
+                    unchecked && errors.isEmpty() ? null : errors);
         }
     }
 

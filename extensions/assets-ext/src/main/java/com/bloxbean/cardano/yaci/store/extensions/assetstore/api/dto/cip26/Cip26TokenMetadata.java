@@ -108,9 +108,11 @@ public class Cip26TokenMetadata {
      * registry whatever is wrong with it (ADR 0006). Not part of the CF V2 wire shape: it is an addition.
      */
     @JsonProperty("validation_errors")
-    @Schema(name = "validation_errors", description = "How the registry entry departs from CIP-26; empty when it follows it.")
-    @Builder.Default
-    private List<ValidationError> validationErrors = new ArrayList<>();
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    @Schema(name = "validation_errors", nullable = true,
+            description = "How the registry entry departs from CIP-26; empty when it follows it, absent when the row was indexed before validation existed.")
+    @Nullable
+    private List<ValidationError> validationErrors;
 
     @Builder.Default
     private Map<String, TokenMetadataProperty<?>> additionalProperties = new HashMap<>();
@@ -152,7 +154,7 @@ public class Cip26TokenMetadata {
         Cip26TokenMetadataBuilder builder = Cip26TokenMetadata.builder()
                 .subject(entity.getSubject())
                 .policy(entity.getPolicy())
-                .validationErrors(entity.getValidationErrors() == null ? new ArrayList<>() : new ArrayList<>(entity.getValidationErrors()));
+                .validationErrors(entity.getValidationErrors() == null ? null : new ArrayList<>(entity.getValidationErrors()));
 
         builder.name(stringProperty(mapping.name(), NameProperty::new));
         builder.description(stringProperty(mapping.description(), DescriptionProperty::new));

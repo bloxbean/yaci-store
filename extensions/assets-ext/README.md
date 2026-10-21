@@ -98,8 +98,10 @@ attack: the reason, the token, the transaction and output or the registry file).
 `SELECT standard, reason_code, count(*) FROM invalid_token GROUP BY 1, 2`. See `db/store/README.md` and ADR 0007. The `yaci.store.assets.invalid_tokens` counter
 (`standard`, `reason_code`) counts the rows written.
 
-Upgrading needs a **full resync**: the tokens that used to be dropped exist nowhere, and a row written before `validation_errors` existed has
-none. A database is never upgraded in place; there is no backfill.
+Upgrading is **in place and needs no resync to keep working**: the migrations only add. A row written before `validation_errors` existed has
+`NULL` (never checked, not the same as "no errors"): the API leaves `validation_errors` out for it, and `metadata.valid` falls back to the rule
+it had before, name and description both present. A **full resync** fills the errors in and brings back the tokens that used to be dropped, which
+exist nowhere until then; there is no backfill.
 
 **Batch request:**
 

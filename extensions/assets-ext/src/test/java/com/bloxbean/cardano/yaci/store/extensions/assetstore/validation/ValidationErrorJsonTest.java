@@ -91,10 +91,17 @@ class ValidationErrorJsonTest {
 
     @Test
     void theCip26DtoWritesAnEmptyArrayWhenThereAreNoErrors() throws Exception {
-        JsonNode json = mapper.readTree(mapper.writeValueAsString(Cip26TokenMetadata.builder().subject("s").build()));
+        JsonNode json = mapper.readTree(mapper.writeValueAsString(Cip26TokenMetadata.builder().subject("s").validationErrors(List.of()).build()));
 
         assertThat(json.get("validation_errors").isArray()).isTrue();
         assertThat(json.get("validation_errors")).isEmpty();
+    }
+
+    @Test
+    void theCip26DtoOmitsTheFieldForARowIndexedBeforeValidationExisted() throws Exception {
+        JsonNode json = mapper.readTree(mapper.writeValueAsString(Cip26TokenMetadata.builder().subject("s").build()));
+
+        assertThat(json.has("validation_errors")).isFalse();
     }
 
     @Test

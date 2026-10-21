@@ -401,11 +401,21 @@ class Cip68TokenServiceTest {
         @Test
         void aRowWithoutErrorsHasAnEmptyList() {
             Cip68Metadata row = Cip68Metadata.builder()
-                    .policyId(POLICY).assetName(REF_NAME).slot(200L).label(333).name("Fine").description("d").version(1L).build();
+                    .policyId(POLICY).assetName(REF_NAME).slot(200L).label(333).name("Fine").description("d").version(1L).validationErrors(List.of()).build();
             when(repository.findFirstByPolicyIdAndAssetNameOrderBySlotDescTxIndexDesc(POLICY, REF_NAME))
                     .thenReturn(Optional.of(row));
 
             assertThat(service.findSubject(POLICY, REF_NAME, List.of()).orElseThrow().validationErrors()).isEmpty();
+        }
+
+        @Test
+        void aRowIndexedBeforeValidationExistedKeepsNullErrors() {
+            Cip68Metadata row = Cip68Metadata.builder()
+                    .policyId(POLICY).assetName(REF_NAME).slot(200L).label(333).name("Old").description("d").version(1L).build();
+            when(repository.findFirstByPolicyIdAndAssetNameOrderBySlotDescTxIndexDesc(POLICY, REF_NAME))
+                    .thenReturn(Optional.of(row));
+
+            assertThat(service.findSubject(POLICY, REF_NAME, List.of()).orElseThrow().validationErrors()).isNull();
         }
 
         @Test
