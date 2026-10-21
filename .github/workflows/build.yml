@@ -8,7 +8,7 @@ on:
       - release/*
       - develop/*
       - next
-      - next_*
+      - next-*
   pull_request:
     branches:
       - main
@@ -16,7 +16,7 @@ on:
       - release/*
       - develop/*
       - next
-      - next_*
+      - next-*
 
 # PR builds run the pull request's own code: read-only token, no secrets.
 permissions:

@@ -31,12 +31,12 @@ concurrency:
 jobs:
   publish:
     # The bucket credentials are secrets of this environment, which only accepts the release branches (main,
-    # release/**), the snapshot-only branches (develop, develop/**, next, next_*) and v* tags. Skip other branches
+    # release/**), the snapshot-only branches (develop, develop/**, next, next-*) and v* tags. Skip other branches
     # rather than fail on the environment's branch policy.
     if: >-
       github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/') ||
       github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/heads/develop/') ||
-      github.ref == 'refs/heads/next' || startsWith(github.ref, 'refs/heads/next_')
+      github.ref == 'refs/heads/next' || startsWith(github.ref, 'refs/heads/next-')
     environment: release-staging
     runs-on: ubuntu-24.04
     timeout-minutes: 120
