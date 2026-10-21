@@ -95,6 +95,10 @@ for it. A token whose datum has no usable entry (a nested `"721"` datum with non
 `no_nested_entry` error. A rejected update no longer leaves the earlier row in place (ADR 0003 decision 5): the newest datum is the
 one served, with its errors.
 
+A client that wants a stricter view asks for it with `?validation=ALL|MANDATORY_ONLY|STRICT` (default `ALL`): `MANDATORY_ONLY` returns only
+tokens with no `MANDATORY` error and `STRICT` only tokens with no error at all. A token that is not accepted is a `404` (left out of a
+batch); the errors of a returned token are never filtered. The check is made in Java on the row already read, so it needs no native query.
+
 ### 6. Rich fungible tokens are served
 
 A `001bc280` subject maps to its reference NFT like a `0014df10` one. A rich fungible token has no `logo`; its `image` is served as
