@@ -231,8 +231,8 @@ characters; CIP-68 has no equivalent, and a CIP-26 limit is reported, not enforc
 
 | Input | Rule | Effect |
 |---|---|---|
-| `version` | an integer that does not fit a `long` | the datum is indexed with no version and an `out_of_range` error (narrowing it would wrap `2^64 + 1` into 1) |
-| `version` | not 1 to 4 | indexed as written, with an `undefined_version` error |
+| `version` | an integer that does not fit a `long` | the datum is indexed with no version and an `out_of_range` error, **`MANDATORY`** (narrowing it would wrap `2^64 + 1` into 1) |
+| `version` | not 1 to 4 | indexed as written, with an `undefined_version` error, **`MANDATORY`**: the CIP requires the `version` field and defines its values. Greenland Reserve Coin (version 0) is therefore returned by default, and left out by `?validation=MANDATORY_ONLY` and `STRICT` |
 | nesting depth of the datum | the CBOR decoder recurses; a `StackOverflowError` is caught | **dropped** with a WARN that says it looks like an attack |
 | a datum that cannot be decoded | | **dropped** with a WARN with the datum, so the case can be reproduced (`parse_failure`) |
 | nesting depth of an additional property (#1240) | at most 100 levels of lists, maps and constructors | the **property is dropped** with a WARN and `properties.dropped{kind="too_deep"}`, the datum is indexed, with a `too_deep` error |
