@@ -139,6 +139,8 @@ CF registry's V1 API cannot be reproduced from it.
 
 ## Consequences
 
+- A file whose name differs from its inner subject is never indexed, under either name; it is recorded in `invalid_token` with the subject it
+  claims (`details.inner_subject`), so it can be found and reported to the registry. This is a decision, not an open question.
 - A registry file that is dropped (a subject mismatch, an unusable subject, an unparseable file, an attack-sized logo) is logged and left out. The
   WARN lines and the `invalid_token` table (ADR 0007: `filename_subject_mismatch`, `unusable_subject`, `unparseable_mapping`, `missing_git_history`; a
   row is replaced each time the file is processed and removed when the file is deleted) are the record, so they are the first place to look when a token is missing. An entry that breaks CIP-26 is not dropped: it is in

@@ -64,7 +64,8 @@ A datum or entry is dropped, with one WARN that says it looks like an attack, on
 - a datum nested so deep that it cannot be decoded (`StackOverflowError`), or that cannot be decoded at all;
 - a property whose value is nested more than 100 levels (ADR 0002 decision 6, issue #1240); the property is dropped and the rest of
   the datum is indexed, with a `too_deep` error;
-- a CIP-26 entry whose file name differs from its inner `subject` (the registry has thousands of these on testnets), and one whose
+- a CIP-26 entry whose file name differs from its inner `subject` (the registry has thousands of these on testnets; they are not indexed
+  under either name, since last-write-wins would make the data ambiguous, and each is recorded in `invalid_token` with the inner subject, ADR 0007), and one whose
   `subject` cannot be a key (not even-length hex, not 56 to 120 characters);
 - a CIP-26 logo far beyond any real size (over about 1 MiB; the CIP's limit is 64 KiB, so anything between is kept with an error);
 - an output whose indexing throws something unexpected (`processing_failure`, ADR 0004).
@@ -144,8 +145,6 @@ that drop a token is on hold.
 
 - Whether the `code` list should be fixed in the API documentation as an enumeration.
 - Whether the errors of a property filter (`property=ticker`) should be limited to the fields asked for. Today all errors are returned.
-- Whether CIP-26 entries whose file name differs from the subject should also be indexed under the file name with an error. They are
-  dropped today, since the registry has thousands of them and last-write-wins would make the data ambiguous.
 
 ## References
 
