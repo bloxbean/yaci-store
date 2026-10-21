@@ -70,7 +70,9 @@ public class TxUtilController {
                     successRes = response.get();
                 }
 
-                return ResponseEntity.accepted()
+                //200 OK to align with Blockfrost. Blockfrost clients such as blockfrost-python (PyCardano) and
+                //MeshJS BlockfrostProvider treat any other status as a failed evaluation
+                return ResponseEntity.ok()
                         .contentType(MediaType.APPLICATION_JSON)
                         .body(JsonUtil.getPrettyJson(successRes));
             } else if (response.isLeft()) {
