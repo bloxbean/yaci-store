@@ -39,7 +39,8 @@ class Cip26MetadataServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new Cip26MetadataService(cip26MetadataRepository, cip26MetadataValidator);
+        service = new Cip26MetadataService(cip26MetadataRepository, cip26MetadataValidator,
+                com.bloxbean.cardano.yaci.store.extensions.assetstore.invalidtoken.InvalidTokenRecorder.noop());
     }
 
     private static Mapping mapping(String subject) {

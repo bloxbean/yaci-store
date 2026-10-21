@@ -5,7 +5,11 @@ import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.AssetType;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.metrics.Cip68Metrics;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Constants;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.ParseOutcome;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.ParsedCip68Datum;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.invalidtoken.InvalidTokenRecorder;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.invalidtoken.InvalidTokenReason;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.invalidtoken.InvalidTokenReport;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.parser.Cip68DatumParser;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service.Cip68TokenService;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service.Cip68Validator;
@@ -26,7 +30,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Locale;
 import java.util.Set;
@@ -51,14 +57,23 @@ public class Cip68Processor {
     private final Cip68DatumParser cip68DatumParser;
     private final Cip68MetadataRepository cip68MetadataRepository;
     private final Cip68Metrics metrics;
+    private final InvalidTokenRecorder invalidTokenRecorder;
 
     @Autowired
     public Cip68Processor(Cip68TokenService cip68TokenService, Cip68DatumParser cip68DatumParser,
-                          Cip68MetadataRepository cip68MetadataRepository, Cip68Metrics metrics) {
+                          Cip68MetadataRepository cip68MetadataRepository, Cip68Metrics metrics,
+                          InvalidTokenRecorder invalidTokenRecorder) {
         this.cip68TokenService = cip68TokenService;
         this.cip68DatumParser = cip68DatumParser;
         this.cip68MetadataRepository = cip68MetadataRepository;
         this.metrics = metrics;
+        this.invalidTokenRecorder = invalidTokenRecorder;
+    }
+
+    /** Without a table for what is dropped (tests). */
+    public Cip68Processor(Cip68TokenService cip68TokenService, Cip68DatumParser cip68DatumParser,
+                          Cip68MetadataRepository cip68MetadataRepository, Cip68Metrics metrics) {
+        this(cip68TokenService, cip68DatumParser, cip68MetadataRepository, metrics, InvalidTokenRecorder.noop());
     }
 
     /** Without metrics that anyone reads (tests). */
@@ -84,7 +99,7 @@ public class Cip68Processor {
                 try {
                     indexOutput(output, assetUnitsInTx, slot, entities);
                 } catch (RuntimeException e) {
-                    skipOutput(output, e);
+                    skipOutput(output, slot, e);
                 }
             }
         }
@@ -118,12 +133,73 @@ public class Cip68Processor {
      * {@code datums.skipped{reason="processing_failure"}}. That counter is the one to alert on: unlike the other
      * reasons it means something unexpected, a bug or a new kind of datum.
      */
-    private void skipOutput(AddressUtxo output, RuntimeException e) {
+    private void skipOutput(AddressUtxo output, Long slot, RuntimeException e) {
         log.warn("Output {}#{}: skipping the CIP-68 datum, indexing it failed unexpectedly ({}: {}); datum {}",
                 output.getTxHash(), output.getOutputIndex(), e.getClass().getSimpleName(), e.getMessage(),
                 output.getInlineDatum());
         log.debug("Stack trace of the CIP-68 indexing failure of output {}#{}", output.getTxHash(), output.getOutputIndex(), e);
         metrics.processingFailure();
+        recordProcessingFailure(output, slot, e);
+    }
+
+    /** One row of {@code invalid_token} per reference NFT of the output (ADR 0007); a failure here is already contained by the recorder. */
+    private void recordProcessingFailure(AddressUtxo output, Long slot, RuntimeException e) {
+        List<Amt> refNfts;
+        try {
+            refNfts = cip68TokenService.extractReferenceNfts(output);
+        } catch (RuntimeException ignored) {
+            refNfts = List.of();
+        }
+        Map<String, Object> details = new LinkedHashMap<>();
+        details.put("exception", e.getClass().getName());
+        details.put("message", String.valueOf(e.getMessage()));
+        details.put("datum_prefix", abbreviateDatum(output.getInlineDatum()));
+        if (refNfts.isEmpty()) {
+            invalidTokenRecorder.record(droppedReport(output, slot, null, InvalidTokenReason.PROCESSING_FAILURE,
+                    "indexing the output failed unexpectedly: " + e.getClass().getSimpleName() + ": " + e.getMessage(), details));
+            return;
+        }
+        for (Amt refNft : refNfts) {
+            invalidTokenRecorder.record(droppedReport(output, slot, AssetType.fromUnit(refNft.getUnit()),
+                    InvalidTokenReason.PROCESSING_FAILURE,
+                    "indexing the output failed unexpectedly: " + e.getClass().getSimpleName() + ": " + e.getMessage(), details));
+        }
+    }
+
+    /** A datum that is dropped as unusable or an attack is recorded for the reference NFT it was read for (ADR 0007). */
+    private void recordDropped(AddressUtxo output, Long slot, AssetType refNft, ParseOutcome.Dropped dropped, @Nullable SharedDatum shared) {
+        Map<String, Object> details = new LinkedHashMap<>();
+        details.put("datum_prefix", abbreviateDatum(output.getInlineDatum()));
+        details.put("datum_bytes", output.getInlineDatum() == null ? 0 : output.getInlineDatum().length() / 2);
+        if (shared != null) {
+            details.put("reference_nfts_in_output", shared.referenceNfts);
+        }
+        invalidTokenRecorder.record(droppedReport(output, slot, refNft, dropped.reasonCode(), dropped.message(), details));
+    }
+
+    private static InvalidTokenReport droppedReport(AddressUtxo output, Long slot, @Nullable AssetType refNft, String reasonCode,
+                                                    String reason, Map<String, Object> details) {
+        return InvalidTokenReport.builder()
+                .standard(InvalidTokenReason.CIP_68)
+                .reasonCode(reasonCode)
+                .reason(reason)
+                .policyId(refNft == null ? null : refNft.policyId())
+                .assetName(refNft == null ? null : refNft.assetName())
+                .subject(refNft == null ? null : refNft.toUnit())
+                .slot(slot)
+                .txHash(output.getTxHash())
+                .txIndex(output.getTxIndex())
+                .outputIndex(output.getOutputIndex())
+                .details(details)
+                .build();
+    }
+
+    /** A datum can be 16 KB: the table keeps its start, which is enough to find it. */
+    private static String abbreviateDatum(@Nullable String datum) {
+        if (datum == null) {
+            return "";
+        }
+        return datum.length() <= 256 ? datum : datum.substring(0, 256) + "...";
     }
 
     /**
@@ -134,9 +210,17 @@ public class Cip68Processor {
      */
     private Optional<Cip68Metadata> toEntity(AddressUtxo output, AssetType refNft, Set<String> assetUnitsInTx, Long slot,
                                              @Nullable SharedDatum shared) {
-        Optional<ParsedCip68Datum> parsedDatum = shared != null
-                ? shared.parsed
-                : cip68DatumParser.parse(output.getInlineDatum(), refNft);
+        ParseOutcome outcome = shared != null
+                ? shared.outcome
+                : cip68DatumParser.parseDetailed(output.getInlineDatum(), refNft);
+        if (outcome instanceof ParseOutcome.Dropped dropped) {
+            // a datum shared by several reference NFTs is dropped once for the output: recorded once, for the first
+            if (shared == null || shared.markReported()) {
+                recordDropped(output, slot, refNft, dropped, shared);
+            }
+            return Optional.empty();
+        }
+        Optional<ParsedCip68Datum> parsedDatum = outcome instanceof ParseOutcome.Parsed p ? Optional.of(p.datum()) : Optional.empty();
         return parsedDatum.map(parsed -> {
             // The labels come first: which fields a datum must have depends on them. A reference NFT can have user
             // tokens of several labels (the CIP allows it), and then the datum is checked against every one of them.
@@ -229,14 +313,14 @@ public class Cip68Processor {
     private final class SharedDatum {
         private final AddressUtxo output;
         private final int referenceNfts;
-        private final Optional<ParsedCip68Datum> parsed;
+        private final ParseOutcome outcome;
         private boolean reported;
 
         private SharedDatum(AddressUtxo output, int referenceNfts) {
             this.output = output;
             this.referenceNfts = referenceNfts;
             // Parsed here, once, without a reference NFT: the datum is not specific to one of them.
-            this.parsed = cip68DatumParser.parse(output.getInlineDatum());
+            this.outcome = cip68DatumParser.parseDetailed(output.getInlineDatum(), null);
         }
 
         /** True the first time it is called: the errors of the shared datum are counted by the first reference NFT. */

@@ -99,6 +99,35 @@ Indexes: `idx_cip68_metadata_slot`, `idx_cip68_metadata_label`. See
 
 ---
 
+## `invalid_token` (V0_1700_3)
+
+What the module **drops** or cannot use, one row per item (ADR 0007). A token that is indexed keeps its problems in the
+`validation_errors` of its own row and is not here. The table is written, not served: there is no API for it, read it with SQL.
+
+| Column | Type | Meaning |
+|---|---|---|
+| `id` | `VARCHAR(64)` PK | SHA-256 of `standard, reason_code, policy_id, asset_name, tx_hash, output_index, origin`: the same item has the same id, so a replayed block or a re-run sync adds nothing |
+| `standard` | `VARCHAR(16)` | the standard whose rule found the problem: `CIP-26`, `CIP-68` (`CIP-113` is reserved) |
+| `combined_with` | `VARCHAR(16)` NULL | the other standard of a combination (CIP-113 with CIP-26 or CIP-68) |
+| `reason_code` | `VARCHAR(64)` | stable code: CIP-26 `filename_subject_mismatch`, `unusable_subject`, `unparseable_mapping`, `missing_git_history`; CIP-68 `datum_undecodable`, `datum_too_deep_to_decode`, `processing_failure` |
+| `reason` | `TEXT` | message for people, at most 500 characters |
+| `policy_id`, `asset_name` | NULL | the token, when known (CIP-68: the reference NFT) |
+| `subject` | `VARCHAR(256)` NULL | the identifier as written |
+| `slot`, `tx_hash`, `tx_index`, `output_index` | NULL | the on-chain origin (NULL for CIP-26) |
+| `origin` | `VARCHAR(512)` NULL | the registry file name (CIP-26) |
+| `details` | `JSONB` / `JSON` / `TEXT` NULL | bounded context (at most 2 KB), for example `{"inner_subject": "..."}` or `{"datum_prefix": "...", "exception": "..."}` |
+| `first_seen_at` | `TIMESTAMP` | |
+
+Indexes: `idx_invalid_token_slot`, `idx_invalid_token_reason (standard, reason_code)`, `idx_invalid_token_policy`. A rollback deletes the
+rows with `slot >` the rollback slot; rows from the CIP-26 registry (no slot) are not touched. The CIP-26 rows of a file are replaced each
+time the file is processed and removed when it is deleted from the registry.
+
+```sql
+SELECT standard, reason_code, count(*) FROM invalid_token GROUP BY 1, 2 ORDER BY 3 DESC;
+```
+
+---
+
 ## Dialect differences
 
 | Concept | PostgreSQL | H2 | MySQL |

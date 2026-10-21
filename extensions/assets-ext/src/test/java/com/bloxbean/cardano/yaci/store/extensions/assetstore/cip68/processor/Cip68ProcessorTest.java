@@ -8,6 +8,7 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Co
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.Cip68Metadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.ParsedCip68Datum;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.ParseOutcome;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.parser.Cip68DatumParser;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.repository.Cip68MetadataRepository;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service.Cip68TokenService;
@@ -77,7 +78,7 @@ class Cip68ProcessorTest {
                     .build();
 
             when(cip68TokenService.extractReferenceNfts(utxo)).thenReturn(List.of(refNftAmt));
-            when(cip68DatumParser.parse(eq(datum), any())).thenReturn(Optional.of(metadata));
+            when(cip68DatumParser.parseDetailed(eq(datum), any())).thenReturn(new ParseOutcome.Parsed(metadata));
 
             processor.processTransaction(buildEvent(100L, utxo));
 
@@ -136,7 +137,7 @@ class Cip68ProcessorTest {
                     .build();
 
             when(cip68TokenService.extractReferenceNfts(utxo)).thenReturn(List.of(refNftAmt));
-            when(cip68DatumParser.parse(eq(datum), any())).thenReturn(Optional.empty());
+            when(cip68DatumParser.parseDetailed(eq(datum), any())).thenReturn(new ParseOutcome.NotCip68());
 
             processor.processTransaction(buildEvent(100L, utxo));
 
@@ -162,7 +163,7 @@ class Cip68ProcessorTest {
                     .build();
 
             when(cip68TokenService.extractReferenceNfts(utxo)).thenReturn(List.of(refNftAmt));
-            when(cip68DatumParser.parse(eq(datum), any())).thenReturn(Optional.of(metadata));
+            when(cip68DatumParser.parseDetailed(eq(datum), any())).thenReturn(new ParseOutcome.Parsed(metadata));
 
             processor.processTransaction(buildEvent(100L, utxo));
 
@@ -214,7 +215,7 @@ class Cip68ProcessorTest {
                     .txHash(TX_HASH).inlineDatum(datum).amounts(List.of(refNftAmt)).build();
 
             when(cip68TokenService.extractReferenceNfts(refNftUtxo)).thenReturn(List.of(refNftAmt));
-            when(cip68DatumParser.parse(eq(datum), any())).thenReturn(Optional.of(metadata));
+            when(cip68DatumParser.parseDetailed(eq(datum), any())).thenReturn(new ParseOutcome.Parsed(metadata));
 
             processor.processTransaction(buildEvent(100L, List.of(refNftUtxo)));
 
@@ -242,7 +243,7 @@ class Cip68ProcessorTest {
 
             when(cip68TokenService.extractReferenceNfts(refNftUtxo)).thenReturn(List.of(refNftAmt));
             when(cip68TokenService.extractReferenceNfts(userTokenUtxo)).thenReturn(List.of());
-            when(cip68DatumParser.parse(eq(datum), any())).thenReturn(Optional.of(metadata));
+            when(cip68DatumParser.parseDetailed(eq(datum), any())).thenReturn(new ParseOutcome.Parsed(metadata));
 
             // Both outputs in the same tx — that's how cross-output detection sees them.
             processor.processTransaction(buildEvent(100L, List.of(refNftUtxo, userTokenUtxo)));

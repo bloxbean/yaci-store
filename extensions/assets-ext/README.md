@@ -93,6 +93,11 @@ entry whose subject cannot be a key, a logo far beyond any real size), with a wa
 **Rich fungible tokens (CIP-68 label 444)** are served like fungible tokens, by their own `001bc280…` subject. They have no `logo`: their
 `image` is served as `metadata.logo`, as cf-token-metadata-registry does, and `description` is optional for them.
 
+What is dropped is recorded in the `invalid_token` table (CIP-26 entries and CIP-68 datums that are unusable or look like an
+attack: the reason, the token, the transaction and output or the registry file). There is no API for it; read it with SQL, for example
+`SELECT standard, reason_code, count(*) FROM invalid_token GROUP BY 1, 2`. See `db/store/README.md` and ADR 0007. The `yaci.store.assets.invalid_tokens` counter
+(`standard`, `reason_code`) counts the rows written.
+
 Upgrading needs a **full resync**: the tokens that used to be dropped exist nowhere, and a row written before `validation_errors` existed has
 none. A database is never upgraded in place; there is no backfill.
 

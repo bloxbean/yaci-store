@@ -8,6 +8,9 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.Mapping
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.MappingUpdateDetails;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.enums.SyncStatusEnum;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.repository.Cip26SyncStateRepository;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.invalidtoken.InvalidTokenReason;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.invalidtoken.InvalidTokenRecorder;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.invalidtoken.InvalidTokenReport;
 import jakarta.annotation.PostConstruct;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +34,7 @@ public class Cip26MetadataSyncService {
     private final Cip26SyncStateRepository syncStateRepository;
     private final Cip26NetworkDefaults networkDefaults;
     private final AssetsExtStoreProperties assetsStoreProperties;
+    private final InvalidTokenRecorder invalidTokenRecorder;
 
     @Getter
     private SyncStatus syncStatus;
@@ -146,8 +150,12 @@ public class Cip26MetadataSyncService {
      */
     private FileOutcome processOneMappingFile(File mappingFile,
                                               Map<String, MappingUpdateDetails> mappingDetailsMap) {
+        // The table says what is wrong now: what an earlier run recorded for this file is judged again below.
+        invalidTokenRecorder.forgetOrigin(InvalidTokenReason.CIP_26, mappingFile.getName());
         Optional<Mapping> mapping = tokenMappingService.parseMappings(mappingFile);
         if (mapping.isEmpty()) {
+            recordFileProblem(mappingFile, InvalidTokenReason.UNPARSEABLE_MAPPING,
+                    "The mapping file could not be parsed", null);
             return FileOutcome.SKIPPED_NO_MAPPING;
         }
 
@@ -163,11 +171,15 @@ public class Cip26MetadataSyncService {
         if (!filenameSubject.equals(mapping.get().subject())) {
             log.warn("Skipping '{}': filename does not match inner subject '{}'",
                     mappingFile.getName(), mapping.get().subject());
+            recordFileProblem(mappingFile, InvalidTokenReason.FILENAME_SUBJECT_MISMATCH,
+                    "The file name does not match the subject inside the file", mapping.get().subject());
             return FileOutcome.SKIPPED_FILENAME_MISMATCH;
         }
 
         MappingUpdateDetails updateDetails = mappingDetailsMap.get(mappingFile.getName());
         if (updateDetails == null) {
+            recordFileProblem(mappingFile, InvalidTokenReason.MISSING_GIT_HISTORY,
+                    "The registry's Git history has no update details for the file", mapping.get().subject());
             return FileOutcome.SKIPPED_NO_MAPPING;
         }
 
@@ -181,6 +193,17 @@ public class Cip26MetadataSyncService {
                     mapping.get().subject(), e.getMessage());
             return FileOutcome.TRANSIENTLY_FAILED;
         }
+    }
+
+    private void recordFileProblem(File mappingFile, String reasonCode, String reason, String innerSubject) {
+        invalidTokenRecorder.record(InvalidTokenReport.builder()
+                .standard(InvalidTokenReason.CIP_26)
+                .reasonCode(reasonCode)
+                .reason(reason)
+                .subject(stripJsonExtension(mappingFile.getName()))
+                .origin(mappingFile.getName())
+                .details(innerSubject == null ? null : Map.of("inner_subject", innerSubject))
+                .build());
     }
 
     private FileOutcome classifyInsertOutcome(Mapping mapping, MappingUpdateDetails updateDetails) {
@@ -328,6 +351,7 @@ public class Cip26MetadataSyncService {
         int deleted = 0;
         int permanentlyFailed = 0;
         for (String subject : subjectsToDelete) {
+            invalidTokenRecorder.forgetOrigin(InvalidTokenReason.CIP_26, subject + ".json");
             switch (tokenMetadataService.deleteMapping(subject)) {
                 case DELETED -> {
                     deleted++;

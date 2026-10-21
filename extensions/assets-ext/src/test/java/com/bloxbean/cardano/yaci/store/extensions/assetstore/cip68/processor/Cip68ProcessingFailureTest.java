@@ -88,7 +88,7 @@ class Cip68ProcessingFailureTest {
 
     @Test
     void anUnexpectedExceptionSkipsThatOutputAndTheOthersAreIndexed() {
-        doThrow(new IllegalStateException("boom")).when(parser).parse(eq(BAD_DATUM), any(AssetType.class));
+        doThrow(new IllegalStateException("boom")).when(parser).parseDetailed(eq(BAD_DATUM), any(AssetType.class));
 
         // one block: a good token, the failing one, then a good token in the next transaction
         AddressUtxoEvent event = AddressUtxoEvent.builder()
@@ -111,7 +111,7 @@ class Cip68ProcessingFailureTest {
     @Test
     void aFailureWhileParsingTheDatumSharedByReferenceNftsIsOneSkippedOutput() {
         // the shared flat datum is parsed when the output is first seen, before any token is read
-        doThrow(new IllegalStateException("boom")).when(parser).parse(BAD_DATUM);
+        doThrow(new IllegalStateException("boom")).when(parser).parseDetailed(BAD_DATUM, null);
 
         AddressUtxo shared = outputWithReferenceNfts(BAD_DATUM, "01", "02", "03");
         AddressUtxoEvent event = event(tx(shared));
@@ -134,7 +134,7 @@ class Cip68ProcessingFailureTest {
             level = next;
         }
         ParsedCip68Datum parsed = new ParsedCip68Datum(null, "d", null, "Too deep", null, null, 1L, null, null, deep);
-        doReturn(Optional.of(parsed)).when(parser).parse(eq(TOO_DEEP_DATUM), any(AssetType.class));
+        doReturn(new com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.ParseOutcome.Parsed(parsed)).when(parser).parseDetailed(eq(TOO_DEEP_DATUM), any(AssetType.class));
 
         AddressUtxoEvent event = event(tx(
                 output(TOO_DEEP_DATUM, "01"), userToken("01"),
