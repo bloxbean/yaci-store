@@ -93,6 +93,19 @@ entry whose subject cannot be a key, a logo far beyond any real size), with a wa
 **Rich fungible tokens (CIP-68 label 444)** are served like fungible tokens, by their own `001bc280…` subject. They have no `logo`: their
 `image` is served as `metadata.logo`, as cf-token-metadata-registry does, and `description` is optional for them.
 
+**Choosing which tokens are returned** (`?validation=`, on `GET /tokens/subject/{subject}`, `POST /tokens/subject/query`, `/tokens/cip68/ft/...` and
+`/tokens/cip26/...`):
+
+| `validation` | Returned when |
+|---|---|
+| `ALL` (default) | always: every indexed token, as before |
+| `MANDATORY_ONLY` | the token has no `MANDATORY` validation error (optional problems are tolerated) |
+| `STRICT` | the token has no validation error at all (`metadata.valid` is `true`) |
+
+A token that is not accepted is a `404` for a single subject and is left out of a batch; the `validation_errors` of the tokens that are returned
+are never filtered. A token indexed before validation existed (no `validation_errors`) is judged by the rule it had before: name and description
+present. The filter runs on the rows the request already reads, so it adds no query.
+
 What is dropped is recorded in the `invalid_token` table (CIP-26 entries and CIP-68 datums that are unusable or look like an
 attack: the reason, the token, the transaction and output or the registry file). There is no API for it; read it with SQL, for example
 `SELECT standard, reason_code, count(*) FROM invalid_token GROUP BY 1, 2`. See `db/store/README.md` and ADR 0007. The `yaci.store.assets.invalid_tokens` counter

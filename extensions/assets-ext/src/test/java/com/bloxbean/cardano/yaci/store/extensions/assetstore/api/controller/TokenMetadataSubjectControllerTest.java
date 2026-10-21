@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.api.controller;
 
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.ValidationScope;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.AssetsExtStoreProperties;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.Metadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.StringProperty;
@@ -78,7 +79,7 @@ class TokenMetadataSubjectControllerTest {
 
         @Test
         void returns200WithMergedMetadataWhenFound() throws Exception {
-            when(tokenQueryService.querySubject(eq(VALID_SUBJECT), anyList(), anyList(), anyBoolean()))
+            when(tokenQueryService.querySubject(eq(VALID_SUBJECT), anyList(), anyList(), anyBoolean(), any(ValidationScope.class)))
                     .thenReturn(Optional.of(subjectWithName(VALID_SUBJECT, "Nutcoin")));
 
             mockMvc.perform(get("/api/v1/tokens/subject/{subject}", VALID_SUBJECT))
@@ -91,7 +92,7 @@ class TokenMetadataSubjectControllerTest {
 
         @Test
         void returns404WhenNoStandardHasAnythingIndexedForTheSubject() throws Exception {
-            when(tokenQueryService.querySubject(anyString(), anyList(), anyList(), anyBoolean()))
+            when(tokenQueryService.querySubject(anyString(), anyList(), anyList(), anyBoolean(), any(ValidationScope.class)))
                     .thenReturn(Optional.empty());
 
             mockMvc.perform(get("/api/v1/tokens/subject/{subject}", VALID_SUBJECT))
@@ -113,7 +114,7 @@ class TokenMetadataSubjectControllerTest {
         @Test
         void acceptsAPropertyFilterWithoutNameAndDescription() throws Exception {
             // a token is returned as indexed: there is no gate on name and description any more (ADR 0006)
-            when(tokenQueryService.querySubject(anyString(), anyList(), anyList(), anyBoolean()))
+            when(tokenQueryService.querySubject(anyString(), anyList(), anyList(), anyBoolean(), any(ValidationScope.class)))
                     .thenReturn(Optional.of(subjectWithName(VALID_SUBJECT, "Nutcoin")));
 
             mockMvc.perform(get("/api/v1/tokens/subject/{subject}", VALID_SUBJECT).param("property", "ticker"))
@@ -124,7 +125,7 @@ class TokenMetadataSubjectControllerTest {
         void returnsTheValidationErrorsOfATokenThatBreaksItsCip() throws Exception {
             ValidationError error = ValidationError.mandatory("CIP-68", "333", "description", "missing_value",
                     "description field is missing a mandatory value");
-            when(tokenQueryService.querySubject(anyString(), anyList(), anyList(), anyBoolean()))
+            when(tokenQueryService.querySubject(anyString(), anyList(), anyList(), anyBoolean(), any(ValidationScope.class)))
                     .thenReturn(Optional.of(new Subject(VALID_SUBJECT, Metadata.builder()
                             .name(new StringProperty("Nutcoin", "CIP_68")).build(), null, List.of(error))));
 
@@ -143,7 +144,7 @@ class TokenMetadataSubjectControllerTest {
 
         @Test
         void alwaysReturnsAValidationErrorsArray() throws Exception {
-            when(tokenQueryService.querySubject(anyString(), anyList(), anyList(), anyBoolean()))
+            when(tokenQueryService.querySubject(anyString(), anyList(), anyList(), anyBoolean(), any(ValidationScope.class)))
                     .thenReturn(Optional.of(subjectWithName(VALID_SUBJECT, "Nutcoin")));
 
             mockMvc.perform(get("/api/v1/tokens/subject/{subject}", VALID_SUBJECT))
@@ -153,7 +154,7 @@ class TokenMetadataSubjectControllerTest {
 
         @Test
         void acceptsPropertyFilterWithRequiredFields() throws Exception {
-            when(tokenQueryService.querySubject(anyString(), anyList(), anyList(), anyBoolean()))
+            when(tokenQueryService.querySubject(anyString(), anyList(), anyList(), anyBoolean(), any(ValidationScope.class)))
                     .thenReturn(Optional.of(subjectWithName(VALID_SUBJECT, "Nutcoin")));
 
             mockMvc.perform(get("/api/v1/tokens/subject/{subject}", VALID_SUBJECT)
@@ -164,7 +165,7 @@ class TokenMetadataSubjectControllerTest {
 
         @Test
         void usesRequestedQueryPriority() throws Exception {
-            when(tokenQueryService.querySubject(anyString(), anyList(), anyList(), anyBoolean()))
+            when(tokenQueryService.querySubject(anyString(), anyList(), anyList(), anyBoolean(), any(ValidationScope.class)))
                     .thenReturn(Optional.of(subjectWithName(VALID_SUBJECT, "Nutcoin")));
 
             mockMvc.perform(get("/api/v1/tokens/subject/{subject}", VALID_SUBJECT)
@@ -183,9 +184,9 @@ class TokenMetadataSubjectControllerTest {
         void returns200WithBatchResultsWhenValid() throws Exception {
             when(tokenQueryService.prefetchBatch(anyList(), anyList()))
                     .thenReturn(new BatchPrefetchData(Map.of(), Map.of(), Map.of()));
-            when(tokenQueryService.querySubjectBatch(eq(VALID_SUBJECT), anyList(), anyList(), any(), anyBoolean()))
+            when(tokenQueryService.querySubjectBatch(eq(VALID_SUBJECT), anyList(), anyList(), any(), anyBoolean(), any(ValidationScope.class)))
                     .thenReturn(Optional.of(subjectWithName(VALID_SUBJECT, "Nutcoin")));
-            when(tokenQueryService.querySubjectBatch(eq(VALID_SUBJECT_2), anyList(), anyList(), any(), anyBoolean()))
+            when(tokenQueryService.querySubjectBatch(eq(VALID_SUBJECT_2), anyList(), anyList(), any(), anyBoolean(), any(ValidationScope.class)))
                     .thenReturn(Optional.of(subjectWithName(VALID_SUBJECT_2, "FLDT")));
 
             String body = objectMapper.writeValueAsString(Map.of(
@@ -204,7 +205,7 @@ class TokenMetadataSubjectControllerTest {
         void filtersOutSubjectsNoStandardKnows() throws Exception {
             when(tokenQueryService.prefetchBatch(anyList(), anyList()))
                     .thenReturn(new BatchPrefetchData(Map.of(), Map.of(), Map.of()));
-            when(tokenQueryService.querySubjectBatch(eq(VALID_SUBJECT), anyList(), anyList(), any(), anyBoolean()))
+            when(tokenQueryService.querySubjectBatch(eq(VALID_SUBJECT), anyList(), anyList(), any(), anyBoolean(), any(ValidationScope.class)))
                     .thenReturn(Optional.empty());
 
             String body = objectMapper.writeValueAsString(Map.of("subjects", List.of(VALID_SUBJECT)));
@@ -256,7 +257,7 @@ class TokenMetadataSubjectControllerTest {
             ValidationError error = ValidationError.mandatory("CIP-26", null, "name", "missing_value", "name field is missing a mandatory value");
             when(tokenQueryService.prefetchBatch(anyList(), anyList()))
                     .thenReturn(new BatchPrefetchData(Map.of(), Map.of(), Map.of()));
-            when(tokenQueryService.querySubjectBatch(eq(VALID_SUBJECT), anyList(), anyList(), any(), anyBoolean()))
+            when(tokenQueryService.querySubjectBatch(eq(VALID_SUBJECT), anyList(), anyList(), any(), anyBoolean(), any(ValidationScope.class)))
                     .thenReturn(Optional.of(new Subject(VALID_SUBJECT, Metadata.empty(), null, List.of(error))));
 
             String body = objectMapper.writeValueAsString(Map.of("subjects", List.of(VALID_SUBJECT)));
@@ -275,7 +276,7 @@ class TokenMetadataSubjectControllerTest {
         void acceptsAPropertyFilterWithoutNameAndDescription() throws Exception {
             when(tokenQueryService.prefetchBatch(anyList(), anyList()))
                     .thenReturn(new BatchPrefetchData(Map.of(), Map.of(), Map.of()));
-            when(tokenQueryService.querySubjectBatch(eq(VALID_SUBJECT), anyList(), anyList(), any(), anyBoolean()))
+            when(tokenQueryService.querySubjectBatch(eq(VALID_SUBJECT), anyList(), anyList(), any(), anyBoolean(), any(ValidationScope.class)))
                     .thenReturn(Optional.empty());
             String body = objectMapper.writeValueAsString(Map.of(
                     "subjects", List.of(VALID_SUBJECT),

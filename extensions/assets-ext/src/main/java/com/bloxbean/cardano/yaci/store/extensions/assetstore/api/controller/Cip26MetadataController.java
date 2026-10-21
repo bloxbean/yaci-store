@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.api.controller;
 
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.ValidationScope;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.Cip26Metadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.Cip26StorageReader;
 import io.swagger.v3.oas.annotations.Operation;
@@ -33,9 +34,12 @@ public class Cip26MetadataController {
             @PathVariable("subject")
             @Pattern(regexp = TokenPatterns.SUBJECT_REGEX,
                     message = "subject must be 56-120 hex characters (policyId + assetName)")
-            String subject) {
+            String subject,
+            @Parameter(description = "ALL (default), MANDATORY_ONLY (no mandatory validation error) or STRICT (no validation error); a token that is not accepted is a 404")
+            @RequestParam(value = "validation", defaultValue = "ALL", required = false) ValidationScope validation) {
 
         return cip26StorageReader.findBySubject(subject)
+                .filter(entity -> validation.accepts(entity.getValidationErrors(), entity.getName() != null && entity.getDescription() != null))
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
@@ -57,9 +61,12 @@ public class Cip26MetadataController {
             @PathVariable("assetName")
             @Pattern(regexp = TokenPatterns.ASSET_NAME_REGEX,
                     message = "assetName must be 0-64 hex characters")
-            String assetName) {
+            String assetName,
+            @Parameter(description = "ALL (default), MANDATORY_ONLY (no mandatory validation error) or STRICT (no validation error); a token that is not accepted is a 404")
+            @RequestParam(value = "validation", defaultValue = "ALL", required = false) ValidationScope validation) {
 
         return cip26StorageReader.findBySubject(policyId + assetName)
+                .filter(entity -> validation.accepts(entity.getValidationErrors(), entity.getName() != null && entity.getDescription() != null))
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }

@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.api.controller;
 
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.ValidationScope;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Constants;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.Cip68StorageReader;
@@ -38,9 +39,12 @@ public class Cip68MetadataController {
             @PathVariable("subject")
             @Pattern(regexp = TokenPatterns.SUBJECT_REGEX,
                     message = "subject must be 56-120 hex characters (policyId + assetName)")
-            String subject) {
+            String subject,
+            @Parameter(description = "ALL (default), MANDATORY_ONLY (no mandatory validation error) or STRICT (no validation error); a token that is not accepted is a 404")
+            @RequestParam(value = "validation", defaultValue = "ALL", required = false) ValidationScope validation) {
 
         return cip68StorageReader.findBySubject(subject)
+                .filter(token -> validation.accepts(token.validationErrors(), token.name() != null && token.description() != null))
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
@@ -64,10 +68,13 @@ public class Cip68MetadataController {
             @PathVariable("rawAssetName")
             @Pattern(regexp = TokenPatterns.CIP68_RAW_ASSET_NAME_REGEX,
                     message = "rawAssetName must be 0-56 hex characters (CIP-68 label is prepended automatically)")
-            String rawAssetName) {
+            String rawAssetName,
+            @Parameter(description = "ALL (default), MANDATORY_ONLY (no mandatory validation error) or STRICT (no validation error); a token that is not accepted is a 404")
+            @RequestParam(value = "validation", defaultValue = "ALL", required = false) ValidationScope validation) {
 
         String referenceNftAssetName = Cip68Constants.REFERENCE_TOKEN_PREFIX + rawAssetName;
         return cip68StorageReader.findByPolicyIdAndAssetName(policyId, referenceNftAssetName)
+                .filter(token -> validation.accepts(token.validationErrors(), token.name() != null && token.description() != null))
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
