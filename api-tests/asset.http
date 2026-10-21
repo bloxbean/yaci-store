@@ -10,7 +10,8 @@ GET {{base_url}}/api/v1/txs?page=1&count=1
     );
     const txHash = response.body.transaction_summaries[0].tx_hash;
 
-    client.global.set("tx_hash", txHash);
+    //client.global.set("tx_hash", txHash);
+    client.global.set("tx_hash", "9b24acb8edfc51446fd7f85e9f3711ec1ac9892154e6b305be3b9e1b473c82b7");
 
     client.log("Stored tx_hash: " + txHash);
   });
@@ -142,7 +143,7 @@ GET {{base_url}}/api/v1/assets/supply/fingerprint/{{fingerprint}}
 
 ###
 ### Get asset history by fingerprint
-GET {{base_url}}/api/v1/assets/fingerprint/{{fingerprint}}?page=1&count=1
+GET {{base_url}}/api/v1/assets/fingerprint/{{fingerprint}}/history?page=1&count=1
 
 > {%
   client.test("Get asset supply by fingerprint", function() {
