@@ -104,7 +104,13 @@ entry whose subject cannot be a key, a logo far beyond any real size), with a wa
 
 A token that is not accepted is a `404` for a single subject and is left out of a batch; the `validation_errors` of the tokens that are returned
 are never filtered. A token indexed before validation existed (no `validation_errors`) is judged by the rule it had before: name and description
-present. The filter runs on the rows the request already reads, so it adds no query.
+present.
+
+**`?property=` limits the errors too.** When a request asks for some properties (`?property=ticker`), `validation_errors`, `metadata.valid` and the
+`?validation=` gate are about those properties only: an error on the `image` is not reported to a client that asked for the `ticker`. An `image` error
+counts for `logo` (a rich fungible token's image is served as its logo), the error that says a nested datum has no entry for the token is always kept,
+and errors about what the merged endpoint cannot return (`files`, extra properties, keys) are not reported under a filter. Without `property`, all
+errors are returned. The filter runs on the rows the request already reads, so it adds no query.
 
 What is dropped is recorded in the `invalid_token` table (CIP-26 entries and CIP-68 datums that are unusable or look like an
 attack: the reason, the token, the transaction and output or the registry file). There is no API for it; read it with SQL, for example

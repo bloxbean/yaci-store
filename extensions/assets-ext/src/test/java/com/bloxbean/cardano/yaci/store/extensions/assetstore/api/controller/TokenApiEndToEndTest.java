@@ -323,4 +323,33 @@ class TokenApiEndToEndTest {
         assertThat(statusOf("/api/v1/tokens/cip68/ft/{s}", "ALL")).isEqualTo(200);
         mockMvc.perform(get("/api/v1/tokens/cip68/ft/{s}", FT_SUBJECT)).andExpect(status().isOk());
     }
+
+    // ?property= limits the errors to the requested properties
+
+    @Test
+    void aPropertyFilterReportsOnlyTheErrorsOfTheRequestedProperties() throws Exception {
+        store(row(333).name("Coin").ticker("COIN").validationErrors(List.of(MANDATORY_ERROR)).build());
+
+        // the broken field is the description, the client reads only the ticker
+        mockMvc.perform(get("/api/v1/tokens/subject/{s}", FT_SUBJECT).param("property", "ticker"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.subject.validation_errors.length()").value(0))
+                .andExpect(jsonPath("$.subject.metadata.valid").value(true));
+        mockMvc.perform(get("/api/v1/tokens/subject/{s}", FT_SUBJECT).param("property", "description"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.subject.validation_errors.length()").value(1))
+                .andExpect(jsonPath("$.subject.metadata.valid").value(false));
+        mockMvc.perform(get("/api/v1/tokens/subject/{s}", FT_SUBJECT))
+                .andExpect(jsonPath("$.subject.validation_errors.length()").value(1));
+    }
+
+    @Test
+    void strictAndAPropertyFilterTogetherJudgeOnlyTheRequestedProperties() throws Exception {
+        store(row(333).name("Coin").ticker("COIN").validationErrors(List.of(MANDATORY_ERROR)).build());
+
+        mockMvc.perform(get("/api/v1/tokens/subject/{s}", FT_SUBJECT).param("property", "ticker").param("validation", "STRICT"))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/v1/tokens/subject/{s}", FT_SUBJECT).param("validation", "STRICT"))
+                .andExpect(status().isNotFound());
+    }
 }

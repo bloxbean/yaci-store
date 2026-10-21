@@ -448,6 +448,84 @@ class TokenQueryServiceTest {
                     .isPresent();
         }
 
+        // ?property=: only the errors about the requested properties
+
+        private final ValidationError imageError = ValidationError.mandatory("CIP-68", "222", "image", "missing_value",
+                "image field is missing a mandatory value");
+
+        @Test
+        void aPropertyFilterKeepsOnlyTheErrorsOfTheRequestedProperties() {
+            cip68Only(new FungibleTokenMetadata(null, null, null, "N", "TKR", null, 1L, List.of(cip68Error, imageError)));
+
+            Subject result = service.querySubject(BROKEN_SUBJECT, DEFAULT_PRIORITY, List.of("ticker"), false).orElseThrow();
+            assertThat(result.validationErrors()).isEmpty();
+            assertThat(result.metadata().valid()).isTrue();
+
+            assertThat(service.querySubject(BROKEN_SUBJECT, DEFAULT_PRIORITY, List.of("ticker", "description"), false)
+                    .orElseThrow().validationErrors()).containsExactly(cip68Error);
+        }
+
+        @Test
+        void withoutAPropertyFilterEveryErrorIsKept() {
+            cip68Only(new FungibleTokenMetadata(null, null, null, "N", "TKR", null, 1L, List.of(cip68Error, imageError)));
+
+            assertThat(service.querySubject(BROKEN_SUBJECT, DEFAULT_PRIORITY, List.of(), false).orElseThrow().validationErrors())
+                    .containsExactly(cip68Error, imageError);
+        }
+
+        @Test
+        void theValidationScopeJudgesTheRequestedPropertiesOnly() {
+            cip68Only(new FungibleTokenMetadata(null, null, null, "N", "TKR", null, 1L, List.of(cip68Error)));
+
+            // the description is broken, but only the ticker is asked for
+            assertThat(service.querySubject(BROKEN_SUBJECT, DEFAULT_PRIORITY, List.of("ticker"), false, ValidationScope.STRICT)).isPresent();
+            assertThat(service.querySubject(BROKEN_SUBJECT, DEFAULT_PRIORITY, List.of("description"), false, ValidationScope.STRICT)).isEmpty();
+            assertThat(service.querySubject(BROKEN_SUBJECT, DEFAULT_PRIORITY, List.of(), false, ValidationScope.MANDATORY_ONLY)).isEmpty();
+        }
+
+        @Test
+        void thePerStandardBlockIsFilteredToo() {
+            cip68Only(new FungibleTokenMetadata(null, null, null, "N", "TKR", null, 1L, List.of(cip68Error, imageError)));
+
+            Subject result = service.querySubject(BROKEN_SUBJECT, DEFAULT_PRIORITY, List.of("description"), true).orElseThrow();
+
+            assertThat(result.standards().cip68().validationErrors()).containsExactly(cip68Error);
+        }
+
+        @Test
+        void aCip26EntryIsFilteredToo() {
+            Cip26Metadata cip26 = new Cip26Metadata();
+            cip26.setSubject(BROKEN_SUBJECT);
+            cip26.setName("N");
+            cip26.setValidationErrors(List.of(cip26Error, ValidationError.optional("CIP-26", null, "ticker", "invalid_length", "ticker too long")));
+            cip26.setProperties(new Mapping(BROKEN_SUBJECT, null, null, null, null, null, null, null));
+            when(cip26StorageReader.findBySubject(BROKEN_SUBJECT)).thenReturn(Optional.of(cip26));
+            when(cip26StorageReader.findLogoBySubject(BROKEN_SUBJECT)).thenReturn(Optional.empty());
+            when(cip68StorageReader.findBySubject(eq(BROKEN_SUBJECT), any())).thenReturn(Optional.empty());
+
+            Subject result = service.querySubject(BROKEN_SUBJECT, DEFAULT_PRIORITY, List.of("ticker"), false).orElseThrow();
+
+            assertThat(result.validationErrors()).extracting(ValidationError::fieldName).containsExactly("ticker");
+        }
+
+        @Test
+        void theBatchFiltersTheErrorsToo() {
+            cip68Only(new FungibleTokenMetadata(null, null, null, "N", "TKR", null, 1L, List.of(cip68Error)));
+            TokenQueryService.BatchPrefetchData prefetch = service.prefetchBatch(List.of(BROKEN_SUBJECT), List.of("ticker"));
+
+            assertThat(service.querySubjectBatch(BROKEN_SUBJECT, DEFAULT_PRIORITY, List.of("ticker"), prefetch, false,
+                    ValidationScope.STRICT))
+                    .hasValueSatisfying(subject -> assertThat(subject.validationErrors()).isEmpty());
+        }
+
+        @Test
+        void aRowNeverCheckedStaysUncheckedUnderAPropertyFilter() {
+            cip68Only(new FungibleTokenMetadata(null, "d", null, "N", "TKR", null, 1L, null));
+
+            assertThat(service.querySubject(BROKEN_SUBJECT, DEFAULT_PRIORITY, List.of("ticker"), false).orElseThrow()
+                    .validationErrors()).isNull();
+        }
+
         @Test
         void theBatchKeepsAnUncheckedRowUnchecked() {
             cip68Only(new FungibleTokenMetadata(null, "d", null, "N", null, null, 1L, null));

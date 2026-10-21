@@ -161,6 +161,7 @@ public class TokenQueryService {
                             ? cip26StorageReader.findLogoBySubject(subject).orElse(null)
                             : null;
                     Cip26TokenMetadata cip26 = Cip26TokenMetadata.from(entity, logo);
+                    cip26.setValidationErrors(PropertyErrorFilter.filter(cip26.getValidationErrors(), properties));
                     return new ResolvedMetadata(
                             Metadata.from(entity, logo, properties),
                             new Standards(cip26, null),
@@ -170,6 +171,7 @@ public class TokenQueryService {
 
     private Optional<ResolvedMetadata> findCip68Metadata(String subject, List<String> properties) {
         return cip68StorageReader.findBySubject(subject, properties)
+                .map(found -> found.withValidationErrors(PropertyErrorFilter.filter(found.validationErrors(), properties)))
                 .map(cip68TokenMetadata -> new ResolvedMetadata(
                         Metadata.from(cip68TokenMetadata),
                         new Standards(null, cip68TokenMetadata),
@@ -197,7 +199,7 @@ public class TokenQueryService {
                                                                QueryPriority priority, BatchPrefetchData prefetchData) {
         return switch (priority) {
             case CIP_26 -> findCip26MetadataBatch(subject, properties, prefetchData);
-            case CIP_68 -> findCip68MetadataBatch(subject, prefetchData);
+            case CIP_68 -> findCip68MetadataBatch(subject, properties, prefetchData);
         };
     }
 
@@ -211,6 +213,7 @@ public class TokenQueryService {
                 ? prefetchData.cip26LogoMap().get(subject)
                 : null;
         Cip26TokenMetadata cip26 = Cip26TokenMetadata.from(entity, logo);
+        cip26.setValidationErrors(PropertyErrorFilter.filter(cip26.getValidationErrors(), properties));
         return Optional.of(new ResolvedMetadata(
                 Metadata.from(entity, logo, properties),
                 new Standards(cip26, null),
@@ -221,11 +224,13 @@ public class TokenQueryService {
      * Looks up CIP-68 metadata from the pre-fetched batch map keyed by fungible-token subject.
      * Property filtering was already applied when the map was built in {@link #prefetchBatch}.
      */
-    private Optional<ResolvedMetadata> findCip68MetadataBatch(String subject, BatchPrefetchData prefetchData) {
-        FungibleTokenMetadata cip68TokenMetadata = prefetchData.cip68MetadataMap().get(subject);
-        if (cip68TokenMetadata == null) {
+    private Optional<ResolvedMetadata> findCip68MetadataBatch(String subject, List<String> properties, BatchPrefetchData prefetchData) {
+        FungibleTokenMetadata fetched = prefetchData.cip68MetadataMap().get(subject);
+        if (fetched == null) {
             return Optional.empty();
         }
+        FungibleTokenMetadata cip68TokenMetadata =
+                fetched.withValidationErrors(PropertyErrorFilter.filter(fetched.validationErrors(), properties));
 
         return Optional.of(new ResolvedMetadata(
                 Metadata.from(cip68TokenMetadata),
