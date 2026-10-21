@@ -438,17 +438,6 @@ class TokenQueryServiceTest {
         }
 
         @Test
-        void aTokenWithOnlyAnUndefinedVersionPassesMandatoryOnlyButNotStrict() {
-            // Greenland Reserve Coin has version 0: the datum is readable, only the value is not one CIP-68 defines
-            ValidationError undefinedVersion = ValidationError.optional("CIP-68", null, "version", "undefined_version",
-                    "version 0 is not one CIP-68 defines (1 to 4)");
-            cip68Only(new FungibleTokenMetadata(null, "d", null, "N", null, null, 0L, List.of(undefinedVersion)));
-
-            assertThat(service.querySubject(BROKEN_SUBJECT, DEFAULT_PRIORITY, List.of(), false, ValidationScope.MANDATORY_ONLY)).isPresent();
-            assertThat(service.querySubject(BROKEN_SUBJECT, DEFAULT_PRIORITY, List.of(), false, ValidationScope.STRICT)).isEmpty();
-        }
-
-        @Test
         void theBatchLeavesOutATokenThatIsNotAccepted() {
             cip68Only(new FungibleTokenMetadata(null, null, null, "N", null, null, 1L, List.of(cip68Error)));
             TokenQueryService.BatchPrefetchData prefetch = service.prefetchBatch(List.of(BROKEN_SUBJECT), List.of());

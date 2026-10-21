@@ -27,7 +27,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * CIP-68 defines datum versions 1 to 4. A datum with another version is still indexed, with an OPTIONAL error on the
+ * CIP-68 defines datum versions 1 to 4. A datum with another version is still indexed, with a MANDATORY error on the
  * {@code version} that says which versions the CIP defines (ADR 0006): Greenland Reserve Coin has version 0 and is a
  * live token. For versions 1 to 4 the
  * layout still comes from the structure, as the CIP's retrieval steps say: a "721" key means nested metadata. The two
@@ -93,7 +93,7 @@ class Cip68VersionTest {
         assertThat(parsed.validationErrors()).singleElement().satisfies(e -> {
             assertThat(e.cip()).isEqualTo("CIP-68");
             assertThat(e.fieldName()).isEqualTo("version");
-            assertThat(e.fieldCategory().name()).isEqualTo("OPTIONAL");
+            assertThat(e.fieldCategory().name()).isEqualTo("MANDATORY");
             assertThat(e.code()).isEqualTo("undefined_version");
             assertThat(e.error()).contains("version " + version).contains("is not one CIP-68 defines (1 to 4)");
         });
