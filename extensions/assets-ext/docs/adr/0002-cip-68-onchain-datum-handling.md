@@ -351,6 +351,8 @@ Measured with this decision, on a full preprod sync from genesis (2026-10-20, ti
 
 - 76,101 rows: 64,927 without errors and 11,174 with some. Latest row per token: 222 = 52,694, 333 = 2,163, 444 = 454. Of the served 333 and 444 tokens,
   1,678 follow their CIP completely, 326 have only optional errors and 613 have a mandatory one.
+  (This sync ran before `undefined_version` became `OPTIONAL`, so its 36 rows with that error are counted among the mandatory ones; with the current
+  rule those whose only mandatory problem was the version move to the optional-only group. To be measured again.)
 - Errors by kind: `missing_value` on a mandatory field (222: 5,803, 333: 1,892, 444: 162), `invalid_uri_scheme` on an image (2,022), `plutus_constructor` (1,574),
   `wrong_type` (1,261), `invalid_files_entry` (471), `invalid_uri_scheme` on a logo (378), `not_utf8` (110), `undefined_version` (36), `no_nested_entry` (2).
 - Rules that drop a token that breaks the CIP skip 8,197 datums on the same chain (3,410 with no image, 1,968 with an image scheme the CIP does not allow,
