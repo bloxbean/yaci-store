@@ -78,9 +78,11 @@ There are no length caps on text: a datum is at most one transaction (16 KB), so
 
 The errors are computed by the parser, the validator and the processor, and stored in a new `validation_errors` JSON column of
 `cip68_metadata` and `cip26_metadata` (`JSONB`, `JSON`, `TEXT` on H2; nullable). Reading a row costs nothing extra, and the batch
-API makes no new query. A row written before the column existed has `NULL`, which the API returns as `[]`; the tokens that were
-dropped before exist nowhere, so a **full resync is required** when upgrading: a database is never upgraded in place, and there is no
-backfill. The migration is additive (`V0_1700_2`).
+API makes no new query. A row written before the column existed has `NULL`, which means *never checked* and is not the same as `[]` (*checked, no errors*): the API
+leaves `validation_errors` out for it, and `metadata.valid` falls back to the rule it had before (name and description both present). The
+migration is additive (`V0_1700_2`, with `V0_1700_3`) and rewrites no data, so a node upgrades in place and keeps working. The tokens that were
+dropped before exist nowhere, and the old rows have no errors, so a **full resync** is needed for complete results; there is no backfill. When
+a token merges several standards, `validation_errors` is left out only if a standard has none recorded and no other reports any.
 
 *Alternative rejected:* computing the errors at read time from the stored datum or mapping. It needs no migration, but it runs the
 parser on every request, and it cannot bring back what was never stored.
@@ -110,9 +112,10 @@ but not served. This follows cf-token-metadata-registry ADR-018, since for now b
 
 ### 8. Where it ships
 
-yaci-store 3 only. The 2.x line keeps its current behaviour. The new rows and the `validation_errors` column need a resync to be
-complete, and a partial backport (the field and the migration, with old rows `NULL`) would give mixed results. The backport PR #1242
-of rules that drop a token is on hold.
+yaci-store 3. The migrations are additive and the API tells "never checked" (`NULL`, field left out, the old `valid` rule) from "no errors"
+(`[]`), so a later 2.x backport of the field, the migrations and `invalid_token` can upgrade a database in place without a resync, with the rows
+written before it unchecked. The policy that serves tokens a strict reader would drop stays with 3.x for now; the backport PR #1242 of rules
+that drop a token is on hold.
 
 ## Consequences
 
