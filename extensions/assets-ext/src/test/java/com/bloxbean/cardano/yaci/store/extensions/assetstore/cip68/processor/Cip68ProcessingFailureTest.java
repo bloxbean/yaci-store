@@ -21,6 +21,9 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.parser.Cip68D
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service.Cip68TokenService;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.Cip68Metadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.repository.Cip68MetadataRepository;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.invalidtoken.InvalidTokenReason;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.invalidtoken.InvalidTokenRecorder;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.invalidtoken.InvalidTokenReport;
 import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxoEvent;
 import com.bloxbean.cardano.yaci.store.utxo.domain.TxInputOutput;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -106,6 +109,43 @@ class Cip68ProcessingFailureTest {
         assertThat(warnings()).singleElement().satisfies(w -> assertThat(w)
                 .contains(TX_HASH + "#").contains("indexing it failed unexpectedly")
                 .contains("IllegalStateException").contains("boom").contains(BAD_DATUM));
+    }
+
+    @Test
+    void oneReferenceNftFailingSkipsOnlyThatOneAndTheRestOfTheOutputIsIndexed() {
+        // an output with the reference NFTs A, B and C, each read on its own (a nested datum): B throws, A and C are fine
+        doReturn(true).when(parser).hasNestedMetadata(any());
+        doThrow(new IllegalStateException("boom")).when(parser)
+                .parseDetailed(any(), eq(AssetType.fromUnit(POLICY + Cip68Constants.REFERENCE_TOKEN_PREFIX + "02")));
+        AddressUtxo shared = outputWithReferenceNfts(goodDatum("Fine"), "01", "02", "03");
+
+        assertThatCode(() -> processor.processTransaction(event(tx(shared, userToken("01"), userToken("02"), userToken("03")))))
+                .doesNotThrowAnyException();
+
+        // A and C are stored (C used to be lost with B), B is skipped and counted once
+        assertThat(saved()).extracting(Cip68Metadata::getAssetName)
+                .containsExactlyInAnyOrder(Cip68Constants.REFERENCE_TOKEN_PREFIX + "01", Cip68Constants.REFERENCE_TOKEN_PREFIX + "03");
+        assertThat(processingFailures()).isEqualTo(1);
+        assertThat(indexed333()).isEqualTo(2);
+        assertThat(warnings()).singleElement().satisfies(w -> assertThat(w)
+                .contains(POLICY + "/" + Cip68Constants.REFERENCE_TOKEN_PREFIX + "02").contains("boom"));
+    }
+
+    @Test
+    void onlyTheReferenceNftThatFailedIsRecordedInInvalidToken() {
+        InvalidTokenRecorder recorder = mock(InvalidTokenRecorder.class);
+        processor = new Cip68Processor(new Cip68TokenService(repository), parser, repository, new Cip68Metrics(registry), recorder);
+        doReturn(true).when(parser).hasNestedMetadata(any());
+        doThrow(new IllegalStateException("boom")).when(parser)
+                .parseDetailed(any(), eq(AssetType.fromUnit(POLICY + Cip68Constants.REFERENCE_TOKEN_PREFIX + "02")));
+
+        processor.processTransaction(event(tx(outputWithReferenceNfts(goodDatum("Fine"), "01", "02", "03"),
+                userToken("01"), userToken("02"), userToken("03"))));
+
+        ArgumentCaptor<InvalidTokenReport> recorded = ArgumentCaptor.forClass(InvalidTokenReport.class);
+        verify(recorder).record(recorded.capture());
+        assertThat(recorded.getValue().reasonCode()).isEqualTo(InvalidTokenReason.PROCESSING_FAILURE);
+        assertThat(recorded.getValue().assetName()).isEqualTo(Cip68Constants.REFERENCE_TOKEN_PREFIX + "02");
     }
 
     @Test

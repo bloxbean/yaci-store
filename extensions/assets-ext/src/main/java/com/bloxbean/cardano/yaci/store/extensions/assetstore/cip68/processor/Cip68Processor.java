@@ -117,15 +117,22 @@ public class Cip68Processor {
             shared = new SharedDatum(output, refNfts.size());
         }
         for (Amt refNftAmt : refNfts) {
-            toEntity(output, AssetType.fromUnit(refNftAmt.getUnit()), assetUnitsInTx, slot, shared).ifPresent(entities::add);
+            AssetType refNft = AssetType.fromUnit(refNftAmt.getUnit());
+            // one reference NFT failing must not take the others of the output with it: only that one is skipped
+            try {
+                toEntity(output, refNft, assetUnitsInTx, slot, shared).ifPresent(entities::add);
+            } catch (RuntimeException e) {
+                skipReferenceNft(output, slot, refNft, e);
+            }
         }
     }
 
     /**
-     * An unexpected exception while indexing an output means the datum is something the parser did not foresee, and
-     * on a public chain anyone can put a datum there. The output is skipped, with a warning and a count, and the sync
-     * goes on: the metadata of a token is not worth stopping the store for. Rows already built for this output are
-     * kept. A failure that only shows at flush or commit, inside the database, is not caught here.
+     * An unexpected exception while indexing a reference NFT means the datum is something the parser did not foresee, and
+     * on a public chain anyone can put a datum there. That reference NFT is skipped, with a warning and a count, and the
+     * sync goes on: the metadata of a token is not worth stopping the store for. The other reference NFTs of the output,
+     * and the rows already built, are kept. A failure that only shows at flush or commit, inside the database, is not
+     * caught here.
      * <p>
      * Why this catch exists: this listener runs inside the block transaction, so any exception stops the whole store
      * (https://github.com/bloxbean/yaci-store/issues/1243, ADR 0004 in {@code extensions/assets-ext/docs/adr}).
@@ -133,37 +140,47 @@ public class Cip68Processor {
      * {@code datums.skipped{reason="processing_failure"}}. That counter is the one to alert on: unlike the other
      * reasons it means something unexpected, a bug or a new kind of datum.
      */
+    private void skipReferenceNft(AddressUtxo output, Long slot, AssetType refNft, RuntimeException e) {
+        log.warn("Output {}#{}: skipping the CIP-68 datum of {}, indexing it failed unexpectedly ({}: {}); datum {}",
+                output.getTxHash(), output.getOutputIndex(), refNft.policyId() + "/" + refNft.assetName(), e.getClass().getSimpleName(), e.getMessage(),
+                output.getInlineDatum());
+        log.debug("Stack trace of the CIP-68 indexing failure of output {}#{}", output.getTxHash(), output.getOutputIndex(), e);
+        metrics.processingFailure();
+        recordProcessingFailure(output, slot, refNft, e);
+    }
+
+    /**
+     * The same for a failure that cannot be put on one reference NFT: reading the output's reference NFTs, or the datum that
+     * all of them share, failed before any of them was indexed. The whole output is skipped.
+     */
     private void skipOutput(AddressUtxo output, Long slot, RuntimeException e) {
         log.warn("Output {}#{}: skipping the CIP-68 datum, indexing it failed unexpectedly ({}: {}); datum {}",
                 output.getTxHash(), output.getOutputIndex(), e.getClass().getSimpleName(), e.getMessage(),
                 output.getInlineDatum());
         log.debug("Stack trace of the CIP-68 indexing failure of output {}#{}", output.getTxHash(), output.getOutputIndex(), e);
         metrics.processingFailure();
-        recordProcessingFailure(output, slot, e);
-    }
-
-    /** One row of {@code invalid_token} per reference NFT of the output (ADR 0007); a failure here is already contained by the recorder. */
-    private void recordProcessingFailure(AddressUtxo output, Long slot, RuntimeException e) {
         List<Amt> refNfts;
         try {
             refNfts = cip68TokenService.extractReferenceNfts(output);
         } catch (RuntimeException ignored) {
             refNfts = List.of();
         }
+        if (refNfts.isEmpty()) {
+            recordProcessingFailure(output, slot, null, e);
+        }
+        for (Amt refNft : refNfts) {
+            recordProcessingFailure(output, slot, AssetType.fromUnit(refNft.getUnit()), e);
+        }
+    }
+
+    /** One row of {@code invalid_token} (ADR 0007) for the reference NFT that failed, or for the output when none can be named; a failure here is already contained by the recorder. */
+    private void recordProcessingFailure(AddressUtxo output, Long slot, @Nullable AssetType refNft, RuntimeException e) {
         Map<String, Object> details = new LinkedHashMap<>();
         details.put("exception", e.getClass().getName());
         details.put("message", String.valueOf(e.getMessage()));
         details.put("datum_prefix", abbreviateDatum(output.getInlineDatum()));
-        if (refNfts.isEmpty()) {
-            invalidTokenRecorder.record(droppedReport(output, slot, null, InvalidTokenReason.PROCESSING_FAILURE,
-                    "indexing the output failed unexpectedly: " + e.getClass().getSimpleName() + ": " + e.getMessage(), details));
-            return;
-        }
-        for (Amt refNft : refNfts) {
-            invalidTokenRecorder.record(droppedReport(output, slot, AssetType.fromUnit(refNft.getUnit()),
-                    InvalidTokenReason.PROCESSING_FAILURE,
-                    "indexing the output failed unexpectedly: " + e.getClass().getSimpleName() + ": " + e.getMessage(), details));
-        }
+        invalidTokenRecorder.record(droppedReport(output, slot, refNft, InvalidTokenReason.PROCESSING_FAILURE,
+                "indexing the output failed unexpectedly: " + e.getClass().getSimpleName() + ": " + e.getMessage(), details));
     }
 
     /** A datum that is dropped as unusable or an attack is recorded for the reference NFT it was read for (ADR 0007). */
