@@ -32,7 +32,14 @@ public interface RewardStorage {
 
     int deleteInstantRewardsBySlotGreaterThan(long slot);
 
-    int deleteRewardsBySlotGreaterThan(long slot);
+    /**
+     * Deletes rewards with slot greater than the given slot.
+     *
+     * @param slot the rollback slot
+     * @param fromSpendableEpoch the epoch of {@code slot}. A reward's spendable_epoch is the epoch of its slot,
+     *                           so this bound removes no extra rows; it only lets PostgreSQL skip the older partitions.
+     */
+    int deleteRewardsBySlotGreaterThan(long slot, int fromSpendableEpoch);
 
     int deleteRewardRestsBySlotGreaterThan(long slot);
 
