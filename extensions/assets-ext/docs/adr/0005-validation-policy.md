@@ -64,7 +64,7 @@ lets through; new rules have to be written in code and tested there.
   are checked on GitHub before they are merged (the maintainers' statement), and the sync logs a tally at INFO every 500 files and at
   the end: `inserted`, `perm-skipped`, `transient`, `no-mapping` and `filename-mismatch`. `perm-skipped` now means only an entry that
   was dropped, not one that failed validation.
-- A datum that does not have the CIP-68 shape at all is not logged, because reference NFT outputs can carry arbitrary datums.
+- A datum that does not have the CIP-68 shape at all (not a constructor, or its first field is not a metadata map) is not logged, because reference NFT outputs can carry arbitrary datums. A datum with the metadata map but no integer version has the shape: it is indexed with a `MANDATORY` error on the version.
 
 ## Consequences
 

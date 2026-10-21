@@ -231,6 +231,7 @@ characters; CIP-68 has no equivalent, and a CIP-26 limit is reported, not enforc
 
 | Input | Rule | Effect |
 |---|---|---|
+| `version` | missing (a constructor with the metadata map and no second field), or not an integer | the datum is indexed with no version and a **`MANDATORY`** error: `missing_value` when absent, `wrong_type` when it is another type. The CIP requires the version, so the token is not hidden; it is flagged. Measured on preprod: 292 reference NFT outputs (239 without a version, 53 with a non-integer one), about 0.4% of the indexed rows; mainnet to be measured |
 | `version` | an integer that does not fit a `long` | the datum is indexed with no version and an `out_of_range` error, **`MANDATORY`** (narrowing it would wrap `2^64 + 1` into 1) |
 | `version` | not 1 to 4 | indexed as written, with an `undefined_version` error, **`MANDATORY`**: the CIP requires the `version` field and defines its values. Greenland Reserve Coin (version 0) is therefore returned by default, and left out by `?validation=MANDATORY_ONLY` and `STRICT` |
 | nesting depth of the datum | the CBOR decoder recurses; a `StackOverflowError` is caught | **dropped** with a WARN that says it looks like an attack |
@@ -290,7 +291,7 @@ not UTF-8, where it used to return garbled text.
 - A flat datum is parsed once for the whole output, so what is wrong with the datum itself (a wrong type, a constructor, a bad `logo`, an undefined version) is
   **counted once per output**, not once per reference NFT; the errors that depend on a label, the rows and the `indexed` count stay per token. Without this a datum
   that is wrong was counted once for each of its reference NFTs (178 times for the largest output on mainnet), which says nothing about how many datums are bad.
-- A datum that does not have the CIP-68 shape at all (not a constructor, no metadata map, no integer version) is **not** logged: reference NFT outputs can
+- A datum that does not have the CIP-68 shape at all (not a constructor, or a constructor whose first field is not a metadata map) is **not** logged: reference NFT outputs can
   carry arbitrary datums, and it would be noise.
 
 **Metrics (#1237).** Micrometer counters, read from `/actuator/prometheus`: `yaci.store.assets.cip68.datums.indexed` (tag `label`: 222, 333, 444);
