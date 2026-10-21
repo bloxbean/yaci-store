@@ -70,8 +70,8 @@ class Cip68PropertyDepthTest {
         assertThat(parsed.name()).isEqualTo("x");
         assertThat(parsed.description()).isEqualTo("d");
         assertThat(parsed.properties()).isNull();
-        assertThat(warnings()).singleElement().satisfies(w -> assertThat(w)
-                .contains("dropping property 'properties.foo' and keeping the rest").contains("nested deeper than " + LIMIT + " levels"));
+        // the WARN that names the token and the transaction is the processor's (Cip68AttackLoggingTest); the parser counts and reports
+        assertThat(warnings()).isEmpty();
         assertThat(dropped()).isEqualTo(1);
         // the owner is told too: an error with the field and the limit
         assertThat(parsed.validationErrors()).singleElement().satisfies(e -> {
@@ -111,10 +111,11 @@ class Cip68PropertyDepthTest {
         MapPlutusData props = withProperty("bar", BigIntPlutusData.of(1));
         props.put(BytesPlutusData.of("files"), ListPlutusData.of(file));
 
+        ParsedCip68Datum parsed = parse(props);
         @SuppressWarnings("unchecked")
-        List<Map<String, Object>> files = (List<Map<String, Object>>) parse(props).properties().get("files");
+        List<Map<String, Object>> files = (List<Map<String, Object>>) parsed.properties().get("files");
         assertThat(files).singleElement().satisfies(f -> assertThat(f).containsOnlyKeys("mediaType", "src"));
-        assertThat(warnings()).singleElement().satisfies(w -> assertThat(w).contains("files[].deep"));
+        assertThat(parsed.validationErrors()).singleElement().satisfies(e -> assertThat(e.fieldName()).isEqualTo("files[].deep"));
         assertThat(dropped()).isEqualTo(1);
     }
 
@@ -131,7 +132,10 @@ class Cip68PropertyDepthTest {
 
         assertThat(parsed.name()).isEqualTo("x");
         assertThat(parsed.properties()).isNull();
-        assertThat(warnings()).singleElement().satisfies(w -> assertThat(w).contains("nested deeper than"));
+        assertThat(parsed.validationErrors()).singleElement().satisfies(e -> {
+            assertThat(e.code()).isEqualTo("too_deep");
+            assertThat(e.error()).contains("nested deeper than");
+        });
     }
 
     // ---------- helpers ----------

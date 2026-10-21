@@ -128,14 +128,14 @@ public class Cip68DatumParser {
             // transaction size, so a valid on-chain datum can be nested deeper than the stack allows.
             // StackOverflowError is an Error, not an Exception, so it needs its own catch. A datum nested this
             // deep is an obvious attack on the indexer: it is left out, like any undecodable one.
-            log.warn("Skipping CIP-68 datum nested too deeply to decode, this looks like an attack ({} bytes)",
-                    inlineDatum.length() / 2);
+            log.warn("Skipping the CIP-68 datum of {}, nested too deeply to decode, this looks like an attack ({} bytes): {}",
+                    describe(referenceNft), inlineDatum.length() / 2, abbreviateDatum(inlineDatum));
             metrics.parseFailure();
             return Optional.empty();
         } catch (Exception e) {
             // One line per failure, with the datum for reproduction; the stack trace only at DEBUG,
             // so a run of unparseable datums doesn't flood the sync log.
-            log.warn("Skipping unparseable CIP-68 datum ({}): {}", e, inlineDatum);
+            log.warn("Skipping the unparseable CIP-68 datum of {} ({}): {}", describe(referenceNft), e, inlineDatum);
             log.debug("CIP-68 datum parse failure", e);
             metrics.parseFailure();
             return Optional.empty();
@@ -542,16 +542,15 @@ public class Cip68DatumParser {
 
     /**
      * Drops a property whose value is nested deeper than {@link #MAX_PROPERTY_DEPTH}: that is an obvious attack on the
-     * indexer (https://github.com/bloxbean/yaci-store/issues/1240), not metadata. One warning and a count, and an error
-     * so that the owner is told; the rest of the datum is indexed.
+     * indexer (https://github.com/bloxbean/yaci-store/issues/1240), not metadata. A count, and an error so that the owner is
+     * told (and the processor logs one warning that names the token and the transaction); the rest of the datum is indexed.
      */
     private boolean dropsTooDeepProperty(String field, PlutusData value, List<ValidationError> errors) {
         if (!isNestedDeeperThan(value, MAX_PROPERTY_DEPTH)) {
             return false;
         }
+        // the processor logs the WARN, since it knows the token and the transaction; the parser only counts it
         metrics.propertyDropped(Cip68Metrics.TOO_DEEP);
-        log.warn("CIP-68 datum: dropping property '{}' and keeping the rest, because its value is nested deeper than {} "
-                + "levels, this looks like an attack", field, MAX_PROPERTY_DEPTH);
         errors.add(ValidationError.optional(CIP_68, null, field, TOO_DEEP,
                 "the value is nested deeper than " + MAX_PROPERTY_DEPTH + " levels, dropped"));
         return true;
@@ -635,6 +634,15 @@ public class Cip68DatumParser {
             errors.add(ValidationError.optional(CIP_68, null, field, PLUTUS_CONSTRUCTOR,
                     "the value holds a Plutus constructor, which CIP-68 metadata does not allow, stored as {constructor, fields}"));
         }
+    }
+
+    private static String describe(@Nullable AssetType referenceNft) {
+        return referenceNft == null ? "an unknown reference NFT" : referenceNft.policyId() + "/" + referenceNft.assetName();
+    }
+
+    /** A datum that is an attack can be 16 KB of nesting: the log shows its start only. */
+    private static String abbreviateDatum(String datum) {
+        return datum.length() <= 120 ? datum : datum.substring(0, 120) + "...";
     }
 
     private static String abbreviate(String value) {
