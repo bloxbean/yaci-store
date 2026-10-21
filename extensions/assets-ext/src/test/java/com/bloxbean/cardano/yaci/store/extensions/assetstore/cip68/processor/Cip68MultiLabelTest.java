@@ -94,7 +94,6 @@ class Cip68MultiLabelTest {
         assertThat(warnings()).isEmpty();
         assertThat(infos()).singleElement().satisfies(i -> assertThat(i)
                 .contains(POLICY).contains("[222, 333]").contains("stored with label 222"));
-        assertThat(multiLabel("222+333")).isEqualTo(1);
     }
 
     @Test
@@ -105,7 +104,6 @@ class Cip68MultiLabelTest {
         assertThat(saved).get().extracting(Cip68Metadata::getLabel).isEqualTo(Cip68Constants.LABEL_NFT);
         assertThat(errorsOf(saved.get())).containsExactly("333:description:MANDATORY:missing_value");
         assertThat(warnings()).isEmpty();
-        assertThat(multiLabel("222+333")).isEqualTo(1);
         assertThat(registry.find(Cip68Metrics.SKIPPED).counters()).isEmpty();
     }
 
@@ -138,7 +136,6 @@ class Cip68MultiLabelTest {
             // the logo does not depend on the label, so its error carries no sub_standard
             assertThat(errorsOf(row)).containsExactly("null:logo:OPTIONAL:invalid_uri_scheme");
         });
-        assertThat(multiLabel("222+333")).isEqualTo(1);
     }
 
     @Test
@@ -147,7 +144,6 @@ class Cip68MultiLabelTest {
 
         assertThat(saved).get().extracting(Cip68Metadata::getLabel).isEqualTo(Cip68Constants.LABEL_NFT);
         assertThat(saved.get().getValidationErrors()).isEmpty();
-        assertThat(multiLabel("222+333+444")).isEqualTo(1);
     }
 
     @Test
@@ -165,7 +161,6 @@ class Cip68MultiLabelTest {
 
         assertThat(saved).get().extracting(Cip68Metadata::getLabel).isEqualTo(Cip68Constants.LABEL_NFT);
         assertThat(infos()).isEmpty();
-        assertThat(registry.find(Cip68Metrics.MULTI_LABEL).counters()).isEmpty();
     }
 
     @Test
@@ -177,11 +172,6 @@ class Cip68MultiLabelTest {
     }
 
     // ---------- helpers ----------
-
-    private double multiLabel(String labels) {
-        var c = registry.find(Cip68Metrics.MULTI_LABEL).tag("labels", labels).counter();
-        return c == null ? 0 : c.count();
-    }
 
     private List<String> warnings() {
         return logs.list.stream().filter(e -> e.getLevel() == Level.WARN).map(ILoggingEvent::getFormattedMessage).toList();

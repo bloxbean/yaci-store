@@ -31,9 +31,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
 /**
- * The counters behind {@code /actuator/prometheus}: datums indexed, validation errors reported for them (by label, code
- * and category), datums skipped (only what is not metadata at all) and properties dropped (only what looks like an
- * attack). Runs the real parser, validator and processor with a {@link SimpleMeterRegistry}.
+ * The counters behind {@code /actuator/prometheus}: datums indexed (by label), datums skipped (only what is not metadata at
+ * all) and properties dropped (only what looks like an attack). What is wrong with a stored token is not a counter, it is
+ * in its {@code validation_errors}. Runs the real parser, validator and processor with a {@link SimpleMeterRegistry}.
  */
 class Cip68MetricsTest {
 
@@ -64,26 +64,22 @@ class Cip68MetricsTest {
     }
 
     @Test
-    void countsTheValidationErrorsPerLabelCodeAndCategoryAndIndexesEveryDatum() {
+    void indexesEveryDatumWhateverIsWrongWithIt() {
         process(Cip68Constants.NFT_TOKEN_PREFIX, text("description", "no name"), text("image", "ipfs://Qm"));
         process(Cip68Constants.NFT_TOKEN_PREFIX, text("name", "N"));
         process(Cip68Constants.NFT_TOKEN_PREFIX, text("name", "N"), text("image", "iagon://x"));
         process(Cip68Constants.FUNGIBLE_TOKEN_PREFIX, text("name", "C"));
 
         // 222: no name, no image, an image with another scheme; 333: no description. All four datums are indexed.
-        assertThat(errors("222", "missing_value", "MANDATORY")).isEqualTo(2);
-        assertThat(errors("222", "invalid_uri_scheme", "MANDATORY")).isEqualTo(1);
-        assertThat(errors("333", "missing_value", "MANDATORY")).isEqualTo(1);
         assertThat(indexed(222)).isEqualTo(3);
         assertThat(indexed(333)).isEqualTo(1);
         assertThat(registry.find(Cip68Metrics.SKIPPED).counters()).isEmpty();
     }
 
     @Test
-    void countsABadLogoAsAnOptionalErrorAndStillIndexesTheToken() {
+    void aBadLogoStillIndexesTheToken() {
         process(Cip68Constants.FUNGIBLE_TOKEN_PREFIX, text("name", "C"), text("description", "d"), text("logo", "iagon://logo"));
 
-        assertThat(errors("none", "invalid_uri_scheme", "OPTIONAL")).isEqualTo(1);
         assertThat(indexed(333)).isEqualTo(1);
         assertThat(registry.find(Cip68Metrics.SKIPPED).counters()).isEmpty();
         assertThat(registry.find(Cip68Metrics.DROPPED_PROPERTIES).counters()).isEmpty();
@@ -93,12 +89,12 @@ class Cip68MetricsTest {
     void countsAnUndecodableDatumAsAParseFailure() {
         processor.processTransaction(event("zz-not-hex", Cip68Constants.NFT_TOKEN_PREFIX));
 
-        assertThat(registry.get(Cip68Metrics.SKIPPED).tag("label", "unknown").tag("reason", "parse_failure").counter().count())
+        assertThat(registry.get(Cip68Metrics.SKIPPED).tag("reason", "parse_failure").counter().count())
                 .isEqualTo(1);
     }
 
     @Test
-    void countsANestedDatumWithoutAnEntryForTheTokenAsAnErrorAndIndexesIt() {
+    void indexesANestedDatumWithoutAnEntryForTheToken() {
         MapPlutusData entry = new MapPlutusData();
         entry.put(BytesPlutusData.of("name"), BytesPlutusData.of("N"));
         entry.put(BytesPlutusData.of("image"), BytesPlutusData.of("ipfs://Qm"));
@@ -112,13 +108,12 @@ class Cip68MetricsTest {
 
         processor.processTransaction(event(datum(root), Cip68Constants.NFT_TOKEN_PREFIX));
 
-        assertThat(errors("none", "no_nested_entry", "MANDATORY")).isEqualTo(1);
         assertThat(indexed(222)).isEqualTo(1);
         assertThat(registry.find(Cip68Metrics.SKIPPED).counters()).isEmpty();
     }
 
     @Test
-    void countsWhatAFlatDatumGetsWrongOnceWhenSeveralReferenceNftsShareIt() {
+    void countsEachReferenceNftOfAFlatDatumAsIndexed() {
         // one flat datum with a bad logo and a constructor property, held by an output with three reference NFTs
         MapPlutusData props = new MapPlutusData();
         props.put(BytesPlutusData.of("name"), BytesPlutusData.of("N"));
@@ -128,47 +123,20 @@ class Cip68MetricsTest {
 
         processor.processTransaction(eventWithReferenceNfts(datum(props), "01", "02", "03"));
 
-        // each reference NFT has its own row, so the tokens are counted per token ...
+        // each reference NFT has its own row, so the tokens are counted per token
         assertThat(indexed(333)).isEqualTo(3);
-        // ... but the datum is one, so what is wrong with it is reported once, not three times
-        assertThat(errors("none", "plutus_constructor", "OPTIONAL")).isEqualTo(1);
-        assertThat(errors("none", "invalid_uri_scheme", "OPTIONAL")).isEqualTo(1);
-    }
-
-    @Test
-    void countsWhatTwoOutputsGetWrongOnceEachWhenEachHoldsOneReferenceNft() {
-        MapPlutusData props = new MapPlutusData();
-        props.put(BytesPlutusData.of("name"), BytesPlutusData.of("N"));
-        props.put(BytesPlutusData.of("description"), BytesPlutusData.of("d"));
-        props.put(BytesPlutusData.of("k"), ConstrPlutusData.of(0));
-
-        processor.processTransaction(eventWithReferenceNfts(datum(props), "01"));
-        processor.processTransaction(eventWithReferenceNfts(datum(props), "02"));
-
-        assertThat(errors("none", "plutus_constructor", "OPTIONAL")).isEqualTo(2);
-    }
-
-    @Test
-    void countsLabelErrorsPerReferenceNftWhenSeveralShareAFlatDatum() {
-        MapPlutusData props = new MapPlutusData();
-        props.put(BytesPlutusData.of("name"), BytesPlutusData.of("N"));
-
-        // no paired user token: the label is inferred (333), and the missing description is each token's own error
-        processor.processTransaction(eventWithReferenceNfts(datum(props), "01", "02", "03"));
-
-        assertThat(errors("333", "missing_value", "MANDATORY")).isEqualTo(3);
     }
 
     @Test
     void countsAnUndecodableDatumOnceWhenSeveralReferenceNftsShareIt() {
         processor.processTransaction(eventWithReferenceNfts("zz-not-hex", "01", "02"));
 
-        assertThat(registry.get(Cip68Metrics.SKIPPED).tag("label", "unknown").tag("reason", "parse_failure").counter().count())
+        assertThat(registry.get(Cip68Metrics.SKIPPED).tag("reason", "parse_failure").counter().count())
                 .isEqualTo(1);
     }
 
     @Test
-    void countsConstructorPropertiesAsErrorsAndDropsNothing() {
+    void constructorPropertiesDropNothing() {
         MapPlutusData nested = new MapPlutusData();
         nested.put(BytesPlutusData.of("k"), ConstrPlutusData.of(0));
         process(Cip68Constants.NFT_TOKEN_PREFIX, text("name", "N"), text("image", "ipfs://Qm"),
@@ -176,13 +144,12 @@ class Cip68MetricsTest {
                 entry("deep", nested),
                 Map.entry("1", (PlutusData) BytesPlutusData.of("from bytes")));
 
-        assertThat(errors("none", "plutus_constructor", "OPTIONAL")).isEqualTo(3);
-        assertThat(errors("none", "unsupported_key", "OPTIONAL")).isZero();
+        assertThat(indexed(222)).isEqualTo(1);
         assertThat(registry.find(Cip68Metrics.DROPPED_PROPERTIES).counters()).isEmpty();
     }
 
     @Test
-    void countsAPropertyNestedTooDeepAsDroppedAndAsAnError() {
+    void countsAPropertyNestedTooDeepAsDropped() {
         PlutusData value = BigIntPlutusData.of(0);
         for (int i = 0; i <= Cip68DatumParser.MAX_PROPERTY_DEPTH; i++) {
             value = ListPlutusData.of(value);
@@ -190,12 +157,11 @@ class Cip68MetricsTest {
         process(Cip68Constants.NFT_TOKEN_PREFIX, text("name", "N"), text("image", "ipfs://Qm"), entry("deep", value));
 
         assertThat(dropped("too_deep")).isEqualTo(1);
-        assertThat(errors("none", "too_deep", "OPTIONAL")).isEqualTo(1);
         assertThat(indexed(222)).isEqualTo(1);
     }
 
     @Test
-    void countsKeysLeftOutAndCollisions() {
+    void indexesADatumWithKeysLeftOutAndCollisions() {
         MapPlutusData props = new MapPlutusData();
         props.put(BytesPlutusData.of("name"), BytesPlutusData.of("N"));
         props.put(BytesPlutusData.of("image"), BytesPlutusData.of("ipfs://Qm"));
@@ -204,8 +170,6 @@ class Cip68MetricsTest {
         props.put(BigIntPlutusData.of(1), BytesPlutusData.of("i"));
         processor.processTransaction(event(datum(props), Cip68Constants.NFT_TOKEN_PREFIX));
 
-        assertThat(errors("none", "unsupported_key", "OPTIONAL")).isEqualTo(1);
-        assertThat(errors("none", "key_collision", "OPTIONAL")).isEqualTo(1);
         assertThat(indexed(222)).isEqualTo(1);
     }
 
@@ -213,12 +177,6 @@ class Cip68MetricsTest {
 
     private double indexed(int label) {
         var c = registry.find(Cip68Metrics.INDEXED).tag("label", String.valueOf(label)).counter();
-        return c == null ? 0 : c.count();
-    }
-
-    private double errors(String subStandard, String code, String category) {
-        var c = registry.find(Cip68Metrics.VALIDATION_ERRORS).tag("sub_standard", subStandard).tag("code", code)
-                .tag("category", category).counter();
         return c == null ? 0 : c.count();
     }
 
