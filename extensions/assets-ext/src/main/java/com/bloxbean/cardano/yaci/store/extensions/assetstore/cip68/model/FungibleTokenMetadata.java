@@ -31,4 +31,9 @@ public record FungibleTokenMetadata(
                                  @Nullable Long version) {
         this(decimals, description, logo, name, ticker, url, version, List.of());
     }
+
+    /** The same metadata with other validation errors (for example those of the properties a request asked for). */
+    public FungibleTokenMetadata withValidationErrors(@Nullable List<ValidationError> errors) {
+        return new FungibleTokenMetadata(decimals, description, logo, name, ticker, url, version, errors);
+    }
 }
