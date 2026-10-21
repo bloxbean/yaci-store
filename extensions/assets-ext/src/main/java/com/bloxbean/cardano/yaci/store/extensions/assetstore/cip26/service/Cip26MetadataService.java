@@ -17,6 +17,7 @@ import org.springframework.dao.TransientDataAccessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -32,6 +33,7 @@ public class Cip26MetadataService {
     private final Cip26MetadataRepository cip26MetadataRepository;
     private final Cip26MetadataValidator cip26MetadataValidator;
     private final InvalidTokenRecorder invalidTokenRecorder;
+    private final Clock clock;
 
     /**
      * Checks and inserts CIP-26 metadata for one mapping. An entry that breaks CIP-26 is stored as written, with the
@@ -68,7 +70,7 @@ public class Cip26MetadataService {
         cip26Metadata.setValidationErrors(validation.errors());
 
         try {
-            cip26Metadata.setLastSyncedAt(LocalDateTime.now());
+            cip26Metadata.setLastSyncedAt(LocalDateTime.now(clock));
             cip26MetadataRepository.save(cip26Metadata);
             return InsertOutcome.INSERTED;
         } catch (NonTransientDataAccessException e) {
@@ -161,7 +163,7 @@ public class Cip26MetadataService {
             errors.removeIf(e -> "logo".equals(e.fieldName()));
             errors.addAll(logoValidation.errors());
             row.setValidationErrors(errors);
-            row.setLastSyncedAt(LocalDateTime.now());
+            row.setLastSyncedAt(LocalDateTime.now(clock));
             cip26MetadataRepository.save(row);
             return InsertOutcome.INSERTED;
         } catch (NonTransientDataAccessException e) {

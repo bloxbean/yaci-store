@@ -1,5 +1,8 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.service;
 
+import java.time.ZoneOffset;
+import java.time.Instant;
+import java.time.Clock;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.Item;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.Mapping;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.Cip26Metadata;
@@ -35,12 +38,15 @@ class Cip26MetadataServiceTest {
     @Mock private Cip26MetadataRepository cip26MetadataRepository;
     @Mock private Cip26MetadataValidator cip26MetadataValidator;
 
+    private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-10-21T12:00:00Z"), ZoneOffset.UTC);
+    private static final LocalDateTime NOW = LocalDateTime.of(2026, 10, 21, 12, 0);
+
     private Cip26MetadataService service;
 
     @BeforeEach
     void setUp() {
         service = new Cip26MetadataService(cip26MetadataRepository, cip26MetadataValidator,
-                com.bloxbean.cardano.yaci.store.extensions.assetstore.invalidtoken.InvalidTokenRecorder.noop());
+                com.bloxbean.cardano.yaci.store.extensions.assetstore.invalidtoken.InvalidTokenRecorder.noop(), CLOCK);
     }
 
     private static Mapping mapping(String subject) {
@@ -77,6 +83,17 @@ class Cip26MetadataServiceTest {
             org.mockito.ArgumentCaptor<Cip26Metadata> saved = org.mockito.ArgumentCaptor.forClass(Cip26Metadata.class);
             verify(cip26MetadataRepository).save(saved.capture());
             assertThat(saved.getValue().getValidationErrors()).containsExactly(error);
+        }
+
+        @Test
+        void stampsTheRowWithTheTimeOfTheClock() {
+            when(cip26MetadataValidator.validate(any(), any())).thenReturn(Cip26Validation.of(List.of()));
+
+            service.insertMapping(mapping("subject1"), LocalDateTime.of(2020, 1, 1, 0, 0), "author@test.com");
+
+            org.mockito.ArgumentCaptor<Cip26Metadata> saved = org.mockito.ArgumentCaptor.forClass(Cip26Metadata.class);
+            verify(cip26MetadataRepository).save(saved.capture());
+            assertThat(saved.getValue().getLastSyncedAt()).isEqualTo(NOW);
         }
 
         @Test
@@ -153,6 +170,7 @@ class Cip26MetadataServiceTest {
             // Logo is now set on the merged-in Cip26Metadata row, not a separate TokenLogo entity.
             verify(cip26MetadataRepository).save(existing);
             assertThat(existing.getLogo()).isEqualTo("data:image/png;base64,iVBOR...");
+            assertThat(existing.getLastSyncedAt()).isEqualTo(NOW);
         }
 
         @Test

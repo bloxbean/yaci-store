@@ -28,6 +28,7 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -58,22 +59,24 @@ public class Cip68Processor {
     private final Cip68MetadataRepository cip68MetadataRepository;
     private final Cip68Metrics metrics;
     private final InvalidTokenRecorder invalidTokenRecorder;
+    private final Clock clock;
 
     @Autowired
     public Cip68Processor(Cip68TokenService cip68TokenService, Cip68DatumParser cip68DatumParser,
                           Cip68MetadataRepository cip68MetadataRepository, Cip68Metrics metrics,
-                          InvalidTokenRecorder invalidTokenRecorder) {
+                          InvalidTokenRecorder invalidTokenRecorder, Clock clock) {
         this.cip68TokenService = cip68TokenService;
         this.cip68DatumParser = cip68DatumParser;
         this.cip68MetadataRepository = cip68MetadataRepository;
         this.metrics = metrics;
         this.invalidTokenRecorder = invalidTokenRecorder;
+        this.clock = clock;
     }
 
     /** Without a table for what is dropped (tests). */
     public Cip68Processor(Cip68TokenService cip68TokenService, Cip68DatumParser cip68DatumParser,
                           Cip68MetadataRepository cip68MetadataRepository, Cip68Metrics metrics) {
-        this(cip68TokenService, cip68DatumParser, cip68MetadataRepository, metrics, InvalidTokenRecorder.noop());
+        this(cip68TokenService, cip68DatumParser, cip68MetadataRepository, metrics, InvalidTokenRecorder.noop(), Clock.systemDefaultZone());
     }
 
     /** Without metrics that anyone reads (tests). */
@@ -463,7 +466,7 @@ public class Cip68Processor {
                 .datum(output.getInlineDatum())
                 .properties(parsed.properties())
                 .validationErrors(validationErrors)
-                .lastSyncedAt(LocalDateTime.now())
+                .lastSyncedAt(LocalDateTime.now(clock))
                 .build();
     }
 }

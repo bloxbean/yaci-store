@@ -1,5 +1,8 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.service;
 
+import java.time.ZoneOffset;
+import java.time.Instant;
+import java.time.Clock;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.AssetsExtStoreProperties;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.Cip26NetworkDefaults;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.ChangedMappings;
@@ -47,6 +50,8 @@ class Cip26MetadataSyncServiceTest {
     @Mock private Cip26NetworkDefaults networkDefaults;
     @Mock private com.bloxbean.cardano.yaci.store.extensions.assetstore.invalidtoken.InvalidTokenRecorder invalidTokenRecorder;
 
+    private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-10-21T12:00:00Z"), ZoneOffset.UTC);
+
     private AssetsExtStoreProperties assetsStoreProperties;
     private Cip26MetadataSyncService service;
 
@@ -56,7 +61,7 @@ class Cip26MetadataSyncServiceTest {
         service = new Cip26MetadataSyncService(
                 gitService, tokenMetadataService, tokenMappingService,
                 syncStateRepository, networkDefaults, assetsStoreProperties,
-                invalidTokenRecorder);
+                invalidTokenRecorder, CLOCK);
     }
 
     @Nested
@@ -164,7 +169,9 @@ class Cip26MetadataSyncServiceTest {
             verify(tokenMetadataService).insertMapping(any(), any(), any());
             verify(tokenMetadataService).insertLogo(any());
             verify(tokenMetadataService, never()).deleteMapping(any());
-            verify(syncStateRepository).save(any(Cip26SyncState.class));
+            ArgumentCaptor<Cip26SyncState> saved = ArgumentCaptor.forClass(Cip26SyncState.class);
+            verify(syncStateRepository).save(saved.capture());
+            assertThat(saved.getValue().getLastSyncedAt()).isEqualTo(LocalDateTime.of(2026, 10, 21, 12, 0));
             assertThat(service.getSyncStatus().getStatus()).isEqualTo(SyncStatusEnum.SYNC_DONE);
             assertThat(service.getSyncStatus().isInitialSyncDone()).isTrue();
         }

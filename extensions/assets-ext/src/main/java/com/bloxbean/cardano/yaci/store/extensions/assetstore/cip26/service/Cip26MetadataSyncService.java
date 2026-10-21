@@ -19,6 +19,7 @@ import org.springframework.stereotype.Service;
 
 import java.io.File;
 import java.nio.file.Path;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -37,6 +38,7 @@ public class Cip26MetadataSyncService {
     private final Cip26NetworkDefaults networkDefaults;
     private final AssetsExtStoreProperties assetsStoreProperties;
     private final InvalidTokenRecorder invalidTokenRecorder;
+    private final Clock clock;
 
     @Getter
     private SyncStatus syncStatus;
@@ -62,15 +64,15 @@ public class Cip26MetadataSyncService {
         String lastHash = lastSyncState
                 .map(Cip26SyncState::getLastCommitHash).orElse(null);
 
-        long syncStart = System.currentTimeMillis();
+        long syncStart = clock.millis();
         log.info("Starting offchain sync. Last known commit: {}", lastHash != null ? lastHash : "(none — full sync)");
 
-        long cloneStart = System.currentTimeMillis();
+        long cloneStart = clock.millis();
         Optional<Path> repoPathOpt = gitService.cloneCardanoTokenRegistryGitRepository();
 
         if (repoPathOpt.isPresent()) {
 
-            log.info("Repository ready in {} ms", System.currentTimeMillis() - cloneStart);
+            log.info("Repository ready in {} ms", clock.millis() - cloneStart);
 
             Optional<String> newHashOpt = gitService.getHeadCommitHash();
             if (newHashOpt.isEmpty()) {
@@ -93,12 +95,12 @@ public class Cip26MetadataSyncService {
             Set<String> fileNames = filesToProcess.stream()
                     .map(File::getName)
                     .collect(Collectors.toCollection(HashSet::new));
-            long gitHistoryStart = System.currentTimeMillis();
+            long gitHistoryStart = clock.millis();
             log.info("Resolving git history for {} file(s) in batch...", fileNames.size());
             Map<String, MappingUpdateDetails> mappingDetailsMap = gitService.getAllMappingDetails(fileNames);
-            log.info("Git history resolved in {} ms", System.currentTimeMillis() - gitHistoryStart);
+            log.info("Git history resolved in {} ms", clock.millis() - gitHistoryStart);
 
-            long processStart = System.currentTimeMillis();
+            long processStart = clock.millis();
             boolean anyTransientFailure = processMappingFiles(filesToProcess, mappingDetailsMap);
             anyTransientFailure |= processDeletions(pendingChanges.subjectsToDelete());
 
@@ -107,16 +109,16 @@ public class Cip26MetadataSyncService {
             } else if (newHashOpt.isPresent()) {
                 Cip26SyncState offChainSyncStateToSave = lastSyncState.orElse(new Cip26SyncState());
                 offChainSyncStateToSave.setLastCommitHash(newHashOpt.get());
-                offChainSyncStateToSave.setLastSyncedAt(LocalDateTime.now());
+                offChainSyncStateToSave.setLastSyncedAt(LocalDateTime.now(clock));
                 syncStateRepository.save(offChainSyncStateToSave);
                 log.info("Commit hash advanced to {}", newHashOpt.get());
             }
 
-            log.info("Mapping processing took {} ms", System.currentTimeMillis() - processStart);
+            log.info("Mapping processing took {} ms", clock.millis() - processStart);
 
             syncStatus.setStatus(SyncStatusEnum.SYNC_DONE);
             syncStatus.setInitialSyncDone(true);
-            log.info("Offchain sync complete in {} ms", System.currentTimeMillis() - syncStart);
+            log.info("Offchain sync complete in {} ms", clock.millis() - syncStart);
 
         } else {
             log.warn("cardano-token-registry could not be cloned");
