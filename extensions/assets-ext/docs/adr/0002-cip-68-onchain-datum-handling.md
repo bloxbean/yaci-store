@@ -232,7 +232,7 @@ characters; CIP-68 has no equivalent, and a CIP-26 limit is reported, not enforc
 | Input | Rule | Effect |
 |---|---|---|
 | `version` | an integer that does not fit a `long` | the datum is indexed with no version and an `out_of_range` error (narrowing it would wrap `2^64 + 1` into 1) |
-| `version` | not 1 to 4 | indexed as written, with an `undefined_version` error, **`OPTIONAL`**: the field is there and the datum is read by its structure, so the token is usable (Greenland Reserve Coin, version 0, passes `?validation=MANDATORY_ONLY`). A version that is not an integer in the range of a `BIGINT` is `out_of_range`, `MANDATORY`, and stored as no version |
+| `version` | not 1 to 4 | indexed as written, with an `undefined_version` error |
 | nesting depth of the datum | the CBOR decoder recurses; a `StackOverflowError` is caught | **dropped** with a WARN that says it looks like an attack |
 | a datum that cannot be decoded | | **dropped** with a WARN with the datum, so the case can be reproduced (`parse_failure`) |
 | nesting depth of an additional property (#1240) | at most 100 levels of lists, maps and constructors | the **property is dropped** with a WARN and `properties.dropped{kind="too_deep"}`, the datum is indexed, with a `too_deep` error |
