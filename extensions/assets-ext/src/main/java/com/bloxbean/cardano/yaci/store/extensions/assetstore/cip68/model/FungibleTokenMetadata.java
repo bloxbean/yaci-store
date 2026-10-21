@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model;
 
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.validation.ValidationError;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.annotation.Nullable;
@@ -18,15 +19,11 @@ public record FungibleTokenMetadata(
         @Nullable @Schema(description = "Token ticker symbol.") String ticker,
         @Nullable @Schema(description = "Project URL.") String url,
         @Nullable @Schema(description = "CIP-68 metadata version.") Long version,
-        @JsonProperty("validation_errors")
-        @Schema(name = "validation_errors", description = "How the datum departs from CIP-68; empty when it follows it. "
+        @JsonProperty("validation_errors") @JsonInclude(JsonInclude.Include.NON_NULL)
+        @Schema(name = "validation_errors", description = "How the datum departs from CIP-68; empty when it follows it, absent when the row was indexed before validation existed. "
                 + "MANDATORY errors mean the token lacks something CIP-68 requires, so a strict wallet may reject it.")
-        List<ValidationError> validationErrors
+        @Nullable List<ValidationError> validationErrors
 ) {
-
-    public FungibleTokenMetadata {
-        validationErrors = validationErrors == null ? List.of() : validationErrors;
-    }
 
     /** Metadata with no validation errors. */
     public FungibleTokenMetadata(@Nullable Long decimals, @Nullable String description, @Nullable String logo,

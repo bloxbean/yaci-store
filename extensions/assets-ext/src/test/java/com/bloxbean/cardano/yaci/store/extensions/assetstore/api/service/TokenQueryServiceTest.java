@@ -61,6 +61,7 @@ class TokenQueryServiceTest {
         knownCip26.setName("nutcoin");
         knownCip26.setDescription("The legendary Nutcoin, the first native asset minted on Cardano.");
         knownCip26.setUrl("https://fivebinaries.com/nutcoin");
+        knownCip26.setValidationErrors(List.of());
         knownCip26.setProperties(new Mapping(
                 KNOWN_SUBJECT,
                 new Item(0, "https://fivebinaries.com/nutcoin", List.of()),
@@ -292,6 +293,95 @@ class TokenQueryServiceTest {
 
             assertThat(result.validationErrors()).hasSize(1);
             assertThat(result.metadata().valid()).isFalse();
+        }
+
+        // A row indexed before validation_errors existed has null errors: "never checked", which is not "no errors".
+
+        @Test
+        void aRowNeverCheckedHasNoErrorsListAndIsValidWhenNameAndDescriptionArePresent() {
+            cip68Only(new FungibleTokenMetadata(null, "d", null, "N", null, null, 1L, null));
+
+            Subject result = service.querySubject(BROKEN_SUBJECT, DEFAULT_PRIORITY, List.of(), false).orElseThrow();
+
+            assertThat(result.validationErrors()).isNull();
+            assertThat(result.metadata().valid()).isTrue();
+        }
+
+        @Test
+        void aRowNeverCheckedIsNotValidWithoutADescription() {
+            cip68Only(new FungibleTokenMetadata(null, null, null, "N", null, null, 1L, null));
+
+            Subject result = service.querySubject(BROKEN_SUBJECT, DEFAULT_PRIORITY, List.of(), false).orElseThrow();
+
+            assertThat(result.validationErrors()).isNull();
+            assertThat(result.metadata().valid()).isFalse();
+        }
+
+        @Test
+        void aRowNeverCheckedIsNotValidWithoutAName() {
+            cip68Only(new FungibleTokenMetadata(null, "d", null, null, null, null, 1L, null));
+
+            assertThat(service.querySubject(BROKEN_SUBJECT, DEFAULT_PRIORITY, List.of(), false).orElseThrow()
+                    .metadata().valid()).isFalse();
+        }
+
+        @Test
+        void aRowCheckedAndCleanIsValidEvenWithoutADescription() {
+            // the new rule: errors are the judge (a 222 or 444 token does not need a description), not the old name/description test
+            cip68Only(new FungibleTokenMetadata(null, null, null, "N", null, null, 1L, List.of()));
+
+            Subject result = service.querySubject(BROKEN_SUBJECT, DEFAULT_PRIORITY, List.of(), false).orElseThrow();
+
+            assertThat(result.validationErrors()).isEmpty();
+            assertThat(result.metadata().valid()).isTrue();
+        }
+
+        @Test
+        void oneStandardNeverCheckedAndTheOtherCleanLeavesTheTokenUnchecked() {
+            Cip26Metadata cip26 = new Cip26Metadata();
+            cip26.setSubject(BROKEN_SUBJECT);
+            cip26.setName("N");
+            cip26.setProperties(new Mapping(BROKEN_SUBJECT, null, null, null, null, null, null, null));
+            when(cip26StorageReader.findBySubject(BROKEN_SUBJECT)).thenReturn(Optional.of(cip26));
+            when(cip26StorageReader.findLogoBySubject(BROKEN_SUBJECT)).thenReturn(Optional.empty());
+            when(cip68StorageReader.findBySubject(eq(BROKEN_SUBJECT), any()))
+                    .thenReturn(Optional.of(new FungibleTokenMetadata(null, null, null, "N", null, null, 1L, List.of())));
+
+            Subject result = service.querySubject(BROKEN_SUBJECT, DEFAULT_PRIORITY, List.of(), false).orElseThrow();
+
+            // "no errors" would claim the CIP-26 row was checked; the old rule applies, and there is no description
+            assertThat(result.validationErrors()).isNull();
+            assertThat(result.metadata().valid()).isFalse();
+        }
+
+        @Test
+        void oneStandardNeverCheckedAndTheOtherWithErrorsReportsTheErrorsAndIsNotValid() {
+            Cip26Metadata cip26 = new Cip26Metadata();
+            cip26.setSubject(BROKEN_SUBJECT);
+            cip26.setName("N");
+            cip26.setDescription("D");
+            cip26.setProperties(new Mapping(BROKEN_SUBJECT, null, null, null, null, null, null, null));
+            when(cip26StorageReader.findBySubject(BROKEN_SUBJECT)).thenReturn(Optional.of(cip26));
+            when(cip26StorageReader.findLogoBySubject(BROKEN_SUBJECT)).thenReturn(Optional.empty());
+            when(cip68StorageReader.findBySubject(eq(BROKEN_SUBJECT), any()))
+                    .thenReturn(Optional.of(new FungibleTokenMetadata(null, null, null, "N", null, null, 1L, List.of(cip68Error))));
+
+            Subject result = service.querySubject(BROKEN_SUBJECT, DEFAULT_PRIORITY, List.of(), false).orElseThrow();
+
+            assertThat(result.validationErrors()).containsExactly(cip68Error);
+            assertThat(result.metadata().valid()).isFalse();
+        }
+
+        @Test
+        void theBatchKeepsAnUncheckedRowUnchecked() {
+            cip68Only(new FungibleTokenMetadata(null, "d", null, "N", null, null, 1L, null));
+            TokenQueryService.BatchPrefetchData prefetch = service.prefetchBatch(List.of(BROKEN_SUBJECT), List.of());
+
+            assertThat(service.querySubjectBatch(BROKEN_SUBJECT, DEFAULT_PRIORITY, List.of(), prefetch, false))
+                    .hasValueSatisfying(subject -> {
+                        assertThat(subject.validationErrors()).isNull();
+                        assertThat(subject.metadata().valid()).isTrue();
+                    });
         }
 
         @Test

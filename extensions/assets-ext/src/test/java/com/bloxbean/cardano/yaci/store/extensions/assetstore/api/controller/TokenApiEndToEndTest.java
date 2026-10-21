@@ -127,13 +127,23 @@ class TokenApiEndToEndTest {
     }
 
     @Test
-    void aRowIndexedBeforeTheColumnExistedHasAnEmptyList() throws Exception {
+    void aRowIndexedBeforeTheColumnExistedHasNoErrorsFieldAndKeepsTheOldRuleForValid() throws Exception {
         store(row(333).name("Old").description("Indexed before validation_errors").build());
 
         mockMvc.perform(get("/api/v1/tokens/subject/{s}", FT_SUBJECT))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.subject.validation_errors").isArray())
-                .andExpect(jsonPath("$.subject.validation_errors.length()").value(0));
+                .andExpect(jsonPath("$.subject.validation_errors").doesNotExist())
+                .andExpect(jsonPath("$.subject.metadata.valid").value(true));
+    }
+
+    @Test
+    void anOldRowWithoutADescriptionIsNotValidByTheOldRule() throws Exception {
+        store(row(333).name("Old").build());
+
+        mockMvc.perform(get("/api/v1/tokens/subject/{s}", FT_SUBJECT))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.subject.validation_errors").doesNotExist())
+                .andExpect(jsonPath("$.subject.metadata.valid").value(false));
     }
 
     @Test

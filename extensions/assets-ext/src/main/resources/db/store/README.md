@@ -40,7 +40,7 @@ whose `subject` cannot be a key, or a logo far beyond any real size, is dropped,
 | `logo` | `TEXT` (PG/H2) / `LONGTEXT` (MySQL) | Base64-encoded image, up to ~87 KB per CIP-26. MySQL `TEXT` caps at 64 KB so `LONGTEXT` is required. PostgreSQL TOAST keeps the bulky column out of the row when not selected. |
 | `updated`, `updated_by` | `TIMESTAMP`, `VARCHAR(255)` | Audit fields from the registry entry. |
 | `properties` | `JSONB` (PG) / `JSON` (MySQL) / `TEXT` (H2) | Catch-all: full original `Mapping` JSON with per-property signed envelopes (`{value, signatures, sequenceNumber}`) and any non-well-known properties. |
-| `validation_errors` | `JSONB` (PG) / `JSON` (MySQL) / `TEXT` (H2) | List of `{cip, field_name, field_category, code, error}` for what the entry breaks in CIP-26 (`sub_standard` is absent for CIP-26). `NULL` on rows written before `V0_1700_2` (a resync fills it); `[]` when the entry follows the CIP. |
+| `validation_errors` | `JSONB` (PG) / `JSON` (MySQL) / `TEXT` (H2) | List of `{cip, field_name, field_category, code, error}` for what the entry breaks in CIP-26 (`sub_standard` is absent for CIP-26). `NULL` on rows written before `V0_1700_2` (never checked; the API leaves the field out and `valid` falls back to name and description present; a resync fills it); `[]` when the entry follows the CIP. |
 | `last_synced_at` | `TIMESTAMP` | |
 
 ## `cip26_sync_state` — sync housekeeping
@@ -91,7 +91,7 @@ row stored under label=222). Read-path queries must **not** filter by label — 
 | `version` | `BIGINT` | CIP-68 schema version, typically 1. A version CIP-68 does not define (for example Greenland Reserve Coin's 0) is stored as it is, with an error; `NULL` when the datum holds an integer that does not fit a `BIGINT`. |
 | `datum` | `TEXT` (PG/H2) / `LONGTEXT` (MySQL) NOT NULL | Full CBOR hex of the inline datum, kept for re-parse / audit. |
 | `properties` | `JSONB` (PG) / `JSON` (MySQL) / `TEXT` (H2) | Catch-all: `files[]` (array of `{name, mediaType, src}`, kept as written even when an entry breaks the CIP) + collection-specific traits. A Plutus constructor is stored as `{"constructor": n, "fields": [...]}` and reported. A property is left out, and the rest of the datum is indexed, only when its value is nested deeper than 100 levels, which is an attack (Jackson cannot write a JSON document nested deeper than 1000). The full datum stays in `datum`. |
-| `validation_errors` | `JSONB` (PG) / `JSON` (MySQL) / `TEXT` (H2) | List of `{cip, sub_standard, field_name, field_category, code, error}` for what the datum breaks in CIP-68, per label it was checked for (`sub_standard` is the label; absent for a rule that does not depend on one). `NULL` on rows written before `V0_1700_2` (a resync fills it); `[]` when the datum follows the CIP. |
+| `validation_errors` | `JSONB` (PG) / `JSON` (MySQL) / `TEXT` (H2) | List of `{cip, sub_standard, field_name, field_category, code, error}` for what the datum breaks in CIP-68, per label it was checked for (`sub_standard` is the label; absent for a rule that does not depend on one). `NULL` on rows written before `V0_1700_2` (never checked; the API leaves the field out and `valid` falls back to name and description present; a resync fills it); `[]` when the datum follows the CIP. |
 | `last_synced_at` | `TIMESTAMP` | |
 
 Indexes: `idx_cip68_metadata_slot`, `idx_cip68_metadata_label`. See
@@ -136,3 +136,14 @@ SELECT standard, reason_code, count(*) FROM invalid_token GROUP BY 1, 2 ORDER BY
 | JSON column | `JSONB` | `TEXT` | `JSON` |
 | Auto-increment PK | `BIGSERIAL` | `BIGINT AUTO_INCREMENT` | `BIGINT AUTO_INCREMENT` |
 | `TIMESTAMP` nullability | implicit nullable | implicit nullable | requires explicit `NULL` |
+
+## Upgrading from an earlier release (including within 2.x)
+
+`V0_1700_2` and `V0_1700_3` only add things: nullable `validation_errors` columns, the `invalid_token` table, text columns widened to
+`TEXT`, and `cip68_metadata.version` made nullable. They rewrite no data, so a node upgrades in place and keeps serving. On PostgreSQL and
+H2 the statements use `IF NOT EXISTS` and can be run again; on MySQL the column changes rewrite the two tables once (a few hundred thousand
+rows on mainnet).
+
+Rows written before the upgrade have `validation_errors = NULL`: never checked, which is not the same as "no errors". The API leaves
+`validation_errors` out for them and `metadata.valid` falls back to the rule it had before (name and description both present). Only a
+resync fills them in, and brings back the tokens that were dropped before; it is not needed for the node to work.
