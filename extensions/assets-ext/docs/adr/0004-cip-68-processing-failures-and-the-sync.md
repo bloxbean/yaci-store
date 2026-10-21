@@ -44,13 +44,14 @@ Two facts about the transaction make a simple fix insufficient:
 **A. Let the sync stop (today for a failure inside the database; before #1220, for any failure).** Nothing is lost silently and the bad datum is found at once. The price is that an
 optional module can halt a node that is otherwise healthy, until a person fixes the code.
 
-**B. A `try/catch` per output.** Cheap, and catches what the parser throws. It does not catch a flush or commit failure
+**B. A `try/catch` per reference NFT.** Cheap, and catches what the parser throws. It does not catch a flush or commit failure
 (above), so on its own it only moves the problem. **Implemented in PR #1220**, with the one addition that lets it reach
 the failure we know: the `properties` are written as JSON once while the row is built, with a default Jackson mapper (what
-Hibernate does later, at flush), so a value Jackson refuses (#1240) fails inside the `try` and skips the output. The skip is
+Hibernate does later, at flush), so a value Jackson refuses (#1240) fails inside the `try` and skips that reference NFT. The skip is
 the WARN and the `processing_failure` count described under Decision. Only work in memory is inside the `try`; the
-`saveAll` is outside it, so a database that is down still stops the sync. A failure in one token of an output with several
-reference NFTs skips the rest of that output. Not covered: a failure inside the database at flush or commit (a rejected
+`saveAll` is outside it, so a database that is down still stops the sync. A failure in one reference NFT of an output with several
+of them skips only that one; the others are still indexed. A failure before any of them is read (listing them, or parsing the datum they
+share) skips the whole output. Not covered: a failure inside the database at flush or commit (a rejected
 value, for example), which is what C is for. The mapper of the early write is a default `ObjectMapper`, an approximation
 of Hibernate's; the repository does not configure Hibernate's JSON mapper, so today they agree. The code carries a comment
 with the links to #1240 and #1243, so that it is not removed as redundant.
