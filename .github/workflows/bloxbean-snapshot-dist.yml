@@ -1,6 +1,6 @@
 # From the release-ops standard (templates/workflows/bloxbean-snapshot-dist.yml, 2026-10-04), adapted for yaci-store:
-# the JVM zip and the Docker Compose zip, plus the native image zips when snapshot_dist_native is true in
-# gradle.properties.
+# the JVM zip and the Docker Compose zip, plus the native image zips when the run's `native` input is ticked or
+# snapshot_dist_native is true in gradle.properties.
 name: Publish snapshot distributions
 
 # Builds the distribution files of a snapshot commit and, once a release owner approves, publishes exactly those
@@ -17,6 +17,11 @@ name: Publish snapshot distributions
 
 on:
   workflow_dispatch:
+    inputs:
+      native:
+        description: 'Also build and publish the native image zips (always on when snapshot_dist_native is true)'
+        type: boolean
+        default: false
 
 permissions: {}
 
@@ -51,8 +56,10 @@ jobs:
         run: chmod +x gradlew
       # build.gradle inserts the short commit id into the subprojects' -SNAPSHOT version (not the root's), and the
       # zips carry it, e.g. yaci-store-3.0.0-beta6-1a2b3c4-SNAPSHOT.zip.
-      - name: Require a SNAPSHOT version and read snapshot_dist_native
+      - name: Require a SNAPSHOT version and decide on the native zips
         id: version
+        env:
+          NATIVE_INPUT: ${{ inputs.native }}
         shell: bash
         run: |
           set -euo pipefail
@@ -62,6 +69,9 @@ jobs:
             exit 1
           fi
           NATIVE=$(./gradlew -q properties -PskipSigning=true | awk '/^snapshot_dist_native:/ { print $2; exit }')
+          if [[ "$NATIVE_INPUT" == true ]]; then
+            NATIVE=true
+          fi
           {
             echo "version=$VERSION"
             echo "native=${NATIVE:-false}"

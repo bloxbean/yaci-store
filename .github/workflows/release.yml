@@ -14,9 +14,12 @@ name: Release
 #
 # The other release side effects are gated by flags in gradle.properties too, and run after the Maven artifacts:
 #   github_release  the GitHub release v<version> with the JVM zip and the Docker Compose zip
-#   native_release  builds the native image zips (native-build.yml); with github_release they go to a separate
-#                   pre-release, rel-native-<version>, so the main release page stays JVM-only. A failed native
-#                   build never holds back the Maven artifacts, the Docker images or the v<version> release.
+#   native_release  builds the native image zips (native-build.yml) and publishes them as a pre-release of their
+#                   own, rel-native-<version>, so the main release page stays JVM-only and the download URLs stay
+#                   .../releases/download/rel-native-<version>/yaci-store-<version>-<os>-<arch>-<profile>.zip
+#                   (yaci-devkit reads them). A failed native build never holds back the Maven artifacts, the Docker
+#                   images or the v<version> release.
+# A native-only release is a patch version with native_release true and the other flags false.
 #   docker_publish  pushes the Docker images, with the Docker Hub credentials of release-staging
 # The two GitHub release jobs are the only ones with a write token, and they never see the release secrets.
 
@@ -291,9 +294,9 @@ jobs:
             echo
             echo "Release side effects of this tag, which do not wait for the Central deployment:"
             echo "- GitHub release v$VERSION (github_release): $GITHUB_RELEASE"
-            echo "- native image zips (native_release), released as rel-native-$VERSION with github_release: $NATIVE_RELEASE"
+            echo "- native image zips, GitHub release rel-native-$VERSION (native_release): $NATIVE_RELEASE"
             echo "- Docker images (docker_publish, next job): $DOCKER_PUBLISH"
-            if [[ "$BLOXBEAN_REPO_PUBLISH$GITHUB_RELEASE$DOCKER_PUBLISH" != *true* ]]; then
+            if [[ "$BLOXBEAN_REPO_PUBLISH$GITHUB_RELEASE$NATIVE_RELEASE$DOCKER_PUBLISH" != *true* ]]; then
               echo
               echo "Nothing public for this tag. If this was a rehearsal, drop any Central deployment in the portal."
             fi
@@ -312,8 +315,8 @@ jobs:
 
   native:
     needs: publish
-    # Gated by native_release in gradle.properties. Built even when github_release is false, so a release can be
-    # rehearsed end to end; then the zips stay workflow artifacts.
+    # Gated by native_release in gradle.properties; github-release-native publishes the zips. To build them without
+    # publishing, run dev_release_native.yml instead.
     if: needs.publish.outputs.native_release == 'true'
     permissions:
       contents: read
@@ -355,16 +358,40 @@ jobs:
 
   github-release-native:
     needs: [publish, native]
-    # Gated by github_release and native_release. A native build that failed skips only this job: re-run the failed
-    # native jobs, which re-runs this one, or ship native zips with a patch version.
-    if: >-
-      !cancelled() && needs.publish.outputs.github_release == 'true' && needs.native.result == 'success'
+    # Gated by native_release (the native job runs only with it). A native build that failed skips only this job:
+    # re-run the failed native jobs, which re-runs this one, or ship native zips with a patch version.
+    if: ${{ !cancelled() && needs.native.result == 'success' }}
     runs-on: ubuntu-24.04
     permissions:
       contents: write
     env:
       VERSION: ${{ needs.publish.outputs.version }}
+      GITHUB_RELEASE: ${{ needs.publish.outputs.github_release }}
     steps:
+      # rel-native-* tags are not protected like v* (the workflow token has to create them), so a tag someone else
+      # created must not decide which commit the native release belongs to. Re-runs find the tag on this commit.
+      - name: Check rel-native-${{ env.VERSION }} is new or on this commit
+        id: notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="rel-native-$VERSION"
+          if sha=$(gh api "repos/$GITHUB_REPOSITORY/commits/refs/tags/$TAG" --jq .sha 2> /dev/null); then
+            if [[ "$sha" != "$GITHUB_SHA" ]]; then
+              echo "::error::$TAG already exists on $sha, not on the released commit $GITHUB_SHA. Delete it and re-run." >&2
+              exit 1
+            fi
+            echo "$TAG already on $GITHUB_SHA (re-run)."
+          fi
+          if [[ "$GITHUB_RELEASE" == true ]]; then
+            notes="Native binaries for release: https://github.com/$GITHUB_REPOSITORY/releases/tag/v$VERSION"
+          else
+            notes="Native binaries of yaci-store $VERSION (tag v$VERSION)."
+          fi
+          echo "body=$notes" >> "$GITHUB_OUTPUT"
+
       - name: Download the native zips
         uses: actions/download-artifact@v4
         with:
@@ -384,7 +411,7 @@ jobs:
           tag_name: rel-native-${{ env.VERSION }}
           target_commitish: ${{ github.sha }}
           name: ${{ env.VERSION }}-native
-          body: 'Native binaries for release: https://github.com/${{ github.repository }}/releases/tag/v${{ env.VERSION }}'
+          body: ${{ steps.notes.outputs.body }}
           files: dist/*
           fail_on_unmatched_files: true
           prerelease: true
