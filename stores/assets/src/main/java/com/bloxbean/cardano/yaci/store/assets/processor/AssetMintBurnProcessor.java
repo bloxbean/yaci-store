@@ -42,6 +42,7 @@ public class AssetMintBurnProcessor {
                             .stream().map(amount -> TxAsset.builder()
                                     .slot(eventMetadata.getSlot())
                                     .txHash(txMintBurn.getTxHash())
+                                    .txIndex(txMintBurn.getTxIndex())
                                     .policy(amount.getPolicyId())
                                     .assetName(amount.getAssetName())
                                     .unit(amount.getUnit())

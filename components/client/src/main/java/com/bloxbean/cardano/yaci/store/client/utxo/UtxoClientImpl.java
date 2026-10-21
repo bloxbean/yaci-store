@@ -29,7 +29,7 @@ public class UtxoClientImpl implements UtxoClient {
     public List<AddressUtxo> getUtxosByIds(List<UtxoKey> utxoIds) {
         String url = getBaseUrl() + "/utxos";
         AddressUtxo[] utxos = restTemplate.postForObject(url, utxoIds, AddressUtxo[].class);
-        return Arrays.asList(utxos);
+        return utxos == null ? List.of() : Arrays.asList(utxos);
     }
 
     public Optional<AddressUtxo> getUtxoById(UtxoKey utxoId) {
@@ -42,7 +42,7 @@ public class UtxoClientImpl implements UtxoClient {
     public List<Utxo> getUtxoByAddress(String address, int page, int count)  {
         String url = getBaseUrl() + "/addresses/" + address + "/utxos?page=" + page + "&count=" + count;
         Utxo[] utxos = restTemplate.getForObject(url, Utxo[].class);
-        return Arrays.asList(utxos);
+        return utxos == null ? List.of() : Arrays.asList(utxos);
     }
 
     private String getBaseUrl() {
