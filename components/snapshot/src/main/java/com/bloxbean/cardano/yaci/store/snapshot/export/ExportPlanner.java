@@ -6,6 +6,7 @@ import com.bloxbean.cardano.yaci.store.snapshot.ducklake.DuckLakeCatalog;
 import com.bloxbean.cardano.yaci.store.snapshot.ducklake.DuckLakeFile;
 import com.bloxbean.cardano.yaci.store.snapshot.load.ColumnPlanner;
 import com.bloxbean.cardano.yaci.store.snapshot.load.ImportPlanCheck;
+import com.bloxbean.cardano.yaci.store.snapshot.load.SourceScan;
 import com.bloxbean.cardano.yaci.store.snapshot.load.TargetTable;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.BatchBoundary;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.CutoffType;
@@ -241,20 +242,27 @@ public class ExportPlanner {
             return List.of();
         }
         Map<String, String> dependencies = new LinkedHashMap<>();
-        for (String dep : spec.importSpec().dependencies()) {
-            TablePlan d = plans.get(dep);
-            if (d == null || d.sourceColumns().isEmpty()) {
-                return List.of(); // the dependency's own blocker says why
+        try {
+            for (String dep : spec.importSpec().dependencies()) {
+                TablePlan d = plans.get(dep);
+                if (d == null || d.sourceColumns().isEmpty()) {
+                    return List.of(); // the dependency's own blocker says why
+                }
+                dependencies.put(dep, sample(d));
             }
-            dependencies.put(dep, sample(d));
+            return ImportPlanCheck.check(catalog.connection(), new ColumnPlanner(new ConverterRegistry()), spec,
+                    plan.sourceColumns(), sample(plan), dependencies, target, cutSlot, completedEpoch);
+        } catch (SQLException e) {
+            return List.of("the exported files could not be read: " + e.getMessage());
         }
-        return ImportPlanCheck.check(catalog.connection(), new ColumnPlanner(new ConverterRegistry()), spec,
-                plan.sourceColumns(), sample(plan), dependencies, target, cutSlot, completedEpoch);
     }
 
-    private String sample(TablePlan plan) {
+    /** A few of the plan's files, with every catalog column, as the import reads them. */
+    private String sample(TablePlan plan) throws SQLException {
         return plan.files().isEmpty() ? ImportPlanCheck.emptyRelation(plan.sourceColumns())
-                : DuckDb.readParquet(catalog.parquetList(plan.files().subList(0, Math.min(2, plan.files().size()))));
+                : SourceScan.of(catalog.connection(),
+                        catalog.parquetList(plan.files().subList(0, Math.min(2, plan.files().size()))),
+                        plan.sourceColumns());
     }
 
     /** Digest of the observed source column names and types, so schema drift is detectable. */

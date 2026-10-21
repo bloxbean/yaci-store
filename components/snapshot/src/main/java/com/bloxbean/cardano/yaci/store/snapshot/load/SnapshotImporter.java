@@ -596,9 +596,9 @@ public class SnapshotImporter {
                 for (String dep : spec.importSpec().dependencies()) {
                     dependencyFiles.put(dep, filesBySpec.getOrDefault(dep, List.of()));
                 }
-                String select = loader.sourceSelect(spec, batches.get(0), manifest.point().slot(),
-                        manifest.point().epoch(), dependencyFiles);
                 try {
+                    String select = loader.sourceSelect(session.connection(), spec, batches.get(0),
+                            manifest.point().slot(), manifest.point().epoch(), dependencyFiles);
                     loader.planFor(session, spec, select, schema.table(spec.targetTable()),
                             manifest.table(spec.id()).sourceColumns());
                 } catch (ColumnPlanner.MappingException e) {
@@ -636,8 +636,6 @@ public class SnapshotImporter {
             throws SQLException {
         Set<String> completed = journal.completedBatchIds(manifest.snapshotId());
         BatchPlanner planner = new BatchPlanner();
-        TableLoader loader = new TableLoader(converters, extractRoot);
-
         List<SnapshotTableSpec> ordered = registry.importedTables();
         Map<String, List<SnapshotManifest.FileEntry>> filesBySpec = new HashMap<>();
         Map<String, Map<String, String>> declaredColumns = new HashMap<>();
@@ -645,6 +643,7 @@ public class SnapshotImporter {
             filesBySpec.put(t.specId(), t.files());
             declaredColumns.put(t.specId(), t.sourceColumns());
         });
+        TableLoader loader = new TableLoader(converters, extractRoot, declaredColumns);
 
         // Resolve every table's mapping against the extracted files before writing a single row.
         // Preflight already planned the DIRECT and MAPPED tables from the manifest's recorded column
@@ -711,7 +710,7 @@ public class SnapshotImporter {
                             SnapshotTableSpec spec = table.spec();
                             ImportBatch batch = item.batch();
                             long batchStarted = status.started(spec.id());
-                            String select = loader.sourceSelect(spec, batch,
+                            String select = loader.sourceSelect(session.connection(), spec, batch,
                                     manifest.point().slot(), manifest.point().epoch(), table.dependencyFiles());
                             ColumnPlan plan = loader.planFor(session, spec, select, table.target(),
                                     declaredColumns.get(spec.id()));

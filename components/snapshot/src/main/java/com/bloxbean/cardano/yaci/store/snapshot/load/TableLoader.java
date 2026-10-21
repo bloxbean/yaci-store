@@ -1,7 +1,6 @@
 package com.bloxbean.cardano.yaci.store.snapshot.load;
 
 import com.bloxbean.cardano.yaci.store.snapshot.convert.ConverterRegistry;
-import com.bloxbean.cardano.yaci.store.snapshot.ducklake.DuckDb;
 import com.bloxbean.cardano.yaci.store.snapshot.manifest.SnapshotManifest;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.BatchBoundary;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.CutoffType;
@@ -12,6 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.file.Path;
+import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -36,35 +36,66 @@ public class TableLoader {
     private final ConverterRegistry converters;
     private final ColumnPlanner planner;
     private final Path extractRoot;
+    private final Map<String, Map<String, String>> declaredColumns;
 
     public TableLoader(ConverterRegistry converters, Path extractRoot) {
+        this(converters, extractRoot, Map.of());
+    }
+
+    /**
+     * @param declaredColumns each table's source columns as its manifest records them, by spec id, so a
+     *                        batch of files exported before a column existed still has it (as NULL)
+     */
+    public TableLoader(ConverterRegistry converters, Path extractRoot,
+                       Map<String, Map<String, String>> declaredColumns) {
         this.converters = converters;
         this.planner = new ColumnPlanner(converters);
         this.extractRoot = extractRoot;
+        this.declaredColumns = declaredColumns;
     }
 
-    /** The SELECT a batch reads from, before the target column list is applied. */
+    /** The SELECT a batch reads from, before the target column list is applied, reading the files as they are. */
     public String sourceSelect(SnapshotTableSpec spec, ImportBatch batch, long cutSlot, int completedEpoch,
                                Map<String, List<SnapshotManifest.FileEntry>> dependencyFiles) {
-        return sourceSelect(spec, batch, cutSlot, completedEpoch, dependencyFiles, null);
+        try {
+            return sourceSelect(null, spec, batch, cutSlot, completedEpoch, dependencyFiles, null);
+        } catch (SQLException e) {
+            throw new IllegalStateException(e); // not reached: without a connection no file is read
+        }
     }
 
-    String sourceSelect(SnapshotTableSpec spec, ImportBatch batch, long cutSlot, int completedEpoch,
-                        Map<String, List<SnapshotManifest.FileEntry>> dependencyFiles, String sourceFilter) {
+    /**
+     * The SELECT a batch reads from, before the target column list is applied, with every column its
+     * manifest declares: {@code duck} reads the files' schemas to add any column they predate.
+     */
+    public String sourceSelect(Connection duck, SnapshotTableSpec spec, ImportBatch batch, long cutSlot,
+                               int completedEpoch, Map<String, List<SnapshotManifest.FileEntry>> dependencyFiles)
+            throws SQLException {
+        return sourceSelect(duck, spec, batch, cutSlot, completedEpoch, dependencyFiles, null);
+    }
+
+    String sourceSelect(Connection duck, SnapshotTableSpec spec, ImportBatch batch, long cutSlot, int completedEpoch,
+                        Map<String, List<SnapshotManifest.FileEntry>> dependencyFiles, String sourceFilter)
+            throws SQLException {
         if (spec.importSpec().mode() == ImportMode.SQL) {
-            String source = DuckDb.readParquet(parquetList(batch.files()));
+            String source = scan(duck, spec.id(), batch.files());
             if (sourceFilter != null) {
                 // Apply before grouping. Filtering the grouped result would not reduce its memory.
                 source = "(SELECT * FROM " + source + " WHERE " + sourceFilter + ")";
             }
             Map<String, String> dependencies = new LinkedHashMap<>();
-            dependencyFiles.forEach((dep, files) ->
-                    dependencies.put(dep, DuckDb.readParquet(parquetList(narrowToBatchPartitions(batch, files)))));
+            for (Map.Entry<String, List<SnapshotManifest.FileEntry>> dep : dependencyFiles.entrySet()) {
+                dependencies.put(dep.getKey(), scan(duck, dep.getKey(), narrowToBatchPartitions(batch, dep.getValue())));
+            }
             return "(" + SqlResources.bindTransform(SqlResources.read(spec.importSpec().selectResource()),
                     source, dependencies, cutSlot, completedEpoch) + ")";
         }
-        return "(SELECT * FROM " + DuckDb.readParquet(parquetList(batch.files()))
+        return "(SELECT * FROM " + scan(duck, spec.id(), batch.files())
                 + cutoffPredicate(spec, cutSlot, completedEpoch) + ")";
+    }
+
+    private String scan(Connection duck, String specId, List<SnapshotManifest.FileEntry> files) throws SQLException {
+        return SourceScan.of(duck, parquetList(files), declaredColumns.get(specId));
     }
 
     /**

@@ -212,6 +212,35 @@ public class DuckLakeCatalog implements AutoCloseable {
         return out;
     }
 
+    /**
+     * Columns added to a relation after some of its live files were written, each with the number of
+     * those files. They have no such column and read it as NULL: an exporter that gained a column in a
+     * later release fills it only in the partitions exported since.
+     */
+    public Map<String, Long> filesPredatingColumns(String relation, long snapshotId) throws SQLException {
+        Identifiers.requireSqlIdentifier(relation, "ducklake relation");
+        Map<String, Long> out = new LinkedHashMap<>();
+        String sql = "SELECT c.column_name, count(*) FROM " + CAT + ".ducklake_column c"
+                + " JOIN " + CAT + ".ducklake_table t ON t.table_id = c.table_id"
+                + " JOIN " + CAT + ".ducklake_data_file f ON f.table_id = t.table_id"
+                + " WHERE t.table_name = " + Identifiers.literal(relation)
+                + "   AND t.begin_snapshot <= " + snapshotId
+                + "   AND (t.end_snapshot IS NULL OR t.end_snapshot > " + snapshotId + ")"
+                + "   AND c.parent_column IS NULL"
+                + "   AND c.begin_snapshot <= " + snapshotId
+                + "   AND (c.end_snapshot IS NULL OR c.end_snapshot > " + snapshotId + ")"
+                + "   AND f.begin_snapshot <= " + snapshotId
+                + "   AND (f.end_snapshot IS NULL OR f.end_snapshot > " + snapshotId + ")"
+                + "   AND f.begin_snapshot < c.begin_snapshot"
+                + " GROUP BY c.column_name, c.column_order ORDER BY c.column_order";
+        try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery(sql)) {
+            while (rs.next()) {
+                out.put(rs.getString(1), rs.getLong(2));
+            }
+        }
+        return out;
+    }
+
     /** Immutable file set of a relation at the pinned snapshot, ordered for deterministic batching. */
     public List<DuckLakeFile> files(String relation, long snapshotId) throws SQLException {
         Identifiers.requireSqlIdentifier(relation, "ducklake relation");

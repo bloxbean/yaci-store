@@ -60,7 +60,7 @@ class BuiltInSqlTransformsTest {
                     + " owner_stake_credential varchar, inline_datum varchar, data_hash varchar,"
                     + " script_ref varchar, reference_script_hash varchar, is_collateral_return boolean,"
                     + " epoch int32, slot int64, block_hash varchar, block_time timestamptz, tx_index int32,"
-                    + " asset_index int64, date date"));
+                    + " asset_index int64, date date, owner_addr_full varchar"));
 
     /** Target definitions from the store migrations; every column is nullable unless listed. */
     private static final Map<String, TargetTable> TARGETS = Map.of(

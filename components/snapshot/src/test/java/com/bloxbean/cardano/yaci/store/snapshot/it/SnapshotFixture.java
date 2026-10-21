@@ -34,6 +34,8 @@ final class SnapshotFixture {
     static final int POINT_EPOCH = 2;
     /** Blocks 0..39; epoch 2 covers blocks 20..29, so the point is block 29. */
     static final int POINT_BLOCK = 29;
+    /** The output (block number) whose address is too long for owner_addr, so owner_addr_full holds it. */
+    static final int LONG_ADDRESS_OUTPUT = 21;
 
     private SnapshotFixture() {
     }
@@ -182,7 +184,8 @@ final class SnapshotFixture {
                     "inline_datum", "varchar", "data_hash", "varchar", "script_ref", "varchar",
                     "reference_script_hash", "varchar", "is_collateral_return", "boolean",
                     "epoch", "int32", "slot", "int64", "block_hash", "varchar",
-                    "block_time", "timestamptz", "tx_index", "int32", "asset_index", "int64", "date", "date");
+                    "block_time", "timestamptz", "tx_index", "int32", "asset_index", "int64", "date", "date",
+                    "owner_addr_full", "varchar");
             case "adapot" -> ordered("epoch", "int32", "slot", "int64",
                     "deposits_stake", "decimal(38,0)", "fees", "decimal(38,0)", "utxo", "decimal(38,0)",
                     "treasury", "decimal(38,0)", "reserves", "decimal(38,0)", "circulation", "decimal(38,0)",
@@ -365,6 +368,10 @@ final class SnapshotFixture {
                     + " CAST(CASE asset WHEN 'lovelace' THEN 1 WHEN 'empty' THEN 2"
                     + "                 WHEN 'longname' THEN 3 ELSE 4 END AS BIGINT) AS asset_index,"
                     + " CAST(to_timestamp(1700000000 + n * 20) AS DATE) AS date"
+                    // The first day was exported before the view had owner_addr_full, so its file has no
+                    // such column; the second day's file has it, set for one long-address output.
+                    + (part == 0 ? "" : ", CASE WHEN n = " + LONG_ADDRESS_OUTPUT + " THEN repeat('addr_test1', 60)"
+                            + " END AS owner_addr_full")
                     // 'tok' is a named asset; the two 'pol...' units share a policy and differ in
                     // asset-name length, and one has an empty name, which is what the analytics view
                     // turns into NULL.

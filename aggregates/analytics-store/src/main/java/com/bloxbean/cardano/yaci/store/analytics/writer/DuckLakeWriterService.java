@@ -17,6 +17,10 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.LocalDate;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 
 /**
  * DuckLake-based storage writer implementation.
@@ -94,6 +98,8 @@ public class DuckLakeWriterService implements StorageWriter {
             // DuckLake requires ALTER TABLE SET PARTITIONED BY after table creation
             if (isNewTable) {
                 configurePartitioning(conn, tableName, outputPath, partitionColumn);
+            } else {
+                addMissingColumns(conn, tableName, finalQuery);
             }
 
             // Replace the partition's rows (DELETE + INSERT in one DuckLake transaction)
@@ -167,6 +173,40 @@ public class DuckLakeWriterService implements StorageWriter {
     }
 
     /**
+     * Adds the columns an exporter's query has gained since the table was created, so a release that
+     * exports one more column keeps exporting into the existing table. Earlier data files read the
+     * new column as NULL. A column the query no longer returns stays in the table, NULL from now on.
+     */
+    private void addMissingColumns(Connection conn, String tableName, String query) throws SQLException {
+        Set<String> existing = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+        try (Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(String.format(
+                     "SELECT column_name FROM duckdb_columns() WHERE database_name = 'ducklake_catalog'"
+                             + " AND table_name = '%s';", tableName))) {
+            while (rs.next()) {
+                existing.add(rs.getString(1));
+            }
+        }
+
+        Map<String, String> missing = new LinkedHashMap<>();
+        try (Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("DESCRIBE " + query)) {
+            while (rs.next()) {
+                String column = rs.getString("column_name");
+                if (!existing.contains(column)) {
+                    missing.put(column, rs.getString("column_type"));
+                }
+            }
+        }
+
+        for (Map.Entry<String, String> column : missing.entrySet()) {
+            connectionHelper.executeSql(conn, String.format("ALTER TABLE %s ADD COLUMN %s %s;",
+                    tableName, connectionHelper.quoteIdentifier(column.getKey()), column.getValue()));
+            log.info("Added column '{}' ({}) to DuckLake table '{}'", column.getKey(), column.getValue(), tableName);
+        }
+    }
+
+    /**
      * Configure partitioning for a DuckLake table based on the output path format and partition column.
      *
      * DuckLake requires ALTER TABLE SET PARTITIONED BY after table creation.
@@ -219,7 +259,7 @@ public class DuckLakeWriterService implements StorageWriter {
     }
 
     /**
-     * Export data using DuckLake INSERT.
+     * Export data using DuckLake INSERT, matching the query's columns to the table's by name.
      */
     private long exportWithDuckLake(Connection conn, String tableName, String query) throws SQLException {
         // Compression settings are configured globally at catalog level
@@ -228,7 +268,7 @@ public class DuckLakeWriterService implements StorageWriter {
 
         // Insert data into DuckLake table (we're already using ducklake_catalog database)
         String insertSql = String.format(
-                "INSERT INTO %s %s;",
+                "INSERT INTO %s BY NAME %s;",
                 tableName,
                 query
         );

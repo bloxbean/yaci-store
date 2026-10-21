@@ -13,8 +13,10 @@
 -- cannot spill: the densest mainnet day (2.96M asset rows) needed over 3GB that way and fits in 2GB
 -- this way, at a third of the time. asset_index is unique within an output, so the order is the same.
 --
--- owner_addr_full is not present in this export and is therefore left to its column default. That
--- limitation is declared in the specification and recorded in the manifest.
+-- Transform version 6 restores owner_addr_full, the full address of an output longer than
+-- owner_addr's 500 characters, which the export carries since the view gained it. A file exported
+-- before then reads it as NULL (the scan matches columns by name); the export inspection reports
+-- such files as a limitation of that snapshot.
 --
 -- Parameters supplied by the importer:
 --   ${files}    this batch's rows (whole partition directories)
@@ -33,6 +35,7 @@ grouped AS (
         any_value(owner_stake_addr)         AS owner_stake_addr,
         any_value(owner_payment_credential) AS owner_payment_credential,
         any_value(owner_stake_credential)   AS owner_stake_credential,
+        any_value(owner_addr_full)          AS owner_addr_full,
         any_value(inline_datum)             AS inline_datum,
         any_value(data_hash)                AS data_hash,
         any_value(script_ref)               AS script_ref,
@@ -81,6 +84,7 @@ SELECT
     g.data_hash                              AS data_hash,
     g.inline_datum                           AS inline_datum,
     g.owner_addr                             AS owner_addr,
+    g.owner_addr_full                        AS owner_addr_full,
     g.owner_stake_addr                       AS owner_stake_addr,
     g.owner_payment_credential               AS owner_payment_credential,
     g.owner_stake_credential                 AS owner_stake_credential,

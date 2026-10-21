@@ -518,8 +518,12 @@ class SnapshotImportIT {
                     + " WHERE slot = 0")).isEqualTo(1000000L);
             assertThat(scalarLong(conn, "SELECT block FROM " + qt("address_utxo")
                     + " WHERE slot = 0")).isZero();
+            // owner_addr_full comes back where the export has it; the older day's file, written before
+            // the export had the column, restores it as NULL.
             assertThat(scalarLong(conn, "SELECT count(*) FROM " + qt("address_utxo")
-                    + " WHERE owner_addr_full IS NOT NULL")).isZero();
+                    + " WHERE owner_addr_full IS NOT NULL")).isOne();
+            assertThat(scalarLong(conn, "SELECT length(owner_addr_full) FROM " + qt("address_utxo")
+                    + " WHERE slot = " + SnapshotFixture.LONG_ADDRESS_OUTPUT * 20)).isEqualTo(600L);
 
             // cursor_ tail seeded to the configured depth, ending exactly at the point.
             assertThat(count(conn, "cursor_")).isEqualTo(10);

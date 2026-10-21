@@ -78,10 +78,15 @@ public final class DuckDb {
      * the type the importer plans against depends on where a file happens to sit. Every snapshot scan
      * goes through here so that never happens.
      *
+     * <p>Columns are matched by name across files. A column an exporter gained in a later release is
+     * missing from the files written before it, and DuckLake keeps those files as they are; a scan
+     * that took its columns from the first file would drop the new column without a word, or fail on
+     * the older files. Matched by name, the older files read it as NULL.
+     *
      * @param files a DuckDB list literal of file paths
      */
     public static String readParquet(String files) {
-        return "read_parquet(" + files + ", hive_partitioning = false)";
+        return "read_parquet(" + files + ", hive_partitioning = false, union_by_name = true)";
     }
 
     public static void exec(Connection conn, String sql) throws SQLException {

@@ -1062,10 +1062,12 @@ specifications can never claim the same target table.
 A snapshot's manifest lists every declared limitation, and `snapshot validate` repeats them. For a
 snapshot produced from the current analytics export:
 
-- **`address_utxo.owner_addr_full`** is not present in the flattened export and cannot be recovered
-  from it. It is populated only for addresses longer than 500 characters, so it is null for
-  effectively all rows in practice, but the limitation is real and recorded. A later
-  snapshot-format revision will add a lossless projection.
+- **Columns an exporter gained in a later release.** When a release exports one more column (for
+  example `address_utxo.owner_addr_full`, the full address of an output longer than 500 characters),
+  the analytics store adds it to the existing relation and fills it from then on. Days exported
+  before the upgrade have no such column and restore it as NULL. The export inspection lists each
+  such column with the number of files that predate it, and the manifest records it; re-export
+  those days to fill it.
 - **Address balance history is not restored.** `address_balance` and `address_tx_amount`
   remain lossy analytics projections and are left empty, along with the `*_current` caches.
   `stake_address_balance` is restored from the separate lossless

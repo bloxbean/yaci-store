@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Pattern;
-import java.util.stream.IntStream;
+import java.util.ArrayList;
 
 /** Bounds the non-spillable UTxO list aggregate without changing persisted batch boundaries. */
 final class UtxoBatchLoader {
@@ -41,10 +41,12 @@ final class UtxoBatchLoader {
             int count = buckets;
             // A key's asset rows always hash together, even across files or partitions. All buckets
             // cover the exact original input once. Each statement releases its aggregate state.
-            Iterable<String> selects = () -> IntStream.range(0, count).mapToObj(bucket ->
-                    loader.sourceSelect(batch.spec(), batch, manifest.point().slot(), manifest.point().epoch(),
-                            dependencies, count == 1 ? null
-                                    : "hash(tx_hash, output_index) % " + count + " = " + bucket)).iterator();
+            List<String> selects = new ArrayList<>(count);
+            for (int bucket = 0; bucket < count; bucket++) {
+                selects.add(loader.sourceSelect(session.connection(), batch.spec(), batch, manifest.point().slot(),
+                        manifest.point().epoch(), dependencies, count == 1 ? null
+                                : "hash(tx_hash, output_index) % " + count + " = " + bucket));
+            }
             if (count > 1) {
                 log.info("Loading UTxO batch {} in {} memory-bounded slices", batch.batchId().substring(0, 12), count);
             }

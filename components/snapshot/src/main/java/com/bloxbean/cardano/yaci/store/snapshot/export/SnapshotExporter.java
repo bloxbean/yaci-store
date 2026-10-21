@@ -79,6 +79,7 @@ public class SnapshotExporter {
     InspectionReport inspect(DuckLakeCatalog catalog, ExportOptions options) throws SQLException {
         List<String> blockers = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
+        List<String> predatingColumns = new ArrayList<>();
 
         long snapshotId = catalog.latestSnapshotId();
         if (snapshotId < 0) {
@@ -139,6 +140,10 @@ public class SnapshotExporter {
                 TablePlan plan = planner.plan(spec, snapshotId, selection.completedEpoch(),
                         selection.point().slot());
                 plans.add(plan);
+                catalog.filesPredatingColumns(spec.relation(), snapshotId).forEach((column, files) ->
+                        predatingColumns.add(spec.targetTable() + ": " + files + " of its exported files predate the"
+                                + " export column '" + column + "' and restore it as NULL; re-export those"
+                                + " partitions to fill it"));
                 plan.problems().forEach(p -> blockers.add("[" + spec.id() + "] " + p));
                 if (plan.rowCount() == 0) {
                     warnings.add("Table '" + spec.id() + "' contributes no rows at the consistency point");
@@ -161,8 +166,8 @@ public class SnapshotExporter {
         }
 
         // Declared limitations, gathered from the specifications themselves so they can never drift
-        // from what the importer actually does. address_utxo.owner_addr_full is the known example.
-        List<String> lossy = new ArrayList<>();
+        // from what the importer actually does, and from this export's files.
+        List<String> lossy = new ArrayList<>(predatingColumns);
         for (SnapshotTableSpec spec : registry.all()) {
             if (spec.restore() == RestoreMode.NOT_RESTORED) {
                 lossy.add(spec.targetTable() + ": " + spec.reason());

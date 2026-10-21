@@ -124,6 +124,26 @@ class DuckLakeWriterServiceReplaceTest {
     }
 
     @Test
+    void anExporterThatGainsAColumnKeepsExportingIntoTheTable() throws Exception {
+        writer.export(blocks(0, 2, MARCH_1), path("address_utxo", "date=2024-03-01"), "block_time");
+
+        // A later release exports one more column, in the middle of the select list
+        String widened = "SELECT " + 100 + " + range AS slot, 'addr' || range AS owner_addr_full, to_timestamp("
+                + (MARCH_1 + 86400) + " + range) AS block_time FROM range(3)";
+        assertThat(writer.export(widened, path("address_utxo", "date=2024-03-02"), "block_time").getRowCount())
+                .isEqualTo(3);
+
+        assertThat(rowsPerDate("address_utxo")).containsExactly(Map.entry("2024-03-01", 2L), Map.entry("2024-03-02", 3L));
+        assertThat(count("SELECT COUNT(*) FROM address_utxo WHERE owner_addr_full IS NULL")).isEqualTo(2);
+        assertThat(count("SELECT COUNT(*) FROM address_utxo WHERE owner_addr_full = 'addr' || (slot - 100)")).isEqualTo(3);
+
+        // Re-exporting an earlier day with the widened query fills the column there too
+        writer.export("SELECT range AS slot, 'old' AS owner_addr_full, to_timestamp(" + MARCH_1 + " + range) AS block_time"
+                + " FROM range(2)", path("address_utxo", "date=2024-03-01"), "block_time");
+        assertThat(count("SELECT COUNT(*) FROM address_utxo WHERE owner_addr_full IS NULL")).isZero();
+    }
+
+    @Test
     void failedReExportKeepsThePreviousRows() throws Exception {
         writer.export(blocks(0, 5, MARCH_1), path("block", "date=2024-03-01"), "block_time");
 
