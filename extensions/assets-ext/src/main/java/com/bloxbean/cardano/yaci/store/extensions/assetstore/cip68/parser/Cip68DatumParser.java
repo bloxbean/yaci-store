@@ -117,8 +117,8 @@ public class Cip68DatumParser {
      * The result is empty for a datum that is not a CIP-68 datum or cannot be decoded.
      */
     public Optional<ParsedCip68Datum> parse(String inlineDatum, @Nullable AssetType referenceNft) {
-        return parseDetailed(inlineDatum, referenceNft) instanceof ParseOutcome.Parsed parsed
-                ? Optional.of(parsed.datum())
+        return parseDetailed(inlineDatum, referenceNft) instanceof ParseOutcome.Parsed(ParsedCip68Datum datum)
+                ? Optional.of(datum)
                 : Optional.empty();
     }
 

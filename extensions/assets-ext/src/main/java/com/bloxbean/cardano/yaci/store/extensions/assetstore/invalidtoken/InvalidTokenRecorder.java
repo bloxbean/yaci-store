@@ -67,7 +67,7 @@ public class InvalidTokenRecorder {
     }
 
     /** Records one dropped item, unless the same item is already recorded. Never throws. */
-    public void record(InvalidTokenReport report) {
+    public void report(InvalidTokenReport report) {
         if (repository == null) {
             return;
         }

@@ -52,7 +52,7 @@ class InvalidTokenRecorderTest {
     @Test
     @DisplayName("a new item is saved and counted")
     void savesAndCounts() {
-        recorder.record(report().build());
+        recorder.report(report().build());
 
         ArgumentCaptor<InvalidToken> row = ArgumentCaptor.forClass(InvalidToken.class);
         verify(repository).save(row.capture());
@@ -67,7 +67,7 @@ class InvalidTokenRecorderTest {
     void existingItemIsNotSavedAgain() {
         when(repository.existsById(any())).thenReturn(true);
 
-        recorder.record(report().build());
+        recorder.report(report().build());
 
         verify(repository, never()).save(any());
         assertThat(meters.getMeters()).isEmpty();
@@ -104,13 +104,13 @@ class InvalidTokenRecorderTest {
     void failureIsContained() {
         when(repository.existsById(any())).thenThrow(new IllegalStateException("db down"));
 
-        assertThatCode(() -> recorder.record(report().build())).doesNotThrowAnyException();
+        assertThatCode(() -> recorder.report(report().build())).doesNotThrowAnyException();
         assertThatCode(() -> recorder.forgetOrigin("CIP-26", "x.json")).doesNotThrowAnyException();
     }
 
     @Test
     @DisplayName("the no-op recorder records nothing and does not throw")
     void noop() {
-        assertThatCode(() -> InvalidTokenRecorder.noop().record(report().build())).doesNotThrowAnyException();
+        assertThatCode(() -> InvalidTokenRecorder.noop().report(report().build())).doesNotThrowAnyException();
     }
 }

@@ -350,7 +350,7 @@ class Cip26MetadataSyncServiceTest {
 
             // and the dropped file is recorded, with the subject it claimed (ADR 0007)
             ArgumentCaptor<InvalidTokenReport> recorded = ArgumentCaptor.forClass(InvalidTokenReport.class);
-            verify(invalidTokenRecorder).record(recorded.capture());
+            verify(invalidTokenRecorder).report(recorded.capture());
             assertThat(recorded.getValue().reasonCode()).isEqualTo(InvalidTokenReason.FILENAME_SUBJECT_MISMATCH);
             assertThat(recorded.getValue().origin()).isEqualTo("garbage.json");
             assertThat(recorded.getValue().details()).containsEntry("inner_subject", "legit");
@@ -372,7 +372,7 @@ class Cip26MetadataSyncServiceTest {
             service.synchronizeDatabase();
 
             ArgumentCaptor<InvalidTokenReport> recorded = ArgumentCaptor.forClass(InvalidTokenReport.class);
-            verify(invalidTokenRecorder, times(2)).record(recorded.capture());
+            verify(invalidTokenRecorder, times(2)).report(recorded.capture());
             assertThat(recorded.getAllValues()).extracting(InvalidTokenReport::reasonCode)
                     .containsExactlyInAnyOrder(InvalidTokenReason.UNPARSEABLE_MAPPING, InvalidTokenReason.MISSING_GIT_HISTORY);
         }
