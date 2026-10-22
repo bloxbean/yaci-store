@@ -4,6 +4,7 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.Cip26
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.Cip26StorageReaderImpl;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.repository.Cip26MetadataRepository;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service.Cip68TokenService;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service.Cip68UserTokenService;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.Cip68StorageReader;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.Cip68StorageReaderImpl;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -51,7 +52,7 @@ public class AssetsExtConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public Cip68StorageReader cip68StorageReader(Cip68TokenService cip68TokenService) {
-        return new Cip68StorageReaderImpl(cip68TokenService);
+    public Cip68StorageReader cip68StorageReader(Cip68TokenService cip68TokenService, Cip68UserTokenService cip68UserTokenService) {
+        return new Cip68StorageReaderImpl(cip68TokenService, cip68UserTokenService);
     }
 }

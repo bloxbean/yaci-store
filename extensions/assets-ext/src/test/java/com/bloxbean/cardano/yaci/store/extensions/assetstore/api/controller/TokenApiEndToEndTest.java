@@ -5,6 +5,9 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.service.TokenQu
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.Cip26StorageReaderImpl;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.repository.Cip26MetadataRepository;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service.Cip68TokenService;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service.Cip68UserTokenService;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.Cip68UserToken;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.repository.Cip68UserTokenRepository;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.Cip68StorageReaderImpl;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.Cip68Metadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.repository.Cip68MetadataRepository;
@@ -17,12 +20,17 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -49,19 +57,33 @@ class TokenApiEndToEndTest {
     private Cip68MetadataRepository cip68Repository;
     private Cip26MetadataRepository cip26Repository;
     private MockMvc mockMvc;
+    /** The user tokens that have NOT been seen on chain; every other token is taken as seen. */
+    private final Set<String> unseenUserTokens = new HashSet<>();
 
     @BeforeEach
     void setUp() {
         cip68Repository = mock(Cip68MetadataRepository.class);
         cip26Repository = mock(Cip26MetadataRepository.class);
         Cip68TokenService cip68TokenService = new Cip68TokenService(cip68Repository);
+        Cip68UserTokenRepository userTokenRepository = mock(Cip68UserTokenRepository.class);
+        when(userTokenRepository.existsById(anyString())).thenAnswer(i -> !unseenUserTokens.contains((String) i.getArgument(0)));
+        when(userTokenRepository.findAllById(any())).thenAnswer(i -> {
+            List<Cip68UserToken> seen = new ArrayList<>();
+            for (Object id : (Iterable<?>) i.getArgument(0)) {
+                if (!unseenUserTokens.contains((String) id)) {
+                    seen.add(Cip68UserToken.builder().unit((String) id).slot(1L).txHash("a".repeat(64)).build());
+                }
+            }
+            return seen;
+        });
+        Cip68UserTokenService userTokenService = new Cip68UserTokenService(userTokenRepository);
         TokenQueryService queryService = new TokenQueryService(
-                new Cip26StorageReaderImpl(cip26Repository), new Cip68StorageReaderImpl(cip68TokenService));
+                new Cip26StorageReaderImpl(cip26Repository), new Cip68StorageReaderImpl(cip68TokenService, userTokenService));
 
         AssetsExtStoreProperties properties = new AssetsExtStoreProperties();
         TokenMetadataSubjectController subjectController = new TokenMetadataSubjectController(queryService, properties);
         subjectController.init();
-        Cip68MetadataController cip68Controller = new Cip68MetadataController(new Cip68StorageReaderImpl(cip68TokenService));
+        Cip68MetadataController cip68Controller = new Cip68MetadataController(new Cip68StorageReaderImpl(cip68TokenService, userTokenService));
 
         LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
         validator.afterPropertiesSet();
@@ -351,5 +373,60 @@ class TokenApiEndToEndTest {
                 .andExpect(status().isOk());
         mockMvc.perform(get("/api/v1/tokens/subject/{s}", FT_SUBJECT).param("validation", "STRICT"))
                 .andExpect(status().isNotFound());
+    }
+
+    // a 333 or 444 subject is served only when its user token has been seen on chain (ADR 0008)
+
+    @Test
+    void aSubjectWhoseUserTokenWasNeverSeenIs404EvenThoughTheReferenceNftExists() throws Exception {
+        store(row(333).name("Coin").description("A coin").validationErrors(List.of()).build());
+        unseenUserTokens.add(FT_SUBJECT);
+
+        mockMvc.perform(get("/api/v1/tokens/subject/{s}", FT_SUBJECT)).andExpect(status().isNotFound());
+        mockMvc.perform(get("/api/v1/tokens/cip68/ft/{s}", FT_SUBJECT)).andExpect(status().isNotFound());
+    }
+
+    @Test
+    void aReferenceNftOfAnNftAnswersNeitherAs333NorAs444WhenNoSuchTokenWasSeen() throws Exception {
+        store(row(222).name("An NFT").image("ipfs://QmImage").validationErrors(List.of()).build());
+        unseenUserTokens.add(FT_SUBJECT);
+        unseenUserTokens.add(RFT_SUBJECT);
+
+        mockMvc.perform(get("/api/v1/tokens/subject/{s}", FT_SUBJECT)).andExpect(status().isNotFound());
+        mockMvc.perform(get("/api/v1/tokens/subject/{s}", RFT_SUBJECT)).andExpect(status().isNotFound());
+    }
+
+    @Test
+    void theSameReferenceNftServesTheSubjectsWhoseTokenWasSeen() throws Exception {
+        // a reference NFT can serve several user tokens: here the 444 was seen and the 333 was not
+        store(row(444).name("Edition").image("ipfs://QmImage").validationErrors(List.of()).build());
+        unseenUserTokens.add(FT_SUBJECT);
+
+        mockMvc.perform(get("/api/v1/tokens/subject/{s}", FT_SUBJECT)).andExpect(status().isNotFound());
+        mockMvc.perform(get("/api/v1/tokens/subject/{s}", RFT_SUBJECT)).andExpect(status().isOk());
+    }
+
+    @Test
+    void theBatchLeavesOutASubjectWhoseUserTokenWasNeverSeen() throws Exception {
+        store(row(333).name("Coin").validationErrors(List.of()).build());
+        unseenUserTokens.add(FT_SUBJECT);
+        String body = new ObjectMapper().writeValueAsString(Map.of("subjects", List.of(FT_SUBJECT)));
+
+        mockMvc.perform(post("/api/v1/tokens/subject/query").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.subjects.length()").value(0));
+    }
+
+    @Test
+    void thePolicyAndNameEndpointServesTheTokenWhenItsFungibleOrRichFungibleTokenWasSeen() throws Exception {
+        store(row(333).name("Coin").description("A coin").validationErrors(List.of()).build());
+        // neither the 333 nor the 444 token was seen
+        unseenUserTokens.add(FT_SUBJECT);
+        unseenUserTokens.add(RFT_SUBJECT);
+        mockMvc.perform(get("/api/v1/tokens/cip68/ft/{p}/{n}", POLICY, BASE)).andExpect(status().isNotFound());
+
+        // the 333 token was seen
+        unseenUserTokens.remove(FT_SUBJECT);
+        mockMvc.perform(get("/api/v1/tokens/cip68/ft/{p}/{n}", POLICY, BASE)).andExpect(status().isOk());
     }
 }

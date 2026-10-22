@@ -99,6 +99,22 @@ Indexes: `idx_cip68_metadata_slot`, `idx_cip68_metadata_label`. See
 
 ---
 
+## `cip68_user_token` (V0_1700_4)
+
+The CIP-68 fungible (333) and rich fungible (444) user tokens that have been seen in an output, so that the API serves a 333 or 444 subject only when
+its token exists (ADR 0008). The metadata is in `cip68_metadata`.
+
+| Column | Type | Meaning |
+|---|---|---|
+| `unit` | `VARCHAR(120)` PK | policy id + asset name of the user token, lower case hex |
+| `slot` | `BIGINT` | the slot of the first transaction that showed the token; a rollback to an earlier slot removes the row |
+| `tx_hash` | `VARCHAR(64)` | that transaction |
+
+Index: `idx_cip68_user_token_slot`. Only a unit whose asset name starts with the 333 or the 444 label and has a name after it is kept, so the table holds
+a few thousand rows on mainnet. It is written in the block transaction, bounded and idempotent; a failed write is a warning and never stops the sync.
+
+---
+
 ## `invalid_token` (V0_1700_3)
 
 What the module **drops** or cannot use, one row per item (ADR 0007). A token that is indexed keeps its problems in the

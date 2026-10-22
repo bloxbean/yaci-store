@@ -108,6 +108,13 @@ A token that is not accepted is a `404` for a single subject and is left out of 
 are never filtered. A token indexed before validation existed (no `validation_errors`) is judged by the rule it had before: name and description
 present.
 
+**A 333 or 444 subject is served only when its user token exists.** The reference NFT of the same name holds the metadata, but it does not say that
+the fungible (`0014df10`) or rich fungible (`001bc280`) token was ever minted. The module records every 333 and 444 token it sees in an output
+(`cip68_user_token`) and answers `404` for a subject whose token was never seen, on `/tokens/subject/**` (single and batch) and `/tokens/cip68/ft/**`. Before,
+any 333 or 444 subject with the name of a reference NFT answered `200`, including the 333 and 444 subjects of NFTs. A reference NFT that serves several
+user tokens (for example a 222 and a 333) serves each of them once its token has been seen. Like the rest of the CIP-68 data, this needs a sync from
+genesis; see ADR 0008.
+
 **`?property=` limits the errors too.** When a request asks for some properties (`?property=ticker`), `validation_errors`, `metadata.valid` and the
 `?validation=` gate are about those properties only: an error on the `image` is not reported to a client that asked for the `ticker`. An `image` error
 counts for `logo` (a rich fungible token's image is served as its logo), the error that says a nested datum has no entry for the token is always kept,

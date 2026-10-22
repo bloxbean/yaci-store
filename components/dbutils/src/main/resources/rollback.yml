@@ -20,6 +20,13 @@ rollback:
         type: "slot"
         column: "slot"
         operator: ">"
+
+    - name: "cip68_user_token"
+      operation: "DELETE"
+      condition:
+        type: "slot"
+        column: "slot"
+        operator: ">"
         
     - name: "block"
       operation: "DELETE"

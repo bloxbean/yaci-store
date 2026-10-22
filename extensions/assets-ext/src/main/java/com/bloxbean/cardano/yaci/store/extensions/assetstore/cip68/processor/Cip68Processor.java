@@ -60,17 +60,27 @@ public class Cip68Processor {
     private final Cip68Metrics metrics;
     private final InvalidTokenRecorder invalidTokenRecorder;
     private final Clock clock;
+    private final Cip68UserTokenRecorder userTokenRecorder;
 
     @Autowired
     public Cip68Processor(Cip68TokenService cip68TokenService, Cip68DatumParser cip68DatumParser,
                           Cip68MetadataRepository cip68MetadataRepository, Cip68Metrics metrics,
-                          InvalidTokenRecorder invalidTokenRecorder, Clock clock) {
+                          InvalidTokenRecorder invalidTokenRecorder, Clock clock, Cip68UserTokenRecorder userTokenRecorder) {
         this.cip68TokenService = cip68TokenService;
         this.cip68DatumParser = cip68DatumParser;
         this.cip68MetadataRepository = cip68MetadataRepository;
         this.metrics = metrics;
         this.invalidTokenRecorder = invalidTokenRecorder;
         this.clock = clock;
+        this.userTokenRecorder = userTokenRecorder;
+    }
+
+    /** Without a table of the user tokens that were seen (tests). */
+    public Cip68Processor(Cip68TokenService cip68TokenService, Cip68DatumParser cip68DatumParser,
+                          Cip68MetadataRepository cip68MetadataRepository, Cip68Metrics metrics,
+                          InvalidTokenRecorder invalidTokenRecorder, Clock clock) {
+        this(cip68TokenService, cip68DatumParser, cip68MetadataRepository, metrics, invalidTokenRecorder, clock,
+                Cip68UserTokenRecorder.noop());
     }
 
     /** Without a table for what is dropped (tests). */
@@ -95,8 +105,10 @@ public class Cip68Processor {
         // the co-minted user token (000de140 / 0014df10 / 001bc280) paired with the reference
         // NFT; a flat-map across all txs would lose that boundary.
         List<Cip68Metadata> entities = new ArrayList<>();
+        Map<String, String> userTokens = new LinkedHashMap<>();
         for (TxInputOutput txIo : addressUtxoEvent.getTxInputOutputs()) {
             Set<String> assetUnitsInTx = collectAssetUnits(txIo);
+            collectUserTokens(txIo, userTokens);
 
             for (AddressUtxo output : txIo.getOutputs()) {
                 try {
@@ -110,6 +122,27 @@ public class Cip68Processor {
         if (!entities.isEmpty()) {
             cip68MetadataRepository.saveAll(entities);
         }
+        // the fungible and rich fungible tokens of the block, so that the API serves a 333 or 444 subject only when its token exists (ADR 0008)
+        userTokenRecorder.record(userTokens, slot);
+    }
+
+    /** The 333 and 444 user tokens in the outputs of a transaction, each with the hash of the first transaction that showed it in the block. */
+    private static void collectUserTokens(TxInputOutput txIo, Map<String, String> into) {
+        for (AddressUtxo output : txIo.getOutputs()) {
+            for (Amt amt : output.getAmounts()) {
+                String unit = normalize(AssetType.fromUnit(amt.getUnit()).toUnit());
+                if (isFungibleOrRichFungibleUnit(unit)) {
+                    into.putIfAbsent(unit, output.getTxHash());
+                }
+            }
+        }
+    }
+
+    /** A unit whose asset name starts with the 333 or the 444 label and has a name after it. */
+    static boolean isFungibleOrRichFungibleUnit(String unit) {
+        String assetName = AssetType.fromUnit(unit).assetName();
+        return assetName.length() > Cip68Constants.FUNGIBLE_TOKEN_PREFIX.length()
+                && (assetName.startsWith(Cip68Constants.FUNGIBLE_TOKEN_PREFIX) || assetName.startsWith(Cip68Constants.RICH_FUNGIBLE_TOKEN_PREFIX));
     }
 
     private void indexOutput(AddressUtxo output, Set<String> assetUnitsInTx, Long slot, List<Cip68Metadata> entities) {
