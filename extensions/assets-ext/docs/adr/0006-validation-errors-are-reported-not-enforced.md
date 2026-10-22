@@ -47,7 +47,7 @@ Every response that carries token metadata has a `validation_errors` array, empt
 | `sub_standard` | For CIP-68, the label the rule was checked for (`222`, `333`, `444`). A reference NFT with user tokens of several labels is checked against each, and each error names its label. Absent for CIP-26 and for a rule that does not depend on a label (for example a bad `logo`). |
 | `field_name` | The field, for example `description`, `image`, `version`, `files`, `properties.owner`. |
 | `field_category` | `MANDATORY` if the CIP requires the field (for CIP-68, as the label requires it; `name` and `description` for CIP-26), `OPTIONAL` otherwise. |
-| `code` | A stable reason for programs: `missing_value`, `wrong_type`, `invalid_uri_scheme`, `invalid_length`, `invalid_value`, `out_of_range`, `undefined_version`, `plutus_constructor`, `not_utf8`, `invalid_files_entry`, `no_nested_entry`, `too_deep`, `unsupported_key`, `key_collision`, `invalid_base64`, `too_large`. |
+| `code` | A stable reason for programs: `missing_value`, `wrong_type`, `invalid_uri_scheme`, `invalid_length`, `invalid_value`, `out_of_range`, `invalid_version`, `plutus_constructor`, `not_utf8`, `invalid_files_entry`, `no_nested_entry`, `too_deep`, `unsupported_key`, `key_collision`, `invalid_base64`, `too_large`. |
 | `error` | A message for people, for example `description field is missing a mandatory value`. |
 
 The field is **additive**: no existing field is renamed or removed. `metadata.valid`, which the response always had, stays and is now

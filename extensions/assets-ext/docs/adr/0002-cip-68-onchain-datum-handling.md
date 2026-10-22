@@ -231,9 +231,8 @@ characters; CIP-68 has no equivalent, and a CIP-26 limit is reported, not enforc
 
 | Input | Rule | Effect |
 |---|---|---|
-| `version` | missing (a constructor with the metadata map and no second field), or not an integer | the datum is indexed with no version and a **`MANDATORY`** error: `missing_value` when absent, `wrong_type` when it is another type. The CIP requires the version, so the token is not hidden; it is flagged. Measured on preprod: 292 reference NFT outputs (239 without a version, 53 with a non-integer one), about 0.4% of the indexed rows. On mainnet (synced to slot 158 million, 2026-10-21) only 5 outputs are affected: 3 without a version and 2 with a version that is bytes, all small test or hobby tokens |
-| `version` | an integer that does not fit a `long` | the datum is indexed with no version and an `out_of_range` error, **`MANDATORY`** (narrowing it would wrap `2^64 + 1` into 1) |
-| `version` | not 1 to 4 | indexed as written, with an `undefined_version` error, **`MANDATORY`**: the CIP requires the `version` field and defines its values. Greenland Reserve Coin (version 0) is therefore returned by default, and left out by `?validation=MANDATORY_ONLY` and `STRICT` |
+| `version` | missing (a constructor with the metadata map and no second field) | the datum is indexed with no version and a **`MANDATORY`** `missing_value` error. The CIP requires the version, so the token is not hidden; it is flagged. Measured on preprod: 240 reference NFT outputs (the rows below); mainnet: 3 outputs (synced to slot 158 million, 2026-10-21), all small test or hobby tokens |
+| `version` | there but not an integer (bytes, a map, a list, a constructor), an integer that does not fit a `long`, or an integer not in 1 to 4 | one **`MANDATORY`** `invalid_version` error, and the message says which. A value that is not an integer, or that does not fit a `long`, is stored as no version (narrowing it would wrap `2^64 + 1` into 1); a value outside 1 to 4 is stored as written, since the datum is read by its structure. The CIP requires the version and defines its values, so Greenland Reserve Coin (version 0) is returned by default, and left out by `?validation=MANDATORY_ONLY` and `STRICT`. Measured on preprod: 94 rows with a version that is not an integer, and 35 with a version outside 1 to 4 (then reported as `wrong_type` and `undefined_version`) |
 | nesting depth of the datum | the CBOR decoder recurses; a `StackOverflowError` is caught | **dropped** with a WARN that says it looks like an attack |
 | a datum that cannot be decoded | | **dropped** with a WARN with the datum, so the case can be reproduced (`parse_failure`) |
 | nesting depth of an additional property (#1240) | at most 100 levels of lists, maps and constructors | the **property is dropped** with a WARN and `properties.dropped{kind="too_deep"}`, the datum is indexed, with a `too_deep` error |
@@ -340,7 +339,7 @@ Decisions that are still open:
 - One label per row, although the CIP allows several user tokens for one reference NFT: should the table record every matching label? Nothing reads the label
   today; the number of such tokens (below) will show whether it matters.
 - Should the CIP fix its 444 definition (`3 / 4`), which contradicts its changelog and mainnet, and say whether a consumer should accept a datum whose version
-  it does not know? The module accepts it and reports `undefined_version`; neither point is raised in the CIPs repository yet.
+  it does not know? The module accepts it and reports `invalid_version`; neither point is raised in the CIPs repository yet.
 
 Measured on a full mainnet index made before this decision (`ebb9daa37`, read on 2026-10-14; to be measured again with PR #1220):
 
