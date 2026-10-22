@@ -1,0 +1,112 @@
+name: Build native image zips
+
+# Builds the yaci-store native image zips for every platform and uploads each as a workflow artifact named
+# <artifact-prefix>-<platform>-<profile>. Called by release.yml (v* tags, native_release in gradle.properties),
+# bloxbean-snapshot-dist.yml (snapshot_dist_native) and dev_release_native.yml; the caller decides what happens to
+# the zips. No secrets and a read-only token: nothing here publishes anything, and no build cache is restored, so
+# nothing from an earlier run can change the binaries.
+#
+# Asset names: yaci-store-<version>-<os>-<arch>-<profile>.zip, e.g. yaci-store-2.0.7-linux-x64-n2c.zip. The musl
+# builds are best effort, as they always were: a failed musl build doesn't fail the caller, its zips are just missing.
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: 'Version in the zip names (the release version, or the snapshot version with its commit id)'
+        required: true
+        type: string
+      artifact-prefix:
+        description: 'Prefix of the uploaded workflow artifact names'
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-22.04, profile: n2c, musl: false }
+          - { os: ubuntu-22.04, profile: all, musl: false }
+          - { os: macOS, profile: n2c, musl: false }
+          - { os: macOS, profile: all, musl: false }
+          - { os: ubuntu-22.04, profile: n2c, musl: true }
+          - { os: ubuntu-22.04, profile: all, musl: true }
+          - { os: windows-latest, profile: all, musl: false }
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.musl }}
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ inputs.version }}
+      ARTIFACT_PREFIX: ${{ inputs.artifact-prefix }}
+      PROFILE: ${{ matrix.profile }}
+      MUSL: ${{ matrix.musl }}
+      FORCE_COLOR: 1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: graalvm/setup-graalvm@0426e2e191540e8514dff98dc52a5f5146a2a276 # v1.6.6
+        with:
+          java-version: '21'
+          distribution: 'graalvm'
+          version: '21.0.5'
+          native-image-musl: ${{ matrix.musl }}
+          native-image-job-reports: 'true'
+
+      - name: Select the platform
+        shell: bash
+        run: |
+          set -euo pipefail
+          props=applications/all/src/main/resources/META-INF/native-image/yaci-store-all
+          arch=$(tr '[:upper:]' '[:lower:]' <<< "$RUNNER_ARCH")
+          case "$RUNNER_OS" in
+            Linux)
+              # Pin the builder heap: sized from free memory at start, it sometimes lands at ~7.5GB on these
+              # runners and the image build fails (applications/all/build.gradle reads this, a9c3947e5).
+              echo "NATIVE_BUILDER_MAX_HEAP=11g" >> "$GITHUB_ENV"
+              if [[ "$MUSL" == true ]]; then
+                cp "$props/native-image.properties.musl" "$props/native-image.properties"
+                platform="linux-musl-$arch"
+              else
+                platform="linux-$arch"
+              fi
+              ;;
+            macOS) platform="macos-$arch" ;;
+            Windows)
+              cp "$props/native-image.properties.win" "$props/native-image.properties"
+              platform="windows-$arch"
+              ;;
+          esac
+          echo "PLATFORM=$platform" >> "$GITHUB_ENV"
+
+      - name: Build with Gradle
+        shell: bash
+        run: ./gradlew --no-daemon -i -Pprofile="$PROFILE" -PskipSigning=true clean distNativeZip
+
+      - name: Name the zip
+        id: zip
+        shell: bash
+        run: |
+          set -euo pipefail
+          built=(applications/all/build/output/yaci-store-*.zip)
+          if [[ ${#built[@]} != 1 ]]; then
+            echo "::error::Expected one native zip; found: ${built[*]}" >&2
+            exit 1
+          fi
+          name="yaci-store-$VERSION-$PLATFORM-$PROFILE.zip"
+          mv "${built[0]}" "applications/all/build/output/$name"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "artifact=$ARTIFACT_PREFIX-$PLATFORM-$PROFILE" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.zip.outputs.artifact }}
+          path: applications/all/build/output/${{ steps.zip.outputs.name }}
+          if-no-files-found: error
+          retention-days: 7

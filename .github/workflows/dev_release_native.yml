@@ -1,183 +1,46 @@
 name: Build Native Dev Build
 
+# Builds the native image zips of the selected ref and keeps them as workflow artifacts (7 days). Nothing is
+# published; bloxbean-snapshot-dist.yml publishes snapshot zips to the BloxBean repository.
+
 on:
   workflow_dispatch:
-  # Also runs on a PR carrying the 'test-native' label, so a native build can be
-  # verified on the branch before a rel-native-* tag is cut. Label-gated because a
-  # full matrix is ~25 min x 7 jobs.
-  pull_request:
-    types: [ labeled, synchronize ]
 
-concurrency:
-  group: native-dev-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+permissions: {}
 
 jobs:
-  buildAndUpload-mostly-static:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'test-native')
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ "ubuntu-22.04", "macOS" ]
-        profile: [ "n2c", "all" ]
-    runs-on: ${{ matrix.os }}
-    env:
-      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      FORCE_COLOR: 1
+  version:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
-      - uses: graalvm/setup-graalvm@v1
+        with:
+          persist-credentials: false
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
         with:
           java-version: '21'
-          distribution: 'graalvm'
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          version: '21.0.5'
-          native-image-job-reports: 'true'
-      - name: Get Version from gradle.properties
-        run: |
-          VERSION=$(grep "version=" gradle.properties | cut -d'=' -f2 | xargs)
-          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+          distribution: 'liberica'
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
-      - name: Copy CI specific native-image properties and env setup
-        if: runner.os == 'Linux'
+      # A subproject's version: build.gradle inserts the short commit id into a -SNAPSHOT version there.
+      - name: Resolve the version
+        id: version
+        shell: bash
         run: |
-          echo "os_prefix=linux" >> $GITHUB_ENV
-          echo "NATIVE_BUILDER_MAX_HEAP=11g" >> $GITHUB_ENV
-      - name: MacOS specific env
-        if: runner.os == 'macOS'
-        run: |
-          echo "os_prefix=macos" >> $GITHUB_ENV
-      - name: Set lowercase architecture
-        run: echo "arch=$(echo ${{ runner.arch }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
-      - name: Set Profile Suffix
-        run: |
-          if [ "${{ matrix.profile }}" == "all" ]; then
-            echo "PROFILE_SUFFIX=" >> $GITHUB_ENV
-          elif [ -n "${{ matrix.profile }}" ]; then
-            echo "PROFILE_SUFFIX=-${{ matrix.profile }}" >> $GITHUB_ENV
-          else
-            echo "PROFILE_SUFFIX=" >> $GITHUB_ENV
-          fi
-      - name: Build with Gradle
-        run: ./gradlew --no-daemon -i -Pversion=${{ env.VERSION }} -Pprofile=${{ matrix.profile }} clean distNativeZip
-      - name: Copy artifacts
-        run: mv applications/all/build/output/yaci-store-*.zip applications/all/build/output/yaci-store-${{ env.VERSION }}-${{ env.os_prefix }}-${{ env.arch }}${{ env.PROFILE_SUFFIX }}.zip
-      - uses: actions/upload-artifact@v4
-        with:
-          name: yaci-store-${{ env.VERSION }}-${{ env.os_prefix }}-${{ env.arch }}${{ env.PROFILE_SUFFIX }}
-          path: ./applications/all/build/output/yaci-store-${{ env.VERSION }}-${{ env.os_prefix }}-${{ env.arch }}${{ env.PROFILE_SUFFIX }}.zip
+          set -euo pipefail
+          VERSION=$(./gradlew -q :components:common:properties -PskipSigning=true | awk '/^version:/ { print $2; exit }')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Building $VERSION"
 
-  buildAndUpload-musl:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'test-native')
-    strategy:
-      fail-fast: false
-      matrix:
-        os: ["ubuntu-22.04"]
-        profile: ["n2c", "all"]
-    runs-on: ${{ matrix.os }}
-    continue-on-error: true
-    env:
-      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      FORCE_COLOR: 1
-    steps:
-      - uses: actions/checkout@v4
-      - uses: graalvm/setup-graalvm@v1
-        with:
-          java-version: '21'
-          distribution: 'graalvm'
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          version: '21.0.5'
-          native-image-musl: true
-          native-image-job-reports: 'true'
-      - name: Get Version from gradle.properties
-        run: |
-          VERSION=$(grep "version=" gradle.properties | cut -d'=' -f2 | xargs)
-          echo "VERSION=${VERSION}" >> $GITHUB_ENV
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
-      - name: Copy CI specific native-image properties and env setup
-        if: runner.os == 'Linux'
-        run: |
-          echo "os_prefix=linux" >> $GITHUB_ENV
-          echo "NATIVE_BUILDER_MAX_HEAP=11g" >> $GITHUB_ENV
-          cp applications/all/src/main/resources/META-INF/native-image/yaci-store-all/native-image.properties.musl applications/all/src/main/resources/META-INF/native-image/yaci-store-all/native-image.properties
-      - name: MacOS specific env
-        if: runner.os == 'macOS'
-        run: |
-          echo "os_prefix=macos" >> $GITHUB_ENV
-      - name: Set lowercase architecture
-        run: echo "arch=$(echo ${{ runner.arch }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
-      - name: Set Profile Suffix
-        run: |
-          if [ "${{ matrix.profile }}" == "all" ]; then
-            echo "PROFILE_SUFFIX=" >> $GITHUB_ENV
-          elif [ -n "${{ matrix.profile }}" ]; then
-            echo "PROFILE_SUFFIX=-${{ matrix.profile }}" >> $GITHUB_ENV
-          else
-            echo "PROFILE_SUFFIX=" >> $GITHUB_ENV
-          fi
-      - name: Build with Gradle
-        run: ./gradlew --no-daemon -i -Pversion=${{ env.VERSION }} -Pprofile=${{ matrix.profile }} clean distNativeZip
-      - name: Copy artifacts
-        run: mv applications/all/build/output/yaci-store-*.zip applications/all/build/output/yaci-store-${{ env.VERSION }}-${{ env.os_prefix }}-musl-${{ env.arch }}${{ env.PROFILE_SUFFIX }}.zip
-      - uses: actions/upload-artifact@v4
-        with:
-          name: yaci-store-${{ env.VERSION }}-${{ env.os_prefix }}-musl-${{ env.arch }}${{ env.PROFILE_SUFFIX }}
-          path: ./applications/all/build/output/yaci-store-${{ env.VERSION }}-${{ env.os_prefix }}-musl-${{ env.arch }}${{ env.PROFILE_SUFFIX }}.zip
-
-  windowBuild:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'test-native')
-    strategy:
-      matrix:
-        profile: ["all"]
-    runs-on: windows-latest
-    env:
-      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      FORCE_COLOR: 1
-    steps:
-      - uses: actions/checkout@v4
-      - uses: graalvm/setup-graalvm@v1
-        with:
-          java-version: '21'
-          distribution: 'graalvm'
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          version: '21.0.5'
-          native-image-job-reports: 'true'
-      - name: Extract version (Windows)
-        shell: pwsh
-        run: |
-          $VERSION = (Get-Content gradle.properties | Where-Object { $_ -match "^version=" } | ForEach-Object { $_.Split('=')[1].Trim() })
-          echo "VERSION=$VERSION" >> $env:GITHUB_ENV
-      - name: Set Profile Suffix
-        shell: pwsh
-        run: |
-          if ("${{ matrix.profile }}" -eq "all") {
-              Add-Content -Path $env:GITHUB_ENV -Value "PROFILE_SUFFIX="
-          } elseif ("${{ matrix.profile }}" -ne "") {
-              Add-Content -Path $env:GITHUB_ENV -Value "PROFILE_SUFFIX=-${{ matrix.profile }}"
-          } else {
-              Add-Content -Path $env:GITHUB_ENV -Value "PROFILE_SUFFIX="
-          }
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
-      - name: Windows specific env
-        run: |
-          echo "os_prefix=win" >> $GITHUB_ENV
-          copy applications\all\src\main\resources\META-INF\native-image\yaci-store-all\native-image.properties.win applications\all\src\main\resources\META-INF\native-image\yaci-store-all\native-image.properties
-      - name: Set lowercase architecture
-        shell: pwsh
-        run: |
-          $arch = "${{ runner.arch }}".ToLower()
-          Add-Content -Path $env:GITHUB_ENV -Value "arch=$arch"
-      - name: Build with Gradle
-        run: ./gradlew --no-daemon -i  -Pprofile=${{ matrix.profile }} clean distNativeZip
-      - name: Copy artifacts
-        run: mv applications/all/build/output/yaci-store-*.zip applications/all/build/output/yaci-store-${{ env.VERSION }}-windows-${{ env.arch }}${{ env.PROFILE_SUFFIX }}.zip
-      - uses: actions/upload-artifact@v4
-        with:
-          name: yaci-store-${{ env.VERSION }}-windows-${{ env.arch }}${{ env.PROFILE_SUFFIX }}
-          path: ./applications/all/build/output/yaci-store-${{ env.VERSION }}-windows-${{ env.arch }}${{ env.PROFILE_SUFFIX }}.zip
+  native:
+    needs: version
+    permissions:
+      contents: read
+    uses: ./.github/workflows/native-build.yml
+    with:
+      version: ${{ needs.version.outputs.version }}
+      artifact-prefix: dev-native
