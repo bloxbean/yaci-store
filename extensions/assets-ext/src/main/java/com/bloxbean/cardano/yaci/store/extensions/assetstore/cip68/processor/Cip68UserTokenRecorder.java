@@ -47,7 +47,7 @@ public class Cip68UserTokenRecorder {
      * @param txHashByUnit the user tokens seen in a block, each with the hash of the first transaction of the block that showed it
      *                     (units in lower case hex)
      */
-    public void record(Map<String, String> txHashByUnit, long slot) {
+    public void recordSeen(Map<String, String> txHashByUnit, long slot) {
         if (repository == null || writer == null || txHashByUnit.isEmpty()) {
             return;
         }

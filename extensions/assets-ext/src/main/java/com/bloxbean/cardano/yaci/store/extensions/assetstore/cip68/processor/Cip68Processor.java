@@ -123,7 +123,7 @@ public class Cip68Processor {
             cip68MetadataRepository.saveAll(entities);
         }
         // the fungible and rich fungible tokens of the block, so that the API serves a 333 or 444 subject only when its token exists (ADR 0008)
-        userTokenRecorder.record(userTokens, slot);
+        userTokenRecorder.recordSeen(userTokens, slot);
     }
 
     /** The 333 and 444 user tokens in the outputs of a transaction, each with the hash of the first transaction that showed it in the block. */

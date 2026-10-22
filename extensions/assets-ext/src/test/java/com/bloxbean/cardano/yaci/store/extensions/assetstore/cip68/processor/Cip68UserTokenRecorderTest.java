@@ -16,6 +16,8 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -52,7 +54,7 @@ class Cip68UserTokenRecorderTest {
         seen.put(RFT, TX);   // 001bc280 sorts after 0014df10
         seen.put(FT, TX);
 
-        recorder.record(seen, 123L);
+        recorder.recordSeen(seen, 123L);
 
         InOrder order = inOrder(writer);
         order.verify(writer).upsertFirstSeen(FT, TX, 123L);
@@ -67,7 +69,7 @@ class Cip68UserTokenRecorderTest {
         seen.put(FT, TX);
         seen.put(RFT, TX);
 
-        recorder.record(seen, 123L);
+        recorder.recordSeen(seen, 123L);
 
         verify(writer, never()).upsertFirstSeen(any(), any(), anyLong());
     }
@@ -77,7 +79,7 @@ class Cip68UserTokenRecorderTest {
     void laterRecordedSlotIsLowered() {
         when(repository.findAllById(any())).thenReturn(List.of(recorded(FT, 200L)));
 
-        recorder.record(Map.of(FT, TX), 100L);
+        recorder.recordSeen(Map.of(FT, TX), 100L);
 
         verify(writer).upsertFirstSeen(FT, TX, 100L);
     }
@@ -90,7 +92,7 @@ class Cip68UserTokenRecorderTest {
         seen.put(FT, TX);
         seen.put(RFT, TX);
 
-        recorder.record(seen, 123L);
+        recorder.recordSeen(seen, 123L);
 
         verify(writer, never()).upsertFirstSeen(eq(FT), any(), anyLong());
         verify(writer).upsertFirstSeen(RFT, TX, 123L);
@@ -99,7 +101,7 @@ class Cip68UserTokenRecorderTest {
     @Test
     @DisplayName("nothing is read or written for a block without user tokens")
     void emptyBlockDoesNothing() {
-        recorder.record(Map.of(), 123L);
+        recorder.recordSeen(Map.of(), 123L);
 
         verify(repository, never()).findAllById(any());
         verify(writer, never()).upsertFirstSeen(any(), any(), anyLong());
@@ -109,16 +111,16 @@ class Cip68UserTokenRecorderTest {
     @DisplayName("a failing repository or writer is a warning, never an exception")
     void failureIsContained() {
         when(repository.findAllById(any())).thenThrow(new IllegalStateException("db down"));
-        assertThatCode(() -> recorder.record(Map.of(FT, TX), 123L)).doesNotThrowAnyException();
+        assertThatCode(() -> recorder.recordSeen(Map.of(FT, TX), 123L)).doesNotThrowAnyException();
 
-        org.mockito.Mockito.doReturn(List.of()).when(repository).findAllById(any());
-        org.mockito.Mockito.doThrow(new IllegalStateException("db down")).when(writer).upsertFirstSeen(any(), any(), anyLong());
-        assertThatCode(() -> recorder.record(Map.of(FT, TX), 123L)).doesNotThrowAnyException();
+        doReturn(List.of()).when(repository).findAllById(any());
+        doThrow(new IllegalStateException("db down")).when(writer).upsertFirstSeen(any(), any(), anyLong());
+        assertThatCode(() -> recorder.recordSeen(Map.of(FT, TX), 123L)).doesNotThrowAnyException();
     }
 
     @Test
     @DisplayName("the no-op recorder records nothing and does not throw")
     void noop() {
-        assertThatCode(() -> Cip68UserTokenRecorder.noop().record(Map.of(FT, TX), 1L)).doesNotThrowAnyException();
+        assertThatCode(() -> Cip68UserTokenRecorder.noop().recordSeen(Map.of(FT, TX), 1L)).doesNotThrowAnyException();
     }
 }
