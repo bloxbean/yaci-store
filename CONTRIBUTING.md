@@ -65,7 +65,7 @@ We welcome feature suggestions! Please:
 
 ### Prerequisites
 
-- Java 21 or higher
+- Java 25 or higher
 - Gradle 8.x
 - Git
 - Your preferred IDE (IntelliJ IDEA recommended)

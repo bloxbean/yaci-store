@@ -5,7 +5,7 @@
 //
 // The root build.gradle subprojects block already applies `java`, `io.spring.dependency-management`
 // (which imports the spring-boot-dependencies BOM that versions the unversioned deps below),
-// `java-library`, and sets Java 21 source/target. So this file only adds the Spring Boot plugin
+// `java-library`, and sets Java 25 source/target. So this file only adds the Spring Boot plugin
 // and the module dependencies.
 plugins {
     id 'org.springframework.boot' version "${springBootVersion}"
