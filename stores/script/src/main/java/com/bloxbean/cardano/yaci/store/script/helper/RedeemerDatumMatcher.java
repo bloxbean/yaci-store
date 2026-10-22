@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.script.helper;
 
 import com.bloxbean.cardano.client.address.Address;
+import com.bloxbean.cardano.client.address.CredentialType;
 import com.bloxbean.cardano.client.util.HexUtil;
 import com.bloxbean.cardano.yaci.core.model.*;
 import com.bloxbean.cardano.yaci.core.model.certs.*;
@@ -34,10 +35,11 @@ public class RedeemerDatumMatcher {
      */
     public List<ScriptContext> findScriptsForRedeemers(Transaction transaction, Map<String, PlutusScript> scriptsMap) {
         //Map redeemers to scripts
-        //Find distinct policies if mint available
+        //Find distinct policies if mint available. Mint redeemer index follows the ledger's policy id order, not the CBOR order.
         List<String> distinctPolicies = transaction.getBody().getMint() != null ? transaction.getBody().getMint().stream()
                 .map(amount -> amount.getPolicyId())
                 .distinct()
+                .sorted()
                 .collect(Collectors.toList()) : null;
 
         List<TransactionInput> inputs = new ArrayList<>(transaction.getBody().getInputs());
@@ -123,15 +125,17 @@ public class RedeemerDatumMatcher {
         if (withdrawals == null || withdrawals.size() == 0)
             return Optional.empty();
 
-        List<String> rewardAddresses = withdrawals.entrySet().stream()
-                .map(entry -> entry.getKey())
+        //Reward redeemer index follows the ledger's reward account order: script credentials first, then credential hash
+        List<String> rewardAddresses = withdrawals.keySet().stream()
+                .sorted(Comparator.comparing(RedeemerDatumMatcher::isKeyCredential)
+                        .thenComparing(RedeemerDatumMatcher::delegationHash))
                 .collect(Collectors.toList());
 
         int index = redeemer.getIndex();
-        String rewardAddress = rewardAddresses.get(index);
+        if (index >= rewardAddresses.size())
+            return Optional.empty();
 
-        Address address = new Address(HexUtil.decodeHexString(rewardAddress));
-        String delegationHash = HexUtil.encodeHexString(address.getDelegationCredential().get().getBytes());
+        String delegationHash = delegationHash(rewardAddresses.get(index));
 
         PlutusScript plutusScript = null;
         if (delegationHash != null)
@@ -223,19 +227,16 @@ public class RedeemerDatumMatcher {
         if (votingProcedures == null || votingProcedures.getVoting() == null || votingProcedures.getVoting().size() == 0)
             return Optional.empty();
 
-        Set<Voter> voters = ((LinkedHashMap)votingProcedures.getVoting()).keySet();
+        //Voting redeemer index follows the ledger's voter order: committee, DRep, pool; script credentials before key credentials
+        List<Voter> voters = votingProcedures.getVoting().keySet().stream()
+                .sorted(Comparator.comparing(RedeemerDatumMatcher::voterRank)
+                        .thenComparing(Voter::getHash))
+                .collect(Collectors.toList());
 
-        int i = 0;
-        Voter voter = null;
-        for (Voter v : voters) {
-            if (redeemer.getIndex() == i) {
-                voter = v;
-                break;
-            }
-            i++;
-        }
+        if (redeemer.getIndex() >= voters.size())
+            return Optional.empty();
 
-        var hash = voter.getHash();
+        var hash = voters.get(redeemer.getIndex()).getHash();
 
         PlutusScript plutusScript = null;
         if (hash != null)
@@ -273,6 +274,25 @@ public class RedeemerDatumMatcher {
                         .thenComparing(TransactionInput::getIndex)
         );
         return copyInputs;
+    }
+
+    private static boolean isKeyCredential(String rewardAddress) {
+        return new Address(HexUtil.decodeHexString(rewardAddress)).getDelegationCredential().get().getType() == CredentialType.Key;
+    }
+
+    private static String delegationHash(String rewardAddress) {
+        Address address = new Address(HexUtil.decodeHexString(rewardAddress));
+        return HexUtil.encodeHexString(address.getDelegationCredential().get().getBytes());
+    }
+
+    private static int voterRank(Voter voter) {
+        return switch (voter.getType()) {
+            case CONSTITUTIONAL_COMMITTEE_HOT_SCRIPT_HASH -> 0;
+            case CONSTITUTIONAL_COMMITTEE_HOT_KEY_HASH -> 1;
+            case DREP_SCRIPT_HASH -> 2;
+            case DREP_KEY_HASH -> 3;
+            case STAKING_POOL_KEY_HASH -> 4;
+        };
     }
 
     private String credentialHash(StakeCredential stakeCredential) {
