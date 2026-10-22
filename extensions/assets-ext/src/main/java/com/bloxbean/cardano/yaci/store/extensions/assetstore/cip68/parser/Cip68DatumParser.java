@@ -61,6 +61,7 @@ public class Cip68DatumParser {
     public static final String NAME        = "name";
     public static final String TICKER      = "ticker";
     public static final String URL         = "url";
+    public static final String VERSION     = "version";
     public static final String IMAGE       = "image";
     public static final String MEDIA_TYPE  = "mediaType";
     public static final String FILES       = "files";
@@ -282,19 +283,19 @@ public class Cip68DatumParser {
         if (value == null) {
             // the CIP requires the version: a datum without an integer one is read and flagged, not hidden
             errors.add(ABSENT.equals(parts.versionProblem())
-                    ? ValidationError.mandatory(CIP_68, null, "version", ValidationCode.MISSING_VALUE, "version field is missing a mandatory value")
-                    : ValidationError.mandatory(CIP_68, null, "version", WRONG_TYPE,
+                    ? ValidationError.mandatory(CIP_68, null, VERSION, ValidationCode.MISSING_VALUE, "version field is missing a mandatory value")
+                    : ValidationError.mandatory(CIP_68, null, VERSION, WRONG_TYPE,
                             "version is " + parts.versionProblem() + ", not an integer, stored without a version"));
             return null;
         }
         if (value.bitLength() >= Long.SIZE) {
-            errors.add(ValidationError.mandatory(CIP_68, null, "version", OUT_OF_RANGE,
+            errors.add(ValidationError.mandatory(CIP_68, null, VERSION, OUT_OF_RANGE,
                     "version " + abbreviate(value.toString()) + " does not fit a 64-bit integer, stored without a version"));
             return null;
         }
         long version = value.longValue();
         if (version < MIN_DEFINED_VERSION || version > MAX_DEFINED_VERSION) {
-            errors.add(ValidationError.mandatory(CIP_68, null, "version", UNDEFINED_VERSION,
+            errors.add(ValidationError.mandatory(CIP_68, null, VERSION, UNDEFINED_VERSION,
                     "version " + version + " is not one CIP-68 defines (" + MIN_DEFINED_VERSION + " to " + MAX_DEFINED_VERSION + ")"));
         }
         return version;
