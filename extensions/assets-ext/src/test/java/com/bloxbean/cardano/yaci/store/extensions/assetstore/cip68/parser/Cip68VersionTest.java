@@ -94,7 +94,7 @@ class Cip68VersionTest {
             assertThat(e.cip()).isEqualTo("CIP-68");
             assertThat(e.fieldName()).isEqualTo("version");
             assertThat(e.fieldCategory().name()).isEqualTo("MANDATORY");
-            assertThat(e.code()).isEqualTo("undefined_version");
+            assertThat(e.code()).isEqualTo("invalid_version");
             assertThat(e.error()).contains("version " + version).contains("is not one CIP-68 defines (1 to 4)");
         });
     }
@@ -159,7 +159,7 @@ class Cip68VersionTest {
             assertThat(parsed.version()).isNull();
             assertThat(parsed.validationErrors()).singleElement().satisfies(e -> {
                 assertThat(e.fieldName()).isEqualTo("version");
-                assertThat(e.code()).isEqualTo("out_of_range");
+                assertThat(e.code()).isEqualTo("invalid_version");
             });
         }
     }
