@@ -5,7 +5,7 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -14,6 +14,9 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -28,57 +31,69 @@ class Cip68UserTokenRecorderTest {
     private static final String TX = "bb".repeat(32);
 
     private Cip68UserTokenRepository repository;
+    private Cip68UserTokenWriter writer;
     private Cip68UserTokenRecorder recorder;
 
     @BeforeEach
     void setUp() {
         repository = mock(Cip68UserTokenRepository.class);
-        recorder = new Cip68UserTokenRecorder(repository);
+        writer = mock(Cip68UserTokenWriter.class);
+        recorder = new Cip68UserTokenRecorder(repository, writer);
+    }
+
+    private static Cip68UserToken recorded(String unit, long slot) {
+        return Cip68UserToken.builder().unit(unit).slot(slot).txHash(TX).build();
     }
 
     @Test
-    @DisplayName("a token that is not recorded yet is saved with its slot and transaction")
-    void savesNewTokens() {
+    @DisplayName("a token that is not recorded yet is written with its slot and transaction, in a fixed order")
+    void writesNewTokensInOrder() {
+        Map<String, String> seen = new LinkedHashMap<>();
+        seen.put(RFT, TX);   // 001bc280 sorts after 0014df10
+        seen.put(FT, TX);
+
+        recorder.record(seen, 123L);
+
+        InOrder order = inOrder(writer);
+        order.verify(writer).upsertFirstSeen(FT, TX, 123L);
+        order.verify(writer).upsertFirstSeen(RFT, TX, 123L);
+    }
+
+    @Test
+    @DisplayName("a token recorded at this slot or earlier is left alone, so a replayed block adds nothing")
+    void knownTokensAreNotWrittenAgain() {
+        when(repository.findAllById(any())).thenReturn(List.of(recorded(FT, 123L), recorded(RFT, 50L)));
         Map<String, String> seen = new LinkedHashMap<>();
         seen.put(FT, TX);
         seen.put(RFT, TX);
 
         recorder.record(seen, 123L);
 
-        @SuppressWarnings("unchecked")
-        ArgumentCaptor<List<Cip68UserToken>> saved = ArgumentCaptor.forClass(List.class);
-        verify(repository).saveAll(saved.capture());
-        assertThat(saved.getValue()).extracting(Cip68UserToken::getUnit).containsExactly(FT, RFT);
-        assertThat(saved.getValue()).allSatisfy(t -> {
-            assertThat(t.getSlot()).isEqualTo(123L);
-            assertThat(t.getTxHash()).isEqualTo(TX);
-        });
+        verify(writer, never()).upsertFirstSeen(any(), any(), anyLong());
     }
 
     @Test
-    @DisplayName("a token that is already recorded is left alone, so a replayed block adds nothing")
-    void knownTokensAreNotSavedAgain() {
-        when(repository.findAllById(any())).thenReturn(List.of(Cip68UserToken.builder().unit(FT).slot(1L).txHash(TX).build()));
+    @DisplayName("a token recorded at a later slot (a later block committed first) is written again, so that the row keeps the earlier slot")
+    void laterRecordedSlotIsLowered() {
+        when(repository.findAllById(any())).thenReturn(List.of(recorded(FT, 200L)));
 
-        recorder.record(Map.of(FT, TX), 123L);
+        recorder.record(Map.of(FT, TX), 100L);
 
-        verify(repository, never()).saveAll(any());
+        verify(writer).upsertFirstSeen(FT, TX, 100L);
     }
 
     @Test
-    @DisplayName("only the tokens that are new are saved when a block shows new and known ones")
-    void savesOnlyTheNewOnes() {
-        when(repository.findAllById(any())).thenReturn(List.of(Cip68UserToken.builder().unit(FT).slot(1L).txHash(TX).build()));
+    @DisplayName("only the tokens that are new are written when a block shows new and known ones")
+    void writesOnlyTheNewOnes() {
+        when(repository.findAllById(any())).thenReturn(List.of(recorded(FT, 1L)));
         Map<String, String> seen = new LinkedHashMap<>();
         seen.put(FT, TX);
         seen.put(RFT, TX);
 
         recorder.record(seen, 123L);
 
-        @SuppressWarnings("unchecked")
-        ArgumentCaptor<List<Cip68UserToken>> saved = ArgumentCaptor.forClass(List.class);
-        verify(repository).saveAll(saved.capture());
-        assertThat(saved.getValue()).extracting(Cip68UserToken::getUnit).containsExactly(RFT);
+        verify(writer, never()).upsertFirstSeen(eq(FT), any(), anyLong());
+        verify(writer).upsertFirstSeen(RFT, TX, 123L);
     }
 
     @Test
@@ -87,14 +102,17 @@ class Cip68UserTokenRecorderTest {
         recorder.record(Map.of(), 123L);
 
         verify(repository, never()).findAllById(any());
-        verify(repository, never()).saveAll(any());
+        verify(writer, never()).upsertFirstSeen(any(), any(), anyLong());
     }
 
     @Test
-    @DisplayName("a failing repository is a warning, never an exception: it must not stop the sync")
+    @DisplayName("a failing repository or writer is a warning, never an exception")
     void failureIsContained() {
         when(repository.findAllById(any())).thenThrow(new IllegalStateException("db down"));
+        assertThatCode(() -> recorder.record(Map.of(FT, TX), 123L)).doesNotThrowAnyException();
 
+        org.mockito.Mockito.doReturn(List.of()).when(repository).findAllById(any());
+        org.mockito.Mockito.doThrow(new IllegalStateException("db down")).when(writer).upsertFirstSeen(any(), any(), anyLong());
         assertThatCode(() -> recorder.record(Map.of(FT, TX), 123L)).doesNotThrowAnyException();
     }
 

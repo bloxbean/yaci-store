@@ -51,12 +51,18 @@ class Cip68UserTokenH2IT {
     @EntityScan(basePackageClasses = {Cip68Metadata.class, Cip68UserToken.class})
     @EnableJpaRepositories(basePackageClasses = {Cip68MetadataRepository.class, Cip68UserTokenRepository.class})
     static class Config {
+        @org.springframework.context.annotation.Bean
+        Cip68UserTokenWriter cip68UserTokenWriter() {
+            return new Cip68UserTokenWriter();
+        }
     }
 
     @Autowired
     private Cip68MetadataRepository metadataRepository;
     @Autowired
     private Cip68UserTokenRepository repository;
+    @Autowired
+    private Cip68UserTokenWriter writer;
     @Autowired
     private EntityManager entityManager;
 
@@ -67,7 +73,7 @@ class Cip68UserTokenH2IT {
         processor = new Cip68Processor(new Cip68TokenService(metadataRepository), new Cip68DatumParser(), metadataRepository,
                 com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.metrics.Cip68Metrics.noop(),
                 com.bloxbean.cardano.yaci.store.extensions.assetstore.invalidtoken.InvalidTokenRecorder.noop(), Clock.systemDefaultZone(),
-                new Cip68UserTokenRecorder(repository));
+                new Cip68UserTokenRecorder(repository, writer));
     }
 
     @Test
@@ -109,6 +115,36 @@ class Cip68UserTokenH2IT {
         entityManager.clear();
 
         assertThat(repository.findById(FT)).get().extracting(Cip68UserToken::getSlot).isEqualTo(100L);
+    }
+
+    @Test
+    @DisplayName("the upsert keeps the smallest slot: a later block that committed first is lowered by an earlier one, never raised")
+    void upsertKeepsTheSmallestSlot() {
+        writer.upsertFirstSeen(FT, "cc".repeat(32), 200L);
+        entityManager.flush();
+        writer.upsertFirstSeen(FT, TX_HASH, 100L);
+        entityManager.flush();
+        writer.upsertFirstSeen(FT, "dd".repeat(32), 300L);
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(repository.findAll()).singleElement().satisfies(t -> {
+            assertThat(t.getUnit()).isEqualTo(FT);
+            assertThat(t.getSlot()).isEqualTo(100L);
+            assertThat(t.getTxHash()).isEqualTo(TX_HASH);
+        });
+    }
+
+    @Test
+    @DisplayName("two writers of the same new token do not fail with a duplicate key: the database resolves the conflict")
+    void writingTheSameTokenTwiceDoesNotFail() {
+        // what two blocks processed in parallel do: both saw the token as new, and both write it
+        writer.upsertFirstSeen(FT, TX_HASH, 100L);
+        writer.upsertFirstSeen(FT, TX_HASH, 100L);
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(repository.findAll()).hasSize(1);
     }
 
     @Test

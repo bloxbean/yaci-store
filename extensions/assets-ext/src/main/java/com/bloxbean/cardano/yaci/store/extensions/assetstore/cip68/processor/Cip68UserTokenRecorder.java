@@ -6,10 +6,8 @@ import jakarta.annotation.Nullable;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
-import java.util.Set;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 /**
@@ -19,9 +17,11 @@ import java.util.stream.Collectors;
  * <ul>
  *   <li><b>bounded:</b> only a unit whose asset name starts with the 333 or 444 label and has a name after it is kept, and a unit is at most
  *       120 characters, so a row is small whatever is on chain;</li>
- *   <li><b>idempotent:</b> a token that is already recorded is left alone, so a replayed block or a rollback adds nothing twice;</li>
- *   <li><b>contained:</b> a failure of its own (reading or saving) is a warning, never thrown. A failure that only shows at flush or commit,
- *       inside the database, is not caught here (#1265).</li>
+ *   <li><b>idempotent and safe in parallel:</b> a token already recorded is not written again, and the write itself is an upsert that the database
+ *       resolves ({@link Cip68UserTokenWriter}), so two blocks processed in parallel that see the same new token do not fail with a duplicate key.
+ *       The row keeps the smallest slot;</li>
+ *   <li><b>best effort:</b> a failure of its own is a warning, not an exception. A failure that the database reports and that poisons the
+ *       transaction (PostgreSQL) still reaches the commit, as in #1265.</li>
  * </ul>
  */
 @Component
@@ -30,14 +30,17 @@ public class Cip68UserTokenRecorder {
 
     @Nullable
     private final Cip68UserTokenRepository repository;
+    @Nullable
+    private final Cip68UserTokenWriter writer;
 
-    public Cip68UserTokenRecorder(@Nullable Cip68UserTokenRepository repository) {
+    public Cip68UserTokenRecorder(@Nullable Cip68UserTokenRepository repository, @Nullable Cip68UserTokenWriter writer) {
         this.repository = repository;
+        this.writer = writer;
     }
 
     /** A recorder that records nothing, for code built without a database (tests). */
     public static Cip68UserTokenRecorder noop() {
-        return new Cip68UserTokenRecorder(null);
+        return new Cip68UserTokenRecorder(null, null);
     }
 
     /**
@@ -45,21 +48,20 @@ public class Cip68UserTokenRecorder {
      *                     (units in lower case hex)
      */
     public void record(Map<String, String> txHashByUnit, long slot) {
-        if (repository == null || txHashByUnit.isEmpty()) {
+        if (repository == null || writer == null || txHashByUnit.isEmpty()) {
             return;
         }
         try {
-            Set<String> known = repository.findAllById(txHashByUnit.keySet()).stream()
-                    .map(Cip68UserToken::getUnit).collect(Collectors.toSet());
-            List<Cip68UserToken> added = new ArrayList<>();
-            txHashByUnit.forEach((unit, txHash) -> {
-                if (!known.contains(unit)) {
-                    added.add(Cip68UserToken.builder().unit(unit).slot(slot).txHash(txHash).build());
+            Map<String, Long> recordedSlot = repository.findAllById(txHashByUnit.keySet()).stream()
+                    .collect(Collectors.toMap(Cip68UserToken::getUnit, Cip68UserToken::getSlot));
+            // in a fixed order, so that two transactions that write the same tokens cannot wait for each other
+            new TreeMap<>(txHashByUnit).forEach((unit, txHash) -> {
+                // a token recorded at this slot or earlier is left alone; one recorded at a later slot (a later block committed first) is lowered
+                Long recorded = recordedSlot.get(unit);
+                if (recorded == null || recorded > slot) {
+                    writer.upsertFirstSeen(unit, txHash, slot);
                 }
             });
-            if (!added.isEmpty()) {
-                repository.saveAll(added);
-            }
         } catch (RuntimeException e) {
             log.warn("Could not record {} CIP-68 user token(s) of slot {}: {}: {}", txHashByUnit.size(), slot,
                     e.getClass().getSimpleName(), e.getMessage());
