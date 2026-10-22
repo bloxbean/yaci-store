@@ -70,6 +70,10 @@ jobs:
       # AWS CLI 2.23+ sends request checksums R2 does not accept by default; send them only when an API needs one.
       AWS_REQUEST_CHECKSUM_CALCULATION: when_required
       AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+      # R2 allows one write per second per key and answers a retry that comes sooner with "Reduce your concurrent
+      # request rate for the same object"; the default 3 attempts can all land inside that window.
+      AWS_RETRY_MODE: standard
+      AWS_MAX_ATTEMPTS: '10'
     steps:
       - uses: actions/checkout@v4
         with:
