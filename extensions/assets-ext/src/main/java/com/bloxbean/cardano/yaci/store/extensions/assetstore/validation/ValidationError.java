@@ -30,7 +30,7 @@ public record ValidationError(
                 example = "missing_value",
                 allowableValues = {ValidationCode.MISSING_VALUE, ValidationCode.WRONG_TYPE, ValidationCode.INVALID_URI_SCHEME,
                         ValidationCode.INVALID_LENGTH, ValidationCode.INVALID_VALUE, ValidationCode.OUT_OF_RANGE,
-                        ValidationCode.UNDEFINED_VERSION, ValidationCode.PLUTUS_CONSTRUCTOR, ValidationCode.NOT_UTF8,
+                        ValidationCode.INVALID_VERSION, ValidationCode.PLUTUS_CONSTRUCTOR, ValidationCode.NOT_UTF8,
                         ValidationCode.INVALID_FILES_ENTRY, ValidationCode.NO_NESTED_ENTRY, ValidationCode.TOO_DEEP,
                         ValidationCode.UNSUPPORTED_KEY, ValidationCode.KEY_COLLISION, ValidationCode.INVALID_BASE64,
                         ValidationCode.TOO_LARGE}) String code,

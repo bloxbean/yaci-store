@@ -70,7 +70,7 @@ public class Cip68DatumParser {
     public static final String WRONG_TYPE = ValidationCode.WRONG_TYPE;
     public static final String NOT_UTF8 = "not_utf8";
     public static final String OUT_OF_RANGE = ValidationCode.OUT_OF_RANGE;
-    public static final String UNDEFINED_VERSION = ValidationCode.UNDEFINED_VERSION;
+    public static final String INVALID_VERSION = ValidationCode.INVALID_VERSION;
     public static final String PLUTUS_CONSTRUCTOR = ValidationCode.PLUTUS_CONSTRUCTOR;
     public static final String UNSUPPORTED_KEY = ValidationCode.UNSUPPORTED_KEY;
     public static final String KEY_COLLISION = ValidationCode.KEY_COLLISION;
@@ -275,7 +275,9 @@ public class Cip68DatumParser {
     /**
      * The version is stored as a long, but a datum integer is unbounded: a value that does not fit is stored as no
      * version (and reported), instead of letting {@code longValue()} silently wrap it ({@code 2^64 + 1} would become 1).
-     * A version that CIP-68 does not define is stored as it is, with an error.
+     * A version that CIP-68 does not define is stored as it is, with an error. Every problem with a present version
+     * ({@code invalid_version}: not an integer, out of range, not defined) has the one code, and the message says which; a
+     * missing version is {@code missing_value}, as for every other field.
      */
     @Nullable
     private Long readVersion(DatumParts parts, List<ValidationError> errors) {
@@ -284,18 +286,18 @@ public class Cip68DatumParser {
             // the CIP requires the version: a datum without an integer one is read and flagged, not hidden
             errors.add(ABSENT.equals(parts.versionProblem())
                     ? ValidationError.mandatory(CIP_68, null, VERSION, ValidationCode.MISSING_VALUE, "version field is missing a mandatory value")
-                    : ValidationError.mandatory(CIP_68, null, VERSION, WRONG_TYPE,
+                    : ValidationError.mandatory(CIP_68, null, VERSION, INVALID_VERSION,
                             "version is " + parts.versionProblem() + ", not an integer, stored without a version"));
             return null;
         }
         if (value.bitLength() >= Long.SIZE) {
-            errors.add(ValidationError.mandatory(CIP_68, null, VERSION, OUT_OF_RANGE,
-                    "version " + abbreviate(value.toString()) + " does not fit a 64-bit integer, stored without a version"));
+            errors.add(ValidationError.mandatory(CIP_68, null, VERSION, INVALID_VERSION,
+                    "version " + abbreviate(value.toString()) + " is out of range: it does not fit a 64-bit integer, stored without a version"));
             return null;
         }
         long version = value.longValue();
         if (version < MIN_DEFINED_VERSION || version > MAX_DEFINED_VERSION) {
-            errors.add(ValidationError.mandatory(CIP_68, null, VERSION, UNDEFINED_VERSION,
+            errors.add(ValidationError.mandatory(CIP_68, null, VERSION, INVALID_VERSION,
                     "version " + version + " is not one CIP-68 defines (" + MIN_DEFINED_VERSION + " to " + MAX_DEFINED_VERSION + ")"));
         }
         return version;

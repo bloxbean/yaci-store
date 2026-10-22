@@ -367,7 +367,7 @@ class Cip68DatumParserTest {
             assertThat(parse("ticker", "TT", BigInteger.TWO.pow(64).add(BigInteger.ONE))).hasValueSatisfying(m -> {
                 assertThat(m.version()).isNull();
                 assertThat(m.ticker()).isEqualTo("TT");
-                assertThat(m.validationErrors()).singleElement().satisfies(e -> assertThat(e.code()).isEqualTo("out_of_range"));
+                assertThat(m.validationErrors()).singleElement().satisfies(e -> assertThat(e.code()).isEqualTo("invalid_version"));
             });
         }
 
@@ -383,7 +383,7 @@ class Cip68DatumParserTest {
             for (BigInteger version : new BigInteger[]{BigInteger.ZERO, BigInteger.valueOf(5), BigInteger.valueOf(Long.MAX_VALUE)}) {
                 assertThat(parse("ticker", "TT", version)).hasValueSatisfying(m -> {
                     assertThat(m.version()).isEqualTo(version.longValue());
-                    assertThat(m.validationErrors()).singleElement().satisfies(e -> assertThat(e.code()).isEqualTo("undefined_version"));
+                    assertThat(m.validationErrors()).singleElement().satisfies(e -> assertThat(e.code()).isEqualTo("invalid_version"));
                 });
             }
             assertThat(parse("ticker", "TT", BigInteger.TWO.pow(63))).hasValueSatisfying(m -> assertThat(m.version()).isNull());
@@ -831,7 +831,7 @@ class Cip68DatumParserTest {
                 assertThat(m.validationErrors()).singleElement().satisfies(e -> {
                     assertThat(e.fieldName()).isEqualTo("version");
                     assertThat(e.fieldCategory().name()).isEqualTo("MANDATORY");
-                    assertThat(e.code()).isEqualTo("wrong_type");
+                    assertThat(e.code()).isEqualTo("invalid_version");
                     assertThat(e.error()).contains("bytes");
                 });
             });
@@ -847,7 +847,7 @@ class Cip68DatumParserTest {
 
                 assertThat(parser.parse(hexDatum)).hasValueSatisfying(m ->
                         assertThat(m.validationErrors()).singleElement().satisfies(e -> {
-                            assertThat(e.code()).isEqualTo("wrong_type");
+                            assertThat(e.code()).isEqualTo("invalid_version");
                             assertThat(e.fieldCategory().name()).isEqualTo("MANDATORY");
                         }));
             }
