@@ -101,6 +101,57 @@ class RedeemerMatcherTest {
     }
 
     @Test
+    void findScriptsForRedeemers_votingRedeemersOfSameVoterTypeFollowHashOrder() {
+        String drepScriptEe = "ee".repeat(28);
+        String drepScriptCc = "cc".repeat(28);
+        Map<String, PlutusScript> scripts = scripts(drepScriptEe, drepScriptCc);
+
+        Map<Voter, Map<GovActionId, VotingProcedure>> voting = new LinkedHashMap<>();
+        voting.put(new Voter(VoterType.DREP_SCRIPT_HASH, drepScriptEe), Map.of());
+        voting.put(new Voter(VoterType.DREP_SCRIPT_HASH, drepScriptCc), Map.of());
+        TransactionBody body = body().votingProcedures(new VotingProcedures(voting)).build();
+
+        List<ScriptContext> contexts = matcher.findScriptsForRedeemers(tx(body, RedeemerTag.Voting, 2), scripts);
+
+        assertThat(contexts.get(0).getPlutusScript()).isSameAs(scripts.get(drepScriptCc));
+        assertThat(contexts.get(1).getPlutusScript()).isSameAs(scripts.get(drepScriptEe));
+    }
+
+    @Test
+    void findScriptsForRedeemers_votingIndexCountsKeyVoters() {
+        String committeeKey = "11".repeat(28);
+        String drepScript = "22".repeat(28);
+        Map<String, PlutusScript> scripts = scripts(drepScript);
+
+        //Committee key voter sorts before the DRep script voter, so the DRep script redeemer has index 1
+        Map<Voter, Map<GovActionId, VotingProcedure>> voting = new LinkedHashMap<>();
+        voting.put(new Voter(VoterType.DREP_SCRIPT_HASH, drepScript), Map.of());
+        voting.put(new Voter(VoterType.CONSTITUTIONAL_COMMITTEE_HOT_KEY_HASH, committeeKey), Map.of());
+        TransactionBody body = body().votingProcedures(new VotingProcedures(voting)).build();
+
+        Transaction tx = tx(body, RedeemerTag.Voting, 0);
+        tx.getWitnesses().getRedeemers().add(Redeemer.builder().tag(RedeemerTag.Voting).index(1).build());
+
+        List<ScriptContext> contexts = matcher.findScriptsForRedeemers(tx, scripts);
+
+        assertThat(contexts).hasSize(1);
+        assertThat(contexts.get(0).getPlutusScript()).isSameAs(scripts.get(drepScript));
+    }
+
+    @Test
+    void findScriptsForRedeemers_returnsEmptyContextWhenVotingIndexIsOutOfRange() {
+        String drepScript = "22".repeat(28);
+        Map<Voter, Map<GovActionId, VotingProcedure>> voting = new LinkedHashMap<>();
+        voting.put(new Voter(VoterType.DREP_SCRIPT_HASH, drepScript), Map.of());
+        TransactionBody body = body().votingProcedures(new VotingProcedures(voting)).build();
+
+        List<ScriptContext> contexts = matcher.findScriptsForRedeemers(tx(body, RedeemerTag.Voting, 2), scripts(drepScript));
+
+        assertThat(contexts.get(1).getPlutusScript()).isNull();
+        assertThat(contexts.get(1).getRedeemer().getIndex()).isEqualTo(1);
+    }
+
+    @Test
     void findScriptsForRedeemers_returnsEmptyContextWhenRewardIndexIsOutOfRange() {
         String scriptHash = "22".repeat(28);
         TransactionBody body = body().withdrawals(Map.of("f1" + scriptHash, BigInteger.ZERO)).build();
