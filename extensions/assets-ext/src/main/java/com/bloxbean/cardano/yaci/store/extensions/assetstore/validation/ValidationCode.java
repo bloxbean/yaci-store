@@ -13,7 +13,7 @@ public final class ValidationCode {
     public static final String INVALID_LENGTH = "invalid_length";
     public static final String INVALID_VALUE = "invalid_value";
     public static final String OUT_OF_RANGE = "out_of_range";
-    public static final String UNDEFINED_VERSION = "undefined_version";
+    public static final String INVALID_VERSION = "invalid_version";
     public static final String PLUTUS_CONSTRUCTOR = "plutus_constructor";
     public static final String NOT_UTF8 = "not_utf8";
     public static final String INVALID_FILES_ENTRY = "invalid_files_entry";
@@ -29,12 +29,12 @@ public final class ValidationCode {
             | code | meaning |
             |---|---|
             | `missing_value` | a field the CIP requires is missing or empty: for CIP-68 the `version` and, as the label requires it, `name`, `description` (333) and `image` (222, 444); for CIP-26 `name` and `description` |
-            | `wrong_type` | the value has a type the CIP does not allow (for example a number where text is expected, or a `version` that is not an integer); a value that cannot be kept is left out |
+            | `wrong_type` | the value has a type the CIP does not allow (for example a number where text is expected); a value that cannot be kept is left out |
             | `invalid_uri_scheme` | an `image` or `logo` is not a URI with one of the schemes CIP-68 allows (`https`, `ipfs`, `ar`, `data`); the value is kept as written |
             | `invalid_length` | a CIP-26 text is shorter or longer than CIP-26 allows (for example a `name` over 50 characters) |
             | `invalid_value` | a CIP-26 value breaks a rule of the registry's validator that is not a type, a length or a range |
-            | `out_of_range` | a number is outside the range allowed: `decimals`, or a `version` that does not fit a 64-bit integer (stored without a version) |
-            | `undefined_version` | the CIP-68 `version` is not one CIP-68 defines (1 to 4); the datum is read by its structure and kept |
+            | `out_of_range` | a number is outside the range allowed: `decimals` |
+            | `invalid_version` | the CIP-68 `version` is there but cannot be used: it is not an integer, it does not fit a 64-bit integer (stored without a version), or it is not one CIP-68 defines (1 to 4; the datum is read by its structure and kept). The message says which. A missing `version` is `missing_value` |
             | `plutus_constructor` | a property holds a Plutus constructor, which CIP-68 metadata does not allow; it is kept as `{constructor, fields}` |
             | `not_utf8` | a text is not valid UTF-8; it is kept as hex |
             | `invalid_files_entry` | an entry of `files` breaks the CIP-68 definition (for example no `mediaType` or `src`); the entry is kept |

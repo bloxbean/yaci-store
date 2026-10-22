@@ -81,7 +81,7 @@ GET /api/v1/subject/<policyId>0014df10<name>      # a 333 token with no descript
 | `sub_standard` | For CIP-68, the label the rule was checked for (`222`, `333`, `444`). A reference NFT with user tokens of several labels is checked against each of them. Absent for CIP-26 and for a rule that does not depend on a label. |
 | `field_name` | The metadata field, for example `description`, `image`, `properties.owner`, `files`. |
 | `field_category` | `MANDATORY` if the CIP requires the field, `OPTIONAL` otherwise. |
-| `code` | A stable reason: `missing_value`, `wrong_type`, `invalid_uri_scheme`, `invalid_length`, `out_of_range`, `undefined_version`, `plutus_constructor`, `not_utf8`, `invalid_files_entry`, `no_nested_entry`, `too_deep`, `unsupported_key`, `key_collision`, `invalid_base64`, `too_large`. |
+| `code` | A stable reason: `missing_value`, `wrong_type`, `invalid_uri_scheme`, `invalid_length`, `out_of_range`, `invalid_version`, `plutus_constructor`, `not_utf8`, `invalid_files_entry`, `no_nested_entry`, `too_deep`, `unsupported_key`, `key_collision`, `invalid_base64`, `too_large`. |
 | `error` | A human-readable message. |
 
 Every `code` is described in the OpenAPI documentation of `validation_errors` (Swagger UI), and listed as the allowed values of the `code` field.
