@@ -31,9 +31,19 @@ output, in a small table `cip68_user_token` (`unit`, `slot`, `tx_hash`; migratio
 subject out (batch) or answers `404` (`/cip68/ft/{policyId}/{rawAssetName}`, which accepts the 333 or the 444 token of that name) when the token is not in
 the table.
 
-The write is made in the block transaction, so it follows ADR 0004 and ADR 0007: **bounded** (only two labels, a unit of at most 120 characters),
-**idempotent** (a known token is not written again, the first slot is kept) and **contained** (a failed write is a warning and never stops the sync). A
-rollback to an earlier slot deletes the rows with `slot >` the rollback slot (a listener, and an entry in `rollback.yml`).
+The write is made in the block transaction. It is **bounded** (only two labels, a unit of at most 120 characters) and **idempotent** (a token already
+recorded is not written again), and it is an **upsert that the database resolves**, in a fixed order, that **keeps the smallest slot**. A rollback to an
+earlier slot deletes the rows with `slot >` the rollback slot (a listener, and an entry in `rollback.yml`).
+
+*Why an upsert and not a read followed by an insert:* blocks can be processed in parallel (`store.executor.enable-parallel-processing`), each in its own
+transaction. Two transactions that both see a token for the first time both read "not recorded" and both insert it, and the second fails with a duplicate
+key **when it commits**, inside the block transaction, where an exception stops the whole sync (ADR 0004). That happened in the first minutes of the first
+preprod run of this change. The database resolves the conflict (`ON CONFLICT` on PostgreSQL, `ON DUPLICATE KEY UPDATE` on MySQL, `MERGE` on H2), and the
+fixed order stops two transactions that write the same tokens from waiting for each other. The row keeps the smallest slot because a later block can commit
+first, and a rollback to a slot between the two must not delete a token that was already seen before it.
+
+*What is not guaranteed:* a failed write is logged as a warning, but a database error that poisons the transaction (PostgreSQL) still reaches the commit,
+as in ADR 0004 and #1265, so the write cannot be called harmless in every case.
 
 *Why a table and not a query of the utxo or assets stores:* `assets-ext` does not depend on them, the assets store is disabled in some deployments, and
 `address_utxo` has no index on the units it holds, so a lookup per request would scan it.
@@ -57,6 +67,7 @@ appears in an output, and is not recorded.
 - A sync from genesis is needed, like the rest of the CIP-68 data. The table is empty after the migration and is filled by a resync, which #1220
   requires anyway (ADR 0006). A store started mid-chain would miss the tokens minted before it started, and would `404` a reference NFT that is
   updated later; the module already assumes a sync from genesis (older reference NFTs would be missing as well).
+- The MySQL statement was written from the documentation and has not been run against a MySQL database; PostgreSQL and H2 were.
 - The table grows with the number of 333 and 444 tokens, a few thousand on mainnet. An attacker could mint many units with these labels, but each costs
   transaction fees, and a row is small.
 - A token that was minted and burned stays recorded and is still served: it existed.
