@@ -81,7 +81,9 @@ seed() {
 # sees metadata naming something that is not there yet. A filter pattern's `*` also matches `/`, and the last
 # matching filter wins: `*/$VERSION/maven-metadata.xml*` is the version level only, whatever the artifact path's
 # depth. `cp` without --delete only adds or replaces the staged keys. Metadata is marked no-cache so an edge cache
-# rule on the domain can never serve a stale version list. A run stopped part-way is repaired by running it again.
+# rule on the domain can never serve a stale version list. A snapshot run stopped part-way is repaired by running it
+# again, under new timestamps. A release run is not: seed refuses a version that has any object, and the
+# verification one that a version list names (release-ops docs/08-operations.md §1).
 upload() {
   local source="$STAGING_DIR/$GROUP_PATH/" target="s3://$BUCKET/$REPOSITORY_PREFIX/$GROUP_PATH/"
   aws s3 cp "$source" "$target" --recursive --only-show-errors \
