@@ -16,7 +16,7 @@ yaci-store is modular and these decisions only concern this module.
 | [0005](0005-validation-policy.md) | Validation policy: what is checked, where the checks live, and what is reported |
 | [0006](0006-validation-errors-are-reported-not-enforced.md) | Validation errors are reported, not enforced |
 | [0007](0007-invalid-token-table.md) | A table for what is dropped (`invalid_token`) |
-| [0008](0008-serve-only-user-tokens-that-exist.md) | A 333 or 444 subject is served only when its user token was seen on chain |
+| [0008](0008-reference-nft-answers-for-its-333-and-444-subjects.md) | A reference NFT answers for its 333 and 444 subjects (the lookup is not changed) |
 
 A record has a status (`Proposed`, `Accepted`, `Superseded`), a date, the context, the decisions with their
 trade-offs, the consequences and the open questions. When a decision changes, add a new record that supersedes

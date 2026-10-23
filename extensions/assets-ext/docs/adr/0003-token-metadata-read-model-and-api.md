@@ -96,9 +96,9 @@ purely additive, and it is why the README lists it; the `validation_errors` fiel
 ### 4. Fungible and rich fungible tokens from CIP-68 are served
 
 The CIP-68 table stores rows for labels 222, 333 and 444. A subject with the fungible prefix `0014df10`, or the rich fungible prefix `001bc280`,
-is mapped to its reference NFT (prefix `000643b0`) and the latest row of that reference NFT is returned, **but only when that user token has been seen on chain**
-(ADR 0008, #1292): the reference NFT holds the metadata and does not say that the token was minted, so without the check the 333 and 444 subjects of NFTs
-and of tokens that were never minted answered 200. NFT rows are stored and not exposed.
+is mapped to its reference NFT (prefix `000643b0`) and the latest row of that reference NFT is returned. The reference NFT holds the metadata and does not say
+that the token was minted, so the 333 and 444 subjects of NFTs, of burned tokens and of tokens that were never minted answer 200 too (ADR 0008, #1292: kept on
+purpose, so that the metadata of a burned token is still there for history). NFT rows are stored and not exposed.
 A rich fungible token has no `logo` in CIP-68; its `image` is served as `metadata.logo` (source `CIP_68`), as cf-token-metadata-registry does,
 and its `description` is optional (not an error). An image whose scheme the CIP does not allow is served as written, with an `invalid_uri_scheme`
 error, so a wallet can decide.
@@ -106,7 +106,7 @@ error, so a wallet can decide.
 The latest row is chosen **whatever its label**. A reference NFT can be updated in a transaction that also mints a user
 token of another label, so its newest row may carry label 222 although the token is fungible; filtering by label would then
 return an older row, which is worse than an unexpected label. The label decides which fields are mandatory for the token (ADR 0002
-decision 3), not what the API returns; for the same reason the label is not a gate for whether a subject is served (ADR 0008 decision 2).
+decision 3), not what the API returns; for the same reason the label is not a gate for whether a subject is served (ADR 0008).
 
 *Why these two:* the public API surface is fungible-token focused today, and the registry serves RFTs since cf-token-metadata-registry
 #110, so the two implementations stay comparable. Storing NFT rows while not exposing them means their rules can change without a

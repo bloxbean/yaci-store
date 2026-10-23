@@ -81,7 +81,7 @@ The errors are computed by the parser, the validator and the processor, and stor
 `cip68_metadata` and `cip26_metadata` (`JSONB`, `JSON`, `TEXT` on H2; nullable). Reading a row costs nothing extra, and the batch
 API makes no new query. A row written before the column existed has `NULL`, which means *never checked* and is not the same as `[]` (*checked, no errors*): the API
 leaves `validation_errors` out for it, and `metadata.valid` falls back to the rule it had before (name and description both present). The
-migrations are additive (`V0_1700_2` to `V0_1700_4`: the `validation_errors` columns, `invalid_token`, `cip68_user_token`) and rewrite no data, so a node upgrades in place and keeps working. The tokens that were
+migrations are additive (`V0_1700_2` and `V0_1700_3`: the `validation_errors` columns and `invalid_token`) and rewrite no data, so a node upgrades in place and keeps working. The tokens that were
 dropped before exist nowhere, and the old rows have no errors, so a **full resync** is needed for complete results; there is no backfill. When
 a token merges several standards, `validation_errors` is left out only if a standard has none recorded and no other reports any.
 
@@ -109,8 +109,7 @@ description present. When a request asks for some properties (`?property=`), the
 
 A `001bc280` subject maps to its reference NFT like a `0014df10` one. A rich fungible token has no `logo`; its `image` is served as
 `metadata.logo`, and `description` is optional for it (a token without one is not an error). NFTs (label 222) are still indexed
-but not served. This follows cf-token-metadata-registry ADR-018, since for now both implementations are kept. A 333 or 444 subject is served only when its user
-token was seen on chain (ADR 0008).
+but not served. This follows cf-token-metadata-registry ADR-018, since for now both implementations are kept. A 333 or 444 subject is answered from the reference NFT of the same name, as it always was, whether or not the token exists (ADR 0008).
 
 ### 7. How it is reported
 
