@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.api.controller;
 
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.QueryPriority;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.ValidationScope;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.*;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.service.TokenQueryService;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.AssetsExtStoreProperties;
@@ -13,13 +14,12 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
@@ -49,7 +49,6 @@ public class TokenMetadataSubjectController {
 
     private static final List<String> ALL_PROPERTIES = List.of();
 
-    private static final List<String> REQUIRED_PROPERTIES = List.of("name", "description");
 
     private final TokenQueryService tokenQueryService;
     private final AssetsExtStoreProperties assetsStoreProperties;
@@ -67,9 +66,9 @@ public class TokenMetadataSubjectController {
 
     @Operation(operationId = "getSubject", summary = "Query either all or a subset of properties of a given subject",
             responses = {
-                    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Merged metadata found"),
-                    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Required properties (name, description) missing from filter"),
-                    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Subject not found or has no valid metadata")
+                    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200",
+                            description = "Merged metadata found. The token is returned as indexed, whatever is wrong with it: validation_errors lists how it departs from its CIP"),
+                    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Subject not found: no standard has anything indexed for it")
             })
     @GetMapping(path = "/subject/{subject}", produces = {"application/json;charset=utf-8"})
     public ResponseEntity<SubjectResponse> getSubject(
@@ -83,7 +82,12 @@ public class TokenMetadataSubjectController {
             @Parameter(description = "the CIP priority: if the same property is present in multiple standards, the one with highest priority is returned")
             @RequestParam(value = "query_priority", required = false) List<QueryPriority> priorities,
             @Parameter(description = "whether all the CIP specific properties should be returned in the response. False by default")
-            @RequestParam(value = "show_cips_details", defaultValue = "false", required = false) Boolean showCipsDetails) {
+            @RequestParam(value = "show_cips_details", defaultValue = "false", required = false) Boolean showCipsDetails,
+            @Parameter(description = "which tokens are returned by how well their metadata follows its CIP: ALL (default) returns every indexed token; "
+                    + "MANDATORY_ONLY only tokens with no mandatory validation error; STRICT only tokens with no validation error at all. "
+                    + "A token that is not accepted is a 404 (or left out of a batch). A token indexed before validation existed is judged by "
+                    + "the old rule: name and description present.")
+            @RequestParam(value = "validation", defaultValue = "ALL", required = false) ValidationScope validation) {
 
         // Per-request line at DEBUG, not INFO — at any real RPS the previous INFO level
         // floods logs without operator value (the request is also recorded by the access log
@@ -95,19 +99,18 @@ public class TokenMetadataSubjectController {
                 showCipsDetails);
 
         List<String> queryProperties = properties != null ? properties : ALL_PROPERTIES;
-        validateProperties(queryProperties);
         List<QueryPriority> queryPriority = priorities != null ? priorities : defaultQueryPriority;
         boolean includeCipsDetails = Boolean.TRUE.equals(showCipsDetails);
 
         List<String> stringPriorities = queryPriority.stream().map(QueryPriority::name).toList();
-        return tokenQueryService.querySubject(subject, queryPriority, queryProperties, includeCipsDetails)
+        return tokenQueryService.querySubject(subject, queryPriority, queryProperties, includeCipsDetails, validation)
                 .map(result -> ResponseEntity.ok(new SubjectResponse(result, stringPriorities)))
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @Operation(operationId = "getSubjects", summary = "Query either all or a subset of properties of the given subjects",
             responses = {
-                    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Batch results (subjects without valid metadata are excluded)")
+                    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Batch results (subjects that no standard has anything indexed for are excluded; the others are returned as indexed, with their validation_errors)")
             })
     @PostMapping(value = "/subject/query", produces = {"application/json;charset=utf-8"}, consumes = {"application/json;charset=utf-8"})
     public ResponseEntity<SubjectBatchResponse> getSubjects(
@@ -116,10 +119,14 @@ public class TokenMetadataSubjectController {
             @Parameter(description = "the CIP priority: if the same property is present in multiple standards, the one with highest priority is returned")
             @RequestParam(value = "query_priority", required = false) List<QueryPriority> priorities,
             @Parameter(description = "whether all the CIP specific properties should be returned in the response. False by default")
-            @RequestParam(value = "show_cips_details", defaultValue = "false", required = false) Boolean showCipsDetails) {
+            @RequestParam(value = "show_cips_details", defaultValue = "false", required = false) Boolean showCipsDetails,
+            @Parameter(description = "which tokens are returned by how well their metadata follows its CIP: ALL (default) returns every indexed token; "
+                    + "MANDATORY_ONLY only tokens with no mandatory validation error; STRICT only tokens with no validation error at all. "
+                    + "A token that is not accepted is a 404 (or left out of a batch). A token indexed before validation existed is judged by "
+                    + "the old rule: name and description present.")
+            @RequestParam(value = "validation", defaultValue = "ALL", required = false) ValidationScope validation) {
 
         List<String> queryProperties = body.getProperties() != null ? body.getProperties() : ALL_PROPERTIES;
-        validateProperties(queryProperties);
         List<QueryPriority> queryPriority = priorities != null ? priorities : defaultQueryPriority;
         boolean includeCipsDetails = Boolean.TRUE.equals(showCipsDetails);
 
@@ -128,19 +135,12 @@ public class TokenMetadataSubjectController {
         List<Subject> subjects = body.getSubjects()
                 .stream()
                 .map(subject -> tokenQueryService.querySubjectBatch(
-                        subject, queryPriority, queryProperties, prefetchData, includeCipsDetails))
-                .filter(s -> !s.metadata().isEmpty() && s.metadata().isValid())
+                        subject, queryPriority, queryProperties, prefetchData, includeCipsDetails, validation))
+                .flatMap(Optional::stream)
                 .toList();
 
         List<String> stringPriorities = queryPriority.stream().map(QueryPriority::name).toList();
         return ResponseEntity.ok(new SubjectBatchResponse(subjects, stringPriorities));
-    }
-
-    private void validateProperties(List<String> queryProperties) {
-        if (!queryProperties.isEmpty() && !queryProperties.containsAll(REQUIRED_PROPERTIES)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "When filtering properties, 'name' and 'description' are required and must be included");
-        }
     }
 
 }

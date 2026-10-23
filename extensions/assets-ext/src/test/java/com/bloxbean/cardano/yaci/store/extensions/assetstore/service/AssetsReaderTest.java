@@ -97,17 +97,17 @@ class AssetsReaderTest {
     class GetSubjects {
 
         @Test
-        void invalidMetadataSubjectsAreFilteredOut() {
-            // The batch facade silently drops subjects whose metadata is incomplete (no name +
-            // description), so callers don't have to defend against half-populated rows.
+        void subjectsNoStandardKnowsAreFilteredOut() {
+            // The batch facade drops the subjects that have nothing indexed; the others are returned as indexed,
+            // with their validation errors.
             List<String> subjects = List.of("a-valid-subject", "an-invalid-subject");
             BatchPrefetchData prefetch = new BatchPrefetchData(Map.of(), Map.of(), Map.of());
 
             when(tokenQueryService.prefetchBatch(subjects, List.of())).thenReturn(prefetch);
             when(tokenQueryService.querySubjectBatch(eq("a-valid-subject"), any(), any(), eq(prefetch), eq(false)))
-                    .thenReturn(subject("a-valid-subject"));
+                    .thenReturn(Optional.of(subject("a-valid-subject")));
             when(tokenQueryService.querySubjectBatch(eq("an-invalid-subject"), any(), any(), eq(prefetch), eq(false)))
-                    .thenReturn(subjectWithoutMetadata("an-invalid-subject"));
+                    .thenReturn(Optional.empty());
 
             List<Subject> result = assetsReader.getSubjects(subjects, List.of(QueryPriority.CIP_68));
 
@@ -175,8 +175,4 @@ class AssetsReaderTest {
         return new Subject(subjectId, metadata, null);
     }
 
-    private static Subject subjectWithoutMetadata(String subjectId) {
-        // no name → Metadata.isValid() = false → batch facade filters this out
-        return new Subject(subjectId, Metadata.empty(), null);
-    }
 }

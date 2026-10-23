@@ -31,16 +31,6 @@ public class Cip68TokenService {
     private final Cip68MetadataRepository metadataReferenceNftRepository;
 
     /**
-     * Validate a CIP-68 datum. Per spec, name and description are the required fields
-     * for any of the user-token labels (222 NFT / 333 FT / 444 RFT).
-     *
-     * @return true if the metadata satisfies CIP-68's required-field constraint
-     */
-    public boolean isValidMetadata(ParsedCip68Datum parsed) {
-        return parsed.name() != null && parsed.description() != null;
-    }
-
-    /**
      * Checks whether the utxo contains an NFT which matches Cip68 Reference NFT requirements
      *
      * @param utxo the utxo to check
@@ -58,6 +48,17 @@ public class Cip68TokenService {
      */
     public Optional<Amt> extractReferenceNft(AddressUtxo utxo) {
         return utxo.getAmounts().stream().filter(this::isReferenceNft).findFirst();
+    }
+
+    /**
+     * Returns every reference NFT in the output, in the order of its assets. An output normally holds one,
+     * but a version 4 nested datum can describe several, which is why they may be locked together.
+     *
+     * @param utxo the utxo to check
+     * @return the amounts matching Cip68 Reference NFT requirements, empty if there are none
+     */
+    public List<Amt> extractReferenceNfts(AddressUtxo utxo) {
+        return utxo.getAmounts().stream().filter(this::isReferenceNft).toList();
     }
 
     /**
@@ -121,11 +122,25 @@ public class Cip68TokenService {
         return new FungibleTokenMetadata(
                 getPropertyIfRequired(Cip68DatumParser.DECIMALS, referenceNft.getDecimals(), properties),
                 getPropertyIfRequired(Cip68DatumParser.DESCRIPTION, referenceNft.getDescription(), properties),
-                getPropertyIfRequired(Cip68DatumParser.LOGO, referenceNft.getLogo(), properties),
+                getPropertyIfRequired(Cip68DatumParser.LOGO, logoOf(referenceNft), properties),
                 getPropertyIfRequired(Cip68DatumParser.NAME, referenceNft.getName(), properties),
                 getPropertyIfRequired(Cip68DatumParser.TICKER, referenceNft.getTicker(), properties),
                 getPropertyIfRequired(Cip68DatumParser.URL, referenceNft.getUrl(), properties),
-                getPropertyIfRequired(VERSION, referenceNft.getVersion(), properties));
+                getPropertyIfRequired(VERSION, referenceNft.getVersion(), properties),
+                referenceNft.getValidationErrors());
+    }
+
+    /**
+     * The logo to serve. A rich fungible token (444) has no {@code logo} in CIP-68: its picture is the {@code image},
+     * which is served as the logo, as cf-token-metadata-registry does, so that wallets show it unchanged. The image is
+     * served as written even when it is not a URI with an allowed scheme; the validation errors say so.
+     */
+    @Nullable
+    private static String logoOf(Cip68Metadata row) {
+        if (row.getLogo() == null && row.getLabel() != null && row.getLabel() == LABEL_RFT) {
+            return row.getImage();
+        }
+        return row.getLogo();
     }
 
     @Nullable
@@ -138,29 +153,30 @@ public class Cip68TokenService {
     }
 
     /**
-     * Converts a fungible token subject to its corresponding reference NFT subject.
+     * Converts a fungible or rich fungible token subject to its corresponding reference NFT subject.
      * <p>
      * CIP-68 stores metadata in a <b>reference NFT</b> (label 100, prefix {@code 000643b0}),
-     * not in the fungible token itself (label 333, prefix {@code 0014df10}). Both tokens are
-     * minted together under the same policy with the same base name — only the 8-char label
-     * prefix differs.
+     * not in the user token itself (label 333, prefix {@code 0014df10}, or label 444, prefix
+     * {@code 001bc280}). Both tokens are minted together under the same policy with the same base
+     * name — only the 8-char label prefix differs. NFTs (label 222) are not served.
      * <p>
      * When a user queries by the fungible token subject they see in their wallet
      * (e.g. {@code <policyId>0014df10<name>}), this method swaps the prefix to produce the
      * reference NFT subject ({@code <policyId>000643b0<name>}) that the database stores.
      * <p>
-     * Returns empty if the subject does not have a fungible token prefix ({@code 0014df10}),
-     * indicating the subject is not a CIP-68 fungible token.
+     * Returns empty if the subject has neither the fungible token prefix ({@code 0014df10}) nor the
+     * rich fungible token prefix ({@code 001bc280}), indicating the subject is not served from CIP-68.
      *
-     * @param subject the fungible token unit (policyId + 0014df10 + hex name)
-     * @return the reference NFT AssetType if the subject has a fungible token prefix, empty otherwise
+     * @param subject the user token unit (policyId + 0014df10 or 001bc280 + hex name)
+     * @return the reference NFT AssetType if the subject has a served token prefix, empty otherwise
      */
     public Optional<AssetType> getReferenceNftSubject(String subject) {
         AssetType assetType = AssetType.fromUnit(subject);
         String assetName = assetType.assetName();
         int tokenPrefixLength = REFERENCE_TOKEN_PREFIX.length();
 
-        if (assetName.length() > tokenPrefixLength && assetName.startsWith(FUNGIBLE_TOKEN_PREFIX)) {
+        if (assetName.length() > tokenPrefixLength
+                && (assetName.startsWith(FUNGIBLE_TOKEN_PREFIX) || assetName.startsWith(RICH_FUNGIBLE_TOKEN_PREFIX))) {
             String refNftAssetName = String.format("%s%s", REFERENCE_TOKEN_PREFIX, assetType.assetName().substring(tokenPrefixLength));
             return Optional.of(new AssetType(assetType.policyId(), refNftAssetName));
         }

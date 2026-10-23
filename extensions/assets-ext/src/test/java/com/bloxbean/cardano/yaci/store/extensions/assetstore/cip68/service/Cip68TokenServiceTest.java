@@ -3,9 +3,11 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.AssetType;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Constants;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.ParsedCip68Datum;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.Cip68Metadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.validation.ValidationError;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.repository.Cip68MetadataRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -75,6 +77,16 @@ class Cip68TokenServiceTest {
             assertThat(result.get().assetName().substring(8)).isEqualTo(BASE_NAME);
             // Prefix should be reference NFT, not fungible token
             assertThat(result.get().assetName().substring(0, 8)).isEqualTo("000643b0");
+        }
+
+        @Test
+        void convertsARichFungibleTokenSubjectToItsReferenceNft() {
+            String rftSubject = POLICY_ID + "001bc280" + BASE_NAME;
+
+            Optional<AssetType> result = service.getReferenceNftSubject(rftSubject);
+
+            assertThat(result).isPresent();
+            assertThat(result.get().toUnit()).isEqualTo(POLICY_ID + "000643b0" + BASE_NAME);
         }
 
         @Test
@@ -185,25 +197,39 @@ class Cip68TokenServiceTest {
     }
 
     @Nested
-    @DisplayName("isValidMetadata")
-    class IsValidMetadata {
+    @DisplayName("extractReferenceNfts")
+    class ExtractReferenceNfts {
 
-        @Test
-        void validWhenNameAndDescriptionPresent() {
-            ParsedCip68Datum m = new ParsedCip68Datum(null, "desc", null, "name", null, null, null, null, null, null);
-            assertThat(service.isValidMetadata(m)).isTrue();
+        private AddressUtxo utxoWith(Amt... amounts) {
+            return AddressUtxo.builder().amounts(List.of(amounts)).build();
+        }
+
+        private Amt amt(String assetNameHex, long quantity) {
+            return Amt.builder().unit(POLICY_ID + assetNameHex).quantity(BigInteger.valueOf(quantity)).build();
         }
 
         @Test
-        void invalidWhenNameMissing() {
-            ParsedCip68Datum m = new ParsedCip68Datum(null, "desc", null, null, null, null, null, null, null, null);
-            assertThat(service.isValidMetadata(m)).isFalse();
+        void returnsEveryReferenceNftInTheOutputInOrder() {
+            Amt first = amt("000643b001", 1);
+            Amt second = amt("000643b002", 1);
+            Amt third = amt("000643b003", 1);
+
+            assertThat(service.extractReferenceNfts(utxoWith(first, amt("000de14001", 1), second, third)))
+                    .containsExactly(first, second, third);
         }
 
         @Test
-        void invalidWhenDescriptionMissing() {
-            ParsedCip68Datum m = new ParsedCip68Datum(null, null, null, "name", null, null, null, null, null, null);
-            assertThat(service.isValidMetadata(m)).isFalse();
+        void ignoresAssetsThatAreNotReferenceNfts() {
+            // a user token, and a reference-NFT-looking asset with quantity 2
+            assertThat(service.extractReferenceNfts(utxoWith(amt("000de14001", 1), amt("000643b001", 2)))).isEmpty();
+        }
+
+        @Test
+        void returnsOneForTheUsualOutput() {
+            Amt only = amt("000643b001", 1);
+
+            assertThat(service.extractReferenceNfts(utxoWith(only))).containsExactly(only);
+            assertThat(service.extractReferenceNft(utxoWith(only))).contains(only);
         }
     }
 
@@ -353,6 +379,77 @@ class Cip68TokenServiceTest {
                     .thenReturn(Optional.empty());
 
             assertThat(service.findSubject(POLICY, REF_NAME, List.of())).isEmpty();
+        }
+
+        @Test
+        void returnsATokenThatBreaksCip68WithItsValidationErrors() {
+            ValidationError error = ValidationError.mandatory("CIP-68", "333", "description", "missing_value",
+                    "description field is missing a mandatory value");
+            Cip68Metadata row = Cip68Metadata.builder()
+                    .policyId(POLICY).assetName(REF_NAME).slot(200L).label(333)
+                    .name("No description").version(1L).validationErrors(List.of(error)).build();
+            when(repository.findFirstByPolicyIdAndAssetNameOrderBySlotDescTxIndexDesc(POLICY, REF_NAME))
+                    .thenReturn(Optional.of(row));
+
+            FungibleTokenMetadata result = service.findSubject(POLICY, REF_NAME, List.of()).orElseThrow();
+
+            assertThat(result.name()).isEqualTo("No description");
+            assertThat(result.description()).isNull();
+            assertThat(result.validationErrors()).containsExactly(error);
+        }
+
+        @Test
+        void aRowWithoutErrorsHasAnEmptyList() {
+            Cip68Metadata row = Cip68Metadata.builder()
+                    .policyId(POLICY).assetName(REF_NAME).slot(200L).label(333).name("Fine").description("d").version(1L).validationErrors(List.of()).build();
+            when(repository.findFirstByPolicyIdAndAssetNameOrderBySlotDescTxIndexDesc(POLICY, REF_NAME))
+                    .thenReturn(Optional.of(row));
+
+            assertThat(service.findSubject(POLICY, REF_NAME, List.of()).orElseThrow().validationErrors()).isEmpty();
+        }
+
+        @Test
+        void aRowIndexedBeforeValidationExistedKeepsNullErrors() {
+            Cip68Metadata row = Cip68Metadata.builder()
+                    .policyId(POLICY).assetName(REF_NAME).slot(200L).label(333).name("Old").description("d").version(1L).build();
+            when(repository.findFirstByPolicyIdAndAssetNameOrderBySlotDescTxIndexDesc(POLICY, REF_NAME))
+                    .thenReturn(Optional.of(row));
+
+            assertThat(service.findSubject(POLICY, REF_NAME, List.of()).orElseThrow().validationErrors()).isNull();
+        }
+
+        @Test
+        void servesTheImageOfARichFungibleTokenAsItsLogo() {
+            Cip68Metadata rft = Cip68Metadata.builder()
+                    .policyId(POLICY).assetName(REF_NAME).slot(200L).label(444)
+                    .name("Edition").image("ipfs://QmImage").version(1L).build();
+            when(repository.findFirstByPolicyIdAndAssetNameOrderBySlotDescTxIndexDesc(POLICY, REF_NAME))
+                    .thenReturn(Optional.of(rft));
+
+            assertThat(service.findSubject(POLICY, REF_NAME, List.of()).orElseThrow().logo()).isEqualTo("ipfs://QmImage");
+        }
+
+        @Test
+        void servesTheImageAsWrittenEvenWhenItsSchemeIsNotAllowed() {
+            Cip68Metadata rft = Cip68Metadata.builder()
+                    .policyId(POLICY).assetName(REF_NAME).slot(200L).label(444)
+                    .name("Edition").image("iagon://x").version(1L).build();
+            when(repository.findFirstByPolicyIdAndAssetNameOrderBySlotDescTxIndexDesc(POLICY, REF_NAME))
+                    .thenReturn(Optional.of(rft));
+
+            // the validation errors of the row say the scheme is not allowed; the value is not hidden
+            assertThat(service.findSubject(POLICY, REF_NAME, List.of()).orElseThrow().logo()).isEqualTo("iagon://x");
+        }
+
+        @Test
+        void aFungibleTokensOwnLogoIsNotReplacedByItsImage() {
+            Cip68Metadata ft = Cip68Metadata.builder()
+                    .policyId(POLICY).assetName(REF_NAME).slot(200L).label(333)
+                    .name("Coin").logo("ipfs://QmLogo").image("ipfs://QmImage").version(1L).build();
+            when(repository.findFirstByPolicyIdAndAssetNameOrderBySlotDescTxIndexDesc(POLICY, REF_NAME))
+                    .thenReturn(Optional.of(ft));
+
+            assertThat(service.findSubject(POLICY, REF_NAME, List.of()).orElseThrow().logo()).isEqualTo("ipfs://QmLogo");
         }
     }
 
