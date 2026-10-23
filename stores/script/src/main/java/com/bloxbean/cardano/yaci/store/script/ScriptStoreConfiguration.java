@@ -34,8 +34,8 @@ public class ScriptStoreConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public TxScriptStorage txScriptStorage(TxScriptRepository txScriptRepository, ScriptMapper scriptMapper) {
-        return new TxScriptStorageImpl(txScriptRepository, scriptMapper);
+    public TxScriptStorage txScriptStorage(TxScriptRepository txScriptRepository, ScriptMapper scriptMapper, DSLContext dslContext) {
+        return new TxScriptStorageImpl(txScriptRepository, scriptMapper, dslContext);
     }
 
     @Bean
