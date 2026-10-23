@@ -95,6 +95,10 @@ entry whose subject cannot be a key, a logo far beyond any real size), with a wa
 **Rich fungible tokens (CIP-68 label 444)** are served like fungible tokens, by their own `001bc280…` subject. They have no `logo`: their
 `image` is served as `metadata.logo`, as cf-token-metadata-registry does, and `description` is optional for them.
 
+**A `200` does not say that the token exists.** The metadata of a CIP-68 token is in its reference NFT, so a reference NFT also answers for its 333 and
+444 subjects (the 333 and 444 subject of an NFT, or of a token that was never minted, answer `200`), and it keeps answering after the token is burned, so that
+explorers and wallets can still show historical transactions. To know whether a token exists, use the chain data (ADR 0008, #1292).
+
 **Choosing which tokens are returned** (`?validation=`, on `GET /tokens/subject/{subject}`, `POST /tokens/subject/query`, `/tokens/cip68/ft/...` and
 `/tokens/cip26/...`):
 
