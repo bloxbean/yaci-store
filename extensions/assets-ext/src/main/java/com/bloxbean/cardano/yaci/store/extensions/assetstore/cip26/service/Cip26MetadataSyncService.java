@@ -8,6 +8,9 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.Mapping
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.MappingUpdateDetails;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.enums.SyncStatusEnum;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.repository.Cip26SyncStateRepository;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.invalidtoken.InvalidTokenReason;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.invalidtoken.InvalidTokenRecorder;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.invalidtoken.InvalidTokenReport;
 import jakarta.annotation.PostConstruct;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -16,6 +19,7 @@ import org.springframework.stereotype.Service;
 
 import java.io.File;
 import java.nio.file.Path;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -25,12 +29,16 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class Cip26MetadataSyncService {
 
+    private static final String JSON_EXTENSION = ".json";
+
     private final GitService gitService;
     private final Cip26MetadataService tokenMetadataService;
     private final TokenMappingService tokenMappingService;
     private final Cip26SyncStateRepository syncStateRepository;
     private final Cip26NetworkDefaults networkDefaults;
     private final AssetsExtStoreProperties assetsStoreProperties;
+    private final InvalidTokenRecorder invalidTokenRecorder;
+    private final Clock clock;
 
     @Getter
     private SyncStatus syncStatus;
@@ -56,15 +64,15 @@ public class Cip26MetadataSyncService {
         String lastHash = lastSyncState
                 .map(Cip26SyncState::getLastCommitHash).orElse(null);
 
-        long syncStart = System.currentTimeMillis();
+        long syncStart = clock.millis();
         log.info("Starting offchain sync. Last known commit: {}", lastHash != null ? lastHash : "(none — full sync)");
 
-        long cloneStart = System.currentTimeMillis();
+        long cloneStart = clock.millis();
         Optional<Path> repoPathOpt = gitService.cloneCardanoTokenRegistryGitRepository();
 
         if (repoPathOpt.isPresent()) {
 
-            log.info("Repository ready in {} ms", System.currentTimeMillis() - cloneStart);
+            log.info("Repository ready in {} ms", clock.millis() - cloneStart);
 
             Optional<String> newHashOpt = gitService.getHeadCommitHash();
             if (newHashOpt.isEmpty()) {
@@ -87,12 +95,12 @@ public class Cip26MetadataSyncService {
             Set<String> fileNames = filesToProcess.stream()
                     .map(File::getName)
                     .collect(Collectors.toCollection(HashSet::new));
-            long gitHistoryStart = System.currentTimeMillis();
+            long gitHistoryStart = clock.millis();
             log.info("Resolving git history for {} file(s) in batch...", fileNames.size());
             Map<String, MappingUpdateDetails> mappingDetailsMap = gitService.getAllMappingDetails(fileNames);
-            log.info("Git history resolved in {} ms", System.currentTimeMillis() - gitHistoryStart);
+            log.info("Git history resolved in {} ms", clock.millis() - gitHistoryStart);
 
-            long processStart = System.currentTimeMillis();
+            long processStart = clock.millis();
             boolean anyTransientFailure = processMappingFiles(filesToProcess, mappingDetailsMap);
             anyTransientFailure |= processDeletions(pendingChanges.subjectsToDelete());
 
@@ -101,16 +109,16 @@ public class Cip26MetadataSyncService {
             } else if (newHashOpt.isPresent()) {
                 Cip26SyncState offChainSyncStateToSave = lastSyncState.orElse(new Cip26SyncState());
                 offChainSyncStateToSave.setLastCommitHash(newHashOpt.get());
-                offChainSyncStateToSave.setLastSyncedAt(LocalDateTime.now());
+                offChainSyncStateToSave.setLastSyncedAt(LocalDateTime.now(clock));
                 syncStateRepository.save(offChainSyncStateToSave);
                 log.info("Commit hash advanced to {}", newHashOpt.get());
             }
 
-            log.info("Mapping processing took {} ms", System.currentTimeMillis() - processStart);
+            log.info("Mapping processing took {} ms", clock.millis() - processStart);
 
             syncStatus.setStatus(SyncStatusEnum.SYNC_DONE);
             syncStatus.setInitialSyncDone(true);
-            log.info("Offchain sync complete in {} ms", System.currentTimeMillis() - syncStart);
+            log.info("Offchain sync complete in {} ms", clock.millis() - syncStart);
 
         } else {
             log.warn("cardano-token-registry could not be cloned");
@@ -146,8 +154,12 @@ public class Cip26MetadataSyncService {
      */
     private FileOutcome processOneMappingFile(File mappingFile,
                                               Map<String, MappingUpdateDetails> mappingDetailsMap) {
+        // The table says what is wrong now: what an earlier run recorded for this file is judged again below.
+        invalidTokenRecorder.forgetOrigin(InvalidTokenReason.CIP_26, mappingFile.getName());
         Optional<Mapping> mapping = tokenMappingService.parseMappings(mappingFile);
         if (mapping.isEmpty()) {
+            recordFileProblem(mappingFile, InvalidTokenReason.UNPARSEABLE_MAPPING,
+                    "The mapping file could not be parsed", null);
             return FileOutcome.SKIPPED_NO_MAPPING;
         }
 
@@ -161,13 +173,19 @@ public class Cip26MetadataSyncService {
         // one file per subject (filenames are unique) and full determinism.
         String filenameSubject = stripJsonExtension(mappingFile.getName());
         if (!filenameSubject.equals(mapping.get().subject())) {
-            log.warn("Skipping '{}': filename does not match inner subject '{}'",
+            // DEBUG, not WARN: a registry can have thousands of these (5,000 on preprod). Each is a row of invalid_token (ADR 0007) and the
+            // tally at the end of the sync counts them.
+            log.debug("Skipping '{}': filename does not match inner subject '{}'",
                     mappingFile.getName(), mapping.get().subject());
+            recordFileProblem(mappingFile, InvalidTokenReason.FILENAME_SUBJECT_MISMATCH,
+                    "The file name does not match the subject inside the file", mapping.get().subject());
             return FileOutcome.SKIPPED_FILENAME_MISMATCH;
         }
 
         MappingUpdateDetails updateDetails = mappingDetailsMap.get(mappingFile.getName());
         if (updateDetails == null) {
+            recordFileProblem(mappingFile, InvalidTokenReason.MISSING_GIT_HISTORY,
+                    "The registry's Git history has no update details for the file", mapping.get().subject());
             return FileOutcome.SKIPPED_NO_MAPPING;
         }
 
@@ -181,6 +199,17 @@ public class Cip26MetadataSyncService {
                     mapping.get().subject(), e.getMessage());
             return FileOutcome.TRANSIENTLY_FAILED;
         }
+    }
+
+    private void recordFileProblem(File mappingFile, String reasonCode, String reason, String innerSubject) {
+        invalidTokenRecorder.report(InvalidTokenReport.builder()
+                .standard(InvalidTokenReason.CIP_26)
+                .reasonCode(reasonCode)
+                .reason(reason)
+                .subject(stripJsonExtension(mappingFile.getName()))
+                .origin(mappingFile.getName())
+                .details(innerSubject == null ? null : Map.of("inner_subject", innerSubject))
+                .build());
     }
 
     private FileOutcome classifyInsertOutcome(Mapping mapping, MappingUpdateDetails updateDetails) {
@@ -264,8 +293,8 @@ public class Cip26MetadataSyncService {
     }
 
     private static String stripJsonExtension(String fileName) {
-        return fileName.endsWith(".json")
-                ? fileName.substring(0, fileName.length() - ".json".length())
+        return fileName.endsWith(JSON_EXTENSION)
+                ? fileName.substring(0, fileName.length() - JSON_EXTENSION.length())
                 : fileName;
     }
 
@@ -328,6 +357,7 @@ public class Cip26MetadataSyncService {
         int deleted = 0;
         int permanentlyFailed = 0;
         for (String subject : subjectsToDelete) {
+            invalidTokenRecorder.forgetOrigin(InvalidTokenReason.CIP_26, subject + JSON_EXTENSION);
             switch (tokenMetadataService.deleteMapping(subject)) {
                 case DELETED -> {
                     deleted++;

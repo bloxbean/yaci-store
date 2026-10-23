@@ -9,7 +9,7 @@ query a single yaci-store instance and get merged metadata transparently.
 | Standard | Source | Description |
 |----------|--------|-------------|
 | CIP-26 | Off-chain (GitHub [cardano-token-registry](https://github.com/cardano-foundation/cardano-token-registry)) | Fungible token metadata synced periodically from Git |
-| CIP-68 | On-chain (reference NFT inline datums, label 333) | Fungible token metadata parsed from blockchain |
+| CIP-68 | On-chain (reference NFT inline datums; fungible tokens, label 333, and rich fungible tokens, label 444) | Token metadata parsed from blockchain. NFTs (label 222) are indexed but not served. |
 
 ## REST API
 
@@ -27,7 +27,7 @@ standard provides the data. Response-compatible with cf-token-metadata-registry'
 
 **Query parameters:**
 
-- `property` (optional, repeatable) — filter which properties to return. When used, `name` and `description` are required.
+- `property` (optional, repeatable) — filter which properties to return.
 - `query_priority` (optional, repeatable) — CIP priority order, e.g. `?query_priority=CIP_68&query_priority=CIP_26`. Default: `CIP_68,CIP_26` (on-chain preferred).
 - `show_cips_details` (optional, default `false`) — include raw per-standard metadata in the response.
 
@@ -45,11 +45,88 @@ GET /api/v1/subject/577f0b1342f8f8f4aed3388b80a8535812950c7a892495c0ecdf0f1e0014
       "ticker": { "value": "FLDT", "source": "CIP_26" },
       "decimals": { "value": 6, "source": "CIP_68" },
       "url": { "value": "https://fluidtokens.com", "source": "CIP_26" }
-    }
+    },
+    "validation_errors": []
   },
   "queryPriority": ["CIP_68", "CIP_26"]
 }
 ```
+
+### Validation errors
+
+A token is **returned as it is indexed**, whatever is wrong with its metadata: nothing is dropped for breaking a CIP. Instead, every
+response has a `validation_errors` array (empty when the token follows its CIP) that says how it departs from it, so that the
+owner can fix the datum or the registry entry, and a wallet can decide whether to accept the token (for example, reject any token with a
+`MANDATORY` error).
+
+```
+GET /api/v1/subject/<policyId>0014df10<name>      # a 333 token with no description
+
+{
+  "subject": {
+    "subject": "…",
+    "metadata": { "name": { "value": "Coin", "source": "CIP_68" } },
+    "validation_errors": [
+      { "cip": "CIP-68", "sub_standard": "333", "field_name": "description", "field_category": "MANDATORY",
+        "code": "missing_value", "error": "description field is missing a mandatory value" }
+    ]
+  },
+  "queryPriority": ["CIP_68", "CIP_26"]
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `cip` | `CIP-26` or `CIP-68`. The errors of every standard that has the token are listed, in query priority order. |
+| `sub_standard` | For CIP-68, the label the rule was checked for (`222`, `333`, `444`). A reference NFT with user tokens of several labels is checked against each of them. Absent for CIP-26 and for a rule that does not depend on a label. |
+| `field_name` | The metadata field, for example `description`, `image`, `properties.owner`, `files`. |
+| `field_category` | `MANDATORY` if the CIP requires the field, `OPTIONAL` otherwise. |
+| `code` | A stable reason: `missing_value`, `wrong_type`, `invalid_uri_scheme`, `invalid_length`, `out_of_range`, `invalid_version`, `plutus_constructor`, `not_utf8`, `invalid_files_entry`, `no_nested_entry`, `too_deep`, `unsupported_key`, `key_collision`, `invalid_base64`, `too_large`. |
+| `error` | A human-readable message. |
+
+Every `code` is described in the OpenAPI documentation of `validation_errors` (Swagger UI), and listed as the allowed values of the `code` field.
+
+`validation_errors` is also on `standards.cip26` and `standards.cip68` (with `show_cips_details=true`), and on `/cip68/ft/...` and `/cip26/...`.
+It is the one thing a client has to adapt to: a token that was `404` because its `name` or `description` was missing, or because
+its version, `image` or `logo` did not follow CIP-68, is now `200` with errors, so `name` and `description` are no longer
+guaranteed to be there. The `metadata.valid` flag the response always had stays. It is `true` when `validation_errors` is empty, that is when the token follows its CIP completely, optional fields included. It used to mean "name and description are both there" and was the gate of the API, so it was `true` for every token returned; now it can be `false`, and `validation_errors` has the detail. Only an obvious attack is still dropped (a datum or property nested so deep that it cannot be decoded, a CIP-26
+entry whose subject cannot be a key, a logo far beyond any real size), with a warning in the log.
+
+**Rich fungible tokens (CIP-68 label 444)** are served like fungible tokens, by their own `001bc280…` subject. They have no `logo`: their
+`image` is served as `metadata.logo`, as cf-token-metadata-registry does, and `description` is optional for them.
+
+**A `200` does not say that the token exists.** The metadata of a CIP-68 token is in its reference NFT, so a reference NFT also answers for its 333 and
+444 subjects (the 333 and 444 subject of an NFT, or of a token that was never minted, answer `200`), and it keeps answering after the token is burned, so that
+explorers and wallets can still show historical transactions. To know whether a token exists, use the chain data (ADR 0008, #1292).
+
+**Choosing which tokens are returned** (`?validation=`, on `GET /tokens/subject/{subject}`, `POST /tokens/subject/query`, `/tokens/cip68/ft/...` and
+`/tokens/cip26/...`):
+
+| `validation` | Returned when |
+|---|---|
+| `ALL` (default) | always: every indexed token, as before |
+| `MANDATORY_ONLY` | the token has no `MANDATORY` validation error (optional problems are tolerated) |
+| `STRICT` | the token has no validation error at all (`metadata.valid` is `true`) |
+
+A token that is not accepted is a `404` for a single subject and is left out of a batch; the `validation_errors` of the tokens that are returned
+are never filtered. A token indexed before validation existed (no `validation_errors`) is judged by the rule it had before: name and description
+present.
+
+**`?property=` limits the errors too.** When a request asks for some properties (`?property=ticker`), `validation_errors`, `metadata.valid` and the
+`?validation=` gate are about those properties only: an error on the `image` is not reported to a client that asked for the `ticker`. An `image` error
+counts for `logo` (a rich fungible token's image is served as its logo), the error that says a nested datum has no entry for the token is always kept,
+and errors about what the merged endpoint cannot return (`files`, extra properties, keys) are not reported under a filter. Without `property`, all
+errors are returned. The filter runs on the rows the request already reads, so it adds no query.
+
+What is dropped is recorded in the `invalid_token` table (CIP-26 entries and CIP-68 datums that are unusable or look like an
+attack: the reason, the token, the transaction and output or the registry file). There is no API for it; read it with SQL, for example
+`SELECT standard, reason_code, count(*) FROM invalid_token GROUP BY 1, 2`. See `db/store/README.md` and ADR 0007. The `yaci.store.assets.invalid_tokens` counter
+(`standard`, `reason_code`) counts the rows written.
+
+Upgrading is **in place and needs no resync to keep working**: the migrations only add. A row written before `validation_errors` existed has
+`NULL` (never checked, not the same as "no errors"): the API leaves `validation_errors` out for it, and `metadata.valid` falls back to the rule
+it had before, name and description both present. A **full resync** fills the errors in and brings back the tokens that used to be dropped, which
+exist nowhere until then; there is no backfill.
 
 **Batch request:**
 
@@ -69,7 +146,7 @@ For advanced users who want to query a specific standard directly.
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/cip26/{subject}` | CIP-26 off-chain metadata only |
-| `GET` | `/cip68/ft/{policyId}/{assetName}` | CIP-68 fungible token metadata only |
+| `GET` | `/cip68/ft/{policyId}/{assetName}` | CIP-68 fungible and rich fungible token metadata only |
 
 
 ## Configuration
@@ -86,7 +163,7 @@ store:
       sync-interval-minutes: 60
 
     cip68:
-      enabled: true                    # Fungible token support (label 333)
+      enabled: true                    # Fungible (333) and rich fungible (444) token support
 
     query:
       priority: "CIP_68,CIP_26"       # Default merge priority
@@ -96,12 +173,11 @@ store:
 
 | Table | Description |
 |-------|-------------|
-| `ft_offchain_metadata` | CIP-26 fungible token metadata (subject as PK) |
-| `ft_offchain_logo` | CIP-26 token logos (separated for performance) |
-| `off_chain_sync_state` | GitHub sync progress tracking |
-| `metadata_reference_nft` | CIP-68 on-chain reference NFT metadata (composite PK: policy_id, asset_name, slot). `label` column discriminates FT (333) vs NFT (222) for future use. |
+| `cip26_metadata` | CIP-26 token metadata, logo included (subject as PK), with `validation_errors` |
+| `cip26_sync_state` | GitHub sync progress tracking |
+| `cip68_metadata` | CIP-68 on-chain reference NFT metadata (composite PK: policy_id, asset_name, slot, tx_hash). `label` is 222, 333 or 444; `validation_errors` says what the datum breaks. |
 
-All tables include a `last_synced_at` timestamp for monitoring.
+All tables include a `last_synced_at` timestamp for monitoring. See [`db/store/README.md`](src/main/resources/db/store/README.md).
 
 ## Health Indicators
 

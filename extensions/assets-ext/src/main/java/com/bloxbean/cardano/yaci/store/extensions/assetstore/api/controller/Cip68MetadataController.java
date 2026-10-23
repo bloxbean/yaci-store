@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.api.controller;
 
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.ValidationScope;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Constants;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.Cip68StorageReader;
@@ -16,7 +17,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("${apiPrefix}/tokens")
 @RequiredArgsConstructor
-@Tag(name = "CIP-68 Metadata", description = "On-chain fungible token metadata parsed from CIP-68 reference NFT inline datums")
+@Tag(name = "CIP-68 Metadata", description = "On-chain fungible and rich fungible token metadata parsed from CIP-68 reference NFT inline datums")
 @Slf4j
 public class Cip68MetadataController {
 
@@ -24,21 +25,26 @@ public class Cip68MetadataController {
 
     @Operation(operationId = "getCip68FungibleTokenMetadataBySubject",
             summary = "Get CIP-68 fungible token metadata by subject",
-            description = "The subject is the fungible token unit (policyId + 0014df10 + hex name). "
-                    + "The CIP-68 reference NFT prefix is resolved automatically.",
+            description = "The subject is the fungible token unit (policyId + 0014df10 + hex name), or the rich fungible token unit "
+                    + "(policyId + 001bc280 + hex name), whose image is returned as the logo. "
+                    + "The CIP-68 reference NFT prefix is resolved automatically. The token is returned as indexed, whatever is wrong "
+                    + "with its datum: validation_errors says how it departs from CIP-68.",
             responses = {
-                    @ApiResponse(responseCode = "200", description = "Fungible token metadata found"),
+                    @ApiResponse(responseCode = "200", description = "Token metadata found (with its validation_errors)"),
                     @ApiResponse(responseCode = "404", description = "No CIP-68 reference NFT found for this subject")
             })
     @GetMapping(path = "/cip68/ft/{subject}", produces = {"application/json;charset=utf-8"})
     public ResponseEntity<FungibleTokenMetadata> getFungibleTokenMetadataBySubject(
-            @Parameter(description = "The fungible token subject (policyId + 0014df10 + hex asset name)")
+            @Parameter(description = "The fungible (0014df10) or rich fungible (001bc280) token subject: policyId + prefix + hex asset name")
             @PathVariable("subject")
             @Pattern(regexp = TokenPatterns.SUBJECT_REGEX,
                     message = "subject must be 56-120 hex characters (policyId + assetName)")
-            String subject) {
+            String subject,
+            @Parameter(description = "ALL (default), MANDATORY_ONLY (no mandatory validation error) or STRICT (no validation error); a token that is not accepted is a 404")
+            @RequestParam(value = "validation", defaultValue = "ALL", required = false) ValidationScope validation) {
 
         return cip68StorageReader.findBySubject(subject)
+                .filter(token -> validation.accepts(token.validationErrors(), token.name() != null && token.description() != null))
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
@@ -62,10 +68,13 @@ public class Cip68MetadataController {
             @PathVariable("rawAssetName")
             @Pattern(regexp = TokenPatterns.CIP68_RAW_ASSET_NAME_REGEX,
                     message = "rawAssetName must be 0-56 hex characters (CIP-68 label is prepended automatically)")
-            String rawAssetName) {
+            String rawAssetName,
+            @Parameter(description = "ALL (default), MANDATORY_ONLY (no mandatory validation error) or STRICT (no validation error); a token that is not accepted is a 404")
+            @RequestParam(value = "validation", defaultValue = "ALL", required = false) ValidationScope validation) {
 
         String referenceNftAssetName = Cip68Constants.REFERENCE_TOKEN_PREFIX + rawAssetName;
         return cip68StorageReader.findByPolicyIdAndAssetName(policyId, referenceNftAssetName)
+                .filter(token -> validation.accepts(token.validationErrors(), token.name() != null && token.description() != null))
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }

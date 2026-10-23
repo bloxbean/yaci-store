@@ -4,6 +4,7 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.Item;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.Mapping;
 
+import jakarta.annotation.Nullable;
 import lombok.extern.slf4j.Slf4j;
 
 import java.time.LocalDateTime;
@@ -39,15 +40,18 @@ public final class MappingsUtil {
     }
 
     /** Extract the logo's base64 string from a Mapping, or null if absent. */
+    @Nullable
     public static String extractLogo(Mapping mapping) {
         return getValue(mapping.logo());
     }
 
-    private static String getValue(Item item) {
+    @Nullable
+    private static String getValue(@Nullable Item item) {
         return getValue(item, Function.identity());
     }
 
-    private static <T> T getValue(Item item, Function<String, T> f) {
+    @Nullable
+    private static <T> T getValue(@Nullable Item item, Function<String, T> f) {
         return Optional.ofNullable(item).map(Item::value).map(f).orElse(null);
     }
 }
