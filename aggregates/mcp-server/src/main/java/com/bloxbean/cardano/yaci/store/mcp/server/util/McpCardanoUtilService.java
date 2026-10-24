@@ -16,6 +16,7 @@ import com.bloxbean.cardano.yaci.store.common.domain.NetworkType;
 import com.bloxbean.cardano.yaci.store.common.util.GovUtil;
 import com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
+import com.bloxbean.cardano.yaci.store.mcp.server.config.Jackson2ToolCallResultConverter;
 import com.bloxbean.cardano.yaci.store.mcp.server.model.BlockchainTimeInfo;
 import com.bloxbean.cardano.yaci.store.mcp.server.model.CardanoNetworkInfo;
 import com.bloxbean.cardano.yaci.store.mcp.server.model.ConversionResult;
@@ -86,7 +87,8 @@ public class McpCardanoUtilService {
     private final StoreProperties storeProperties;
     private final EraService eraService;
 
-    @Tool(name = "cardano-network-info",
+    @Tool(resultConverter = Jackson2ToolCallResultConverter.class,
+          name = "cardano-network-info",
           description = "⚠️ CRITICAL: Read this FIRST when calculating slot ranges or time periods! " +
                        "Provides network genesis configuration including slot duration and epoch length. " +
                        "ESSENTIAL for correctly converting time ranges to slot numbers. " +
@@ -111,7 +113,8 @@ public class McpCardanoUtilService {
         );
     }
 
-    @Tool(name = "cardano-amount-units-info",
+    @Tool(resultConverter = Jackson2ToolCallResultConverter.class,
+          name = "cardano-amount-units-info",
           description = "⚠️ IMPORTANT: Read this FIRST when working with Cardano monetary amounts! " +
                        "Explains the unit conventions (lovelace vs ADA) used across ALL Yaci Store MCP tools. " +
                        "This is CRITICAL for correctly interpreting and presenting monetary values to users. " +
@@ -174,7 +177,8 @@ public class McpCardanoUtilService {
             """;
     }
 
-    @Tool(name = "convert-lovelace-to-ada",
+    @Tool(resultConverter = Jackson2ToolCallResultConverter.class,
+          name = "convert-lovelace-to-ada",
           description = "Convert lovelace amount to ADA with proper decimal formatting. " +
                        "Use this whenever you need to present lovelace amounts to users. " +
                        "Returns formatted string with ADA unit label.")
@@ -185,7 +189,8 @@ public class McpCardanoUtilService {
         return String.format("%.6f ADA (%,d lovelace)", ada, lovelace);
     }
 
-    @Tool(name = "convert-metadata-cbor-to-json",
+    @Tool(resultConverter = Jackson2ToolCallResultConverter.class,
+          name = "convert-metadata-cbor-to-json",
           description = "Convert transaction metadata CBOR hex to readable JSON format. " +
                        "Input should be metadata CBOR in hex format. " +
                        "Uses Cardano Client Library's MetadataBuilder to deserialize and convert. " +
@@ -216,7 +221,8 @@ public class McpCardanoUtilService {
         }
     }
 
-    @Tool(name = "convert-datum-cbor-to-json",
+    @Tool(resultConverter = Jackson2ToolCallResultConverter.class,
+          name = "convert-datum-cbor-to-json",
           description = "Convert Plutus datum CBOR hex to readable JSON format. " +
                        "Input should be datum CBOR in hex format (as stored in datum table). " +
                        "Uses Cardano Client Library's PlutusData deserializer and JSON converter. " +
@@ -247,7 +253,8 @@ public class McpCardanoUtilService {
         }
     }
 
-    @Tool(name = "extract-stake-address",
+    @Tool(resultConverter = Jackson2ToolCallResultConverter.class,
+          name = "extract-stake-address",
           description = "Extract the stake address from a Cardano address (bech32 format). " +
                        "Supports different address types: " +
                        "- Base address (addr1...): Returns the associated stake address (stake1...) " +
@@ -299,7 +306,8 @@ public class McpCardanoUtilService {
         }
     }
 
-    @Tool(name = "script-hash-to-address",
+    @Tool(resultConverter = Jackson2ToolCallResultConverter.class,
+          name = "script-hash-to-address",
           description = "Convert a script hash to a Cardano enterprise address (bech32 format). " +
                        "Enterprise addresses contain only the payment credential (no staking component). " +
                        "IMPORTANT: Requires network specification - mainnet vs testnet addresses have different prefixes. " +
@@ -339,7 +347,8 @@ public class McpCardanoUtilService {
         }
     }
 
-    @Tool(name = "address-to-payment-hash",
+    @Tool(resultConverter = Jackson2ToolCallResultConverter.class,
+          name = "address-to-payment-hash",
           description = "Extract the payment credential hash from a Cardano address (bech32 format). " +
                        "Returns the payment credential hash in hex format for both key-based and script-based addresses. " +
                        "This is the REVERSE operation of script-hash-to-address. " +
@@ -393,7 +402,8 @@ public class McpCardanoUtilService {
         }
     }
 
-    @Tool(name = "gov-action-id-from-bech32",
+    @Tool(resultConverter = Jackson2ToolCallResultConverter.class,
+          name = "gov-action-id-from-bech32",
           description = "Convert a CIP-129 bech32 governance action ID to transaction hash and index. " +
                        "Governance action IDs in bech32 format (gov_action1...) are user-friendly identifiers for proposals. " +
                        "This tool extracts the underlying transaction hash and governance action index. " +
@@ -427,7 +437,8 @@ public class McpCardanoUtilService {
         }
     }
 
-    @Tool(name = "cardano-slot-to-timestamp",
+    @Tool(resultConverter = Jackson2ToolCallResultConverter.class,
+          name = "cardano-slot-to-timestamp",
           description = "⏰ Convert Cardano slot number to Unix timestamp. " +
                        "IMPORTANT: Returns timestamp in SECONDS (multiply by 1000 for milliseconds). " +
                        "Era handling: Use 'BYRON' for Byron blocks, 'SHELLEY' for all post-Byron blocks (Shelley/Allegra/Mary/Alonzo/Babbage/Conway). " +
@@ -461,7 +472,8 @@ public class McpCardanoUtilService {
         return new SlotTimeInfo(slot, timestampSeconds, timestampMillis, utcTime, effectiveEra);
     }
 
-    @Tool(name = "cardano-format-timestamp",
+    @Tool(resultConverter = Jackson2ToolCallResultConverter.class,
+          name = "cardano-format-timestamp",
           description = "⏰ Convert Unix timestamp (in SECONDS) to human-readable local time. " +
                        "CRITICAL: Input must be in SECONDS (Yaci Store block_time format), not milliseconds! " +
                        "Supports timezone IDs like 'Asia/Singapore', 'America/New_York', 'Europe/London', 'UTC'. " +
@@ -504,7 +516,8 @@ public class McpCardanoUtilService {
         }
     }
 
-    @Tool(name = "cardano-timestamp-to-slot",
+    @Tool(resultConverter = Jackson2ToolCallResultConverter.class,
+          name = "cardano-timestamp-to-slot",
           description = "⏰ Convert Unix timestamp to Cardano slot number with automatic era detection. " +
                        "Accepts timestamps in SECONDS or MILLISECONDS (auto-detects format). " +
                        "Returns slot number, detected era, and validation information. " +
@@ -579,7 +592,8 @@ public class McpCardanoUtilService {
         );
     }
 
-    @Tool(name = "cardano-blockchain-time-info",
+    @Tool(resultConverter = Jackson2ToolCallResultConverter.class,
+          name = "cardano-blockchain-time-info",
           description = "⏰ COMPREHENSIVE time converter - handles both slots and block_time values. " +
                        "⚠️ USE THIS FIRST when displaying blockchain times to users! " +
                        "Accepts either slot number OR block_time timestamp (in SECONDS). " +
@@ -652,7 +666,8 @@ public class McpCardanoUtilService {
         }
     }
 
-    @Tool(name = "cardano-slots-to-timestamps-batch",
+    @Tool(resultConverter = Jackson2ToolCallResultConverter.class,
+          name = "cardano-slots-to-timestamps-batch",
           description = "⏰ Convert multiple slot numbers to timestamps in one call (MAX 50 slots). " +
                        "⚠️ DoS Protection: Limited to 50 slots per batch to prevent resource exhaustion. " +
                        "Efficiently converts a list of slots to timestamps with full time information. " +

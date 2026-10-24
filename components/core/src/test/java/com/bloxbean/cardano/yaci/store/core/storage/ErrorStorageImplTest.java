@@ -5,7 +5,7 @@ import com.bloxbean.cardano.yaci.store.core.storage.impl.model.ErrorEntity;
 import com.bloxbean.cardano.yaci.store.events.ErrorEvent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 
 import java.util.List;
 

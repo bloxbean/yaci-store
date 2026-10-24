@@ -1,5 +1,5 @@
 dependencies {
-    implementation 'org.springframework.boot:spring-boot-starter'
+    implementation 'org.springframework.boot:spring-boot-starter-classic'
     api project(":extensions:blockfrost:blockfrost-epoch")
     api project(":extensions:blockfrost:blockfrost-address")
     api project(":extensions:blockfrost:blockfrost-asset")

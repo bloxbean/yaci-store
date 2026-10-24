@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.ledgerstate;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.configuration.annotation.EnableBatchProcessing;
+import org.springframework.batch.core.configuration.annotation.EnableJdbcJobRepository;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.scheduling.annotation.EnableScheduling;
@@ -9,6 +10,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @SpringBootApplication
 @EnableScheduling
 @EnableBatchProcessing
+@EnableJdbcJobRepository //Spring Batch 6: keep the job repository in the BATCH_ tables
 @Slf4j
 public class LedgerStateApplication {
     public static void main(String[] args) {

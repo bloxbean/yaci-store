@@ -13,6 +13,7 @@ import com.bloxbean.cardano.yaci.store.client.utxo.DummyUtxoClient;
 import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClient;
 import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClientImpl;
 import com.bloxbean.cardano.yaci.store.common.executor.ParallelExecutor;
+import com.bloxbean.cardano.yaci.store.common.util.Jackson2RestTemplate;
 import com.bloxbean.cardano.yaci.store.core.StoreConfiguration;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
@@ -25,12 +26,13 @@ import org.apache.commons.pool2.impl.GenericObjectPool;
 import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
 import org.jooq.conf.RenderQuotedNames;
 import org.jooq.impl.DefaultConfiguration;
+import org.jooq.jpa.extensions.DefaultAnnotatedPojoMemberProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.boot.autoconfigure.domain.EntityScan;
-import org.springframework.boot.autoconfigure.jooq.DefaultConfigurationCustomizer;
+import org.springframework.boot.persistence.autoconfigure.EntityScan;
+import org.springframework.boot.jooq.autoconfigure.DefaultConfigurationCustomizer;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.*;
 import org.springframework.core.env.Environment;
@@ -163,15 +165,20 @@ public class YaciStoreAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public RestTemplate restTemplate() {
-        return new RestTemplate();
+        //Used by the remote utxo client: its JSON uses Jackson 2 annotations (snake_case)
+        return Jackson2RestTemplate.useJackson2(new RestTemplate());
     }
 
     @Bean
     public DefaultConfigurationCustomizer configurationCustomiser() {
-        return (DefaultConfiguration c) -> c.settings()
-                .withRenderQuotedNames(
-                        RenderQuotedNames.NEVER
-                );
+        return (DefaultConfiguration c) -> {
+            c.settings()
+                    .withRenderQuotedNames(
+                            RenderQuotedNames.NEVER
+                    );
+            //jOOQ 3.20+ maps records into JPA-annotated entities (fetchInto) only with an explicit provider
+            c.set(new DefaultAnnotatedPojoMemberProvider());
+        };
     }
 
     @Bean

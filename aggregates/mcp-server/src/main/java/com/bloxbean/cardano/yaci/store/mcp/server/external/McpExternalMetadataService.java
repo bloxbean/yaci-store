@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.mcp.server.external;
 
+import com.bloxbean.cardano.yaci.store.mcp.server.config.Jackson2ToolCallResultConverter;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -60,7 +61,8 @@ public class McpExternalMetadataService {
         "https://dweb.link/ipfs/"
     );
 
-    @Tool(name = "get-token-registry-metadata",
+    @Tool(resultConverter = Jackson2ToolCallResultConverter.class,
+          name = "get-token-registry-metadata",
           description = "Fetch official Cardano token metadata from the Cardano Foundation Token Registry for a SINGLE token. " +
                         "Returns name, ticker, description, decimals, logo, and other verified metadata. " +
                         "This tool fetches from GitHub server-side to bypass Claude Desktop network restrictions. " +
@@ -85,7 +87,8 @@ public class McpExternalMetadataService {
         return result;
     }
 
-    @Tool(name = "get-token-registry-metadata-batch",
+    @Tool(resultConverter = Jackson2ToolCallResultConverter.class,
+          name = "get-token-registry-metadata-batch",
           description = "Efficiently fetch token metadata for MULTIPLE tokens in parallel using virtual threads. " +
                         "IMPORTANT: Use this for 10+ tokens to avoid context exhaustion and slow responses. " +
                         "Compact mode (default=true) returns only essential fields (name, ticker, decimals) saving ~70% context. " +
@@ -180,7 +183,8 @@ public class McpExternalMetadataService {
         return response;
     }
 
-    @Tool(name = "fetch-ipfs-content",
+    @Tool(resultConverter = Jackson2ToolCallResultConverter.class,
+          name = "fetch-ipfs-content",
           description = "Fetch content from IPFS via public gateways. Automatically tries multiple gateways for reliability. " +
                         "IMPORTANT: This tool is essential for accessing Cardano governance anchor URLs, which are typically " +
                         "stored on IPFS (e.g., 'ipfs://QmXxxx...'). Use this to fetch proposal metadata, voting rationale, " +

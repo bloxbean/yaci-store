@@ -4,6 +4,8 @@ dependencies {
 
     api 'org.springframework.boot:spring-boot-starter-data-jpa'
     api 'org.springframework.boot:spring-boot-starter-jooq'
+    //jOOQ 3.20+: mapping records into JPA-annotated classes needs this module (see YaciStoreAutoConfiguration)
+    api(libs.jooq.jpa.extensions)
     api 'org.springframework:spring-context'
     api(libs.yaci) {
         exclude group: "io.netty", module: "netty-all"
@@ -15,6 +17,11 @@ dependencies {
 
     implementation 'org.springframework.boot:spring-boot-starter-validation'
 
+    //JsonColumnCloner: loaded by hypersistence-utils only where a store uses it
+    compileOnly(libs.hibernate.types)
+    testImplementation(libs.hibernate.types)
+    testImplementation 'jakarta.servlet:jakarta.servlet-api'
+
     api 'org.springframework.boot:spring-boot-starter-actuator'
     runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
 
@@ -23,6 +30,8 @@ dependencies {
     api 'com.h2database:h2'
 
     implementation 'org.flywaydb:flyway-core'
+    //Spring Boot 4: Flyway auto-configuration (migrations on startup) is no longer part of spring-boot-autoconfigure
+    api 'org.springframework.boot:spring-boot-flyway'
     implementation "org.flywaydb:flyway-mysql"
     implementation "org.flywaydb:flyway-database-postgresql"
 }
