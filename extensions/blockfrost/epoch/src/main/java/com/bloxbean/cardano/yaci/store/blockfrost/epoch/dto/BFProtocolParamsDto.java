@@ -100,4 +100,15 @@ public class BFProtocolParamsDto {
         return pvtPPSecurityGroup;
     }
 
+    //Explicit getters with the JSON name: Jackson 2.18+ no longer joins getEMax() / getNOpt() ("emax", "nopt")
+    //with the annotated fields and would write both values a second time
+    @JsonProperty("e_max")
+    public Integer getEMax() {
+        return eMax;
+    }
+
+    @JsonProperty("n_opt")
+    public Integer getNOpt() {
+        return nOpt;
+    }
 }
