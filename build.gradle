@@ -1,11 +1,11 @@
 plugins {
     id 'maven-publish'
     id 'signing'
-    id 'org.flywaydb.flyway' version '10.17.3'
+    id 'org.flywaydb.flyway' version '12.4.0'
     id 'nu.studer.jooq' version '8.2.3'
     id 'io.spring.dependency-management' version "${springDependencyManagementVersion}"
 
-    id 'org.ajoberstar.grgit' version '5.2.0'
+    id 'org.ajoberstar.grgit' version '5.3.3'
     // The root publishes nothing itself: it only aggregates the subprojects' publications into one Central
     // Portal deployment. Published subprojects apply com.gradleup.nmcp below.
     id 'com.gradleup.nmcp' version '1.6.2' apply false
@@ -77,10 +77,9 @@ subprojects {
         }
     }
 
-    if (project.name == "all") {
-        archivesBaseName = 'yaci-store';
-    } else
-        archivesBaseName = 'yaci-store-' + project.name
+    base {
+        archivesName = project.name == "all" ? 'yaci-store' : 'yaci-store-' + project.name
+    }
 
     def commit_id=getCheckedOutGitCommitHash()
     if (project.version.endsWith("-SNAPSHOT")) {
@@ -115,11 +114,13 @@ subprojects {
         annotationProcessor(libs.mapstruct.processor)
         testImplementation 'org.springframework.boot:spring-boot-starter-test'
         testImplementation 'io.projectreactor:reactor-test'
+        //Gradle 9 no longer provides the JUnit Platform launcher
+        testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     }
 
     compileJava {
-        sourceCompatibility = '21'
-        targetCompatibility = '21'
+        sourceCompatibility = '25'
+        targetCompatibility = '25'
 
         options.compilerArgs += ["-Aproject=${project.group}/${project.name}", "-parameters"]
     }
@@ -156,6 +157,8 @@ subprojects {
 
     test {
         useJUnitPlatform()
+        //Gradle 9 fails a test task that finds no tests; several modules only have test helpers
+        failOnNoDiscoveredTests = false
     }
 }
 
@@ -287,7 +290,8 @@ task distZip(type: Zip) {
         into zipDirName + '/' + binDir
         eachFile { file ->
             if (file.name.endsWith(".sh")) {
-                file.mode = 0b111101101  // 755 in octal
+                //Gradle 9 removed FileCopyDetails.setMode()
+                file.permissions { unix('rwxr-xr-x') }
             }
         }
     }
