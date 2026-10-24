@@ -75,4 +75,29 @@ class PPEraChangeRulesTest {
         assertThat(pp.getMinUtxo()).isEqualTo(BigInteger.valueOf(1000000));
         assertThat(pp.getAdaPerUtxoByte()).isEqualTo(BigInteger.valueOf(34482));
     }
+
+    @Test
+    void apply_directDijkstraStart_appliesAlonzoAndBabbageRules() {
+        //Musashi (Leios) starts in Dijkstra: alonzo-genesis lovelacePerUTxOWord 34482
+        ProtocolParams pp = ProtocolParams.builder()
+                .minUtxo(BigInteger.valueOf(1000000))
+                .adaPerUtxoByte(BigInteger.valueOf(34482))
+                .build();
+
+        rules.apply(Era.Dijkstra, null, pp);
+
+        assertThat(pp.getMinUtxo()).isNull();
+        assertThat(pp.getAdaPerUtxoByte()).isEqualTo(BigInteger.valueOf(4310));
+    }
+
+    @Test
+    void apply_dijkstraFromConwayTransition_keepsParams() {
+        ProtocolParams pp = ProtocolParams.builder()
+                .adaPerUtxoByte(BigInteger.valueOf(4310))
+                .build();
+
+        rules.apply(Era.Dijkstra, Era.Conway, pp);
+
+        assertThat(pp.getAdaPerUtxoByte()).isEqualTo(BigInteger.valueOf(4310));
+    }
 }

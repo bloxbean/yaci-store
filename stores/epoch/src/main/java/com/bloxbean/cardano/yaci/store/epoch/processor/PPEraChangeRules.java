@@ -24,8 +24,9 @@ class PPEraChangeRules {
                     applyAlonzoRules(protocolParams);
                 }
                 applyBabbageRules(protocolParams);
-            } else if (newEra == Era.Conway) {
-                if (prevEra == null) { //custom network starting directly from Conway era
+            } else if (newEra.getValue() >= Era.Conway.getValue()) {
+                //custom network starting directly from Conway or a later era (e.g. Dijkstra on Musashi)
+                if (prevEra == null) {
                     applyAlonzoRules(protocolParams);
                     applyBabbageRules(protocolParams);
                 }
