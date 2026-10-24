@@ -9,7 +9,7 @@ import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.common.util.AddressUtil;
 import com.bloxbean.cardano.yaci.store.common.util.Tuple;
-import lombok.RequiredArgsConstructor;
+import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UnspentUtxoTable;
 import lombok.extern.slf4j.Slf4j;
 import org.jooq.Condition;
 import org.jooq.DSLContext;
@@ -22,6 +22,8 @@ import org.jooq.SortField;
 import org.jooq.Table;
 import org.jooq.TableField;
 import org.jooq.impl.DSL;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Component;
 
@@ -33,18 +35,38 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.BooleanSupplier;
 
 import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.ADDRESS_UTXO;
+import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.ADDRESS_UTXO_UNSPENT;
 import static com.bloxbean.cardano.yaci.store.transaction.jooq.Tables.TRANSACTION;
 import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.TX_INPUT;
 import static com.bloxbean.cardano.yaci.store.account.jooq.Tables.ADDRESS_BALANCE_CURRENT;
 import static com.bloxbean.cardano.yaci.store.common.Constants.QUERY_TIMEOUT_SECONDS;
 
 @Component
-@RequiredArgsConstructor
 @Slf4j
 public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
     private final DSLContext dsl;
+
+    /**
+     * Read an address's current outputs from address_utxo_unspent instead of anti-joining address_utxo with
+     * tx_input ({@code store.utxo.unspent-table-read-enabled}, once the table is active). The totals and the
+     * transaction lists need the spent outputs too, so they always read address_utxo.
+     */
+    private final BooleanSupplier readUnspentTable;
+
+    @Autowired
+    public BFAddressStorageReaderImpl(DSLContext dsl, ObjectProvider<UnspentUtxoTable> unspentUtxoTable) {
+        this.dsl = dsl;
+        UnspentUtxoTable table = unspentUtxoTable.getIfAvailable();
+        this.readUnspentTable = table != null ? table::isReadable : () -> false;
+    }
+
+    BFAddressStorageReaderImpl(DSLContext dsl, boolean readUnspentTable) {
+        this.dsl = dsl;
+        this.readUnspentTable = () -> readUnspentTable;
+    }
 
     /**
      * Find transaction hashes for an address with pagination and ordering.
@@ -132,14 +154,49 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
 
     @Override
     public List<AddressUtxo> findAddressUtxos(String address, int page, int count, Order order) {
+        if (readUnspentTable.getAsBoolean()) {
+            Condition addrCondition = addressCondition(address, ADDRESS_UTXO_UNSPENT.OWNER_ADDR, ADDRESS_UTXO_UNSPENT.OWNER_ADDR_FULL);
+            return fetchUnspentTableUtxos(addrCondition, DSL.trueCondition(), page, count, order);
+        }
         Condition addrCondition = addressCondition(address, ADDRESS_UTXO.OWNER_ADDR, ADDRESS_UTXO.OWNER_ADDR_FULL);
         return fetchAddressUtxos(addrCondition, DSL.trueCondition(), page, count, order);
     }
 
     @Override
     public List<AddressUtxo> findAddressUtxosForAsset(String address, String unit, int page, int count, Order order) {
+        if (readUnspentTable.getAsBoolean()) {
+            Condition addrCondition = addressCondition(address, ADDRESS_UTXO_UNSPENT.OWNER_ADDR, ADDRESS_UTXO_UNSPENT.OWNER_ADDR_FULL);
+            return fetchUnspentTableUtxos(addrCondition, unitCondition(ADDRESS_UTXO_UNSPENT.AMOUNTS, unit), page, count, order);
+        }
         Condition addrCondition = addressCondition(address, ADDRESS_UTXO.OWNER_ADDR, ADDRESS_UTXO.OWNER_ADDR_FULL);
-        return fetchAddressUtxos(addrCondition, unitCondition(unit), page, count, order);
+        return fetchAddressUtxos(addrCondition, unitCondition(ADDRESS_UTXO.AMOUNTS, unit), page, count, order);
+    }
+
+    /**
+     * Same rows, order and pages as {@link #fetchAddressUtxos}, read from address_utxo_unspent.
+     */
+    private List<AddressUtxo> fetchUnspentTableUtxos(Condition addrCondition, Condition extraCondition,
+                                                     int page, int count, Order order) {
+        int offset = Math.max(page, 0) * count;
+        var fields = new ArrayList<>(Arrays.asList(ADDRESS_UTXO_UNSPENT.fields()));
+        // Workaround: AddressUtxo.blockNumber maps from the column jOOQ names `block`.
+        fields.add(ADDRESS_UTXO_UNSPENT.BLOCK.as("blockNumber"));
+
+        boolean desc = order == Order.desc;
+        SortField<?> slotSort = desc ? ADDRESS_UTXO_UNSPENT.SLOT.desc() : ADDRESS_UTXO_UNSPENT.SLOT.asc();
+        SortField<?> txHashSort = desc ? ADDRESS_UTXO_UNSPENT.TX_HASH.desc() : ADDRESS_UTXO_UNSPENT.TX_HASH.asc();
+        SortField<?> outputIndexSort = desc ? ADDRESS_UTXO_UNSPENT.OUTPUT_INDEX.desc() : ADDRESS_UTXO_UNSPENT.OUTPUT_INDEX.asc();
+
+        return dsl.select(fields)
+                .from(ADDRESS_UTXO_UNSPENT)
+                .where(addrCondition)
+                .and(extraCondition)
+                .orderBy(slotSort, txHashSort, outputIndexSort)
+                .offset(offset)
+                .limit(count)
+                .queryTimeout(QUERY_TIMEOUT_SECONDS)
+                .fetch()
+                .into(AddressUtxo.class);
     }
 
     private List<AddressUtxo> fetchAddressUtxos(Condition addrCondition, Condition extraCondition,
@@ -170,13 +227,13 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
                 .into(AddressUtxo.class);
     }
 
-    private Condition unitCondition(String unit) {
+    private Condition unitCondition(Field<?> amounts, String unit) {
         if (BlockfrostDialectUtil.isPostgres(dsl)) {
-            return DSL.condition("{0} @> {1}::jsonb", ADDRESS_UTXO.AMOUNTS,
+            return DSL.condition("{0} @> {1}::jsonb", amounts,
                     DSL.val("[{\"unit\": \"" + unit + "\"}]"));
         }
-        return ADDRESS_UTXO.AMOUNTS.cast(String.class).contains("\"unit\": \"" + unit + "\"")
-                .or(ADDRESS_UTXO.AMOUNTS.cast(String.class).contains("\"unit\":\"" + unit + "\""));
+        return amounts.cast(String.class).contains("\"unit\": \"" + unit + "\"")
+                .or(amounts.cast(String.class).contains("\"unit\":\"" + unit + "\""));
     }
 
     /**
@@ -230,8 +287,39 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
      */
     @Override
     public Map<String, BigInteger> findUnspentAddressBalanceByUnit(String address) {
-        Condition condition = addressCondition(address, ADDRESS_UTXO.OWNER_ADDR, ADDRESS_UTXO.OWNER_ADDR_FULL);
-        return fetchUnspentAmountSums(condition);
+        return fetchUnspentAmountSums(unspentOutputs(address));
+    }
+
+    /**
+     * The address's current outputs as (tx_hash, output_index, amounts, lovelace_amount): read from
+     * address_utxo_unspent when it can serve reads, otherwise from address_utxo without the spent ones.
+     */
+    private Select<?> unspentOutputs(String address) {
+        if (readUnspentTable.getAsBoolean()) {
+            return dsl.select(
+                            ADDRESS_UTXO_UNSPENT.TX_HASH.as("tx_hash"),
+                            ADDRESS_UTXO_UNSPENT.OUTPUT_INDEX.as("output_index"),
+                            ADDRESS_UTXO_UNSPENT.AMOUNTS.as("amounts"),
+                            ADDRESS_UTXO_UNSPENT.LOVELACE_AMOUNT.as("lovelace_amount")
+                    )
+                    .from(ADDRESS_UTXO_UNSPENT)
+                    .where(addressCondition(address, ADDRESS_UTXO_UNSPENT.OWNER_ADDR, ADDRESS_UTXO_UNSPENT.OWNER_ADDR_FULL));
+        }
+
+        return dsl.select(
+                        ADDRESS_UTXO.TX_HASH.as("tx_hash"),
+                        ADDRESS_UTXO.OUTPUT_INDEX.as("output_index"),
+                        ADDRESS_UTXO.AMOUNTS.as("amounts"),
+                        ADDRESS_UTXO.LOVELACE_AMOUNT.as("lovelace_amount")
+                )
+                .from(ADDRESS_UTXO)
+                .where(addressCondition(address, ADDRESS_UTXO.OWNER_ADDR, ADDRESS_UTXO.OWNER_ADDR_FULL))
+                .and(DSL.notExists(
+                        dsl.selectOne()
+                                .from(TX_INPUT)
+                                .where(TX_INPUT.TX_HASH.eq(ADDRESS_UTXO.TX_HASH))
+                                .and(TX_INPUT.OUTPUT_INDEX.eq(ADDRESS_UTXO.OUTPUT_INDEX))
+                ));
     }
 
     /**
@@ -331,34 +419,19 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
     }
 
     /**
-     * Aggregate unspent amounts for an address using an anti-join to exclude spent outputs.
+     * Aggregate the amounts of an address's current outputs ({@link #unspentOutputs}).
      * Lovelace is sourced from {@code lovelace_amount}; JSON is used for non-lovelace assets,
      * and for lovelace when the scalar amount is missing or zero.
      */
-    private Map<String, BigInteger> fetchUnspentAmountSums(Condition addressCondition) {
+    private Map<String, BigInteger> fetchUnspentAmountSums(Select<?> unspentOutputs) {
         if (BlockfrostDialectUtil.isPostgres(dsl)) {
-            return fetchUnspentAmountSumsPostgres(addressCondition);
+            return fetchUnspentAmountSumsPostgres(unspentOutputs);
         }
-        return fetchUnspentAmountSumsNonPostgres(addressCondition);
+        return fetchUnspentAmountSumsNonPostgres(unspentOutputs);
     }
 
-    private Map<String, BigInteger> fetchUnspentAmountSumsPostgres(Condition addressCondition) {
-        var unspentCte = DSL.name("unspent").as(
-                dsl.select(
-                                ADDRESS_UTXO.TX_HASH.as("tx_hash"),
-                                ADDRESS_UTXO.OUTPUT_INDEX.as("output_index"),
-                                ADDRESS_UTXO.AMOUNTS.as("amounts"),
-                                ADDRESS_UTXO.LOVELACE_AMOUNT.as("lovelace_amount")
-                        )
-                        .from(ADDRESS_UTXO)
-                        .where(addressCondition)
-                        .and(DSL.notExists(
-                                dsl.selectOne()
-                                        .from(TX_INPUT)
-                                        .where(TX_INPUT.TX_HASH.eq(ADDRESS_UTXO.TX_HASH))
-                                        .and(TX_INPUT.OUTPUT_INDEX.eq(ADDRESS_UTXO.OUTPUT_INDEX))
-                        ))
-        );
+    private Map<String, BigInteger> fetchUnspentAmountSumsPostgres(Select<?> unspentOutputs) {
+        var unspentCte = DSL.name("unspent").as(unspentOutputs);
 
         Table<?> unspentTable = DSL.table(DSL.name("unspent"));
         Field<?> amountsField = DSL.field(DSL.name("unspent", "amounts"));
@@ -403,19 +476,13 @@ public class BFAddressStorageReaderImpl implements BFAddressStorageReader {
                 .collect(HashMap::new, (map, entry) -> map.put(entry.getKey(), entry.getValue().toBigInteger()), HashMap::putAll);
     }
 
-    private Map<String, BigInteger> fetchUnspentAmountSumsNonPostgres(Condition addressCondition) {
-        Field<String> amountsField = ADDRESS_UTXO.AMOUNTS.cast(String.class).as("amounts");
-        Field<BigDecimal> lovelaceAmountField = ADDRESS_UTXO.LOVELACE_AMOUNT.cast(BigDecimal.class).as("lovelace_amount");
+    private Map<String, BigInteger> fetchUnspentAmountSumsNonPostgres(Select<?> unspentOutputs) {
+        Table<?> unspent = unspentOutputs.asTable("unspent");
+        Field<String> amountsField = unspent.field("amounts").cast(String.class).as("amounts");
+        Field<BigDecimal> lovelaceAmountField = unspent.field("lovelace_amount").cast(BigDecimal.class).as("lovelace_amount");
 
         var query = dsl.select(amountsField, lovelaceAmountField)
-                .from(ADDRESS_UTXO)
-                .where(addressCondition)
-                .and(DSL.notExists(
-                        dsl.selectOne()
-                                .from(TX_INPUT)
-                                .where(TX_INPUT.TX_HASH.eq(ADDRESS_UTXO.TX_HASH))
-                                .and(TX_INPUT.OUTPUT_INDEX.eq(ADDRESS_UTXO.OUTPUT_INDEX))
-                ));
+                .from(unspent);
 
         return aggregateAmountRows(query.fetch(), amountsField, lovelaceAmountField);
     }

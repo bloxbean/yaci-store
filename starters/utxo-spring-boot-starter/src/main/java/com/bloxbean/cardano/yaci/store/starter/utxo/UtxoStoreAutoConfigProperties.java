@@ -40,17 +40,24 @@ public class UtxoStoreAutoConfigProperties {
         private boolean contentAwareRollback = false;
 
         /**
-         * Maintain address_utxo_unspent, a copy of the outputs that are not spent yet, at every
-         * commit. Readers that need current outputs then read it instead of anti-joining
-         * address_utxo with tx_input over the whole history. Turning it on for an already synced
-         * store needs a one-time backfill (admin-cli backfill-unspent-utxos).
+         * Maintain address_utxo_unspent, a copy of the outputs that are not spent yet. Outputs are
+         * written together with address_utxo, and spent outputs are deleted at each commit. Readers that need current outputs then read it instead of anti-joining
+         * address_utxo with tx_input over the whole history. On an already synced store, or one where
+         * the table fell behind, the table is built when the sync reaches the tip, or beforehand with
+         * admin-cli backfill-unspent-utxos.
          */
         private boolean unspentTableEnabled = false;
 
         /**
+         * With unspent-table-enabled: write nothing to address_utxo_unspent during the initial sync and
+         * build it once when the sync reaches the tip, then keep it current. Without it the table is
+         * written from the first block of a new store.
+         */
+        private boolean unspentTableBackfillAtTip = false;
+
+        /**
          * Serve the unspent-output queries (by address, payment credential, stake address, asset)
-         * from address_utxo_unspent. Turn it on only once the table is complete: maintained since
-         * the start of the sync, or backfilled and reconciled.
+         * from address_utxo_unspent while it is current. Until then they use address_utxo and tx_input.
          */
         private boolean unspentTableReadEnabled = false;
     }

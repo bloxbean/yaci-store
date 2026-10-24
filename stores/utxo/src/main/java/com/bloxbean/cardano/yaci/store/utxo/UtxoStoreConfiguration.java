@@ -1,6 +1,8 @@
 package com.bloxbean.cardano.yaci.store.utxo;
 
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
+import com.bloxbean.cardano.yaci.store.common.service.CursorService;
+import com.bloxbean.cardano.yaci.store.common.service.StoreStateService;
 import com.bloxbean.cardano.yaci.store.utxo.storage.AddressStorage;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorageReader;
@@ -8,10 +10,12 @@ import com.bloxbean.cardano.yaci.store.utxo.storage.impl.AddressStorageImpl;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UtxoCache;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UtxoStorageImpl;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UnspentTableUtxoStorageReader;
+import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UnspentUtxoTable;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UtxoStorageReaderImpl;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.TxInputRepository;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.UtxoRepository;
 import org.jooq.DSLContext;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
@@ -41,21 +45,34 @@ public class UtxoStoreConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
+    public UnspentUtxoTable unspentUtxoTable(UtxoStoreProperties utxoStoreProperties, DSLContext dslContext,
+                                             PlatformTransactionManager transactionManager,
+                                             ObjectProvider<StoreStateService> storeStateService,
+                                             ObjectProvider<CursorService> cursorService) {
+        return new UnspentUtxoTable(utxoStoreProperties, dslContext, transactionManager,
+                storeStateService.getIfAvailable(), cursorService.getIfAvailable());
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
     public UtxoStorage utxoStorage(UtxoRepository utxoRepository,
                                    TxInputRepository spentOutputRepository,
                                    DSLContext dslContext,
                                    UtxoCache utxoCache,
-                                   PlatformTransactionManager transactionManager) {
-        return new UtxoStorageImpl(utxoRepository, spentOutputRepository, dslContext, utxoCache, transactionManager);
+                                   PlatformTransactionManager transactionManager,
+                                   UnspentUtxoTable unspentUtxoTable) {
+        return new UtxoStorageImpl(utxoRepository, spentOutputRepository, dslContext, utxoCache, transactionManager,
+                unspentUtxoTable);
     }
 
     @Bean
     @ConditionalOnMissingBean
     public UtxoStorageReader utxoStorageReader(UtxoRepository utxoRepository, DSLContext dslContext,
-                                               UtxoStoreProperties utxoStoreProperties) {
+                                               UtxoStoreProperties utxoStoreProperties,
+                                               UnspentUtxoTable unspentUtxoTable) {
         UtxoStorageReader reader = new UtxoStorageReaderImpl(utxoRepository, dslContext);
         return utxoStoreProperties.isUnspentTableReadEnabled()
-                ? new UnspentTableUtxoStorageReader(reader, dslContext)
+                ? new UnspentTableUtxoStorageReader(reader, dslContext, unspentUtxoTable::isReadable)
                 : reader;
     }
 

@@ -9,7 +9,7 @@ import com.bloxbean.cardano.yaci.store.blockfrost.asset.storage.impl.model.BFPol
 import com.bloxbean.cardano.yaci.store.blockfrost.common.util.AmountsJsonUtil;
 import com.bloxbean.cardano.yaci.store.blockfrost.common.util.BlockfrostDialectUtil;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
-import com.bloxbean.cardano.yaci.store.utxo.UtxoStoreProperties;
+import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UnspentUtxoTable;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import lombok.extern.slf4j.Slf4j;
@@ -32,6 +32,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.BooleanSupplier;
 import java.util.stream.Collectors;
 
 import static com.bloxbean.cardano.yaci.store.assets.jooq.Tables.ASSETS;
@@ -46,20 +47,20 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
 
     /**
      * Read current holdings from address_utxo_unspent instead of anti-joining address_utxo with
-     * tx_input ({@code store.utxo.unspent-table-read-enabled}).
+     * tx_input ({@code store.utxo.unspent-table-read-enabled}, once the table is active).
      */
-    private final boolean readUnspentTable;
+    private final BooleanSupplier readUnspentTable;
 
     @Autowired
-    public BFAssetStorageReaderImpl(DSLContext dsl, ObjectProvider<UtxoStoreProperties> utxoStoreProperties) {
-        this(dsl, Optional.ofNullable(utxoStoreProperties.getIfAvailable())
-                .map(UtxoStoreProperties::isUnspentTableReadEnabled)
-                .orElse(false));
+    public BFAssetStorageReaderImpl(DSLContext dsl, ObjectProvider<UnspentUtxoTable> unspentUtxoTable) {
+        this.dsl = dsl;
+        UnspentUtxoTable table = unspentUtxoTable.getIfAvailable();
+        this.readUnspentTable = table != null ? table::isReadable : () -> false;
     }
 
     BFAssetStorageReaderImpl(DSLContext dsl, boolean readUnspentTable) {
         this.dsl = dsl;
-        this.readUnspentTable = readUnspentTable;
+        this.readUnspentTable = () -> readUnspentTable;
     }
 
     /**
@@ -371,6 +372,7 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
         int offset = Math.max(page, 0) * count;
         String dir = order == Order.desc ? "desc" : "asc";
         String unitJson = "[{\"unit\": \"" + unit + "\"}]";
+        boolean useUnspentTable = readUnspentTable.getAsBoolean();
 
         Table<?> assetAddresses = DSL.table(
                 """
@@ -419,8 +421,8 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
                         dir, // %1$s: reuse the same asc/desc direction at every ordering level
                         // %2$s / %3$s: the current outputs. address_utxo_unspent holds exactly those, so
                         // the anti-join over the unit's whole history is only needed without it.
-                        readUnspentTable ? "address_utxo_unspent" : "address_utxo",
-                        readUnspentTable ? "" : """
+                        useUnspentTable ? "address_utxo_unspent" : "address_utxo",
+                        useUnspentTable ? "" : """
                                 and not exists (
                                       select 1 from tx_input ti
                                       where ti.tx_hash = au.tx_hash and ti.output_index = au.output_index

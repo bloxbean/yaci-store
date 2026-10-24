@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.store.dbutils.index.model.RollbackConfig;
 import com.bloxbean.cardano.yaci.store.dbutils.index.model.RollbackContext;
 import com.bloxbean.cardano.yaci.store.dbutils.index.model.TableRollbackAction;
 import com.bloxbean.cardano.yaci.store.dbutils.index.util.DatabaseUtils;
+import com.bloxbean.cardano.yaci.store.dbutils.utxo.UnspentUtxoBackfillService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.util.Pair;
@@ -20,6 +21,8 @@ import java.util.List;
 @RequiredArgsConstructor
 @Slf4j
 public class RollbackService {
+    private static final String UNSPENT_UTXO_TABLE = "address_utxo_unspent";
+
     private final NamedParameterJdbcTemplate jdbcTemplate;
     private final DatabaseUtils databaseUtils;
 
@@ -49,6 +52,28 @@ public class RollbackService {
         for (RollbackConfig.TableRollbackDefinition tableDef : config.getTables()) {
             String tableName = tableDef.getName();
             if (!databaseUtils.tableExists(tableName)) {
+                continue;
+            }
+
+            //address_utxo_unspent also restores the outputs whose spend is rolled back. It is listed before
+            //tx_input in rollback.yml, so those spends are still there. Its store_state row then moves to the point.
+            if (UNSPENT_UTXO_TABLE.equalsIgnoreCase(tableName) && "DELETE".equalsIgnoreCase(tableDef.getOperation())) {
+                List<String> unspentSqls = new ArrayList<>(List.of(buildDeleteSql(tableDef), UnspentUtxoBackfillService.RESTORE_SPENT_AFTER));
+                if (databaseUtils.tableExists("store_state"))
+                    unspentSqls.add(UnspentUtxoBackfillService.STATE_AFTER_ROLLBACK);
+
+                var unspentParams = new MapSqlParameterSource(params.getValues())
+                        .addValue("block", rollbackBlock.getNumber())
+                        .addValue("block_hash", rollbackBlock.getHash());
+                for (String unspentSql : unspentSqls) {
+                    log.info("Executing rollback on table '{}': {}", tableName, unspentSql);
+                    try {
+                        jdbcTemplate.update(unspentSql, unspentParams);
+                    } catch (Exception e) {
+                        log.error("Failed to execute rollback on table '{}': {}", tableName, e.getMessage());
+                        failedRollbackActions.add(new TableRollbackAction(tableName, unspentSql));
+                    }
+                }
                 continue;
             }
 

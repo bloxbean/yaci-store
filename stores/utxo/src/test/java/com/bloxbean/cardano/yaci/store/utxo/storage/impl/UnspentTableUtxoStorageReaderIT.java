@@ -4,6 +4,9 @@ import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.common.domain.TxInput;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
+import com.bloxbean.cardano.yaci.store.events.EventMetadata;
+import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
+import com.bloxbean.cardano.yaci.store.utxo.UtxoStoreProperties;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.UtxoRepository;
 import org.jooq.DSLContext;
@@ -44,7 +47,7 @@ class UnspentTableUtxoStorageReaderIT {
     private DSLContext dsl;
 
     @Autowired
-    private UnspentUtxoTableService service;
+    private UtxoStoreProperties properties;
 
     @Autowired
     private JdbcTemplate jdbc;
@@ -55,6 +58,7 @@ class UnspentTableUtxoStorageReaderIT {
     @BeforeEach
     void seed() {
         clean();   // the H2 database is shared with the module's other tests
+        properties.setUnspentTableEnabled(true);
         antiJoin = new UtxoStorageReaderImpl(utxoRepository, dsl);
         table = new UnspentTableUtxoStorageReader(antiJoin, dsl);
 
@@ -81,7 +85,7 @@ class UnspentTableUtxoStorageReaderIT {
         }
         utxoStorage.saveUnspent(outputs);
         utxoStorage.saveSpent(spends);
-        service.applyCommit(0, Long.MAX_VALUE);
+        utxoStorage.handleCommit(new CommitEvent<>(EventMetadata.builder().build(), List.of()));
     }
 
     @AfterEach
@@ -89,6 +93,7 @@ class UnspentTableUtxoStorageReaderIT {
         jdbc.update("delete from address_utxo_unspent");
         jdbc.update("delete from address_utxo");
         jdbc.update("delete from tx_input");
+        properties.setUnspentTableEnabled(false);
     }
 
     /** Every page of {@code read}, in both orders, from both readers. */

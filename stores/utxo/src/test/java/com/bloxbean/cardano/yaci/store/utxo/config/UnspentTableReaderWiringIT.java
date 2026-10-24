@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.utxo.config;
 import com.bloxbean.cardano.yaci.store.utxo.UtxoStoreConfiguration;
 import com.bloxbean.cardano.yaci.store.utxo.UtxoStoreProperties;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UnspentTableUtxoStorageReader;
+import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UnspentUtxoTable;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UtxoStorageReaderImpl;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.UtxoRepository;
 import org.jooq.DSLContext;
@@ -24,7 +25,8 @@ class UnspentTableReaderWiringIT {
 
     private Object readerWith(boolean readEnabled) {
         UtxoStoreProperties properties = UtxoStoreProperties.builder().unspentTableReadEnabled(readEnabled).build();
-        return new UtxoStoreConfiguration().utxoStorageReader(utxoRepository, dsl, properties);
+        return new UtxoStoreConfiguration().utxoStorageReader(utxoRepository, dsl, properties,
+                new UnspentUtxoTable(properties, dsl, null, null, null));
     }
 
     @Test

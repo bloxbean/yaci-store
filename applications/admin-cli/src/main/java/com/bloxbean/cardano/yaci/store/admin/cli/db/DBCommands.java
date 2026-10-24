@@ -22,6 +22,7 @@ import org.springframework.shell.command.annotation.Option;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 import static com.bloxbean.cardano.yaci.store.admin.cli.common.ConsoleWriter.*;
@@ -160,28 +161,36 @@ public class DBCommands {
         }
     }
 
-    @Command(description = "Fill address_utxo_unspent for a store synced before store.utxo.unspent-table-enabled was turned on")
+    @Command(description = "Build address_utxo_unspent for a store synced before store.utxo.unspent-table-enabled was turned on. Stop the store first.")
     public void backfillUnspentUtxos(
-            @Option(longNames = "from-slot", defaultValue = "0", description = "First slot to copy (to resume an interrupted fill)") long fromSlot,
-            @Option(longNames = "chunk-slots", defaultValue = "43200", description = "Slots copied per transaction") long chunkSlots) {
-        if (!databaseUtils.tableExists("address_utxo_unspent")) {
-            writeLn(error("Table address_utxo_unspent not found. Start the store once with this version so its migration runs."));
+            @Option(longNames = "from-output-index", defaultValue = "0", description = "0 rebuilds the table from scratch; to resume an interrupted run, pass the output_index it last reported") int fromOutputIndex) {
+        if (!databaseUtils.tableExists("address_utxo_unspent") || !databaseUtils.tableExists("store_state")) {
+            writeLn(error("Table address_utxo_unspent or store_state not found. Start the store once with this version so its migrations run."));
             return;
         }
 
-        long tip = unspentUtxoBackfillService.tipSlot();
-        if (tip < 0) {
-            writeLn(warn("address_utxo is empty, nothing to backfill"));
+        if (unspentUtxoBackfillService.maxOutputIndex() < 0) {
+            writeLn(warn("address_utxo is empty, nothing to build"));
             return;
         }
 
-        writeLn(info("Copying unspent outputs from slot %d to %d, %d slots per transaction ...", fromSlot, tip, chunkSlots));
-        writeLn(info("store.utxo.unspent-table-enabled must already be on, so blocks after slot %d are kept by the store itself.", tip));
-        long copied = unspentUtxoBackfillService.backfill(fromSlot, tip, chunkSlots);
-        int removed = unspentUtxoBackfillService.reconcileSpentAfter(tip);
+        boolean hasCursor = databaseUtils.tableExists("cursor_");
+        Long cursorBefore = hasCursor ? unspentUtxoBackfillService.cursorSlot() : null;
+        writeLn(info("Building address_utxo_unspent at cursor slot %s from output_index %d. The store must stay stopped until this finishes.",
+                cursorBefore, fromOutputIndex));
+        long copied = unspentUtxoBackfillService.rebuild(fromOutputIndex);
 
-        writeLn(success("Copied %d rows; removed %d spent while the fill ran.", copied, removed));
-        writeLn(info("address_utxo_unspent is complete. Reads can now use it: store.utxo.unspent-table-read-enabled=true"));
+        Long cursorAfter = hasCursor ? unspentUtxoBackfillService.cursorSlot() : null;
+        if (!Objects.equals(cursorBefore, cursorAfter)) {
+            writeLn(error("The store's cursor moved from slot %s to %s while the table was built, so the store was running and the table may be wrong. "
+                    + "Stop the store and run this command again.", cursorBefore, cursorAfter));
+            return;
+        }
+
+        unspentUtxoBackfillService.markCurrentAtCursor();
+        writeLn(success("Copied %d unspent outputs.", copied));
+        writeLn(info("Now start the store with store.utxo.unspent-table-enabled=true (it keeps the table current from slot %s) "
+                + "and store.utxo.unspent-table-read-enabled=true.", cursorAfter));
     }
 
     @Command(description = "List missing read indexes")
