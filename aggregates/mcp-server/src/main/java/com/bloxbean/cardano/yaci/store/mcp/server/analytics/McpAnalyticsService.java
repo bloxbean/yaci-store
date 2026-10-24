@@ -6,6 +6,7 @@ import com.bloxbean.cardano.yaci.store.analytics.query.model.SchemaOverview;
 import com.bloxbean.cardano.yaci.store.analytics.query.model.TableDescription;
 import com.bloxbean.cardano.yaci.store.analytics.query.service.AnalyticsSchemaService;
 import com.bloxbean.cardano.yaci.store.analytics.query.service.SqlValidator;
+import com.bloxbean.cardano.yaci.store.mcp.server.config.Jackson2ToolCallResultConverter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.annotation.Tool;
@@ -54,7 +55,8 @@ public class McpAnalyticsService {
     private final AnalyticsQueryExecutor queryExecutor;
     private final ParquetReadConnectionProvider connectionProvider;
 
-    @Tool(name = "analytics-list-tables",
+    @Tool(resultConverter = Jackson2ToolCallResultConverter.class,
+          name = "analytics-list-tables",
             description = "List all available Cardano analytics tables queryable via DuckDB SQL. " +
                     "Returns table names, row counts, partition strategies, date ranges, per-table 'dataScope' " +
                     "('historical' = exported data as of 'dataAsOf'; 'historical+live' = also unioned with live " +
@@ -72,7 +74,8 @@ public class McpAnalyticsService {
         return schemaService.listTables();
     }
 
-    @Tool(name = "analytics-describe-table",
+    @Tool(resultConverter = Jackson2ToolCallResultConverter.class,
+          name = "analytics-describe-table",
             description = "Get detailed column schema for a specific analytics table. " +
                     "Returns column names, DuckDB types, and query hints for building efficient queries. " +
                     "Data is queried via DuckDB — use DuckDB SQL syntax. " +
@@ -88,7 +91,8 @@ public class McpAnalyticsService {
         return schemaService.describeTable(tableName);
     }
 
-    @Tool(name = "analytics-execute-sql",
+    @Tool(resultConverter = Jackson2ToolCallResultConverter.class,
+          name = "analytics-execute-sql",
             description = "Execute a read-only DuckDB SQL query against the Cardano analytics tables listed by " +
                     "analytics-list-tables. Data is the exported analytics data (see 'dataAsOf'); tables with " +
                     "dataScope 'historical+live' also include live rows up to the chain tip. For the real-time " +

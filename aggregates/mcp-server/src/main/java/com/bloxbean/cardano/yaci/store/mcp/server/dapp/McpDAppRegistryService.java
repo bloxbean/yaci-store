@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.mcp.server.dapp;
 
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.NetworkType;
+import com.bloxbean.cardano.yaci.store.mcp.server.config.Jackson2ToolCallResultConverter;
 import com.bloxbean.cardano.yaci.store.mcp.server.model.DAppInfo;
 import com.bloxbean.cardano.yaci.store.mcp.server.model.DAppSearchResult;
 import com.bloxbean.cardano.yaci.store.mcp.server.model.DAppSummary;
@@ -135,7 +136,8 @@ public class McpDAppRegistryService {
         }
     }
 
-    @Tool(name = "dapp-lookup",
+    @Tool(resultConverter = Jackson2ToolCallResultConverter.class,
+          name = "dapp-lookup",
           description = "🏷️ Look up well-known DApp information by name (e.g., 'minswap', 'sundaeswap', 'jpg.store'). " +
                        "Returns script addresses, policy IDs, and contract hashes for the DApp. " +
                        "CRITICAL for: " +
@@ -174,7 +176,8 @@ public class McpDAppRegistryService {
         return DAppSearchResult.create(exactMatches, partialMatches, name, currentNetwork);
     }
 
-    @Tool(name = "dapp-list-by-category",
+    @Tool(resultConverter = Jackson2ToolCallResultConverter.class,
+          name = "dapp-list-by-category",
           description = "📋 List known DApps in a specific category (lightweight summary). " +
                        "Categories: DEX, NFT Marketplace, Lending, NFT Collection, Wallet, Identity, Gaming, AI, etc. " +
                        "Use 'All' or empty string to see all categories. " +
@@ -215,7 +218,8 @@ public class McpDAppRegistryService {
             .collect(Collectors.toList());
     }
 
-    @Tool(name = "dapp-reverse-lookup",
+    @Tool(resultConverter = Jackson2ToolCallResultConverter.class,
+          name = "dapp-reverse-lookup",
           description = "🔍 Identify DApp from script address, policy ID, or contract hash. " +
                        "CRITICAL for tagging addresses in query results. " +
                        "When you see an address in transaction/UTXO results, use this to check if it's a known DApp. " +
@@ -276,7 +280,8 @@ public class McpDAppRegistryService {
         return null;
     }
 
-    @Tool(name = "dapp-list-all",
+    @Tool(resultConverter = Jackson2ToolCallResultConverter.class,
+          name = "dapp-list-all",
           description = "📚 List all known DApps in the registry for current network (lightweight summary). " +
                        "Returns only name, display name, and category for each DApp (no addresses/policy IDs). " +
                        "⚠️ Limited to 10 random DApps if more exist (to prevent token overflow). " +
@@ -458,7 +463,8 @@ public class McpDAppRegistryService {
         log.info("DApp registry merge complete. Total DApps: {}", allDApps.size());
     }
 
-    @Tool(name = "dapp-registry-status",
+    @Tool(resultConverter = Jackson2ToolCallResultConverter.class,
+          name = "dapp-registry-status",
           description = "📊 Get DApp registry status and statistics. " +
                        "Shows total DApps loaded, local vs external counts, last sync time, and categories. " +
                        "Useful for debugging or verifying registry state. " +

@@ -4,8 +4,8 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.service.SyncS
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.service.Cip26MetadataSyncCronJob;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.service.Cip26MetadataSyncService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.boot.actuate.health.Health;
-import org.springframework.boot.actuate.health.HealthIndicator;
+import org.springframework.boot.health.contributor.Health;
+import org.springframework.boot.health.contributor.HealthIndicator;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.stereotype.Component;
 

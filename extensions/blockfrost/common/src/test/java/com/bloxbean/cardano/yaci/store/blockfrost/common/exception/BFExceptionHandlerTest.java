@@ -5,6 +5,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -37,6 +38,8 @@ class BFExceptionHandlerTest {
     @BeforeEach
     void setUp() {
         mvc = MockMvcBuilders.standaloneSetup(new BfController(), new OutsideController())
+                //As in the app: Jackson 2 (Spring Framework 7 would pick Jackson 3 here)
+                .setMessageConverters(new MappingJackson2HttpMessageConverter())
                 .setControllerAdvice(new BFDataAccessExceptionHandler(), new BFGlobalExceptionHandler())
                 .build();
     }

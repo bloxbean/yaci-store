@@ -11,9 +11,10 @@ dependencies {
 
     // For FlywayConfigurationCustomizer
     compileOnly 'org.flywaydb:flyway-core'
+    compileOnly 'org.springframework.boot:spring-boot-flyway'
 
     testImplementation project(':starters:spring-boot-starter')
-    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test-classic'
     testImplementation 'com.h2database:h2'  // For unit tests
 }
 

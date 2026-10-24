@@ -2,7 +2,7 @@ plugins {
     id 'maven-publish'
     id 'signing'
     id 'org.flywaydb.flyway' version '12.4.0'
-    id 'nu.studer.jooq' version '8.2.3'
+    id 'nu.studer.jooq' version '10.2.1'
     id 'io.spring.dependency-management' version "${springDependencyManagementVersion}"
 
     id 'org.ajoberstar.grgit' version '5.3.3'
@@ -87,6 +87,9 @@ subprojects {
     }
 
     plugins.withId('com.gorylenko.gradle-git-properties') {
+        //gradle-git-properties 4 adds its output to the main resources, which sourceJar packages
+        tasks.named('sourceJar') { dependsOn 'generateGitProperties' }
+
         gitProperties {
             failOnNoGitDirectory = false
             // In git worktrees, .git is a file pointing to the real git dir.
@@ -98,6 +101,12 @@ subprojects {
                 dotGitDirectory = mainGitDir
             }
         }
+    }
+
+    //spring-boot-starter-test-classic brings spring-boot-security-test, whose MockMvc auto-configuration needs
+    //spring-boot-security; Yaci Store does not use Spring Security
+    configurations.matching { it.name.startsWith('test') }.configureEach {
+        exclude group: 'org.springframework.boot', module: 'spring-boot-security-test'
     }
 
     dependencyManagement {
@@ -112,7 +121,9 @@ subprojects {
         implementation(libs.mapstruct)
         annotationProcessor 'org.projectlombok:lombok'
         annotationProcessor(libs.mapstruct.processor)
-        testImplementation 'org.springframework.boot:spring-boot-starter-test'
+        //Yaci Store, Yaci and CCL use Jackson 2; Spring Boot 4 defaults to Jackson 3
+        implementation 'org.springframework.boot:spring-boot-jackson2'
+        testImplementation 'org.springframework.boot:spring-boot-starter-test-classic'
         testImplementation 'io.projectreactor:reactor-test'
         //Gradle 9 no longer provides the JUnit Platform launcher
         testRuntimeOnly 'org.junit.platform:junit-platform-launcher'

@@ -4,19 +4,21 @@ plugins {
 }
 
 dependencies {
-    implementation 'org.springframework.boot:spring-boot-starter'
+    implementation 'org.springframework.boot:spring-boot-starter-classic'
     implementation 'org.springframework.shell:spring-shell-starter'
+    implementation 'org.springframework.shell:spring-shell-jline'
 
     implementation project(':components:dbutils')
+    implementation 'org.springframework.data:spring-data-commons'
 
     runtimeOnly "com.mysql:mysql-connector-j:${mysqlDriverVersion}"
     runtimeOnly "org.postgresql:postgresql:${postgresDriverVersion}"
 
-    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test-classic'
 }
 
 dependencyManagement {
     imports {
-        mavenBom "org.springframework.shell:spring-shell-dependencies:3.4.0"
+        mavenBom "org.springframework.shell:spring-shell-dependencies:4.0.3"
     }
 }

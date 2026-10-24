@@ -9,11 +9,10 @@ import com.bloxbean.cardano.yaci.store.core.service.StartService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jooq.DSLContext;
-import org.springframework.batch.core.Job;
-import org.springframework.batch.core.Step;
+import org.springframework.batch.core.job.Job;
+import org.springframework.batch.core.step.Step;
 import org.springframework.batch.core.job.builder.JobBuilder;
-import org.springframework.batch.core.launch.support.RunIdIncrementer;
-import org.springframework.batch.core.partition.support.Partitioner;
+import org.springframework.batch.core.partition.Partitioner;
 import org.springframework.batch.core.partition.support.TaskExecutorPartitionHandler;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.builder.StepBuilder;
@@ -44,7 +43,7 @@ public class UtxoAccountBatchConfiguration {
     @Bean
     public Job utxoAccountBalanceJob() {
         return new JobBuilder("utxoAddressAggregationJob", jobRepository)
-                .incrementer(new RunIdIncrementer())
+                //No incrementer: Spring Batch 6 JobOperator.start would replace the snapshot parameters with run.id
                 .start(createStakeAddressStep())
                 .next(accountBalanceMasterStep())
                 .next(stakeAddressBalanceMasterStep())
