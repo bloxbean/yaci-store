@@ -206,6 +206,39 @@ public class UnspentUtxoTable {
                 .build());
     }
 
+    /** The table's state row if it is current (the last block the table holds), else null. */
+    StoreState currentState() {
+        if (storeStateService == null)
+            return null;
+
+        return storeStateService.getState(STATE_ID)
+                .filter(state -> STATUS_CURRENT.equals(state.getStatus()))
+                .orElse(null);
+    }
+
+    /**
+     * Checks that a batch starts right after the last block the table holds, or at a block it holds already
+     * (a block processed again). That should always be so, because every commit moves the state with it.
+     * <p>
+     * If blocks were skipped (a gap), the table is missing their outputs and spends and cannot be trusted. Then
+     * it is marked stale and switched off: queries go back to address_utxo and tx_input, the sync keeps running,
+     * and the table is built again the next time the sync starts (restart or reconnect).
+     *
+     * @return true if there is a gap and the table was switched off
+     */
+    boolean stopIfGap(StoreState kept, Long firstBlock) {
+        if (kept == null || kept.getBlock() == null || firstBlock == null || firstBlock <= kept.getBlock() + 1)
+            return false;
+
+        log.error("address_utxo_unspent missed {} blocks: it holds blocks up to {}, but this batch starts at block {}. "
+                        + "It is switched off and marked stale: queries use address_utxo and tx_input, the sync continues, "
+                        + "and the table is built again when the sync next starts.",
+                firstBlock - kept.getBlock() - 1, kept.getBlock(), firstBlock);
+        storeStateService.saveState(kept.toBuilder().status(STATUS_STALE).build());
+        current = false;
+        return true;
+    }
+
     /**
      * A rollback to {@code slot}. If the table was rolled back with the store it is current there. If not
      * (the table is off or not current) and its state is after the point, it still holds rows of blocks

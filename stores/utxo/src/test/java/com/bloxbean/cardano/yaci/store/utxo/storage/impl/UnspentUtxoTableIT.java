@@ -10,6 +10,7 @@ import com.bloxbean.cardano.yaci.store.common.service.StoreStateService;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
+import com.bloxbean.cardano.yaci.store.events.model.internal.BatchBlock;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.jooq.DSLContext;
@@ -206,6 +207,74 @@ class UnspentUtxoTableIT {
         }
 
         assertThat(unspentKeys()).containsExactly(hash(5) + "#1").isEqualTo(expectedKeys());
+    }
+
+    /**
+     * A restart rolls back to the cursor and syncs again from the cursor block, so the first batch holds a block the
+     * table has already settled. An output of that block spent in the batch must be deleted, not skipped as new.
+     */
+    @Test
+    void anOutputOfTheCursorBlockSpentAfterARestartIsDeleted() {
+        utxoStorage.saveUnspent(List.of(output(hash(50), 0, 200)));
+        utxoStorage.handleCommit(commitAt(200));   //the cursor block
+        utxoStorage.saveSpent(List.of(spend(hash(50), 0, 230)));
+        utxoStorage.saveUnspent(List.of(output(hash(51), 0, 230)));   //killed before this batch's commit
+
+        rollbackTo(200);   //the restart rollback, to the cursor
+        utxoStorage.saveSpent(List.of(spend(hash(50), 0, 230)));
+        utxoStorage.saveUnspent(List.of(output(hash(50), 0, 200), output(hash(51), 0, 230)));
+        utxoStorage.handleCommit(commitAt(299));
+
+        assertThat(unspentKeys()).containsExactly(hash(51) + "#0").isEqualTo(expectedKeys());
+    }
+
+    /**
+     * A crash after the batch's commit but before the cursor moved: the restart rollback to the cursor restores the
+     * output the batch spent, and the replayed batch, which creates and spends it, must delete it again.
+     */
+    @Test
+    void anOutputRestoredByTheRestartRollbackIsDeletedByTheReplayedBatch() {
+        utxoStorage.saveUnspent(List.of(output(hash(52), 0, 200)));
+        utxoStorage.handleCommit(commitAt(200));   //the cursor block
+        utxoStorage.saveSpent(List.of(spend(hash(52), 0, 230)));
+        utxoStorage.saveUnspent(List.of(output(hash(53), 0, 230)));
+        utxoStorage.handleCommit(commitAt(299));   //committed, then killed before the cursor moved
+        assertThat(unspentKeys()).containsExactly(hash(53) + "#0");
+
+        rollbackTo(200);
+        assertThat(unspentKeys()).containsExactly(hash(52) + "#0");   //restored: its spend is after the point
+        utxoStorage.saveSpent(List.of(spend(hash(52), 0, 230)));
+        utxoStorage.saveUnspent(List.of(output(hash(52), 0, 200), output(hash(53), 0, 230)));
+        utxoStorage.handleCommit(commitAt(299));
+
+        assertThat(unspentKeys()).containsExactly(hash(53) + "#0").isEqualTo(expectedKeys());
+    }
+
+    @Test
+    void anOlderOutputReSavedInTheBatchThatSpendsItIsDeleted() {
+        utxoStorage.saveUnspent(List.of(output(hash(54), 0, 100)));
+        utxoStorage.handleCommit(commitAt(100));
+
+        utxoStorage.saveSpent(List.of(spend(hash(54), 0, 230)));
+        utxoStorage.saveUnspent(List.of(output(hash(54), 0, 100)));   //pointer-address re-save at commit
+        utxoStorage.handleCommit(commitAt(299));
+
+        assertThat(unspentKeys()).isEmpty();
+        assertThat(expectedKeys()).isEmpty();
+    }
+
+    @Test
+    void withoutACurrentStateAnOutputSpentInTheBatchIsDeleted() {
+        utxoStorage.saveUnspent(List.of(output(hash(55), 0, 200)));
+        utxoStorage.handleCommit(commitAt(200));
+        jdbc.update("delete from store_state");
+
+        utxoStorage.saveSpent(List.of(spend(hash(55), 0, 230)));
+        utxoStorage.saveUnspent(List.of(output(hash(55), 0, 200)));
+        utxoStorage.handleCommit(commitAt(299));
+
+        assertThat(unspentKeys()).isEmpty();
+        assertThat(expectedKeys()).isEmpty();
     }
 
     @Test
@@ -475,6 +544,55 @@ class UnspentUtxoTableIT {
         utxoStorage.handleCommit(commitAt(200));   //a crash before the cursor moved: the batch is replayed
 
         assertThat(fromGenesisAt(100L).table().isActive()).isTrue();
+    }
+
+    /** The end of a batch of blocks from {@code firstSlot} to {@code lastSlot}, one every 10 slots (block = slot / 10). */
+    private static CommitEvent<?> batch(long firstSlot, long lastSlot) {
+        List<BatchBlock> blocks = new ArrayList<>();
+        for (long slot = firstSlot; slot <= lastSlot; slot += 10)
+            blocks.add(new BatchBlock(EventMetadata.builder().slot(slot).block(slot / 10).blockHash("bh" + slot).build(), null, List.of()));
+        return new CommitEvent<>(blocks.getLast().getMetadata(), blocks);
+    }
+
+    @Test
+    void aBatchThatFollowsOnOrRepeatsABlockKeepsTheTable() {
+        Store store = fromGenesisAt(null);
+        store.storage().saveUnspent(List.of(output(hash(56), 0, 100)));
+        store.storage().handleCommit(batch(10, 100));      //blocks 1 to 10
+        store.storage().saveUnspent(List.of(output(hash(57), 0, 200)));
+        store.storage().handleCommit(batch(110, 200));     //blocks 11 to 20: right after
+        store.storage().saveUnspent(List.of(output(hash(58), 0, 300)));
+        store.storage().handleCommit(batch(200, 300));     //blocks 20 to 30: block 20 again, as after a restart
+
+        assertThat(state()).containsEntry("STATUS", "CURRENT").containsEntry("BLOCK", 30L);
+        assertThat(store.table().isActive()).isTrue();
+        assertThat(unspentKeys()).hasSize(3).isEqualTo(expectedKeys());
+    }
+
+    @Test
+    void aBatchAfterSkippedBlocksSwitchesTheTableOffUntilItIsBuiltAgain() {
+        Store store = fromGenesisAt(null);
+        store.storage().saveUnspent(List.of(output(hash(59), 0, 100)));
+        store.storage().handleCommit(batch(10, 100));      //the table holds blocks up to 10
+
+        store.storage().saveSpent(List.of(spend(hash(59), 0, 300)));
+        store.storage().saveUnspent(List.of(output(hash(60), 0, 300)));
+        store.storage().handleCommit(batch(300, 310));     //starts at block 30: blocks 11 to 29 never reached the table
+
+        assertThat(state()).containsEntry("STATUS", "STALE").containsEntry("BLOCK", 10L);
+        assertThat(store.table().isActive()).isFalse();
+        assertThat(store.table().isReadable()).isFalse();   //queries use address_utxo and tx_input
+        assertThat(unspentKeys()).containsExactly(hash(59) + "#0");   //left as it was, not written further
+
+        store.storage().saveUnspent(List.of(output(hash(61), 0, 320)));   //the sync keeps running
+        store.storage().handleCommit(batch(320, 320));
+        assertThat(unspentKeys()).containsExactly(hash(59) + "#0");
+
+        store.reachTip();   //the next sync start builds it again
+
+        assertThat(store.table().isActive()).isTrue();
+        assertThat(state()).containsEntry("STATUS", "CURRENT");
+        assertThat(unspentKeys()).hasSize(2).isEqualTo(expectedKeys());
     }
 
     @Test

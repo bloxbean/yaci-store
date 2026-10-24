@@ -1,10 +1,12 @@
 package com.bloxbean.cardano.yaci.store.utxo.storage.impl;
 
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
+import com.bloxbean.cardano.yaci.store.common.domain.StoreState;
 import com.bloxbean.cardano.yaci.store.common.domain.TxInput;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.common.util.JsonUtil;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
+import com.bloxbean.cardano.yaci.store.events.model.internal.BatchEvent;
 import com.bloxbean.cardano.yaci.store.plugin.aspect.Plugin;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.mapper.UtxoMapper;
@@ -30,6 +32,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -352,19 +355,39 @@ public class UtxoStorageImpl implements UtxoStorage {
                 .filter(entry -> !spentKeys.contains(entry.getKey()))
                 .map(Map.Entry::getValue)
                 .toList();
-        List<UtxoKey> spentEarlier = spentKeys.stream()
-                .filter(utxoKey -> !outputs.containsKey(utxoKey))
-                .toList();
 
+        boolean[] gap = new boolean[1];
+        int[] deleted = new int[1];
         commitTransactionTemplate.executeWithoutResult(status -> {
+            //Where the last commit left the table. Read it before keptTo below moves it to this batch.
+            StoreState kept = unspentUtxoTable.currentState();
+
+            //This batch must start right after that block. If blocks were skipped, the table is switched off.
+            if (unspentUtxoTable.stopIfGap(kept, firstBlock(commitEvent))) {
+                gap[0] = true;
+                return;
+            }
+
+            //An output created and spent in this batch is normally not in the table, so there is nothing to delete.
+            //But a block can be processed twice: the cursor block after every restart, or a whole batch after a crash
+            //between its commit and the cursor update. If the output's block is one the table already holds (at or
+            //before the kept slot), the output may be in the table, so delete it. With no state, delete it anyway.
+            Long keptSlot = kept != null ? kept.getSlot() : null;
+            List<UtxoKey> toDelete = spentKeys.stream()
+                    .filter(utxoKey -> !outputs.containsKey(utxoKey)
+                            || keptSlot == null
+                            || outputs.get(utxoKey).addressUtxo().getSlot() <= keptSlot)
+                    .toList();
+            deleted[0] = toDelete.size();
+
             for (int from = 0; from < unspent.size(); from += UNSPENT_WRITE_BATCH_SIZE) {
                 dsl.batch(unspent.subList(from, Math.min(from + UNSPENT_WRITE_BATCH_SIZE, unspent.size())).stream()
                         .map(output -> upsert(ADDRESS_UTXO_UNSPENT, mapper.toAddressUtxoEntity(output.addressUtxo()), output.savedAt()))
                         .toList()).execute();
             }
 
-            for (int from = 0; from < spentEarlier.size(); from += UNSPENT_WRITE_BATCH_SIZE) {
-                dsl.batch(spentEarlier.subList(from, Math.min(from + UNSPENT_WRITE_BATCH_SIZE, spentEarlier.size())).stream()
+            for (int from = 0; from < toDelete.size(); from += UNSPENT_WRITE_BATCH_SIZE) {
+                dsl.batch(toDelete.subList(from, Math.min(from + UNSPENT_WRITE_BATCH_SIZE, toDelete.size())).stream()
                         .map(utxoKey -> dsl.deleteFrom(ADDRESS_UTXO_UNSPENT)
                                 .where(ADDRESS_UTXO_UNSPENT.TX_HASH.eq(utxoKey.getTxHash()))
                                 .and(ADDRESS_UTXO_UNSPENT.OUTPUT_INDEX.eq(utxoKey.getOutputIndex())))
@@ -378,9 +401,24 @@ public class UtxoStorageImpl implements UtxoStorage {
         pendingOutputs.keySet().removeAll(outputs.keySet());
         pendingSpentKeys.removeAll(spentKeys);
 
+        if (gap[0])
+            return;
+
         if (log.isDebugEnabled())
             log.debug("address_utxo_unspent: {} outputs written, {} spent in the same batch, {} spent outputs deleted",
-                    unspent.size(), outputs.size() - unspent.size(), spentEarlier.size());
+                    unspent.size(), outputs.size() - unspent.size(), deleted[0]);
+    }
+
+    /** The lowest block number in the batch, or null if the event carries no blocks. */
+    private static Long firstBlock(CommitEvent<?> commitEvent) {
+        if (commitEvent.getBlockCaches() == null)
+            return null;
+
+        OptionalLong first = commitEvent.getBlockCaches().stream()
+                .filter(BatchEvent.class::isInstance)
+                .mapToLong(block -> ((BatchEvent) block).getMetadata().getBlock())
+                .min();
+        return first.isPresent() ? first.getAsLong() : null;
     }
 
     @Override
