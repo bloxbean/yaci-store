@@ -354,6 +354,7 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
                 .plutusV1Scripts(transaction.getWitnesses().getPlutusV1Scripts())
                 .plutusV2Scripts(transaction.getWitnesses().getPlutusV2Scripts())
                 .plutusV3Scripts(transaction.getWitnesses().getPlutusV3Scripts())
+                .plutusV4Scripts(transaction.getWitnesses().getPlutusV4Scripts())
                 .nativeScripts(transaction.getWitnesses().getNativeScripts())
                 .datums(transaction.getWitnesses().getDatums())
                 .redeemers(transaction.getWitnesses().getRedeemers())

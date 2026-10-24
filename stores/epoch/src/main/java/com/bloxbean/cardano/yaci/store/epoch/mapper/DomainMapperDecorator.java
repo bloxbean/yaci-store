@@ -62,6 +62,11 @@ public class DomainMapperDecorator implements DomainMapper {
                 strKey = PlutusKeys.PLUTUS_V2;
             } else if (key == 2) {
                 strKey = PlutusKeys.PLUTUS_V3;
+            } else if (key == 3) {
+                strKey = PlutusKeys.PLUTUS_V4;
+            } else {
+                //A later Plutus version: keep its costs under its own name rather than a null key
+                strKey = "PlutusV" + (key + 1);
             }
 
             var cborCostModelValue = costModelmap.get(key);

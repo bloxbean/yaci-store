@@ -24,6 +24,9 @@ public class AlonzoGenesis extends GenesisFile {
     private static final String EXECUTION_PRICES = "executionPrices";
     private static final String PR_STEPS = "prSteps";
     private static final String PR_MEM = "prMem";
+    //Key names in newer cardano-node genesis files (e.g. the Leios test network Musashi)
+    private static final String PRICE_STEPS = "priceSteps";
+    private static final String PRICE_MEMORY = "priceMemory";
     private static final String NUMERATOR = "numerator";
     private static final String DENOMINATOR = "denominator";
     private static final String MAX_TX_EX_UNITS = "maxTxExUnits";
@@ -59,8 +62,8 @@ public class AlonzoGenesis extends GenesisFile {
         BigInteger lovelacePerUTxOWord = genesisJson.get(LOVELACE_PER_UTXO_WORD).bigIntegerValue();
 
         var executionPriceNode = genesisJson.get(EXECUTION_PRICES);
-        var prStepsNode = executionPriceNode.get(PR_STEPS);
-        var prMemNode = executionPriceNode.get(PR_MEM);
+        var prStepsNode = getPriceNode(executionPriceNode, PR_STEPS, PRICE_STEPS);
+        var prMemNode = getPriceNode(executionPriceNode, PR_MEM, PRICE_MEMORY);
 
         BigDecimal priceSteps;
         if (prStepsNode.isObject()) {
@@ -123,6 +126,13 @@ public class AlonzoGenesis extends GenesisFile {
                 .costModels(costModelMap)
                 .costModelsHash("alonzo.genesis")
                 .build();
+    }
+
+    private static JsonNode getPriceNode(JsonNode executionPriceNode, String key, String newKey) {
+        var priceNode = executionPriceNode.hasNonNull(key) ? executionPriceNode.get(key) : executionPriceNode.get(newKey);
+        if (priceNode == null || priceNode.isNull())
+            throw new IllegalStateException("Alonzo genesis: executionPrices must have " + key + " or " + newKey);
+        return priceNode;
     }
 
     private long[] getCostsInLong(JsonNode plutusCostModelNode) {

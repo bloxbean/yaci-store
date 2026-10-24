@@ -242,4 +242,20 @@ class DomainMapperTest {
         assertThat(cclProtocolParams.getDrepActivity()).isEqualTo(protocolParams.getDrepActivity());
     }
 
+
+    @Test
+    void plutusV4CostModel() {
+        //Dijkstra: cost model language 3 is Plutus V4 (CBOR arrays [1, 2] and [3, 4, 5])
+        ProtocolParamUpdate update = ProtocolParamUpdate.builder()
+                .costModels(java.util.Map.of(2, "820102", 3, "83030405"))
+                .build();
+
+        ProtocolParams protocolParams = domainMapper.toProtocolParams(update);
+
+        assertThat(protocolParams.getCostModels()).containsOnlyKeys("PlutusV3", "PlutusV4");
+        assertThat(protocolParams.getCostModels().get("PlutusV4")).containsExactly(3, 4, 5);
+        //No Plutus V4 operation names yet: the costs stay available as raw values
+        ProtocolParamsDto dto = domainMapper.toProtocolParamsDto(protocolParams);
+        assertThat(dto.getCostModelsRaw()).containsKey("PlutusV4");
+    }
 }

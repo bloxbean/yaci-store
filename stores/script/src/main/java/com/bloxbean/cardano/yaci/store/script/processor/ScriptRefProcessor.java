@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.core.model.NativeScript;
 import com.bloxbean.cardano.yaci.core.model.PlutusScript;
 import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.common.util.JsonUtil;
+import com.bloxbean.cardano.yaci.store.common.util.PlutusV4Script;
 import com.bloxbean.cardano.yaci.store.common.util.ScriptReferenceUtil;
 import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
@@ -18,7 +19,9 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
@@ -45,14 +48,14 @@ public class ScriptRefProcessor {
                     .filter(Objects::nonNull)
                     .map(scriptRef -> {
                         com.bloxbean.cardano.client.spec.Script script;
+                        ScriptType scriptType;
                         try {
                             script = ScriptReferenceUtil.deserializeScriptRef(HexUtil.decodeHexString(scriptRef));
+                            scriptType = toScriptType(script);
                         } catch (Exception e) {
                             log.error("Script deserialization failed. Block hash: " + transactionEvent.getMetadata().getBlockHash(), e);
                             return null;
                         }
-
-                        ScriptType scriptType = toScriptType(script);
                         String scriptHash;
                         String content;
 
@@ -67,6 +70,19 @@ public class ScriptRefProcessor {
                                 scriptHash = ScriptUtil.getNativeScriptHash(nativeScript);
                             } catch (Exception e) {
                                 log.error("Error getting native script hash, Block hash: " + transactionEvent.getMetadata().getBlockHash(), e);
+                                return null;
+                            }
+                        } else if (scriptType == ScriptType.PLUTUS_V4) {
+                            //Yaci has no Plutus V4 script type yet: same content shape as the other Plutus scripts
+                            Map<String, String> plutusV4Script = new LinkedHashMap<>();
+                            plutusV4Script.put("type", PlutusV4Script.TYPE_NAME);
+                            plutusV4Script.put("content", ((PlutusV4Script) script).getCborHex());
+                            content = JsonUtil.getJson(plutusV4Script);
+
+                            try {
+                                scriptHash = HexUtil.encodeHexString(script.getScriptHash());
+                            } catch (Exception e) {
+                                log.error("Error getting plutus script hash, Block hash: " + transactionEvent.getMetadata().getBlockHash(), e);
                                 return null;
                             }
                         } else {

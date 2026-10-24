@@ -16,7 +16,7 @@ This guide is for **Yaci Store plugin framework developers** who need to quickly
 
 ## Prerequisites
 
-- Java 21+
+- Java 25+
 - Docker (for PostgreSQL)
 - Gradle (for building)
 

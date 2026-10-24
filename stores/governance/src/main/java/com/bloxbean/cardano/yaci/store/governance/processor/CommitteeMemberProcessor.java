@@ -60,8 +60,9 @@ public class CommitteeMemberProcessor {
         long slot = event.getMetadata().getSlot();
         Integer epoch = event.getEpoch();
 
-        // store data from genesis file
-        if (newEra.equals(Era.Conway) && prevEra != Era.Conway) {
+        // store data from genesis file: first epoch in Conway or later (a chain can start in Dijkstra)
+        if (newEra.getValue() >= Era.Conway.getValue()
+                && (prevEra == null || prevEra.getValue() < Era.Conway.getValue())) {
             boolean isCommitteeMemberDataPresent = committeeMemberStorageReader.findAll(0, 1, null).size() > 0;
             if (isCommitteeMemberDataPresent) {
                 log.debug("Committee members already exists. Skipping storing committee members from genesis file");

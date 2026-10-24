@@ -1,5 +1,6 @@
 [libraries]
-yaci = "com.bloxbean.cardano:yaci:0.4.7"
+#Leios w42: local build of bloxbean/yaci PR #223 (feat/leios_w42), not published
+yaci = "com.bloxbean.cardano:yaci:0.5.0-leios-w42-4ababce-SNAPSHOT"
 cardano-client-lib = "com.bloxbean.cardano:cardano-client-lib:0.8.0-pre4"
 cardano-client-backend = "com.bloxbean.cardano:cardano-client-backend:0.8.0-pre4"
 cardano-client-backend-ogmios = "com.bloxbean.cardano:cardano-client-backend-ogmios:0.8.0-pre4"
@@ -14,12 +15,12 @@ cbor = "co.nstant.in:cbor:0.9"
 hibernate-types = "io.hypersistence:hypersistence-utils-hibernate-63:3.7.1"
 codehaus-janino = "org.codehaus.janino:janino:3.1.11"
 guava = "com.google.guava:guava:33.0.0-jre"
-springdoc-openapi-starter-webmvc-ui = "org.springdoc:springdoc-openapi-starter-webmvc-ui:2.3.0"
+springdoc-openapi-starter-webmvc-ui = "org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.17"
 mapstruct="org.mapstruct:mapstruct:1.5.5.Final"
 mapstruct-processor="org.mapstruct:mapstruct-processor:1.5.5.Final"
 
-spring-boot-admin-server="de.codecentric:spring-boot-admin-starter-server:3.2.1"
-spring-boot-admin-client="de.codecentric:spring-boot-admin-starter-client:3.2.1"
+spring-boot-admin-server="de.codecentric:spring-boot-admin-starter-server:3.5.11"
+spring-boot-admin-client="de.codecentric:spring-boot-admin-starter-client:3.5.11"
 
 rocksdb="org.rocksdb:rocksdbjni:8.9.1"
 messagepack-jackson="org.msgpack:jackson-dataformat-msgpack:0.9.6"

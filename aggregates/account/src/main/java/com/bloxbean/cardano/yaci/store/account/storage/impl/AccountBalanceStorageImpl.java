@@ -463,8 +463,8 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
                 .where(field("rn", Integer.class).eq(1));
                 //.asTable(latest);
 
+        //A derived table, not a CTE: H2 2.3 rejects the WITH ... INSERT jOOQ renders
         Table<Record> latestTable = latestBalancesQuery.asTable(latest);
-        CommonTableExpression<?> latestBalancesCte = name("latest_balances").as(latestBalancesQuery);
 
         // Step 2: Delete existing entries
         dsl.deleteFrom(abc)
@@ -473,8 +473,7 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
                 .execute();
 
         // Step 3: Upsert back into current balance table
-        dsl.with(latestBalancesCte)
-                .insertInto(abc)
+        dsl.insertInto(abc)
                 .columns(
                         abc.ADDRESS,
                         abc.UNIT,
@@ -497,7 +496,7 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
                                 latestTable.field("block_time", Long.class),
                                 latestTable.field("epoch", Integer.class),
                                 latestTable.field("update_datetime", LocalDateTime.class)
-                        ).from(latest)
+                        ).from(latestTable)
                 )
                 .execute();
     }
@@ -537,8 +536,8 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
                 .where(field("rn", Integer.class).eq(1));
                 //.asTable(latest);
 
+        //A derived table, not a CTE: H2 2.3 rejects the WITH ... INSERT jOOQ renders
         Table<Record> latestTable = latestBalancesQuery.asTable(latest);
-        CommonTableExpression<?> latestBalancesCte = name("latest_balances").as(latestBalancesQuery);
 
 
         // Step 2: Delete old current records for addresses
@@ -547,8 +546,7 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
                 .execute();
 
         // Step 3: Insert or update latest balance
-        dsl.with(latestBalancesCte)
-                .insertInto(sabc)
+        dsl.insertInto(sabc)
                 .columns(
                         sabc.ADDRESS,
                         sabc.QUANTITY,
@@ -567,7 +565,7 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
                                 latestTable.field("block_time", Long.class),
                                 latestTable.field("epoch", Integer.class),
                                 latestTable.field("update_datetime", LocalDateTime.class)
-                        ).from(latest)
+                        ).from(latestTable)
                 )
                 .execute();
     }

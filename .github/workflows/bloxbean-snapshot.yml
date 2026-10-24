@@ -71,10 +71,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           CI_WORKFLOWS: build.yml
         run: bash .github/scripts/require-green-ci.sh
-      - name: Set up JDK 21
+      - name: Set up JDK 25
         uses: actions/setup-java@v4
         with:
-          java-version: '21'
+          java-version: '25'
           distribution: 'liberica'
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew

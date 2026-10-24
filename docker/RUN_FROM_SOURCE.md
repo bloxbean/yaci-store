@@ -6,7 +6,7 @@ This guide explains how to build and run Yaci Store locally using Docker and Doc
 
 ## ☕ Prerequisite
 
-To build Yaci Store from source, **Java 21** is required.  
+To build Yaci Store from source, **Java 25** is required.  
 Make sure it's installed and set as your active Java version.
 
 ---

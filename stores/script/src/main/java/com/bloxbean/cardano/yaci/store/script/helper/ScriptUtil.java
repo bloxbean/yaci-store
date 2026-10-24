@@ -15,6 +15,7 @@ import com.bloxbean.cardano.yaci.core.model.PlutusScriptType;
 import com.bloxbean.cardano.yaci.core.util.CborSerializationUtil;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
+import com.bloxbean.cardano.yaci.store.common.util.PlutusV4Script;
 import com.bloxbean.cardano.yaci.store.script.domain.Script;
 import com.bloxbean.cardano.yaci.store.script.domain.ScriptType;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -54,6 +55,10 @@ public class ScriptUtil {
                 PlutusV3Script plutusV3Script =
                         PlutusV3Script.deserialize((ByteString) CborSerializationUtil.deserializeOne(content));
                 return HexUtil.encodeHexString(plutusV3Script.getScriptHash());
+            } else if (PlutusScriptType.PlutusScriptV4 == plutusScript.getType()) {
+                PlutusV4Script plutusV4Script =
+                        PlutusV4Script.deserialize((ByteString) CborSerializationUtil.deserializeOne(content));
+                return HexUtil.encodeHexString(plutusV4Script.getScriptHash());
             } else {
                 throw new IllegalArgumentException("Invalid plutus script type : " + plutusScript.getType());
             }
@@ -70,6 +75,8 @@ public class ScriptUtil {
             return ScriptType.PLUTUS_V2;
         else if (PlutusScriptType.PlutusScriptV3 == strType)
             return ScriptType.PLUTUS_V3;
+        else if (PlutusScriptType.PlutusScriptV4 == strType)
+            return ScriptType.PLUTUS_V4;
         else
             throw new IllegalArgumentException("Invalid plutus script type : " + strType);
     }
@@ -83,6 +90,8 @@ public class ScriptUtil {
             return ScriptType.PLUTUS_V2;
         } else if (cclScript.getScriptType() == 3) {
             return ScriptType.PLUTUS_V3;
+        } else if (cclScript.getScriptType() == PlutusV4Script.TYPE) {
+            return ScriptType.PLUTUS_V4;
         } else
             throw new IllegalArgumentException("Invalid script type: " + cclScript.getScriptType());
     }
@@ -150,6 +159,10 @@ public class ScriptUtil {
     }
 
     public static PlutusScript toPlutusScript(@NonNull com.bloxbean.cardano.client.spec.Script script) {
+        //Dijkstra era: cardano-client-lib has no Plutus V4 script yet (see PlutusV4Script)
+        if (script instanceof PlutusV4Script plutusV4Script)
+            return new PlutusScript(PlutusScriptType.PlutusScriptV4, plutusV4Script.getCborHex());
+
         var plutusScriptType = switch (script.getScriptType()) {
             case 1 -> PlutusScriptType.PlutusScriptV1;
             case 2 -> PlutusScriptType.PlutusScriptV2;
