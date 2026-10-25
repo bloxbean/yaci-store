@@ -10,6 +10,7 @@ import com.bloxbean.cardano.yaci.store.utxo.storage.impl.AddressStorageImpl;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UtxoCache;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UtxoStorageImpl;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UnspentTableUtxoStorageReader;
+import com.bloxbean.cardano.yaci.store.utxo.storage.impl.TxInputAddrHash;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UnspentUtxoTable;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UtxoStorageReaderImpl;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.TxInputRepository;
@@ -55,22 +56,34 @@ public class UtxoStoreConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
+    public TxInputAddrHash txInputAddrHash(UtxoStoreProperties utxoStoreProperties, DSLContext dslContext,
+                                           PlatformTransactionManager transactionManager,
+                                           ObjectProvider<StoreStateService> storeStateService,
+                                           ObjectProvider<CursorService> cursorService) {
+        return new TxInputAddrHash(utxoStoreProperties, dslContext, transactionManager,
+                storeStateService.getIfAvailable(), cursorService.getIfAvailable());
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
     public UtxoStorage utxoStorage(UtxoRepository utxoRepository,
                                    TxInputRepository spentOutputRepository,
                                    DSLContext dslContext,
                                    UtxoCache utxoCache,
                                    PlatformTransactionManager transactionManager,
-                                   UnspentUtxoTable unspentUtxoTable) {
+                                   UnspentUtxoTable unspentUtxoTable,
+                                   TxInputAddrHash txInputAddrHash) {
         return new UtxoStorageImpl(utxoRepository, spentOutputRepository, dslContext, utxoCache, transactionManager,
-                unspentUtxoTable);
+                unspentUtxoTable, txInputAddrHash);
     }
 
     @Bean
     @ConditionalOnMissingBean
     public UtxoStorageReader utxoStorageReader(UtxoRepository utxoRepository, DSLContext dslContext,
                                                UtxoStoreProperties utxoStoreProperties,
-                                               UnspentUtxoTable unspentUtxoTable) {
-        UtxoStorageReader reader = new UtxoStorageReaderImpl(utxoRepository, dslContext);
+                                               UnspentUtxoTable unspentUtxoTable,
+                                               TxInputAddrHash txInputAddrHash) {
+        UtxoStorageReader reader = new UtxoStorageReaderImpl(utxoRepository, dslContext, txInputAddrHash::isReadable);
         return utxoStoreProperties.isUnspentTableReadEnabled()
                 ? new UnspentTableUtxoStorageReader(reader, dslContext, unspentUtxoTable::isReadable)
                 : reader;

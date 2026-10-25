@@ -10,7 +10,6 @@ import com.bloxbean.cardano.yaci.store.utxo.storage.impl.mapper.UtxoMapper;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.model.UtxoId;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.UtxoRepository;
 import lombok.NonNull;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jooq.*;
 import org.jooq.impl.DSL;
@@ -22,18 +21,30 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.BooleanSupplier;
 
 import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.ADDRESS_UTXO;
 import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.TX_INPUT;
 import static org.jooq.impl.DSL.field;
 
 @Slf4j
-@RequiredArgsConstructor
 public class UtxoStorageReaderImpl implements UtxoStorageReader {
 
     private final UtxoRepository utxoRepository;
     private final DSLContext dsl;
     private final UtxoMapper mapper = UtxoMapper.INSTANCE;
+    //Whether tx_input.addr_hash and its indexes are current (see TxInputAddrHash)
+    private final BooleanSupplier addrHashReadable;
+
+    public UtxoStorageReaderImpl(UtxoRepository utxoRepository, DSLContext dsl) {
+        this(utxoRepository, dsl, () -> false);
+    }
+
+    public UtxoStorageReaderImpl(UtxoRepository utxoRepository, DSLContext dsl, BooleanSupplier addrHashReadable) {
+        this.utxoRepository = utxoRepository;
+        this.dsl = dsl;
+        this.addrHashReadable = addrHashReadable;
+    }
 
     @Override
     public Optional<AddressUtxo> findById(String txHash, int outputIndex) {
@@ -181,6 +192,9 @@ public class UtxoStorageReaderImpl implements UtxoStorageReader {
 
     @Override
     public List<AddressTransaction> findTransactionsByAddress(String address, int page, int count, Order order) {
+        if (addrHashReadable.getAsBoolean())
+            return findTransactionsByAddressHash(address, page, count, order);
+
         Pageable pageable = getPageable(page, count, order);
 
         // Define the CTEs using JOOQ
@@ -217,6 +231,51 @@ public class UtxoStorageReaderImpl implements UtxoStorageReader {
                 .fetchInto(AddressTransaction.class);
 
         return result;
+    }
+
+    /**
+     * The transactions of an address from tx_input.addr_hash (PostgreSQL, see TxInputAddrHash): the address's outputs
+     * from the address_utxo index on (hash(owner_addr), slot), and the spends of its outputs from the tx_input index on
+     * (addr_hash, spent_at_slot). Both come out in slot order, so PostgreSQL merges them and stops after the page,
+     * instead of reading and sorting the address's whole history. A hash shared by another address is ruled out by
+     * comparing owner_addr. Same rows as the full query; transactions in the same slot are ordered by tx_hash.
+     */
+    private List<AddressTransaction> findTransactionsByAddressHash(String address, int page, int count, Order order) {
+        Field<Long> addressHash = TxInputAddrHash.hash(DSL.val(address));
+
+        var outputs = dsl
+                .select(ADDRESS_UTXO.TX_HASH.as("tx_hash"), ADDRESS_UTXO.BLOCK.as("block"),
+                        ADDRESS_UTXO.BLOCK_TIME.as("block_time"), ADDRESS_UTXO.SLOT.as("slot"))
+                .from(ADDRESS_UTXO)
+                .where(TxInputAddrHash.hash(ADDRESS_UTXO.OWNER_ADDR).eq(addressHash))
+                .and(ADDRESS_UTXO.OWNER_ADDR.eq(address));
+
+        var spentOutput = ADDRESS_UTXO.as("spent_output");
+        var spends = dsl
+                .select(TX_INPUT.SPENT_TX_HASH, TX_INPUT.SPENT_AT_BLOCK, TX_INPUT.SPENT_BLOCK_TIME, TX_INPUT.SPENT_AT_SLOT)
+                .from(TX_INPUT)
+                .join(spentOutput)
+                .on(spentOutput.TX_HASH.eq(TX_INPUT.TX_HASH))
+                .and(spentOutput.OUTPUT_INDEX.eq(TX_INPUT.OUTPUT_INDEX))
+                .where(TX_INPUT.ADDR_HASH.eq(addressHash))
+                .and(spentOutput.OWNER_ADDR.eq(address));
+
+        Table<?> combined = outputs.unionAll(spends).asTable("combined_tx");
+        Field<String> txHash = combined.field("tx_hash", String.class);
+        Field<Long> block = combined.field("block", Long.class);
+        Field<Long> blockTime = combined.field("block_time", Long.class);
+        Field<Long> slot = combined.field("slot", Long.class);
+
+        return dsl
+                .selectDistinct(txHash.as("txHash"), block.as("blockHeight"), block.as("blockNumber"),
+                        blockTime.as("blockTime"), slot.as("slot"))
+                .from(combined)
+                .orderBy(order.equals(Order.desc)
+                        ? new SortField<?>[]{slot.desc(), txHash.desc()}
+                        : new SortField<?>[]{slot.asc(), txHash.asc()})
+                .limit(count)
+                .offset(page * count)
+                .fetchInto(AddressTransaction.class);
     }
 
     //This method is currently optimized only for Postgresql

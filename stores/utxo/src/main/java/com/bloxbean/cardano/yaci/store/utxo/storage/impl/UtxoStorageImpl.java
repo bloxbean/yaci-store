@@ -35,6 +35,7 @@ import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.*;
 import static org.jooq.impl.DSL.notExists;
@@ -76,6 +77,11 @@ public class UtxoStorageImpl implements UtxoStorage {
     private final UtxoCache utxoCache;
     private final PlatformTransactionManager transactionManager;
     private final UnspentUtxoTable unspentUtxoTable;
+    private final TxInputAddrHash txInputAddrHash;
+
+    //Slots of the spends saved since the last commit, while tx_input.addr_hash is written (see TxInputAddrHash)
+    private final AtomicLong addrHashFromSlot = new AtomicLong(Long.MAX_VALUE);
+    private final AtomicLong addrHashToSlot = new AtomicLong(Long.MIN_VALUE);
 
     //Outputs saved and keys spent since the last commit, settled in address_utxo_unspent at commit
     private final Map<UtxoKey, PendingOutput> pendingOutputs = new ConcurrentHashMap<>();
@@ -93,12 +99,19 @@ public class UtxoStorageImpl implements UtxoStorage {
     public UtxoStorageImpl(UtxoRepository utxoRepository, TxInputRepository spentOutputRepository, DSLContext dsl,
                            UtxoCache utxoCache, PlatformTransactionManager transactionManager,
                            UnspentUtxoTable unspentUtxoTable) {
+        this(utxoRepository, spentOutputRepository, dsl, utxoCache, transactionManager, unspentUtxoTable, null);
+    }
+
+    public UtxoStorageImpl(UtxoRepository utxoRepository, TxInputRepository spentOutputRepository, DSLContext dsl,
+                           UtxoCache utxoCache, PlatformTransactionManager transactionManager,
+                           UnspentUtxoTable unspentUtxoTable, TxInputAddrHash txInputAddrHash) {
         this.utxoRepository = utxoRepository;
         this.spentOutputRepository = spentOutputRepository;
         this.dsl = dsl;
         this.utxoCache = utxoCache;
         this.transactionManager = transactionManager;
         this.unspentUtxoTable = unspentUtxoTable;
+        this.txInputAddrHash = txInputAddrHash;
 
         init();
     }
@@ -185,6 +198,12 @@ public class UtxoStorageImpl implements UtxoStorage {
             unspentUtxoTable.rolledBackTo(slot, true);
         } else if (unspentUtxoTable != null) {
             unspentUtxoTable.rolledBackTo(slot, false);
+        }
+
+        if (txInputAddrHash != null) {
+            txInputAddrHash.rolledBackTo(slot);
+            addrHashFromSlot.set(Long.MAX_VALUE);
+            addrHashToSlot.set(Long.MIN_VALUE);
         }
 
         return spentOutputRepository.deleteBySpentAtSlotGreaterThan(slot);
@@ -312,8 +331,10 @@ public class UtxoStorageImpl implements UtxoStorage {
         if (txInputs == null || txInputs.isEmpty())
             return;
 
+        boolean addrHash = txInputAddrHash != null && txInputAddrHash.isLive();
         var inserts = txInputs.stream()
-                        .map(spentOutput -> dsl.insertInto(TX_INPUT)
+                        .map(spentOutput -> {
+                            var insert = dsl.insertInto(TX_INPUT)
                                 .set(TX_INPUT.TX_HASH, spentOutput.getTxHash())
                                 .set(TX_INPUT.OUTPUT_INDEX, spentOutput.getOutputIndex())
                                 .set(TX_INPUT.SPENT_AT_SLOT, spentOutput.getSpentAtSlot())
@@ -321,11 +342,28 @@ public class UtxoStorageImpl implements UtxoStorage {
                                 .set(TX_INPUT.SPENT_AT_BLOCK_HASH, spentOutput.getSpentAtBlockHash())
                                 .set(TX_INPUT.SPENT_BLOCK_TIME, spentOutput.getSpentBlockTime())
                                 .set(TX_INPUT.SPENT_EPOCH, spentOutput.getSpentEpoch())
-                                .set(TX_INPUT.SPENT_TX_HASH, spentOutput.getSpentTxHash())
-                                .onDuplicateKeyIgnore())
-                                .toList();
+                                .set(TX_INPUT.SPENT_TX_HASH, spentOutput.getSpentTxHash());
+                            //The hash of the spent output's address, looked up by its key. Null if that output is not
+                            //written yet (it is later in the same batch); the commit fills those.
+                            if (addrHash)
+                                insert = insert.set(TX_INPUT.ADDR_HASH, select(TxInputAddrHash.hash(ADDRESS_UTXO.OWNER_ADDR))
+                                        .from(ADDRESS_UTXO)
+                                        .where(ADDRESS_UTXO.TX_HASH.eq(spentOutput.getTxHash()))
+                                        .and(ADDRESS_UTXO.OUTPUT_INDEX.eq(spentOutput.getOutputIndex())));
+                            return insert.onDuplicateKeyIgnore();
+                        })
+                        .toList();
 
         dsl.batch(inserts).execute();
+
+        if (addrHash) {
+            txInputs.forEach(txInput -> {
+                if (txInput.getSpentAtSlot() == null)
+                    return;
+                addrHashFromSlot.accumulateAndGet(txInput.getSpentAtSlot(), Math::min);
+                addrHashToSlot.accumulateAndGet(txInput.getSpentAtSlot(), Math::max);
+            });
+        }
 
         if (isUnspentTableEnabled()) {
             txInputs.forEach(txInput -> pendingSpentKeys.add(new UtxoKey(txInput.getTxHash(), txInput.getOutputIndex())));
@@ -337,6 +375,8 @@ public class UtxoStorageImpl implements UtxoStorage {
         try {
             if (isUnspentTableEnabled())
                 commitUnspentTable(commitEvent);
+            if (txInputAddrHash != null && txInputAddrHash.isLive())
+                commitAddrHash(commitEvent);
         } finally {
             utxoCache.clear();
         }
@@ -407,6 +447,22 @@ public class UtxoStorageImpl implements UtxoStorage {
         if (log.isDebugEnabled())
             log.debug("address_utxo_unspent: {} outputs written, {} spent in the same batch, {} spent outputs deleted",
                     unspent.size(), outputs.size() - unspent.size(), deleted[0]);
+    }
+
+    /**
+     * Fills tx_input.addr_hash for the batch's spends that were saved before the output they spend, and, once the
+     * hash is current, records the batch's last slot as how far it is kept. In sync mode this joins the block's
+     * transaction; in parallel mode it runs in its own.
+     */
+    private void commitAddrHash(CommitEvent<?> commitEvent) {
+        long from = addrHashFromSlot.get();
+        long to = addrHashToSlot.get();
+        commitTransactionTemplate.executeWithoutResult(status ->
+                txInputAddrHash.committed(from <= to ? from : null, from <= to ? to : null, commitEvent.getMetadata().getSlot()));
+
+        //Only after the transaction succeeded: on failure the range stays for the next commit
+        addrHashFromSlot.compareAndSet(from, Long.MAX_VALUE);
+        addrHashToSlot.compareAndSet(to, Long.MIN_VALUE);
     }
 
     /** The lowest block number in the batch, or null if the event carries no blocks. */

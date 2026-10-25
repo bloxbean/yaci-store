@@ -55,4 +55,12 @@ public class UtxoStoreProperties {
      */
     @Builder.Default
     private boolean unspentTableReadEnabled = false;
+
+    /**
+     * PostgreSQL only. Keep tx_input.addr_hash, the hash of the address each input spends from, and read
+     * /addresses/{address}/transactions newest first from it (see TxInputAddrHash). Nothing is written during
+     * the initial sync; at the tip new spends get the hash and the older rows are filled in the background.
+     */
+    @Builder.Default
+    private boolean txInputAddrHashEnabled = false;
 }

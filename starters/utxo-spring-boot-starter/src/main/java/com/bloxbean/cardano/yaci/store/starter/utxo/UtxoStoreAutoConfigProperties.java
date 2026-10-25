@@ -60,6 +60,15 @@ public class UtxoStoreAutoConfigProperties {
          * from address_utxo_unspent while it is current. Until then they use address_utxo and tx_input.
          */
         private boolean unspentTableReadEnabled = false;
+
+        /**
+         * PostgreSQL only. Keep tx_input.addr_hash, a 64-bit hash of the address each input spends from, so
+         * /addresses/{address}/transactions reads an address's latest transactions from two indexes instead
+         * of its whole history. Nothing is written during the initial sync. When the sync reaches the tip,
+         * new spends get the hash, and the older rows are filled in the background (about 3 to 4 hours on
+         * mainnet) while the sync continues; the query switches over when that is done. Ignored on H2 and MySQL.
+         */
+        private boolean txInputAddrHashEnabled = false;
     }
 
     @Getter

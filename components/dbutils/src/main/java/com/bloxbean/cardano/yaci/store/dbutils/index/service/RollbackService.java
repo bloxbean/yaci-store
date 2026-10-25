@@ -23,6 +23,15 @@ import java.util.List;
 public class RollbackService {
     private static final String UNSPENT_UTXO_TABLE = "address_utxo_unspent";
 
+    /**
+     * tx_input.addr_hash (TxInputAddrHash in stores/utxo): every tx_input row up to its store_state slot has the hash.
+     * The rows after the rollback point are deleted, so the slot moves back to the point. Otherwise blocks synced again
+     * while the hash is off would count as having it.
+     */
+    static final String ADDR_HASH_STATE_AFTER_ROLLBACK = "update store_state "
+            + "set slot = :slot, update_datetime = current_timestamp "
+            + "where state_id = 'utxo.tx_input_addr_hash' and slot > :slot";
+
     private final NamedParameterJdbcTemplate jdbcTemplate;
     private final DatabaseUtils databaseUtils;
 
@@ -117,6 +126,16 @@ public class RollbackService {
             } catch (Exception e) {
                 log.error("Failed to execute rollback on table '{}': {}", tableName, e.getMessage());
                 failedRollbackActions.add(new TableRollbackAction(tableName, sql));
+            }
+        }
+
+        if (databaseUtils.tableExists("tx_input") && databaseUtils.tableExists("store_state")) {
+            log.info("Executing rollback on table 'store_state': {}", ADDR_HASH_STATE_AFTER_ROLLBACK);
+            try {
+                jdbcTemplate.update(ADDR_HASH_STATE_AFTER_ROLLBACK, params);
+            } catch (Exception e) {
+                log.error("Failed to execute rollback on table 'store_state': {}", e.getMessage());
+                failedRollbackActions.add(new TableRollbackAction("store_state", ADDR_HASH_STATE_AFTER_ROLLBACK));
             }
         }
 
