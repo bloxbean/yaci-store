@@ -71,6 +71,16 @@ SPRING_PROFILES_ACTIVE=ledger-state,blockfrost
 ```
 </Callout>
 
+<Callout type="info">
+**Transaction `size` and CBOR need the full transaction CBOR.** `GET /txs/{hash}` reports `size` and `GET /txs/{hash}/cbor` returns the transaction from the stored CBOR, so enable:
+
+```properties
+store.transaction.save-full-tx-cbor=true
+```
+
+Enable it before the initial sync: transactions indexed without it are not backfilled. With only `store.transaction.save-cbor=true`, just the transaction body is stored, so `size` is `null` and `/txs/{hash}/cbor` returns the body only.
+</Callout>
+
 ## Transaction submit
 
 `POST /tx/submit` routes through the `submit` component. It tries backends in this order; the first one configured wins:

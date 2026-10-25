@@ -305,6 +305,14 @@ store.transaction.cbor-pruning-enabled=false
 store.transaction.cbor-retention-slots=43200
 ```
 
+`store.transaction.save-cbor` stores the transaction **body** only. To store the full signed transaction (body, witness set, validity flag and auxiliary data) instead, use:
+
+```properties
+store.transaction.save-full-tx-cbor=false
+```
+
+It works on its own and does not need `store.cardano.return-tx-body-cbor` or `store.transaction.save-cbor`. The Blockfrost-compatible `/txs/{hash}` `size` and `/txs/{hash}/cbor` need it. Enable it before the initial sync, since existing transactions are not backfilled.
+
 #### Epoch Stake Pruning
 
 ```properties
