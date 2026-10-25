@@ -10,6 +10,7 @@ import com.bloxbean.cardano.yaci.store.client.staking.StakingClient;
 import com.bloxbean.cardano.yaci.store.client.utxo.DummyUtxoClient;
 import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClient;
 import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClientImpl;
+import com.bloxbean.cardano.yaci.store.common.cache.RocksDBCacheStore;
 import com.bloxbean.cardano.yaci.store.common.executor.ParallelExecutor;
 import com.bloxbean.cardano.yaci.store.core.StoreConfiguration;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
@@ -37,6 +38,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.web.client.RestTemplate;
 
+import java.nio.file.Path;
 import java.time.Duration;
 
 @AutoConfiguration
@@ -171,6 +173,16 @@ public class YaciStoreAutoConfiguration {
         return new ParallelExecutor();
     }
 
+    /**
+     * The process's RocksDB for caches: a store that needs one asks for this bean and makes its own column family.
+     * Lazy, so RocksDB is loaded and its folder deleted only when a store uses it.
+     */
+    @Bean(destroyMethod = "close")
+    @Lazy
+    public RocksDBCacheStore rocksDBCacheStore(StoreProperties storeProperties) {
+        return new RocksDBCacheStore(Path.of(storeProperties.getRocksdbCachePath()));
+    }
+
     @Bean
     public StoreProperties storeProperties() {
         StoreProperties storeProperties = new StoreProperties();
@@ -239,6 +251,7 @@ public class YaciStoreAutoConfiguration {
 
         storeProperties.setMvstoreEnabled(properties.isMvstoreEnabled());
         storeProperties.setMvstorePath(properties.getMvstorePath());
+        storeProperties.setRocksdbCachePath(properties.getRocksdbCachePath());
 
         //N2C Pool properties
         storeProperties.setN2cPoolEnabled(properties.getCardano().isN2cPoolEnabled());

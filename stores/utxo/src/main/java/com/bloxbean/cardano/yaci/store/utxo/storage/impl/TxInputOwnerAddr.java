@@ -1,7 +1,9 @@
 package com.bloxbean.cardano.yaci.store.utxo.storage.impl;
 
+import com.bloxbean.cardano.yaci.store.common.cache.Cache;
 import com.bloxbean.cardano.yaci.store.common.domain.Cursor;
 import com.bloxbean.cardano.yaci.store.common.domain.StoreState;
+import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.common.service.CursorService;
 import com.bloxbean.cardano.yaci.store.common.service.StoreStateService;
 import com.bloxbean.cardano.yaci.store.events.internal.PreBlockSyncEvent;
@@ -18,58 +20,55 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.sql.Statement;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
 
 import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.ADDRESS_UTXO;
 import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.TX_INPUT;
 
 /**
- * tx_input.addr_hash: a 64-bit hash of the owner_addr of the output each tx_input row spends. With it, and an
- * index on the same hash of address_utxo.owner_addr, the transactions of an address are read newest first from
- * two indexes ({@link UtxoStorageReaderImpl#findTransactionsByAddress}) instead of from its whole history.
- * PostgreSQL only: the hash is {@code hashtextextended(owner_addr, 0)}, the hash PostgreSQL's hash partitioning
- * uses, so it is computed in SQL and stays the same across upgrades. On H2 and MySQL nothing here is active.
+ * tx_input.owner_addr: the owner_addr of the output each tx_input row spends. With it, and an index on
+ * address_utxo by a hash of owner_addr, the transactions of an address are read newest first from two indexes
+ * ({@link UtxoStorageReaderImpl#findTransactionsByAddress}) instead of from its whole history. PostgreSQL 16+ only,
+ * behind {@code store.utxo.tx-input-owner-addr-enabled}; on H2, MySQL and older PostgreSQL nothing here is active.
  *
- * <p>Its store_state row ({@link #STATE_ID}) records how far tx_input has the hash:
+ * <p>The address is written with the row, from the first block: {@link UtxoStorageImpl} keeps the address of each
+ * unspent output in a cache ({@link #cache()}, a column family of the process's RocksDB cache) and looks the spent
+ * output up there, or in address_utxo when the cache does not have it. The cache is empty after every restart and
+ * never decides a result: an output's address never changes.
+ *
+ * <p>Its store_state row ({@link #STATE_ID}) records up to which slot every tx_input row has the address:
  * <ul>
- *   <li>No row: nothing is written, as in the initial sync, which stays as fast as before.</li>
- *   <li>The first {@link PreBlockSyncEvent} (the store reaches the tip, or starts near it) creates the row as
- *   {@link #STATUS_FILLING}. From then on every new tx_input row gets the hash when it is inserted, and a background
- *   thread fills the older rows in slot chunks while the sync continues. The row's slot is how far the fill got:
- *   every row up to it has the hash. Then the thread builds the two indexes and sets {@link #STATUS_CURRENT}.</li>
- *   <li>{@link #STATUS_CURRENT}: queries use the hash, and each commit moves the slot to its last block.</li>
+ *   <li>A new store starts at slot 0, and each commit moves the slot to its last block. A store synced before the
+ *   flag was on starts with no slot: the background fill below brings it up to date.</li>
+ *   <li>At the first {@link PreBlockSyncEvent} (the store reaches the tip, or starts near it) a background thread fills
+ *   the rows that are still missing the address, if any, builds the two indexes and sets {@link #STATUS_CURRENT}.
+ *   On a new store there is nothing to fill: only the indexes are built.</li>
+ *   <li>{@link #STATUS_CURRENT}: queries use the address.</li>
  * </ul>
- * A store that saves tx_input rows without the hash once the state exists (the flag was turned off) puts the state
- * back to filling from before those rows, and so does a writer that starts with the state behind its cursor (a version
- * without this class synced blocks). A rollback moves the slot back to the rollback point. Readers, also read-only
- * instances, re-check the state against the cursor every minute.
- *
- * <p>Needs PostgreSQL 16 or later, whose planner can stop a DISTINCT ... ORDER BY ... LIMIT over two merged index scans
- * early (incremental sort for DISTINCT). On older versions nothing here is active.
+ * A store that saves tx_input rows without the address (the flag was turned off) puts the state back to filling from
+ * before those rows; readers also check that the state is at or past the cursor, which covers a writer of a version
+ * without this class. A rollback moves the slot back to the rollback point.
  */
 @Slf4j
-public class TxInputAddrHash {
-    public static final String STATE_ID = "utxo.tx_input_addr_hash";
+public class TxInputOwnerAddr {
+    public static final String STATE_ID = "utxo.tx_input_owner_addr";
     public static final String STATUS_FILLING = "FILLING";
     public static final String STATUS_CURRENT = "CURRENT";
+    /** The cache's column family in the RocksDB cache. */
+    public static final String CACHE_NAME = "utxo_owner_addr";
 
-    static final String TX_INPUT_INDEX = "idx_tx_input_addr_hash_slot";
+    static final String TX_INPUT_INDEX = "idx_tx_input_owner_addr_slot";
     static final String ADDRESS_UTXO_INDEX = "idx_address_utxo_addr_hash_slot";
 
     /** Rows per fill chunk: each chunk is one UPDATE that reads address_utxo once, then tx_input is vacuumed. */
     private static final long DEFAULT_CHUNK_ROWS = 50_000_000;
-    /**
-     * The last stretch before the tip is filled in its own small chunk, so a chain rollback, which deletes the
-     * newest rows, never waits for a long chunk. About half a day of mainnet.
-     */
+    /** The last stretch before the tip is filled in a small chunk, so a chain rollback never waits for a long one. */
     private static final long RECENT_SLOTS = 50_000;
-    /**
-     * Memory for a chunk's hash join (each chunk hashes its tx_input keys, about 5 GB for a large chunk, and reads
-     * address_utxo against them): the less fits, the more of address_utxo is written to temporary files in batches.
-     */
+    /** Memory for a fill chunk's hash join: the less fits, the more is written to temporary files. */
     private static final String FILL_WORK_MEM = "2GB";
-    /** Memory for the VACUUM after each chunk to collect the dead row versions in fewer passes over the indexes. */
+    /** Memory for the VACUUM after each fill chunk. */
     private static final String VACUUM_MEM = "1GB";
-    /** How often a store that is not current re-reads store_state, for read-only instances that do not fill. */
+    /** How often whether the address is current is re-checked, for read-only instances that do not fill. */
     private static final long RECHECK_INTERVAL_MS = 60_000;
 
     private final UtxoStoreProperties properties;
@@ -77,37 +76,43 @@ public class TxInputAddrHash {
     private final TransactionTemplate transactionTemplate;
     private final StoreStateService storeStateService;
     private final CursorService cursorService;
+    private final Supplier<Cache<UtxoKey, String>> cacheSupplier;
 
-    //null until checked at the first use
-    private volatile Boolean live;
     private volatile Boolean postgres16;
+    private volatile boolean initialized;
     private volatile boolean current;
     private volatile long lastCheck;
+    private volatile Cache<UtxoKey, String> cache;
     private final AtomicBoolean filling = new AtomicBoolean(false);
     private final AtomicBoolean warned = new AtomicBoolean(false);
-    private final AtomicBoolean savedWithoutHashChecked = new AtomicBoolean(false);
+    private final AtomicBoolean savedWithoutAddrChecked = new AtomicBoolean(false);
 
     //Package-private so tests can fill in several chunks
     long chunkRows = DEFAULT_CHUNK_ROWS;
     long recentSlots = RECENT_SLOTS;
 
-    public TxInputAddrHash(UtxoStoreProperties properties, DSLContext dsl, PlatformTransactionManager transactionManager,
-                           StoreStateService storeStateService, CursorService cursorService) {
+    /**
+     * @param cacheSupplier makes the cache of output addresses, called once and only if the address is written
+     */
+    public TxInputOwnerAddr(UtxoStoreProperties properties, DSLContext dsl, PlatformTransactionManager transactionManager,
+                            StoreStateService storeStateService, CursorService cursorService,
+                            Supplier<Cache<UtxoKey, String>> cacheSupplier) {
         this.properties = properties;
         this.dsl = dsl;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
         this.transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         this.storeStateService = storeStateService;
         this.cursorService = cursorService;
+        this.cacheSupplier = cacheSupplier;
     }
 
-    /** {@code hashtextextended(value, 0)}: the address hash, of a column or of a bound address. */
+    /** {@code hashtextextended(value, 0)}, the key of the address_utxo index: of a column or of a bound address. */
     static Field<Long> hash(Field<String> address) {
         return DSL.field("hashtextextended({0}, 0)", Long.class, address);
     }
 
     private boolean enabled() {
-        return properties != null && properties.isTxInputAddrHashEnabled() && storeStateService != null
+        return properties != null && properties.isTxInputOwnerAddrEnabled() && storeStateService != null
                 && dsl.dialect().family() == SQLDialect.POSTGRES && postgres16();
     }
 
@@ -116,52 +121,47 @@ public class TxInputAddrHash {
             try {
                 postgres16 = Integer.parseInt(String.valueOf(dsl.fetchValue("show server_version_num"))) >= 160000;
             } catch (Exception e) {
-                log.warn("tx_input.addr_hash: could not read the PostgreSQL version, so it is not used", e);
+                log.warn("tx_input.owner_addr: could not read the PostgreSQL version, so it is not used", e);
                 postgres16 = false;
             }
             if (!postgres16)
-                log.warn("store.utxo.tx-input-addr-hash-enabled is ignored: it needs PostgreSQL 16 or later");
+                log.warn("store.utxo.tx-input-owner-addr-enabled is ignored: it needs PostgreSQL 16 or later");
         }
         return postgres16;
     }
 
-    /** Whether new tx_input rows get the hash: from the first time the store reached the tip with the flag on. */
+    /** Whether tx_input rows are written with the address. */
     public boolean isLive() {
         if (!enabled())
             return false;
 
-        if (live == null)
+        if (!initialized)
             init();
-        return live;
+        return true;
     }
 
-    /** Whether every tx_input row has the hash and the indexes exist, so the transactions query can use them. */
+    /** The addresses of unspent outputs, by output; empty after every restart. Only while {@link #isLive()}. */
+    Cache<UtxoKey, String> cache() {
+        if (cache == null) {
+            synchronized (this) {
+                if (cache == null)
+                    cache = cacheSupplier.get();
+            }
+        }
+        return cache;
+    }
+
+    /** Whether every tx_input row has the address and the indexes exist, so the transactions query can use them. */
     public boolean isReadable() {
-        return readableKeptSlot() != null;
-    }
-
-    /**
-     * While the transactions query can use the hash, the slot up to which every tx_input row has it; else null. Rows
-     * after it can still be waiting for their batch's commit to fill them (see {@link #committed}). Whether the hash is
-     * current is re-checked against store_state and the cursor at most once a minute, so read-only instances follow
-     * what the writer records.
-     */
-    public Long readableKeptSlot() {
         if (!enabled())
-            return null;
+            return false;
 
         long now = System.currentTimeMillis();
         if (now - lastCheck > RECHECK_INTERVAL_MS) {
             lastCheck = now;
             current = checkCurrent();
         }
-        if (!current)
-            return null;
-
-        return storeStateService.getState(STATE_ID)
-                .filter(state -> STATUS_CURRENT.equals(state.getStatus()))
-                .map(StoreState::getSlot)
-                .orElse(null);
+        return current;
     }
 
     /** CURRENT, and kept to the cursor or past it: the cursor is saved after the commit that moves the state. */
@@ -170,45 +170,69 @@ public class TxInputAddrHash {
         if (state == null || !STATUS_CURRENT.equals(state.getStatus()) || state.getSlot() == null)
             return false;
 
-        Long cursorSlot = cursorService != null ? cursorService.getCursor().map(Cursor::getSlot).orElse(null) : null;
+        Long cursorSlot = cursorSlot();
         return cursorSlot == null || state.getSlot() >= cursorSlot;
     }
 
+    private Long cursorSlot() {
+        return cursorService != null ? cursorService.getCursor().map(Cursor::getSlot).orElse(null) : null;
+    }
+
     private synchronized void init() {
-        if (live != null)
+        if (initialized)
             return;
 
         StoreState state = storeStateService.getState(STATE_ID).orElse(null);
+        Long cursorSlot = cursorSlot();
         if (state == null) {
-            live = false;
-            return;
-        }
-
-        //A current state behind the cursor: blocks were synced while the flag was off, so their rows have no hash
-        Long cursorSlot = cursorService != null ? cursorService.getCursor().map(Cursor::getSlot).orElse(null) : null;
-        if (STATUS_CURRENT.equals(state.getStatus()) && cursorSlot != null
+            //A new store has the address from its first block; an older one gets its rows filled at the tip
+            state = StoreState.builder().stateId(STATE_ID).status(STATUS_FILLING).slot(cursorSlot == null ? 0L : null).build();
+            storeStateService.saveState(state);
+            if (cursorSlot != null)
+                log.info("tx_input.owner_addr: new tx_input rows get the address from now on. The rows synced so far are "
+                        + "filled in the background when the sync reaches the tip.");
+        } else if (STATUS_CURRENT.equals(state.getStatus()) && cursorSlot != null
                 && (state.getSlot() == null || state.getSlot() < cursorSlot)) {
-            log.warn("tx_input.addr_hash is set up to slot {}, but the store is at slot {}: blocks were synced without it. "
+            //Blocks were synced by a version without the address
+            log.warn("tx_input.owner_addr is set up to slot {}, but the store is at slot {}: blocks were synced without it. "
                     + "/addresses/{address}/transactions uses its full query until the rows after slot {} are filled, "
                     + "which starts when the sync reaches the tip.", state.getSlot(), cursorSlot, state.getSlot());
-            storeStateService.saveState(state.toBuilder().status(STATUS_FILLING).build());
             state = state.toBuilder().status(STATUS_FILLING).build();
+            storeStateService.saveState(state);
         }
 
         current = STATUS_CURRENT.equals(state.getStatus());
         lastCheck = System.currentTimeMillis();
-        live = true;
+        initialized = true;
+    }
+
+    /**
+     * A commit of a batch whose rows all have the address. If every row before the batch had it too (the state is
+     * kept to the previous commit, which the cursor still shows), the state moves to the batch's last slot. Runs in
+     * the commit's transaction.
+     */
+    void committed(long commitSlot) {
+        if (!isLive())
+            return;
+
+        StoreState state = storeStateService.getState(STATE_ID).orElse(null);
+        if (state == null || state.getSlot() == null)
+            return;
+
+        Long cursorSlot = cursorSlot();
+        if (cursorSlot == null || state.getSlot() >= cursorSlot)
+            storeStateService.saveState(state.toBuilder().slot(Math.max(state.getSlot(), commitSlot)).build());
     }
 
     @EventListener
     public void handlePreBlockSync(PreBlockSyncEvent event) {
-        if (properties == null || !properties.isTxInputAddrHashEnabled())
+        if (properties == null || !properties.isTxInputOwnerAddrEnabled())
             return;
 
         if (!enabled()) {
             if (warned.compareAndSet(false, true))
-                log.warn("store.utxo.tx-input-addr-hash-enabled is ignored: it needs PostgreSQL and the store_state table, "
-                        + "the store runs on {}", dsl.dialect().family());
+                log.warn("store.utxo.tx-input-owner-addr-enabled is ignored: it needs PostgreSQL 16 or later and the "
+                        + "store_state table, the store runs on {}", dsl.dialect().family());
             return;
         }
 
@@ -216,43 +240,40 @@ public class TxInputAddrHash {
         if (current || !filling.compareAndSet(false, true))
             return;
 
-        //From here on new rows get the hash, before any block of this sync is written
-        if (!live) {
-            storeStateService.saveState(StoreState.builder().stateId(STATE_ID).status(STATUS_FILLING).build());
-            live = true;
-        }
-
         Thread thread = new Thread(() -> {
             try {
                 fill();
             } catch (Exception e) {
-                log.error("tx_input.addr_hash fill failed. It continues from where it stopped when the sync restarts", e);
+                log.error("tx_input.owner_addr fill failed. It continues from where it stopped when the sync restarts", e);
             } finally {
                 filling.set(false);
             }
-        }, "tx-input-addr-hash-fill");
+        }, "tx-input-owner-addr-fill");
         thread.setDaemon(true);
         thread.start();
     }
 
     /**
-     * Fills the hash of the tx_input rows up to the cursor slot at the start, in chunks of about {@link #chunkRows}
-     * rows by spent_at_slot, then builds the indexes and marks the state current. Each chunk commits with the
-     * state's slot moved to its end, so a restart continues after the last finished chunk.
+     * Fills the address of the tx_input rows that miss it, up to the cursor slot at the start, in chunks of about
+     * {@link #chunkRows} rows by spent_at_slot, then builds the indexes and marks the state current. Each chunk
+     * commits with the state's slot moved to its end, so a restart continues after the last finished chunk.
      */
     void fill() {
         long start = System.currentTimeMillis();
         StoreState state = storeStateService.getState(STATE_ID).orElseThrow();
         long from = state.getSlot() != null ? state.getSlot() : -1;
-        Long target = cursorService != null ? cursorService.getCursor().map(Cursor::getSlot).orElse(null) : null;
+        Long target = cursorSlot();
         if (target == null)
             target = dsl.select(DSL.max(TX_INPUT.SPENT_AT_SLOT)).from(TX_INPUT).fetchOne(0, Long.class);
 
-        log.info("tx_input.addr_hash: filling the rows spent after slot {} up to slot {} in the background, "
-                + "about 3 to 4 hours on mainnet. The sync continues; /addresses/{address}/transactions uses its full "
-                + "query until this is done.", from, target);
-
         long filled = 0;
+        if (target != null && from < target) {
+            log.info("tx_input.owner_addr: filling the rows spent after slot {} up to slot {} in the background. The sync "
+                    + "continues; /addresses/{address}/transactions uses its full query until this is done.", from, target);
+            //Statistics for the new column, so the planner knows the rows to fill are all of the chunk
+            dsl.execute("analyze " + TX_INPUT.getName());
+        }
+
         long recentFrom = target != null ? target - recentSlots : Long.MAX_VALUE;
         while (target != null && from < target) {
             long chunkFrom = from;
@@ -273,18 +294,18 @@ public class TxInputAddrHash {
             //Frees the old row versions now, so the next chunk reuses their space instead of growing the table
             outsideTransaction("set maintenance_work_mem = '" + VACUUM_MEM + "'", "vacuum " + TX_INPUT.getName(),
                     "reset maintenance_work_mem");
-            log.info("tx_input.addr_hash: filled up to slot {} of {}, {} rows so far, {} s elapsed",
+            log.info("tx_input.owner_addr: filled up to slot {} of {}, {} rows so far, {} s elapsed",
                     to, target, filled, (System.currentTimeMillis() - start) / 1000);
             from = to;
         }
 
         createIndexes();
 
-        Long now = cursorService != null ? cursorService.getCursor().map(Cursor::getSlot).orElse(target) : target;
+        Long now = cursorSlot();
         storeStateService.saveState(StoreState.builder().stateId(STATE_ID).status(STATUS_CURRENT)
-                .slot(now != null ? now : 0L).build());
+                .slot(now != null ? now : target != null ? target : 0L).build());
         current = true;
-        log.info("tx_input.addr_hash is current: {} rows filled and indexes built in {} s. "
+        log.info("tx_input.owner_addr is current: {} rows filled and indexes built in {} s. "
                 + "/addresses/{address}/transactions now reads from it.", filled, (System.currentTimeMillis() - start) / 1000);
     }
 
@@ -299,15 +320,15 @@ public class TxInputAddrHash {
         return end != null ? end : Long.MAX_VALUE;
     }
 
-    /** Sets the hash of the rows spent in slots (from, to] that do not have it yet. */
+    /** Sets the address of the rows spent in slots (from, to] that do not have it yet. */
     int fillRange(long from, long to) {
         var au = ADDRESS_UTXO.as("au");
         return dsl.update(TX_INPUT)
-                .set(TX_INPUT.ADDR_HASH, hash(au.OWNER_ADDR))
+                .set(TX_INPUT.OWNER_ADDR, au.OWNER_ADDR)
                 .from(au)
                 .where(TX_INPUT.SPENT_AT_SLOT.gt(from))
                 .and(TX_INPUT.SPENT_AT_SLOT.le(to))
-                .and(TX_INPUT.ADDR_HASH.isNull())
+                .and(TX_INPUT.OWNER_ADDR.isNull())
                 .and(au.TX_HASH.eq(TX_INPUT.TX_HASH))
                 .and(au.OUTPUT_INDEX.eq(TX_INPUT.OUTPUT_INDEX))
                 .execute();
@@ -321,7 +342,7 @@ public class TxInputAddrHash {
         String txInput = TX_INPUT.getName();
         String addressUtxo = ADDRESS_UTXO.getName();
         createIndex(TX_INPUT_INDEX, "create index concurrently if not exists " + TX_INPUT_INDEX
-                + " on " + txInput + " (addr_hash, spent_at_slot)");
+                + " on " + txInput + " (owner_addr, spent_at_slot)");
         createIndex(ADDRESS_UTXO_INDEX, "create index concurrently if not exists " + ADDRESS_UTXO_INDEX
                 + " on " + addressUtxo + " (hashtextextended(owner_addr, 0), slot)");
         //The planner estimates the expression's selectivity from statistics that only ANALYZE collects
@@ -338,9 +359,9 @@ public class TxInputAddrHash {
             outsideTransaction("drop index concurrently if exists " + name);
 
         long start = System.currentTimeMillis();
-        log.info("tx_input.addr_hash: building index {} ...", name);
+        log.info("tx_input.owner_addr: building index {} ...", name);
         outsideTransaction(sql);
-        log.info("tx_input.addr_hash: index {} built in {} s", name, (System.currentTimeMillis() - start) / 1000);
+        log.info("tx_input.owner_addr: index {} built in {} s", name, (System.currentTimeMillis() - start) / 1000);
     }
 
     /**
@@ -361,40 +382,21 @@ public class TxInputAddrHash {
     }
 
     /**
-     * Sets the hash of the batch's rows that were inserted without it: in a batch a block's spends can be saved
-     * before the output they spend, which a later block or transaction of the batch writes. Runs in the commit's
-     * transaction; once current, the state's slot moves to the batch's last block in the same transaction.
-     *
-     * @param fromSlot the first slot of the spends saved since the last commit, null if there were none
-     * @param toSlot   the last slot of those spends, null if there were none
-     * @param commitSlot the slot of the batch's last block
+     * tx_input rows spent from {@code fromSlot} on were saved without the address, by a store with the flag off. If
+     * the address was kept that far, it no longer is: the state goes back to filling from before those rows, so
+     * readers stop using it, here at once and on other instances within a minute, until a store with the flag on
+     * fills them again. Checked once per run: from the first such save on, every later row is saved the same way.
      */
-    void committed(Long fromSlot, Long toSlot, long commitSlot) {
-        if (!isLive())
-            return;
-
-        if (fromSlot != null && toSlot != null)
-            fillRange(fromSlot - 1, toSlot);
-        if (current)
-            storeStateService.saveState(StoreState.builder().stateId(STATE_ID).status(STATUS_CURRENT).slot(commitSlot).build());
-    }
-
-    /**
-     * tx_input rows spent from {@code fromSlot} on were saved without the hash, by a store with the flag off. If the
-     * hash was kept that far, it no longer is: the state goes back to filling from before those rows, so readers stop
-     * using it, here at once and on other instances within a minute, until a store with the flag on fills them again.
-     * Checked once per run: from the first such save on, every later row is saved the same way.
-     */
-    void savedWithoutHash(long fromSlot) {
+    void savedWithoutAddr(long fromSlot) {
         if (storeStateService == null || dsl.dialect().family() != SQLDialect.POSTGRES
-                || !savedWithoutHashChecked.compareAndSet(false, true))
+                || !savedWithoutAddrChecked.compareAndSet(false, true))
             return;
 
         storeStateService.getState(STATE_ID)
                 .filter(state -> STATUS_CURRENT.equals(state.getStatus()) || state.getSlot() == null || state.getSlot() >= fromSlot)
                 .ifPresent(state -> {
                     Long keptTo = state.getSlot() != null ? Math.min(state.getSlot(), fromSlot - 1) : null;
-                    log.warn("tx_input rows are saved without addr_hash from slot {} (store.utxo.tx-input-addr-hash-enabled "
+                    log.warn("tx_input rows are saved without owner_addr from slot {} (store.utxo.tx-input-owner-addr-enabled "
                             + "is off). /addresses/{address}/transactions uses its full query until a store with it on fills "
                             + "the rows after slot {}.", fromSlot, keptTo);
                     storeStateService.saveState(state.toBuilder().status(STATUS_FILLING).slot(keptTo).build());
@@ -402,7 +404,7 @@ public class TxInputAddrHash {
                 });
     }
 
-    /** A rollback to {@code slot}: every row up to the point still has the hash, the rows after it are gone. */
+    /** A rollback to {@code slot}: every row up to the point still has the address, the rows after it are gone. */
     void rolledBackTo(long slot) {
         if (storeStateService == null || dsl.dialect().family() != SQLDialect.POSTGRES)
             return;

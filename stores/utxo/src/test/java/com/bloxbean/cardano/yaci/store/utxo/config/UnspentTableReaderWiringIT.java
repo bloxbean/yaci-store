@@ -3,7 +3,7 @@ package com.bloxbean.cardano.yaci.store.utxo.config;
 import com.bloxbean.cardano.yaci.store.utxo.UtxoStoreConfiguration;
 import com.bloxbean.cardano.yaci.store.utxo.UtxoStoreProperties;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UnspentTableUtxoStorageReader;
-import com.bloxbean.cardano.yaci.store.utxo.storage.impl.TxInputAddrHash;
+import com.bloxbean.cardano.yaci.store.utxo.storage.impl.TxInputOwnerAddr;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UnspentUtxoTable;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UtxoStorageReaderImpl;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.UtxoRepository;
@@ -27,7 +27,7 @@ class UnspentTableReaderWiringIT {
     private Object readerWith(boolean readEnabled) {
         UtxoStoreProperties properties = UtxoStoreProperties.builder().unspentTableReadEnabled(readEnabled).build();
         return new UtxoStoreConfiguration().utxoStorageReader(utxoRepository, dsl, properties,
-                new UnspentUtxoTable(properties, dsl, null, null, null), new TxInputAddrHash(properties, dsl, null, null, null));
+                new UnspentUtxoTable(properties, dsl, null, null, null), new TxInputOwnerAddr(properties, dsl, null, null, null, null));
     }
 
     @Test

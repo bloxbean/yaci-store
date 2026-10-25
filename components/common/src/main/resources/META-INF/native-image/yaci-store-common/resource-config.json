@@ -1,0 +1,18 @@
+{
+  "resources": {
+    "includes": [
+      {
+        "pattern": "org/rocksdb/.*"
+      },
+      {
+        "pattern": "librocksdbjni-.*\\.jnilib"
+      },
+      {
+        "pattern": "librocksdbjni-.*\\.so"
+      },
+      {
+        "pattern": "librocksdbjni-.*\\.dll"
+      }
+    ]
+  }
+}

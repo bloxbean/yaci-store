@@ -26,6 +26,8 @@ public class YaciStoreProperties {
     private String utxoClientUrl;
     private boolean mvstoreEnabled = false;
     private String mvstorePath = "./.mvstore";
+    //Folder of the RocksDB used for caches (RocksDBCacheStore). Deleted at every start.
+    private String rocksdbCachePath = "./.rocksdb-cache";
     private boolean continueOnParseError = false;
 
     private Plugins plugins = new Plugins();

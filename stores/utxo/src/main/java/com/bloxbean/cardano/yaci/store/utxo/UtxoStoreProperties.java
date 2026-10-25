@@ -57,10 +57,10 @@ public class UtxoStoreProperties {
     private boolean unspentTableReadEnabled = false;
 
     /**
-     * PostgreSQL only. Keep tx_input.addr_hash, the hash of the address each input spends from, and read
-     * /addresses/{address}/transactions newest first from it (see TxInputAddrHash). Nothing is written during
-     * the initial sync; at the tip new spends get the hash and the older rows are filled in the background.
+     * PostgreSQL 16+ only. Keep tx_input.owner_addr, the address each input spends from, and read
+     * /addresses/{address}/transactions newest first from it (see TxInputOwnerAddr). Written from the first block,
+     * with a RocksDB cache of the unspent outputs' addresses; a store synced before is filled at the tip.
      */
     @Builder.Default
-    private boolean txInputAddrHashEnabled = false;
+    private boolean txInputOwnerAddrEnabled = false;
 }

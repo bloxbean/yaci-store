@@ -35,7 +35,7 @@ public class UtxoStoreAutoConfiguration {
         utxoStoreProperties.setUnspentTableEnabled(properties.getUtxo().isUnspentTableEnabled());
         utxoStoreProperties.setUnspentTableBackfillAtTip(properties.getUtxo().isUnspentTableBackfillAtTip());
         utxoStoreProperties.setUnspentTableReadEnabled(properties.getUtxo().isUnspentTableReadEnabled());
-        utxoStoreProperties.setTxInputAddrHashEnabled(properties.getUtxo().isTxInputAddrHashEnabled());
+        utxoStoreProperties.setTxInputOwnerAddrEnabled(properties.getUtxo().isTxInputOwnerAddrEnabled());
 
         return utxoStoreProperties;
     }
