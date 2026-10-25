@@ -16,6 +16,7 @@ import { Callout } from 'nextra/components'
 | `store.extensions.blockfrost.scripts.enabled` | `true` | Script and datum endpoints (`/scripts`). |
 | `store.extensions.blockfrost.transaction.enabled` | `true` | Transaction read endpoints (`/txs`) and tx submit (`/tx/submit`). |
 | `store.extensions.blockfrost.util.enabled` | `true` | Tx execution-units evaluate and xpub-derive utilities (`/utils`). |
+| `store.extensions.blockfrost.query-timeout` | `30s` | Database time budget of one Blockfrost request. A query still running when it runs out is cancelled and the request answers `504`. `0` disables it. See [Query timeout](#query-timeout). |
 | `blockfrost.apiPrefix` | _(none — required)_ | URL prefix prepended to every yaci-store Blockfrost-compatible controller path. Set by the `blockfrost` profile to `/api/v1/blockfrost`. |
 | `blockfrost.hostname` | `""` | Public base URL for this yaci-store instance. Used only by the yaci-store Blockfrost-compatible root endpoint to return an absolute `url` when set. |
 
@@ -69,6 +70,37 @@ Blockfrost-compatible controllers read from data the underlying yaci-store modul
 ```bash
 SPRING_PROFILES_ACTIVE=ledger-state,blockfrost
 ```
+</Callout>
+
+## Query timeout
+
+Every Blockfrost request gets a database time budget, `store.extensions.blockfrost.query-timeout` (default `30s`). Each SQL statement the request runs is given the time left in that budget as its JDBC query timeout, so a request that issues several queries is bounded as a whole. When the budget runs out, the database cancels the running statement and the request answers:
+
+```json
+{"error":"Gateway Timeout","message":"The query took too long to complete.","status_code":504}
+```
+
+Other database failures still answer `500`. A request whose query timed out never answers `200`, even if the code that ran the query fell back to an empty result.
+
+```properties
+# Default 30s. Use a smaller value to fail fast, or 0 to disable the bound.
+store.extensions.blockfrost.query-timeout=30s
+```
+
+The budget only applies to threads serving a Blockfrost endpoint. Indexing, rollback and the other yaci-store APIs are not affected, so it is safe to enable on an instance that also syncs.
+
+<Callout type="info">
+**Read-only instances.** When the Blockfrost API runs on a separate instance with `store.read-only-mode=true`, you can also set a server-side `statement_timeout` on that instance's database connections as a backstop. Keep it a little above `query-timeout`, so the application's own `504` normally wins. Flyway still runs migrations on startup, so give it its own connection without the timeout:
+
+```properties
+spring.datasource.url=jdbc:postgresql://db:5432/yaci_store?currentSchema=yaci_store&options=-c%20statement_timeout%3D35s
+# Separate Flyway connection, without the timeout
+spring.flyway.url=jdbc:postgresql://db:5432/yaci_store?currentSchema=yaci_store
+spring.flyway.user=${spring.datasource.username}
+spring.flyway.password=${spring.datasource.password}
+```
+
+Do not use `spring.flyway.init-sqls=SET statement_timeout = 0` for this: Flyway borrows connections from the application pool, and the `SET` stays on them, silently removing the timeout. If you prefer `ALTER ROLE ... SET statement_timeout`, run Flyway with a different role. Do not set a server-side timeout on an instance that syncs: it would also cancel long-running indexing and rollback statements.
 </Callout>
 
 ## Transaction submit
