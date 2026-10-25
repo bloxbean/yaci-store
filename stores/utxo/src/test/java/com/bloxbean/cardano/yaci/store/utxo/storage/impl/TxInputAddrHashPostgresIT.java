@@ -24,6 +24,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.jdbc.datasource.TransactionAwareDataSourceProxy;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -223,6 +224,35 @@ class TxInputAddrHashPostgresIT {
         assertThat(latest.getBlockNumber()).isEqualTo(60);
         assertThat(latest.getBlockHeight()).isEqualTo(60);
         assertThat(latest.getBlockTime()).isEqualTo(1_600_600L);
+    }
+
+    @Test
+    void aPageIsReadAlongBothIndexesWithoutReadingTheHistory() throws Exception {
+        //20,000 outputs, Alice's every other one, and 19,000 of them spent five slots later
+        jdbc.update("""
+                insert into address_utxo (tx_hash, output_index, slot, block, block_time, owner_addr)
+                select lpad(to_hex(g), 64, '0'), 0, g, g / 10, g, case when g % 2 = 0 then ? else ? end
+                from generate_series(1, 20000) g""", ALICE, BOB);
+        jdbc.update("""
+                insert into tx_input (tx_hash, output_index, spent_at_slot, spent_at_block, spent_block_time, spent_tx_hash)
+                select lpad(to_hex(g), 64, '0'), 0, g + 5, (g + 5) / 10, g + 5, lpad(to_hex(g + 100000), 64, '0')
+                from generate_series(1, 19000) g""");
+        cursorSlot.set(20005);
+        fillAtTheTip();
+
+        String plan = new TransactionTemplate(transactionManager).execute(status -> {
+            //Small tables: keep the planner on the indexes it would use on a large store
+            dsl.execute("set local enable_seqscan = off");
+            dsl.execute("set local enable_bitmapscan = off");
+            return dsl.explain(hashQuery.transactionsByAddressHash(ALICE, 20005, 0, 20, Order.desc)).plan();
+        });
+
+        assertThat(plan)
+                .contains("Index Scan Backward using " + TxInputAddrHash.ADDRESS_UTXO_INDEX)
+                .contains("Index Scan Backward using " + TxInputAddrHash.TX_INPUT_INDEX)
+                .doesNotContain("Seq Scan");
+        assertThat(txHashes(hashQuery.findTransactionsByAddress(ALICE, 0, 20, Order.desc)))
+                .containsExactlyElementsOf(txHashes(fullQuery.findTransactionsByAddress(ALICE, 0, 20, Order.desc)));
     }
 
     @Test

@@ -40,18 +40,29 @@ create index idx_tx_input_addr_hash_slot     on tx_input     (addr_hash, spent_a
 create index idx_address_utxo_addr_hash_slot on address_utxo (hashtextextended(owner_addr, 0), slot);
 ```
 
-both halves come out of an index in slot order. PostgreSQL merges them and stops after the page:
+both halves come out of an index in slot order. Each half takes its own first `offset + count`
+transactions along its index and stops; the halves are then merged and the page cut out:
 
 ```sql
 select distinct tx_hash, block, block_time, slot from (
-    select tx_hash, block, block_time, slot from address_utxo
-    where hashtextextended(owner_addr, 0) = hashtextextended(:address, 0) and owner_addr = :address
+    (select distinct tx_hash, block, block_time, slot from address_utxo
+     where hashtextextended(owner_addr, 0) = hashtextextended(:address, 0) and owner_addr = :address
+     order by slot desc, tx_hash desc limit :offset + :count)
   union all
-    select i.spent_tx_hash, i.spent_at_block, i.spent_block_time, i.spent_at_slot
-    from tx_input i join address_utxo o on o.tx_hash = i.tx_hash and o.output_index = i.output_index
-    where i.addr_hash = hashtextextended(:address, 0) and o.owner_addr = :address
+    (select distinct i.spent_tx_hash, i.spent_at_block, i.spent_block_time, i.spent_at_slot
+     from tx_input i join address_utxo o on o.tx_hash = i.tx_hash and o.output_index = i.output_index
+     where i.addr_hash = hashtextextended(:address, 0) and o.owner_addr = :address
+     order by i.spent_at_slot desc, i.spent_tx_hash desc limit :offset + :count)
+  union all
+    (-- spends after the kept slot whose hash the batch's commit has not filled yet, see below)
 ) t order by slot desc, tx_hash desc limit :count offset :offset
 ```
+
+Every transaction before the page is before it in its own half too, so the page is within the
+rows the halves return. With the limit only on the outer query, PostgreSQL appends, sorts and
+de-duplicates the whole history first: a review run on PostgreSQL 18 with 600k rows for one
+address read 242k buffers in 270-680 ms that way, and 191 buffers in 3.7 ms with the per-half
+limits. A deep page costs about `offset + count` index entries per half.
 
 The `owner_addr = :address` checks rule out another address with the same 64-bit hash; a
 collision costs one extra row read, never a wrong row.
@@ -70,7 +81,9 @@ Behind `store.utxo.tx-input-addr-hash-enabled` (default `false`), PostgreSQL onl
    created as `FILLING`. From then on every inserted `tx_input` row gets the hash from a primary
    key lookup of the output it spends, inside the insert. A spend saved before its output (a later
    transaction of the same block, or a later block of a parallel batch) is filled at the commit,
-   from the range of slots saved since the last commit.
+   from the range of slots saved since the last commit. In a parallel batch the blocks commit before
+   that fill, so the query has a third half: the spends after the kept slot that have no hash yet,
+   read by `spent_at_slot`. Only the batch not yet committed is after the kept slot.
 3. **Background fill**, while the sync continues: the older rows, in chunks of about 50M rows by
    `spent_at_slot`. Each chunk is one `UPDATE ... FROM address_utxo` with nested loops off, so it
    hashes the chunk and reads `address_utxo` once instead of 50M random lookups. The chunk commits
@@ -82,15 +95,19 @@ Behind `store.utxo.tx-input-addr-hash-enabled` (default `false`), PostgreSQL onl
    and built again), then `ANALYZE` for the expression's statistics. The row becomes `CURRENT`.
 5. **Current:** reads use the hash query; each commit moves the row's slot to its last block.
 
-A store that synced blocks with the flag off has its slot behind the cursor at startup: it goes
-back to `FILLING` from that slot, and reads use the full query until it is filled again. A rollback
-(chain or `admin-cli rollback-data`) moves the slot back to the rollback point.
+A store that saves `tx_input` rows without the hash once the row exists (the flag was turned off)
+puts it back to `FILLING` from before those rows at its first such save. A writer of a version
+without this change cannot do that, so readers also check that the kept slot is at or past the
+cursor; the cursor is saved after the commit that moves the slot. A rollback (chain, or
+`admin-cli rollback-data` when it deletes `tx_input` rows) moves the slot back to the point.
 
-A read-only API instance never fills; it re-reads the state every minute until it is `CURRENT`.
+A read-only API instance never fills; it re-checks the state and the cursor every minute.
 
 ### Databases
 
-PostgreSQL only. The column is added on H2 and MySQL too, so `tx_input` has the same columns on
+PostgreSQL 16 or later: the per-half `DISTINCT ... ORDER BY ... LIMIT` needs incremental sort
+for `DISTINCT`, added in 16. The shipped compose files use 17.4 and 18. On older PostgreSQL the
+flag is ignored with a warning. The column is added on H2 and MySQL too, so `tx_input` has the same columns on
 every database and the jOOQ classes are shared, but it stays null there and the full query is used.
 H2 backs devkit/devnet stores, where histories are small. A MySQL version would compute the hash in
 Java and needs a matching expression on each database; not done until a large MySQL store needs it.
@@ -104,7 +121,21 @@ Java and needs a matching expression on each database; not done until a large My
 | `idx_address_utxo_addr_hash_slot` | ~12 GB |
 | **Total** | **~26-28 GB** |
 
-The background fill also leaves about one chunk of free space inside `tx_input`.
+### Cost of the background fill (mainnet)
+
+- Reads: each 50M-row chunk hashes its `tx_input` keys and reads `address_utxo` (253 GB) once,
+  about 7 chunks. Joining all 352M spends with their outputs this way took 68 minutes on the
+  benchmark VM (as four `CREATE TABLE AS` slices; the fill also writes the rows).
+- Temporary files: the chunk's hash table (about 5 GB) does not fit `work_mem` (set to 2 GB per
+  chunk), so the join runs in batches and writes most of the projected `address_utxo` rows to
+  temporary files, up to about 50 GB per chunk, freed when the chunk ends.
+- Table and indexes: the updates are not HOT (`tx_input` pages are full), so each updated row adds
+  a version to the table and an entry to each `tx_input` index. `VACUUM` after each chunk lets the
+  next chunk reuse the table's space; index pages split by the chunk stay. To be measured on the
+  mainnet store and added here.
+- Each chunk is one transaction for its duration (minutes), which holds back cleanup of other
+  tables meanwhile. `CREATE INDEX CONCURRENTLY` waits for transactions already running, such as a
+  slow `/transactions` request of the old query.
 
 ## Alternatives considered
 

@@ -238,44 +238,65 @@ public class UtxoStorageReaderImpl implements UtxoStorageReader {
     /**
      * The transactions of an address from tx_input.addr_hash (PostgreSQL, see TxInputAddrHash): the address's outputs
      * from the address_utxo index on (hash(owner_addr), slot), and the spends of its outputs from the tx_input index on
-     * (addr_hash, spent_at_slot). Both come out in slot order, so PostgreSQL merges them and stops after the page,
-     * instead of reading and sorting the address's whole history. A hash shared by another address is ruled out by
-     * comparing owner_addr. Same rows as the full query; transactions in the same slot are ordered by tx_hash.
+     * (addr_hash, spent_at_slot). A hash shared by another address is ruled out by comparing owner_addr. Same rows as
+     * the full query; transactions in the same slot are ordered by tx_hash.
+     */
+    private List<AddressTransaction> findTransactionsByAddressHash(String address, long keptTo, int page, int count, Order order) {
+        return transactionsByAddressHash(address, keptTo, page, count, order).fetchInto(AddressTransaction.class);
+    }
+
+    /**
+     * Each branch takes its own first {@code (page + 1) * count} distinct transactions in slot order, read backward (or
+     * forward) along its index and stopping there; the branches are then merged and the page cut out. The overall page
+     * is within those rows, since every transaction before it is before it in its own branch too. With the limit only
+     * outside, PostgreSQL appends, sorts and de-duplicates the address's whole history instead.
      *
      * <p>A third branch adds the spends after {@code keptTo} that have no hash yet: in a parallel batch a spend saved
      * before its output gets it only at the batch's commit, but is visible before that. Only the batch not yet
      * committed is after keptTo, so this reads a few blocks of tx_input by slot.
      */
-    private List<AddressTransaction> findTransactionsByAddressHash(String address, long keptTo, int page, int count, Order order) {
+    ResultQuery<Record5<String, Long, Long, Long, Long>> transactionsByAddressHash(String address, long keptTo, int page,
+                                                                                  int count, Order order) {
+        boolean desc = order.equals(Order.desc);
+        int branchLimit = (page + 1) * count;
         Field<Long> addressHash = TxInputAddrHash.hash(DSL.val(address));
 
         var outputs = dsl
-                .select(ADDRESS_UTXO.TX_HASH.as("tx_hash"), ADDRESS_UTXO.BLOCK.as("block"),
+                .selectDistinct(ADDRESS_UTXO.TX_HASH.as("tx_hash"), ADDRESS_UTXO.BLOCK.as("block"),
                         ADDRESS_UTXO.BLOCK_TIME.as("block_time"), ADDRESS_UTXO.SLOT.as("slot"))
                 .from(ADDRESS_UTXO)
                 .where(TxInputAddrHash.hash(ADDRESS_UTXO.OWNER_ADDR).eq(addressHash))
-                .and(ADDRESS_UTXO.OWNER_ADDR.eq(address));
+                .and(ADDRESS_UTXO.OWNER_ADDR.eq(address))
+                .orderBy(desc ? ADDRESS_UTXO.SLOT.desc() : ADDRESS_UTXO.SLOT.asc(),
+                        desc ? ADDRESS_UTXO.TX_HASH.desc() : ADDRESS_UTXO.TX_HASH.asc())
+                .limit(branchLimit);
 
         var spentOutput = ADDRESS_UTXO.as("spent_output");
         var spends = dsl
-                .select(TX_INPUT.SPENT_TX_HASH, TX_INPUT.SPENT_AT_BLOCK, TX_INPUT.SPENT_BLOCK_TIME, TX_INPUT.SPENT_AT_SLOT)
+                .selectDistinct(TX_INPUT.SPENT_TX_HASH, TX_INPUT.SPENT_AT_BLOCK, TX_INPUT.SPENT_BLOCK_TIME, TX_INPUT.SPENT_AT_SLOT)
                 .from(TX_INPUT)
                 .join(spentOutput)
                 .on(spentOutput.TX_HASH.eq(TX_INPUT.TX_HASH))
                 .and(spentOutput.OUTPUT_INDEX.eq(TX_INPUT.OUTPUT_INDEX))
                 .where(TX_INPUT.ADDR_HASH.eq(addressHash))
-                .and(spentOutput.OWNER_ADDR.eq(address));
+                .and(spentOutput.OWNER_ADDR.eq(address))
+                .orderBy(desc ? TX_INPUT.SPENT_AT_SLOT.desc() : TX_INPUT.SPENT_AT_SLOT.asc(),
+                        desc ? TX_INPUT.SPENT_TX_HASH.desc() : TX_INPUT.SPENT_TX_HASH.asc())
+                .limit(branchLimit);
 
         var unsettledOutput = ADDRESS_UTXO.as("unsettled_output");
         var unsettledSpends = dsl
-                .select(TX_INPUT.SPENT_TX_HASH, TX_INPUT.SPENT_AT_BLOCK, TX_INPUT.SPENT_BLOCK_TIME, TX_INPUT.SPENT_AT_SLOT)
+                .selectDistinct(TX_INPUT.SPENT_TX_HASH, TX_INPUT.SPENT_AT_BLOCK, TX_INPUT.SPENT_BLOCK_TIME, TX_INPUT.SPENT_AT_SLOT)
                 .from(TX_INPUT)
                 .join(unsettledOutput)
                 .on(unsettledOutput.TX_HASH.eq(TX_INPUT.TX_HASH))
                 .and(unsettledOutput.OUTPUT_INDEX.eq(TX_INPUT.OUTPUT_INDEX))
                 .where(TX_INPUT.SPENT_AT_SLOT.gt(keptTo))
                 .and(TX_INPUT.ADDR_HASH.isNull())
-                .and(unsettledOutput.OWNER_ADDR.eq(address));
+                .and(unsettledOutput.OWNER_ADDR.eq(address))
+                .orderBy(desc ? TX_INPUT.SPENT_AT_SLOT.desc() : TX_INPUT.SPENT_AT_SLOT.asc(),
+                        desc ? TX_INPUT.SPENT_TX_HASH.desc() : TX_INPUT.SPENT_TX_HASH.asc())
+                .limit(branchLimit);
 
         Table<?> combined = outputs.unionAll(spends).unionAll(unsettledSpends).asTable("combined_tx");
         Field<String> txHash = combined.field("tx_hash", String.class);
@@ -287,12 +308,9 @@ public class UtxoStorageReaderImpl implements UtxoStorageReader {
                 .selectDistinct(txHash.as("txHash"), block.as("blockHeight"), block.as("blockNumber"),
                         blockTime.as("blockTime"), slot.as("slot"))
                 .from(combined)
-                .orderBy(order.equals(Order.desc)
-                        ? new SortField<?>[]{slot.desc(), txHash.desc()}
-                        : new SortField<?>[]{slot.asc(), txHash.asc()})
+                .orderBy(desc ? slot.desc() : slot.asc(), desc ? txHash.desc() : txHash.asc())
                 .limit(count)
-                .offset(page * count)
-                .fetchInto(AddressTransaction.class);
+                .offset(page * count);
     }
 
     //This method is currently optimized only for Postgresql

@@ -62,6 +62,13 @@ public class TxInputAddrHash {
      * newest rows, never waits for a long chunk. About half a day of mainnet.
      */
     private static final long RECENT_SLOTS = 50_000;
+    /**
+     * Memory for a chunk's hash join (each chunk hashes its tx_input keys, about 5 GB for a large chunk, and reads
+     * address_utxo against them): the less fits, the more of address_utxo is written to temporary files in batches.
+     */
+    private static final String FILL_WORK_MEM = "2GB";
+    /** Memory for the VACUUM after each chunk to collect the dead row versions in fewer passes over the indexes. */
+    private static final String VACUUM_MEM = "1GB";
     /** How often a store that is not current re-reads store_state, for read-only instances that do not fill. */
     private static final long RECHECK_INTERVAL_MS = 60_000;
 
@@ -254,15 +261,18 @@ public class TxInputAddrHash {
             boolean large = from < recentFrom;
             Integer rows = transactionTemplate.execute(status -> {
                 //A large chunk is joined by hashing it and reading address_utxo once, never row by row
-                if (large)
+                if (large) {
                     dsl.execute("set local enable_nestloop = off");
+                    dsl.execute("set local work_mem = '" + FILL_WORK_MEM + "'");
+                }
                 int updated = fillRange(chunkFrom, to);
                 storeStateService.saveState(StoreState.builder().stateId(STATE_ID).status(STATUS_FILLING).slot(to).build());
                 return updated;
             });
             filled += rows != null ? rows : 0;
             //Frees the old row versions now, so the next chunk reuses their space instead of growing the table
-            outsideTransaction("vacuum " + TX_INPUT.getName());
+            outsideTransaction("set maintenance_work_mem = '" + VACUUM_MEM + "'", "vacuum " + TX_INPUT.getName(),
+                    "reset maintenance_work_mem");
             log.info("tx_input.addr_hash: filled up to slot {} of {}, {} rows so far, {} s elapsed",
                     to, target, filled, (System.currentTimeMillis() - start) / 1000);
             from = to;
@@ -337,12 +347,13 @@ public class TxInputAddrHash {
      * Runs VACUUM or CREATE/DROP INDEX CONCURRENTLY, which PostgreSQL refuses inside a transaction block, on a
      * connection set to autocommit whatever the pool's default is.
      */
-    private void outsideTransaction(String sql) {
+    private void outsideTransaction(String... sqls) {
         dsl.connection(connection -> {
             boolean autoCommit = connection.getAutoCommit();
             connection.setAutoCommit(true);
             try (Statement statement = connection.createStatement()) {
-                statement.execute(sql);
+                for (String sql : sqls)
+                    statement.execute(sql);
             } finally {
                 connection.setAutoCommit(autoCommit);
             }

@@ -36,7 +36,6 @@ import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
 
 import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.*;
 import static org.jooq.impl.DSL.notExists;
@@ -80,9 +79,10 @@ public class UtxoStorageImpl implements UtxoStorage {
     private final UnspentUtxoTable unspentUtxoTable;
     private final TxInputAddrHash txInputAddrHash;
 
-    //Slots of the spends saved since the last commit, while tx_input.addr_hash is written (see TxInputAddrHash)
-    private final AtomicLong addrHashFromSlot = new AtomicLong(Long.MAX_VALUE);
-    private final AtomicLong addrHashToSlot = new AtomicLong(Long.MIN_VALUE);
+    //First and last slot of the spends saved since the last commit while tx_input.addr_hash is written (see
+    //TxInputAddrHash), or null if there were none. Read and replaced together, under addrHashRangeLock.
+    private final Object addrHashRangeLock = new Object();
+    private long[] addrHashRange;
 
     //Outputs saved and keys spent since the last commit, settled in address_utxo_unspent at commit
     private final Map<UtxoKey, PendingOutput> pendingOutputs = new ConcurrentHashMap<>();
@@ -203,8 +203,9 @@ public class UtxoStorageImpl implements UtxoStorage {
 
         if (txInputAddrHash != null) {
             txInputAddrHash.rolledBackTo(slot);
-            addrHashFromSlot.set(Long.MAX_VALUE);
-            addrHashToSlot.set(Long.MIN_VALUE);
+            synchronized (addrHashRangeLock) {
+                addrHashRange = null;
+            }
         }
 
         return spentOutputRepository.deleteBySpentAtSlotGreaterThan(slot);
@@ -358,12 +359,8 @@ public class UtxoStorageImpl implements UtxoStorage {
         dsl.batch(inserts).execute();
 
         if (addrHash) {
-            txInputs.forEach(txInput -> {
-                if (txInput.getSpentAtSlot() == null)
-                    return;
-                addrHashFromSlot.accumulateAndGet(txInput.getSpentAtSlot(), Math::min);
-                addrHashToSlot.accumulateAndGet(txInput.getSpentAtSlot(), Math::max);
-            });
+            txInputs.stream().map(TxInput::getSpentAtSlot).filter(Objects::nonNull)
+                    .forEach(slot -> addAddrHashRange(slot, slot));
         } else if (txInputAddrHash != null) {
             //Saved without the hash: if it was kept past these rows, it no longer is
             txInputs.stream().map(TxInput::getSpentAtSlot).filter(Objects::nonNull).min(Long::compare)
@@ -460,14 +457,28 @@ public class UtxoStorageImpl implements UtxoStorage {
      * transaction; in parallel mode it runs in its own.
      */
     private void commitAddrHash(CommitEvent<?> commitEvent) {
-        long from = addrHashFromSlot.get();
-        long to = addrHashToSlot.get();
-        commitTransactionTemplate.executeWithoutResult(status ->
-                txInputAddrHash.committed(from <= to ? from : null, from <= to ? to : null, commitEvent.getMetadata().getSlot()));
+        long[] range;
+        synchronized (addrHashRangeLock) {
+            range = addrHashRange;
+            addrHashRange = null;
+        }
+        try {
+            commitTransactionTemplate.executeWithoutResult(status -> txInputAddrHash.committed(
+                    range != null ? range[0] : null, range != null ? range[1] : null, commitEvent.getMetadata().getSlot()));
+        } catch (RuntimeException e) {
+            //Not filled: keep the range for the next commit
+            if (range != null)
+                addAddrHashRange(range[0], range[1]);
+            throw e;
+        }
+    }
 
-        //Only after the transaction succeeded: on failure the range stays for the next commit
-        addrHashFromSlot.compareAndSet(from, Long.MAX_VALUE);
-        addrHashToSlot.compareAndSet(to, Long.MIN_VALUE);
+    private void addAddrHashRange(long from, long to) {
+        synchronized (addrHashRangeLock) {
+            addrHashRange = addrHashRange == null
+                    ? new long[]{from, to}
+                    : new long[]{Math.min(addrHashRange[0], from), Math.max(addrHashRange[1], to)};
+        }
     }
 
     /** The lowest block number in the batch, or null if the event carries no blocks. */
