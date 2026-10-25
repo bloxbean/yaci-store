@@ -83,7 +83,7 @@ class TxInputAddrHashPostgresIT {
         storage = new UtxoStorageImpl(mock(UtxoRepository.class), mock(TxInputRepository.class), dsl,
                 new UtxoCache(), transactionManager, null, addrHash);
         fullQuery = new UtxoStorageReaderImpl(mock(UtxoRepository.class), dsl);
-        hashQuery = new UtxoStorageReaderImpl(mock(UtxoRepository.class), dsl, () -> true);
+        hashQuery = new UtxoStorageReaderImpl(mock(UtxoRepository.class), dsl, () -> addrHash.readableKeptSlot());
     }
 
     private TxInputAddrHash newAddrHash() {
@@ -253,6 +253,10 @@ class TxInputAddrHashPostgresIT {
         storage.saveSpent(List.of(spend(hash(9), 0, hash(10), 710)));
         storage.saveUnspent(List.of(output(hash(8), 0, BOB, 700), output(hash(9), 0, ALICE, 705), output(hash(10), 0, BOB, 710)));
         assertThat(jdbc.queryForObject("select addr_hash from tx_input where tx_hash = ?", Long.class, hash(9))).isNull();
+        //Visible before the commit (a parallel batch's blocks commit on their own): still found, without its hash
+        assertThat(txHashes(hashQuery.findTransactionsByAddress(ALICE, 0, 100, Order.desc)))
+                .containsExactlyInAnyOrderElementsOf(txHashes(fullQuery.findTransactionsByAddress(ALICE, 0, 100, Order.desc)))
+                .contains(hash(10));
         commit(710);
 
         assertThat(rowsWithoutHash()).isZero();
@@ -264,28 +268,48 @@ class TxInputAddrHashPostgresIT {
     }
 
     @Test
-    void blocksSyncedWithoutTheHashAreFilledAgainBeforeReadsUseIt() throws Exception {
+    void blocksSyncedWithTheFlagOffAreFilledAgainBeforeReadsUseIt() throws Exception {
         history();
         cursorSlot.set(600);
         fillAtTheTip();
 
-        //The store ran with the flag off: these spends have no hash, and the state stayed at 600
+        //The store runs with the flag off: its first spend saved without the hash puts the state back to filling
+        TxInputAddrHash off = new TxInputAddrHash(UtxoStoreProperties.builder().build(), dsl, transactionManager, stateService, null);
         storage = new UtxoStorageImpl(mock(UtxoRepository.class), mock(TxInputRepository.class), dsl,
-                new UtxoCache(), transactionManager, null, null);
+                new UtxoCache(), transactionManager, null, off);
         storage.saveSpent(List.of(spend(hash(7), 0, hash(8), 700)));
         storage.saveUnspent(List.of(output(hash(8), 0, BOB, 700)));
         cursorSlot.set(700);
+        StoreState state = stateService.getState(TxInputAddrHash.STATE_ID).orElseThrow();
+        assertThat(state.getStatus()).isEqualTo(TxInputAddrHash.STATUS_FILLING);
+        assertThat(state.getSlot()).isEqualTo(600);
 
         //Started again with the flag on: not readable until the rows after 600 are filled
         addrHash = newAddrHash();
         assertThat(addrHash.isLive()).isTrue();
         assertThat(addrHash.isReadable()).isFalse();
-        assertThat(stateService.getState(TxInputAddrHash.STATE_ID).orElseThrow().getStatus())
-                .isEqualTo(TxInputAddrHash.STATUS_FILLING);
 
         fillAtTheTip();
         assertThat(rowsWithoutHash()).isZero();
         assertThat(stateService.getState(TxInputAddrHash.STATE_ID).orElseThrow().getSlot()).isEqualTo(700);
+    }
+
+    @Test
+    void aStateBehindTheCursorIsNotReadEvenIfCurrent() throws Exception {
+        history();
+        cursorSlot.set(600);
+        fillAtTheTip();
+
+        //A version without TxInputAddrHash synced on: the state still says CURRENT at 600
+        storage = new UtxoStorageImpl(mock(UtxoRepository.class), mock(TxInputRepository.class), dsl,
+                new UtxoCache(), transactionManager, null, null);
+        storage.saveSpent(List.of(spend(hash(7), 0, hash(8), 700)));
+        cursorSlot.set(700);
+
+        //A read-only instance starting now does not use it
+        addrHash = newAddrHash();
+        assertThat(addrHash.isReadable()).isFalse();
+        assertThat(txHashes(hashQuery.findTransactionsByAddress(ALICE, 0, 100, Order.desc))).contains(hash(8));
     }
 
     @Test

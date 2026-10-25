@@ -129,7 +129,10 @@ public class RollbackService {
             }
         }
 
-        if (databaseUtils.tableExists("tx_input") && databaseUtils.tableExists("store_state")) {
+        //Only when this rollback deletes tx_input rows: a ledger-state rollback keeps them, and the cursor
+        boolean txInputRolledBack = !context.isRollbackLedgerState() && config.getTables().stream()
+                .anyMatch(table -> "tx_input".equalsIgnoreCase(table.getName()) && "DELETE".equalsIgnoreCase(table.getOperation()));
+        if (txInputRolledBack && databaseUtils.tableExists("tx_input") && databaseUtils.tableExists("store_state")) {
             log.info("Executing rollback on table 'store_state': {}", ADDR_HASH_STATE_AFTER_ROLLBACK);
             try {
                 jdbcTemplate.update(ADDR_HASH_STATE_AFTER_ROLLBACK, params);

@@ -31,6 +31,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
@@ -363,6 +364,10 @@ public class UtxoStorageImpl implements UtxoStorage {
                 addrHashFromSlot.accumulateAndGet(txInput.getSpentAtSlot(), Math::min);
                 addrHashToSlot.accumulateAndGet(txInput.getSpentAtSlot(), Math::max);
             });
+        } else if (txInputAddrHash != null) {
+            //Saved without the hash: if it was kept past these rows, it no longer is
+            txInputs.stream().map(TxInput::getSpentAtSlot).filter(Objects::nonNull).min(Long::compare)
+                    .ifPresent(txInputAddrHash::savedWithoutHash);
         }
 
         if (isUnspentTableEnabled()) {

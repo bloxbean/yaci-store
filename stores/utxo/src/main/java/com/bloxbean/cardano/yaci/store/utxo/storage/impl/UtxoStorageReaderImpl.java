@@ -21,7 +21,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
-import java.util.function.BooleanSupplier;
+import java.util.function.Supplier;
 
 import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.ADDRESS_UTXO;
 import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.TX_INPUT;
@@ -33,17 +33,18 @@ public class UtxoStorageReaderImpl implements UtxoStorageReader {
     private final UtxoRepository utxoRepository;
     private final DSLContext dsl;
     private final UtxoMapper mapper = UtxoMapper.INSTANCE;
-    //Whether tx_input.addr_hash and its indexes are current (see TxInputAddrHash)
-    private final BooleanSupplier addrHashReadable;
+    //While tx_input.addr_hash and its indexes are current, the slot up to which every row has it, else null
+    //(see TxInputAddrHash#readableKeptSlot)
+    private final Supplier<Long> addrHashKeptSlot;
 
     public UtxoStorageReaderImpl(UtxoRepository utxoRepository, DSLContext dsl) {
-        this(utxoRepository, dsl, () -> false);
+        this(utxoRepository, dsl, () -> null);
     }
 
-    public UtxoStorageReaderImpl(UtxoRepository utxoRepository, DSLContext dsl, BooleanSupplier addrHashReadable) {
+    public UtxoStorageReaderImpl(UtxoRepository utxoRepository, DSLContext dsl, Supplier<Long> addrHashKeptSlot) {
         this.utxoRepository = utxoRepository;
         this.dsl = dsl;
-        this.addrHashReadable = addrHashReadable;
+        this.addrHashKeptSlot = addrHashKeptSlot;
     }
 
     @Override
@@ -192,8 +193,9 @@ public class UtxoStorageReaderImpl implements UtxoStorageReader {
 
     @Override
     public List<AddressTransaction> findTransactionsByAddress(String address, int page, int count, Order order) {
-        if (addrHashReadable.getAsBoolean())
-            return findTransactionsByAddressHash(address, page, count, order);
+        Long addrHashKeptTo = addrHashKeptSlot.get();
+        if (addrHashKeptTo != null)
+            return findTransactionsByAddressHash(address, addrHashKeptTo, page, count, order);
 
         Pageable pageable = getPageable(page, count, order);
 
@@ -239,8 +241,12 @@ public class UtxoStorageReaderImpl implements UtxoStorageReader {
      * (addr_hash, spent_at_slot). Both come out in slot order, so PostgreSQL merges them and stops after the page,
      * instead of reading and sorting the address's whole history. A hash shared by another address is ruled out by
      * comparing owner_addr. Same rows as the full query; transactions in the same slot are ordered by tx_hash.
+     *
+     * <p>A third branch adds the spends after {@code keptTo} that have no hash yet: in a parallel batch a spend saved
+     * before its output gets it only at the batch's commit, but is visible before that. Only the batch not yet
+     * committed is after keptTo, so this reads a few blocks of tx_input by slot.
      */
-    private List<AddressTransaction> findTransactionsByAddressHash(String address, int page, int count, Order order) {
+    private List<AddressTransaction> findTransactionsByAddressHash(String address, long keptTo, int page, int count, Order order) {
         Field<Long> addressHash = TxInputAddrHash.hash(DSL.val(address));
 
         var outputs = dsl
@@ -260,7 +266,18 @@ public class UtxoStorageReaderImpl implements UtxoStorageReader {
                 .where(TX_INPUT.ADDR_HASH.eq(addressHash))
                 .and(spentOutput.OWNER_ADDR.eq(address));
 
-        Table<?> combined = outputs.unionAll(spends).asTable("combined_tx");
+        var unsettledOutput = ADDRESS_UTXO.as("unsettled_output");
+        var unsettledSpends = dsl
+                .select(TX_INPUT.SPENT_TX_HASH, TX_INPUT.SPENT_AT_BLOCK, TX_INPUT.SPENT_BLOCK_TIME, TX_INPUT.SPENT_AT_SLOT)
+                .from(TX_INPUT)
+                .join(unsettledOutput)
+                .on(unsettledOutput.TX_HASH.eq(TX_INPUT.TX_HASH))
+                .and(unsettledOutput.OUTPUT_INDEX.eq(TX_INPUT.OUTPUT_INDEX))
+                .where(TX_INPUT.SPENT_AT_SLOT.gt(keptTo))
+                .and(TX_INPUT.ADDR_HASH.isNull())
+                .and(unsettledOutput.OWNER_ADDR.eq(address));
+
+        Table<?> combined = outputs.unionAll(spends).unionAll(unsettledSpends).asTable("combined_tx");
         Field<String> txHash = combined.field("tx_hash", String.class);
         Field<Long> block = combined.field("block", Long.class);
         Field<Long> blockTime = combined.field("block_time", Long.class);

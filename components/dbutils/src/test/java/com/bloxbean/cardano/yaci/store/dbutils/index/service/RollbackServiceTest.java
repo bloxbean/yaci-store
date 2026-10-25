@@ -144,6 +144,8 @@ class RollbackServiceTest {
         verify(jdbcTemplate, times(1)).update(eq("DELETE FROM epoch_stake WHERE epoch >= (:epoch + -1)"), any(SqlParameterSource.class));
         verify(jdbcTemplate, times(1)).update(eq("DELETE FROM tx_input WHERE spent_at_slot > :slot"), any(SqlParameterSource.class));
         verify(jdbcTemplate, times(1)).update(eq("DELETE FROM adapot_jobs WHERE slot > :slot"), any(SqlParameterSource.class));
+        //tx_input is rolled back, so tx_input.addr_hash is kept only up to the point
+        verify(jdbcTemplate, times(1)).update(eq(RollbackService.ADDR_HASH_STATE_AFTER_ROLLBACK), any(SqlParameterSource.class));
     }
 
     @Test
@@ -270,6 +272,8 @@ class RollbackServiceTest {
 
         verify(jdbcTemplate, times(1)).update(eq("DELETE FROM drep_pv9_stale_clear_event_cache WHERE pv9_max_epoch >= :epoch"), any(SqlParameterSource.class));
         verify(jdbcTemplate, times(1)).update(eq("DELETE FROM drep_pv9_stale_clear_event WHERE pv9_max_epoch >= :epoch"), any(SqlParameterSource.class));
+        //A ledger-state rollback keeps tx_input, so tx_input.addr_hash stays where it is
+        verify(jdbcTemplate, never()).update(eq(RollbackService.ADDR_HASH_STATE_AFTER_ROLLBACK), any(SqlParameterSource.class));
     }
 
     @Test

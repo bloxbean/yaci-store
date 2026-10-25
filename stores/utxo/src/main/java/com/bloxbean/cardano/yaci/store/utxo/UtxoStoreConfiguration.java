@@ -83,7 +83,7 @@ public class UtxoStoreConfiguration {
                                                UtxoStoreProperties utxoStoreProperties,
                                                UnspentUtxoTable unspentUtxoTable,
                                                TxInputAddrHash txInputAddrHash) {
-        UtxoStorageReader reader = new UtxoStorageReaderImpl(utxoRepository, dslContext, txInputAddrHash::isReadable);
+        UtxoStorageReader reader = new UtxoStorageReaderImpl(utxoRepository, dslContext, txInputAddrHash::readableKeptSlot);
         return utxoStoreProperties.isUnspentTableReadEnabled()
                 ? new UnspentTableUtxoStorageReader(reader, dslContext, unspentUtxoTable::isReadable)
                 : reader;
