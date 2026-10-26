@@ -79,10 +79,20 @@ decides a result, since an output's address never changes.
 
 - **The cache** is a column family (`utxo_owner_addr`) of the process's RocksDB cache,
   `RocksDBCacheStore` in `components/common`: one RocksDB per Yaci Store process, in which any
-  store can make its own column family. Its folder (`store.rocksdb-cache-path`) is deleted at every
-  start, and writes skip RocksDB's write-ahead log: after a restart every spend of an older output
-  is a miss, read from the database, until those outputs are spent. Keys are 34 bytes (tx hash and
-  index), values the address. Mainnet's ~11M unspent outputs take about 1-1.5 GB on disk.
+  store can make its own column family. Its folder (`store.rocksdb-cache-path`) is kept across
+  restarts, and writes skip RocksDB's write-ahead log. Keys are 34 bytes (tx hash and index),
+  values the address. Mainnet's ~11M unspent outputs take about 1-1.5 GB on disk.
+- **The cache is for the initial sync.** There a block spends outputs of any age, and a cache
+  emptied by a restart would make every spend of an older output a miss for hours. So:
+  - a restart during the initial sync keeps the cache (after a crash it can miss the last writes,
+    which are then read from the database);
+  - when the sync reaches the tip (`PreBlockSyncEvent`) the cache is cleared and no longer used: a
+    block's spends are read from `address_utxo`, one query per block;
+  - a restart of a store that has reached the tip, or of a new store (the folder may be left from
+    an earlier database), clears it at start.
+
+  An entry can never be wrong, even from another database: the key is the output's tx hash and
+  index, and an output's address never changes. A folder RocksDB cannot open is deleted.
 - **A spend saved before its output.** A block's spends are saved before its outputs, and in a
   parallel batch a block can spend an output another block of the batch has not saved yet. Such a
   spend is held in memory and inserted at the batch's commit, when every output of the batch is
@@ -137,7 +147,7 @@ used. H2 backs devkit/devnet stores, where histories are small.
 | `idx_tx_input_owner_addr_slot` | ~27 GB (84 bytes per entry, measured on the same sample) |
 | `idx_address_utxo_addr_hash_slot` | ~12 GB (estimate) |
 | **Total** | **~71 GB** |
-| RocksDB cache | ~1-1.5 GB, outside the database, recreated at every start |
+| RocksDB cache | ~1-1.5 GB during the initial sync, outside the database, cleared at the tip |
 
 ### Filling a store synced without the address (mainnet)
 
@@ -170,8 +180,9 @@ store by rebuilding `tx_input` is a possible follow-up.
 ## Consequences
 
 - `/addresses/{address}/transactions` costs about `page x count` index entries, not the history.
-- With the flag on, each spend looks its output up in the RocksDB cache, or in `address_utxo` on a
-  miss, and `tx_input` rows are about 98 bytes wider.
+- With the flag on, each spend of the initial sync looks its output up in the RocksDB cache, or in
+  `address_utxo` on a miss (at the tip, always in `address_utxo`), and `tx_input` rows are about 98
+  bytes wider.
 - After the initial sync, `admin-cli apply-indexes` builds the two indexes with the other read
   indexes (`CREATE INDEX`, which holds writes to the table while it builds, as for every index in
   `index.yml`).

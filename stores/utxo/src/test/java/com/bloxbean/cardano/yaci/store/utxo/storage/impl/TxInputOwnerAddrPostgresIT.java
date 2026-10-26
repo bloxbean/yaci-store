@@ -6,6 +6,7 @@ import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Cursor;
 import com.bloxbean.cardano.yaci.store.common.domain.StoreState;
 import com.bloxbean.cardano.yaci.store.common.domain.TxInput;
+import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.common.service.CursorService;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
@@ -108,20 +109,28 @@ class TxInputOwnerAddrPostgresIT {
     @AfterEach
     void closeCaches() {
         cacheStores.forEach(RocksDBCacheStore::close);
+        cacheStores.clear();
     }
 
-    /** A run of the store: a new RocksDB cache, empty, as after a restart. */
+    /** A RocksDB cache store on the test's folder, as a process opens it at start. */
+    private RocksDBCacheStore openCacheStore() {
+        closeCaches();
+        RocksDBCacheStore cacheStore = new RocksDBCacheStore(tmp.resolve("cache"));
+        cacheStores.add(cacheStore);
+        return cacheStore;
+    }
+
+    private RocksDBCache<UtxoKey, String> openCache() {
+        return openCacheStore().cache(TxInputOwnerAddr.CACHE_NAME, UtxoKeyCodec.INSTANCE, RocksDBCache.STRING);
+    }
+
+    /** A run of the store: the RocksDB cache is reopened from the folder of the last run, as after a restart. */
     private TxInputOwnerAddr newOwnerAddr(boolean enabled) {
         CursorService cursorService = mock(CursorService.class);
         when(cursorService.getCursor()).thenAnswer(invocation -> cursorSlot.get() < 0
                 ? Optional.empty() : Optional.of(Cursor.builder().slot(cursorSlot.get()).build()));
-        Path folder = tmp.resolve("cache-" + cacheStores.size());
         return new TxInputOwnerAddr(UtxoStoreProperties.builder().txInputOwnerAddrEnabled(enabled).build(), dsl,
-                transactionManager, stateService, cursorService, () -> {
-            RocksDBCacheStore cacheStore = new RocksDBCacheStore(folder);
-            cacheStores.add(cacheStore);
-            return cacheStore.cache(TxInputOwnerAddr.CACHE_NAME, UtxoKeyCodec.INSTANCE, RocksDBCache.STRING);
-        });
+                transactionManager, stateService, cursorService, this::openCache);
     }
 
     private UtxoStorageImpl newStorage(TxInputOwnerAddr txInputOwnerAddr) {
@@ -305,14 +314,21 @@ class TxInputOwnerAddrPostgresIT {
         assertThat(state().getSlot()).isEqualTo(200);
     }
 
+    private void restart() {
+        ownerAddr = newOwnerAddr(true);
+        storage = newStorage(ownerAddr);
+    }
+
     @Test
-    void afterARestartTheEmptyCacheFallsBackToAddressUtxo() {
+    void aRestartDuringTheInitialSyncKeepsTheCache() {
         storage.saveUnspent(List.of(output(hash(1), 0, ALICE, 100), output(hash(1), 1, BOB, 100)));
         commit(100);
 
-        //Restarted: a new, empty cache
-        ownerAddr = newOwnerAddr(true);
-        storage = newStorage(ownerAddr);
+        restart();
+        ownerAddr.isLive();
+        assertThat(ownerAddr.cache().get(new UtxoKey(hash(1), 0))).isEqualTo(ALICE);
+        assertThat(ownerAddr.cache().get(new UtxoKey(hash(1), 1))).isEqualTo(BOB);
+
         storage.saveSpent(List.of(spend(hash(1), 0, hash(2), 200), spend(hash(1), 1, hash(2), 200)));
         storage.saveUnspent(List.of(output(hash(2), 0, ALICE, 200)));
         commit(200);
@@ -320,6 +336,70 @@ class TxInputOwnerAddrPostgresIT {
         assertThat(rowsWithoutAddr()).isZero();
         assertThat(rowsWithWrongAddr()).isZero();
         assertThat(state().getSlot()).isEqualTo(200);
+    }
+
+    @Test
+    void aSpendWhoseOutputIsNotInTheCacheReadsAddressUtxo() {
+        storage.saveUnspent(List.of(output(hash(1), 0, ALICE, 100), output(hash(1), 1, BOB, 100)));
+        commit(100);
+
+        //As after a crash: the writes RocksDB had not flushed are lost
+        ownerAddr.cache().clear();
+        storage.saveSpent(List.of(spend(hash(1), 0, hash(2), 200), spend(hash(1), 1, hash(2), 200)));
+        storage.saveUnspent(List.of(output(hash(2), 0, ALICE, 200)));
+        commit(200);
+
+        assertThat(rowsWithoutAddr()).isZero();
+        assertThat(rowsWithWrongAddr()).isZero();
+        assertThat(state().getSlot()).isEqualTo(200);
+    }
+
+    @Test
+    void atTheTipTheCacheIsClearedAndSpendsReadAddressUtxo() throws Exception {
+        storage.saveUnspent(List.of(output(hash(1), 0, ALICE, 100), output(hash(1), 1, BOB, 100)));
+        commit(100);
+        var cache = ownerAddr.cache();
+        assertThat(cache.get(new UtxoKey(hash(1), 0))).isEqualTo(ALICE);
+
+        atTheTipWithoutIndexes();
+        assertThat(ownerAddr.cache()).isNull();
+        assertThat(cache.size()).isZero();
+
+        //At the tip outputs are not cached, and spends find their address in address_utxo
+        storage.saveSpent(List.of(spend(hash(1), 0, hash(2), 200)));
+        storage.saveUnspent(List.of(output(hash(2), 0, BOB, 200)));
+        commit(200);
+        assertThat(cache.get(new UtxoKey(hash(2), 0))).isNull();
+        storage.saveSpent(List.of(spend(hash(2), 0, hash(3), 300), spend(hash(1), 1, hash(3), 300)));
+        storage.saveUnspent(List.of(output(hash(3), 0, ALICE, 300)));
+        commit(300);
+
+        assertThat(rowsWithoutAddr()).isZero();
+        assertThat(rowsWithWrongAddr()).isZero();
+        assertThat(state().getStatus()).isEqualTo(TxInputOwnerAddr.STATUS_CURRENT);
+        assertThat(state().getSlot()).isEqualTo(300);
+    }
+
+    @Test
+    void aRestartAfterTheTipClearsTheCache() throws Exception {
+        storage.saveUnspent(List.of(output(hash(1), 0, ALICE, 100)));
+        commit(100);
+        atTheTipWithoutIndexes();
+        //A spend saved while the tip was reached can still have added an entry
+        openCache().put(new UtxoKey(hash(9), 0), BOB);
+
+        restart();
+        ownerAddr.isLive();
+        assertThat(ownerAddr.cache().get(new UtxoKey(hash(9), 0))).isNull();
+    }
+
+    @Test
+    void aNewStoreClearsACacheLeftByAnEarlierDatabase() {
+        openCache().put(new UtxoKey(hash(1), 0), BOB);
+
+        storage.saveUnspent(List.of(output(hash(2), 0, ALICE, 100)));
+        assertThat(ownerAddr.cache().get(new UtxoKey(hash(1), 0))).isNull();
+        assertThat(ownerAddr.cache().get(new UtxoKey(hash(2), 0))).isEqualTo(ALICE);
     }
 
     @Test

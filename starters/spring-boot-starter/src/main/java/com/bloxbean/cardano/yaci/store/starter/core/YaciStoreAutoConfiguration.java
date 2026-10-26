@@ -175,7 +175,7 @@ public class YaciStoreAutoConfiguration {
 
     /**
      * The process's RocksDB for caches: a store that needs one asks for this bean and makes its own column family.
-     * Lazy, so RocksDB is loaded and its folder deleted only when a store uses it.
+     * Lazy, so RocksDB is loaded and its folder opened only when a store uses it.
      */
     @Bean(destroyMethod = "close")
     @Lazy

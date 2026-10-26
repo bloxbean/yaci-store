@@ -8,7 +8,7 @@ import java.util.function.Function;
 
 /**
  * A {@link Cache} in a column family of the process's {@link RocksDBCacheStore}, for data too large for memory.
- * Made with {@link RocksDBCacheStore#cache}. Entries do not survive a restart.
+ * Made with {@link RocksDBCacheStore#cache}. Entries are kept across restarts, until {@link #clear}.
  */
 public class RocksDBCache<K, V> implements Cache<K, V> {
 
@@ -108,6 +108,8 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
                 db.deleteRange(family, store.writeOptions(), first, last);
                 db.delete(family, store.writeOptions(), last);
             }
+            //Drops the deleted entries' files now, rather than at some later compaction
+            db.compactRange(family);
             return null;
         });
     }

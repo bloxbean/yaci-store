@@ -66,9 +66,10 @@ public class UtxoStoreAutoConfigProperties {
          * PostgreSQL 16+ only. Keep tx_input.owner_addr, the address each input spends from, so
          * /addresses/{address}/transactions reads an address's latest transactions from two indexes instead
          * of its whole history. Written from the first block: the addresses of unspent outputs are kept in a
-         * RocksDB cache (store.rocksdb-cache-path, emptied at every start), and address_utxo is read on a miss.
-         * When the sync reaches the tip the two indexes are built and the query switches over. A store synced
-         * before has its rows filled in the background first, which is slow on mainnet. Ignored on H2 and MySQL.
+         * RocksDB cache (store.rocksdb-cache-path) during the initial sync, kept across its restarts and cleared
+         * when the sync reaches the tip; address_utxo is read on a miss, and at the tip. The query switches over
+         * once its two indexes (index.yml) are applied with admin-cli apply-indexes. A store synced before has its
+         * rows filled in the background at the tip, which is slow on mainnet. Ignored on H2 and MySQL.
          */
         private boolean txInputOwnerAddrEnabled = false;
     }

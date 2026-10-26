@@ -51,15 +51,32 @@ class RocksDBCacheTest {
     }
 
     @Test
-    void aStoreOpensEmptyEvenWhenTheFolderHasAnOldCache() throws Exception {
+    void aStoreReopensTheCachesOfTheLastRun() {
         Path folder = tmp.resolve("cache");
         try (RocksDBCacheStore store = new RocksDBCacheStore(folder)) {
-            store.cache("utxo_owner_addr", RocksDBCache.STRING, RocksDBCache.STRING).put("tx1#0", "addr1");
+            store.cache("one", RocksDBCache.STRING, RocksDBCache.STRING).put("tx1#0", "addr1");
+            store.cache("two", RocksDBCache.STRING, RocksDBCache.STRING).put("tx1#0", "addr2");
         }
-        Files.writeString(folder.resolve("stray-file"), "left from an earlier run");
 
         try (RocksDBCacheStore store = new RocksDBCacheStore(folder)) {
-            assertThat(store.cache("utxo_owner_addr", RocksDBCache.STRING, RocksDBCache.STRING).get("tx1#0")).isNull();
+            assertThat(store.cache("one", RocksDBCache.STRING, RocksDBCache.STRING).get("tx1#0")).isEqualTo("addr1");
+            assertThat(store.cache("two", RocksDBCache.STRING, RocksDBCache.STRING).get("tx1#0")).isEqualTo("addr2");
+            assertThat(store.cache("three", RocksDBCache.STRING, RocksDBCache.STRING).get("tx1#0")).isNull();
+        }
+    }
+
+    @Test
+    void aFolderRocksDBCannotOpenIsReplacedByAnEmptyCache() throws Exception {
+        Path folder = tmp.resolve("cache");
+        Files.createDirectories(folder);
+        Files.writeString(folder.resolve("CURRENT"), "not a manifest\n");
+        Files.writeString(folder.resolve("stray-file"), "left from somewhere else");
+
+        try (RocksDBCacheStore store = new RocksDBCacheStore(folder)) {
+            RocksDBCache<String, String> cache = store.cache("utxo_owner_addr", RocksDBCache.STRING, RocksDBCache.STRING);
+            assertThat(cache.get("tx1#0")).isNull();
+            cache.put("tx1#0", "addr1");
+            assertThat(cache.get("tx1#0")).isEqualTo("addr1");
             assertThat(folder.resolve("stray-file")).doesNotExist();
         }
     }

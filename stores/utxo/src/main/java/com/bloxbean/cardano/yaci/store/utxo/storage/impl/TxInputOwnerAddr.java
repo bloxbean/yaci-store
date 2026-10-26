@@ -33,8 +33,11 @@ import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.TX_INPUT;
  *
  * <p>The address is written with the row, from the first block: {@link UtxoStorageImpl} keeps the address of each
  * unspent output in a cache ({@link #cache()}, a column family of the process's RocksDB cache) and looks the spent
- * output up there, or in address_utxo when the cache does not have it. The cache is empty after every restart and
- * never decides a result: an output's address never changes.
+ * output up there, or in address_utxo when the cache does not have it. The cache never decides a result: an output's
+ * address never changes. It is for the initial sync, where a block spends outputs of any age: a restart during it
+ * keeps the cache, so the sync does not slow down while the cache refills. When the sync reaches the tip the cache is
+ * cleared and not used again: a block's spends are read from address_utxo, one query per block. A restart after the
+ * tip, or of a new store (a folder left by an earlier database), clears it too.
  *
  * <p>Its store_state row ({@link #STATE_ID}) records up to which slot every tx_input row has the address:
  * <ul>
@@ -89,6 +92,8 @@ public class TxInputOwnerAddr {
     private volatile boolean keptToCommits;
     private volatile long lastCheck;
     private volatile Cache<UtxoKey, String> cache;
+    //Set when the sync reaches the tip: from then on spends are read from address_utxo
+    private volatile boolean cacheRetired;
     private final AtomicBoolean filling = new AtomicBoolean(false);
     private final AtomicBoolean warned = new AtomicBoolean(false);
     private final AtomicBoolean indexHintLogged = new AtomicBoolean(false);
@@ -147,8 +152,17 @@ public class TxInputOwnerAddr {
         return true;
     }
 
-    /** The addresses of unspent outputs, by output; empty after every restart. Only while {@link #isLive()}. */
+    /**
+     * The addresses of unspent outputs, by output, until the sync reaches the tip; null from then on. Only while
+     * {@link #isLive()}.
+     */
     Cache<UtxoKey, String> cache() {
+        if (cacheRetired)
+            return null;
+        return openCache();
+    }
+
+    private Cache<UtxoKey, String> openCache() {
         if (cache == null) {
             synchronized (this) {
                 if (cache == null)
@@ -210,6 +224,7 @@ public class TxInputOwnerAddr {
             return;
 
         StoreState state = storeStateService.getState(STATE_ID).orElse(null);
+        boolean stateBefore = state != null;
         Long cursorSlot = cursorSlot();
         if (state == null) {
             //A store with no tx_input row yet has the address from its first spend, even if its cursor is already
@@ -237,7 +252,20 @@ public class TxInputOwnerAddr {
         }
 
         current = STATUS_CURRENT.equals(state.getStatus());
+        //The last run's cache is kept only while the initial sync it was made for goes on
+        if (!(stateBefore && keptToCommits && !current))
+            clearCache("the store " + (current ? "has reached the tip before" : "starts its tx_input.owner_addr state"));
         initialized = true;
+    }
+
+    private void clearCache(String reason) {
+        long start = System.currentTimeMillis();
+        Cache<UtxoKey, String> cache = openCache();
+        long entries = cache.size();
+        cache.clear();
+        if (entries > 0)
+            log.info("tx_input.owner_addr: cleared the cache of about {} output addresses in {} ms, as {}",
+                    entries, System.currentTimeMillis() - start, reason);
     }
 
     /**
@@ -269,6 +297,12 @@ public class TxInputOwnerAddr {
         }
 
         isLive();
+        //At the tip a block's spends are read from address_utxo. A spend saved while this runs may still use the
+        //cache: it finds the address or reads it, and a later restart clears what it adds.
+        if (!cacheRetired) {
+            cacheRetired = true;
+            clearCache("the sync has reached the tip");
+        }
         if (current || !filling.compareAndSet(false, true))
             return;
 

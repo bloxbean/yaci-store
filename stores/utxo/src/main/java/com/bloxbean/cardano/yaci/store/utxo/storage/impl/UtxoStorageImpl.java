@@ -285,9 +285,9 @@ public class UtxoStorageImpl implements UtxoStorage {
 
         dsl.batch(inserts).execute();
 
-        //Each output's address, for the spend of it to find (see saveSpent)
-        if (txInputOwnerAddr != null && txInputOwnerAddr.isLive()) {
-            Cache<UtxoKey, String> cache = txInputOwnerAddr.cache();
+        //Each output's address, for the spend of it to find (see saveSpent); until the sync reaches the tip
+        Cache<UtxoKey, String> cache = txInputOwnerAddr != null && txInputOwnerAddr.isLive() ? txInputOwnerAddr.cache() : null;
+        if (cache != null) {
             addressUtxoList.stream()
                     .filter(addressUtxo -> addressUtxo.getOwnerAddr() != null)
                     .forEach(addressUtxo -> cache.put(new UtxoKey(addressUtxo.getTxHash(), addressUtxo.getOutputIndex()),
@@ -499,8 +499,9 @@ public class UtxoStorageImpl implements UtxoStorage {
     }
 
     /**
-     * The owner_addr of the outputs these inputs spend, from the cache of unspent outputs, else from address_utxo in one
-     * query. An output not saved yet is missing. The outputs found are dropped from the cache: they are spent now.
+     * The owner_addr of the outputs these inputs spend, from the cache of unspent outputs (until the sync reaches the
+     * tip), else from address_utxo in one query. An output not saved yet is missing. The outputs found are dropped from
+     * the cache: they are spent now.
      */
     private Map<UtxoKey, String> spentOutputAddresses(List<TxInput> txInputs) {
         Cache<UtxoKey, String> cache = txInputOwnerAddr.cache();
@@ -508,7 +509,7 @@ public class UtxoStorageImpl implements UtxoStorage {
         List<UtxoKey> misses = new ArrayList<>();
         for (TxInput txInput : txInputs) {
             UtxoKey utxoKey = new UtxoKey(txInput.getTxHash(), txInput.getOutputIndex());
-            String address = cache.get(utxoKey);
+            String address = cache != null ? cache.get(utxoKey) : null;
             if (address != null) {
                 addresses.put(utxoKey, address);
                 cache.remove(utxoKey);
