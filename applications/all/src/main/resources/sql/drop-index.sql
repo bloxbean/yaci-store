@@ -33,7 +33,6 @@ drop index idx_address_balance_unit;
 
 drop index idx_stake_addr_balance_stake_addr;
 drop index idx_stake_addr_balance_block_time;
-drop index idx_stake_addr_balance_epoch;
 -- transaction_witness
 drop index idx_transaction_witness_tx_hash;
 
