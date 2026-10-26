@@ -85,6 +85,8 @@ public class TxInputOwnerAddr {
     private volatile boolean initialized;
     private volatile boolean current;
     private volatile boolean readable;
+    //Whether every row up to the state's slot had the address when this run started: then each commit moves it
+    private volatile boolean keptToCommits;
     private volatile long lastCheck;
     private volatile Cache<UtxoKey, String> cache;
     private final AtomicBoolean filling = new AtomicBoolean(false);
@@ -219,6 +221,7 @@ public class TxInputOwnerAddr {
             if (!newStore)
                 log.info("tx_input.owner_addr: new tx_input rows get the address from now on. The rows synced so far are "
                         + "filled in the background when the sync reaches the tip.");
+            keptToCommits = newStore;
         } else if (STATUS_CURRENT.equals(state.getStatus()) && cursorSlot != null
                 && (state.getSlot() == null || state.getSlot() < cursorSlot)) {
             //Blocks were synced by a version without the address
@@ -227,6 +230,10 @@ public class TxInputOwnerAddr {
                     + "which starts when the sync reaches the tip.", state.getSlot(), cursorSlot, state.getSlot());
             state = state.toBuilder().status(STATUS_FILLING).build();
             storeStateService.saveState(state);
+            keptToCommits = false;
+        } else {
+            //Not behind the cursor: the last run kept it to its last commit (the cursor is saved after the commit)
+            keptToCommits = state.getSlot() != null && (cursorSlot == null || state.getSlot() >= cursorSlot);
         }
 
         current = STATUS_CURRENT.equals(state.getStatus());
@@ -234,21 +241,19 @@ public class TxInputOwnerAddr {
     }
 
     /**
-     * A commit of a batch whose rows all have the address. If every row before the batch had it too (the state is
-     * kept to the previous commit, which the cursor still shows), the state moves to the batch's last slot. Runs in
-     * the commit's transaction.
+     * A commit of a batch whose rows all have the address. If every row before the batch had it too (the state was
+     * kept to the commits since this run started), the state moves to the batch's last slot. Runs in the commit's
+     * transaction. The cursor is not compared here: a Byron epoch boundary block moves it without a commit.
      */
     void committed(long commitSlot) {
-        if (!isLive())
+        if (!isLive() || !keptToCommits)
             return;
 
         StoreState state = storeStateService.getState(STATE_ID).orElse(null);
         if (state == null || state.getSlot() == null)
             return;
 
-        Long cursorSlot = cursorSlot();
-        if (cursorSlot == null || state.getSlot() >= cursorSlot)
-            storeStateService.saveState(state.toBuilder().slot(Math.max(state.getSlot(), commitSlot)).build());
+        storeStateService.saveState(state.toBuilder().slot(Math.max(state.getSlot(), commitSlot)).build());
     }
 
     @EventListener
@@ -330,6 +335,8 @@ public class TxInputOwnerAddr {
         storeStateService.saveState(StoreState.builder().stateId(STATE_ID).status(STATUS_CURRENT)
                 .slot(now != null ? now : target != null ? target : 0L).build());
         current = true;
+        //Every row up to here has the address, and this run writes every new one with it
+        keptToCommits = true;
         recheck();
         log.info("tx_input.owner_addr is current: {} rows filled in {} s. /addresses/{address}/transactions reads from it "
                 + "once its indexes are built (admin-cli apply-indexes).", filled, (System.currentTimeMillis() - start) / 1000);

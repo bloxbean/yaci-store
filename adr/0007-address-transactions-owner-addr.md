@@ -97,8 +97,10 @@ decides a result, since an output's address never changes.
 which slot every `tx_input` row has the address:
 
 1. **A new store** (no `tx_input` row when it first saves; its cursor may already be at the genesis
-   block) starts at its cursor slot. Each commit moves the slot to
-   its last block while the previous commit left it at the cursor.
+   block) starts at its cursor slot, and each commit moves the slot to its last block. Whether the
+   commits move it is decided once per run, at its first save: for a new store, or when the slot is
+   at or past the cursor (the last run kept it to its last commit). The commits do not compare it
+   with the cursor, since a Byron epoch boundary block moves the cursor without a commit.
 2. **At the first `PreBlockSyncEvent`** (the store reaches the tip, or starts near it) a background
    thread fills the rows still missing the address (none on a new store) and sets `CURRENT`.
 3. **Reads** use the query above once the state is `CURRENT` and both indexes exist and are valid,

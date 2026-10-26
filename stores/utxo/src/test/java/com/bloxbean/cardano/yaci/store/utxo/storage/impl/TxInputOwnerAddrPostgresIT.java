@@ -264,18 +264,28 @@ class TxInputOwnerAddrPostgresIT {
     }
 
     @Test
-    void aNewStoreWhoseCursorIsAlreadySetStillWritesTheAddressFromTheFirstBlock() throws Exception {
+    void theStateFollowsTheCommitsOfANewStoreWhoseCursorMovesWithoutACommit() throws Exception {
         //A new store's cursor is at the genesis block before the first output or spend is saved
         cursorSlot.set(0);
+        storage.saveUnspent(List.of(output(hash(1), 0, ALICE, 100), output(hash(1), 1, BOB, 100)));
+        assertThat(state().getSlot()).isEqualTo(0);
 
-        history();
+        //A Byron epoch boundary block moves the cursor without a commit, before and between commits
+        cursorSlot.set(50);
+        commit(100);
+        assertThat(state().getSlot()).isEqualTo(100);
+
+        storage.saveSpent(List.of(spend(hash(1), 0, hash(2), 200)));
+        storage.saveUnspent(List.of(output(hash(2), 0, BOB, 200)));
+        cursorSlot.set(150);
+        commit(200);
 
         assertThat(rowsWithoutAddr()).isZero();
         assertThat(state().getStatus()).isEqualTo(TxInputOwnerAddr.STATUS_FILLING);
-        assertThat(state().getSlot()).isEqualTo(600);
+        assertThat(state().getSlot()).isEqualTo(200);
 
         atTheTip();
-        assertThat(state().getSlot()).isEqualTo(600);
+        assertThat(state().getSlot()).isEqualTo(200);
     }
 
     @Test
