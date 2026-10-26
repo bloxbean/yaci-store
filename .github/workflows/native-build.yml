@@ -55,7 +55,7 @@ jobs:
         with:
           java-version: '21'
           distribution: 'graalvm'
-          version: '21.0.5'
+          version: '21.0.12'
           native-image-musl: ${{ matrix.musl }}
           native-image-job-reports: 'true'
 
