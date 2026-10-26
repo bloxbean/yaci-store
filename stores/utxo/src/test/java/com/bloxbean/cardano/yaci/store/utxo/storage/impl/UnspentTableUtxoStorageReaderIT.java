@@ -59,6 +59,7 @@ class UnspentTableUtxoStorageReaderIT {
     void seed() {
         clean();   // the H2 database is shared with the module's other tests
         properties.setUnspentTableEnabled(true);
+        properties.setUnspentTableBackfillAtTip(false);
         antiJoin = new UtxoStorageReaderImpl(utxoRepository, dsl);
         table = new UnspentTableUtxoStorageReader(antiJoin, dsl);
 
@@ -94,6 +95,7 @@ class UnspentTableUtxoStorageReaderIT {
         jdbc.update("delete from address_utxo");
         jdbc.update("delete from tx_input");
         properties.setUnspentTableEnabled(false);
+        properties.setUnspentTableBackfillAtTip(true);
     }
 
     /** Every page of {@code read}, in both orders, from both readers. */

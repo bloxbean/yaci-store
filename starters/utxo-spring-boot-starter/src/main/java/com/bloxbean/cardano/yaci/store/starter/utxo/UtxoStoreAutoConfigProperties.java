@@ -50,10 +50,11 @@ public class UtxoStoreAutoConfigProperties {
 
         /**
          * With unspent-table-enabled: write nothing to address_utxo_unspent during the initial sync and
-         * build it once when the sync reaches the tip, then keep it current. Without it the table is
-         * written from the first block of a new store.
+         * build it once when the sync reaches the tip, then keep it current. On by default, as it keeps
+         * the initial sync as fast as without the table. Off, the table is written from the first block
+         * of a new store.
          */
-        private boolean unspentTableBackfillAtTip = false;
+        private boolean unspentTableBackfillAtTip = true;
 
         /**
          * Serve the unspent-output queries (by address, payment credential, stake address, asset)

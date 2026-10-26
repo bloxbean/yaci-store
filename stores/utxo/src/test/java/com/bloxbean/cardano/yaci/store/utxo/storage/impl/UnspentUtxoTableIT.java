@@ -77,6 +77,8 @@ class UnspentUtxoTableIT {
     @BeforeEach
     void enable() {
         properties.setUnspentTableEnabled(true);
+        //These tests keep the table from the first block
+        properties.setUnspentTableBackfillAtTip(false);
     }
 
     @AfterEach
@@ -87,6 +89,7 @@ class UnspentUtxoTableIT {
         jdbc.update("delete from tx_input");
         jdbc.update("delete from store_state");
         properties.setUnspentTableEnabled(false);
+        properties.setUnspentTableBackfillAtTip(true);
     }
 
     private static AddressUtxo output(String txHash, int index, long slot) {
@@ -436,7 +439,8 @@ class UnspentUtxoTableIT {
 
     /** A store kept from genesis whose cursor is at {@code cursorSlot}. */
     private Store fromGenesisAt(Long cursorSlot) {
-        return store(UtxoStoreProperties.builder().unspentTableEnabled(true).unspentTableReadEnabled(true).build(), cursorSlot);
+        return store(UtxoStoreProperties.builder().unspentTableEnabled(true).unspentTableBackfillAtTip(false)
+                .unspentTableReadEnabled(true).build(), cursorSlot);
     }
 
     /** The same store running with the table turned off. */
