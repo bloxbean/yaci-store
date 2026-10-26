@@ -43,9 +43,9 @@ public class UtxoStoreProperties {
 
     /**
      * With {@link #unspentTableEnabled}: write nothing to address_utxo_unspent during the initial sync, and
-     * build it once when the store reaches the tip (see UnspentUtxoTable). On by default: writing the table
-     * during the initial sync made it about 1.45x slower on preprod, while the build at the tip took
-     * 2 hours on mainnet. Off, the table is written from the first block.
+     * build it once when the store reaches the tip (see UnspentUtxoTable). On by default, so the initial sync
+     * does no extra writes; the build at the tip took 2 hours on mainnet. Off, the table is written from the
+     * first block.
      */
     @Builder.Default
     private boolean unspentTableBackfillAtTip = true;
