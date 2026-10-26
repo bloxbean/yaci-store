@@ -264,6 +264,21 @@ class TxInputOwnerAddrPostgresIT {
     }
 
     @Test
+    void aNewStoreWhoseCursorIsAlreadySetStillWritesTheAddressFromTheFirstBlock() throws Exception {
+        //A new store's cursor is at the genesis block before the first output or spend is saved
+        cursorSlot.set(0);
+
+        history();
+
+        assertThat(rowsWithoutAddr()).isZero();
+        assertThat(state().getStatus()).isEqualTo(TxInputOwnerAddr.STATUS_FILLING);
+        assertThat(state().getSlot()).isEqualTo(600);
+
+        atTheTip();
+        assertThat(state().getSlot()).isEqualTo(600);
+    }
+
+    @Test
     void aSpendSavedBeforeItsOutputIsInsertedAtTheCommitWithTheAddress() {
         storage.saveUnspent(List.of(output(hash(1), 0, ALICE, 100)));
         commit(100);

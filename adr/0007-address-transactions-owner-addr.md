@@ -96,7 +96,8 @@ decides a result, since an output's address never changes.
 `TxInputOwnerAddr` keeps a `store_state` row, `utxo.tx_input_owner_addr`, whose slot says up to
 which slot every `tx_input` row has the address:
 
-1. **A new store** (no cursor when it first saves) starts at slot 0. Each commit moves the slot to
+1. **A new store** (no `tx_input` row when it first saves; its cursor may already be at the genesis
+   block) starts at its cursor slot. Each commit moves the slot to
    its last block while the previous commit left it at the cursor.
 2. **At the first `PreBlockSyncEvent`** (the store reaches the tip, or starts near it) a background
    thread fills the rows still missing the address (none on a new store) and sets `CURRENT`.

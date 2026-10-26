@@ -38,7 +38,7 @@ import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.TX_INPUT;
  *
  * <p>Its store_state row ({@link #STATE_ID}) records up to which slot every tx_input row has the address:
  * <ul>
- *   <li>A new store starts at slot 0, and each commit moves the slot to its last block. A store synced before the
+ *   <li>A new store (no tx_input row yet) starts at its cursor, and each commit moves the slot to its last block. A store synced before the
  *   flag was on starts with no slot: the background fill below brings it up to date.</li>
  *   <li>At the first {@link PreBlockSyncEvent} (the store reaches the tip, or starts near it) a background thread fills
  *   the rows that are still missing the address, if any, and sets {@link #STATUS_CURRENT}. On a new store there is
@@ -210,10 +210,13 @@ public class TxInputOwnerAddr {
         StoreState state = storeStateService.getState(STATE_ID).orElse(null);
         Long cursorSlot = cursorSlot();
         if (state == null) {
-            //A new store has the address from its first block; an older one gets its rows filled at the tip
-            state = StoreState.builder().stateId(STATE_ID).status(STATUS_FILLING).slot(cursorSlot == null ? 0L : null).build();
+            //A store with no tx_input row yet has the address from its first spend, even if its cursor is already
+            //set (at the genesis block); one with rows synced before gets them filled at the tip
+            boolean newStore = !dsl.fetchExists(TX_INPUT);
+            Long slot = newStore ? (cursorSlot != null ? cursorSlot : 0L) : null;
+            state = StoreState.builder().stateId(STATE_ID).status(STATUS_FILLING).slot(slot).build();
             storeStateService.saveState(state);
-            if (cursorSlot != null)
+            if (!newStore)
                 log.info("tx_input.owner_addr: new tx_input rows get the address from now on. The rows synced so far are "
                         + "filled in the background when the sync reaches the tip.");
         } else if (STATUS_CURRENT.equals(state.getStatus()) && cursorSlot != null
