@@ -41,9 +41,11 @@ import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.TX_INPUT;
  *   <li>A new store starts at slot 0, and each commit moves the slot to its last block. A store synced before the
  *   flag was on starts with no slot: the background fill below brings it up to date.</li>
  *   <li>At the first {@link PreBlockSyncEvent} (the store reaches the tip, or starts near it) a background thread fills
- *   the rows that are still missing the address, if any, builds the two indexes and sets {@link #STATUS_CURRENT}.
- *   On a new store there is nothing to fill: only the indexes are built.</li>
- *   <li>{@link #STATUS_CURRENT}: queries use the address.</li>
+ *   the rows that are still missing the address, if any, and sets {@link #STATUS_CURRENT}. On a new store there is
+ *   nothing to fill.</li>
+ *   <li>{@link #STATUS_CURRENT} and both indexes built: queries use the address. The indexes are optional indexes
+ *   (dbutils index.yml), applied after the sync with {@code admin-cli apply-indexes}; until they are valid the full
+ *   query is used.</li>
  * </ul>
  * A store that saves tx_input rows without the address (the flag was turned off) puts the state back to filling from
  * before those rows; readers also check that the state is at or past the cursor, which covers a writer of a version
@@ -57,6 +59,7 @@ public class TxInputOwnerAddr {
     /** The cache's column family in the RocksDB cache. */
     public static final String CACHE_NAME = "utxo_owner_addr";
 
+    /** Defined in dbutils index.yml, which admin-cli apply-indexes applies. */
     static final String TX_INPUT_INDEX = "idx_tx_input_owner_addr_slot";
     static final String ADDRESS_UTXO_INDEX = "idx_address_utxo_addr_hash_slot";
 
@@ -68,7 +71,7 @@ public class TxInputOwnerAddr {
     private static final String FILL_WORK_MEM = "2GB";
     /** Memory for the VACUUM after each fill chunk. */
     private static final String VACUUM_MEM = "1GB";
-    /** How often whether the address is current is re-checked, for read-only instances that do not fill. */
+    /** How often the state and the indexes are re-checked: by read-only instances, and for indexes applied later. */
     private static final long RECHECK_INTERVAL_MS = 60_000;
 
     private final UtxoStoreProperties properties;
@@ -81,10 +84,12 @@ public class TxInputOwnerAddr {
     private volatile Boolean postgres16;
     private volatile boolean initialized;
     private volatile boolean current;
+    private volatile boolean readable;
     private volatile long lastCheck;
     private volatile Cache<UtxoKey, String> cache;
     private final AtomicBoolean filling = new AtomicBoolean(false);
     private final AtomicBoolean warned = new AtomicBoolean(false);
+    private final AtomicBoolean indexHintLogged = new AtomicBoolean(false);
     private final AtomicBoolean savedWithoutAddrChecked = new AtomicBoolean(false);
 
     //Package-private so tests can fill in several chunks
@@ -159,9 +164,14 @@ public class TxInputOwnerAddr {
         long now = System.currentTimeMillis();
         if (now - lastCheck > RECHECK_INTERVAL_MS) {
             lastCheck = now;
-            current = checkCurrent();
+            readable = checkCurrent() && checkIndexes();
         }
-        return current;
+        return readable;
+    }
+
+    /** Re-checks the state and the indexes at the next {@link #isReadable()}. */
+    void recheck() {
+        lastCheck = 0;
     }
 
     /** CURRENT, and kept to the cursor or past it: the cursor is saved after the commit that moves the state. */
@@ -172,6 +182,21 @@ public class TxInputOwnerAddr {
 
         Long cursorSlot = cursorSlot();
         return cursorSlot == null || state.getSlot() >= cursorSlot;
+    }
+
+    /** Both indexes exist and are valid: without them the query would read the whole of both tables. */
+    private boolean checkIndexes() {
+        Integer valid = dsl.fetchOne("select count(*)::int from pg_index i join pg_class c on c.oid = i.indexrelid "
+                + "where i.indisvalid and c.relname in (?, ?) and pg_table_is_visible(c.oid)", TX_INPUT_INDEX, ADDRESS_UTXO_INDEX)
+                .get(0, Integer.class);
+        boolean built = valid == 2;
+        if (!built && indexHintLogged.compareAndSet(false, true))
+            log.info("tx_input.owner_addr is current, but its indexes {} and {} are not built yet. Apply them with "
+                    + "admin-cli apply-indexes; /addresses/{address}/transactions uses its full query until then.",
+                    TX_INPUT_INDEX, ADDRESS_UTXO_INDEX);
+        if (built)
+            indexHintLogged.set(false);
+        return built;
     }
 
     private Long cursorSlot() {
@@ -202,7 +227,6 @@ public class TxInputOwnerAddr {
         }
 
         current = STATUS_CURRENT.equals(state.getStatus());
-        lastCheck = System.currentTimeMillis();
         initialized = true;
     }
 
@@ -255,8 +279,8 @@ public class TxInputOwnerAddr {
 
     /**
      * Fills the address of the tx_input rows that miss it, up to the cursor slot at the start, in chunks of about
-     * {@link #chunkRows} rows by spent_at_slot, then builds the indexes and marks the state current. Each chunk
-     * commits with the state's slot moved to its end, so a restart continues after the last finished chunk.
+     * {@link #chunkRows} rows by spent_at_slot, then marks the state current. Each chunk commits with the state's
+     * slot moved to its end, so a restart continues after the last finished chunk.
      */
     void fill() {
         long start = System.currentTimeMillis();
@@ -299,14 +323,13 @@ public class TxInputOwnerAddr {
             from = to;
         }
 
-        createIndexes();
-
         Long now = cursorSlot();
         storeStateService.saveState(StoreState.builder().stateId(STATE_ID).status(STATUS_CURRENT)
                 .slot(now != null ? now : target != null ? target : 0L).build());
         current = true;
-        log.info("tx_input.owner_addr is current: {} rows filled and indexes built in {} s. "
-                + "/addresses/{address}/transactions now reads from it.", filled, (System.currentTimeMillis() - start) / 1000);
+        recheck();
+        log.info("tx_input.owner_addr is current: {} rows filled in {} s. /addresses/{address}/transactions reads from it "
+                + "once its indexes are built (admin-cli apply-indexes).", filled, (System.currentTimeMillis() - start) / 1000);
     }
 
     /** The slot about {@link #chunkRows} rows after {@code from}, or the last slot when fewer rows are left. */
@@ -335,38 +358,8 @@ public class TxInputOwnerAddr {
     }
 
     /**
-     * Builds the two indexes without blocking writes. A build that was interrupted leaves an invalid index,
-     * which is dropped and built again.
-     */
-    private void createIndexes() {
-        String txInput = TX_INPUT.getName();
-        String addressUtxo = ADDRESS_UTXO.getName();
-        createIndex(TX_INPUT_INDEX, "create index concurrently if not exists " + TX_INPUT_INDEX
-                + " on " + txInput + " (owner_addr, spent_at_slot)");
-        createIndex(ADDRESS_UTXO_INDEX, "create index concurrently if not exists " + ADDRESS_UTXO_INDEX
-                + " on " + addressUtxo + " (hashtextextended(owner_addr, 0), slot)");
-        //The planner estimates the expression's selectivity from statistics that only ANALYZE collects
-        dsl.execute("analyze " + addressUtxo);
-        dsl.execute("analyze " + txInput);
-    }
-
-    private void createIndex(String name, String sql) {
-        Boolean invalid = dsl.fetchOptional("select not i.indisvalid from pg_index i join pg_class c on c.oid = i.indexrelid "
-                        + "where c.relname = ? and pg_table_is_visible(c.oid)", name)
-                .map(record -> record.get(0, Boolean.class))
-                .orElse(null);
-        if (Boolean.TRUE.equals(invalid))
-            outsideTransaction("drop index concurrently if exists " + name);
-
-        long start = System.currentTimeMillis();
-        log.info("tx_input.owner_addr: building index {} ...", name);
-        outsideTransaction(sql);
-        log.info("tx_input.owner_addr: index {} built in {} s", name, (System.currentTimeMillis() - start) / 1000);
-    }
-
-    /**
-     * Runs VACUUM or CREATE/DROP INDEX CONCURRENTLY, which PostgreSQL refuses inside a transaction block, on a
-     * connection set to autocommit whatever the pool's default is.
+     * Runs VACUUM, which PostgreSQL refuses inside a transaction block, on a connection set to autocommit whatever
+     * the pool's default is.
      */
     private void outsideTransaction(String... sqls) {
         dsl.connection(connection -> {
@@ -401,6 +394,7 @@ public class TxInputOwnerAddr {
                             + "the rows after slot {}.", fromSlot, keptTo);
                     storeStateService.saveState(state.toBuilder().status(STATUS_FILLING).slot(keptTo).build());
                     current = false;
+                    readable = false;
                 });
     }
 

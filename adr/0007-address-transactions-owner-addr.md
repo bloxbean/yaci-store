@@ -36,11 +36,14 @@ Add `tx_input.owner_addr varchar(500)`: the `owner_addr` of the output the row s
 value and type as `address_utxo.owner_addr`. With two indexes
 
 ```sql
-create index idx_tx_input_owner_addr_slot    on tx_input     (owner_addr, spent_at_slot);
+create index idx_tx_input_owner_addr_slot    on tx_input     (owner_addr, spent_at_slot) where owner_addr is not null;
 create index idx_address_utxo_addr_hash_slot on address_utxo (hashtextextended(owner_addr, 0), slot);
 ```
 
-both halves come out of an index in slot order. The `address_utxo` index is on a 64-bit hash of the
+both halves come out of an index in slot order. They are optional indexes like the other read
+indexes: listed in dbutils `index.yml` (PostgreSQL only) and applied after the sync with
+`admin-cli apply-indexes`. The `tx_input` index leaves out the rows without the address, so a
+store with the flag off that applies `index.yml` gets an almost empty index there. The `address_utxo` index is on a 64-bit hash of the
 address, computed by PostgreSQL on both sides, so it is a third of the size of an index on the
 address; `owner_addr = :address` rules out another address with the same hash. Each half takes its
 own first `offset + count` transactions along its index and stops; the halves are then merged and
@@ -96,10 +99,14 @@ which slot every `tx_input` row has the address:
 1. **A new store** (no cursor when it first saves) starts at slot 0. Each commit moves the slot to
    its last block while the previous commit left it at the cursor.
 2. **At the first `PreBlockSyncEvent`** (the store reaches the tip, or starts near it) a background
-   thread fills the rows still missing the address (none on a new store), builds the two indexes
-   with `CREATE INDEX CONCURRENTLY`, runs `ANALYZE`, and sets `CURRENT`. Reads then use the query
-   above.
-3. **A store synced before the flag was on** writes the address from then on and starts with no
+   thread fills the rows still missing the address (none on a new store) and sets `CURRENT`.
+3. **Reads** use the query above once the state is `CURRENT` and both indexes exist and are valid,
+   which is checked every minute; until then they use the full query, and the store logs that the
+   indexes are to be applied. `admin-cli apply-indexes` builds them, then runs `ANALYZE address_utxo`:
+   PostgreSQL keeps statistics of an index expression only from an `ANALYZE`, and autovacuum may not
+   analyze a 350M-row table for weeks. On the mainnet store `ANALYZE address_utxo` took 5.8 s
+   (30,000 sampled rows).
+4. **A store synced before the flag was on** writes the address from then on and starts with no
    slot; the background fill at the tip fills its older rows: chunks of about 50M rows by
    `spent_at_slot`, each an `UPDATE ... FROM address_utxo` hash join with a `VACUUM` after it. That
    is slow on mainnet (below). The sync is not paused.
@@ -162,7 +169,9 @@ store by rebuilding `tx_input` is a possible follow-up.
 - `/addresses/{address}/transactions` costs about `page x count` index entries, not the history.
 - With the flag on, each spend looks its output up in the RocksDB cache, or in `address_utxo` on a
   miss, and `tx_input` rows are about 98 bytes wider.
-- A new mainnet store builds the two indexes at the tip, in the background.
+- After the initial sync, `admin-cli apply-indexes` builds the two indexes with the other read
+  indexes (`CREATE INDEX`, which holds writes to the table while it builds, as for every index in
+  `index.yml`).
 - Out of scope: Blockfrost `/addresses/{address}/transactions` (its own reader), stake-address and
   payment-credential transaction lists (possible by joining the optional `address` table on
   `owner_addr`), an admin-cli command to fill a stopped store.

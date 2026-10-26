@@ -43,6 +43,16 @@
     - name: idx_address_utxo_epoch
       columns:
         - epoch
+    # With idx_tx_input_owner_addr_slot: /addresses/{address}/transactions when
+    # store.utxo.tx-input-owner-addr-enabled is on. A 64-bit hash of the address,
+    # a third of the size of an index on it; the query also compares owner_addr.
+    - name: idx_address_utxo_addr_hash_slot
+      columns:
+        - hashtextextended(owner_addr, 0)
+        - slot
+      excludes:
+        - h2
+        - mysql
 
 - table: address_utxo_unspent
   indexes:
@@ -58,6 +68,19 @@
     - name: idx_address_utxo_unspent_owner_stakekey_hash
       columns:
       - owner_stake_credential
+
+- table: tx_input
+  indexes:
+    # owner_addr is only written with store.utxo.tx-input-owner-addr-enabled on,
+    # so the index leaves out the rows without it.
+    - name: idx_tx_input_owner_addr_slot
+      columns:
+        - owner_addr
+        - spent_at_slot
+      where: owner_addr is not null
+      excludes:
+        - h2
+        - mysql
 
 #assets store
 - table: assets

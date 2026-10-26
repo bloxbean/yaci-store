@@ -32,12 +32,16 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.yaml.snakeyaml.Yaml;
 
+import java.io.InputStream;
 import java.math.BigInteger;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -48,7 +52,8 @@ import static org.mockito.Mockito.when;
 /**
  * tx_input.owner_addr on PostgreSQL ({@link TxInputOwnerAddr}) with a RocksDB cache: the address written from the
  * first block, the cache miss read from address_utxo, a spend saved before its output, the fill of a store synced
- * without it, the indexes, the transactions query, and how the state follows gaps and rollbacks.
+ * without it, the indexes, the transactions query, and how the state follows gaps and rollbacks. The indexes are
+ * built from dbutils index.yml, as admin-cli apply-indexes builds them.
  */
 @Testcontainers(disabledWithoutDocker = true)
 class TxInputOwnerAddrPostgresIT {
@@ -56,6 +61,7 @@ class TxInputOwnerAddrPostgresIT {
     @Container
     static final PostgreSQLContainer<?> PG = new PostgreSQLContainer<>("postgres:16");
 
+    private static final Path INDEX_YML = Path.of("../../components/dbutils/src/main/resources/index.yml");
     private static final String ALICE = "addr_test1alice";
     private static final String BOB = "addr_test1bob";
 
@@ -191,11 +197,43 @@ class TxInputOwnerAddrPostgresIT {
         return stateService.getState(TxInputOwnerAddr.STATE_ID).orElseThrow();
     }
 
-    private void atTheTip() throws InterruptedException {
+    /** The store reaches the tip: the rows still missing the address are filled and the state becomes CURRENT. */
+    private void atTheTipWithoutIndexes() throws InterruptedException {
         ownerAddr.handlePreBlockSync(new PreBlockSyncEvent(null));
-        for (int i = 0; i < 300 && !ownerAddr.isReadable(); i++)
+        for (int i = 0; i < 300 && !TxInputOwnerAddr.STATUS_CURRENT.equals(state().getStatus()); i++)
             Thread.sleep(100);
+        assertThat(state().getStatus()).isEqualTo(TxInputOwnerAddr.STATUS_CURRENT);
+    }
+
+    /** At the tip, then the indexes applied: reads use the address. */
+    private void atTheTip() throws Exception {
+        atTheTipWithoutIndexes();
+        applyIndexes();
+        ownerAddr.recheck();
         assertThat(ownerAddr.isReadable()).isTrue();
+    }
+
+    /** The two indexes as admin-cli apply-indexes builds them from index.yml (IndexService), then ANALYZE. */
+    @SuppressWarnings("unchecked")
+    private static void applyIndexes() throws Exception {
+        List<Map<String, Object>> tables;
+        try (InputStream in = Files.newInputStream(INDEX_YML)) {
+            tables = new Yaml().load(in);
+        }
+        int applied = 0;
+        for (Map<String, Object> table : tables) {
+            for (Map<String, Object> index : (List<Map<String, Object>>) table.get("indexes")) {
+                String name = (String) index.get("name");
+                if (!name.equals(TxInputOwnerAddr.TX_INPUT_INDEX) && !name.equals(TxInputOwnerAddr.ADDRESS_UTXO_INDEX))
+                    continue;
+                String where = index.get("where") != null ? " WHERE " + index.get("where") : "";
+                jdbc.execute(String.format("CREATE INDEX IF NOT EXISTS %s ON %s (%s) %s", name, table.get("table"),
+                        String.join(", ", (List<String>) index.get("columns")), where));
+                jdbc.execute("ANALYZE " + table.get("table"));
+                applied++;
+            }
+        }
+        assertThat(applied).isEqualTo(2);
     }
 
     private static List<String> txHashes(List<AddressTransaction> transactions) {
@@ -203,7 +241,7 @@ class TxInputOwnerAddrPostgresIT {
     }
 
     @Test
-    void aNewStoreWritesTheAddressFromTheFirstBlockAndAtTheTipOnlyBuildsTheIndexes() throws Exception {
+    void aNewStoreWritesTheAddressFromTheFirstBlockAndIsReadOnceTheIndexesAreApplied() throws Exception {
         history();
 
         assertThat(rowsWithoutAddr()).isZero();
@@ -212,14 +250,17 @@ class TxInputOwnerAddrPostgresIT {
         assertThat(state().getSlot()).isEqualTo(600);
         assertThat(ownerAddr.isReadable()).isFalse();
 
-        atTheTip();
-
-        assertThat(jdbc.queryForList("select c.relname from pg_index i join pg_class c on c.oid = i.indexrelid "
-                + "where i.indisvalid and c.relname in (?, ?) order by 1", String.class,
-                TxInputOwnerAddr.ADDRESS_UTXO_INDEX, TxInputOwnerAddr.TX_INPUT_INDEX))
-                .containsExactly(TxInputOwnerAddr.ADDRESS_UTXO_INDEX, TxInputOwnerAddr.TX_INPUT_INDEX);
-        assertThat(state().getStatus()).isEqualTo(TxInputOwnerAddr.STATUS_CURRENT);
+        //At the tip nothing is left to fill, and the store builds no index
+        atTheTipWithoutIndexes();
         assertThat(state().getSlot()).isEqualTo(600);
+        ownerAddr.recheck();
+        assertThat(ownerAddr.isReadable()).isFalse();
+        assertThat(jdbc.queryForObject("select count(*) from pg_class where relname in (?, ?)", Long.class,
+                TxInputOwnerAddr.ADDRESS_UTXO_INDEX, TxInputOwnerAddr.TX_INPUT_INDEX)).isZero();
+
+        applyIndexes();
+        ownerAddr.recheck();
+        assertThat(ownerAddr.isReadable()).isTrue();
     }
 
     @Test

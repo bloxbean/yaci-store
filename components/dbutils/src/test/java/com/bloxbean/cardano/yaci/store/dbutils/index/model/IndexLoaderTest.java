@@ -19,6 +19,19 @@ class IndexLoaderTest {
     }
 
     @Test
+    void indexYmlHasTheTxInputOwnerAddrIndexesForPostgresOnly() {
+        List<IndexDefinition.Index> indexes = new IndexLoader().loadIndexes("index.yml").stream()
+                .flatMap(definition -> definition.getIndexes().stream())
+                .filter(index -> index.getName().equals("idx_tx_input_owner_addr_slot")
+                        || index.getName().equals("idx_address_utxo_addr_hash_slot"))
+                .toList();
+
+        assertThat(indexes).extracting(IndexDefinition.Index::getColumns).containsExactlyInAnyOrder(
+                List.of("owner_addr", "spent_at_slot"), List.of("hashtextextended(owner_addr, 0)", "slot"));
+        assertThat(indexes).allSatisfy(index -> assertThat(index.getExcludes()).containsExactlyInAnyOrder("h2", "mysql"));
+    }
+
+    @Test
     void loadExtraIndexes() {
         List<IndexDefinition> indexDefinitions = new IndexLoader().loadIndexes("extra-index.yml");
         assertThat(indexDefinitions).hasSizeGreaterThan(0);
