@@ -5,7 +5,7 @@ import com.bloxbean.cardano.client.address.AddressProvider;
 import com.bloxbean.cardano.client.address.AddressType;
 import com.bloxbean.cardano.client.address.CredentialType;
 import com.bloxbean.cardano.client.address.util.AddressUtil;
-import com.bloxbean.cardano.client.exception.AddressExcepion;
+import com.bloxbean.cardano.client.common.model.Networks;
 import com.bloxbean.cardano.yaci.store.account.AccountStoreProperties;
 import com.bloxbean.cardano.yaci.store.blockfrost.address.dto.BFAddressDTO;
 import com.bloxbean.cardano.yaci.store.blockfrost.address.dto.BFAddressTotalDTO;
@@ -165,20 +165,19 @@ public class BFAddressService {
     private boolean isValidAddress(String address) {
         try {
             return AddressUtil.isValidAddress(address) && isPaymentAddressOnConfiguredNetwork(address);
-        } catch (RuntimeException | AddressExcepion e) {
+        } catch (RuntimeException e) {
             return false;
         }
     }
 
-    // Shelley header: high nibble is the type (0xE/0xF = stake), low nibble the network id (1 = mainnet).
-    // Byron (0x8_) is not network-checked.
-    private boolean isPaymentAddressOnConfiguredNetwork(String address) throws AddressExcepion {
-        int header = AddressUtil.addressToBytes(address)[0] & 0xFF;
-        int type = header >> 4;
-        if (type == 8) {
+    // Byron (Base58) addresses are not network-checked; Address(String) only parses Bech32.
+    private boolean isPaymentAddressOnConfiguredNetwork(String address) {
+        if (!address.startsWith("addr") && !address.startsWith("stake")) {
             return true;
         }
-        return type < 8 && ((header & 0x0F) == 1) == storeProperties.isMainnet();
+        Address addr = new Address(address);
+        return addr.getAddressType() != AddressType.Reward
+                && (addr.getNetwork().getNetworkId() == Networks.mainnet().getNetworkId()) == storeProperties.isMainnet();
     }
 
     private boolean isCurrentBalanceEnabled() {
