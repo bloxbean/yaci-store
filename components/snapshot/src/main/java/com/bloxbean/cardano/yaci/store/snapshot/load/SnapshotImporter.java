@@ -479,18 +479,19 @@ public class SnapshotImporter {
             int partitionsCreated = prepareTargetPartitions(pg, options, manifest);
             say(progress, "partitions", "Created " + partitionsCreated + " partition(s)");
 
-            // Off until ANALYZE is done with the tables. Reset when the load fails too: a resumed
-            // import switches it off again, and an abandoned one must not leave it off.
-            Autovacuum.disable(pg, options.schema(), loadedTables(manifest));
-            if (options.tunePostgres()) {
-                PostgresTuning.apply(pg, options.schema()).forEach(m -> say(progress, "postgres", "Set " + m));
-            }
             LoadResult loaded;
             long loadMillis;
             long freezeMillis;
             long indexMillis;
             long analyzeMillis;
             try {
+                // Off until ANALYZE is done with the tables. Inside the try, so a failure while switching
+                // either off, or later, puts both back: a resumed import switches them off again, and an
+                // abandoned one must not leave them off.
+                Autovacuum.disable(pg, options.schema(), loadedTables(manifest));
+                if (options.tunePostgres()) {
+                    PostgresTuning.apply(pg, options.schema()).forEach(m -> say(progress, "postgres", "Set " + m));
+                }
                 long t2 = System.currentTimeMillis();
                 loaded = loadTables(options, manifest, extractRoot, journal, schema, progress);
                 loadMillis = System.currentTimeMillis() - t2;
@@ -532,15 +533,13 @@ public class SnapshotImporter {
                 analyzeMillis = System.currentTimeMillis() - tStats;
             } catch (Exception e) {
                 try {
-                    Autovacuum.restore(pg, options.schema(), loadedTables(manifest));
-                    PostgresTuning.restore(pg, options.schema());
+                    restoreServerState(pg, options.schema(), loadedTables(manifest));
                 } catch (SQLException restore) {
                     e.addSuppressed(restore);
                 }
                 throw e;
             }
-            Autovacuum.restore(pg, options.schema(), loadedTables(manifest));
-            PostgresTuning.restore(pg, options.schema());
+            restoreServerState(pg, options.schema(), loadedTables(manifest));
 
             long t3 = System.currentTimeMillis();
             Progress.phase(progress, "Control state: " + registry.handlerTables().size()
@@ -931,6 +930,34 @@ public class SnapshotImporter {
             return pg;
         } catch (SQLException e) {
             throw new SQLException(DuckPgSession.redact(e.getMessage(), options.password()), e.getSQLState());
+        }
+    }
+
+    /**
+     * Puts back the server settings an import changed and the tables' autovacuum, each attempted even when
+     * the other fails. The settings' record stays in the schema until they are restored, so a later run
+     * restores them.
+     *
+     * @throws SQLException the first failure, with the second suppressed
+     */
+    static void restoreServerState(Connection pg, String schema, List<String> tables) throws SQLException {
+        SQLException failed = null;
+        try {
+            PostgresTuning.restore(pg, schema);
+        } catch (SQLException e) {
+            failed = e;
+        }
+        try {
+            Autovacuum.restore(pg, schema, tables);
+        } catch (SQLException e) {
+            if (failed == null) {
+                failed = e;
+            } else {
+                failed.addSuppressed(e);
+            }
+        }
+        if (failed != null) {
+            throw failed;
         }
     }
 

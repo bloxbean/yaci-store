@@ -471,7 +471,9 @@ time writing WAL. These settings cost disk for `pg_wal` and a longer crash recov
 and need no restart. `--tune-postgres` sets `wal_compression` to `lz4` when the server supports it:
 `on` means pglz, which compresses on the writing process's CPU, several times slower. `--tune-postgres` applies them for the import only: it records the server's
 values in the target schema first, restores them after the load (also when the import fails), and
-needs a superuser or `ALTER SYSTEM` granted on those parameters (PostgreSQL 15+). On a server you
+needs a superuser, or a role with `ALTER SYSTEM` granted on those parameters, `EXECUTE` on
+`pg_reload_conf()` and the privileges of `pg_read_all_settings` (PostgreSQL 15+); preflight refuses
+the import before changing anything when one is missing. On a server you
 manage you can instead set them permanently; the shipped `postgres-compose.yml` sets
 `max_wal_size=16GB` and `checkpoint_timeout=15min`, which also speed up a normal sync.
 

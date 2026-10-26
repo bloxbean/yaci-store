@@ -82,7 +82,12 @@ public final class PostgresTuning {
                 + " raising both (needs a PostgreSQL restart) shortens them.", pool, workers, 2L * workers));
     }
 
-    /** Null when this session may change the settings, otherwise why it may not. */
+    /**
+     * Null when this session may change the settings and put them back, otherwise why it may not. A role
+     * other than a superuser needs ALTER SYSTEM on each setting, EXECUTE on {@code pg_reload_conf()}, and
+     * the privileges of {@code pg_read_all_settings}: without them {@code pg_settings.sourcefile} is
+     * hidden, so a value already in postgresql.auto.conf would be recorded as absent and reset afterwards.
+     */
     public static String cannotApply(Connection pg) throws SQLException {
         try (Statement st = pg.createStatement(); ResultSet rs = st.executeQuery(
                 "SELECT rolsuper FROM pg_roles WHERE rolname = current_user")) {
@@ -90,19 +95,34 @@ public final class PostgresTuning {
                 return null;
             }
         }
+        List<String> missing = new ArrayList<>();
         try (Statement st = pg.createStatement(); ResultSet rs = st.executeQuery(
                 "SELECT has_parameter_privilege('max_wal_size', 'ALTER SYSTEM')"
                         + " AND has_parameter_privilege('checkpoint_timeout', 'ALTER SYSTEM')"
-                        + " AND has_parameter_privilege('wal_compression', 'ALTER SYSTEM')")) {
-            if (rs.next() && rs.getBoolean(1)) {
-                return null;
+                        + " AND has_parameter_privilege('wal_compression', 'ALTER SYSTEM'),"
+                        + " has_function_privilege('pg_reload_conf()', 'EXECUTE'),"
+                        + " pg_has_role(current_user, 'pg_read_all_settings', 'USAGE')")) {
+            rs.next();
+            if (!rs.getBoolean(1)) {
+                missing.add(ALTER_SYSTEM_GRANTS);
+            }
+            if (!rs.getBoolean(2)) {
+                missing.add(RELOAD_GRANT);
+            }
+            if (!rs.getBoolean(3)) {
+                missing.add(READ_SETTINGS_GRANT);
             }
         } catch (SQLException e) {
             // has_parameter_privilege exists from PostgreSQL 15.
+            missing = List.of(ALTER_SYSTEM_GRANTS, RELOAD_GRANT, READ_SETTINGS_GRANT);
         }
-        return "--tune-postgres needs a superuser, or ALTER SYSTEM granted on max_wal_size, checkpoint_timeout"
-                + " and wal_compression (PostgreSQL 15+)";
+        return missing.isEmpty() ? null
+                : "--tune-postgres needs a superuser, or a role with " + String.join(", ", missing) + " (PostgreSQL 15+)";
     }
+
+    private static final String ALTER_SYSTEM_GRANTS = "ALTER SYSTEM on max_wal_size, checkpoint_timeout and wal_compression";
+    private static final String RELOAD_GRANT = "EXECUTE on pg_reload_conf()";
+    private static final String READ_SETTINGS_GRANT = "the privileges of pg_read_all_settings";
 
     /**
      * Raises the settings below their recommendation, after recording the server's values once.
