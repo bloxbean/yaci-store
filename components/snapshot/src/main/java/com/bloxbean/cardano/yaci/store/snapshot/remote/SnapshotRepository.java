@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.store.snapshot.archive.PartSource;
 import com.bloxbean.cardano.yaci.store.snapshot.manifest.ManifestCodec;
 import com.bloxbean.cardano.yaci.store.snapshot.manifest.SnapshotManifest;
 import com.bloxbean.cardano.yaci.store.snapshot.util.Digests;
+import com.bloxbean.cardano.yaci.store.snapshot.util.Identifiers;
 import com.bloxbean.cardano.yaci.store.snapshot.util.Progress;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -12,7 +13,9 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.security.DigestInputStream;
@@ -53,6 +56,8 @@ public class SnapshotRepository {
 
     private static final int INDEX_ATTEMPTS = 5;
     private static final int DOWNLOAD_ATTEMPTS = 3;
+    /** Suffix of a part being downloaded; the file is renamed to the part once its digest checks out. */
+    private static final String DOWNLOAD_SUFFIX = ".download";
 
     /** Wait before reopening a remote part at the byte its read failed; doubled for each failure there. */
     public static final java.time.Duration RESUME_BACKOFF = java.time.Duration.ofSeconds(2);
@@ -398,6 +403,11 @@ public class SnapshotRepository {
     }
 
     private Resolved fetch(String network, SnapshotIndex.Entry e) throws IOException {
+        // The id names the local work directory and the key's segments name remote objects.
+        requireFileName(e.snapshotId(), "snapshot id");
+        for (String segment : e.manifest().split("/", -1)) {
+            requireFileName(segment, "manifest key " + e.manifest());
+        }
         byte[] bytes = store.read(network + "/" + e.manifest()).orElseThrow(
                 () -> new IOException("The index lists " + e.manifest() + " but it is not in " + store.describe())).bytes();
         String sha = Digests.sha256Hex(bytes);
@@ -416,12 +426,11 @@ public class SnapshotRepository {
      */
     public Path downloadMetadata(Resolved r, Path outDir) throws IOException {
         Files.createDirectories(outDir);
-        Path manifest = outDir.resolve(r.manifestFileName());
-        Files.write(manifest, r.manifestBytes());
+        Path manifest = writeInside(outDir, r.manifestFileName(), r.manifestBytes());
         for (String name : List.of(SUMS, SIGNATURE, SIGNATURE_INFO)) {
             var obj = store.read(r.directory() + name);
             if (obj.isPresent()) {
-                Files.write(outDir.resolve(name), obj.get().bytes());
+                writeInside(outDir, name, obj.get().bytes());
             } else if (name.equals(SUMS)) {
                 throw new IOException(SUMS + " is missing for snapshot " + r.entry().snapshotId());
             }
@@ -437,6 +446,11 @@ public class SnapshotRepository {
     public void downloadParts(Resolved r, Path outDir, Predicate<SnapshotManifest.PartManifest> wanted, int threads,
                               Consumer<String> progress) throws IOException {
         List<SnapshotManifest.PartManifest> parts = r.manifest().parts().stream().filter(wanted).toList();
+        // Every destination is checked before the first byte is written.
+        Map<SnapshotManifest.PartManifest, Path> targets = new LinkedHashMap<>();
+        for (SnapshotManifest.PartManifest p : parts) {
+            targets.put(p, inside(outDir, p.fileName()));
+        }
         long total = parts.stream().mapToLong(SnapshotManifest.PartManifest::size).sum();
         long started = System.currentTimeMillis();
         AtomicLong received = new AtomicLong();
@@ -445,8 +459,10 @@ public class SnapshotRepository {
         try (Progress.Ticker ignored = Progress.every(Progress.INTERVAL_MILLIS, "download",
                 () -> Progress.rate(received.get(), total, started, System.currentTimeMillis()), progress)) {
             Parallel.map(parts, Math.max(1, threads), p -> {
-                Path target = outDir.resolve(p.fileName());
-                if (Files.isRegularFile(target) && Files.size(target) == p.size()
+                Path target = targets.get(p);
+                removeLeftoverDownloads(target);
+                // Not through a link: a part counts as present only if it is a file in outDir.
+                if (Files.isRegularFile(target, LinkOption.NOFOLLOW_LINKS) && Files.size(target) == p.size()
                         && Digests.sha256Hex(target).equals(p.sha256())) {
                     received.addAndGet(p.size());
                     return null;
@@ -477,27 +493,78 @@ public class SnapshotRepository {
 
     private void downloadPart(Resolved r, SnapshotManifest.PartManifest p, Path target, java.util.function.LongConsumer read)
             throws IOException {
-        Path tmp = target.resolveSibling(target.getFileName() + ".download");
-        MessageDigest md = Digests.sha256();
-        long n = 0;
-        try (InputStream in = new DigestInputStream(openPart(r, p), md);
-             OutputStream out = Files.newOutputStream(tmp)) {
-            byte[] buf = new byte[1 << 20];
-            int k;
-            while ((k = in.read(buf)) != -1) {
-                n += k;
-                if (n > p.size()) {
-                    throw new IOException(p.fileName() + " is larger than the " + p.size() + " bytes the manifest declares");
+        // A new file of its own, so nothing already in the directory (a link included) is written through.
+        Path tmp = Files.createTempFile(target.getParent(), target.getFileName() + ".", DOWNLOAD_SUFFIX);
+        try {
+            MessageDigest md = Digests.sha256();
+            long n = 0;
+            try (InputStream in = new DigestInputStream(openPart(r, p), md);
+                 OutputStream out = Files.newOutputStream(tmp)) {
+                byte[] buf = new byte[1 << 20];
+                int k;
+                while ((k = in.read(buf)) != -1) {
+                    n += k;
+                    if (n > p.size()) {
+                        throw new IOException(p.fileName() + " is larger than the " + p.size() + " bytes the manifest declares");
+                    }
+                    out.write(buf, 0, k);
+                    read.accept(k);
                 }
-                out.write(buf, 0, k);
-                read.accept(k);
+            }
+            if (n != p.size() || !Digests.hex(md.digest()).equals(p.sha256())) {
+                throw new IOException(p.fileName() + " does not match the manifest (size or SHA-256)");
+            }
+            // Replaces a link at target rather than following it.
+            Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
+        } finally {
+            Files.deleteIfExists(tmp);
+        }
+    }
+
+    /** {@code dir/name}, where {@code name} must be a plain file name that stays inside {@code dir}. */
+    static Path inside(Path dir, String name) throws IOException {
+        requireFileName(name, "snapshot file");
+        Path base = dir.toAbsolutePath().normalize();
+        Path p = base.resolve(name).normalize();
+        if (!base.equals(p.getParent())) {
+            throw new IOException("Snapshot file " + name + " resolves outside " + base);
+        }
+        return p;
+    }
+
+    private static void requireFileName(String name, String what) throws IOException {
+        try {
+            Identifiers.requireFileName(name, what);
+        } catch (IllegalArgumentException e) {
+            throw new IOException(e.getMessage(), e);
+        }
+    }
+
+    /** Writes a new file then renames it over {@code dir/name}, so a link already there is replaced, not followed. */
+    private static Path writeInside(Path dir, String name, byte[] bytes) throws IOException {
+        Path target = inside(dir, name);
+        Path tmp = Files.createTempFile(target.getParent(), name + ".", ".tmp");
+        try {
+            Files.write(tmp, bytes);
+            Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
+        } finally {
+            Files.deleteIfExists(tmp);
+        }
+        return target;
+    }
+
+    /** Deletes what an interrupted run left for this part: {@code <name>.download} and {@code <name>.<random>.download}. */
+    private static void removeLeftoverDownloads(Path target) throws IOException {
+        String name = target.getFileName().toString();
+        try (DirectoryStream<Path> leftovers = Files.newDirectoryStream(target.getParent(),
+                f -> {
+                    String n = f.getFileName().toString();
+                    return n.startsWith(name + ".") && n.endsWith(DOWNLOAD_SUFFIX);
+                })) {
+            for (Path f : leftovers) {
+                Files.deleteIfExists(f);
             }
         }
-        if (n != p.size() || !Digests.hex(md.digest()).equals(p.sha256())) {
-            Files.deleteIfExists(tmp);
-            throw new IOException(p.fileName() + " does not match the manifest (size or SHA-256)");
-        }
-        Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
     }
 
     /** The resolved snapshot's parts, streamed from the store into an import. */

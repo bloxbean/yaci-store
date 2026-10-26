@@ -205,6 +205,104 @@ public class SnapshotRepositoryTest {
     }
 
     @Test
+    void aPartNameThatIsNotAPlainFileIsRefusedWhenTheManifestIsRead() throws Exception {
+        Path m = snapshot(tmp.resolve("s1"), ID1, 100, null);
+        String json = Files.readString(m);
+        String name = new ManifestCodec().parse(json.getBytes()).parts().get(0).fileName();
+        for (String bad : List.of("../victim.txt", "/tmp/victim.zip", "sub/part.zip", "sub\\\\part.zip", "..", ".",
+                ".hidden.zip", "", "C:part.zip")) {
+            byte[] crafted = json.replace("\"" + name + "\"", "\"" + bad + "\"").getBytes();
+            assertThatThrownBy(() -> new ManifestCodec().parse(crafted))
+                    .as(bad).hasStackTraceContaining("Invalid file name for archive part");
+        }
+    }
+
+    @Test
+    void aCraftedManifestCannotWriteOutsideTheDownloadDirectory() throws Exception {
+        Path bucket = tmp.resolve("bucket");
+        var repo = new SnapshotRepository(new LocalSnapshotStore(bucket));
+        Path m = snapshot(tmp.resolve("s1"), ID1, 100, null);
+        repo.publish(m, 1, true, null);
+        Path victim = Files.writeString(tmp.resolve("victim.txt"), "keep");
+        // The attacker controls the store: rewrite a part's name and every digest that covers the manifest.
+        Path published = bucket.resolve("preprod/" + ID1 + "/" + m.getFileName());
+        String oldSha = Digests.sha256Hex(published);
+        String name = new ManifestCodec().parse(Files.readAllBytes(published)).parts().get(0).fileName();
+        Files.writeString(published, Files.readString(published).replace("\"" + name + "\"", "\"../victim.txt\""));
+        String newSha = Digests.sha256Hex(published);
+        for (Path f : List.of(bucket.resolve("preprod/index.json"), bucket.resolve("preprod/" + ID1 + "/snapshot.json"))) {
+            Files.writeString(f, Files.readString(f).replace(oldSha, newSha));
+        }
+
+        assertThatThrownBy(() -> {
+            var resolved = repo.resolve("preprod", ID1, null, x -> List.of(), null);
+            Path out = tmp.resolve("download");
+            repo.downloadMetadata(resolved, out);
+            repo.downloadParts(resolved, out, p -> true, 2, null);
+        }).hasStackTraceContaining("Invalid file name for archive part");
+        assertThat(Files.readString(victim)).isEqualTo("keep");
+    }
+
+    @Test
+    void anIndexEntryWhoseKeyOrIdLeavesItsDirectoryIsRefused() throws Exception {
+        Path bucket = tmp.resolve("bucket");
+        var repo = new SnapshotRepository(new LocalSnapshotStore(bucket));
+        repo.publish(snapshot(tmp.resolve("s1"), ID1, 100, null), 1, true, null);
+        Path index = bucket.resolve("preprod/index.json");
+        String original = Files.readString(index);
+
+        Files.writeString(index, original.replace("\"" + ID1 + "/", "\"../" + ID1 + "/"));
+        assertThatThrownBy(() -> repo.resolve("preprod", "latest", null, x -> List.of(), null))
+                .hasStackTraceContaining("Invalid file name for manifest key");
+
+        Files.writeString(index, original.replace("\"snapshotId\" : \"" + ID1, "\"snapshotId\" : \"../" + ID1));
+        assertThatThrownBy(() -> repo.resolve("preprod", "latest", null, x -> List.of(), null))
+                .hasStackTraceContaining("Invalid file name for snapshot id");
+    }
+
+    @Test
+    void namesAreResolvedOnlyInsideTheDirectory() throws Exception {
+        assertThat(SnapshotRepository.inside(tmp, "a.part-00001.zip")).isEqualTo(tmp.toAbsolutePath().resolve("a.part-00001.zip"));
+        for (String bad : List.of("../x.zip", "/abs.zip", "a/b.zip", "..", "")) {
+            assertThatThrownBy(() -> SnapshotRepository.inside(tmp, bad)).as(bad).isInstanceOf(IOException.class);
+        }
+    }
+
+    @Test
+    void linksAlreadyInTheDownloadDirectoryAreReplacedNotWrittenThrough() throws Exception {
+        Path bucket = tmp.resolve("bucket");
+        var repo = new SnapshotRepository(new LocalSnapshotStore(bucket));
+        Path m = snapshot(tmp.resolve("s1"), ID1, 100, null);
+        repo.publish(m, 1, true, null);
+        var resolved = repo.resolve("preprod", "latest", null, x -> List.of(), null);
+        var part = resolved.manifest().parts().get(0);
+        Path out = Files.createDirectories(tmp.resolve("download"));
+        Path victim = Files.writeString(tmp.resolve("victim.txt"), "keep");
+        List<String> linked = List.of(part.fileName(), part.fileName() + ".download", "SHA256SUMS",
+                m.getFileName().toString());
+        try {
+            for (String n : linked) {
+                Files.createSymbolicLink(out.resolve(n), victim);
+            }
+        } catch (UnsupportedOperationException | IOException e) {
+            org.junit.jupiter.api.Assumptions.abort("symbolic links are not available: " + e.getMessage());
+        }
+
+        repo.downloadMetadata(resolved, out);
+        repo.downloadParts(resolved, out, p -> true, 2, null);
+
+        assertThat(Files.readString(victim)).isEqualTo("keep");
+        for (String n : List.of(part.fileName(), "SHA256SUMS", m.getFileName().toString())) {
+            assertThat(Files.isSymbolicLink(out.resolve(n))).as(n).isFalse();
+        }
+        assertThat(Digests.sha256Hex(out.resolve(part.fileName()))).isEqualTo(part.sha256());
+        assertThat(Files.readAllBytes(out.resolve(m.getFileName()))).isEqualTo(Files.readAllBytes(m));
+        try (var files = Files.list(out)) {
+            assertThat(files.map(f -> f.getFileName().toString())).noneMatch(n -> n.endsWith(".download") || n.endsWith(".tmp"));
+        }
+    }
+
+    @Test
     void aBrokenDownloadResumesWithARangeRequestOrReadsPastTheStartWhenTheServerIgnoresRanges() throws Exception {
         Path bucket = tmp.resolve("bucket");
         new SnapshotRepository(new LocalSnapshotStore(bucket)).publish(snapshot(tmp.resolve("s1"), ID1, 100, null), 1, true, null);

@@ -13,8 +13,21 @@ public final class Identifiers {
 
     private static final Pattern SQL_IDENTIFIER = Pattern.compile("[A-Za-z_][A-Za-z0-9_]{0,62}");
     private static final Pattern SPEC_ID = Pattern.compile("[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?");
+    private static final Pattern FILE_NAME = Pattern.compile("[A-Za-z0-9][A-Za-z0-9._-]{0,254}");
 
     private Identifiers() {
+    }
+
+    /**
+     * A file name that a snapshot supplies (a part, the manifest, the snapshot id as a directory name).
+     * One path segment of letters, digits, dots, underscores and hyphens that does not start with a dot,
+     * so it cannot be absolute, name a parent directory or carry a separator.
+     */
+    public static String requireFileName(String value, String what) {
+        if (value == null || !FILE_NAME.matcher(value).matches()) {
+            throw new IllegalArgumentException("Invalid file name for " + what + ": '" + value + "'");
+        }
+        return value;
     }
 
     public static String requireSqlIdentifier(String value, String what) {

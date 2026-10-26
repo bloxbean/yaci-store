@@ -1,5 +1,7 @@
 package com.bloxbean.cardano.yaci.store.snapshot.manifest;
 
+import com.bloxbean.cardano.yaci.store.snapshot.util.Identifiers;
+
 import java.util.List;
 import java.util.Map;
 
@@ -238,7 +240,10 @@ public record SnapshotManifest(
         }
     }
 
-    /** One independently downloadable and verifiable ZIP part. */
+    /**
+     * One independently downloadable and verifiable ZIP part. Its file name is joined to local
+     * directories and remote keys, so a manifest naming anything but a plain file is refused as it is read.
+     */
     public record PartManifest(
             int partNumber,
             String fileName,
@@ -246,5 +251,9 @@ public record SnapshotManifest(
             String sha256,
             int entryCount,
             List<String> tables
-    ) {}
+    ) {
+        public PartManifest {
+            Identifiers.requireFileName(fileName, "archive part");
+        }
+    }
 }
