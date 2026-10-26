@@ -24,7 +24,8 @@ services:
       # Fewer checkpoints during sync: on a preprod sync to slot 35M, 9% faster and 72% less WAL than the
       # 1GB/5min defaults. Costs up to ~16GB of disk for pg_wal and a longer crash recovery, not memory.
       "-c", "max_wal_size=16GB",
-      "-c", "checkpoint_timeout=15min"
+      "-c", "checkpoint_timeout=15min",
+      "-c", "max_locks_per_transaction=1024"
       # optionally:
       # "-c", "shared_buffers=1GB"
     ]
