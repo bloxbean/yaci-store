@@ -21,6 +21,8 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.stream.Stream;
 
 /**
@@ -29,6 +31,9 @@ import java.util.stream.Stream;
  *
  * <p>Only for data that can always be read again from the database: the folder is deleted when the store opens,
  * so every cache starts empty after a restart, and writes skip RocksDB's write-ahead log.
+ *
+ * <p>A call on a cache after {@link #close} throws an {@link IllegalStateException}: at shutdown the sync thread can
+ * still be using a cache, and a RocksDB call on a closed handle crashes the JVM.
  */
 @Slf4j
 public class RocksDBCacheStore implements AutoCloseable {
@@ -41,6 +46,9 @@ public class RocksDBCacheStore implements AutoCloseable {
     private final WriteOptions writeOptions;
     private final RocksDB db;
     private final List<ColumnFamilyHandle> handles = new ArrayList<>();
+    //Calls hold the read lock, close the write lock, so close waits for the calls in progress
+    private final ReadWriteLock lock = new ReentrantReadWriteLock();
+    private boolean closed;
 
     /** Deletes {@code folder} and opens an empty RocksDB there. */
     public RocksDBCacheStore(Path folder) {
@@ -79,18 +87,28 @@ public class RocksDBCacheStore implements AutoCloseable {
      */
     public synchronized <K, V> RocksDBCache<K, V> cache(String name, RocksDBCache.Codec<K> keyCodec,
                                                        RocksDBCache.Codec<V> valueCodec) {
+        ColumnFamilyHandle handle = call("create " + name, db -> db.createColumnFamily(
+                new ColumnFamilyDescriptor(name.getBytes(StandardCharsets.UTF_8), familyOptions)));
+        handles.add(handle);
+        return new RocksDBCache<>(this, handle, keyCodec, valueCodec);
+    }
+
+    /** A RocksDB call, which fails with an {@link IllegalStateException} once the store is closed. */
+    <T> T call(String operation, Call<T> call) {
+        lock.readLock().lock();
         try {
-            ColumnFamilyHandle handle = db.createColumnFamily(
-                    new ColumnFamilyDescriptor(name.getBytes(StandardCharsets.UTF_8), familyOptions));
-            handles.add(handle);
-            return new RocksDBCache<>(this, handle, keyCodec, valueCodec);
+            if (closed)
+                throw new IllegalStateException("The RocksDB cache at " + folder + " is closed");
+            return call.run(db);
         } catch (RocksDBException e) {
-            throw new IllegalStateException("Could not create the RocksDB cache " + name, e);
+            throw new IllegalStateException("RocksDB cache " + operation + " failed", e);
+        } finally {
+            lock.readLock().unlock();
         }
     }
 
-    RocksDB db() {
-        return db;
+    interface Call<T> {
+        T run(RocksDB db) throws RocksDBException;
     }
 
     WriteOptions writeOptions() {
@@ -99,6 +117,14 @@ public class RocksDBCacheStore implements AutoCloseable {
 
     @Override
     public synchronized void close() {
+        lock.writeLock().lock();
+        try {
+            if (closed)
+                return;
+            closed = true;
+        } finally {
+            lock.writeLock().unlock();
+        }
         handles.forEach(ColumnFamilyHandle::close);
         db.close();
         writeOptions.close();

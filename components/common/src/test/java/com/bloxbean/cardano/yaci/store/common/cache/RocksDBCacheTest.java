@@ -7,6 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class RocksDBCacheTest {
 
@@ -61,5 +62,19 @@ class RocksDBCacheTest {
             assertThat(store.cache("utxo_owner_addr", RocksDBCache.STRING, RocksDBCache.STRING).get("tx1#0")).isNull();
             assertThat(folder.resolve("stray-file")).doesNotExist();
         }
+    }
+
+    @Test
+    void aCacheFailsInJavaOnceItsStoreIsClosed() {
+        RocksDBCacheStore store = new RocksDBCacheStore(tmp.resolve("cache"));
+        RocksDBCache<String, String> cache = store.cache("utxo_owner_addr", RocksDBCache.STRING, RocksDBCache.STRING);
+        cache.put("tx1#0", "addr1");
+        store.close();
+        store.close();
+
+        //A RocksDB call on the closed handles would crash the JVM, as the sync thread did at a shutdown
+        assertThatThrownBy(() -> cache.get("tx1#0")).isInstanceOf(IllegalStateException.class).hasMessageContaining("closed");
+        assertThatThrownBy(() -> cache.put("tx2#0", "addr2")).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(cache::clear).isInstanceOf(IllegalStateException.class);
     }
 }

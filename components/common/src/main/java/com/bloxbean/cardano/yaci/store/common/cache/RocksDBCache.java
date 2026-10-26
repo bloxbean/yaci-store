@@ -1,7 +1,6 @@
 package com.bloxbean.cardano.yaci.store.common.cache;
 
 import org.rocksdb.ColumnFamilyHandle;
-import org.rocksdb.RocksDBException;
 import org.rocksdb.RocksIterator;
 
 import java.nio.charset.StandardCharsets;
@@ -46,11 +45,10 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
 
     @Override
     public void put(K key, V value) {
-        try {
-            store.db().put(family, store.writeOptions(), keyCodec.encode(key), valueCodec.encode(value));
-        } catch (RocksDBException e) {
-            throw new IllegalStateException("RocksDB cache put failed", e);
-        }
+        store.call("put", db -> {
+            db.put(family, store.writeOptions(), keyCodec.encode(key), valueCodec.encode(value));
+            return null;
+        });
     }
 
     /** Not atomic: a concurrent put of the same key can be overwritten. */
@@ -74,12 +72,8 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
 
     @Override
     public V get(K key) {
-        try {
-            byte[] bytes = store.db().get(family, keyCodec.encode(key));
-            return bytes != null ? valueCodec.decode(bytes) : null;
-        } catch (RocksDBException e) {
-            throw new IllegalStateException("RocksDB cache get failed", e);
-        }
+        byte[] bytes = store.call("get", db -> db.get(family, keyCodec.encode(key)));
+        return bytes != null ? valueCodec.decode(bytes) : null;
     }
 
     @Override
@@ -89,36 +83,32 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
 
     @Override
     public void remove(K key) {
-        try {
-            store.db().delete(family, store.writeOptions(), keyCodec.encode(key));
-        } catch (RocksDBException e) {
-            throw new IllegalStateException("RocksDB cache remove failed", e);
-        }
+        store.call("remove", db -> {
+            db.delete(family, store.writeOptions(), keyCodec.encode(key));
+            return null;
+        });
     }
 
     /** An estimate: RocksDB counts deleted keys until they are compacted away. */
     @Override
     public long size() {
-        try {
-            return store.db().getLongProperty(family, "rocksdb.estimate-num-keys");
-        } catch (RocksDBException e) {
-            throw new IllegalStateException("RocksDB cache size failed", e);
-        }
+        return store.call("size", db -> db.getLongProperty(family, "rocksdb.estimate-num-keys"));
     }
 
     @Override
     public void clear() {
-        try (RocksIterator iterator = store.db().newIterator(family)) {
-            iterator.seekToFirst();
-            if (!iterator.isValid())
-                return;
-            byte[] first = iterator.key();
-            iterator.seekToLast();
-            byte[] last = iterator.key();
-            store.db().deleteRange(family, store.writeOptions(), first, last);
-            store.db().delete(family, store.writeOptions(), last);
-        } catch (RocksDBException e) {
-            throw new IllegalStateException("RocksDB cache clear failed", e);
-        }
+        store.call("clear", db -> {
+            try (RocksIterator iterator = db.newIterator(family)) {
+                iterator.seekToFirst();
+                if (!iterator.isValid())
+                    return null;
+                byte[] first = iterator.key();
+                iterator.seekToLast();
+                byte[] last = iterator.key();
+                db.deleteRange(family, store.writeOptions(), first, last);
+                db.delete(family, store.writeOptions(), last);
+            }
+            return null;
+        });
     }
 }
