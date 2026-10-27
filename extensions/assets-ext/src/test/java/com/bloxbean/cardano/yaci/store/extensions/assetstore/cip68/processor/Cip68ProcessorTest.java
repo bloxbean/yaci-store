@@ -17,6 +17,7 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.ParseOu
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.parser.Cip68DatumParser;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.repository.Cip68MetadataRepository;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service.Cip68TokenService;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.validation.ValidationError;
 import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxoEvent;
 import com.bloxbean.cardano.yaci.store.utxo.domain.TxInputOutput;
 import org.junit.jupiter.api.DisplayName;
@@ -30,6 +31,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigInteger;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -174,10 +176,17 @@ class Cip68ProcessorTest {
                     .amounts(List.of(refNftAmt))
                     .build();
 
+            // minted with its 333 user token: a datum without any of the token fields is not token metadata otherwise
+            AddressUtxo userToken = AddressUtxo.builder()
+                    .txHash(TX_HASH)
+                    .amounts(List.of(Amt.builder().unit(POLICY_ID + "0014df10" + REF_NFT_ASSET_NAME.substring(8))
+                            .quantity(BigInteger.ONE).build()))
+                    .build();
+
             when(cip68TokenService.extractReferenceNfts(utxo)).thenReturn(List.of(refNftAmt));
             when(cip68DatumParser.parseDetailed(eq(datum), any())).thenReturn(new ParseOutcome.Parsed(metadata));
 
-            processor.processTransaction(buildEvent(100L, utxo));
+            processor.processTransaction(buildEvent(100L, List.of(utxo, userToken)));
 
             ArgumentCaptor<Iterable<Cip68Metadata>> captor = ArgumentCaptor.forClass(Iterable.class);
             verify(metadataReferenceNftRepository).saveAll(captor.capture());
@@ -275,6 +284,90 @@ class Cip68ProcessorTest {
             ArgumentCaptor<Iterable<Cip68Metadata>> captor = ArgumentCaptor.forClass(Iterable.class);
             verify(metadataReferenceNftRepository).saveAll(captor.capture());
             return captor.getValue().iterator().next().getLabel();
+        }
+    }
+
+    /**
+     * A datum without a user token in its transaction and with none of the CIP-68 token fields is not token metadata
+     * (mainnet: Atrium profiles, empty datums, an {@code insert_fee} datum): it was indexed as a 333 by default.
+     */
+    @Nested
+    @DisplayName("A datum that is not token metadata")
+    class NotTokenMetadata {
+
+        private static final String DATUM = "d8799fa0ff";
+
+        private void index(ParsedCip68Datum parsed) {
+            Amt refNftAmt = Amt.builder().unit(POLICY_ID + REF_NFT_ASSET_NAME).quantity(BigInteger.ONE).build();
+            AddressUtxo utxo = AddressUtxo.builder().txHash(TX_HASH).inlineDatum(DATUM).amounts(List.of(refNftAmt)).build();
+            when(cip68TokenService.extractReferenceNfts(utxo)).thenReturn(List.of(refNftAmt));
+            when(cip68DatumParser.parseDetailed(eq(DATUM), any())).thenReturn(new ParseOutcome.Parsed(parsed));
+
+            processor.processTransaction(buildEvent(100L, utxo));
+        }
+
+        @Test
+        void isSkippedAndCountedWithoutAUserTokenAndWithNoneOfTheTokenFields() {
+            ParsedCip68Datum dAppState = new ParsedCip68Datum(null, null, null, null, null, null, 1L, null, null,
+                    Map.of("additional_properties", Map.of("mainnet-testing", "profile")));
+
+            index(dAppState);
+
+            verify(metadataReferenceNftRepository, never()).saveAll(any());
+            verify(metrics).notTokenMetadata();
+        }
+
+        @Test
+        void isStoredWhenItsReferenceNftIsAlreadyStored() {
+            // an owner who clears the metadata must not be served the old one
+            when(metadataReferenceNftRepository.existsByPolicyIdAndAssetName(POLICY_ID, REF_NFT_ASSET_NAME)).thenReturn(true);
+
+            index(new ParsedCip68Datum(null, null, null, null, null, null, 1L, null, null, null));
+
+            verify(metadataReferenceNftRepository).saveAll(any());
+            verify(metrics, never()).notTokenMetadata();
+        }
+
+        @Test
+        void isStoredWhenItsOnlyTokenFieldHasTheWrongType() {
+            // the field is there, so it is token metadata, broken
+            ValidationError wrongName = ValidationError.mandatory("CIP-68", null, "name", "wrong_type", "name is not a byte string, left out");
+
+            index(new ParsedCip68Datum(null, null, null, null, null, null, 1L, null, null, null, List.of(wrongName)));
+
+            @SuppressWarnings("unchecked")
+            ArgumentCaptor<Iterable<Cip68Metadata>> captor = ArgumentCaptor.forClass(Iterable.class);
+            verify(metadataReferenceNftRepository).saveAll(captor.capture());
+            assertThat(captor.getValue()).singleElement().satisfies(entity -> assertThat(entity.getValidationErrors())
+                    .extracting(e -> e.fieldName() + ":" + e.code()).contains("name:wrong_type"));
+        }
+
+        @Test
+        void storesAChunkedDescriptionOfA333WithOneMandatoryError() {
+            ValidationError chunked = ValidationError.optional("CIP-68", null, "description", "chunked_text",
+                    "description is a list of byte strings, not one byte string; the chunks are joined");
+            AddressUtxo userToken = AddressUtxo.builder().txHash(TX_HASH)
+                    .amounts(List.of(Amt.builder().unit(POLICY_ID + "0014df10" + REF_NFT_ASSET_NAME.substring(8))
+                            .quantity(BigInteger.ONE).build()))
+                    .build();
+            Amt refNftAmt = Amt.builder().unit(POLICY_ID + REF_NFT_ASSET_NAME).quantity(BigInteger.ONE).build();
+            AddressUtxo utxo = AddressUtxo.builder().txHash(TX_HASH).inlineDatum(DATUM).amounts(List.of(refNftAmt)).build();
+            when(cip68TokenService.extractReferenceNfts(utxo)).thenReturn(List.of(refNftAmt));
+            when(cip68DatumParser.parseDetailed(eq(DATUM), any())).thenReturn(new ParseOutcome.Parsed(new ParsedCip68Datum(
+                    null, "Templar Protocol - Templar lets you borrow", null, "Templar Protocol", null, null, 1L, null, null,
+                    null, List.of(chunked))));
+
+            processor.processTransaction(buildEvent(100L, List.of(utxo, userToken)));
+
+            @SuppressWarnings("unchecked")
+            ArgumentCaptor<Iterable<Cip68Metadata>> captor = ArgumentCaptor.forClass(Iterable.class);
+            verify(metadataReferenceNftRepository).saveAll(captor.capture());
+            assertThat(captor.getValue()).singleElement().satisfies(entity -> {
+                assertThat(entity.getDescription()).isEqualTo("Templar Protocol - Templar lets you borrow");
+                assertThat(entity.getValidationErrors())
+                        .extracting(e -> e.subStandard() + ":" + e.fieldName() + ":" + e.fieldCategory() + ":" + e.code())
+                        .containsExactly("333:description:MANDATORY:chunked_text");
+            });
         }
     }
 

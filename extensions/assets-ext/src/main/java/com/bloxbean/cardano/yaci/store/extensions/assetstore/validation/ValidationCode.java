@@ -23,6 +23,7 @@ public final class ValidationCode {
     public static final String KEY_COLLISION = "key_collision";
     public static final String INVALID_BASE64 = "invalid_base64";
     public static final String TOO_LARGE = "too_large";
+    public static final String CHUNKED_TEXT = "chunked_text";
 
     /** Markdown, for the OpenAPI description. */
     public static final String DOCUMENTATION = """
@@ -44,6 +45,7 @@ public final class ValidationCode {
             | `key_collision` | two keys read the same (for example the text `1` and the integer `1`); one of them is kept |
             | `invalid_base64` | a CIP-26 `logo` is not valid base64 |
             | `too_large` | a CIP-26 `logo` is over 64 KiB once decoded (kept up to about 1 MiB; anything larger is dropped) |
+            | `chunked_text` | a CIP-68 text (`name`, `description`, `ticker`, `url`, `mediaType`) is a list of byte strings instead of one byte string; the chunks are joined and the text is served |
             """;
 
     private ValidationCode() {

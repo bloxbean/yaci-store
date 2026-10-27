@@ -33,7 +33,7 @@ public record ValidationError(
                         ValidationCode.INVALID_VERSION, ValidationCode.PLUTUS_CONSTRUCTOR, ValidationCode.NOT_UTF8,
                         ValidationCode.INVALID_FILES_ENTRY, ValidationCode.NO_NESTED_ENTRY, ValidationCode.TOO_DEEP,
                         ValidationCode.UNSUPPORTED_KEY, ValidationCode.KEY_COLLISION, ValidationCode.INVALID_BASE64,
-                        ValidationCode.TOO_LARGE}) String code,
+                        ValidationCode.TOO_LARGE, ValidationCode.CHUNKED_TEXT}) String code,
         @JsonProperty("error") @Schema(description = "Human-readable message.") String error) {
 
     public static final String CIP_26 = "CIP-26";

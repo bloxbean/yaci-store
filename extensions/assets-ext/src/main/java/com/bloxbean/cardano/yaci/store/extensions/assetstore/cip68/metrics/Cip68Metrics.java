@@ -37,6 +37,12 @@ public class Cip68Metrics {
     /** An unexpected exception while indexing an output: the output is skipped and the sync goes on. The one reason to alert on. */
     public static final String PROCESSING_FAILURE = "processing_failure";
 
+    /**
+     * A datum with no user token in its transaction and none of the CIP-68 token fields, for a reference NFT that is not
+     * stored yet: it is not token metadata (a dApp's own state under the {@code 000643b0} prefix, an empty map).
+     */
+    public static final String NOT_TOKEN_METADATA = "not_token_metadata";
+
     /** The {@code kind} of a property that is left out because its value is nested deeper than the parser allows. */
     public static final String TOO_DEEP = "too_deep";
 
@@ -67,6 +73,10 @@ public class Cip68Metrics {
     /** An output whose indexing threw an unexpected exception; it is skipped. Unlike the other reasons, this one is a bug or a new kind of attack. */
     public void processingFailure() {
         registry.counter(SKIPPED, REASON_TAG, PROCESSING_FAILURE).increment();
+    }
+
+    public void notTokenMetadata() {
+        registry.counter(SKIPPED, REASON_TAG, NOT_TOKEN_METADATA).increment();
     }
 
     public void propertyDropped(String kind) {
