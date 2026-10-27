@@ -1,6 +1,6 @@
 ---
 name: yaci-store-remote-debug
-description: Debug and verify a yaci-store instance running on a remote VM over SSH — sync liveness, stalled adapot/reward jobs, disk exhaustion, log triage, blocks stored without their transactions, and correctness cross-checks against Koios for transaction counts, ada-pot values and governance proposal/voting status. Use when a user reports a remote yaci-store that has stopped syncing (including "Utxos not found for all ids"), is stuck on an epoch, has fallen behind tip, may be missing transactions, or whose ledger-state, ada-pot or proposal/vote numbers need verifying against an independent source.
+description: Debug and verify a yaci-store instance running on a remote VM over SSH — sync liveness, stalled adapot/reward jobs, disk exhaustion, log triage, and correctness cross-checks against Koios for both ada-pot values and governance proposal/voting status. Use when a user reports a remote yaci-store that has stopped syncing, is stuck on an epoch, has fallen behind tip, or whose ledger-state, ada-pot or proposal/vote numbers need verifying against an independent source.
 ---
 
 # yaci-store remote instance debugging
@@ -74,23 +74,6 @@ scripts/db.sh --host <HOST> --container <NAME> --csv -- \
 ```
 
 Exits 0 on full agreement, 1 on any mismatch. See "Verifying correctness".
-
-### `koios_tx_count_check.py` — verify no transactions are missing
-
-```sh
-# per epoch (one Koios request); the last epoch is skipped as in progress
-scripts/db.sh --host <HOST> --container <PG> --csv -- \
-  "select epoch, sum(no_of_txs) txs, count(*) blks
-     from block where era >= 2 group by epoch order by epoch;" \
-| grep -v '^SET$' | scripts/koios_tx_count_check.py --network mainnet
-
-# per block, to pinpoint the block(s) in an epoch flagged above
-scripts/db.sh --host <HOST> --container <PG> --csv -- \
-  "select number, no_of_txs from block where epoch = <N> order by number;" \
-| grep -v '^SET$' | scripts/koios_tx_count_check.py --network mainnet --blocks
-```
-
-Exits 0 on full agreement, 1 on any mismatch. See "Verifying block data integrity".
 
 ## Triage workflow
 
@@ -245,65 +228,6 @@ scripts/db.sh --host <HOST> --container <PG> -- \
 
 **`role "postgres" does not exist`** — the deployment uses its own DB user. Use
 `db.sh --info`; never assume `postgres`.
-
-**Block stored without its transactions** — sync stops with
-`IllegalStateException: Utxos not found for all ids`, at a block whose inputs
-spend outputs of an **earlier** block, and every restart fails at the same
-place. Find the culprit with the zero-tx query under "Verifying block data
-integrity": a block with `no_of_txs = 0` but a real `body_size`. Instances
-without ledger-state do not stop at all; they keep syncing with those
-transactions silently missing, so run the check on them too.
-Known case: yaci ≤ 0.4.6 read a definite-length tx-body array with a one-byte
-count of 128–255 (`98 80`…`98 ff`) as a negative count and decoded the block
-as 0 transactions, with no error. Most producers encode lists of more than 23
-txs as indefinite-length (`9f … ff`), so only producers that use definite
-length trigger it. Mainnet block 14,053,493 (137 txs, `98 89`) was the first.
-Fixed in yaci 0.4.7.
-**Fix: upgrade, then move the cursor back.** A restart alone resumes *after*
-the cursor block, so the empty block is never fetched again. Stop the app, run
-the release's `scripts/repair/` SQL (or move the cursor to the block before the
-bad one), then start the app. The startup rollback cleans every store after the
-cursor and re-fetches. Moving the cursor needs explicit user confirmation, like
-any other state change.
-
-## Verifying block data integrity
-
-A parser bug can drop transactions without any log line, so check the data
-itself. Two checks, cheapest first.
-
-**1. Blocks with zero txs but a real body** — no external calls:
-
-```sh
-scripts/db.sh --host <HOST> --container <PG> -- \
-  "select number, slot, era, body_size, protocol_version
-     from block where no_of_txs = 0 and body_size > 4 order by number;"
-```
-
-It should return no rows. `body_size` comes from the block header, which is
-decoded separately from the tx bodies, so a mismatch between the two shows up
-inside a single database. A genuinely empty block is 3 bytes in Shelley–Mary and
-4 bytes from Alonzo on (the empty arrays plus the map). Byron rows always record
-`no_of_txs = 0` and `body_size = 0` by design, so they never match. This check
-catches only blocks that lost **all** their transactions.
-
-**2. Transaction counts against Koios** — catches partial loss too:
-
-```sh
-scripts/db.sh --host <HOST> --container <PG> --csv -- \
-  "select epoch, sum(no_of_txs) txs, count(*) blks
-     from block where era >= 2 group by epoch order by epoch;" \
-| grep -v '^SET$' | scripts/koios_tx_count_check.py --network mainnet
-```
-
-It compares each closed epoch's tx and block counts with Koios's `epoch_info`:
-one request for the whole history. Then rerun with `--blocks` on any epoch it
-flags. On a healthy mainnet instance, the full Shelley-onward history (122M+
-txs) matches exactly. Both instances running the same yaci version would drop
-the same blocks, so agreement between two of your own instances is **not**
-evidence. Koios is.
-
-Run check 1 during any sync stall, and check 2 after each epoch closes on
-long-running instances.
 
 ## Verifying correctness against Koios
 
