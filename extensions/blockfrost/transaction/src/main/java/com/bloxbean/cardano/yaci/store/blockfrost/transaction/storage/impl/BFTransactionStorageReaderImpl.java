@@ -7,7 +7,6 @@ import com.bloxbean.cardano.yaci.store.blockfrost.common.util.AmountsJsonUtil;
 import com.bloxbean.cardano.yaci.store.blockfrost.transaction.dto.BFAmountDto;
 import com.bloxbean.cardano.yaci.store.blockfrost.transaction.storage.BFTransactionStorageReader;
 import com.bloxbean.cardano.yaci.store.blockfrost.transaction.storage.impl.model.*;
-import com.bloxbean.cardano.yaci.store.blockfrost.transaction.util.BFTxSizeUtil;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.transaction.domain.Txn;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionStorageReader;
@@ -117,7 +116,7 @@ public class BFTransactionStorageReaderImpl implements BFTransactionStorageReade
                         TRANSACTION.TTL,
                         TRANSACTION.VALIDITY_INTERVAL_START,
                         TRANSACTION.INVALID,
-                        TRANSACTION_CBOR.CBOR_DATA,
+                        TRANSACTION_CBOR.CBOR_SIZE,
                         withdrawalCount, delegationCount, stakeCertCount,
                         poolUpdateCount, poolRetireCount, redeemerCount,
                         assetMintCount, inputCount, outputCount, collateralReturnCount,
@@ -138,7 +137,7 @@ public class BFTransactionStorageReaderImpl implements BFTransactionStorageReade
                         .ttl(record.get(TRANSACTION.TTL))
                         .validityIntervalStart(record.get(TRANSACTION.VALIDITY_INTERVAL_START))
                         .invalid(record.get(TRANSACTION.INVALID))
-                        .size(BFTxSizeUtil.ledgerSize(record.get(TRANSACTION_CBOR.CBOR_DATA)))
+                        .size(record.get(TRANSACTION_CBOR.CBOR_SIZE))
                         .withdrawalCount(orZero(record.get("withdrawal_count", Integer.class)))
                         .delegationCount(orZero(record.get("delegation_count", Integer.class)))
                         .stakeCertCount(orZero(record.get("stake_cert_count", Integer.class)))
