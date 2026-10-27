@@ -29,6 +29,7 @@ import com.bloxbean.cardano.yaci.store.transaction.storage.InvalidTransactionSto
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionCborStorage;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionStorage;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionWitnessStorage;
+import com.bloxbean.cardano.yaci.store.transaction.util.TxSizeUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
@@ -307,11 +308,13 @@ public class TransactionProcessor {
         }
 
         byte[] cborData = HexUtil.decodeHexString(cborHex);
+        //Ledger size needs the full tx; a body-only cbor can't give it
+        Integer cborSize = transactionStoreProperties.isSaveFullTxCbor() ? TxSizeUtil.ledgerSize(cborData) : null;
 
         txnCborList.add(TxnCbor.builder()
                 .txHash(transaction.getTxHash())
                 .cborData(cborData)
-                .cborSize(cborData.length)
+                .cborSize(cborSize)
                 .slot(transaction.getSlot())
                 .build());
     }
