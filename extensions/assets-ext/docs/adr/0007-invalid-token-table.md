@@ -18,8 +18,8 @@ owner of a dropped token could not be told anything.
 
 CIP-113 (programmable tokens) will add more such items. A registry node links policies; tokens are held at a "jail" address
 (`programmableLogicBase`); the token's metadata is CIP-26 or CIP-68, so a programmable token is CIP-26 + CIP-113 or CIP-68 + CIP-113.
-Failures there are common and are not about one datum: a jail minted without a token to put in it, a policy found in the jail but not in the
-registry, a registry node that cannot be parsed or that looks spoofed. The module for CIP-113 was removed from `main`; this record makes room
+Failures there are not about one datum: a policy found in the jail but not in the registry, a registry node that cannot be parsed or that
+looks spoofed. The module for CIP-113 was removed from `main`; this record makes room
 for it without implementing it.
 
 ## Decision
@@ -55,9 +55,11 @@ Two of them follow the review of PR #1220: an exception of the CIP-26 check was 
 and is `processing_failure`; and a CIP-26 logo far beyond any real size, dropped while its entry is stored, had no record and is `logo_too_large`.
 That logo is the one item here whose token has a row: the row has no logo, so the dropped item is the logo.
 
-Reserved for CIP-113, documented and not written: `jail_without_token`, `unregistered_policy_in_jail`, `registry_node_unparseable`,
-`registry_node_spoofed`. CIP-113 says a registration with no mint is valid for real-world assets, so `jail_without_token` is a **finding**,
-not always a failure; whether it belongs in this table or only in a report is left open until CIP-113 is indexed.
+Reserved for CIP-113, documented and not written: `unregistered_policy_in_jail`, `registry_node_unparseable`, `registry_node_spoofed`.
+
+**A registered policy with nothing minted is not a row here** (decided 2026-10-27; the code `jail_without_token` that was reserved for it is
+removed). CIP-113 says a registration with no mint is valid, for example for real-world assets, and there is no token to store, serve or drop:
+it is a finding for a report or a metric, not something this table records.
 
 **A programmable token without CIP-26 or CIP-68 metadata is not a row here** (decided 2026-10-27 with the review of PR #1220, as in
 cf-token-metadata-registry ADR-020 decision 3). A registry node carries no name, ticker or logo; those come from the token's CIP-26 or
@@ -111,8 +113,8 @@ the rows written.
 
 ## Open questions
 
-- Whether `jail_without_token` is a failure row or a finding only in the report. The decision above, that a programmable token
-  without companion metadata is served with an error and not recorded, points to a finding.
+- Whether `unregistered_policy_in_jail` is a row here or a validation error of the token: the token exists and can be served from CIP-26 or
+  CIP-68, so it may be a token that breaks a rule rather than a dropped item.
 - Whether a programmable token without companion metadata is a `MANDATORY` or an `OPTIONAL` error.
 - How long CIP-26 rows are kept for a file that disappears and comes back.
 
