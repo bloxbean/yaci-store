@@ -2,11 +2,13 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto;
 
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.cip26.Cip26TokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.annotation.Nullable;
 
 public record Standards(@Nullable Cip26TokenMetadata cip26, @Nullable FungibleTokenMetadata cip68) {
 
-    /** True when neither standard has anything for the subject. */
+    /** True when neither standard has anything for the subject. For the code only: not part of the response. */
+    @JsonIgnore
     public boolean isEmpty() {
         return cip26 == null && cip68 == null;
     }

@@ -113,6 +113,17 @@ class TokenApiEndToEndTest {
     }
 
     @Test
+    void theStandardsOfShowCipsDetailsHoldOnlyTheStandards() throws Exception {
+        // Standards.isEmpty() is for the code: it was serialized as "empty": false
+        store(row(333).name("Coin").description("A coin").validationErrors(List.of()).build());
+
+        mockMvc.perform(get("/api/v1/tokens/subject/{s}", FT_SUBJECT).param("show_cips_details", "true"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.subject.standards.cip68.name").value("Coin"))
+                .andExpect(jsonPath("$.subject.standards.empty").doesNotExist());
+    }
+
+    @Test
     void validMeansNoErrorsAtAllAnOptionalErrorMakesTheTokenInvalidToo() throws Exception {
         ValidationError optional = ValidationError.optional("CIP-68", null, "logo", "invalid_uri_scheme",
                 "logo 'Qm…' is not a URI with one of the schemes CIP-68 allows (https, ipfs, ar, data)");
