@@ -67,7 +67,8 @@ A datum or entry is dropped, with one WARN that says it looks like an attack, on
 - a CIP-26 entry whose file name differs from its inner `subject` (the registry has thousands of these on testnets; they are not indexed
   under either name, since last-write-wins would make the data ambiguous, and each is recorded in `invalid_token` with the inner subject, ADR 0007), and one whose
   `subject` cannot be a key (not even-length hex, not 56 to 120 characters);
-- a CIP-26 logo far beyond any real size (over about 1 MiB; the CIP's limit is 64 KiB, so anything between is kept with an error);
+- a CIP-26 logo far beyond any real size (over about 1 MiB; the CIP's limit is 64 KiB, so anything between is kept with an error); the entry
+  is stored without it;
 - an output whose indexing throws something unexpected (`processing_failure`, ADR 0004).
 
 What is dropped is recorded in the `invalid_token` table (ADR 0007).
@@ -116,7 +117,8 @@ batch); the errors of a returned token are never filtered. The check is made in 
 client that asks for a stricter view wants to know that the token does not pass, and an empty or shortened `validation_errors` would read as "it does". The `404`
 is the same answer the client already handles for an unknown token. *Trade-off:* a `404` then means "unknown" or "filtered out", and the client can tell them
 apart by asking again without the parameter. A token indexed before validation existed (no errors recorded) is judged by the rule it had before, name and
-description present. When a request asks for some properties (`?property=`), the errors, `metadata.valid` and this gate are about those properties only (ADR 0003).
+description present; under `?property=`, only those of the two that are asked for (before the review of PR #1220 the rule ran on the filtered
+response, so `?property=ticker&validation=STRICT` was a `404` for a row that has both). When a request asks for some properties (`?property=`), the errors, `metadata.valid` and this gate are about those properties only (ADR 0003).
 
 ### 6. Rich fungible tokens are served
 

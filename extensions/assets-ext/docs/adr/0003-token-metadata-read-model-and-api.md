@@ -118,8 +118,9 @@ breaking API change. *Trade-off:* clients that want NFT metadata cannot get it f
 
 The API serves the latest **stored** row, and every datum that can be decoded writes a row (ADR 0002), so the newest datum is the one
 returned, with its own errors. An update is never rejected, so there is no longer a case where the row of an earlier datum is served as if
-it were current. (A design that skipped bad datums would write nothing, and the API would answer "the last accepted metadata".) A datum that is dropped as an attack (ADR 0006 decision 3) still writes nothing, so the row of the earlier datum stays; that is the one
-remaining case, and it is logged.
+it were current. (A design that skipped bad datums would write nothing, and the API would answer "the last accepted metadata".) A datum or registry file that is dropped (one that cannot be decoded or parsed, an attack, ADR 0006 decision 3) still writes nothing, so the row
+of the earlier datum stays, and the API serves it with nothing to say that a newer one was dropped; that is the one remaining case. It is logged, and
+the dropped update is a row of `invalid_token` (ADR 0007) with its subject and its transaction or file. The README says so too.
 
 ### 6. A batch is read with a fixed number of queries
 

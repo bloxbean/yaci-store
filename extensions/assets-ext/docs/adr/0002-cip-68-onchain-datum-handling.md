@@ -285,7 +285,8 @@ instead of stopping the sync.
 CIP-68 says text is UTF-8, and Plutus has one byte-string type for text and binary data alike. Its retrieval steps say to "encode all string entries to
 UTF-8 if possible, otherwise leave them in hex"; the module follows that rule. Every text value (the typed fields `name`, `description`, `ticker`, `url`,
 `mediaType`, `logo` and `image`, and the values in additional properties) is stored as text if the bytes are valid UTF-8, and as **hex** otherwise. Null
-characters are stripped from text. A typed field that is stored as hex has an `OPTIONAL` `not_utf8` error; a binary value in an additional property (a hash) is
+characters are stripped from text. A typed field that is stored as hex has a `not_utf8` error, `MANDATORY` for `name` (as a name of the wrong type is: the name is
+required, and hex is not one; review of PR #1220) and for the `description` of a 333 (decision 3), `OPTIONAL` otherwise; a binary value in an additional property (a hash) is
 normal and has none. Before #1226 the typed fields were decoded with replacement characters, so bytes that are not UTF-8 became `U+FFFD` and were lost (97 rows on
 a preprod sync, about 0.4%; not measured on mainnet).
 

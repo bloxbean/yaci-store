@@ -47,9 +47,13 @@ for it without implementing it.
 A token that is indexed keeps its problems in `validation_errors` of its row (ADR 0006) and is **not** in this table. The table is the
 complement: the items that have no row to carry a list of errors. The two never describe the same thing.
 
-Codes written now: CIP-26 `filename_subject_mismatch`, `unusable_subject`, `unparseable_mapping`, `missing_git_history`; CIP-68
-`datum_undecodable`, `datum_too_deep_to_decode`, `processing_failure`. A datum that is not CIP-68 at all (a reference NFT output can carry any
-datum) is ignored, not recorded.
+Codes written now: CIP-26 `filename_subject_mismatch`, `unusable_subject`, `unparseable_mapping`, `missing_git_history`, `logo_too_large`; CIP-68
+`datum_undecodable`, `datum_too_deep_to_decode`; both standards `processing_failure` (something nobody foresaw threw). A datum that is not CIP-68 at
+all (a reference NFT output can carry any datum) is ignored, not recorded.
+
+Two of them follow the review of PR #1220: an exception of the CIP-26 check was recorded as `unusable_subject`, although the subject may be fine,
+and is `processing_failure`; and a CIP-26 logo far beyond any real size, dropped while its entry is stored, had no record and is `logo_too_large`.
+That logo is the one item here whose token has a row: the row has no logo, so the dropped item is the logo.
 
 Reserved for CIP-113, documented and not written: `jail_without_token`, `unregistered_policy_in_jail`, `registry_node_unparseable`,
 `registry_node_spoofed`. CIP-113 says a registration with no mint is valid for real-world assets, so `jail_without_token` is a **finding**,
