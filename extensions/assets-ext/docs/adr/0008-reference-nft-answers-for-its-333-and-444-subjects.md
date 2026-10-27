@@ -18,8 +18,10 @@ another label: `000de140` (222, an NFT), `0014df10` (333, fungible), `001bc280` 
 That mapping only looks at the label. It does not check that the user token was ever minted, and it does not check which label the stored datum was
 read for. So any 333 or 444 subject with the name of a reference NFT answers `200` with its metadata, including the 333 and 444 subjects of NFTs and
 of tokens that were never minted. On preprod (full sync, 2026-10-22), 53,383 of 55,619 possible 333 subjects and 55,064 of 55,619 possible 444
-subjects answered `200` while the token did not exist. The same was reported for the cf-token-metadata-registry V2 API (#1292), and the answer is not
-flagged (an NFT datum has no validation errors, so `?validation=STRICT` accepts it).
+subjects answered `200` while the token did not exist. The same was reported for the cf-token-metadata-registry V2 API (#1292), and the answer was not
+flagged (an NFT datum had no validation errors, so `?validation=STRICT` accepted it). Since the review of PR #1220 a subject is checked for its own label
+when it is served (ADR 0006 decision 4): the 333 subject of an NFT without a description has a `MANDATORY` error and is left out by
+`?validation=MANDATORY_ONLY`; one whose datum has what a 333 needs still passes.
 
 Options considered in #1292: (1) serve a subject only if the stored label matches; (2) serve it only if the user token was seen on chain (a small
 `cip68_user_token` table filled by the CIP-68 processor, with rollback); (3) both; (4) do nothing and document it. Option 2 was built and verified on

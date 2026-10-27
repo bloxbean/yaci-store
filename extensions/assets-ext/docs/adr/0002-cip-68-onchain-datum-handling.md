@@ -85,13 +85,22 @@ a table that is added to this module later and has a `slot` column must be added
 CLI leaves its rows behind while the runtime rollback removes them. `cip26_metadata` and `cip26_sync_state` are not listed,
 which is correct for the reason in ADR 0001: they come from Git, not from the chain.
 
-### 2. The label comes from the paired user tokens, and from the datum when there is none (#1222, #1225, #1238)
+### 2. The stored label comes from the paired user tokens, and from the datum when there is none (#1222, #1225, #1238)
 
 The label (222 NFT, 333 FT, 444 RFT) is not in the datum. It is read from the user token minted with
 the reference NFT: the asset in the same transaction with **the same policy and the same base name**
 (reference NFT `000643b0 + base`, user token `<label prefix> + base`). If several are paired, the row is
-stored with the first of them in the order 222, 333, 444, **and the datum is checked against the requirements of every
-paired label** (see below).
+stored with the first of them in the order 222, 333, 444.
+
+**The stored label does not decide what the token is checked against.** What a label requires (decision 3) is checked when a
+subject is served, for the label of that subject: a `0014df10` subject as a 333, a `001bc280` subject as a 444. The stored label is
+kept for the `indexed` metric and the logs. *Why (review of PR #1220):* the label of a row is often a guess (below), and one reference
+NFT can serve a 333 and a 444 token at the same time, so a label fixed when the datum is indexed was wrong in both cases. Measured with
+the processor on H2: a 333 token updated without its user token, whose datum has a `name` and an `image` but no `description`,
+`ticker`, `logo` or `decimals`, was stored as 222, never checked for the description a 333 requires, and served as valid; an RFT
+updated without its user token and without `decimals` was stored as 222 and lost its logo, which was chosen by the stored label; and a
+reference NFT minted with a 333 and a 444 token served each of them the errors of both labels, so the 444 was left out by
+`?validation=MANDATORY_ONLY` for a rule of the 333.
 
 Two remarks in the CIP's "Constraints and conditions" shape this rule. The user token does **not** have to
 be minted in the same transaction as the reference NFT, so looking inside one transaction is a heuristic,
@@ -99,7 +108,7 @@ not the CIP's definition (hence the inference below). And there **may be several
 reference NFT**, for example a 222 and a 333 with the same name, so one metadata record can legitimately
 serve more than one token type. The table holds one label per row, so the stored label is the first in the
 order above, a choice forced by the model that does not claim one of them is the "right" label; what is checked
-is not limited to it.
+does not depend on it.
 
 The earlier rule took the prefixes of every asset in the transaction, whatever its policy or name, with
 222 winning. A transaction that also contained any unrelated 222 NFT then labelled every reference
@@ -121,6 +130,15 @@ fields the datum carries**:
 `decimals` alone does not decide, since the fungible token and the RFT both define it. A paired user token
 always wins over this guess.
 
+**A datum that is not token metadata is not indexed.** A datum with no paired user token and **none of the CIP-68 token fields**
+(`name`, `description`, `ticker`, `decimals`, `url`, `logo`, `image`, `mediaType`, `files`, a nested `"721"`; a field of the wrong
+type counts, since it is there) is skipped at DEBUG and counted as `datums.skipped{reason="not_token_metadata"}`, unless its
+reference NFT is already stored. Such a datum would only read as a 333 by "none of these" above; on mainnet these were dApp state
+under the `000643b0` prefix (Atrium profiles, an `insert_fee` datum) and empty maps, which were indexed as fungible tokens with a
+missing `name` and `description`. A datum paired with its user token is indexed whatever it holds, since the minting transaction says
+what the token is, and once a reference NFT is stored every later datum is, so that an owner who clears the metadata is not served
+the old one. It is not recorded in `invalid_token` (ADR 0007): nothing was dropped, it was never a token.
+
 *Why pair first, and guess only as a fallback:* the pairing is how CIP-68 defines the relation and it does
 not guess; the datum shape is a heuristic and is used only when the pairing is not available. Before the
 inference, such a reference NFT was labelled 333. That is right for a fungible token (Wrapped SILVER) and
@@ -131,20 +149,18 @@ asset lookup at indexing time, which depends on other stores being enabled and c
 NFT. It was not done. *Trade-offs and known gaps:*
 
 - The inference can be wrong for a datum that mixes both kinds of fields. How many reference NFTs have no
-  paired token, and how many the guess would label differently from their real user token, is not measured.
-- With several paired user tokens (USDCx/USDrf LP has both a 222 and a 333 on-chain), the row keeps one label,
-  but the datum is checked against **all** of them (#1238): it needs a `name`, a `description` if 333 is among
-  them, and an `image` with an allowed scheme if 222 or 444 is. Whatever it lacks for a label is a validation error that
-  names that label (`sub_standard`); the datum is indexed either way, since the metadata is shared by every token of that
-  reference NFT. Checking only the first label would index a datum without a description although it is also a fungible token. A multi-label token is logged at INFO when it is indexed (decision 8); it is not a metric, since it needs no action. *Considered and not done:* recording every label (a
-  `labels` column or a row per label): nothing reads it today, and a row per label would duplicate the datum; it can be added
-  later with a resync.
-- The opposite error (an NFT stored as 333) was possible before and is not measured.
+  paired token, and how many the guess would label differently from their real user token, is not measured. A wrong guess
+  only changes the stored label: what the API serves is checked for the label of the subject asked for.
+- With several paired user tokens (USDCx/USDrf LP has both a 222 and a 333 on-chain), the row keeps one label, and each
+  token is checked for its own label when it is served (#1238): the LP token (333) needs a `name` and a `description`, and
+  is not reported as lacking the `image` of the pool NFT. A multi-label token is logged at INFO when it is indexed
+  (decision 8); it is not a metric, since it needs no action. *Considered and not done:* recording every label (a
+  `labels` column or a row per label): nothing reads it, since what is served is checked for the subject asked for.
 - Rows already stored keep their label until their datum is processed again.
 
-What the label does and does not decide: it chooses the fields that are mandatory for the token (decision 3) and the set a
-row belongs to (the API serves fungible and rich fungible tokens, see decision 9). It does **not** change what the
-API returns for a subject, which reads the latest row of the reference NFT whatever its label.
+What the label does and does not decide: the stored label decides nothing that is served. The label of the subject asked for
+chooses the fields that are mandatory for the token (decision 3) and whether its `image` is served as its logo (decision 9). The
+API returns the latest row of the reference NFT whatever its stored label.
 
 ### 3. What each label requires, reported as errors (#1221)
 
@@ -153,13 +169,20 @@ API returns for a subject, which reads the latest row of the reference NFT whate
 | 333 FT | `name` and `description` | everything else (`logo`, `ticker`, `url`, `decimals`) |
 | 222 NFT, 444 RFT | `name` and `image` (decision 4) | `description`, and everything else |
 
-The processor derives the label first and then checks the datum against it, because the requirements depend on it. A datum that lacks
-a mandatory field is indexed, with a `MANDATORY` error for that field and that label (`sub_standard`): for example a 333 token with no
-description has `{"cip": "CIP-68", "sub_standard": "333", "field_name": "description", "field_category": "MANDATORY",
-"code": "missing_value", "error": "description field is missing a mandatory value"}`. A value that is present but of the wrong type (a `name` that
-is an integer) is left out and reported as `wrong_type`; for `name` that error is mandatory, so it is not reported as missing too.
-NFTs and RFTs without a description have no error, which the spec allows. Before #1221 the same rule was applied to every label and valid NFTs
-were dropped silently; on mainnet at least 203 datums were affected (a lower bound).
+The row stores what is wrong with the datum itself, which is the same for every label: the parser's errors and a bad `logo`. They have no
+`sub_standard`. What the label requires is checked when a subject is served, for the label of that subject (decision 2), by
+`Cip68Validator.validate` on the stored row: a token that lacks a mandatory field is served, with a `MANDATORY` error for that field and
+that label (`sub_standard`). For example a 333 token with no description is served with `{"cip": "CIP-68", "sub_standard": "333",
+"field_name": "description", "field_category": "MANDATORY", "code": "missing_value", "error": "description field is missing a mandatory
+value"}`. A value that is present but of the wrong type (a `name` that is an integer) is left out and reported as `wrong_type`; for `name`
+that error is mandatory, so it is not reported as missing too. A `description` of the wrong type, or given as chunks (decision 5), is stored
+without a label and served with the category of the label asked for: `MANDATORY` for a 333, which requires a description, `OPTIONAL` for a
+444; it is not also reported as missing. NFTs and RFTs without a description have no error, which the spec allows. Before #1221 the same rule
+was applied to every label and valid NFTs were dropped silently; on mainnet at least 203 datums were affected (a lower bound).
+
+*Why checked when served:* a rule of a label that changes takes effect on the next request, without a resync, and the same row is checked
+for each subject that reads it. *Trade-off:* the `validation_errors` column holds the errors of the datum only; a SQL report on it has to apply
+the rules of the table above itself, as the API does (the schema README says which they are).
 
 The optional properties report as `OPTIONAL` errors, and keep their value:
 
@@ -169,7 +192,8 @@ The optional properties report as `OPTIONAL` errors, and keep their value:
 | `files` | an entry that is not a map, has no `mediaType` or no `src`, or whose `src` is not a `uri` with an allowed scheme; the entries are kept as written, with one error per bad entry | `invalid_files_entry` |
 | `decimals` | outside [0, 255] (stored as written), not an integer or beyond a `long` (stored as no value) | `out_of_range`, `wrong_type` |
 | text fields | not valid UTF-8 (stored as hex, decision 7) | `not_utf8` |
-| `ticker`, `url`, `mediaType`, `description` (222, 444) | not a byte string (left out) | `wrong_type` |
+| `name`, `description`, `ticker`, `url`, `mediaType` | a list of byte strings instead of one (joined and kept, decision 5); `MANDATORY` for `name`, and for `description` when served as a 333 | `chunked_text` |
+| `ticker`, `url`, `mediaType`, `description` (444) | not a byte string, nor a list of byte strings (left out) | `wrong_type` |
 | additional properties | a constructor anywhere in the value (stored as `{"constructor", "fields"}`), a key with no text form, two keys that read the same (decision 7), a value nested deeper than 100 levels (dropped, decision 6) | `plutus_constructor`, `unsupported_key`, `key_collision`, `too_deep` |
 
 ### 4. `image` (222, 444) and `logo` (333): kept as written, with an error when the scheme is not one the CIP allows (#1221, #1234)
@@ -208,14 +232,20 @@ an allowed scheme, 15 with no `mediaType` and 3 with an entry that is not a map.
 
 *Considered and rejected:* dropping the token, or only the property (ADR 0006); and repairing the value.
 
-### 5. A logo or image given as a list of chunks is joined as bytes (#1226)
+### 5. A value given as a list of chunks is joined as bytes (#1226)
 
 A Plutus byte string is at most 64 bytes, so a longer URI (a `data:` URI, a long URL) can only be stored
 as a list of byte strings. The CIP defines this as `uri = bounded_bytes / [* bounded_bytes]`. The module
 joins the chunks for `logo` and `image`. The chunks are joined as **bytes** and decoded once, so a
 multi-byte character cut by a chunk boundary survives (decoding each chunk on its own corrupted it).
-Elements that are not byte strings are ignored. The other typed fields (`name`, `description`, `ticker`,
-`url`) are plain `bounded_bytes` in the CIP and are not joined.
+Elements that are not byte strings are ignored.
+
+The other typed texts (`name`, `description`, `ticker`, `url`, `mediaType`) are one `bounded_bytes` in the CIP, but minters give
+longer ones as chunks too. A non-empty list of byte strings only is **joined the same way and served**, with a `chunked_text` error
+(`MANDATORY` for `name`, `OPTIONAL` otherwise; a `description` is reported with the category of the label asked for, decision 3). An
+empty list, or one that holds anything but byte strings, is still left out as `wrong_type`. *Why:* the text is readable and is what the
+minter meant; leaving it out hid it. On mainnet 570 descriptions, 43 urls and 12 names of fungible tokens are given this way (Templar
+Protocol and others); they were left out as `wrong_type`, and a 333 then also had a mandatory `missing_value` for its description.
 
 On preprod, 240 of the 1,968 fungible tokens (181 with 2 chunks, 42 with 3, 14 with 4, 3 with 21) store
 their logo this way (not measured on mainnet). The CF token metadata registry does not read them and
@@ -288,13 +318,14 @@ not UTF-8, where it used to return garbled text.
 - An output with a flat datum and several reference NFTs is one **INFO** line with the number found and their units (decision 1). It is a valid case that the CIP
   does not call an error, and it is common (8,918 outputs on mainnet), so at WARN it would bury the lines that matter.
 - A flat datum is parsed once for the whole output, so what is wrong with the datum itself (a wrong type, a constructor, a bad `logo`, an undefined version) is
-  **counted once per output**, not once per reference NFT; the errors that depend on a label, the rows and the `indexed` count stay per token. Without this a datum
+  **counted once per output**, not once per reference NFT; the rows and the `indexed` count stay per token. Without this a datum
   that is wrong was counted once for each of its reference NFTs (178 times for the largest output on mainnet), which says nothing about how many datums are bad.
 - A datum that does not have the CIP-68 shape at all (not a constructor, or a constructor whose first field is not a metadata map) is **not** logged: reference NFT outputs can
   carry arbitrary datums, and it would be noise.
 
 **Metrics (#1237).** Micrometer counters, read from `/actuator/prometheus`: `yaci.store.assets.cip68.datums.indexed` (tag `label`: 222, 333, 444);
-`yaci.store.assets.cip68.datums.skipped` (tag `reason`, only `parse_failure` and `processing_failure`); and
+`yaci.store.assets.cip68.datums.skipped` (tag `reason`: `parse_failure`, `processing_failure`, and `not_token_metadata` for a datum
+that is not token metadata, decision 2); and
 `yaci.store.assets.cip68.properties.dropped` (tag `kind`, only `too_deep`). What is wrong with a stored token is not a counter: it is the
 `validation_errors` of its row, in the API and in SQL, where it is exact and survives a restart; a counter of it would reset on restart and count a replayed
 block again. The drops of both standards are also counted by `yaci.store.assets.invalid_tokens{standard,reason_code}` (ADR 0007). The tags have a small fixed set of values. They are registered with the CIP-68 processor and need no property; without a `MeterRegistry` bean
@@ -306,8 +337,12 @@ counted again; they suit `rate()` and `increase()`, not a historical total.
 ### 9. Read model
 
 - The API serves **fungible and rich fungible tokens**. A subject with the `0014df10` or `001bc280` prefix is mapped to its reference NFT, and the latest row
-  of that reference NFT is returned whatever its label. A rich fungible token has no `logo`: its `image` is served as `metadata.logo`, and its `description`
-  is optional. NFT rows (222) are stored but not exposed.
+  of that reference NFT is returned whatever its label, checked for the label of the subject (decision 3). A rich fungible token has no `logo`: the `image`
+  is served as `metadata.logo` of a `001bc280` subject whatever label the row was stored with, and its `description` is optional. NFT rows (222) are stored
+  but not exposed. A batch that asks for the 333 and the 444 subject of one reference NFT gets both, each checked for its label (before the review of
+  PR #1220 the second one overwrote the first).
+- `/cip68/ft/{policyId}/{rawAssetName}` names no label: the token is checked as a 333, the fungible token the endpoint is named after. A 444 token is asked
+  for by its subject.
 - For one subject, CIP-26 and CIP-68 are combined **per field**: the first non-null value in priority order wins, and the default order is CIP-68 then CIP-26.
   The `validation_errors` of both are returned, each naming its `cip`.
 - A subject is returned when any standard has something indexed for it, **whatever is wrong with it**; there is no longer a requirement that the merged
@@ -328,24 +363,22 @@ full mainnet index made with rules that drop the token, 2,508 of the 3,113 token
   adapt (ADR 0006).
 - NFTs are stored but not served; their rules can change later without a breaking API change.
 - Greenland Reserve Coin (version 0), the SaveCard tokens, NFTs with an `iagon://` or empty image and tokens with a bare-IPFS logo are returned, with errors.
-- Anything corrected in a rule changes the errors of rows already stored, which are recomputed by a resync from before the affected slots; so is the first
-  deployment of this decision, since the tokens that were dropped exist nowhere. That is accepted: the module has no known users yet, and no migration or backfill
-  is planned. This should be revisited once the module is in use.
+- A rule of a label (decision 3) is applied when a token is served, so changing it needs no resync. Anything corrected in the parser changes the errors of rows
+  already stored, which are recomputed by a resync from before the affected slots; so is the first deployment of this decision, since the tokens that were dropped
+  exist nowhere. That is accepted: the module has no known users yet, and no migration or backfill is planned. This should be revisited once the module is in use.
+- The `validation_errors` column holds what is wrong with the datum; what a label requires is in the API only (decision 3).
 
 ## Open questions
 
 Decisions that are still open:
 
-- One label per row, although the CIP allows several user tokens for one reference NFT: should the table record every matching label? Nothing reads the label
-  today; the number of such tokens (below) will show whether it matters.
 - Should the CIP fix its 444 definition (`3 / 4`), which contradicts its changelog and mainnet, and say whether a consumer should accept a datum whose version
   it does not know? The module accepts it and reports `invalid_version`; neither point is raised in the CIPs repository yet.
 
 Measured on a full mainnet index made before this decision (`ebb9daa37`, read on 2026-10-14; to be measured again with PR #1220):
 
 - 8,918 outputs hold several reference NFTs with a flat datum: 6,645 hold two, the largest holds 178.
-- 10 datums were skipped because their reference NFT is paired with user tokens of labels 222 and 333; none of that kind was indexed, so the
-  one-label-per-row question above has no live case yet.
+- 10 datums were skipped because their reference NFT is paired with user tokens of labels 222 and 333; none of that kind was indexed then.
 
 Measured with this decision, on a full preprod sync from genesis (2026-10-20, tip at block 5,314,454; 0 errors, 0 `processing_failure`):
 
@@ -361,7 +394,8 @@ Not measured yet:
 - Whether any real nested (`"721"`) datum exists on-chain: none of the 250,876 rows is one (the two datums that contain the bytes `721` are flat, with `Shrine
   #0721` in the token name), and the nested case is covered by synthetic datums only. A nested datum with no entry for its token is now an error, so the next full
   index will show whether there are any.
-- How good the datum-shape inference is for a reference NFT with no paired token, and whether an exact cross-transaction lookup is worth its cost.
+- How good the datum-shape inference is for a reference NFT with no paired token. It now decides only the stored label, and whether a datum with none of the
+  token fields is skipped, so an exact cross-transaction lookup is unlikely to be worth its cost.
 
 ## References
 
@@ -371,4 +405,7 @@ Not measured yet:
 - ADR 0006: validation errors are reported, not enforced
 - #1132, #1133: the `cip68_metadata` table in the admin CLI rollback configuration (`rollback.yml`)
 - cardano-foundation/cf-token-metadata-registry#104 and #110: backport of these fixes, and rich fungible tokens
+- cardano-foundation/cf-token-metadata-registry#117: chunked texts, one description error per label and datums that are not token metadata, found on its mainnet
+  validation run and ported here
+- Review of PR #1220 (2026-10-26, points 1 and 2): the label checked when a token is served, the batch with a 333 and a 444 subject of one reference NFT
 - `Cip68Processor`, `Cip68DatumParser`, `Cip68Validator`, `Cip68TokenService`, `TokenQueryService`

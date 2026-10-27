@@ -99,14 +99,16 @@ The CIP-68 table stores rows for labels 222, 333 and 444. A subject with the fun
 is mapped to its reference NFT (prefix `000643b0`) and the latest row of that reference NFT is returned. The reference NFT holds the metadata and does not say
 that the token was minted, so the 333 and 444 subjects of NFTs, of burned tokens and of tokens that were never minted answer 200 too (ADR 0008, #1292: kept on
 purpose, so that the metadata of a burned token is still there for history). NFT rows are stored and not exposed.
-A rich fungible token has no `logo` in CIP-68; its `image` is served as `metadata.logo` (source `CIP_68`), as cf-token-metadata-registry does,
-and its `description` is optional (not an error). An image whose scheme the CIP does not allow is served as written, with an `invalid_uri_scheme`
+A rich fungible token has no `logo` in CIP-68; its `image` is served as `metadata.logo` (source `CIP_68`) of a `001bc280` subject, whatever label
+the row was stored with, as cf-token-metadata-registry does, and its `description` is optional (not an error). An image whose scheme the CIP does not allow is served as written, with an `invalid_uri_scheme`
 error, so a wallet can decide.
 
 The latest row is chosen **whatever its label**. A reference NFT can be updated in a transaction that also mints a user
 token of another label, so its newest row may carry label 222 although the token is fungible; filtering by label would then
-return an older row, which is worse than an unexpected label. The label decides which fields are mandatory for the token (ADR 0002
-decision 3), not what the API returns; for the same reason the label is not a gate for whether a subject is served (ADR 0008).
+return an older row, which is worse than an unexpected label. The stored label decides nothing that is served: the label of the
+**subject asked for** decides which fields are mandatory for the token, checked when it is served (ADR 0002 decisions 2 and 3, ADR 0006
+decision 4), and whether its image is its logo; for the same reason the label is not a gate for whether a subject is served (ADR 0008).
+`/cip68/ft/{policyId}/{rawAssetName}` names no label, so the token is checked as a 333, the fungible token the endpoint is named after.
 
 *Why these two:* the public API surface is fungible-token focused today, and the registry serves RFTs since cf-token-metadata-registry
 #110, so the two implementations stay comparable. Storing NFT rows while not exposing them means their rules can change without a
@@ -126,6 +128,10 @@ CIP-26 logos (only if `logo` is requested) and the CIP-68 rows. The merge then r
 a separate query in the single-subject path as well, and is only read when `logo` is requested, because it can be large.
 Properties the request does not ask for are not fetched where that is cheap (the logo), and are filtered out of the response
 otherwise.
+
+The CIP-68 rows are read once per reference NFT and the response is built for **each subject asked for**, with its own label: the 333
+and the 444 subject of one reference NFT are both returned, each checked for its label. (Before the review of PR #1220 the batch kept
+one subject per reference NFT, and the second overwrote the first.)
 
 *Why:* reading each subject with its own queries would make a 100-subject batch hundreds of round trips (the code names this
 the N+1 pattern). *Trade-off:* the batch path and the single path share the merge but not the fetching code, so a change to one has to be made in

@@ -85,6 +85,9 @@ entry `{cip: "CIP-26", field_name, field_category, code, error}` (there is no `s
   comes from the library and the registry, not from the CIP text, and it is what `field_category` reports.
 - **`ticker` (2 to 9 characters), `url` (250), `decimals`, `logo`** are `OPTIONAL`: a value outside its limit is an `invalid_length`, `wrong_type`
   or `out_of_range` error, and the value is stored as written.
+- **A `url` must be a URI with `https` and a host.** The library checks the scheme only, so `https:/rosen.tech` (one slash) passed. A `url` that
+  is not a valid URI, not `https`, or has no host is an `OPTIONAL` `invalid_value` error that quotes it, unless the library already reported the
+  `url`. Found on the mainnet validation run of cf-token-metadata-registry (#117).
 - **`decimals` is in [0, 255]** (`TokenDecimals`). The library only checks `>= 0` and does so on an `int`, so the module range-checks the stored
   `long` first (4294967301 would otherwise pass as 5); a value outside the range is stored and reported as `out_of_range`. A `decimals` that is
   not a number is stored as no value, with a `wrong_type` error that quotes it (the raw string stays in the mapping).
@@ -127,10 +130,18 @@ contains no mapping files at all**, in which case the cleanup is skipped and a w
 *Why:* removals matter (a token can be withdrawn), but an empty or broken clone must not wipe the
 table. *Trade-off:* if the registry is really emptied, the local data stays until someone cleans it.
 
-### 7. One row per subject, no signatures
+### 7. One row per subject, in lower case, no signatures
 
 The table keeps the latest version of a subject (`updated` and `updated_by` come from the Git
-history of the file). The signatures that registry entries carry are not stored and not verified.
+history of the file).
+
+**A subject is stored in lower case.** It is base16, and its case carries no meaning, but 39 mainnet registry files are named and
+written in upper case, and they were stored as written: a client that asked in lower case, as every CIP-68 and on-chain subject is
+written, got a `404`. The subject is lower-cased when the entry and its logo are stored, when an entry is deleted, and when a full sync
+compares the stored subjects with the file names; the file itself is kept as written in the mapping. On 3.x a full resync is required
+anyway (ADR 0006 decision 4), so there is no migration, and 3.x must not run on a database that keeps CIP-26 rows of an earlier release.
+The 2.0.x backport upgrades in place, so it has `V0_1700_4`, which lower-cases the subjects already stored (on MySQL with a binary
+comparison); without it the next full sync would find them stale and delete them. The signatures that registry entries carry are not stored and not verified.
 
 *Why:* the reason is not recorded in the code. What the code shows is that the module serves the
 V2 shape (plain values), and the regression README says a V1 comparison is impossible because
@@ -164,5 +175,7 @@ CF registry's V1 API cannot be reproduced from it.
 ## References
 
 - #1102: propagate CIP-26 token deletions from the upstream registry
+- cardano-foundation/cf-token-metadata-registry#117: the `url` host check and lower-case subjects, found on its mainnet validation run and
+  ported here (PR #1220; the 2.0.x backport #1242 with `V0_1700_4`)
 - `Cip26NetworkDefaults`, `Cip26MetadataSyncService`, `Cip26MetadataService`,
   `Cip26MetadataValidator`
