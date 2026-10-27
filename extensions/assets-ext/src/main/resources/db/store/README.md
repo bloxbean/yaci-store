@@ -30,7 +30,7 @@ whose `subject` cannot be a key, or a logo far beyond any real size, is dropped,
 
 | Column | Type | Bound / Rationale |
 |---|---|---|
-| `subject` | `VARCHAR(120)` PK | policyId (28 B) + optional assetName (0–32 B), hex-encoded. CIP-26 spec: 56–120 chars. |
+| `subject` | `VARCHAR(120)` PK | policyId (28 B) + optional assetName (0–32 B), hex-encoded, **lower case** (a registry file named in upper case is stored under its lower-case subject, `V0_1700_4` converts the rows stored before). CIP-26 spec: 56–120 chars. |
 | `policy` | `TEXT` | CIP-26 `policy` is a base16 CBOR-encoded phase-1 monetary script (a native script), **not** the 28-byte policyId hash (that lives in the first 56 hex chars of `subject`). The spec places no upper bound; real entries with time-locked or k-of-n multisig scripts routinely exceed 200 hex chars (MCOS 216, Incy 586). An earlier `VARCHAR(120)` caused PostgreSQL to reject such entries; `Cip26MetadataService` caught the exception, logged ERROR, and skipped the row — entries were silently dropped with a log line. **Do not cap.** |
 | `name` | `TEXT` | CIP-26 says at most 50 characters; a longer one is stored and reported. |
 | `ticker` | `TEXT` | CIP-26 says 2–9 characters; stored as written, reported otherwise. |
@@ -143,6 +143,11 @@ SELECT standard, reason_code, count(*) FROM invalid_token GROUP BY 1, 2 ORDER BY
 `TEXT`, and `cip68_metadata.version` made nullable. They rewrite no data, so a node upgrades in place and keeps serving. On PostgreSQL and
 H2 the statements use `IF NOT EXISTS` and can be run again; on MySQL the column changes rewrite the two tables once (a few hundred thousand
 rows on mainnet).
+
+`V0_1700_4` lower-cases the CIP-26 subjects already stored (39 on mainnet), since the sync now stores them in lower case and would
+otherwise find a stored upper-case subject stale on the next full sync. It rewrites only those rows and can be run again. On PostgreSQL and
+H2 an upper-case entry whose lower-case twin is also stored is dropped first (none on mainnet); on MySQL the usual case-insensitive collation
+makes such a twin impossible, and the comparison is binary.
 
 Rows written before the upgrade have `validation_errors = NULL`: never checked, which is not the same as "no errors". The API leaves
 `validation_errors` out for them and `metadata.valid` falls back to the rule it had before (name and description both present). Only a

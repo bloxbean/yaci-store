@@ -22,6 +22,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -192,6 +193,17 @@ class Cip26MetadataServiceTest {
         }
 
         @Test
+        void findsTheRowOfAnUpperCaseRegistryFileByItsLowerCaseSubject() {
+            Cip26Metadata existing = new Cip26Metadata();
+            existing.setSubject("abcdef");
+            when(cip26MetadataValidator.validateLogo(any(), any())).thenReturn(Cip26Validation.of(List.of()));
+            when(cip26MetadataRepository.findById("abcdef")).thenReturn(Optional.of(existing));
+
+            assertThat(service.insertLogo(mapping("ABCDEF"))).isEqualTo(InsertOutcome.INSERTED);
+            assertThat(existing.getLogo()).isEqualTo("data:image/png;base64,iVBOR...");
+        }
+
+        @Test
         void permanentlySkipsAnOversizedLogoThatLooksLikeAnAttack() {
             when(cip26MetadataValidator.validateLogo(any(), any())).thenReturn(Cip26Validation.dropped("the logo has 2000000 characters"));
 
@@ -254,6 +266,13 @@ class Cip26MetadataServiceTest {
             DeleteOutcome outcome = service.deleteMapping(SUBJECT);
 
             assertThat(outcome).isEqualTo(DeleteOutcome.DELETED);
+            verify(cip26MetadataRepository).deleteById(SUBJECT);
+        }
+
+        @Test
+        void deletesAnEntryWhoseFileNameIsInUpperCaseByItsStoredLowerCaseSubject() {
+            assertThat(service.deleteMapping(SUBJECT.toUpperCase(Locale.ROOT))).isEqualTo(DeleteOutcome.DELETED);
+
             verify(cip26MetadataRepository).deleteById(SUBJECT);
         }
 

@@ -102,7 +102,8 @@ public class Cip26MetadataService {
     @Transactional
     public DeleteOutcome deleteMapping(String subject) {
         try {
-            cip26MetadataRepository.deleteById(subject);
+            // the subject comes from a file name, stored entries are in lower case
+            cip26MetadataRepository.deleteById(MappingsUtil.normalizeSubject(subject));
             return DeleteOutcome.DELETED;
         } catch (NonTransientDataAccessException e) {
             log.error("Permanent delete failure for token subject '{}', skipping: {}",
@@ -141,7 +142,8 @@ public class Cip26MetadataService {
      */
     @Transactional
     public InsertOutcome insertLogo(Mapping mapping) {
-        String subject = mapping.subject();
+        // the row was stored under the lower-case subject, see MappingsUtil.normalizeSubject
+        String subject = MappingsUtil.normalizeSubject(mapping.subject());
         String logo = extractLogo(mapping);
 
         Cip26Validation logoValidation = cip26MetadataValidator.validateLogo(subject, logo);
