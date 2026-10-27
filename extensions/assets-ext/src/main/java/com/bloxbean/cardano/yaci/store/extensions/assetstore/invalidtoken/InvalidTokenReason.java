@@ -25,8 +25,8 @@ public final class InvalidTokenReason {
     /** CIP-68 and CIP-26: something nobody foresaw threw while an item was indexed or checked. The one reason to look into. */
     public static final String PROCESSING_FAILURE = "processing_failure";
 
-    // CIP-113, reserved: documented in ADR 0007, written when CIP-113 is indexed again
-    public static final String JAIL_WITHOUT_TOKEN = "jail_without_token";
+    // CIP-113, reserved: documented in ADR 0007, written when CIP-113 is indexed again. A registered policy with nothing
+    // minted is not one: it is valid, and there is nothing to drop (ADR 0007)
     public static final String UNREGISTERED_POLICY_IN_JAIL = "unregistered_policy_in_jail";
     public static final String REGISTRY_NODE_UNPARSEABLE = "registry_node_unparseable";
     public static final String REGISTRY_NODE_SPOOFED = "registry_node_spoofed";
