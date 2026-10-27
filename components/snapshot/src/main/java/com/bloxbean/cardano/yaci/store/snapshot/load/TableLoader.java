@@ -1,0 +1,293 @@
+package com.bloxbean.cardano.yaci.store.snapshot.load;
+
+import com.bloxbean.cardano.yaci.store.snapshot.convert.ConverterRegistry;
+import com.bloxbean.cardano.yaci.store.snapshot.manifest.SnapshotManifest;
+import com.bloxbean.cardano.yaci.store.snapshot.spec.BatchBoundary;
+import com.bloxbean.cardano.yaci.store.snapshot.spec.CutoffType;
+import com.bloxbean.cardano.yaci.store.snapshot.spec.ImportMode;
+import com.bloxbean.cardano.yaci.store.snapshot.spec.SnapshotTableSpec;
+import com.bloxbean.cardano.yaci.store.snapshot.util.Identifiers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.nio.file.Path;
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
+
+/**
+ * Executes one batch: build the DuckDB SELECT for the declared import mode, insert it into the
+ * PostgreSQL target, and record the batch in the journal — all inside one transaction.
+ *
+ * <p>The same generic path serves DIRECT, MAPPED and SQL. Adding an ordinary table needs a YAML
+ * specification, not a new loader class.
+ */
+public class TableLoader {
+
+    private static final Logger log = LoggerFactory.getLogger(TableLoader.class);
+
+    private final ConverterRegistry converters;
+    private final ColumnPlanner planner;
+    private final Path extractRoot;
+    private final Map<String, Map<String, String>> declaredColumns;
+
+    public TableLoader(ConverterRegistry converters, Path extractRoot) {
+        this(converters, extractRoot, Map.of());
+    }
+
+    /**
+     * @param declaredColumns each table's source columns as its manifest records them, by spec id, so a
+     *                        batch of files exported before a column existed still has it (as NULL)
+     */
+    public TableLoader(ConverterRegistry converters, Path extractRoot,
+                       Map<String, Map<String, String>> declaredColumns) {
+        this.converters = converters;
+        this.planner = new ColumnPlanner(converters);
+        this.extractRoot = extractRoot;
+        this.declaredColumns = declaredColumns;
+    }
+
+    /** The SELECT a batch reads from, before the target column list is applied, reading the files as they are. */
+    public String sourceSelect(SnapshotTableSpec spec, ImportBatch batch, long cutSlot, int completedEpoch,
+                               Map<String, List<SnapshotManifest.FileEntry>> dependencyFiles) {
+        try {
+            return sourceSelect(null, spec, batch, cutSlot, completedEpoch, dependencyFiles, null);
+        } catch (SQLException e) {
+            throw new IllegalStateException(e); // not reached: without a connection no file is read
+        }
+    }
+
+    /**
+     * The SELECT a batch reads from, before the target column list is applied, with every column its
+     * manifest declares: {@code duck} reads the files' schemas to add any column they predate.
+     */
+    public String sourceSelect(Connection duck, SnapshotTableSpec spec, ImportBatch batch, long cutSlot,
+                               int completedEpoch, Map<String, List<SnapshotManifest.FileEntry>> dependencyFiles)
+            throws SQLException {
+        return sourceSelect(duck, spec, batch, cutSlot, completedEpoch, dependencyFiles, null);
+    }
+
+    String sourceSelect(Connection duck, SnapshotTableSpec spec, ImportBatch batch, long cutSlot, int completedEpoch,
+                        Map<String, List<SnapshotManifest.FileEntry>> dependencyFiles, String sourceFilter)
+            throws SQLException {
+        if (spec.importSpec().mode() == ImportMode.SQL) {
+            String source = scan(duck, spec.id(), batch.files());
+            if (sourceFilter != null) {
+                // Apply before grouping. Filtering the grouped result would not reduce its memory.
+                source = "(SELECT * FROM " + source + " WHERE " + sourceFilter + ")";
+            }
+            Map<String, String> dependencies = new LinkedHashMap<>();
+            for (Map.Entry<String, List<SnapshotManifest.FileEntry>> dep : dependencyFiles.entrySet()) {
+                dependencies.put(dep.getKey(), scan(duck, dep.getKey(), narrowToBatchPartitions(batch, dep.getValue())));
+            }
+            return "(" + SqlResources.bindTransform(SqlResources.read(spec.importSpec().selectResource()),
+                    source, dependencies, cutSlot, completedEpoch) + ")";
+        }
+        return "(SELECT * FROM " + scan(duck, spec.id(), batch.files())
+                + cutoffPredicate(spec, cutSlot, completedEpoch) + ")";
+    }
+
+    private String scan(Connection duck, String specId, List<SnapshotManifest.FileEntry> files) throws SQLException {
+        return SourceScan.of(duck, parquetList(files), declaredColumns.get(specId));
+    }
+
+    /**
+     * Restrict a dependency's files to the partitions this batch actually needs.
+     *
+     * <p>Both sides of the {@code address_utxo} and pool-certificate joins are partitioned daily on
+     * {@code block_time}, and a row's block_time is its block's block_time, so the same {@code date=}
+     * partition on the dependency holds every block the batch can reference. Without this each batch
+     * would re-read the whole block export.
+     *
+     * <p>Falls back to the full dependency when the partition keys do not line up, so correctness
+     * never depends on the optimisation.
+     */
+    static List<SnapshotManifest.FileEntry> narrowToBatchPartitions(
+            ImportBatch batch, List<SnapshotManifest.FileEntry> dependency) {
+        Set<String> wanted = new TreeSet<>();
+        for (SnapshotManifest.FileEntry f : batch.files()) {
+            String key = partitionKey(f.partition());
+            if (key == null) {
+                return dependency;
+            }
+            wanted.add(key);
+        }
+        List<SnapshotManifest.FileEntry> narrowed = new ArrayList<>();
+        for (SnapshotManifest.FileEntry f : dependency) {
+            String key = partitionKey(f.partition());
+            if (key == null) {
+                return dependency;
+            }
+            if (wanted.contains(key)) {
+                narrowed.add(f);
+            }
+        }
+        return narrowed.isEmpty() ? dependency : narrowed;
+    }
+
+    /**
+     * The target partition this batch alone fills, or null. That is the case when the target is
+     * range-partitioned on the very column the source is partitioned by (not remapped: epoch_stake,
+     * but not reward, whose source epoch is the earned epoch while the target is partitioned by
+     * spendable epoch) and the batch is exactly one source partition.
+     */
+    static String ownedPartition(ImportBatch batch) {
+        SnapshotTableSpec spec = batch.spec();
+        SnapshotTableSpec.TargetPartitioning target = spec.importSpec().targetPartitioning();
+        if (target == null || spec.source() == null || spec.source().partition() == null
+                || spec.importSpec().batchBoundary() != BatchBoundary.WHOLE_PARTITION
+                || batch.partition() == null || batch.partition().contains(",")) {
+            return null;
+        }
+        String column = target.column();
+        if (!column.equals(spec.source().partition().column()) || spec.importSpec().columns().containsKey(column)) {
+            return null;
+        }
+        String key = partitionKey(batch.partition());
+        if (key == null || !key.startsWith(column + "=")) {
+            return null;
+        }
+        String value = key.substring(column.length() + 1);
+        if (!value.matches("\\d+")) {
+            return null;
+        }
+        return target.partitionPrefix() + value;
+    }
+
+    /** The {@code date=...} or {@code epoch=...} segment of a partition path. */
+    private static String partitionKey(String partition) {
+        if (partition == null) {
+            return null;
+        }
+        int slash = partition.lastIndexOf('/');
+        String last = slash < 0 ? partition : partition.substring(slash + 1);
+        return last.contains("=") ? last : null;
+    }
+
+    static String cutoffPredicate(SnapshotTableSpec spec, long cutSlot, int completedEpoch) {
+        SnapshotTableSpec.CutoffRule cutoff = spec.consistency().cutoff();
+        if (cutoff.type() == CutoffType.NONE) {
+            return "";
+        }
+        String col = Identifiers.quote(cutoff.column());
+        long value = switch (cutoff.type()) {
+            case SLOT_LTE -> cutSlot;
+            case EPOCH_LTE -> completedEpoch;
+            case EPOCH_LTE_OFFSET -> completedEpoch - cutoff.offset();
+            case NONE -> Long.MAX_VALUE;
+        };
+        return " WHERE " + col + " <= " + value;
+    }
+
+    /**
+     * Resolve the column plan against the real source and target schemas for this batch.
+     *
+     * <p>For DIRECT and MAPPED the declared types come from the manifest, which records what the
+     * producing DuckLake catalog said. The column <em>names</em> are still taken from the files, so a
+     * file whose schema has drifted from the manifest still fails.
+     *
+     * <p>For SQL mode the transform's own output types are authoritative, because the transform casts
+     * explicitly.
+     */
+    public ColumnPlan planFor(DuckPgSession session, SnapshotTableSpec spec, String select,
+                              TargetTable target, Map<String, String> declaredSourceColumns)
+            throws SQLException {
+        Map<String, String> observed = session.describe(select);
+        if (spec.importSpec().mode() == ImportMode.SQL
+                || declaredSourceColumns == null || declaredSourceColumns.isEmpty()) {
+            return planner.plan(spec, observed, target);
+        }
+        if (!observed.keySet().equals(declaredSourceColumns.keySet())) {
+            Set<String> extra = new TreeSet<>(observed.keySet());
+            extra.removeAll(declaredSourceColumns.keySet());
+            Set<String> missing = new TreeSet<>(declaredSourceColumns.keySet());
+            missing.removeAll(observed.keySet());
+            throw new ColumnPlanner.MappingException("Packaged Parquet for '" + spec.id()
+                    + "' does not match the manifest: unexpected column(s) " + extra
+                    + ", missing column(s) " + missing);
+        }
+        return planner.plan(spec, declaredSourceColumns, target);
+    }
+
+    /**
+     * Insert the batch and record it, atomically.
+     *
+     * @return rows inserted
+     */
+    public long loadBatch(DuckPgSession session, ImportBatch batch, ColumnPlan plan, String select,
+                          String snapshotId, String schema) throws SQLException {
+        return loadBatch(session, batch, plan, List.of(select), snapshotId, schema);
+    }
+
+    /** All execution slices retain the original batch's single transaction and journal identity. */
+    long loadBatch(DuckPgSession session, ImportBatch batch, ColumnPlan plan, Iterable<String> selects,
+                   String snapshotId, String schema) throws SQLException {
+        String target = session.qualify(batch.spec().targetTable());
+        String journal = ImportJournal.qualifiedBatchTable(DuckPgSession.PG_ALIAS, schema);
+
+        long rows = 0;
+        String owned = ownedPartition(batch);
+        session.exec("BEGIN TRANSACTION");
+        try {
+            if (owned != null) {
+                // With wal_level=minimal, rows written into a table truncated in the same transaction
+                // skip the WAL (on mainnet, 5M rows: 185 MB of WAL instead of 992 MB). It also makes a
+                // retried batch idempotent: nothing else writes into this partition.
+                session.exec("CALL postgres_execute(" + Identifiers.literal(DuckPgSession.PG_ALIAS) + ", "
+                        + Identifiers.literal("TRUNCATE ONLY " + Identifiers.quote(schema) + "." + Identifiers.quote(owned))
+                        + ")");
+            }
+            for (String select : selects) {
+                String insert = "INSERT INTO " + target + " (" + plan.targetColumnList() + ") "
+                        + "SELECT " + plan.selectList() + " FROM " + select + " AS src";
+                try (Statement st = session.connection().createStatement()) {
+                    rows += st.executeLargeUpdate(insert);
+                }
+            }
+            String record = "INSERT INTO " + journal
+                    + " (snapshot_id, batch_id, spec_id, target_table, row_count) VALUES ("
+                    + Identifiers.literal(snapshotId) + ", "
+                    + Identifiers.literal(batch.batchId()) + ", "
+                    + Identifiers.literal(batch.spec().id()) + ", "
+                    + Identifiers.literal(batch.spec().targetTable()) + ", "
+                    + rows + ")";
+            session.exec(record);
+            session.exec("COMMIT");
+        } catch (SQLException e) {
+            try {
+                session.exec("ROLLBACK");
+            } catch (SQLException rollbackFailure) {
+                // Never retry on a connection whose transaction state is uncertain.
+                e.addSuppressed(rollbackFailure);
+            }
+            throw e;
+        }
+        log.debug("Loaded batch {} of {} ({} rows)", batch.batchId().substring(0, 12),
+                batch.spec().id(), rows);
+        return rows;
+    }
+
+    /** Absolute paths of a batch's extracted files, as a DuckDB list literal. */
+    public String parquetList(List<SnapshotManifest.FileEntry> files) {
+        List<String> paths = new ArrayList<>();
+        for (SnapshotManifest.FileEntry f : files) {
+            paths.add(Identifiers.literal(extractRoot.resolve(f.path()).toAbsolutePath().toString()));
+        }
+        return "[" + String.join(", ", paths) + "]";
+    }
+
+    /** Rows currently in a target table, used by validation. */
+    public static long count(DuckPgSession session, String table) throws SQLException {
+        try (Statement st = session.connection().createStatement();
+             ResultSet rs = st.executeQuery("SELECT count(*) FROM " + session.qualify(table))) {
+            return rs.next() ? rs.getLong(1) : 0;
+        }
+    }
+}

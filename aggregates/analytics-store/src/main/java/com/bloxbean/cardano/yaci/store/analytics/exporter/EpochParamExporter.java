@@ -37,20 +37,27 @@ public class EpochParamExporter extends AbstractTableExporter {
     }
 
     @Override
+    public boolean includesByronEpochs() {
+        return true;
+    }
+
+    @Override
     public PartitionStrategy getPartitionStrategy() {
         return PartitionStrategy.EPOCH;
     }
 
+    /**
+     * Like the other epoch tables, an epoch is exported once its AdaPot job has run. From Conway on the
+     * job's pre-processing is what writes the epoch's parameters; before Conway they are written at the
+     * epoch transition, which the job always follows. Byron epochs have no job and pass. Without the
+     * AdaPot module Conway parameters are never written, so only earlier epochs are exported.
+     */
     @Override
     public boolean preExportValidation(PartitionValue partition) {
         int epoch = ((PartitionValue.EpochPartition) partition).epoch();
-
-        Era era = eraService.getEraForEpoch(epoch);
-        if (era.getValue() < Era.Conway.getValue()) {
-            log.info("Skipping pre export validation for epoch_param for epoch {} as it is before Conway era", epoch);
-            return true;
+        if (adaPotJobStorage instanceof NoOpAdaPotJobStorage) {
+            return eraService.getEraForEpoch(epoch).getValue() < Era.Conway.getValue();
         }
-
         return isRewardCalcAdaPotJobCompleted(epoch);
     }
 

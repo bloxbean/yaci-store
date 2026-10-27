@@ -14,7 +14,7 @@ public class AdaPotAutoConfigProperties {
     @Getter
     @Setter
     public static final class Adapot {
-        private boolean enabled = false;
+        private boolean enabled = com.bloxbean.cardano.yaci.store.common.config.StoreModuleConfig.defaultEnabled("adapot");
         private boolean apiEnabled = true;
 
         //Batch size for updating rewards in the db

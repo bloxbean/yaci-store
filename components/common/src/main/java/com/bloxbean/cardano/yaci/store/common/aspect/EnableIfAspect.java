@@ -24,7 +24,9 @@ public class EnableIfAspect {
     @Around("execution(public * *(..)) && @within(conditionalEventListener)")
     public Object handleConditionalEvent(ProceedingJoinPoint joinPoint, EnableIf conditionalEventListener) throws Throwable {
         Boolean enabled = env.getProperty(conditionalEventListener.value(), Boolean.class);
-        if ((enabled == null && !conditionalEventListener.defaultValue())
+        boolean defaultEnabled = com.bloxbean.cardano.yaci.store.common.config.StoreModuleConfig
+                .defaultForProperty(conditionalEventListener.value(), conditionalEventListener.defaultValue());
+        if ((enabled == null && !defaultEnabled)
                 || (enabled != null && !enabled)) {
             return null;
         }

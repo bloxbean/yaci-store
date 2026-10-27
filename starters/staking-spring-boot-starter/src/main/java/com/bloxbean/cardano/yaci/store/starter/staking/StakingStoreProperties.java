@@ -13,7 +13,7 @@ public class StakingStoreProperties {
     @Getter
     @Setter
     public static final class Staking {
-       private boolean enabled = true;
+       private boolean enabled = com.bloxbean.cardano.yaci.store.common.config.StoreModuleConfig.defaultEnabled("staking");
        private boolean apiEnabled = true;
        private Endpoints endpoints = new Endpoints();
     }

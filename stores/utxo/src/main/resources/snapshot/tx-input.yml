@@ -1,0 +1,37 @@
+snapshot-table:
+  id: tx-input
+  spec-version: 1
+  module: utxo
+  kind: CHAIN_DATA
+  restore: IMPORT
+
+  source:
+    exporter-id: tx_input
+    ducklake-relation: tx_input
+    partition:
+      strategy: DAILY
+      column: spent_block_time
+
+  consistency:
+    cutoff:
+      type: SLOT_LTE
+      column: spent_at_slot
+    coverage:
+      type: SLOT_GTE_CUT
+      column: spent_at_slot
+
+  import:
+    target-table: tx_input
+    mode: MAPPED
+    columns:
+      spent_block_time:
+        source: spent_block_time
+        converter: "timestamp-to-epoch-seconds"
+    ignore-source-columns: [date]
+    batch-boundary: FILE_SET
+    batch-size: 64
+
+  validation:
+    key: [output_index, tx_hash]
+    bounds: [spent_at_slot, spent_epoch]
+    required-columns: [output_index, tx_hash]
