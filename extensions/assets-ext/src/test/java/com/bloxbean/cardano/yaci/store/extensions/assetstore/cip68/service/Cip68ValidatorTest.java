@@ -5,11 +5,13 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.ParsedC
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.validation.FieldCategory;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.validation.ValidationError;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 /**
  * What CIP-68 requires of each label is reported as validation errors, never as a rejection: the token is indexed and
@@ -126,6 +128,73 @@ class Cip68ValidatorTest {
         ParsedCip68Datum parsed = new ParsedCip68Datum(null, "desc", null, null, null, null, 1L, null, null, null, List.of(wrongType));
 
         assertThat(Cip68Validator.validate(parsed, Cip68Constants.LABEL_FT)).isEmpty();
+    }
+
+    @Nested
+    class DescriptionForm {
+
+        private static final ValidationError WRONG_TYPE = ValidationError.optional("CIP-68", null, "description", "wrong_type",
+                "description is not a byte string, left out");
+        private static final ValidationError CHUNKED = ValidationError.optional("CIP-68", null, "description", "chunked_text",
+                "description is a list of byte strings, not one byte string; the chunks are joined");
+        private static final ValidationError NOT_UTF8 = ValidationError.optional("CIP-68", null, "description", "not_utf8",
+                "description is not valid UTF-8, stored as hex");
+
+        private static ParsedCip68Datum withDescription(String description, ValidationError parserError) {
+            return new ParsedCip68Datum(null, description, null, "name", null, null, 1L, "ipfs://Qm", null, null,
+                    List.of(parserError));
+        }
+
+        @Test
+        void aDescriptionOfTheWrongTypeIsOneMandatoryErrorFor333NotAlsoMissing() {
+            // mainnet, before: wrong_type (OPTIONAL, no label) and missing_value (MANDATORY, 333) for the same description
+            assertThat(Cip68Validator.validate(withDescription(null, WRONG_TYPE), Cip68Constants.LABEL_FT))
+                    .singleElement().satisfies(e -> {
+                        assertThat(e.subStandard()).isEqualTo("333");
+                        assertThat(e.fieldName()).isEqualTo("description");
+                        assertThat(e.fieldCategory()).isEqualTo(FieldCategory.MANDATORY);
+                        assertThat(e.code()).isEqualTo("wrong_type");
+                        assertThat(e.error()).isEqualTo("description is not a byte string, left out");
+                    });
+        }
+
+        @Test
+        void aDescriptionOfTheWrongTypeIsOptionalForTheLabelsThatDoNotRequireOne() {
+            for (int label : new int[]{Cip68Constants.LABEL_NFT, Cip68Constants.LABEL_RFT}) {
+                assertThat(Cip68Validator.validate(withDescription(null, WRONG_TYPE), label)).as("label " + label)
+                        .singleElement().satisfies(e -> {
+                            assertThat(e.subStandard()).isEqualTo(String.valueOf(label));
+                            assertThat(e.fieldCategory()).isEqualTo(FieldCategory.OPTIONAL);
+                            assertThat(e.code()).isEqualTo("wrong_type");
+                        });
+            }
+        }
+
+        @Test
+        void aChunkedDescriptionIsReportedPerLabelAndIsNotMissing() {
+            ParsedCip68Datum parsed = withDescription("Templar Protocol - Templar lets you borrow", CHUNKED);
+
+            assertThat(Cip68Validator.validate(parsed, Cip68Constants.LABEL_FT))
+                    .extracting(ValidationError::subStandard, ValidationError::fieldCategory, ValidationError::code)
+                    .containsExactly(tuple("333", FieldCategory.MANDATORY, "chunked_text"));
+            assertThat(Cip68Validator.validate(parsed, Cip68Constants.LABEL_RFT))
+                    .extracting(ValidationError::subStandard, ValidationError::fieldCategory, ValidationError::code)
+                    .containsExactly(tuple("444", FieldCategory.OPTIONAL, "chunked_text"));
+        }
+
+        @Test
+        void theLabelIndependentErrorsLeaveOutOnlyTheFormOfTheDescription() {
+            ValidationError nameChunked = ValidationError.mandatory("CIP-68", null, "name", "chunked_text", "name is a list");
+            ParsedCip68Datum parsed = new ParsedCip68Datum(null, "d", null, "n", null, null, 1L, null, null, null,
+                    List.of(WRONG_TYPE, CHUNKED, NOT_UTF8, nameChunked));
+
+            assertThat(Cip68Validator.labelIndependentErrors(parsed)).containsExactly(NOT_UTF8, nameChunked);
+        }
+
+        @Test
+        void aDescriptionThatIsNotUtf8IsStillPresent() {
+            assertThat(Cip68Validator.validate(withDescription("ff00c3", NOT_UTF8), Cip68Constants.LABEL_FT)).isEmpty();
+        }
     }
 
     private static ParsedCip68Datum ft(String logo) {

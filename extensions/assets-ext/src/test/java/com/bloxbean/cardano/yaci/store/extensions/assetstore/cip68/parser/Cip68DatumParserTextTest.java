@@ -13,6 +13,8 @@ import com.bloxbean.cardano.client.plutus.spec.MapPlutusData;
 import com.bloxbean.cardano.client.plutus.spec.PlutusData;
 import com.bloxbean.cardano.client.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.ParsedCip68Datum;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.validation.FieldCategory;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.validation.ValidationError;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,6 +27,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 /**
  * How the parser turns bytes into text, and how large a {@code logo} or {@code image} may be.
@@ -132,6 +135,62 @@ class Cip68DatumParserTextTest {
 
         assertThat(parse(empty).orElseThrow().image()).isEmpty();
         assertThat(parse(noChunks).orElseThrow().image()).isNull();
+    }
+
+    // ---------- texts given as chunks ----------
+
+    @Test
+    void joinsATextGivenAsChunksAndReportsItsForm() throws Exception {
+        // CIP-68 defines name, description, ticker and url as one bounded_bytes; on mainnet 570 descriptions, 43 urls and
+        // 12 names are lists of 64-byte chunks instead, the way CIP-25 splits a long text
+        MapPlutusData properties = new MapPlutusData();
+        properties.put(BytesPlutusData.of("name"), ListPlutusData.of(BytesPlutusData.of("Stable coin from family Pazinatt"), BytesPlutusData.of("o")));
+        properties.put(BytesPlutusData.of("description"), ListPlutusData.of(BytesPlutusData.of("Templar Protocol - Templar lets "), BytesPlutusData.of("you borrow")));
+        properties.put(BytesPlutusData.of("url"), ListPlutusData.of(BytesPlutusData.of("https://www.thirdhalf.com/cerise"), BytesPlutusData.of("wallet")));
+
+        ParsedCip68Datum parsed = parse(properties).orElseThrow();
+
+        assertThat(parsed.name()).isEqualTo("Stable coin from family Pazinatto");
+        assertThat(parsed.description()).isEqualTo("Templar Protocol - Templar lets you borrow");
+        assertThat(parsed.url()).isEqualTo("https://www.thirdhalf.com/cerisewallet");
+        assertThat(parsed.validationErrors()).extracting(ValidationError::fieldName, ValidationError::fieldCategory, ValidationError::code)
+                .containsExactlyInAnyOrder(
+                        tuple("name", FieldCategory.MANDATORY, "chunked_text"),
+                        tuple("description", FieldCategory.OPTIONAL, "chunked_text"),
+                        tuple("url", FieldCategory.OPTIONAL, "chunked_text"));
+        assertThat(parsed.validationErrors()).allSatisfy(e -> {
+            assertThat(e.subStandard()).isNull();
+            assertThat(e.error()).endsWith("is a list of byte strings, not one byte string; the chunks are joined");
+        });
+    }
+
+    @Test
+    void joinsTextChunksAsBytesSoACharacterSplitAcrossChunksSurvives() throws Exception {
+        byte[] euro = "€".getBytes(StandardCharsets.UTF_8);
+        MapPlutusData properties = props("name", "n");
+        properties.put(BytesPlutusData.of("description"), ListPlutusData.of(
+                BytesPlutusData.of(Arrays.copyOfRange(euro, 0, 1)), BytesPlutusData.of(Arrays.copyOfRange(euro, 1, 3))));
+
+        assertThat(parse(properties).orElseThrow().description()).isEqualTo("€");
+    }
+
+    @Test
+    void leavesOutATextListThatIsEmptyOrHoldsAnythingButByteStrings() throws Exception {
+        MapPlutusData properties = props("name", "n");
+        properties.put(BytesPlutusData.of("description"), ListPlutusData.of(BytesPlutusData.of("a"), BigIntPlutusData.of(7)));
+        properties.put(BytesPlutusData.of("ticker"), new ListPlutusData());
+
+        ParsedCip68Datum parsed = parse(properties).orElseThrow();
+
+        assertThat(parsed.description()).isNull();
+        assertThat(parsed.ticker()).isNull();
+        assertThat(parsed.validationErrors()).extracting(ValidationError::fieldName, ValidationError::code)
+                .containsExactlyInAnyOrder(tuple("description", "wrong_type"), tuple("ticker", "wrong_type"));
+    }
+
+    @Test
+    void reportsNothingForATextThatIsOneByteString() throws Exception {
+        assertThat(parse(props("name", "n", "description", "d", "url", "https://x.io")).orElseThrow().validationErrors()).isEmpty();
     }
 
     // ---------- no size cap ----------

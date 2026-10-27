@@ -77,6 +77,7 @@ public class Cip68DatumParser {
     public static final String TOO_DEEP = ValidationCode.TOO_DEEP;
     public static final String INVALID_FILES_ENTRY = ValidationCode.INVALID_FILES_ENTRY;
     public static final String NO_NESTED_ENTRY = ValidationCode.NO_NESTED_ENTRY;
+    public static final String CHUNKED_TEXT = ValidationCode.CHUNKED_TEXT;
 
     /**
      * Deepest nesting allowed in the value of an additional property (a list inside a list counts as two levels). The
@@ -351,8 +352,9 @@ public class Cip68DatumParser {
     /**
      * Reads a text property. CIP-68 says text is UTF-8, so valid UTF-8 is stored as text. Bytes that are
      * not valid UTF-8 are stored as hex, the same rule as for additional properties, instead of being
-     * decoded with replacement characters, which would lose the original bytes; the error says so. A value that is
-     * not a byte string is left out, with an error.
+     * decoded with replacement characters, which would lose the original bytes; the error says so. A list of byte
+     * strings is joined and reported as {@code chunked_text}; any other value that is not a byte string is left out,
+     * with an error.
      */
     @Nullable
     private String readText(String propertyName, MapPlutusData map, List<ValidationError> errors) {
@@ -360,11 +362,24 @@ public class Cip68DatumParser {
         if (property == null) {
             return null;
         }
-        if (!(property instanceof BytesPlutusData bytes)) {
-            errors.add(wrongType(propertyName));
-            return null;
+        if (property instanceof BytesPlutusData bytes) {
+            return typedBytesToText(propertyName, bytes.getValue(), errors);
         }
-        return typedBytesToText(propertyName, bytes.getValue(), errors);
+        if (isChunks(property)) {
+            // CIP-68 defines these texts as one byte string, but minting tools split a text over 64 bytes into chunks
+            // the way CIP-25 does: the text is joined and served, and the form is reported
+            errors.add(textError(propertyName, CHUNKED_TEXT,
+                    propertyName + " is a list of byte strings, not one byte string; the chunks are joined"));
+            return typedBytesToText(propertyName, joinChunks((ListPlutusData) property), errors);
+        }
+        errors.add(wrongType(propertyName));
+        return null;
+    }
+
+    /** A non-empty list of byte strings only: the chunks of a text. */
+    private static boolean isChunks(PlutusData property) {
+        return property instanceof ListPlutusData list && !list.getPlutusDataList().isEmpty()
+                && list.getPlutusDataList().stream().allMatch(BytesPlutusData.class::isInstance);
     }
 
     /**
@@ -414,10 +429,17 @@ public class Cip68DatumParser {
 
     /** {@code name} is required by every label; the rest of the typed fields are required, if at all, by some labels only. */
     private static ValidationError wrongType(String propertyName) {
-        String error = propertyName + " is not a byte string, left out";
+        return textError(propertyName, WRONG_TYPE, propertyName + " is not a byte string, left out");
+    }
+
+    /**
+     * An error about the form of a typed text. Its category here is the one that does not depend on the label; for
+     * {@code description}, which only the 333 fungible token requires, {@code Cip68Validator} reports it again per label.
+     */
+    private static ValidationError textError(String propertyName, String code, String error) {
         return NAME.equals(propertyName)
-                ? ValidationError.mandatory(CIP_68, null, propertyName, WRONG_TYPE, error)
-                : ValidationError.optional(CIP_68, null, propertyName, WRONG_TYPE, error);
+                ? ValidationError.mandatory(CIP_68, null, propertyName, code, error)
+                : ValidationError.optional(CIP_68, null, propertyName, code, error);
     }
 
     /**

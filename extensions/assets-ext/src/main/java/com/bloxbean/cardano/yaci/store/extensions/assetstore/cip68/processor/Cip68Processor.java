@@ -235,7 +235,7 @@ public class Cip68Processor {
                 ? shared.outcome
                 : cip68DatumParser.parseDetailed(output.getInlineDatum(), refNft);
         if (outcome instanceof ParseOutcome.Parsed(ParsedCip68Datum parsed)) {
-            return Optional.of(indexDatum(parsed, output, refNft, assetUnitsInTx, slot, shared));
+            return indexDatum(parsed, output, refNft, assetUnitsInTx, slot, shared);
         }
         // a datum shared by several reference NFTs is dropped once for the output: recorded once, for the first
         if (outcome instanceof ParseOutcome.Dropped(String reasonCode, String message) && (shared == null || shared.markReported())) {
@@ -244,14 +244,29 @@ public class Cip68Processor {
         return Optional.empty();
     }
 
-    /** The row for a datum that was read: its labels, the errors it gets for each, and what is reported about it. */
-    private Cip68Metadata indexDatum(ParsedCip68Datum parsed, AddressUtxo output, AssetType refNft, Set<String> assetUnitsInTx,
-                                     Long slot, @Nullable SharedDatum shared) {
+    /**
+     * The row for a datum that was read: its labels, the errors it gets for each, and what is reported about it. Empty
+     * for a datum that is not token metadata.
+     */
+    private Optional<Cip68Metadata> indexDatum(ParsedCip68Datum parsed, AddressUtxo output, AssetType refNft,
+                                               Set<String> assetUnitsInTx, Long slot, @Nullable SharedDatum shared) {
         // The labels come first: which fields a datum must have depends on them. A reference NFT can have user
         // tokens of several labels (the CIP allows it), and then the datum is checked against every one of them.
-        List<Integer> labels = deriveLabels(refNft, assetUnitsInTx, parsed);
+        List<Integer> pairedLabels = pairedLabels(refNft, assetUnitsInTx);
+        // Without a user token in the transaction the label can only be inferred from the datum, and a datum with none
+        // of the CIP-68 token fields (a dApp's own state under the 000643b0 prefix, an empty map) is not token metadata:
+        // it would only be indexed as a 333 fungible token by default. Once a reference NFT is indexed, every later
+        // datum is, so that an owner who clears the metadata is not served the old one.
+        if (pairedLabels.isEmpty() && !parsed.hasTokenFields()
+                && !cip68MetadataRepository.existsByPolicyIdAndAssetName(refNft.policyId(), refNft.assetName())) {
+            log.debug("Skipping CIP-68 datum of {}/{}: no user token in the transaction and none of the CIP-68 token fields",
+                    refNft.policyId(), refNft.assetName());
+            metrics.notTokenMetadata();
+            return Optional.empty();
+        }
+        List<Integer> labels = pairedLabels.isEmpty() ? List.of(inferLabel(refNft, parsed)) : pairedLabels;
         // what is wrong with the datum itself does not depend on the label (the parser's errors, and the logo)
-        List<ValidationError> datumErrors = new ArrayList<>(parsed.validationErrors());
+        List<ValidationError> datumErrors = new ArrayList<>(Cip68Validator.labelIndependentErrors(parsed));
         ValidationError logoError = Cip68Validator.validateLogo(parsed);
         if (logoError != null) {
             datumErrors.add(logoError);
@@ -278,7 +293,7 @@ public class Cip68Processor {
                             + "stored with label {}",
                     refNft.policyId(), refNft.assetName(), labels, label);
         }
-        return entity;
+        return Optional.of(entity);
     }
 
     /**
@@ -361,11 +376,11 @@ public class Cip68Processor {
      * <p>
      * The CIP allows several user tokens for one reference NFT, so a transaction can pair it with a 222 and a 333
      * (or 444) token. Every paired label is returned, in the order 222, 333, 444: the first is the label the row
-     * is stored with, and the datum has to satisfy the requirements of all of them. If none is paired (an orphan
-     * reference NFT, or its user token was minted in another transaction), the label is inferred from the shape of
-     * the datum, see {@link #inferLabelFromDatum}, and it is the only one.
+     * is stored with, and the datum has to satisfy the requirements of all of them. Empty if none is paired (an orphan
+     * reference NFT, or its user token was minted in another transaction): the label is then inferred from the shape
+     * of the datum, see {@link #inferLabel}.
      */
-    private List<Integer> deriveLabels(AssetType refNftAssetType, Set<String> assetUnitsInTx, ParsedCip68Datum parsed) {
+    private List<Integer> pairedLabels(AssetType refNftAssetType, Set<String> assetUnitsInTx) {
         String baseName = refNftAssetType.assetName().substring(Cip68Constants.REFERENCE_TOKEN_PREFIX.length());
 
         List<Integer> labels = new ArrayList<>();
@@ -378,13 +393,15 @@ public class Cip68Processor {
         if (hasPairedUserToken(assetUnitsInTx, refNftAssetType, Cip68Constants.RICH_FUNGIBLE_TOKEN_PREFIX, baseName)) {
             labels.add(Cip68Constants.LABEL_RFT);
         }
-        if (!labels.isEmpty()) {
-            return labels;
-        }
+        return labels;
+    }
+
+    /** The label of a reference NFT without a paired user token in the transaction, see {@link #inferLabelFromDatum}. */
+    private static int inferLabel(AssetType refNftAssetType, ParsedCip68Datum parsed) {
         int inferred = inferLabelFromDatum(parsed);
         log.debug("No CIP-68 user token paired with reference NFT {}/{} in this tx; label {} inferred from the datum",
                 refNftAssetType.policyId(), refNftAssetType.assetName(), inferred);
-        return List.of(inferred);
+        return inferred;
     }
 
     /**
