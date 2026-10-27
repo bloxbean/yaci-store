@@ -9,6 +9,10 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.repository.Cip26MetadataRepository;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.util.Cip26MetadataValidator;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.util.Cip26Validation;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.invalidtoken.InvalidTokenReason;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.invalidtoken.InvalidTokenRecorder;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.invalidtoken.InvalidTokenReport;
+import org.mockito.ArgumentCaptor;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.validation.ValidationError;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -38,6 +42,7 @@ class Cip26MetadataServiceTest {
 
     @Mock private Cip26MetadataRepository cip26MetadataRepository;
     @Mock private Cip26MetadataValidator cip26MetadataValidator;
+    @Mock private InvalidTokenRecorder invalidTokenRecorder;
 
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-10-21T12:00:00Z"), ZoneOffset.UTC);
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 10, 21, 12, 0);
@@ -46,8 +51,13 @@ class Cip26MetadataServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new Cip26MetadataService(cip26MetadataRepository, cip26MetadataValidator,
-                com.bloxbean.cardano.yaci.store.extensions.assetstore.invalidtoken.InvalidTokenRecorder.noop(), CLOCK);
+        service = new Cip26MetadataService(cip26MetadataRepository, cip26MetadataValidator, invalidTokenRecorder, CLOCK);
+    }
+
+    private InvalidTokenReport reported() {
+        ArgumentCaptor<InvalidTokenReport> report = ArgumentCaptor.forClass(InvalidTokenReport.class);
+        verify(invalidTokenRecorder).report(report.capture());
+        return report.getValue();
     }
 
     private static Mapping mapping(String subject) {
@@ -101,13 +111,33 @@ class Cip26MetadataServiceTest {
         void returnsPermanentlySkippedWhenTheEntryIsDroppedAsUnstorable() {
             // The validator drops an entry whose subject cannot be a key (it is not CIP-26 metadata at all).
             // Retrying the same row will drop it again — must not block the cursor.
-            when(cip26MetadataValidator.validate(any(), any())).thenReturn(Cip26Validation.dropped("the subject is missing or blank"));
+            when(cip26MetadataValidator.validate(any(), any()))
+                    .thenReturn(Cip26Validation.dropped(InvalidTokenReason.UNUSABLE_SUBJECT, "the subject is missing or blank"));
 
             InsertOutcome outcome = service.insertMapping(
                     mapping("subject1"), LocalDateTime.now(), "author@test.com");
 
             assertThat(outcome).isEqualTo(InsertOutcome.PERMANENTLY_SKIPPED);
             verify(cip26MetadataRepository, never()).save(any(Cip26Metadata.class));
+            assertThat(reported()).satisfies(report -> {
+                assertThat(report.reasonCode()).isEqualTo("unusable_subject");
+                assertThat(report.origin()).isEqualTo("subject1.json");
+            });
+        }
+
+        @Test
+        void recordsAnUnexpectedValidationFailureAsAProcessingFailureNotAsAnUnusableSubject() {
+            // the subject may be fine: something the validator did not foresee threw
+            when(cip26MetadataValidator.validate(any(), any())).thenReturn(Cip26Validation.dropped(
+                    InvalidTokenReason.PROCESSING_FAILURE, "validation failed unexpectedly: boom"));
+
+            assertThat(service.insertMapping(mapping("subject1"), LocalDateTime.now(), "author@test.com"))
+                    .isEqualTo(InsertOutcome.PERMANENTLY_SKIPPED);
+            assertThat(reported()).satisfies(report -> {
+                assertThat(report.standard()).isEqualTo("CIP-26");
+                assertThat(report.reasonCode()).isEqualTo("processing_failure");
+                assertThat(report.reason()).contains("boom");
+            });
         }
 
         @Test
@@ -205,10 +235,19 @@ class Cip26MetadataServiceTest {
 
         @Test
         void permanentlySkipsAnOversizedLogoThatLooksLikeAnAttack() {
-            when(cip26MetadataValidator.validateLogo(any(), any())).thenReturn(Cip26Validation.dropped("the logo has 2000000 characters"));
+            when(cip26MetadataValidator.validateLogo(any(), any()))
+                    .thenReturn(Cip26Validation.dropped(InvalidTokenReason.LOGO_TOO_LARGE, "the logo has 2000000 characters"));
 
-            assertThat(service.insertLogo(mapping("subject1"))).isEqualTo(InsertOutcome.PERMANENTLY_SKIPPED);
+            assertThat(service.insertLogo(mapping("ABCDEF"))).isEqualTo(InsertOutcome.PERMANENTLY_SKIPPED);
             verify(cip26MetadataRepository, never()).save(any(Cip26Metadata.class));
+            // the entry is stored without its logo, and the dropped logo is recorded
+            assertThat(reported()).satisfies(report -> {
+                assertThat(report.standard()).isEqualTo("CIP-26");
+                assertThat(report.reasonCode()).isEqualTo("logo_too_large");
+                assertThat(report.subject()).isEqualTo("abcdef");
+                assertThat(report.origin()).isEqualTo("ABCDEF.json");
+                assertThat(report.reason()).contains("2000000 characters");
+            });
         }
 
         @Test

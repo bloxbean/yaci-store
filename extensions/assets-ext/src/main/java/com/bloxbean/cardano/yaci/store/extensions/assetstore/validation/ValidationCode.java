@@ -37,7 +37,7 @@ public final class ValidationCode {
             | `out_of_range` | a number is outside the range allowed: `decimals` |
             | `invalid_version` | the CIP-68 `version` is there but cannot be used: it is not an integer, it does not fit a 64-bit integer (stored without a version), or it is not one CIP-68 defines (1 to 4; the datum is read by its structure and kept). The message says which. A missing `version` is `missing_value` |
             | `plutus_constructor` | a property holds a Plutus constructor, which CIP-68 metadata does not allow; it is kept as `{constructor, fields}` |
-            | `not_utf8` | a text is not valid UTF-8; it is kept as hex |
+            | `not_utf8` | a text is not valid UTF-8; it is kept as hex (mandatory for a `name`, and for the `description` of a 333) |
             | `invalid_files_entry` | an entry of `files` breaks the CIP-68 definition (for example no `mediaType` or `src`); the entry is kept |
             | `no_nested_entry` | a nested datum (`"721"`) has no usable entry for the token (field `721`); the token is indexed without metadata |
             | `too_deep` | a property is nested more than 100 levels and is dropped, the rest of the datum is kept |

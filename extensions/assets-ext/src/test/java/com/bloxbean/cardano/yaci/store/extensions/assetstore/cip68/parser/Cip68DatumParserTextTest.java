@@ -82,6 +82,22 @@ class Cip68DatumParserTextTest {
     }
 
     @Test
+    void aNameThatIsNotUtf8IsAMandatoryErrorAndTheOtherTextsOptional() throws Exception {
+        // review of #1220: the name is mandatory, so a name that is not text is a mandatory error, as a name of the wrong type is
+        MapPlutusData properties = new MapPlutusData();
+        for (String key : List.of("name", "ticker")) {
+            properties.put(BytesPlutusData.of(key), BytesPlutusData.of(NOT_UTF8));
+        }
+
+        ParsedCip68Datum parsed = parse(properties).orElseThrow();
+
+        assertThat(parsed.validationErrors())
+                .extracting(ValidationError::fieldName, ValidationError::fieldCategory, ValidationError::code)
+                .containsExactlyInAnyOrder(tuple("name", FieldCategory.MANDATORY, "not_utf8"),
+                        tuple("ticker", FieldCategory.OPTIONAL, "not_utf8"));
+    }
+
+    @Test
     void storesInvalidUtf8AsHexForLogoAndImage() throws Exception {
         MapPlutusData properties = props("name", "n");
         properties.put(BytesPlutusData.of("logo"), BytesPlutusData.of(NOT_UTF8));
