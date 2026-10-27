@@ -65,9 +65,9 @@ it is a finding for a report or a metric, not something this table records.
 cf-token-metadata-registry ADR-020 decision 3). A registry node carries no name, ticker or logo; those come from the token's CIP-26 or
 CIP-68 metadata, its *companion*. A token of a registered policy without one is stored and served like any other: with its registry node,
 no metadata, and a validation error (`cip` `CIP-113`, `field_name` `companion_metadata`, `code` `missing_value`), as ADR 0006 does for a
-token that breaks CIP-26 or CIP-68. This table is for what cannot be stored, and such a token can. Whether the error is `MANDATORY` or
-`OPTIONAL` is open: some programmable tokens may be valid without companion metadata (the registry serves it as `OPTIONAL` for now). The
-registry first recorded such a policy here (`no_companion_metadata`) and served its tokens as a 404; it retired that code, and the code is
+token that breaks CIP-26 or CIP-68. This table is for what cannot be stored, and such a token can. The error is `MANDATORY`: without
+CIP-26 or CIP-68 metadata a programmable token does not meet a mandatory requirement, so `?validation=MANDATORY_ONLY` and `STRICT` leave it
+out. The registry first recorded such a policy here (`no_companion_metadata`) and served its tokens as a 404; it retired that code, and the code is
 not reserved here.
 
 ### 3. Written safely from the block transaction
@@ -115,7 +115,6 @@ the rows written.
 
 - Whether `unregistered_policy_in_jail` is a row here or a validation error of the token: the token exists and can be served from CIP-26 or
   CIP-68, so it may be a token that breaks a rule rather than a dropped item.
-- Whether a programmable token without companion metadata is a `MANDATORY` or an `OPTIONAL` error.
 - How long CIP-26 rows are kept for a file that disappears and comes back.
 
 ## References
