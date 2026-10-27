@@ -7,6 +7,7 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Co
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.ParsedCip68Datum;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.Cip68Metadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.validation.FieldCategory;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.validation.ValidationError;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.repository.Cip68MetadataRepository;
 import org.junit.jupiter.api.DisplayName;
@@ -22,7 +23,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import static com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Constants.LABEL_FT;
+import static com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Constants.LABEL_NFT;
+import static com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Constants.LABEL_RFT;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -238,9 +243,12 @@ class Cip68TokenServiceTest {
     class FindSubjects {
 
         private static final String POLICY_A = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-        private static final String POLICY_B = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        private static final String POLICY_B = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
         private static final String REF_NAME_A = "000643b0aaaa"; // reference NFT asset name
         private static final String REF_NAME_B = "000643b0bbbb";
+        private static final String FT_A = POLICY_A + "0014df10aaaa";
+        private static final String RFT_A = POLICY_A + "001bc280aaaa";
+        private static final String FT_B = POLICY_B + "0014df10bbbb";
 
         @Test
         void returnsEmptyMapForEmptyInput() {
@@ -251,32 +259,34 @@ class Cip68TokenServiceTest {
         }
 
         @Test
+        void skipsSubjectsThatAreNotServedFromCip68WithoutAQuery() {
+            assertThat(service.findSubjects(List.of(POLICY_A + REF_NAME_A, POLICY_A + "000de140aaaa"), List.of())).isEmpty();
+            verifyNoInteractions(repository);
+        }
+
+        @Test
         void issuesSingleBatchQuery() {
-            List<AssetType> keys = List.of(
-                    new AssetType(POLICY_A, REF_NAME_A),
-                    new AssetType(POLICY_B, REF_NAME_B));
             when(repository.findLatestByConcatenatedKeys(anyCollection()))
                     .thenReturn(List.of());
 
-            service.findSubjects(keys, List.of());
+            service.findSubjects(List.of(FT_A, FT_B), List.of());
 
             verify(repository).findLatestByConcatenatedKeys(
                     List.of(POLICY_A + REF_NAME_A, POLICY_B + REF_NAME_B));
         }
 
         @Test
-        void mapsResultsKeyedByRefNftSubject() {
-            List<AssetType> keys = List.of(new AssetType(POLICY_A, REF_NAME_A));
+        void mapsResultsKeyedBySubjectAskedFor() {
             Cip68Metadata row = Cip68Metadata.builder()
                     .policyId(POLICY_A).assetName(REF_NAME_A).slot(100L).label(333)
                     .name("TokenA").description("desc A").ticker("TKA").decimals(6L).version(1L).build();
             when(repository.findLatestByConcatenatedKeys(anyCollection()))
                     .thenReturn(List.of(row));
 
-            Map<String, FungibleTokenMetadata> result = service.findSubjects(keys, List.of());
+            Map<String, FungibleTokenMetadata> result = service.findSubjects(List.of(FT_A), List.of());
 
             assertThat(result).hasSize(1);
-            FungibleTokenMetadata md = result.get(POLICY_A + REF_NAME_A);
+            FungibleTokenMetadata md = result.get(FT_A);
             assertThat(md).isNotNull();
             assertThat(md.name()).isEqualTo("TokenA");
             assertThat(md.description()).isEqualTo("desc A");
@@ -287,9 +297,6 @@ class Cip68TokenServiceTest {
 
         @Test
         void omitsPairsWithNoData() {
-            List<AssetType> keys = List.of(
-                    new AssetType(POLICY_A, REF_NAME_A),
-                    new AssetType(POLICY_B, REF_NAME_B));
             Cip68Metadata rowA = Cip68Metadata.builder()
                     .policyId(POLICY_A).assetName(REF_NAME_A).slot(100L).label(333)
                     .name("A").description("desc A").version(1L).build();
@@ -297,15 +304,14 @@ class Cip68TokenServiceTest {
             when(repository.findLatestByConcatenatedKeys(anyCollection()))
                     .thenReturn(List.of(rowA));
 
-            Map<String, FungibleTokenMetadata> result = service.findSubjects(keys, List.of());
+            Map<String, FungibleTokenMetadata> result = service.findSubjects(List.of(FT_A, FT_B), List.of());
 
             assertThat(result).hasSize(1);
-            assertThat(result).containsOnlyKeys(POLICY_A + REF_NAME_A);
+            assertThat(result).containsOnlyKeys(FT_A);
         }
 
         @Test
         void appliesPropertyFilter() {
-            List<AssetType> keys = List.of(new AssetType(POLICY_A, REF_NAME_A));
             Cip68Metadata row = Cip68Metadata.builder()
                     .policyId(POLICY_A).assetName(REF_NAME_A).slot(100L).label(333)
                     .name("TokenA").description("desc A").ticker("TKA").decimals(6L).version(1L)
@@ -315,9 +321,9 @@ class Cip68TokenServiceTest {
 
             // Request only name and decimals — everything else should be null
             Map<String, FungibleTokenMetadata> result =
-                    service.findSubjects(keys, List.of("name", "decimals"));
+                    service.findSubjects(List.of(FT_A), List.of("name", "decimals"));
 
-            FungibleTokenMetadata md = result.get(POLICY_A + REF_NAME_A);
+            FungibleTokenMetadata md = result.get(FT_A);
             assertThat(md.name()).isEqualTo("TokenA");
             assertThat(md.decimals()).isEqualTo(6L);
             assertThat(md.description()).isNull();
@@ -334,14 +340,34 @@ class Cip68TokenServiceTest {
             // The service contract is "return latest by slot, regardless of label" — i.e.
             // the repository must be called WITHOUT a label argument. Verified observationally
             // on mainnet for cLBC/SHLF, Buckazoids, Burballa/Pernis, Diamond, UTXO, etc.
-            List<AssetType> keys = List.of(new AssetType(POLICY_A, REF_NAME_A));
             when(repository.findLatestByConcatenatedKeys(anyCollection()))
                     .thenReturn(List.of());
 
-            service.findSubjects(keys, List.of());
+            service.findSubjects(List.of(FT_A), List.of());
 
             // No label-aware overload should be invoked.
             verify(repository).findLatestByConcatenatedKeys(anyCollection());
+        }
+
+        @Test
+        void servesThe333AndThe444SubjectOfOneReferenceNftEachForItsLabel() {
+            // both user tokens share the reference NFT: one query key, two subjects, each checked for its own label
+            Cip68Metadata row = Cip68Metadata.builder()
+                    .policyId(POLICY_A).assetName(REF_NAME_A).slot(100L).label(333)
+                    .name("Both").image("ipfs://QmBoth").version(1L).validationErrors(List.of()).build();
+            when(repository.findLatestByConcatenatedKeys(anyCollection()))
+                    .thenReturn(List.of(row));
+
+            Map<String, FungibleTokenMetadata> result = service.findSubjects(List.of(FT_A, RFT_A), List.of());
+
+            verify(repository).findLatestByConcatenatedKeys(List.of(POLICY_A + REF_NAME_A));
+            assertThat(result).containsOnlyKeys(FT_A, RFT_A);
+            assertThat(result.get(FT_A).logo()).isNull();
+            assertThat(result.get(FT_A).validationErrors())
+                    .extracting(ValidationError::subStandard, ValidationError::fieldName, ValidationError::code)
+                    .containsExactly(tuple("333", "description", "missing_value"));
+            assertThat(result.get(RFT_A).logo()).isEqualTo("ipfs://QmBoth");
+            assertThat(result.get(RFT_A).validationErrors()).isEmpty();
         }
     }
 
@@ -365,7 +391,7 @@ class Cip68TokenServiceTest {
             when(repository.findFirstByPolicyIdAndAssetNameOrderBySlotDescTxIndexDesc(POLICY, REF_NAME))
                     .thenReturn(Optional.of(latestUnderLabel222));
 
-            Optional<FungibleTokenMetadata> result = service.findSubject(POLICY, REF_NAME, List.of());
+            Optional<FungibleTokenMetadata> result = service.findSubject(POLICY, REF_NAME, LABEL_FT, List.of());
 
             assertThat(result).isPresent();
             assertThat(result.get().name()).isEqualTo("SHLF");
@@ -378,24 +404,47 @@ class Cip68TokenServiceTest {
             when(repository.findFirstByPolicyIdAndAssetNameOrderBySlotDescTxIndexDesc(POLICY, REF_NAME))
                     .thenReturn(Optional.empty());
 
-            assertThat(service.findSubject(POLICY, REF_NAME, List.of())).isEmpty();
+            assertThat(service.findSubject(POLICY, REF_NAME, LABEL_FT, List.of())).isEmpty();
         }
 
         @Test
-        void returnsATokenThatBreaksCip68WithItsValidationErrors() {
-            ValidationError error = ValidationError.mandatory("CIP-68", "333", "description", "missing_value",
-                    "description field is missing a mandatory value");
+        void returnsATokenThatBreaksCip68WithItsStoredErrorsAndThoseOfItsLabel() {
+            ValidationError stored = ValidationError.optional("CIP-68", null, "ticker", "not_utf8",
+                    "ticker is not valid UTF-8, stored as hex");
             Cip68Metadata row = Cip68Metadata.builder()
                     .policyId(POLICY).assetName(REF_NAME).slot(200L).label(333)
-                    .name("No description").version(1L).validationErrors(List.of(error)).build();
+                    .name("No description").ticker("ff").version(1L).validationErrors(List.of(stored)).build();
             when(repository.findFirstByPolicyIdAndAssetNameOrderBySlotDescTxIndexDesc(POLICY, REF_NAME))
                     .thenReturn(Optional.of(row));
 
-            FungibleTokenMetadata result = service.findSubject(POLICY, REF_NAME, List.of()).orElseThrow();
+            FungibleTokenMetadata result = service.findSubject(POLICY, REF_NAME, LABEL_FT, List.of()).orElseThrow();
 
             assertThat(result.name()).isEqualTo("No description");
             assertThat(result.description()).isNull();
-            assertThat(result.validationErrors()).containsExactly(error);
+            assertThat(result.validationErrors()).first().isEqualTo(stored);
+            assertThat(result.validationErrors())
+                    .extracting(ValidationError::subStandard, ValidationError::fieldName, ValidationError::fieldCategory)
+                    .containsExactly(tuple(null, "ticker", FieldCategory.OPTIONAL),
+                            tuple("333", "description", FieldCategory.MANDATORY));
+        }
+
+        @Test
+        void checksAFungibleTokenWhoseLabelWasGuessedAsAnNftForThe333Label() {
+            // a metadata update without the user token: name and image, no description, ticker, logo or decimals, so it
+            // was stored as 222. Asked for as a 333 token, the description CIP-68 requires of it is missing
+            Cip68Metadata guessedNft = Cip68Metadata.builder()
+                    .policyId(POLICY).assetName(REF_NAME).slot(200L).label(LABEL_NFT)
+                    .name("Coin").image("ipfs://QmCoin").version(1L).validationErrors(List.of()).build();
+            when(repository.findFirstByPolicyIdAndAssetNameOrderBySlotDescTxIndexDesc(POLICY, REF_NAME))
+                    .thenReturn(Optional.of(guessedNft));
+
+            FungibleTokenMetadata result = service.findSubject(POLICY, REF_NAME, LABEL_FT, List.of()).orElseThrow();
+
+            assertThat(result.logo()).isNull();
+            assertThat(result.validationErrors())
+                    .extracting(ValidationError::subStandard, ValidationError::fieldName, ValidationError::fieldCategory,
+                            ValidationError::code)
+                    .containsExactly(tuple("333", "description", FieldCategory.MANDATORY, "missing_value"));
         }
 
         @Test
@@ -405,7 +454,7 @@ class Cip68TokenServiceTest {
             when(repository.findFirstByPolicyIdAndAssetNameOrderBySlotDescTxIndexDesc(POLICY, REF_NAME))
                     .thenReturn(Optional.of(row));
 
-            assertThat(service.findSubject(POLICY, REF_NAME, List.of()).orElseThrow().validationErrors()).isEmpty();
+            assertThat(service.findSubject(POLICY, REF_NAME, LABEL_FT, List.of()).orElseThrow().validationErrors()).isEmpty();
         }
 
         @Test
@@ -415,7 +464,7 @@ class Cip68TokenServiceTest {
             when(repository.findFirstByPolicyIdAndAssetNameOrderBySlotDescTxIndexDesc(POLICY, REF_NAME))
                     .thenReturn(Optional.of(row));
 
-            assertThat(service.findSubject(POLICY, REF_NAME, List.of()).orElseThrow().validationErrors()).isNull();
+            assertThat(service.findSubject(POLICY, REF_NAME, LABEL_FT, List.of()).orElseThrow().validationErrors()).isNull();
         }
 
         @Test
@@ -426,7 +475,37 @@ class Cip68TokenServiceTest {
             when(repository.findFirstByPolicyIdAndAssetNameOrderBySlotDescTxIndexDesc(POLICY, REF_NAME))
                     .thenReturn(Optional.of(rft));
 
-            assertThat(service.findSubject(POLICY, REF_NAME, List.of()).orElseThrow().logo()).isEqualTo("ipfs://QmImage");
+            assertThat(service.findSubject(POLICY, REF_NAME, LABEL_RFT, List.of()).orElseThrow().logo()).isEqualTo("ipfs://QmImage");
+        }
+
+        @Test
+        void servesTheImageAsTheLogoOfA444SubjectWhateverLabelTheRowWasStoredWith() {
+            // an RFT update without the user token and without decimals is stored as 222; a 333 user token co-minted
+            // with a 444 one stores the row as 333
+            for (int storedLabel : new int[]{LABEL_NFT, LABEL_FT}) {
+                Cip68Metadata row = Cip68Metadata.builder()
+                        .policyId(POLICY).assetName(REF_NAME).slot(200L).label(storedLabel)
+                        .name("Rich").description("A rich token").image("ipfs://QmRich").version(1L)
+                        .validationErrors(List.of()).build();
+                when(repository.findFirstByPolicyIdAndAssetNameOrderBySlotDescTxIndexDesc(POLICY, REF_NAME))
+                        .thenReturn(Optional.of(row));
+
+                FungibleTokenMetadata result = service.findSubject(POLICY, REF_NAME, LABEL_RFT, List.of()).orElseThrow();
+
+                assertThat(result.logo()).as("stored as %d", storedLabel).isEqualTo("ipfs://QmRich");
+                assertThat(result.validationErrors()).as("stored as %d", storedLabel).isEmpty();
+            }
+        }
+
+        @Test
+        void doesNotServeTheImageAsTheLogoOfA333SubjectStoredAsAnRft() {
+            Cip68Metadata rft = Cip68Metadata.builder()
+                    .policyId(POLICY).assetName(REF_NAME).slot(200L).label(LABEL_RFT)
+                    .name("Edition").description("d").image("ipfs://QmImage").version(1L).build();
+            when(repository.findFirstByPolicyIdAndAssetNameOrderBySlotDescTxIndexDesc(POLICY, REF_NAME))
+                    .thenReturn(Optional.of(rft));
+
+            assertThat(service.findSubject(POLICY, REF_NAME, LABEL_FT, List.of()).orElseThrow().logo()).isNull();
         }
 
         @Test
@@ -438,7 +517,7 @@ class Cip68TokenServiceTest {
                     .thenReturn(Optional.of(rft));
 
             // the validation errors of the row say the scheme is not allowed; the value is not hidden
-            assertThat(service.findSubject(POLICY, REF_NAME, List.of()).orElseThrow().logo()).isEqualTo("iagon://x");
+            assertThat(service.findSubject(POLICY, REF_NAME, LABEL_RFT, List.of()).orElseThrow().logo()).isEqualTo("iagon://x");
         }
 
         @Test
@@ -449,7 +528,7 @@ class Cip68TokenServiceTest {
             when(repository.findFirstByPolicyIdAndAssetNameOrderBySlotDescTxIndexDesc(POLICY, REF_NAME))
                     .thenReturn(Optional.of(ft));
 
-            assertThat(service.findSubject(POLICY, REF_NAME, List.of()).orElseThrow().logo()).isEqualTo("ipfs://QmLogo");
+            assertThat(service.findSubject(POLICY, REF_NAME, LABEL_FT, List.of()).orElseThrow().logo()).isEqualTo("ipfs://QmLogo");
         }
     }
 

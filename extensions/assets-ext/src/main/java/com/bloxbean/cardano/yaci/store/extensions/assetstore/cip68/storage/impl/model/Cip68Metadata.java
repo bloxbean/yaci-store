@@ -142,7 +142,9 @@ public class Cip68Metadata {
     private Map<String, Object> properties;
 
     /**
-     * How the datum departs from CIP-68, per label it was checked for. The token is indexed and served
+     * How the datum itself departs from CIP-68, whatever the label of the token. What the label requires is checked
+     * when the token is served, for the label asked for ({@code Cip68Validator#validate}): the label is often guessed
+     * when the datum is indexed, and one reference NFT can serve a 333 and a 444 token. The token is indexed and served
      * anyway; see ADR 0006. Null on rows written before the column existed.
      */
     @JdbcTypeCode(SqlTypes.JSON)

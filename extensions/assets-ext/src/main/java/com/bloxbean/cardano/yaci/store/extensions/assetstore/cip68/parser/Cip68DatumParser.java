@@ -34,7 +34,8 @@ import static com.bloxbean.cardano.yaci.store.extensions.assetstore.validation.V
  * <p>
  * The parser indexes what is on-chain and reports what departs from CIP-68: a value that breaks the CIP is kept as it
  * was written, and a {@link ValidationError} says what is wrong with it. Whether the token has what its label requires
- * is checked per label by {@link com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service.Cip68Validator}.
+ * is checked when it is served, for the label asked for, by
+ * {@link com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service.Cip68Validator}.
  * A datum is left out only when it cannot be decoded, or when it is an obvious attack on the indexer: one nested so deep
  * that it cannot be decoded, or a property nested more than {@value #MAX_PROPERTY_DEPTH} levels (see ADR 0006).
  */
@@ -434,7 +435,8 @@ public class Cip68DatumParser {
 
     /**
      * An error about the form of a typed text. Its category here is the one that does not depend on the label; for
-     * {@code description}, which only the 333 fungible token requires, {@code Cip68Validator} reports it again per label.
+     * {@code description}, which only the 333 fungible token requires, {@code Cip68Validator} reports it with the category
+     * of the label asked for when the token is served.
      */
     private static ValidationError textError(String propertyName, String code, String error) {
         return NAME.equals(propertyName)

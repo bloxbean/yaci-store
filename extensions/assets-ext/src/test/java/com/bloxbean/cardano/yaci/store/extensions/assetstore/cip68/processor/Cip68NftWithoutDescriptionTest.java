@@ -6,6 +6,7 @@ import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Constants;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.parser.Cip68DatumParser;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service.Cip68TokenService;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service.Cip68Validator;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.Cip68Metadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.repository.Cip68MetadataRepository;
 import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxoEvent;
@@ -91,13 +92,14 @@ class Cip68NftWithoutDescriptionTest {
 
     @Test
     void indexesAnNftWhoseImageIsEmptyWithAMandatoryError() {
-        // no description is fine for an NFT, but CIP-68 requires an image and this datum's is empty: indexed with the error
+        // no description is fine for an NFT, but CIP-68 requires an image and this datum's is empty: indexed, and served
+        // as an NFT with the error
         processor.processTransaction(event(NFT_NO_DESCRIPTION_EMPTY_IMAGE, "000de140"));
 
         Cip68Metadata saved = savedRow();
         assertThat(saved.getName()).isEqualTo("NFT #1");
         // (the datum also has a constructor property, reported as an error of its own)
-        assertThat(saved.getValidationErrors()).filteredOn(e -> e.fieldName().equals("image")).singleElement().satisfies(e -> {
+        assertThat(Cip68Validator.validate(saved, Cip68Constants.LABEL_NFT)).filteredOn(e -> e.fieldName().equals("image")).singleElement().satisfies(e -> {
             assertThat(e.subStandard()).isEqualTo("222");
             assertThat(e.fieldCategory().name()).isEqualTo("MANDATORY");
             assertThat(e.code()).isEqualTo("missing_value");
@@ -117,7 +119,8 @@ class Cip68NftWithoutDescriptionTest {
 
     @Test
     void indexesFungibleTokensWithoutDescriptionWithAMandatoryError() {
-        // 333 requires a description: the same datum is indexed when it belongs to an FT, with the error for the 333 label
+        // 333 requires a description: the same datum is indexed when it belongs to an FT, and served with the error for the
+        // 333 label
         NFT_DATUMS_WITHOUT_DESCRIPTION.forEach((datum, name) -> {
             org.mockito.Mockito.clearInvocations(repository);
 
@@ -126,7 +129,7 @@ class Cip68NftWithoutDescriptionTest {
             Cip68Metadata saved = savedRow();
             assertThat(saved.getName()).as(name).isEqualTo(name);
             assertThat(saved.getLabel()).as(name).isEqualTo(Cip68Constants.LABEL_FT);
-            assertThat(saved.getValidationErrors()).as(name).filteredOn(e -> e.fieldName().equals("description"))
+            assertThat(Cip68Validator.validate(saved, Cip68Constants.LABEL_FT)).as(name).filteredOn(e -> e.fieldName().equals("description"))
                     .singleElement().satisfies(e -> {
                         assertThat(e.subStandard()).isEqualTo("333");
                         assertThat(e.fieldCategory().name()).isEqualTo("MANDATORY");

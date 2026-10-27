@@ -17,8 +17,10 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.metrics.Cip68
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Constants;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.parser.Cip68DatumParser;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service.Cip68TokenService;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service.Cip68Validator;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.Cip68Metadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.repository.Cip68MetadataRepository;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.validation.ValidationError;
 import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxoEvent;
 import com.bloxbean.cardano.yaci.store.utxo.domain.TxInputOutput;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -42,10 +44,9 @@ import static org.mockito.Mockito.verify;
 
 /**
  * CIP-68 allows several user tokens for one reference NFT, for example a 222 and a 333 with the same policy and base
- * name. The row is stored with the first label (222, then 333, then 444), and the datum is checked against the
- * requirements of every label the transaction pairs it with: a token that is also a fungible token needs a
- * description, one that is also an NFT needs an image. A datum that fails one of them is still indexed, and each
- * error names the label it was found for.
+ * name. The row is stored with the first label (222, then 333, then 444), with what is wrong with the datum itself;
+ * each token is checked for its own label when it is served: a fungible token needs a description, an NFT or RFT an
+ * image. A datum that fails one of them is still indexed, and each error names the label it was found for.
  */
 class Cip68MultiLabelTest {
 
@@ -81,7 +82,16 @@ class Cip68MultiLabelTest {
     }
 
     private static List<String> errorsOf(Cip68Metadata row) {
-        return row.getValidationErrors().stream()
+        return format(row.getValidationErrors());
+    }
+
+    /** The errors the token of {@code label} is served with. */
+    private static List<String> servedAs(Cip68Metadata row, int label) {
+        return format(Cip68Validator.validate(row, label));
+    }
+
+    private static List<String> format(List<ValidationError> errors) {
+        return errors.stream()
                 .map(e -> e.subStandard() + ":" + e.fieldName() + ":" + e.fieldCategory() + ":" + e.code()).toList();
     }
 
@@ -102,7 +112,9 @@ class Cip68MultiLabelTest {
         Optional<Cip68Metadata> saved = index(datum("name", "LP", "image", "ipfs://Qm"), NFT, FT);
 
         assertThat(saved).get().extracting(Cip68Metadata::getLabel).isEqualTo(Cip68Constants.LABEL_NFT);
-        assertThat(errorsOf(saved.get())).containsExactly("333:description:MANDATORY:missing_value");
+        assertThat(errorsOf(saved.get())).isEmpty();
+        assertThat(servedAs(saved.get(), Cip68Constants.LABEL_NFT)).isEmpty();
+        assertThat(servedAs(saved.get(), Cip68Constants.LABEL_FT)).containsExactly("333:description:MANDATORY:missing_value");
         assertThat(warnings()).isEmpty();
         assertThat(registry.find(Cip68Metrics.SKIPPED).counters()).isEmpty();
     }
@@ -113,7 +125,8 @@ class Cip68MultiLabelTest {
         Optional<Cip68Metadata> saved = index(datum("name", "LP", "description", "A pool token"), NFT, FT);
 
         assertThat(saved).get().extracting(Cip68Metadata::getLabel).isEqualTo(Cip68Constants.LABEL_NFT);
-        assertThat(errorsOf(saved.get())).containsExactly("222:image:MANDATORY:missing_value");
+        assertThat(servedAs(saved.get(), Cip68Constants.LABEL_NFT)).containsExactly("222:image:MANDATORY:missing_value");
+        assertThat(servedAs(saved.get(), Cip68Constants.LABEL_FT)).isEmpty();
     }
 
     @Test
@@ -121,8 +134,10 @@ class Cip68MultiLabelTest {
         // a 222 + 333 + 444 datum with nothing but a name: 222 and 444 miss the image, 333 misses the description
         Optional<Cip68Metadata> saved = index(datum("name", "X"), NFT, FT, RFT);
 
-        assertThat(errorsOf(saved.orElseThrow())).containsExactly(
-                "222:image:MANDATORY:missing_value", "333:description:MANDATORY:missing_value", "444:image:MANDATORY:missing_value");
+        Cip68Metadata row = saved.orElseThrow();
+        assertThat(servedAs(row, Cip68Constants.LABEL_NFT)).containsExactly("222:image:MANDATORY:missing_value");
+        assertThat(servedAs(row, Cip68Constants.LABEL_FT)).containsExactly("333:description:MANDATORY:missing_value");
+        assertThat(servedAs(row, Cip68Constants.LABEL_RFT)).containsExactly("444:image:MANDATORY:missing_value");
     }
 
     @Test
@@ -152,7 +167,8 @@ class Cip68MultiLabelTest {
         Optional<Cip68Metadata> saved = index(datum("name", "X", "description", "d"), FT, RFT);
 
         assertThat(saved).get().extracting(Cip68Metadata::getLabel).isEqualTo(Cip68Constants.LABEL_FT);
-        assertThat(errorsOf(saved.get())).containsExactly("444:image:MANDATORY:missing_value");
+        assertThat(servedAs(saved.get(), Cip68Constants.LABEL_FT)).isEmpty();
+        assertThat(servedAs(saved.get(), Cip68Constants.LABEL_RFT)).containsExactly("444:image:MANDATORY:missing_value");
     }
 
     @Test
@@ -164,10 +180,10 @@ class Cip68MultiLabelTest {
     }
 
     @Test
-    void aSingleLabelWithAMissingFieldIsIndexedWithTheErrorForThatLabel() {
+    void aSingleLabelWithAMissingFieldIsServedWithTheErrorForThatLabel() {
         Optional<Cip68Metadata> saved = index(datum("name", "N"), NFT);
 
-        assertThat(errorsOf(saved.orElseThrow())).containsExactly("222:image:MANDATORY:missing_value");
+        assertThat(servedAs(saved.orElseThrow(), Cip68Constants.LABEL_NFT)).containsExactly("222:image:MANDATORY:missing_value");
         assertThat(warnings()).isEmpty();
     }
 

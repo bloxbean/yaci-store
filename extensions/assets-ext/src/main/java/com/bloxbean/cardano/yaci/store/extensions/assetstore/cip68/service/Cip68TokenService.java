@@ -8,12 +8,15 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.ParsedC
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.parser.Cip68DatumParser;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.Cip68Metadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.repository.Cip68MetadataRepository;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.validation.ValidationError;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import jakarta.annotation.Nullable;
 
 import java.math.BigInteger;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -74,73 +77,115 @@ public class Cip68TokenService {
 
     /**
      * Find the latest reference-NFT metadata for the given {@code (policyId, assetName)} pair
-     * and project it into a {@link FungibleTokenMetadata}.
+     * and project it into a {@link FungibleTokenMetadata} for a token of {@code label}.
      * <p>
      * No label filter is applied: a single reference NFT may have rows tagged with different
      * labels across its history (the per-row label reflects whichever user-token prefix was
-     * co-minted in that transaction), so the truthful latest metadata is "max slot for this
-     * reference NFT, regardless of label" — see
+     * co-minted in that transaction, or was guessed from the datum), so the truthful latest metadata is
+     * "max slot for this reference NFT, regardless of label" — see
      * {@link Cip68MetadataRepository#findFirstByPolicyIdAndAssetNameOrderBySlotDescTxIndexDesc}.
+     * The label of the token asked for decides what CIP-68 requires of it and whether its image is its logo.
+     *
+     * @param label the label of the token asked for: {@code 333} (FT) or {@code 444} (RFT)
      */
-    public Optional<FungibleTokenMetadata> findSubject(String policyId, String assetName, List<String> properties) {
+    public Optional<FungibleTokenMetadata> findSubject(String policyId, String assetName, int label, List<String> properties) {
         return metadataReferenceNftRepository.findFirstByPolicyIdAndAssetNameOrderBySlotDescTxIndexDesc(
                         policyId, assetName)
-                .map(referenceNft -> toFungibleTokenMetadata(referenceNft, properties));
+                .map(referenceNft -> toFungibleTokenMetadata(referenceNft, label, properties));
     }
 
     /**
-     * Batch variant of {@link #findSubject(String, String, List)}: fetches the latest FT metadata
-     * for every given {@code (policyId, assetName)} pair in a single DB round-trip.
-     * <p>
-     * The input {@code assetName} values are <b>reference NFT</b> asset names (prefix {@code 000643b0}),
-     * not fungible token asset names. Callers should use
-     * {@link #getReferenceNftSubject(String)} first to map fungible-token subjects to reference-NFT keys.
-     * <p>
-     * The returned map is keyed by reference-NFT subject ({@code policyId + assetName}) — mirroring the
-     * input key shape — so callers can do O(1) lookups without rebuilding keys.
+     * Batch variant of {@link #findSubject}: fetches the latest metadata of every fungible (333) or rich fungible (444)
+     * token subject in a single DB round-trip. A 333 and a 444 subject of the same reference NFT are both served from
+     * its one row, each checked for its own label.
      *
-     * @param refNftKeys reference-NFT asset-type pairs (policyId + ref-NFT asset name)
+     * @param subjects   user-token subjects (policyId + {@code 0014df10} or {@code 001bc280} + hex name); any other
+     *                   subject is skipped
      * @param properties property filter (empty list = include all)
-     * @return map keyed by reference-NFT subject; pairs with no data are omitted
+     * @return map keyed by the subject asked for; subjects with no data are omitted
      */
-    public Map<String, FungibleTokenMetadata> findSubjects(List<AssetType> refNftKeys, List<String> properties) {
-        if (refNftKeys.isEmpty()) {
+    public Map<String, FungibleTokenMetadata> findSubjects(List<String> subjects, List<String> properties) {
+        Map<String, AssetType> refNftBySubject = new LinkedHashMap<>();
+        for (String subject : subjects) {
+            getReferenceNftSubject(subject).ifPresent(refNft -> refNftBySubject.put(subject, refNft));
+        }
+        if (refNftBySubject.isEmpty()) {
             return Map.of();
         }
 
-        List<String> concatenatedKeys = refNftKeys.stream()
+        List<String> concatenatedKeys = refNftBySubject.values().stream()
                 .map(AssetType::toUnit)
+                .distinct()
                 .toList();
+        Map<String, Cip68Metadata> rowByRefNft = metadataReferenceNftRepository.findLatestByConcatenatedKeys(concatenatedKeys)
+                .stream()
+                .collect(Collectors.toMap(row -> row.getPolicyId() + row.getAssetName(), row -> row));
 
-        return metadataReferenceNftRepository.findLatestByConcatenatedKeys(concatenatedKeys).stream()
-                .collect(Collectors.toMap(
-                        row -> row.getPolicyId() + row.getAssetName(),
-                        row -> toFungibleTokenMetadata(row, properties)));
+        Map<String, FungibleTokenMetadata> result = new HashMap<>();
+        refNftBySubject.forEach((subject, refNft) -> {
+            Cip68Metadata row = rowByRefNft.get(refNft.toUnit());
+            if (row != null) {
+                result.put(subject, toFungibleTokenMetadata(row, labelOf(subject), properties));
+            }
+        });
+        return result;
     }
 
-    private FungibleTokenMetadata toFungibleTokenMetadata(Cip68Metadata referenceNft, List<String> properties) {
+    /**
+     * The row served as a token of {@code label}. Its errors are what is wrong with the datum, stored when it was
+     * indexed, and what the label requires of it ({@link Cip68Validator#validate}); a row indexed before validation
+     * existed keeps {@code null}: it was never checked.
+     */
+    private FungibleTokenMetadata toFungibleTokenMetadata(Cip68Metadata referenceNft, int label, List<String> properties) {
+        List<ValidationError> errors = referenceNft.getValidationErrors() == null
+                ? null
+                : Cip68Validator.validate(referenceNft, label);
         return new FungibleTokenMetadata(
                 getPropertyIfRequired(Cip68DatumParser.DECIMALS, referenceNft.getDecimals(), properties),
                 getPropertyIfRequired(Cip68DatumParser.DESCRIPTION, referenceNft.getDescription(), properties),
-                getPropertyIfRequired(Cip68DatumParser.LOGO, logoOf(referenceNft), properties),
+                getPropertyIfRequired(Cip68DatumParser.LOGO, logoOf(referenceNft, label), properties),
                 getPropertyIfRequired(Cip68DatumParser.NAME, referenceNft.getName(), properties),
                 getPropertyIfRequired(Cip68DatumParser.TICKER, referenceNft.getTicker(), properties),
                 getPropertyIfRequired(Cip68DatumParser.URL, referenceNft.getUrl(), properties),
                 getPropertyIfRequired(VERSION, referenceNft.getVersion(), properties),
-                referenceNft.getValidationErrors());
+                errors);
     }
 
     /**
      * The logo to serve. A rich fungible token (444) has no {@code logo} in CIP-68: its picture is the {@code image},
-     * which is served as the logo, as cf-token-metadata-registry does, so that wallets show it unchanged. The image is
-     * served as written even when it is not a URI with an allowed scheme; the validation errors say so.
+     * which is served as the logo, as cf-token-metadata-registry does, so that wallets show it unchanged. Whether the
+     * token is an RFT is the label of the subject asked for, not the label the row was stored with, which may have been
+     * guessed. The image is served as written even when it is not a URI with an allowed scheme; the validation errors
+     * say so.
      */
     @Nullable
-    private static String logoOf(Cip68Metadata row) {
-        if (row.getLogo() == null && row.getLabel() != null && row.getLabel() == LABEL_RFT) {
+    private static String logoOf(Cip68Metadata row, int label) {
+        if (row.getLogo() == null && label == LABEL_RFT) {
             return row.getImage();
         }
         return row.getLogo();
+    }
+
+    /** The label of a fungible ({@code 0014df10}) or rich fungible ({@code 001bc280}) token subject. */
+    private static int labelOf(String subject) {
+        return AssetType.fromUnit(subject).assetName().startsWith(RICH_FUNGIBLE_TOKEN_PREFIX) ? LABEL_RFT : LABEL_FT;
+    }
+
+    /**
+     * The reference NFT of a fungible (333) or rich fungible (444) token subject, and the label of that subject; empty
+     * for any other subject.
+     */
+    public Optional<ServedToken> getServedToken(String subject) {
+        return getReferenceNftSubject(subject).map(refNft -> new ServedToken(refNft, labelOf(subject)));
+    }
+
+    /**
+     * A user-token subject that is served from CIP-68: its reference NFT, and its label.
+     *
+     * @param referenceNft the reference NFT (prefix {@code 000643b0}) the metadata is read from
+     * @param label        {@code 333} (FT) or {@code 444} (RFT)
+     */
+    public record ServedToken(AssetType referenceNft, int label) {
     }
 
     @Nullable
