@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.analytics.query.model;
 
+import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -28,6 +29,19 @@ class TableMetadataTest {
         assertTrue(addressBalance.queryHints().stream()
                 .anyMatch(hint -> hint.contains("GET /addresses/{address}/amounts")
                         && hint.contains("when MCP is enabled")));
+    }
+
+    @Test
+    void govActionProposalTypeHintListsStoredValues() {
+        TableMetadata proposal = TableMetadata.forTable("gov_action_proposal");
+        assertNotNull(proposal);
+        String typeHint = proposal.queryHints().stream()
+                .filter(hint -> hint.startsWith("Column 'type' values:"))
+                .findFirst()
+                .orElseThrow();
+        for (GovActionType type : GovActionType.values()) {
+            assertTrue(typeHint.contains("'" + type.name() + "'"), type.name());
+        }
     }
 
     private static void assertPartition(String table, String strategy, String column) {
