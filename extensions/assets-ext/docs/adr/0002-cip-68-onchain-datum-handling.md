@@ -191,7 +191,7 @@ The optional properties report as `OPTIONAL` errors, and keep their value:
 | `logo` | not a `uri` with an allowed scheme (a bare IPFS hash, `iagon://`) | `invalid_uri_scheme` |
 | `files` | an entry that is not a map, has no `mediaType` or no `src`, or whose `src` is not a `uri` with an allowed scheme; the entries are kept as written, with one error per bad entry | `invalid_files_entry` |
 | `decimals` | outside [0, 255] (stored as written), not an integer or beyond a `long` (stored as no value) | `out_of_range`, `wrong_type` |
-| text fields | not valid UTF-8 (stored as hex, decision 7) | `not_utf8` |
+| text fields | not valid UTF-8 (stored as hex, decision 7); `MANDATORY` for `name`, and for `description` when served as a 333 | `not_utf8` |
 | `name`, `description`, `ticker`, `url`, `mediaType` | a list of byte strings instead of one (joined and kept, decision 5); `MANDATORY` for `name`, and for `description` when served as a 333 | `chunked_text` |
 | `ticker`, `url`, `mediaType`, `description` (444) | not a byte string, nor a list of byte strings (left out) | `wrong_type` |
 | additional properties | a constructor anywhere in the value (stored as `{"constructor", "fields"}`), a key with no text form, two keys that read the same (decision 7), a value nested deeper than 100 levels (dropped, decision 6) | `plutus_constructor`, `unsupported_key`, `key_collision`, `too_deep` |

@@ -100,6 +100,8 @@ What is still dropped, with one row in `invalid_token` (ADR 0007) and a WARN whe
   rows would collide (last write wins), so they are not indexed.
 - **A subject that cannot be a key**: missing, not an even-length hex string, or not 56 to 120 characters. Nothing could look the entry up.
 - **An unparseable file** (not JSON, or not a mapping).
+- **A file whose check throws something unforeseen**: recorded as `processing_failure`, not as `unusable_subject`, since the subject may be fine
+  (review of PR #1220). It is the one to look into.
 
 *Why report and not reject* (the alternative is to reject an entry for any failure, including an optional field): the entry is from the registry,
 which is the maintainers' own curated source, and the owners of a token whose entry is rejected see nothing; with errors they see what to fix. The registry also validates entries on GitHub before they are merged (the maintainers'
@@ -113,8 +115,8 @@ token under policy `d8906ca5…` has the policy id pasted twice (128 characters)
 Metadata and logo are two steps. The logo should be valid base64 and at most 64 KiB decoded; the image format (PNG, SVG) is not checked, so the
 module is not stricter than the library. A logo that is not valid base64, or is over 64 KiB, is **kept as written** with an `OPTIONAL` error
 (`invalid_base64`, `too_large`) added to the row. Only a logo far beyond any real size (over about 1.4 million characters, about 1 MiB) is
-dropped, with a WARN that says it looks like an attack: the logo is then missing, and the metadata is still saved. A logo with no metadata row
-(an orphan logo) is skipped.
+dropped, with a WARN that says it looks like an attack, and recorded in `invalid_token` as `logo_too_large` (review of PR #1220; it had no
+record): the logo is then missing, and the metadata is still saved. A logo with no metadata row (an orphan logo) is skipped.
 
 *Why:* the registry is curated, so an oversized logo is more likely a mistake to fix than an attack, and a token with good metadata and a big
 logo is still worth serving. *Trade-off:* a stored token can have a logo that no client can show, which the error says; and a logo between 64 KiB
@@ -154,8 +156,9 @@ CF registry's V1 API cannot be reproduced from it.
   rows, so a count by code is a query, and what is dropped is counted by `invalid_tokens{standard,reason_code}` (ADR 0007).
 - A file whose name differs from its inner subject is never indexed, under either name; it is recorded in `invalid_token` with the subject it
   claims (`details.inner_subject`), so it can be found and reported to the registry. This is a decision, not an open question.
-- A registry file that is dropped (a subject mismatch, an unusable subject, an unparseable file, an attack-sized logo) is logged and left out. The
-  WARN lines and the `invalid_token` table (ADR 0007: `filename_subject_mismatch`, `unusable_subject`, `unparseable_mapping`, `missing_git_history`; a
+- A registry file that is dropped (a subject mismatch, an unusable subject, an unparseable file, a check that threw) is logged and left out, and an
+  attack-sized logo is dropped from its entry. The WARN lines and the `invalid_token` table (ADR 0007: `filename_subject_mismatch`, `unusable_subject`,
+  `unparseable_mapping`, `missing_git_history`, `processing_failure`, `logo_too_large`; a
   row is replaced each time the file is processed and removed when the file is deleted) are the record, so they are the first place to look when a token is missing. An entry that breaks CIP-26 is not dropped: it is in
   the API with its errors, so the API is the first place to look for what is wrong with a token that is there.
 - Preprod logs thousands of "Skipping ... filename does not match" lines on the first sync. That
