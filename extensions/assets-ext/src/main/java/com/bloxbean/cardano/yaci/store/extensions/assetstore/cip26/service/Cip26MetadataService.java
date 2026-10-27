@@ -56,11 +56,11 @@ public class Cip26MetadataService {
 
         Cip26Validation validation = cip26MetadataValidator.validate(mapping, cip26Metadata);
         if (validation.isDropped()) {
-            // Validator already logged the specific reason at WARN. The file is named after the subject here (the sync
-            // drops a mismatch before this call), so the file name is the origin.
+            // Validator already logged the specific reason. The file is named after the subject here (the sync drops a
+            // mismatch before this call), so the file name is the origin.
             invalidTokenRecorder.report(InvalidTokenReport.builder()
                     .standard(InvalidTokenReason.CIP_26)
-                    .reasonCode(InvalidTokenReason.UNUSABLE_SUBJECT)
+                    .reasonCode(validation.droppedCode())
                     .reason(validation.byzantineReason())
                     .subject(mapping.subject())
                     .origin(mapping.subject() + ".json")
@@ -148,6 +148,14 @@ public class Cip26MetadataService {
 
         Cip26Validation logoValidation = cip26MetadataValidator.validateLogo(subject, logo);
         if (logoValidation.isDropped()) {
+            // the entry is stored without its logo; the logo is in the same registry file as the entry
+            invalidTokenRecorder.report(InvalidTokenReport.builder()
+                    .standard(InvalidTokenReason.CIP_26)
+                    .reasonCode(logoValidation.droppedCode())
+                    .reason(logoValidation.byzantineReason())
+                    .subject(subject)
+                    .origin(mapping.subject() + ".json")
+                    .build());
             return InsertOutcome.PERMANENTLY_SKIPPED;
         }
 

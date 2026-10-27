@@ -213,16 +213,32 @@ class Cip68ValidatorTest {
         void onlyTheFormOfTheDescriptionIsReportedForTheLabelOtherStoredErrorsAreKeptAsTheyAre() {
             ValidationError nameChunked = ValidationError.mandatory("CIP-68", null, "name", "chunked_text", "name is a list");
 
-            assertThat(Cip68Validator.validate(row("n", "d", null, List.of(CHUNKED, NOT_UTF8, nameChunked)), Cip68Constants.LABEL_FT))
+            ValidationError tickerNotUtf8 = ValidationError.optional("CIP-68", null, "ticker", "not_utf8", "ticker is not valid UTF-8");
+
+            assertThat(Cip68Validator.validate(row("n", "d", null, List.of(CHUNKED, tickerNotUtf8, nameChunked)), Cip68Constants.LABEL_FT))
                     .extracting(ValidationError::subStandard, ValidationError::fieldName, ValidationError::code)
-                    .containsExactly(tuple(null, "description", "not_utf8"), tuple(null, "name", "chunked_text"),
+                    .containsExactly(tuple(null, "ticker", "not_utf8"), tuple(null, "name", "chunked_text"),
                             tuple("333", "description", "chunked_text"));
         }
 
         @Test
-        void aDescriptionThatIsNotUtf8IsStillPresent() {
-            // the stored error is served as it is, and the description is not reported as missing
-            assertThat(Cip68Validator.validate(withDescription("ff00c3", NOT_UTF8), Cip68Constants.LABEL_FT)).containsExactly(NOT_UTF8);
+        void aDescriptionThatIsNotUtf8IsMandatoryFor333AndIsNotAlsoMissing() {
+            // stored as hex: present, but not the text a 333 requires
+            assertThat(Cip68Validator.validate(withDescription("ff00c3", NOT_UTF8), Cip68Constants.LABEL_FT))
+                    .extracting(ValidationError::subStandard, ValidationError::fieldCategory, ValidationError::code)
+                    .containsExactly(tuple("333", FieldCategory.MANDATORY, "not_utf8"));
+            assertThat(Cip68Validator.validate(withDescription("ff00c3", NOT_UTF8), Cip68Constants.LABEL_RFT))
+                    .extracting(ValidationError::subStandard, ValidationError::fieldCategory, ValidationError::code)
+                    .containsExactly(tuple("444", FieldCategory.OPTIONAL, "not_utf8"));
+        }
+
+        @Test
+        void everyFormErrorOfADescriptionIsReportedForTheLabel() {
+            // chunks that join into bytes that are not UTF-8
+            assertThat(Cip68Validator.validate(row("n", "ff00c3", null, List.of(CHUNKED, NOT_UTF8)), Cip68Constants.LABEL_FT))
+                    .extracting(ValidationError::subStandard, ValidationError::fieldCategory, ValidationError::code)
+                    .containsExactly(tuple("333", FieldCategory.MANDATORY, "chunked_text"),
+                            tuple("333", FieldCategory.MANDATORY, "not_utf8"));
         }
     }
 

@@ -110,7 +110,7 @@ explorers and wallets can still show historical transactions. To know whether a 
 
 A token that is not accepted is a `404` for a single subject and is left out of a batch; the `validation_errors` of the tokens that are returned
 are never filtered. A token indexed before validation existed (no `validation_errors`) is judged by the rule it had before: name and description
-present.
+present (under `?property=`, only those of the two that are asked for).
 
 **`?property=` limits the errors too.** When a request asks for some properties (`?property=ticker`), `validation_errors`, `metadata.valid` and the
 `?validation=` gate are about those properties only: an error on the `image` is not reported to a client that asked for the `ticker`. An `image` error
@@ -122,6 +122,12 @@ What is dropped is recorded in the `invalid_token` table (CIP-26 entries and CIP
 attack: the reason, the token, the transaction and output or the registry file). There is no API for it; read it with SQL, for example
 `SELECT standard, reason_code, count(*) FROM invalid_token GROUP BY 1, 2`. See `db/store/README.md` and ADR 0007. The `yaci.store.assets.invalid_tokens` counter
 (`standard`, `reason_code`) counts the rows written.
+
+**A dropped update leaves the previous metadata in the API.** The API serves the latest stored row of a token, and a dropped datum or registry
+entry writes no row: when an update of a token that is already indexed is dropped (a CIP-68 datum that cannot be decoded, or a CIP-26 file that
+becomes unusable), the API keeps serving the metadata of the earlier row, with its errors, and says nothing about the update. The `invalid_token`
+row of the update is where it shows (its subject, and the transaction or the file). A CIP-26 logo far beyond any real size is dropped on its own:
+the entry is stored without a logo, and the logo is an `invalid_token` row (`logo_too_large`).
 
 Upgrading is **in place and needs no resync to keep working**: the migrations only add. A row written before `validation_errors` existed has
 `NULL` (never checked, not the same as "no errors"): the API leaves `validation_errors` out for it, and `metadata.valid` falls back to the rule

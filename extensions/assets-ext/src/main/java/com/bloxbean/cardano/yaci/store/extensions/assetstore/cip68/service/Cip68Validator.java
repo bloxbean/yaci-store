@@ -26,7 +26,8 @@ import static com.bloxbean.cardano.yaci.store.extensions.assetstore.validation.V
  * <ul>
  *   <li>{@code name} for every label;</li>
  *   <li>{@code description} for the 333 fungible token only (for 222 and 444 it is {@code ? description}). A
- *       description of the wrong type, or given as chunks, is reported with the category of the label asked for;</li>
+ *       description of the wrong type, given as chunks, or not valid UTF-8, is reported with the category of the label
+ *       asked for;</li>
  *   <li>{@code image} for the 222 NFT and the 444 RFT, as a URI whose scheme is one of {@code https}, {@code ipfs},
  *       {@code ar} or {@code data}. A missing or empty image, or another scheme (for example {@code iagon://}, or free
  *       text), is an error: wallets and explorers follow the CIP and could not show such a token.</li>
@@ -58,10 +59,10 @@ public final class Cip68Validator {
         List<ValidationError> datumErrors = row.getValidationErrors();
         String subStandard = String.valueOf(label);
         List<ValidationError> errors = new ArrayList<>();
-        ValidationError descriptionForm = null;
+        List<ValidationError> descriptionForms = new ArrayList<>();
         for (ValidationError error : datumErrors) {
             if (isDescriptionForm(error)) {
-                descriptionForm = error;
+                descriptionForms.add(error);
             } else {
                 errors.add(error);
             }
@@ -70,14 +71,15 @@ public final class Cip68Validator {
         if (row.getName() == null && datumErrors.stream().noneMatch(e -> NAME.equals(e.fieldName()))) {
             errors.add(missing(subStandard, NAME));
         }
-        // the form of a description (a wrong type, chunks) is stored by the parser without a label; it is reported for
-        // the label asked for, with its category: only the 333 fungible token requires a description
+        // the form of a description (a wrong type, chunks, bytes that are not UTF-8) is stored by the parser without a
+        // label; it is reported for the label asked for, with its category: only the 333 fungible token requires one
         boolean descriptionRequired = label == LABEL_FT;
-        if (descriptionForm != null) {
+        for (ValidationError descriptionForm : descriptionForms) {
             errors.add(new ValidationError(CIP_68, subStandard, DESCRIPTION,
                     descriptionRequired ? FieldCategory.MANDATORY : FieldCategory.OPTIONAL,
                     descriptionForm.code(), descriptionForm.error()));
-        } else if (descriptionRequired && row.getDescription() == null) {
+        }
+        if (descriptionForms.isEmpty() && descriptionRequired && row.getDescription() == null) {
             errors.add(missing(subStandard, DESCRIPTION));
         }
         if (label == LABEL_FT) {
@@ -109,7 +111,8 @@ public final class Cip68Validator {
 
     private static boolean isDescriptionForm(ValidationError error) {
         return DESCRIPTION.equals(error.fieldName())
-                && (ValidationCode.WRONG_TYPE.equals(error.code()) || ValidationCode.CHUNKED_TEXT.equals(error.code()));
+                && (ValidationCode.WRONG_TYPE.equals(error.code()) || ValidationCode.CHUNKED_TEXT.equals(error.code())
+                || ValidationCode.NOT_UTF8.equals(error.code()));
     }
 
     private static ValidationError missing(String subStandard, String field) {

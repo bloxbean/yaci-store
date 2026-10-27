@@ -109,7 +109,7 @@ What the module **drops** or cannot use, one row per item (ADR 0007). A token th
 | `id` | `VARCHAR(64)` PK | SHA-256 of `standard, reason_code, policy_id, asset_name, tx_hash, output_index, origin`: the same item has the same id, so a replayed block or a re-run sync adds nothing |
 | `standard` | `VARCHAR(16)` | the standard whose rule found the problem: `CIP-26`, `CIP-68` (`CIP-113` is reserved) |
 | `combined_with` | `VARCHAR(16)` NULL | the other standard of a combination (CIP-113 with CIP-26 or CIP-68) |
-| `reason_code` | `VARCHAR(64)` | stable code: CIP-26 `filename_subject_mismatch`, `unusable_subject`, `unparseable_mapping`, `missing_git_history`; CIP-68 `datum_undecodable`, `datum_too_deep_to_decode`, `processing_failure` |
+| `reason_code` | `VARCHAR(64)` | stable code: CIP-26 `filename_subject_mismatch`, `unusable_subject`, `unparseable_mapping`, `missing_git_history`, `logo_too_large` (the entry is stored without its logo); CIP-68 `datum_undecodable`, `datum_too_deep_to_decode`; both `processing_failure` (something nobody foresaw threw) |
 | `reason` | `TEXT` | message for people, at most 500 characters |
 | `policy_id`, `asset_name` | NULL | the token, when known (CIP-68: the reference NFT) |
 | `subject` | `VARCHAR(256)` NULL | the identifier as written |

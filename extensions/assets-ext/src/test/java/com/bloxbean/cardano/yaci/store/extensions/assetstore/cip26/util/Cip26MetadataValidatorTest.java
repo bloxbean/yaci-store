@@ -226,6 +226,7 @@ class Cip26MetadataValidatorTest {
             Cip26Validation result = validate(metadata(null, "Nutcoin", "A description"));
 
             assertThat(result.isDropped()).isTrue();
+            assertThat(result.droppedCode()).isEqualTo("unusable_subject");
             assertThat(result.byzantineReason()).contains("missing");
         }
 
@@ -296,6 +297,7 @@ class Cip26MetadataValidatorTest {
             Cip26Validation result = validator.validateLogo(VALID_SUBJECT, "A".repeat(Cip26MetadataValidator.LOGO_HARD_CAP_CHARS + 4));
 
             assertThat(result.isDropped()).isTrue();
+            assertThat(result.droppedCode()).isEqualTo("logo_too_large");
         }
 
         @Test

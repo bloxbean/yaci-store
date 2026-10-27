@@ -308,8 +308,8 @@ public class Cip68Processor {
     }
 
     /**
-     * Writes the {@code properties} as JSON now, and throws if that fails, so the output is skipped by
-     * {@link #skipOutput}.
+     * Writes the {@code properties} as JSON now, and throws if that fails, so that this reference NFT is skipped by
+     * {@link #skipReferenceNft} and the rest of the output is indexed.
      * <p>
      * Why: Hibernate writes this column as JSON when the batch is flushed, inside the block transaction. An exception
      * there stops the whole sync, and the datum is untrusted input that anyone can put on-chain: a value nested more

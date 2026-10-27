@@ -68,7 +68,7 @@ public class TokenQueryService {
             return Optional.empty();
         }
 
-        return Optional.of(toSubject(subject, resolved, showCipsDetails)).filter(scope::accepts);
+        return Optional.of(toSubject(subject, resolved, showCipsDetails, queryProperties)).filter(scope::accepts);
     }
 
     /**
@@ -100,18 +100,27 @@ public class TokenQueryService {
 
         return resolved.standards().isEmpty()
                 ? Optional.empty()
-                : Optional.of(toSubject(subject, resolved, showCipsDetails)).filter(scope::accepts);
+                : Optional.of(toSubject(subject, resolved, showCipsDetails, queryProperties)).filter(scope::accepts);
     }
 
-    private static Subject toSubject(String subject, ResolvedMetadata resolved, boolean showCipsDetails) {
+    private static Subject toSubject(String subject, ResolvedMetadata resolved, boolean showCipsDetails, List<String> properties) {
         // valid: the token follows its CIP completely, mandatory and optional fields alike. A row indexed before validation
         // existed has no errors to look at (null, not empty): the rule it always had applies, name and description present.
         List<ValidationError> errors = resolved.validationErrors();
-        boolean valid = errors != null
-                ? errors.isEmpty()
-                : resolved.metadata().name() != null && resolved.metadata().description() != null;
+        boolean valid = errors != null ? errors.isEmpty() : legacyValid(resolved.metadata(), properties);
         Metadata metadata = resolved.metadata().toBuilder().valid(valid).build();
         return new Subject(subject, metadata, showCipsDetails ? resolved.standards() : null, resolved.validationErrors());
+    }
+
+    /**
+     * The rule a row indexed before validation existed always had: name and description present. Under {@code ?property=}
+     * it is about the properties asked for, as the errors are (ADR 0003): a property left out of the response is not
+     * missing, so {@code ?property=ticker} does not judge the name and description it filtered out.
+     */
+    private static boolean legacyValid(Metadata metadata, List<String> properties) {
+        boolean nameAsked = properties.isEmpty() || properties.contains("name");
+        boolean descriptionAsked = properties.isEmpty() || properties.contains("description");
+        return (!nameAsked || metadata.name() != null) && (!descriptionAsked || metadata.description() != null);
     }
 
     /**

@@ -346,6 +346,22 @@ class TokenApiEndToEndTest {
     }
 
     @Test
+    void anOldRowIsJudgedOnlyByTheNameAndDescriptionAskedFor() throws Exception {
+        // review of #1220: the old rule ran on the filtered response, so ?property=ticker always lost the name and description
+        store(row(333).name("Old").description("d").ticker("OLD").build());
+        mockMvc.perform(get("/api/v1/tokens/subject/{s}", FT_SUBJECT).param("property", "ticker").param("validation", "STRICT"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.subject.metadata.valid").value(true));
+
+        // asked for, a missing description still counts
+        store(row(333).name("Old").ticker("OLD").build());
+        mockMvc.perform(get("/api/v1/tokens/subject/{s}", FT_SUBJECT).param("property", "description").param("validation", "STRICT"))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(get("/api/v1/tokens/subject/{s}", FT_SUBJECT).param("property", "ticker").param("validation", "STRICT"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
     void anUnknownValidationValueIsABadRequest() throws Exception {
         store(row(333).name("Coin").description("d").validationErrors(List.of()).build());
 
