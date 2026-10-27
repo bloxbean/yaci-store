@@ -481,6 +481,30 @@ class Cip26MetadataSyncServiceTest {
         }
 
         @Test
+        void fullSync_keepsASubjectStoredInLowerCaseWhoseFileIsNamedInUpperCase() throws IOException {
+            // the stored subject is lower case, the registry file is not: it is still present, not stale
+            when(syncStateRepository.findTopByOrderByIdDesc()).thenReturn(Optional.empty());
+            when(gitService.cloneCardanoTokenRegistryGitRepository())
+                    .thenReturn(Optional.of(repoDir));
+            when(gitService.getHeadCommitHash()).thenReturn(Optional.of(NEW_HASH));
+
+            Files.writeString(repoDir.resolve("ABCDEF.json"), "{}");
+            when(tokenMappingService.parseMappings(any()))
+                    .thenReturn(Optional.of(new Mapping("ABCDEF", null, null, null, null, null, null, null)));
+            when(gitService.getAllMappingDetails(any())).thenReturn(
+                    Map.of("ABCDEF.json", new MappingUpdateDetails("author@test.com", LocalDateTime.now())));
+            when(tokenMetadataService.insertMapping(any(), any(), any()))
+                    .thenReturn(InsertOutcome.INSERTED);
+            when(tokenMetadataService.insertLogo(any())).thenReturn(InsertOutcome.INSERTED);
+            when(tokenMetadataService.findAllSubjects()).thenReturn(List.of("abcdef"));
+
+            service.synchronizeDatabase();
+
+            verify(tokenMetadataService, never()).deleteMapping(any());
+            assertThat(service.getSyncStatus().getStatus()).isEqualTo(SyncStatusEnum.SYNC_DONE);
+        }
+
+        @Test
         void fullSync_skipsStaleCleanup_whenNoMappingFilesFound() {
             when(syncStateRepository.findTopByOrderByIdDesc()).thenReturn(Optional.empty());
             when(gitService.cloneCardanoTokenRegistryGitRepository())

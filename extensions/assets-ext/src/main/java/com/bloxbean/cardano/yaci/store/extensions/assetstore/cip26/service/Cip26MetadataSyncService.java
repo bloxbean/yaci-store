@@ -8,6 +8,7 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.Mapping
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.MappingUpdateDetails;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.enums.SyncStatusEnum;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.repository.Cip26SyncStateRepository;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.util.MappingsUtil;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.invalidtoken.InvalidTokenReason;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.invalidtoken.InvalidTokenRecorder;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.invalidtoken.InvalidTokenReport;
@@ -331,7 +332,8 @@ public class Cip26MetadataSyncService {
         }
         Set<String> presentSubjects = new HashSet<>();
         for (File presentFile : presentFiles) {
-            presentSubjects.add(stripJsonExtension(presentFile.getName()));
+            // stored subjects are in lower case, file names may not be
+            presentSubjects.add(MappingsUtil.normalizeSubject(stripJsonExtension(presentFile.getName())));
         }
         List<String> staleSubjects = tokenMetadataService.findAllSubjects().stream()
                 .filter(subject -> !presentSubjects.contains(subject))
