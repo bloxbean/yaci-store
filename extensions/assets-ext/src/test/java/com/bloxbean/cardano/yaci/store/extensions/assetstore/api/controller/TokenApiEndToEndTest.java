@@ -98,9 +98,8 @@ class TokenApiEndToEndTest {
 
     @Test
     void aTokenThatBreaksItsCipIsStillReturnedWithItsErrors() throws Exception {
-        ValidationError error = ValidationError.mandatory("CIP-68", "333", "description", "missing_value",
-                "description field is missing a mandatory value");
-        store(row(333).name("Coin").validationErrors(List.of(error)).build());
+        // nothing is wrong with the datum itself; a 333 token needs a description, reported when it is served
+        store(row(333).name("Coin").validationErrors(List.of()).build());
 
         mockMvc.perform(get("/api/v1/tokens/subject/{s}", FT_SUBJECT))
                 .andExpect(status().isOk())
@@ -161,9 +160,7 @@ class TokenApiEndToEndTest {
 
     @Test
     void aRichFungibleTokenWithAnImageSchemeTheCipDoesNotAllowIsServedAsWrittenWithTheError() throws Exception {
-        ValidationError error = ValidationError.mandatory("CIP-68", "444", "image", "invalid_uri_scheme",
-                "image 'iagon://x' is not a URI with one of the schemes CIP-68 allows (https, ipfs, ar, data)");
-        store(row(444).name("Edition").image("iagon://x").validationErrors(List.of(error)).build());
+        store(row(444).name("Edition").image("iagon://x").validationErrors(List.of()).build());
 
         mockMvc.perform(get("/api/v1/tokens/subject/{s}", RFT_SUBJECT))
                 .andExpect(status().isOk())
@@ -201,8 +198,7 @@ class TokenApiEndToEndTest {
 
     @Test
     void theCip68EndpointReturnsTheErrorsToo() throws Exception {
-        ValidationError error = ValidationError.mandatory("CIP-68", "444", "name", "missing_value", "name field is missing a mandatory value");
-        store(row(444).image("ipfs://QmImage").validationErrors(List.of(error)).build());
+        store(row(444).image("ipfs://QmImage").validationErrors(List.of()).build());
 
         mockMvc.perform(get("/api/v1/tokens/cip68/ft/{s}", RFT_SUBJECT))
                 .andExpect(status().isOk())
@@ -222,10 +218,8 @@ class TokenApiEndToEndTest {
 
     @Test
     void theBatchReturnsFungibleAndRichFungibleTokensWithErrorsAndLeavesOutWhatNothingKnows() throws Exception {
-        ValidationError error = ValidationError.mandatory("CIP-68", "333", "description", "missing_value",
-                "description field is missing a mandatory value");
         Cip68Metadata ft = Cip68Metadata.builder().policyId(POLICY).assetName(REF).slot(100L).txHash("b".repeat(64)).txIndex(0)
-                .label(333).version(1L).name("Coin").validationErrors(List.of(error)).build();
+                .label(333).version(1L).name("Coin").validationErrors(List.of()).build();
         String otherBase = "4f5448";
         Cip68Metadata rft = Cip68Metadata.builder().policyId(POLICY).assetName("000643b0" + otherBase).slot(100L)
                 .txHash("c".repeat(64)).txIndex(0).label(444).version(1L).name("Edition").image("ipfs://QmImage")
@@ -244,11 +238,68 @@ class TokenApiEndToEndTest {
                 .andExpect(jsonPath("$.subjects[1].validation_errors.length()").value(0));
     }
 
+    // the label of the subject asked for decides what is required and whether the image is the logo, not the label the
+    // row was stored with, which is guessed for a metadata update made without the user token
+
+    @Test
+    void aFungibleTokenStoredAsAnNftByAGuessIsCheckedAsAFungibleToken() throws Exception {
+        // name and image, no description, ticker, logo or decimals: an update without the user token is stored as 222
+        store(row(222).name("Coin").image("ipfs://QmCoin").validationErrors(List.of()).build());
+
+        mockMvc.perform(get("/api/v1/tokens/cip68/ft/{s}", FT_SUBJECT))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.logo").doesNotExist())
+                .andExpect(jsonPath("$.validation_errors.length()").value(1))
+                .andExpect(jsonPath("$.validation_errors[0].sub_standard").value("333"))
+                .andExpect(jsonPath("$.validation_errors[0].field_name").value("description"))
+                .andExpect(jsonPath("$.validation_errors[0].field_category").value("MANDATORY"));
+        assertThat(statusOf("/api/v1/tokens/cip68/ft/{s}", "MANDATORY_ONLY")).isEqualTo(404);
+    }
+
+    @Test
+    void aRichFungibleTokenStoredAsAnNftByAGuessKeepsItsImageAsTheLogo() throws Exception {
+        // no decimals: an update without the user token is stored as 222
+        store(row(222).name("Rich").description("A rich token").image("ipfs://QmRich").validationErrors(List.of()).build());
+
+        mockMvc.perform(get("/api/v1/tokens/cip68/ft/{s}", RFT_SUBJECT))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.logo").value("ipfs://QmRich"))
+                .andExpect(jsonPath("$.validation_errors.length()").value(0));
+    }
+
+    @Test
+    void theFungibleAndRichFungibleTokenOfOneReferenceNftAreEachCheckedForTheirLabel() throws Exception {
+        // minted together: stored as 333, no description, an image
+        store(row(333).name("Both").image("ipfs://QmBoth").validationErrors(List.of()).build());
+
+        mockMvc.perform(get("/api/v1/tokens/cip68/ft/{s}", FT_SUBJECT))
+                .andExpect(jsonPath("$.logo").doesNotExist())
+                .andExpect(jsonPath("$.validation_errors[0].sub_standard").value("333"));
+        mockMvc.perform(get("/api/v1/tokens/cip68/ft/{s}", RFT_SUBJECT))
+                .andExpect(jsonPath("$.logo").value("ipfs://QmBoth"))
+                .andExpect(jsonPath("$.validation_errors.length()").value(0));
+        mockMvc.perform(get("/api/v1/tokens/cip68/ft/{s}", RFT_SUBJECT).param("validation", "MANDATORY_ONLY"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void theBatchReturnsBothTokensOfOneReferenceNft() throws Exception {
+        store(row(333).name("Both").image("ipfs://QmBoth").validationErrors(List.of()).build());
+
+        mockMvc.perform(post("/api/v1/tokens/subject/query").contentType(MediaType.APPLICATION_JSON)
+                        .content(new ObjectMapper().writeValueAsString(Map.of("subjects", List.of(FT_SUBJECT, RFT_SUBJECT)))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.subjects.length()").value(2))
+                .andExpect(jsonPath("$.subjects[?(@.subject == '" + FT_SUBJECT + "')].validation_errors[0].sub_standard").value("333"))
+                .andExpect(jsonPath("$.subjects[?(@.subject == '" + RFT_SUBJECT + "')].metadata.logo.value").value("ipfs://QmBoth"))
+                .andExpect(jsonPath("$.subjects[?(@.subject == '" + RFT_SUBJECT + "')].validation_errors.length()").value(0));
+    }
+
     // ?validation=
 
-    private static final ValidationError MANDATORY_ERROR = ValidationError.mandatory("CIP-68", "333", "description", "missing_value",
-            "description field is missing a mandatory value");
     private static final ValidationError OPTIONAL_ERROR = ValidationError.optional("CIP-68", null, "logo", "invalid_uri_scheme", "bad logo");
+
+    // a 333 "Coin" stored without a description has a mandatory error when it is served
 
     private int statusOf(String path, String validation) throws Exception {
         return mockMvc.perform(get(path, FT_SUBJECT).param("validation", validation)).andReturn().getResponse().getStatus();
@@ -256,7 +307,7 @@ class TokenApiEndToEndTest {
 
     @Test
     void validationAllIsTheDefaultAndReturnsATokenWithAMandatoryError() throws Exception {
-        store(row(333).name("Coin").validationErrors(List.of(MANDATORY_ERROR)).build());
+        store(row(333).name("Coin").validationErrors(List.of()).build());
 
         mockMvc.perform(get("/api/v1/tokens/subject/{s}", FT_SUBJECT)).andExpect(status().isOk());
         mockMvc.perform(get("/api/v1/tokens/subject/{s}", FT_SUBJECT).param("validation", "ALL")).andExpect(status().isOk());
@@ -264,7 +315,7 @@ class TokenApiEndToEndTest {
 
     @Test
     void validationMandatoryOnlyIs404ForAMandatoryErrorAndKeepsOptionalOnes() throws Exception {
-        store(row(333).name("Coin").validationErrors(List.of(MANDATORY_ERROR)).build());
+        store(row(333).name("Coin").validationErrors(List.of()).build());
         assertThat(statusOf("/api/v1/tokens/subject/{s}", "MANDATORY_ONLY")).isEqualTo(404);
 
         store(row(333).name("Coin").description("d").logo("QmBare").validationErrors(List.of(OPTIONAL_ERROR)).build());
@@ -303,7 +354,7 @@ class TokenApiEndToEndTest {
 
     @Test
     void theBatchLeavesOutATokenThatIsNotAccepted() throws Exception {
-        store(row(333).name("Coin").validationErrors(List.of(MANDATORY_ERROR)).build());
+        store(row(333).name("Coin").validationErrors(List.of()).build());
         String body = new ObjectMapper().writeValueAsString(Map.of("subjects", List.of(FT_SUBJECT)));
 
         mockMvc.perform(post("/api/v1/tokens/subject/query").param("validation", "MANDATORY_ONLY")
@@ -317,7 +368,7 @@ class TokenApiEndToEndTest {
 
     @Test
     void theCip68FungibleTokenEndpointTakesTheSameParameter() throws Exception {
-        store(row(333).name("Coin").validationErrors(List.of(MANDATORY_ERROR)).build());
+        store(row(333).name("Coin").validationErrors(List.of()).build());
 
         assertThat(statusOf("/api/v1/tokens/cip68/ft/{s}", "MANDATORY_ONLY")).isEqualTo(404);
         assertThat(statusOf("/api/v1/tokens/cip68/ft/{s}", "ALL")).isEqualTo(200);
@@ -328,7 +379,7 @@ class TokenApiEndToEndTest {
 
     @Test
     void aPropertyFilterReportsOnlyTheErrorsOfTheRequestedProperties() throws Exception {
-        store(row(333).name("Coin").ticker("COIN").validationErrors(List.of(MANDATORY_ERROR)).build());
+        store(row(333).name("Coin").ticker("COIN").validationErrors(List.of()).build());
 
         // the broken field is the description, the client reads only the ticker
         mockMvc.perform(get("/api/v1/tokens/subject/{s}", FT_SUBJECT).param("property", "ticker"))
@@ -345,7 +396,7 @@ class TokenApiEndToEndTest {
 
     @Test
     void strictAndAPropertyFilterTogetherJudgeOnlyTheRequestedProperties() throws Exception {
-        store(row(333).name("Coin").ticker("COIN").validationErrors(List.of(MANDATORY_ERROR)).build());
+        store(row(333).name("Coin").ticker("COIN").validationErrors(List.of()).build());
 
         mockMvc.perform(get("/api/v1/tokens/subject/{s}", FT_SUBJECT).param("property", "ticker").param("validation", "STRICT"))
                 .andExpect(status().isOk());

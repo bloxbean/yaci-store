@@ -5,6 +5,7 @@ import com.bloxbean.cardano.client.plutus.spec.BigIntPlutusData;
 import com.bloxbean.cardano.client.plutus.spec.BytesPlutusData;
 import com.bloxbean.cardano.client.plutus.spec.ConstrPlutusData;
 import com.bloxbean.cardano.client.plutus.spec.MapPlutusData;
+import com.bloxbean.cardano.client.plutus.spec.PlutusData;
 import com.bloxbean.cardano.client.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
@@ -82,17 +83,18 @@ class Cip68ProcessorH2IT {
 
     @Test
     void storesTheValidationErrorsAsJsonAndReadsThemBack() {
-        // no description on a 333 token: indexed, with the error
-        processor.processTransaction(eventWithDatum(datum("A name", false)));
+        // a version that is not an integer: indexed, with the error
+        processor.processTransaction(eventWithDatum(datum("A name", true, BytesPlutusData.of("one"))));
         entityManager.flush();
         entityManager.clear();
 
         assertThat(repository.findAll()).singleElement().satisfies(m ->
                 assertThat(m.getValidationErrors()).singleElement().satisfies(e -> {
                     assertThat(e.cip()).isEqualTo("CIP-68");
-                    assertThat(e.subStandard()).isEqualTo("333");
-                    assertThat(e.fieldName()).isEqualTo("description");
+                    assertThat(e.subStandard()).isNull();
+                    assertThat(e.fieldName()).isEqualTo("version");
                     assertThat(e.fieldCategory().name()).isEqualTo("MANDATORY");
+                    assertThat(e.code()).isEqualTo("invalid_version");
                 }));
     }
 
@@ -121,13 +123,17 @@ class Cip68ProcessorH2IT {
     }
 
     private static String datum(String name, boolean withDescription) {
+        return datum(name, withDescription, BigIntPlutusData.of(1));
+    }
+
+    private static String datum(String name, boolean withDescription, PlutusData version) {
         MapPlutusData properties = new MapPlutusData();
         properties.put(BytesPlutusData.of("name"), BytesPlutusData.of(name));
         if (withDescription) {
             properties.put(BytesPlutusData.of("description"), BytesPlutusData.of("Desc"));
         }
 
-        ConstrPlutusData datum = ConstrPlutusData.of(0, properties, BigIntPlutusData.of(1));
+        ConstrPlutusData datum = ConstrPlutusData.of(0, properties, version);
         try {
             return HexUtil.encodeHexString(CborSerializationUtil.serialize(datum.serialize()));
         } catch (Exception e) {

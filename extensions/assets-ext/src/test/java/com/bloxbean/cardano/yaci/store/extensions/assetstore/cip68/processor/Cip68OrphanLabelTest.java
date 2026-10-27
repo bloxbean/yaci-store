@@ -18,6 +18,7 @@ import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Constants;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.parser.Cip68DatumParser;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service.Cip68TokenService;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service.Cip68Validator;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.Cip68Metadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.repository.Cip68MetadataRepository;
 import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxoEvent;
@@ -46,7 +47,9 @@ import static org.mockito.Mockito.verify;
  * {@code files} mean an NFT (222), or an RFT (444) when {@code decimals} is there too; otherwise 333. An exact
  * pairing always wins over this guess.
  * <p>
- * A datum with a missing required field is still indexed, with a MANDATORY error for the label it was inferred as.
+ * A datum with a missing required field is still indexed; served as a token of the label it was inferred as, it has a
+ * MANDATORY error. The inferred label is only the one the row is stored with: each token is checked for its own label
+ * when it is served.
  * <p>
  * Runs the real parser, token service and processor with the log captured; only the repository is mocked.
  */
@@ -185,7 +188,7 @@ class Cip68OrphanLabelTest {
         assertThat(saved).get().extracting(Cip68Metadata::getLabel).isEqualTo(Cip68Constants.LABEL_NFT);
     }
 
-    // ---------- what is wrong with a datum is reported in the row ----------
+    // ---------- what is wrong with a datum is reported when it is served ----------
 
     @Test
     void aFungibleTokenWithoutADescriptionIsIndexedWithAMandatoryError() {
@@ -194,7 +197,9 @@ class Cip68OrphanLabelTest {
         assertThat(saved).get().satisfies(row -> {
             assertThat(row.getLabel()).isEqualTo(Cip68Constants.LABEL_FT);
             assertThat(errors(row)).containsExactly("333:description:MANDATORY:missing_value");
-            assertThat(row.getValidationErrors().getFirst().error()).isEqualTo("description field is missing a mandatory value");
+            assertThat(row.getValidationErrors()).isEmpty();
+            assertThat(Cip68Validator.validate(row, Cip68Constants.LABEL_FT).getFirst().error())
+                    .isEqualTo("description field is missing a mandatory value");
         });
     }
 
@@ -219,8 +224,9 @@ class Cip68OrphanLabelTest {
 
     // ---------- helpers ----------
 
+    /** The errors the row is served with as a token of the label it was stored with. */
     private static List<String> errors(Cip68Metadata row) {
-        return row.getValidationErrors().stream()
+        return Cip68Validator.validate(row, row.getLabel()).stream()
                 .map(e -> e.subStandard() + ":" + e.fieldName() + ":" + e.fieldCategory() + ":" + e.code()).toList();
     }
 

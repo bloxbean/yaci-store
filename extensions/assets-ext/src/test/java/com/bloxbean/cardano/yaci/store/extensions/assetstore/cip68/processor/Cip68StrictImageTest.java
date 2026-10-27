@@ -17,6 +17,7 @@ import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Constants;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.parser.Cip68DatumParser;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service.Cip68TokenService;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service.Cip68Validator;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.Cip68Metadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.repository.Cip68MetadataRepository;
 import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxoEvent;
@@ -91,7 +92,9 @@ class Cip68StrictImageTest {
 
     private static void assertImageError(Optional<Cip68Metadata> saved, String label, String code, String... messageParts) {
         assertThat(saved).isPresent();
-        assertThat(saved.get().getValidationErrors()).singleElement().satisfies(e -> {
+        // nothing is wrong with the datum itself; served as a token of its label, the image is reported
+        assertThat(saved.get().getValidationErrors()).isEmpty();
+        assertThat(Cip68Validator.validate(saved.get(), Integer.parseInt(label))).singleElement().satisfies(e -> {
             assertThat(e.cip()).isEqualTo("CIP-68");
             assertThat(e.subStandard()).isEqualTo(label);
             assertThat(e.fieldName()).isEqualTo("image");

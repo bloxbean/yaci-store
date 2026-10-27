@@ -17,6 +17,7 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.ParseOu
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.parser.Cip68DatumParser;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.repository.Cip68MetadataRepository;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service.Cip68TokenService;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service.Cip68Validator;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.validation.ValidationError;
 import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxoEvent;
 import com.bloxbean.cardano.yaci.store.utxo.domain.TxInputOutput;
@@ -192,7 +193,9 @@ class Cip68ProcessorTest {
             verify(metadataReferenceNftRepository).saveAll(captor.capture());
             assertThat(captor.getValue()).singleElement().satisfies(entity -> {
                 assertThat(entity.getLabel()).isEqualTo(Cip68Constants.LABEL_FT);
-                assertThat(entity.getValidationErrors())
+                // nothing is wrong with the datum itself; what a 333 requires is reported when it is served
+                assertThat(entity.getValidationErrors()).isEmpty();
+                assertThat(Cip68Validator.validate(entity, Cip68Constants.LABEL_FT))
                         .extracting(e -> e.fieldName() + ":" + e.subStandard() + ":" + e.code())
                         .containsExactly("name:333:missing_value", "description:333:missing_value");
             });
@@ -343,7 +346,7 @@ class Cip68ProcessorTest {
         }
 
         @Test
-        void storesAChunkedDescriptionOfA333WithOneMandatoryError() {
+        void storesAChunkedDescriptionWithoutALabelAndServesItAsOneMandatoryErrorOfA333() {
             ValidationError chunked = ValidationError.optional("CIP-68", null, "description", "chunked_text",
                     "description is a list of byte strings, not one byte string; the chunks are joined");
             AddressUtxo userToken = AddressUtxo.builder().txHash(TX_HASH)
@@ -364,7 +367,8 @@ class Cip68ProcessorTest {
             verify(metadataReferenceNftRepository).saveAll(captor.capture());
             assertThat(captor.getValue()).singleElement().satisfies(entity -> {
                 assertThat(entity.getDescription()).isEqualTo("Templar Protocol - Templar lets you borrow");
-                assertThat(entity.getValidationErrors())
+                assertThat(entity.getValidationErrors()).containsExactly(chunked);
+                assertThat(Cip68Validator.validate(entity, Cip68Constants.LABEL_FT))
                         .extracting(e -> e.subStandard() + ":" + e.fieldName() + ":" + e.fieldCategory() + ":" + e.code())
                         .containsExactly("333:description:MANDATORY:chunked_text");
             });

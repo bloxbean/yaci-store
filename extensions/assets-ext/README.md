@@ -78,7 +78,7 @@ GET /api/v1/subject/<policyId>0014df10<name>      # a 333 token with no descript
 | Field | Meaning |
 |---|---|
 | `cip` | `CIP-26` or `CIP-68`. The errors of every standard that has the token are listed, in query priority order. |
-| `sub_standard` | For CIP-68, the label the rule was checked for (`222`, `333`, `444`). A reference NFT with user tokens of several labels is checked against each of them. Absent for CIP-26 and for a rule that does not depend on a label. |
+| `sub_standard` | For CIP-68, the label the rule was checked for: the label of the subject asked for (`333` or `444`). A 333 and a 444 token of the same reference NFT are each checked for their own label. Absent for CIP-26 and for a rule that does not depend on a label. |
 | `field_name` | The metadata field, for example `description`, `image`, `properties.owner`, `files`. |
 | `field_category` | `MANDATORY` if the CIP requires the field, `OPTIONAL` otherwise. |
 | `code` | A stable reason: `missing_value`, `wrong_type`, `invalid_uri_scheme`, `invalid_length`, `out_of_range`, `invalid_version`, `plutus_constructor`, `not_utf8`, `invalid_files_entry`, `no_nested_entry`, `too_deep`, `unsupported_key`, `key_collision`, `invalid_base64`, `too_large`, `chunked_text`. |
