@@ -59,6 +59,15 @@ Reserved for CIP-113, documented and not written: `jail_without_token`, `unregis
 `registry_node_spoofed`. CIP-113 says a registration with no mint is valid for real-world assets, so `jail_without_token` is a **finding**,
 not always a failure; whether it belongs in this table or only in a report is left open until CIP-113 is indexed.
 
+**A programmable token without CIP-26 or CIP-68 metadata is not a row here** (decided 2026-10-27 with the review of PR #1220, as in
+cf-token-metadata-registry ADR-020 decision 3). A registry node carries no name, ticker or logo; those come from the token's CIP-26 or
+CIP-68 metadata, its *companion*. A token of a registered policy without one is stored and served like any other: with its registry node,
+no metadata, and a validation error (`cip` `CIP-113`, `field_name` `companion_metadata`, `code` `missing_value`), as ADR 0006 does for a
+token that breaks CIP-26 or CIP-68. This table is for what cannot be stored, and such a token can. Whether the error is `MANDATORY` or
+`OPTIONAL` is open: some programmable tokens may be valid without companion metadata (the registry serves it as `OPTIONAL` for now). The
+registry first recorded such a policy here (`no_companion_metadata`) and served its tokens as a 404; it retired that code, and the code is
+not reserved here.
+
 ### 3. Written safely from the block transaction
 
 The CIP-68 processor runs in the block transaction, where an exception stops the sync (ADR 0004). The writer is therefore:
@@ -102,7 +111,9 @@ the rows written.
 
 ## Open questions
 
-- Whether `jail_without_token` is a failure row or a finding only in the report.
+- Whether `jail_without_token` is a failure row or a finding only in the report. The decision above, that a programmable token
+  without companion metadata is served with an error and not recorded, points to a finding.
+- Whether a programmable token without companion metadata is a `MANDATORY` or an `OPTIONAL` error.
 - How long CIP-26 rows are kept for a file that disappears and comes back.
 
 ## References
