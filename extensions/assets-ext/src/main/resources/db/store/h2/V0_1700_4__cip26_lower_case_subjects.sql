@@ -5,8 +5,8 @@
 -- is on the same row.
 
 -- An entry in upper case whose lower-case twin is also stored would collide: the twin is kept (none on mainnet).
-DELETE FROM cip26_metadata m
-WHERE m.subject <> LOWER(m.subject)
-  AND EXISTS (SELECT 1 FROM cip26_metadata t WHERE t.subject = LOWER(m.subject));
+DELETE FROM cip26_metadata
+WHERE subject <> LOWER(subject)
+  AND LOWER(subject) IN (SELECT subject FROM cip26_metadata);
 
 UPDATE cip26_metadata SET subject = LOWER(subject) WHERE subject <> LOWER(subject);
