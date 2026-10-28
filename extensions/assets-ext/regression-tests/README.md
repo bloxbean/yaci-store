@@ -32,8 +32,6 @@ and does not index CIP-113).
 
 Where assets-ext deliberately differs from the registry, the copy says so:
 
-- `cip68_validation_errors_tokens.json`: a `version` CIP-68 does not define is `invalid_version` (the registry reports
-  `undefined_version`).
 - `test_batch_query.py`: a batch holds at most 100 subjects, so the large batch is sent 100 at a time, and a batch of
   101 is a 400.
 
