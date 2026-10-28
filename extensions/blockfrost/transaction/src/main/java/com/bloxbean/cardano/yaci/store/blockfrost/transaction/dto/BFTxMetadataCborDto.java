@@ -17,4 +17,5 @@ import lombok.NoArgsConstructor;
 public class BFTxMetadataCborDto {
     private String label;
     private String cborMetadata;
+    private String metadata;
 }
