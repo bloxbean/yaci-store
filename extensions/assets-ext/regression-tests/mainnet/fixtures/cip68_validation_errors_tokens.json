@@ -2,7 +2,7 @@
   {
     "subject": "67cee89d59ab5354ee22c8af0638224126aecc6210f9372a61f13a640014df10474e5243",
     "name": "Greenland Reserve Coin",
-    "why": "its datum declares version 0, and CIP-68 defines versions 1 to 4: indexed with a MANDATORY invalid_version error (the registry this fixture was copied from reports undefined_version; assets-ext has one code for every problem with a present version)",
+    "why": "its datum declares version 0, and CIP-68 defines versions 1 to 4: indexed with a MANDATORY invalid_version error (dropped before ADR-019)",
     "expected_errors": [
       {"field_name": "version", "code": "invalid_version", "field_category": "MANDATORY"}
     ],
