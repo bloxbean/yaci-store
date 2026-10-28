@@ -1,27 +1,55 @@
+# From the release-ops standard (templates/workflows/snapshot_manual.yml, 2026-09-14). Central Portal snapshots;
+# bloxbean-snapshot.yml publishes to the BloxBean Maven repository.
 name: Manual Snapshot Push to SNAPSHOT repo
 
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   commit-build:
+    # The job runs the selected branch's Gradle build with the Central Portal token, so only protected branches may
+    # publish snapshots: the release branches (main, release/**) and the snapshot-only branches (develop,
+    # develop/**, next, next-*), which can publish snapshots but never release. A run started on any other branch
+    # is skipped.
+    if: >-
+      github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/') ||
+      github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/heads/develop/') ||
+      github.ref == 'refs/heads/next' || startsWith(github.ref, 'refs/heads/next-')
+    # The Central Portal token is a secret of this environment.
+    environment: release-staging
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
-          submodules: 'true'
+          persist-credentials: false
       - name: Set up JDK 21
-        uses: actions/setup-java@v2
+        uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'liberica'
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
+      # Only -SNAPSHOT versions belong in the snapshot repository; release versions go through tag-release.yml.
+      - name: Require a SNAPSHOT version
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION=$(sed -nE 's/^[[:space:]]*version[[:space:]]*=[[:space:]]*//p' gradle.properties \
+            | head -1 | tr -d '[:space:]')
+          if [[ "$VERSION" != *-SNAPSHOT ]]; then
+            echo "::error::Snapshot publishing requires a -SNAPSHOT version. Got: $VERSION" >&2
+            exit 1
+          fi
       - name: Build with Gradle
         run: ./gradlew clean build -PskipSigning=true --stacktrace
+      # Snapshots go straight to the Central Portal snapshot repository; unlike a release there is no
+      # staged deployment and nothing to approve. The version in gradle.properties must end in -SNAPSHOT.
       - name: Publish package to SNAPSHOT repository
-        run: ./gradlew publish -PskipSigning=true --warn --stacktrace
+        run: ./gradlew publishAggregationToCentralPortalSnapshots -PskipSigning=true --warn --stacktrace
         env:
           MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
           MAVEN_PASSWORD: ${{ secrets.OSSRH_TOKEN }}
