@@ -203,6 +203,14 @@ rollback:
         column: "slot"
         operator: ">"
         
+    # Before address_utxo and tx_input: RollbackService also restores the outputs whose spend is rolled back
+    - name: "address_utxo_unspent"
+      operation: "DELETE"
+      condition:
+        type: "slot"
+        column: "slot"
+        operator: ">"
+
     - name: "address_utxo"
       operation: "DELETE"
       condition:
