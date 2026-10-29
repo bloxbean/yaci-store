@@ -124,8 +124,7 @@ response, so `?property=ticker&validation=STRICT` was a `404` for a row that has
 
 A `001bc280` subject maps to its reference NFT like a `0014df10` one. A rich fungible token has no `logo`; its `image` is served as
 `metadata.logo` of a `001bc280` subject whatever label the row was stored with, and `description` is optional for it (a token without one
-is not an error). NFTs (label 222) are still indexed
-but not served. This follows cf-token-metadata-registry ADR-018, since for now both implementations are kept. A 333 or 444 subject is answered from the reference NFT of the same name, as it always was, whether or not the token exists (ADR 0008).
+is not an error). NFTs (label 222) are not served, and the datum of an NFT minted alone is not stored (ADR 0009). This follows cf-token-metadata-registry ADR-018, since for now both implementations are kept. A 333 or 444 subject is answered from the reference NFT of the same name, as it always was, whether or not the token exists (ADR 0008).
 
 ### 7. How it is reported
 

@@ -5,6 +5,9 @@
 Proposed. Implemented in PR #1220 (open, not merged; issues #1221, #1222, #1225, #1226, #1228, #1231, #1232, #1234 to #1238 and #1240). Decisions 3
 to 9 apply ADR 0006 (validation errors are reported, not enforced).
 
+> **Amended by ADR 0009 (2026-10-29):** a datum whose transaction has the 222 NFT and no 333 or 444 token is not stored, unless its reference NFT
+> already is (decision 2, decision 9).
+
 ## Date
 
 2026-10-07
@@ -138,6 +141,10 @@ under the `000643b0` prefix (Atrium profiles, an `insert_fee` datum) and empty m
 missing `name` and `description`. A datum paired with its user token is indexed whatever it holds, since the minting transaction says
 what the token is, and once a reference NFT is stored every later datum is, so that an owner who clears the metadata is not served
 the old one. It is not recorded in `invalid_token` (ADR 0007): nothing was dropped, it was never a token.
+
+**An NFT's datum is not indexed (ADR 0009).** A datum whose transaction has the reference NFT's 222 token and no 333 or 444 token is skipped at
+DEBUG and counted as `datums.skipped{reason="nft_only"}`, unless its reference NFT is already stored. Stored, it would answer for the 333 and 444
+subjects of a token that was never minted (152,408 reference NFTs on mainnet). A datum whose transaction also has a 333 or 444 token is indexed.
 
 *Why pair first, and guess only as a fallback:* the pairing is how CIP-68 defines the relation and it does
 not guess; the datum shape is a heuristic and is used only when the pairing is not available. Before the
@@ -325,8 +332,8 @@ not UTF-8, where it used to return garbled text.
   carry arbitrary datums, and it would be noise.
 
 **Metrics (#1237).** Micrometer counters, read from `/actuator/prometheus`: `yaci.store.assets.cip68.datums.indexed` (tag `label`: 222, 333, 444);
-`yaci.store.assets.cip68.datums.skipped` (tag `reason`: `parse_failure`, `processing_failure`, and `not_token_metadata` for a datum
-that is not token metadata, decision 2); and
+`yaci.store.assets.cip68.datums.skipped` (tag `reason`: `parse_failure`, `processing_failure`, `not_token_metadata` for a datum
+that is not token metadata, and `nft_only` for an NFT's datum, decision 2 and ADR 0009); and
 `yaci.store.assets.cip68.properties.dropped` (tag `kind`, only `too_deep`). What is wrong with a stored token is not a counter: it is the
 `validation_errors` of its row, in the API and in SQL, where it is exact and survives a restart; a counter of it would reset on restart and count a replayed
 block again. The drops of both standards are also counted by `yaci.store.assets.invalid_tokens{standard,reason_code}` (ADR 0007). The tags have a small fixed set of values. They are registered with the CIP-68 processor and need no property; without a `MeterRegistry` bean
@@ -339,8 +346,9 @@ counted again; they suit `rate()` and `increase()`, not a historical total.
 
 - The API serves **fungible and rich fungible tokens**. A subject with the `0014df10` or `001bc280` prefix is mapped to its reference NFT, and the latest row
   of that reference NFT is returned whatever its label, checked for the label of the subject (decision 3). A rich fungible token has no `logo`: the `image`
-  is served as `metadata.logo` of a `001bc280` subject whatever label the row was stored with, and its `description` is optional. NFT rows (222) are stored
-  but not exposed. A batch that asks for the 333 and the 444 subject of one reference NFT gets both, each checked for its label (before the review of
+  is served as `metadata.logo` of a `001bc280` subject whatever label the row was stored with, and its `description` is optional. NFT rows (222) are not
+  exposed, and the datum of an NFT minted alone is not stored (ADR 0009); a 222 row is an update of a reference NFT already stored, or a datum minted with a
+  333 or 444 token too. A batch that asks for the 333 and the 444 subject of one reference NFT gets both, each checked for its label (before the review of
   PR #1220 the second one overwrote the first).
 - `/cip68/ft/{policyId}/{rawAssetName}` names no label: the token is checked as a 333, the fungible token the endpoint is named after. A 444 token is asked
   for by its subject.
@@ -362,7 +370,7 @@ full mainnet index made with rules that drop the token, 2,508 of the 3,113 token
   with a `MANDATORY` error.
 - A token that follows its CIP has `validation_errors: []`; a client that treated a `404` as "no valid metadata", or relied on `name` and `description`, has to
   adapt (ADR 0006).
-- NFTs are stored but not served; their rules can change later without a breaking API change.
+- NFTs are not served, and an NFT's datum is not stored (ADR 0009); a reference NFT stored for a 333 or 444 token keeps its 222 rows.
 - Greenland Reserve Coin (version 0), the SaveCard tokens, NFTs with an `iagon://` or empty image and tokens with a bare-IPFS logo are returned, with errors.
 - A rule of a label (decision 3) is applied when a token is served, so changing it needs no resync. Anything corrected in the parser changes the errors of rows
   already stored, which are recomputed by a resync from before the affected slots; so is the first deployment of this decision, since the tokens that were dropped

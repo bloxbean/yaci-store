@@ -5,6 +5,9 @@
 Accepted. Nothing is implemented: this record is the decision not to change the lookup. The change that was tried, PR #1294 (a table of the 333 and
 444 tokens seen on chain), was closed without merging, and the issue, #1292, was closed as "won't fix".
 
+> **Amended by ADR 0009 (2026-10-29):** the datum of an NFT (minted with its 222 token and no 333 or 444 token) is no longer stored, so an NFT's 333
+> and 444 subjects are a `404`. The lookup is unchanged, and so is the rest of this decision for the reference NFTs that are stored.
+
 ## Date
 
 2026-10-23
@@ -57,9 +60,9 @@ whether a token exists is up to the client.
 
 ## Consequences
 
-- The cases of #1292 keep answering `200`: NFTs asked as 333 or 444, and tokens that were never minted.
+- The cases of #1292 keep answering `200`: NFTs asked as 333 or 444, and tokens that were never minted. *(NFTs: no longer, ADR 0009.)*
 - A burned token keeps its metadata in the API, which is what explorers and wallets need for history.
-- The module and cf-token-metadata-registry V2 behave the same way here.
+- The module and cf-token-metadata-registry V2 behave the same way here. *(Not for NFTs until ADR 0009: the registry does not store an NFT's datum.)*
 - No new table, migration or rollback entry. `invalid_token` (ADR 0007) is the only table of ADR 0006's work besides the new columns.
 
 ## Alternatives considered
