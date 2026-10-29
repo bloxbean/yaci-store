@@ -4,9 +4,11 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.Item;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.Mapping;
 
+import jakarta.annotation.Nullable;
 import lombok.extern.slf4j.Slf4j;
 
 import java.time.LocalDateTime;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.function.Function;
 
@@ -18,7 +20,7 @@ public final class MappingsUtil {
 
     public static Cip26Metadata toCip26Metadata(Mapping mapping, String updateBy, LocalDateTime updatedAt) {
         Cip26Metadata cip26Metadata = new Cip26Metadata();
-        cip26Metadata.setSubject(mapping.subject());
+        cip26Metadata.setSubject(normalizeSubject(mapping.subject()));
         cip26Metadata.setPolicy(mapping.policy());
         cip26Metadata.setName(getValue(mapping.name()));
         cip26Metadata.setTicker(getValue(mapping.ticker()));
@@ -38,16 +40,29 @@ public final class MappingsUtil {
         return cip26Metadata;
     }
 
+    /**
+     * A subject as it is stored and looked up: lower case. A subject is base16, so its case carries no meaning, and
+     * CIP-68 subjects and the asset units clients query with are lower case; a registry file named in upper case would
+     * otherwise only be found by a query in upper case.
+     */
+    @Nullable
+    public static String normalizeSubject(@Nullable String subject) {
+        return subject == null ? null : subject.toLowerCase(Locale.ROOT);
+    }
+
     /** Extract the logo's base64 string from a Mapping, or null if absent. */
+    @Nullable
     public static String extractLogo(Mapping mapping) {
         return getValue(mapping.logo());
     }
 
-    private static String getValue(Item item) {
+    @Nullable
+    private static String getValue(@Nullable Item item) {
         return getValue(item, Function.identity());
     }
 
-    private static <T> T getValue(Item item, Function<String, T> f) {
+    @Nullable
+    private static <T> T getValue(@Nullable Item item, Function<String, T> f) {
         return Optional.ofNullable(item).map(Item::value).map(f).orElse(null);
     }
 }
