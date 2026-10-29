@@ -10,7 +10,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -30,6 +32,7 @@ public class IndexService {
 
         List<IndexDefinition.Index> success = new ArrayList<>();
         List<IndexDefinition.Index> failure = new ArrayList<>();
+        Set<String> tablesToAnalyze = new LinkedHashSet<>();
 
         for (IndexDefinition indexDefinition : indexDefinitions) {
             String tableName = indexDefinition.getTable();
@@ -42,6 +45,8 @@ public class IndexService {
                             log.debug(sql);
                             jdbcTemplate.execute(sql);
                             success.add(index);
+                            if (dbTypeOpt.get() == DatabaseUtils.DbType.postgres && isExpressionIndex(index))
+                                tablesToAnalyze.add(tableName);
                         } catch (Exception e) {
                             log.warn("Failed to apply index on table {}, index name {} ", indexDefinition.getTable(), index.getName());
                             log.warn("Index query: {}", sql);
@@ -56,7 +61,22 @@ public class IndexService {
             }
         }
 
+        //PostgreSQL keeps statistics of an index expression, which the planner needs to estimate its matches,
+        //only from an ANALYZE of the table, and autovacuum may not analyze a large table for a long time
+        for (String tableName : tablesToAnalyze) {
+            log.info("Analyzing table {} for the statistics of its expression indexes", tableName);
+            try {
+                jdbcTemplate.execute("ANALYZE " + tableName);
+            } catch (Exception e) {
+                log.warn("Failed to analyze table {}", tableName, e);
+            }
+        }
+
         return Pair.of(success, failure);
+    }
+
+    private static boolean isExpressionIndex(IndexDefinition.Index index) {
+        return index.getColumns() != null && index.getColumns().stream().anyMatch(column -> column.contains("("));
     }
 
     private String generateCreateIndexSQL(String tableName, IndexDefinition.Index index, DatabaseUtils.DbType dbType) {

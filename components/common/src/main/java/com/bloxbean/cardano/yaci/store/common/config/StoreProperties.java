@@ -103,6 +103,10 @@ public class StoreProperties { //TODO - replace this with YaciStoreProperties fr
     @Builder.Default
     private String mvstorePath = "./.mvstore";
 
+    /** Folder of the RocksDB used for caches (see RocksDBCacheStore). Kept across restarts; each store clears its own cache. */
+    @Builder.Default
+    private String rocksdbCachePath = "./.rocksdb-cache";
+
     @Builder.Default
     private int processingThreadsTimeout = 5; //5 min
 

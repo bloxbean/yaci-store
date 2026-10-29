@@ -15,5 +15,29 @@
   "allDeclaredConstructors": true,
   "allDeclaredMethods": true,
   "allDeclaredFields": true
+  },
+  {
+    "name": "org.rocksdb.RocksDB",
+    "allDeclaredFields": true,
+    "allDeclaredMethods": true,
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "org.rocksdb.RocksDBException",
+    "allDeclaredFields": true,
+    "allDeclaredMethods": true,
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "org.rocksdb.Status",
+    "allDeclaredFields": true,
+    "allDeclaredMethods": true,
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "org.rocksdb.Options",
+    "allDeclaredFields": true,
+    "allDeclaredMethods": true,
+    "allDeclaredConstructors": true
   }
 ]

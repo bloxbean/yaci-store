@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.utxo.storage.impl;
 
+import com.bloxbean.cardano.yaci.store.common.cache.Cache;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.StoreState;
 import com.bloxbean.cardano.yaci.store.common.domain.TxInput;
@@ -28,9 +29,11 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
@@ -76,6 +79,11 @@ public class UtxoStorageImpl implements UtxoStorage {
     private final UtxoCache utxoCache;
     private final PlatformTransactionManager transactionManager;
     private final UnspentUtxoTable unspentUtxoTable;
+    private final TxInputOwnerAddr txInputOwnerAddr;
+
+    //Spends saved while tx_input.owner_addr is written (see TxInputOwnerAddr) whose output was not saved yet: a later
+    //block or transaction of the batch writes it. Inserted at the commit, when every output of the batch is saved.
+    private final List<TxInput> pendingOwnerAddrSpends = new ArrayList<>();
 
     //Outputs saved and keys spent since the last commit, settled in address_utxo_unspent at commit
     private final Map<UtxoKey, PendingOutput> pendingOutputs = new ConcurrentHashMap<>();
@@ -93,12 +101,19 @@ public class UtxoStorageImpl implements UtxoStorage {
     public UtxoStorageImpl(UtxoRepository utxoRepository, TxInputRepository spentOutputRepository, DSLContext dsl,
                            UtxoCache utxoCache, PlatformTransactionManager transactionManager,
                            UnspentUtxoTable unspentUtxoTable) {
+        this(utxoRepository, spentOutputRepository, dsl, utxoCache, transactionManager, unspentUtxoTable, null);
+    }
+
+    public UtxoStorageImpl(UtxoRepository utxoRepository, TxInputRepository spentOutputRepository, DSLContext dsl,
+                           UtxoCache utxoCache, PlatformTransactionManager transactionManager,
+                           UnspentUtxoTable unspentUtxoTable, TxInputOwnerAddr txInputOwnerAddr) {
         this.utxoRepository = utxoRepository;
         this.spentOutputRepository = spentOutputRepository;
         this.dsl = dsl;
         this.utxoCache = utxoCache;
         this.transactionManager = transactionManager;
         this.unspentUtxoTable = unspentUtxoTable;
+        this.txInputOwnerAddr = txInputOwnerAddr;
 
         init();
     }
@@ -187,6 +202,14 @@ public class UtxoStorageImpl implements UtxoStorage {
             unspentUtxoTable.rolledBackTo(slot, false);
         }
 
+        if (txInputOwnerAddr != null) {
+            txInputOwnerAddr.rolledBackTo(slot);
+            //Spends not yet inserted belong to the blocks being rolled back
+            synchronized (pendingOwnerAddrSpends) {
+                pendingOwnerAddrSpends.clear();
+            }
+        }
+
         return spentOutputRepository.deleteBySpentAtSlotGreaterThan(slot);
     }
 
@@ -262,6 +285,15 @@ public class UtxoStorageImpl implements UtxoStorage {
 
         dsl.batch(inserts).execute();
 
+        //Each output's address, for the spend of it to find (see saveSpent); until the sync reaches the tip
+        Cache<UtxoKey, String> cache = txInputOwnerAddr != null && txInputOwnerAddr.isLive() ? txInputOwnerAddr.cache() : null;
+        if (cache != null) {
+            addressUtxoList.stream()
+                    .filter(addressUtxo -> addressUtxo.getOwnerAddr() != null)
+                    .forEach(addressUtxo -> cache.put(new UtxoKey(addressUtxo.getTxHash(), addressUtxo.getOutputIndex()),
+                            addressUtxo.getOwnerAddr()));
+        }
+
         if (isUnspentTableEnabled()) {
             //A later save of the same output (pointer-address resolution at commit) replaces it
             addressUtxoList.forEach(addressUtxo -> pendingOutputs.put(
@@ -312,8 +344,41 @@ public class UtxoStorageImpl implements UtxoStorage {
         if (txInputs == null || txInputs.isEmpty())
             return;
 
+        if (txInputOwnerAddr != null && txInputOwnerAddr.isLive()) {
+            //With the address of the output each spends. An output not saved yet (a later block or transaction of the
+            //batch saves it) has none yet: that spend is inserted at the commit instead.
+            Map<UtxoKey, String> addresses = spentOutputAddresses(txInputs);
+            List<TxInput> found = new ArrayList<>();
+            for (TxInput txInput : txInputs) {
+                if (addresses.containsKey(new UtxoKey(txInput.getTxHash(), txInput.getOutputIndex())))
+                    found.add(txInput);
+                else
+                    synchronized (pendingOwnerAddrSpends) {
+                        pendingOwnerAddrSpends.add(txInput);
+                    }
+            }
+            insertSpent(found, addresses);
+        } else {
+            insertSpent(txInputs, null);
+            //Saved without the address: if it was kept past these rows, it no longer is
+            if (txInputOwnerAddr != null)
+                txInputs.stream().map(TxInput::getSpentAtSlot).filter(Objects::nonNull).min(Long::compare)
+                        .ifPresent(txInputOwnerAddr::savedWithoutAddr);
+        }
+
+        if (isUnspentTableEnabled()) {
+            txInputs.forEach(txInput -> pendingSpentKeys.add(new UtxoKey(txInput.getTxHash(), txInput.getOutputIndex())));
+        }
+    }
+
+    /** Inserts the spends, with the spent output's address when {@code addresses} is given (null if not found). */
+    private void insertSpent(List<TxInput> txInputs, Map<UtxoKey, String> addresses) {
+        if (txInputs.isEmpty())
+            return;
+
         var inserts = txInputs.stream()
-                        .map(spentOutput -> dsl.insertInto(TX_INPUT)
+                        .map(spentOutput -> {
+                            var insert = dsl.insertInto(TX_INPUT)
                                 .set(TX_INPUT.TX_HASH, spentOutput.getTxHash())
                                 .set(TX_INPUT.OUTPUT_INDEX, spentOutput.getOutputIndex())
                                 .set(TX_INPUT.SPENT_AT_SLOT, spentOutput.getSpentAtSlot())
@@ -321,15 +386,15 @@ public class UtxoStorageImpl implements UtxoStorage {
                                 .set(TX_INPUT.SPENT_AT_BLOCK_HASH, spentOutput.getSpentAtBlockHash())
                                 .set(TX_INPUT.SPENT_BLOCK_TIME, spentOutput.getSpentBlockTime())
                                 .set(TX_INPUT.SPENT_EPOCH, spentOutput.getSpentEpoch())
-                                .set(TX_INPUT.SPENT_TX_HASH, spentOutput.getSpentTxHash())
-                                .onDuplicateKeyIgnore())
-                                .toList();
+                                .set(TX_INPUT.SPENT_TX_HASH, spentOutput.getSpentTxHash());
+                            if (addresses != null)
+                                insert = insert.set(TX_INPUT.OWNER_ADDR,
+                                        addresses.get(new UtxoKey(spentOutput.getTxHash(), spentOutput.getOutputIndex())));
+                            return insert.onDuplicateKeyIgnore();
+                        })
+                        .toList();
 
         dsl.batch(inserts).execute();
-
-        if (isUnspentTableEnabled()) {
-            txInputs.forEach(txInput -> pendingSpentKeys.add(new UtxoKey(txInput.getTxHash(), txInput.getOutputIndex())));
-        }
     }
 
     @Override
@@ -337,6 +402,8 @@ public class UtxoStorageImpl implements UtxoStorage {
         try {
             if (isUnspentTableEnabled())
                 commitUnspentTable(commitEvent);
+            if (txInputOwnerAddr != null && txInputOwnerAddr.isLive())
+                commitOwnerAddr(commitEvent);
         } finally {
             utxoCache.clear();
         }
@@ -407,6 +474,58 @@ public class UtxoStorageImpl implements UtxoStorage {
         if (log.isDebugEnabled())
             log.debug("address_utxo_unspent: {} outputs written, {} spent in the same batch, {} spent outputs deleted",
                     unspent.size(), outputs.size() - unspent.size(), deleted[0]);
+    }
+
+    /**
+     * Inserts the spends that waited for their output (see {@link #saveSpent}), now that every output of the batch is
+     * saved, and moves tx_input.owner_addr's state to the batch's last slot. In sync mode this joins the block's
+     * transaction; in parallel mode it runs in its own.
+     */
+    private void commitOwnerAddr(CommitEvent<?> commitEvent) {
+        List<TxInput> waiting;
+        synchronized (pendingOwnerAddrSpends) {
+            waiting = new ArrayList<>(pendingOwnerAddrSpends);
+        }
+        commitTransactionTemplate.executeWithoutResult(status -> {
+            if (!waiting.isEmpty())
+                insertSpent(waiting, spentOutputAddresses(waiting));
+            txInputOwnerAddr.committed(commitEvent.getMetadata().getSlot());
+        });
+
+        //Only after the transaction succeeded: on failure they stay for the next commit
+        synchronized (pendingOwnerAddrSpends) {
+            pendingOwnerAddrSpends.subList(0, waiting.size()).clear();
+        }
+    }
+
+    /**
+     * The owner_addr of the outputs these inputs spend, from the cache of unspent outputs (until the sync reaches the
+     * tip), else from address_utxo in one query. An output not saved yet is missing. The outputs found are dropped from
+     * the cache: they are spent now.
+     */
+    private Map<UtxoKey, String> spentOutputAddresses(List<TxInput> txInputs) {
+        Cache<UtxoKey, String> cache = txInputOwnerAddr.cache();
+        Map<UtxoKey, String> addresses = new HashMap<>();
+        List<UtxoKey> misses = new ArrayList<>();
+        for (TxInput txInput : txInputs) {
+            UtxoKey utxoKey = new UtxoKey(txInput.getTxHash(), txInput.getOutputIndex());
+            String address = cache != null ? cache.get(utxoKey) : null;
+            if (address != null) {
+                addresses.put(utxoKey, address);
+                cache.remove(utxoKey);
+            } else {
+                misses.add(utxoKey);
+            }
+        }
+
+        if (!misses.isEmpty()) {
+            dsl.select(ADDRESS_UTXO.TX_HASH, ADDRESS_UTXO.OUTPUT_INDEX, ADDRESS_UTXO.OWNER_ADDR)
+                    .from(ADDRESS_UTXO)
+                    .where(row(ADDRESS_UTXO.TX_HASH, ADDRESS_UTXO.OUTPUT_INDEX)
+                            .in(misses.stream().map(utxoKey -> row(utxoKey.getTxHash(), utxoKey.getOutputIndex())).toList()))
+                    .forEach(record -> addresses.put(new UtxoKey(record.value1(), record.value2()), record.value3()));
+        }
+        return addresses;
     }
 
     /** The lowest block number in the batch, or null if the event carries no blocks. */

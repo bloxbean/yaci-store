@@ -1,5 +1,7 @@
 package com.bloxbean.cardano.yaci.store.utxo;
 
+import com.bloxbean.cardano.yaci.store.common.cache.RocksDBCache;
+import com.bloxbean.cardano.yaci.store.common.cache.RocksDBCacheStore;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.service.CursorService;
 import com.bloxbean.cardano.yaci.store.common.service.StoreStateService;
@@ -8,8 +10,10 @@ import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorageReader;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.AddressStorageImpl;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UtxoCache;
+import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UtxoKeyCodec;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UtxoStorageImpl;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UnspentTableUtxoStorageReader;
+import com.bloxbean.cardano.yaci.store.utxo.storage.impl.TxInputOwnerAddr;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UnspentUtxoTable;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UtxoStorageReaderImpl;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.TxInputRepository;
@@ -55,22 +59,37 @@ public class UtxoStoreConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
+    public TxInputOwnerAddr txInputOwnerAddr(UtxoStoreProperties utxoStoreProperties, DSLContext dslContext,
+                                             PlatformTransactionManager transactionManager,
+                                             ObjectProvider<StoreStateService> storeStateService,
+                                             ObjectProvider<CursorService> cursorService,
+                                             ObjectProvider<RocksDBCacheStore> rocksDBCacheStore) {
+        //The utxo store's column family in the process's RocksDB cache, made only when the address is written
+        return new TxInputOwnerAddr(utxoStoreProperties, dslContext, transactionManager,
+                storeStateService.getIfAvailable(), cursorService.getIfAvailable(),
+                () -> rocksDBCacheStore.getObject().cache(TxInputOwnerAddr.CACHE_NAME, UtxoKeyCodec.INSTANCE, RocksDBCache.STRING));
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
     public UtxoStorage utxoStorage(UtxoRepository utxoRepository,
                                    TxInputRepository spentOutputRepository,
                                    DSLContext dslContext,
                                    UtxoCache utxoCache,
                                    PlatformTransactionManager transactionManager,
-                                   UnspentUtxoTable unspentUtxoTable) {
+                                   UnspentUtxoTable unspentUtxoTable,
+                                   TxInputOwnerAddr txInputOwnerAddr) {
         return new UtxoStorageImpl(utxoRepository, spentOutputRepository, dslContext, utxoCache, transactionManager,
-                unspentUtxoTable);
+                unspentUtxoTable, txInputOwnerAddr);
     }
 
     @Bean
     @ConditionalOnMissingBean
     public UtxoStorageReader utxoStorageReader(UtxoRepository utxoRepository, DSLContext dslContext,
                                                UtxoStoreProperties utxoStoreProperties,
-                                               UnspentUtxoTable unspentUtxoTable) {
-        UtxoStorageReader reader = new UtxoStorageReaderImpl(utxoRepository, dslContext);
+                                               UnspentUtxoTable unspentUtxoTable,
+                                               TxInputOwnerAddr txInputOwnerAddr) {
+        UtxoStorageReader reader = new UtxoStorageReaderImpl(utxoRepository, dslContext, txInputOwnerAddr::isReadable);
         return utxoStoreProperties.isUnspentTableReadEnabled()
                 ? new UnspentTableUtxoStorageReader(reader, dslContext, unspentUtxoTable::isReadable)
                 : reader;
