@@ -97,10 +97,11 @@ purely additive, and it is why the README lists it; the `validation_errors` fiel
 
 The CIP-68 table stores rows for labels 222, 333 and 444. A subject with the fungible prefix `0014df10`, or the rich fungible prefix `001bc280`,
 is mapped to its reference NFT (prefix `000643b0`) and the latest row of that reference NFT is returned. The reference NFT holds the metadata and does not say
-that the token was minted, so the 333 and 444 subjects of NFTs, of burned tokens and of tokens that were never minted answer 200 too (ADR 0008, #1292: kept on
-purpose, so that the metadata of a burned token is still there for history). NFT rows are stored and not exposed.
+that the token was minted, so the 333 and 444 subjects of burned tokens and of tokens that were never minted answer 200 too (ADR 0008, #1292: kept on
+purpose, so that the metadata of a burned token is still there for history). The datum of an NFT minted alone is not stored (ADR 0009); the 222 rows
+that are stored are not exposed.
 A rich fungible token has no `logo` in CIP-68; its `image` is served as `metadata.logo` (source `CIP_68`) of a `001bc280` subject, whatever label
-the row was stored with, as cf-token-metadata-registry does, and its `description` is optional (not an error). An image whose scheme the CIP does not allow is served as written, with an `invalid_uri_scheme`
+the row was stored with, as cf-token-metadata-registry does, and a `logo` in its datum is not served, also when there is no image, and its `description` is optional (not an error). An image whose scheme the CIP does not allow is served as written, with an `invalid_uri_scheme`
 error, so a wallet can decide.
 
 The latest row is chosen **whatever its label**. A reference NFT can be updated in a transaction that also mints a user

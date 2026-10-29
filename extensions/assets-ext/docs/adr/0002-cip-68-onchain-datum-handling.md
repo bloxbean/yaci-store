@@ -346,7 +346,9 @@ counted again; they suit `rate()` and `increase()`, not a historical total.
 
 - The API serves **fungible and rich fungible tokens**. A subject with the `0014df10` or `001bc280` prefix is mapped to its reference NFT, and the latest row
   of that reference NFT is returned whatever its label, checked for the label of the subject (decision 3). A rich fungible token has no `logo`: the `image`
-  is served as `metadata.logo` of a `001bc280` subject whatever label the row was stored with, and its `description` is optional. NFT rows (222) are not
+  is served as `metadata.logo` of a `001bc280` subject whatever label the row was stored with, and a `logo` in its datum is not served, also when
+  there is no image (until 2026-10-29 such a `logo` was served first, for 880 mainnet RFTs; found by comparing with cf-token-metadata-registry, which
+  serves the image only). Its `description` is optional. NFT rows (222) are not
   exposed, and the datum of an NFT minted alone is not stored (ADR 0009); a 222 row is an update of a reference NFT already stored, or a datum minted with a
   333 or 444 token too. A batch that asks for the 333 and the 444 subject of one reference NFT gets both, each checked for its label (before the review of
   PR #1220 the second one overwrote the first).
