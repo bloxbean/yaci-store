@@ -28,8 +28,15 @@ public interface Cip68MetadataRepository extends JpaRepository<Cip68Metadata, Ci
     Optional<Cip68Metadata> findFirstByPolicyIdAndAssetNameOrderBySlotDescTxIndexDesc(
             String policyId, String assetName);
 
-    /** Whether any datum of this reference NFT is stored, whatever its label. */
-    boolean existsByPolicyIdAndAssetName(String policyId, String assetName);
+    /**
+     * Whether a datum of this reference NFT is stored from earlier in the chain than {@code (slot, txIndex)}: an earlier
+     * block, or an earlier transaction of the same block, whatever its label. A row from later in the chain does not
+     * count: during a parallel sync the blocks of a batch are processed out of order, so it can already be stored.
+     */
+    @Query("SELECT COUNT(e) > 0 FROM Cip68Metadata e WHERE e.policyId = :policyId AND e.assetName = :assetName "
+            + "AND (e.slot < :slot OR (e.slot = :slot AND e.txIndex < :txIndex))")
+    boolean existsEarlierThan(@Param("policyId") String policyId, @Param("assetName") String assetName,
+                              @Param("slot") long slot, @Param("txIndex") int txIndex);
 
     /**
      * Returns the latest reference NFT row per {@code (policy_id, asset_name)} pair, regardless of label.

@@ -37,6 +37,10 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -238,7 +242,7 @@ class Cip68OrphanLabelTest {
     private Optional<Cip68Metadata> index(String datum, String policy, String base, String userTokenPrefix) {
         // an NFT's datum is stored once its reference NFT is (ADR 0002): these tests are about what is stored for it
         if (Cip68Constants.NFT_TOKEN_PREFIX.equals(userTokenPrefix)) {
-            org.mockito.Mockito.when(repository.existsByPolicyIdAndAssetName(policy, Cip68Constants.REFERENCE_TOKEN_PREFIX + base)).thenReturn(true);
+            org.mockito.Mockito.when(repository.existsEarlierThan(eq(policy), eq(Cip68Constants.REFERENCE_TOKEN_PREFIX + base), anyLong(), anyInt())).thenReturn(true);
         }
         List<AddressUtxo> outputs = new ArrayList<>();
         outputs.add(AddressUtxo.builder().txHash(TX_HASH).txIndex(0).inlineDatum(datum)
@@ -257,7 +261,7 @@ class Cip68OrphanLabelTest {
         try {
             verify(repository).saveAll(captor.capture());
         } catch (AssertionError notSaved) {
-            verify(repository, never()).saveAll(org.mockito.ArgumentMatchers.any());
+            verify(repository, never()).saveAll(any());
             return Optional.empty();
         }
         List<Cip68Metadata> rows = new ArrayList<>();

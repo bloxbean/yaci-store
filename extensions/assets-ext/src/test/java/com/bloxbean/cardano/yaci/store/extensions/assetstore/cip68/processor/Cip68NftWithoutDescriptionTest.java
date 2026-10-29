@@ -21,6 +21,9 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -162,8 +165,7 @@ class Cip68NftWithoutDescriptionTest {
     private AddressUtxoEvent event(String datum, String userTokenPrefix) {
         // an NFT's datum is stored once its reference NFT is (ADR 0002): these tests are about what is stored for it
         if ("000de140".equals(userTokenPrefix)) {
-            org.mockito.Mockito.when(repository.existsByPolicyIdAndAssetName(
-                    org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString())).thenReturn(true);
+            org.mockito.Mockito.when(repository.existsEarlierThan(anyString(), anyString(), anyLong(), anyInt())).thenReturn(true);
         }
         AddressUtxo refNft = AddressUtxo.builder()
                 .txHash(TX_HASH).txIndex(0).inlineDatum(datum)
