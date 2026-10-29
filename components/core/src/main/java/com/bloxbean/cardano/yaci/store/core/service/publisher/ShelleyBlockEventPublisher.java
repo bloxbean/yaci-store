@@ -176,12 +176,17 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
 
         //Mints
         var txMintBurnEvent = CompletableFuture.supplyAsync(() -> {
-            List<TxMintBurn> txMintBurnEvents = transactions.stream()
-                    .filter(transaction -> !transaction.isInvalid())
-                    .filter(transaction ->
-                            transaction.getBody().getMint() != null && transaction.getBody().getMint().size() > 0)
-                    .map(transaction -> new TxMintBurn(transaction.getTxHash(), sanitizeAmounts(transaction.getBody().getMint())))
-                    .collect(Collectors.toList());
+            //Index over the full list so tx_index counts invalid transactions, then filter
+            List<TxMintBurn> txMintBurnEvents = IntStream.range(0, transactions.size())
+                    .filter(i -> !transactions.get(i).isInvalid())
+                    .filter(i -> transactions.get(i).getBody().getMint() != null
+                            && transactions.get(i).getBody().getMint().size() > 0)
+                    .mapToObj(i -> TxMintBurn.builder()
+                            .txHash(transactions.get(i).getTxHash())
+                            .txIndex(i)
+                            .amounts(sanitizeAmounts(transactions.get(i).getBody().getMint()))
+                            .build()
+                    ).collect(Collectors.toList());
             publisher.publishEvent(new MintBurnEvent(eventMetadata, txMintBurnEvents));
             return true;
         }, eventExecutor);
@@ -277,12 +282,17 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
         publisher.publishEvent(new CertificateEvent(eventMetadata, txCertificatesList));
 
         //Mints
-        List<TxMintBurn> txMintBurnEvents = transactions.stream()
-                .filter(transaction -> !transaction.isInvalid())
-                .filter(transaction ->
-                        transaction.getBody().getMint() != null && transaction.getBody().getMint().size() > 0)
-                .map(transaction -> new TxMintBurn(transaction.getTxHash(), sanitizeAmounts(transaction.getBody().getMint())))
-                .collect(Collectors.toList());
+        //Index over the full list so tx_index counts invalid transactions, then filter
+        List<TxMintBurn> txMintBurnEvents = IntStream.range(0, transactions.size())
+                .filter(i -> !transactions.get(i).isInvalid())
+                .filter(i -> transactions.get(i).getBody().getMint() != null
+                        && transactions.get(i).getBody().getMint().size() > 0)
+                .mapToObj(i -> TxMintBurn.builder()
+                        .txHash(transactions.get(i).getTxHash())
+                        .txIndex(i)
+                        .amounts(sanitizeAmounts(transactions.get(i).getBody().getMint()))
+                        .build()
+                ).collect(Collectors.toList());
         publisher.publishEvent(new MintBurnEvent(eventMetadata, txMintBurnEvents));
 
         //Updates

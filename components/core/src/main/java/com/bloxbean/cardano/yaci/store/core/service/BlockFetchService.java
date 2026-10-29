@@ -124,7 +124,8 @@ public class BlockFetchService implements BlockChainDataListener {
 
                 //Now process first block
                 log.info("Processing first block of the epoch {}, block {}", eventMetadata.getEpochNumber(), eventMetadata.getBlock());
-                postShelleyBlockEventPublisher.publishBlockEvents(eventMetadata, block, transactions);
+                //Published on the sequential path, so it must not be marked parallel (it is never part of a batch)
+                postShelleyBlockEventPublisher.publishBlockEvents(eventMetadata.toBuilder().parallelMode(false).build(), block, transactions);
             } else {
                 if (parallelMode) {
                     postShelleyBlockEventPublisher.publishBlockEventsInParallel(eventMetadata, block, transactions);
@@ -201,7 +202,7 @@ public class BlockFetchService implements BlockChainDataListener {
 
                 log.info("Processing first block of the epoch {}, block {}", eventMetadata.getEpochNumber(), eventMetadata.getBlock());
                 //Process single block (First block of epoch)
-                byronBlockEventPublisher.publishBlockEvents(eventMetadata, byronBlock, Collections.emptyList());
+                byronBlockEventPublisher.publishBlockEvents(eventMetadata.toBuilder().parallelMode(false).build(), byronBlock, Collections.emptyList());
 
             } else {
                 if (parallelMode) {

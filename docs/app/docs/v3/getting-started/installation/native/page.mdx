@@ -51,3 +51,4 @@ If you are running ledger-state calculation for mainnet, you should **tune your 
    - `store.adapot.reward-bulk-load-maintenance-work-mem=2GB`
    - `store.adapot.stake-snapshot-work-mem=512MB`
    - `store.governance-aggr.drep-dist-work-mem=512MB`
+3. Set `max_locks_per_transaction=1024` in your PostgreSQL configuration (for example in `postgresql.conf`), then restart PostgreSQL. The `reward`, `epoch_stake` and `drep_dist` tables are partitioned by epoch, and with the default (64) queries that span many epochs fail with `ERROR: out of shared memory`. Yaci Store logs a warning at startup when the value is below 1024.
