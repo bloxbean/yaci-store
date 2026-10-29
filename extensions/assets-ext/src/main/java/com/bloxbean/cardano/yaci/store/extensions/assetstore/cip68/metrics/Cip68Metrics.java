@@ -13,9 +13,10 @@ import org.springframework.stereotype.Component;
  * <ul>
  *   <li>{@value #INDEXED}: datums stored, tagged {@code label} (222, 333, 444). A datum is stored whatever is wrong
  *       with it.</li>
- *   <li>{@value #SKIPPED}: datums not stored. Only for what is not metadata at all: {@code parse_failure} for a datum
- *       that could not be decoded, or {@code processing_failure} for an output whose indexing threw an unexpected
- *       exception (the one to alert on). Tagged {@code reason} only.</li>
+ *   <li>{@value #SKIPPED}: datums not stored. Only for what is not token metadata to serve: {@code parse_failure} for
+ *       a datum that could not be decoded, {@code not_token_metadata} for one with none of the CIP-68 token fields,
+ *       {@code nft_only} for an NFT's datum, or {@code processing_failure} for an output whose indexing threw an
+ *       unexpected exception (the one to alert on). Tagged {@code reason} only.</li>
  *   <li>{@value #DROPPED_PROPERTIES}: properties left out of a stored datum because they look like an attack, tagged
  *       {@code kind} ({@code too_deep}).</li>
  * </ul>
@@ -42,6 +43,12 @@ public class Cip68Metrics {
      * stored yet: it is not token metadata (a dApp's own state under the {@code 000643b0} prefix, an empty map).
      */
     public static final String NOT_TOKEN_METADATA = "not_token_metadata";
+
+    /**
+     * A datum whose transaction has the reference NFT's 222 NFT and no 333 or 444 token, for a reference NFT that is not
+     * stored yet: an NFT's metadata, which is not served.
+     */
+    public static final String NFT_ONLY = "nft_only";
 
     /** The {@code kind} of a property that is left out because its value is nested deeper than the parser allows. */
     public static final String TOO_DEEP = "too_deep";
@@ -77,6 +84,10 @@ public class Cip68Metrics {
 
     public void notTokenMetadata() {
         registry.counter(SKIPPED, REASON_TAG, NOT_TOKEN_METADATA).increment();
+    }
+
+    public void nftOnly() {
+        registry.counter(SKIPPED, REASON_TAG, NFT_ONLY).increment();
     }
 
     public void propertyDropped(String kind) {

@@ -9,7 +9,7 @@ query a single yaci-store instance and get merged metadata transparently.
 | Standard | Source | Description |
 |----------|--------|-------------|
 | CIP-26 | Off-chain (GitHub [cardano-token-registry](https://github.com/cardano-foundation/cardano-token-registry)) | Fungible token metadata synced periodically from Git |
-| CIP-68 | On-chain (reference NFT inline datums; fungible tokens, label 333, and rich fungible tokens, label 444) | Token metadata parsed from blockchain. NFTs (label 222) are indexed but not served. |
+| CIP-68 | On-chain (reference NFT inline datums; fungible tokens, label 333, and rich fungible tokens, label 444) | Token metadata parsed from blockchain. NFTs (label 222) are not served, and a datum minted with the NFT alone is not stored. |
 
 ## REST API
 
