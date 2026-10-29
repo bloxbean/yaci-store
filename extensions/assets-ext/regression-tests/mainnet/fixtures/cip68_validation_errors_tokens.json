@@ -1,0 +1,39 @@
+[
+  {
+    "subject": "67cee89d59ab5354ee22c8af0638224126aecc6210f9372a61f13a640014df10474e5243",
+    "name": "Greenland Reserve Coin",
+    "why": "its datum declares version 0, and CIP-68 defines versions 1 to 4: indexed with a MANDATORY invalid_version error (dropped before ADR-019)",
+    "expected_errors": [
+      {"field_name": "version", "code": "invalid_version", "field_category": "MANDATORY"}
+    ],
+    "has_mandatory_error": true
+  },
+  {
+    "subject": "473a7bacfcf03648b7b990328a9d7788286ccba5624c53aa80e68fff0014df104d494e535741502054455354",
+    "name": "Minswap",
+    "why": "its logo is a bare IPFS CID, not a URI: kept as written with an OPTIONAL invalid_uri_scheme error (dropped before ADR-019)",
+    "expected_errors": [
+      {"field_name": "logo", "code": "invalid_uri_scheme", "field_category": "OPTIONAL"}
+    ],
+    "expected_logo": "QmQcx87EPNygLxz7p4ZqKU7CodSoetA2LFQ3UFLhMWtrtk",
+    "has_mandatory_error": false
+  },
+  {
+    "subject": "23b5eccb3deb0b4f71a5d1a57cc69944afee4c598ab5a000de1dde710014df1050565a2067616d65",
+    "name": "Plants vs. Zombies gaming ",
+    "why": "its logo is a bare IPFS CID, not a URI: kept as written with an OPTIONAL invalid_uri_scheme error (dropped before ADR-019)",
+    "expected_errors": [
+      {"field_name": "logo", "code": "invalid_uri_scheme", "field_category": "OPTIONAL"}
+    ],
+    "expected_logo": "QmZPgijpUjVjHbwJyTWW76nBrRzeMescSk4VUeL1ahbs8j",
+    "has_mandatory_error": false
+  },
+  {
+    "subject": "d9d5985e0657933005d6eb953aeadad29aa8c36f17e493e2962584ec0014df1010aceb43bb0127e40b4696bb0e06174c830bec3f7ee6063b1d104546",
+    "name": "USDrf/sUSDrf LP",
+    "why": "SundaeSwap LP token whose reference NFT was minted with a 222 pool NFT: the 222 requirement (an image) is not this 333 token's error, so it is served as a clean fungible token (it was a 404 before ADR-019)",
+    "expected_errors": [],
+    "absent_sub_standard": "222",
+    "has_mandatory_error": false
+  }
+]

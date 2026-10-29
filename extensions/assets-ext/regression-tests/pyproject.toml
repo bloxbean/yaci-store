@@ -1,0 +1,13 @@
+[project]
+name = "assets-ext-regression-tests"
+version = "0.1.0"
+description = "Mainnet regression tests for the assets-ext token metadata API"
+requires-python = ">=3.10"
+dependencies = [
+    "pytest>=8.0",
+    "allure-pytest>=2.13",
+    "requests>=2.31",
+]
+
+[tool.uv]
+package = false
