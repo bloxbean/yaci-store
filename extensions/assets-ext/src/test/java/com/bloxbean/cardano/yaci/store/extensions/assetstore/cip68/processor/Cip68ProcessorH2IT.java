@@ -98,6 +98,26 @@ class Cip68ProcessorH2IT {
                 }));
     }
 
+    @Test
+    void countsOnlyADatumFromEarlierInTheChainAsAlreadyIndexed() {
+        // during a parallel sync a later block can be stored first: it must not make an earlier datum look like an update
+        repository.saveAll(List.of(row(100L, 2), row(300L, 0)));
+        entityManager.flush();
+
+        assertThat(repository.existsEarlierThan(POLICY_ID, REF_NFT_ASSET_NAME, 50L, 0)).as("only later rows").isFalse();
+        assertThat(repository.existsEarlierThan(POLICY_ID, REF_NFT_ASSET_NAME, 100L, 1)).as("a later transaction of the block").isFalse();
+        assertThat(repository.existsEarlierThan(POLICY_ID, REF_NFT_ASSET_NAME, 100L, 2)).as("itself").isFalse();
+        assertThat(repository.existsEarlierThan(POLICY_ID, REF_NFT_ASSET_NAME, 100L, 3)).as("an earlier transaction of the block").isTrue();
+        assertThat(repository.existsEarlierThan(POLICY_ID, REF_NFT_ASSET_NAME, 200L, 0)).as("an earlier block").isTrue();
+        assertThat(repository.existsEarlierThan(POLICY_ID, "000643b0ffff", 400L, 0)).as("another reference NFT").isFalse();
+    }
+
+    private static Cip68Metadata row(long slot, int txIndex) {
+        return Cip68Metadata.builder()
+                .policyId(POLICY_ID).assetName(REF_NFT_ASSET_NAME).slot(slot).txHash(TX_HASH).txIndex(txIndex)
+                .label(333).name("Token").datum("d8799fa0ff").build();
+    }
+
     private void processAndFlush(String name) {
         processor.processTransaction(eventWithDatum(datum(name, true)));
         entityManager.flush();

@@ -27,6 +27,9 @@ import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -130,7 +133,7 @@ class Cip68LabelPairingTest {
 
     @Test
     void labelsAsNftWhenTheNftUserTokenIsPairedWithAReferenceNftAlreadyStored() {
-        when(repository.existsByPolicyIdAndAssetName(FLDT_POLICY, REF + FLDT_BASE)).thenReturn(true);
+        when(repository.existsEarlierThan(eq(FLDT_POLICY), eq(REF + FLDT_BASE), anyLong(), anyInt())).thenReturn(true);
 
         assertThat(labelOf(FLDT_POLICY, FLDT_BASE, IMAGE_DATUM, List.of(FLDT_POLICY + NFT + FLDT_BASE)))
                 .isEqualTo(Cip68Constants.LABEL_NFT);

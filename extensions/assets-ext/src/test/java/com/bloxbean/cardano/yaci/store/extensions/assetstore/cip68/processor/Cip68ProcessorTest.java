@@ -5,9 +5,12 @@ import org.junit.jupiter.api.BeforeEach;
 import java.time.ZoneOffset;
 import java.time.Instant;
 import java.time.Clock;
+import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
+import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
+import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.metrics.Cip68Metrics;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Constants;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.Cip68Metadata;
@@ -223,6 +226,7 @@ class Cip68ProcessorTest {
         void skipsAnNftWhoseTransactionHasOnlyItsNftUserToken() {
             // an NFT's metadata is not served: stored, it would answer for a 333 and a 444 subject never minted
             index(List.of(NFT_USER_TOKEN_NAME));
+            endOfBatch();
 
             verify(metadataReferenceNftRepository, never()).saveAll(any());
             verify(metrics).nftOnly();
@@ -230,7 +234,7 @@ class Cip68ProcessorTest {
 
         @Test
         void labelsAsNftAnNftOnlyUpdateOfAReferenceNftAlreadyStored() {
-            when(metadataReferenceNftRepository.existsByPolicyIdAndAssetName(POLICY_ID, REF_NFT_ASSET_NAME)).thenReturn(true);
+            when(metadataReferenceNftRepository.existsEarlierThan(eq(POLICY_ID), eq(REF_NFT_ASSET_NAME), anyLong(), anyInt())).thenReturn(true);
 
             verifyLabel(List.of(NFT_USER_TOKEN_NAME), Cip68Constants.LABEL_NFT);
             verify(metrics, never()).nftOnly();
@@ -348,6 +352,7 @@ class Cip68ProcessorTest {
                     Map.of("additional_properties", Map.of("mainnet-testing", "profile")));
 
             index(dAppState);
+            endOfBatch();
 
             verify(metadataReferenceNftRepository, never()).saveAll(any());
             verify(metrics).notTokenMetadata();
@@ -356,7 +361,7 @@ class Cip68ProcessorTest {
         @Test
         void isStoredWhenItsReferenceNftIsAlreadyStored() {
             // an owner who clears the metadata must not be served the old one
-            when(metadataReferenceNftRepository.existsByPolicyIdAndAssetName(POLICY_ID, REF_NFT_ASSET_NAME)).thenReturn(true);
+            when(metadataReferenceNftRepository.existsEarlierThan(eq(POLICY_ID), eq(REF_NFT_ASSET_NAME), anyLong(), anyInt())).thenReturn(true);
 
             index(new ParsedCip68Datum(null, null, null, null, null, null, 1L, null, null, null));
 
@@ -406,6 +411,125 @@ class Cip68ProcessorTest {
                         .containsExactly("333:description:MANDATORY:chunked_text");
             });
         }
+    }
+
+    /**
+     * During a parallel sync the blocks of a batch run in partitions at the same time, so a later block can be processed
+     * before an earlier one has stored its row. A datum stored only if its reference NFT is already indexed is then
+     * decided at the end of the batch, in chain order, as a sync of one block at a time would (ADR 0010).
+     */
+    @Nested
+    @DisplayName("Blocks processed out of chain order")
+    class OutOfChainOrder {
+
+        private static final String EMPTY_MAP = "d8799fa001ff";
+        private static final ParsedCip68Datum CLEARED = new ParsedCip68Datum(null, null, null, null, null, null, 1L, null, null, null);
+        private static final String NFT_USER_TOKEN_NAME = "000de140464c4454";
+
+        private AddressUtxo refNftOutput(int txIndex, int outputIndex) {
+            Amt refNftAmt = Amt.builder().unit(POLICY_ID + REF_NFT_ASSET_NAME).quantity(BigInteger.ONE).build();
+            AddressUtxo utxo = AddressUtxo.builder().txHash(TX_HASH).txIndex(txIndex).outputIndex(outputIndex)
+                    .inlineDatum(EMPTY_MAP).amounts(List.of(refNftAmt)).build();
+            lenient().when(cip68TokenService.extractReferenceNfts(utxo)).thenReturn(List.of(refNftAmt));
+            return utxo;
+        }
+
+        private List<Cip68Metadata> savedRows() {
+            @SuppressWarnings("unchecked")
+            ArgumentCaptor<Iterable<Cip68Metadata>> captor = ArgumentCaptor.forClass(Iterable.class);
+            verify(metadataReferenceNftRepository, atLeastOnce()).saveAll(captor.capture());
+            List<Cip68Metadata> rows = new ArrayList<>();
+            captor.getAllValues().forEach(batch -> batch.forEach(rows::add));
+            return rows;
+        }
+
+        @Test
+        void aClearedDatumIsNotSkippedBeforeTheEndOfTheBatch() {
+            // House of Titans #1001 on mainnet: the datum is cleared 20 blocks after the mint, and the block of the mint
+            // was in another partition that had not stored its row yet
+            when(cip68DatumParser.parseDetailed(eq(EMPTY_MAP), any())).thenReturn(new ParseOutcome.Parsed(CLEARED));
+            when(metadataReferenceNftRepository.existsEarlierThan(POLICY_ID, REF_NFT_ASSET_NAME, 102_576_755L, 0))
+                    .thenReturn(false, true);
+
+            processor.processTransaction(buildEvent(102_576_755L, refNftOutput(0, 0)));
+            verify(metadataReferenceNftRepository, never()).saveAll(any());
+            verify(metrics, never()).notTokenMetadata();
+
+            // the partition with the mint has stored its row by the end of the batch
+            endOfBatch();
+
+            assertThat(savedRows()).singleElement().satisfies(row -> {
+                assertThat(row.getSlot()).isEqualTo(102_576_755L);
+                assertThat(row.getName()).isNull();
+            });
+            verify(metrics, never()).notTokenMetadata();
+        }
+
+        @Test
+        void aDatumIsSkippedAtTheEndOfTheBatchWhenNoEarlierDatumOfItsReferenceNftIsStored() {
+            // the query counts only rows from earlier in the chain: a later block of the batch, stored first, is not one
+            when(cip68DatumParser.parseDetailed(eq(EMPTY_MAP), any())).thenReturn(new ParseOutcome.Parsed(CLEARED));
+
+            processor.processTransaction(buildEvent(200L, refNftOutput(0, 0)));
+            endOfBatch();
+
+            verify(metadataReferenceNftRepository, never()).saveAll(any());
+            verify(metrics).notTokenMetadata();
+            verify(metadataReferenceNftRepository, times(2)).existsEarlierThan(POLICY_ID, REF_NFT_ASSET_NAME, 200L, 0);
+        }
+
+        @Test
+        void theDatumsKeptForTheEndOfTheBatchAreDecidedInChainOrder() {
+            // the later block is processed first; the earlier datum is stored because an earlier block of an earlier
+            // batch stored its reference NFT, and the later one because the earlier one was just stored
+            when(cip68DatumParser.parseDetailed(eq(EMPTY_MAP), any())).thenReturn(new ParseOutcome.Parsed(CLEARED));
+            when(metadataReferenceNftRepository.existsEarlierThan(POLICY_ID, REF_NFT_ASSET_NAME, 400L, 0)).thenReturn(false);
+            when(metadataReferenceNftRepository.existsEarlierThan(POLICY_ID, REF_NFT_ASSET_NAME, 300L, 1))
+                    .thenReturn(false, true);
+
+            processor.processTransaction(buildEvent(400L, refNftOutput(0, 0)));
+            processor.processTransaction(buildEvent(300L, refNftOutput(1, 0)));
+            endOfBatch();
+
+            assertThat(savedRows()).extracting(Cip68Metadata::getSlot).containsExactly(300L, 400L);
+            verify(metrics, never()).notTokenMetadata();
+            // the later datum is decided by the earlier one stored in the same pass, not by a query
+            verify(metadataReferenceNftRepository, times(1)).existsEarlierThan(POLICY_ID, REF_NFT_ASSET_NAME, 400L, 0);
+        }
+
+        @Test
+        void anNftsDatumIsStoredAtTheEndOfTheBatchWhenItsReferenceNftWasIndexedEarlier() {
+            ParsedCip68Datum nft = new ParsedCip68Datum(null, null, null, "Titan", null, null, 1L, "ipfs://Qm", null, null);
+            when(cip68DatumParser.parseDetailed(eq(EMPTY_MAP), any())).thenReturn(new ParseOutcome.Parsed(nft));
+            when(metadataReferenceNftRepository.existsEarlierThan(POLICY_ID, REF_NFT_ASSET_NAME, 500L, 0))
+                    .thenReturn(false, true);
+            AddressUtxo userToken = AddressUtxo.builder().txHash(TX_HASH).txIndex(0).outputIndex(1)
+                    .amounts(List.of(Amt.builder().unit(POLICY_ID + NFT_USER_TOKEN_NAME).quantity(BigInteger.ONE).build()))
+                    .build();
+            when(cip68TokenService.extractReferenceNfts(userToken)).thenReturn(List.of());
+
+            processor.processTransaction(buildEvent(500L, List.of(refNftOutput(0, 0), userToken)));
+            endOfBatch();
+
+            assertThat(savedRows()).singleElement().extracting(Cip68Metadata::getLabel).isEqualTo(Cip68Constants.LABEL_NFT);
+            verify(metrics, never()).nftOnly();
+        }
+
+        @Test
+        void aRollbackDropsTheDatumsKeptForTheEndOfTheBatch() {
+            when(cip68DatumParser.parseDetailed(eq(EMPTY_MAP), any())).thenReturn(new ParseOutcome.Parsed(CLEARED));
+
+            processor.processTransaction(buildEvent(600L, refNftOutput(0, 0)));
+            processor.dropPendingDatums(RollbackEvent.builder().rollbackTo(new Point(500L, "ab".repeat(32))).build());
+            endOfBatch();
+
+            verify(metadataReferenceNftRepository, times(1)).existsEarlierThan(POLICY_ID, REF_NFT_ASSET_NAME, 600L, 0);
+            verify(metrics, never()).notTokenMetadata();
+        }
+    }
+
+    private void endOfBatch() {
+        processor.indexPendingDatums(new PreCommitEvent(EventMetadata.builder().build()));
     }
 
     private AddressUtxoEvent buildEvent(long slot, AddressUtxo utxo) {

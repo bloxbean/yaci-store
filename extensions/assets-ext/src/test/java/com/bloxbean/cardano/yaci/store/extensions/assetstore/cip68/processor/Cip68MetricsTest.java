@@ -28,6 +28,9 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 
 /**
@@ -50,8 +53,7 @@ class Cip68MetricsTest {
         Cip68Metrics metrics = new Cip68Metrics(registry);
         Cip68MetadataRepository repository = mock(Cip68MetadataRepository.class);
         // the reference NFTs are already stored, so an NFT's datum is indexed (ADR 0002): these tests count what is stored
-        org.mockito.Mockito.when(repository.existsByPolicyIdAndAssetName(
-                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString())).thenReturn(true);
+        org.mockito.Mockito.when(repository.existsEarlierThan(anyString(), anyString(), anyLong(), anyInt())).thenReturn(true);
         processor = new Cip68Processor(new Cip68TokenService(repository), new Cip68DatumParser(metrics), repository, metrics);
     }
 

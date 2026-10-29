@@ -2,6 +2,8 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.processor;
 
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
+import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
+import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.AssetType;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.metrics.Cip68Metrics;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Constants;
@@ -31,12 +33,16 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Locale;
+import java.util.Queue;
 import java.util.Set;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.stream.Collectors;
 
 @Component
@@ -60,6 +66,13 @@ public class Cip68Processor {
     private final Cip68Metrics metrics;
     private final InvalidTokenRecorder invalidTokenRecorder;
     private final Clock clock;
+
+    /**
+     * The datums whose fate depends on an earlier datum of their reference NFT, and for which none was found when their
+     * block was processed. They are decided at the end of the batch, in chain order ({@link #indexPendingDatums}).
+     * Filled by the block threads of a parallel sync, so it is a concurrent queue.
+     */
+    private final Queue<PendingDatum> pendingDatums = new ConcurrentLinkedQueue<>();
 
     @Autowired
     public Cip68Processor(Cip68TokenService cip68TokenService, Cip68DatumParser cip68DatumParser,
@@ -245,35 +258,130 @@ public class Cip68Processor {
     }
 
     /**
-     * The row for a datum that was read: its label, what is wrong with the datum itself, and what is reported about it.
-     * Empty for a datum that is not token metadata. What the label requires is not stored: it is checked when the token
-     * is served, for the label asked for ({@link Cip68Validator#validate}).
+     * The row for a datum that was read, or empty for a datum that is not token metadata, or whose fate is decided at the
+     * end of the batch.
+     * <p>
+     * Two kinds of datum are stored only if their reference NFT already has a datum from earlier in the chain: one
+     * without a user token and without any of the CIP-68 token fields, and one whose transaction has the 222 NFT and no
+     * 333 or 444 token ({@link Skip}). Whether that earlier datum is stored yet depends on the order the blocks are
+     * processed in, which during a parallel sync is not the chain order: the blocks of a batch are split into partitions
+     * that run at the same time. So when no earlier datum is found yet, the datum is not skipped here; it is kept and
+     * decided at the end of the batch, when every block of the batch is processed ({@link #indexPendingDatums}). The
+     * outcome is then the one of a sync that processes the blocks one by one (ADR 0010).
      */
     private Optional<Cip68Metadata> indexDatum(ParsedCip68Datum parsed, AddressUtxo output, AssetType refNft,
                                                Set<String> assetUnitsInTx, Long slot, @Nullable SharedDatum shared) {
         // A reference NFT can have user tokens of several labels (the CIP allows it); the row is stored with the first.
         List<Integer> pairedLabels = pairedLabels(refNft, assetUnitsInTx);
-        // Without a user token in the transaction the label can only be inferred from the datum, and a datum with none
-        // of the CIP-68 token fields (a dApp's own state under the 000643b0 prefix, an empty map) is not token metadata:
-        // it would only be indexed as a 333 fungible token by default. Once a reference NFT is indexed, every later
-        // datum is, so that an owner who clears the metadata is not served the old one.
-        if (pairedLabels.isEmpty() && !parsed.hasTokenFields()
-                && !cip68MetadataRepository.existsByPolicyIdAndAssetName(refNft.policyId(), refNft.assetName())) {
-            log.debug("Skipping CIP-68 datum of {}/{}: no user token in the transaction and none of the CIP-68 token fields",
-                    refNft.policyId(), refNft.assetName());
-            metrics.notTokenMetadata();
+        Skip skipUnlessIndexed = skipUnlessIndexed(parsed, pairedLabels);
+        if (skipUnlessIndexed != null && !hasEarlierDatum(refNft, slot, output)) {
+            pendingDatums.add(new PendingDatum(parsed, output, refNft, pairedLabels, slot, shared, skipUnlessIndexed));
             return Optional.empty();
         }
-        // A datum whose transaction has the 222 NFT and no 333 or 444 token is an NFT's metadata, which is not served:
-        // stored, it would answer for the 333 and 444 subjects of a token that was never minted. Once a reference NFT is
-        // indexed (a 333 or 444 token was paired with it, or its datum came without a user token), every later datum is.
-        if (isNftOnly(pairedLabels)
-                && !cip68MetadataRepository.existsByPolicyIdAndAssetName(refNft.policyId(), refNft.assetName())) {
-            log.debug("Skipping CIP-68 datum of {}/{}: its transaction has the 222 NFT and no 333 or 444 token",
-                    refNft.policyId(), refNft.assetName());
-            metrics.nftOnly();
-            return Optional.empty();
+        return Optional.of(storedRow(parsed, output, refNft, pairedLabels, slot, shared));
+    }
+
+    /**
+     * Why a datum is not stored unless its reference NFT is already indexed, or {@code null} for a datum that is stored
+     * whatever came before it.
+     * <ul>
+     *   <li>Without a user token in the transaction the label can only be inferred from the datum, and a datum with none
+     *       of the CIP-68 token fields (a dApp's own state under the 000643b0 prefix, an empty map) is not token metadata:
+     *       it would only be indexed as a 333 fungible token by default.</li>
+     *   <li>A datum whose transaction has the 222 NFT and no 333 or 444 token is an NFT's metadata, which is not served:
+     *       stored, it would answer for the 333 and 444 subjects of a token that was never minted (ADR 0009).</li>
+     * </ul>
+     * Once a reference NFT is indexed, every later datum is, so that an owner who clears the metadata is not served the
+     * old one.
+     */
+    @Nullable
+    private static Skip skipUnlessIndexed(ParsedCip68Datum parsed, List<Integer> pairedLabels) {
+        if (pairedLabels.isEmpty() && !parsed.hasTokenFields()) {
+            return Skip.NOT_TOKEN_METADATA;
         }
+        if (isNftOnly(pairedLabels)) {
+            return Skip.NFT_ONLY;
+        }
+        return null;
+    }
+
+    /** Whether the reference NFT has a datum stored from earlier in the chain than this output's transaction. */
+    private boolean hasEarlierDatum(AssetType refNft, Long slot, AddressUtxo output) {
+        int txIndex = output.getTxIndex() == null ? 0 : output.getTxIndex();
+        return cip68MetadataRepository.existsEarlierThan(refNft.policyId(), refNft.assetName(), slot, txIndex);
+    }
+
+    /**
+     * Decides the datums kept by {@link #indexDatum} once every block of the batch is processed: in chain order, each is
+     * stored if its reference NFT now has a datum from earlier in the chain, or had one stored a moment ago in this same
+     * pass, and skipped otherwise. {@link PreCommitEvent} is published after the last block of a batch in a parallel
+     * sync, and after every block otherwise, before the cursor moves, so a crash before it replays the blocks.
+     */
+    @EventListener
+    @Transactional
+    public void indexPendingDatums(PreCommitEvent preCommitEvent) {
+        if (pendingDatums.isEmpty()) {
+            return;
+        }
+        List<PendingDatum> batch = new ArrayList<>();
+        for (PendingDatum pending = pendingDatums.poll(); pending != null; pending = pendingDatums.poll()) {
+            batch.add(pending);
+        }
+        batch.sort(PendingDatum.CHAIN_ORDER);
+
+        Set<String> indexedInThisPass = new HashSet<>();
+        List<Cip68Metadata> entities = new ArrayList<>();
+        for (PendingDatum pending : batch) {
+            try {
+                if (indexedInThisPass.contains(pending.refNft().toUnit())
+                        || hasEarlierDatum(pending.refNft(), pending.slot(), pending.output())) {
+                    entities.add(storedRow(pending.parsed(), pending.output(), pending.refNft(), pending.pairedLabels(),
+                            pending.slot(), pending.shared()));
+                    indexedInThisPass.add(pending.refNft().toUnit());
+                } else {
+                    skip(pending);
+                }
+            } catch (RuntimeException e) {
+                skipReferenceNft(pending.output(), pending.slot(), pending.refNft(), e);
+            }
+        }
+        if (!entities.isEmpty()) {
+            cip68MetadataRepository.saveAll(entities);
+        }
+    }
+
+    /**
+     * The datums kept for the end of the batch belong to blocks that a rollback removes, or that are processed again
+     * after a failed batch: they are dropped, and the blocks that are processed again add them back.
+     */
+    @EventListener
+    public void dropPendingDatums(RollbackEvent rollbackEvent) {
+        pendingDatums.clear();
+    }
+
+    private void skip(PendingDatum pending) {
+        AssetType refNft = pending.refNft();
+        switch (pending.skip()) {
+            case NOT_TOKEN_METADATA -> {
+                log.debug("Skipping CIP-68 datum of {}/{}: no user token in the transaction and none of the CIP-68 token fields",
+                        refNft.policyId(), refNft.assetName());
+                metrics.notTokenMetadata();
+            }
+            case NFT_ONLY -> {
+                log.debug("Skipping CIP-68 datum of {}/{}: its transaction has the 222 NFT and no 333 or 444 token",
+                        refNft.policyId(), refNft.assetName());
+                metrics.nftOnly();
+            }
+        }
+    }
+
+    /**
+     * The row of a datum that is stored: its label, what is wrong with the datum itself, and what is reported about it.
+     * What the label requires is not stored: it is checked when the token is served, for the label asked for
+     * ({@link Cip68Validator#validate}).
+     */
+    private Cip68Metadata storedRow(ParsedCip68Datum parsed, AddressUtxo output, AssetType refNft,
+                                    List<Integer> pairedLabels, Long slot, @Nullable SharedDatum shared) {
         List<Integer> labels = pairedLabels.isEmpty() ? List.of(inferLabel(refNft, parsed)) : pairedLabels;
         // what is wrong with the datum itself does not depend on the label: the parser's errors, and the logo
         List<ValidationError> errors = new ArrayList<>(parsed.validationErrors());
@@ -299,7 +407,24 @@ public class Cip68Processor {
                             + "for its own label when it is served",
                     refNft.policyId(), refNft.assetName(), labels, label);
         }
-        return Optional.of(entity);
+        return entity;
+    }
+
+    /** Why a datum is not stored unless its reference NFT is already indexed, see {@link #skipUnlessIndexed}. */
+    private enum Skip {
+        NOT_TOKEN_METADATA,
+        NFT_ONLY
+    }
+
+    /** A datum whose fate is decided at the end of the batch, with what is needed to store it. */
+    private record PendingDatum(ParsedCip68Datum parsed, AddressUtxo output, AssetType refNft, List<Integer> pairedLabels,
+                                Long slot, @Nullable SharedDatum shared, Skip skip) {
+
+        /** Slot, then the transaction's index in its block, then the output's index in its transaction. */
+        private static final Comparator<PendingDatum> CHAIN_ORDER = Comparator
+                .comparing(PendingDatum::slot)
+                .thenComparing(pending -> pending.output().getTxIndex(), Comparator.nullsFirst(Comparator.naturalOrder()))
+                .thenComparing(pending -> pending.output().getOutputIndex(), Comparator.nullsFirst(Comparator.naturalOrder()));
     }
 
     /**
