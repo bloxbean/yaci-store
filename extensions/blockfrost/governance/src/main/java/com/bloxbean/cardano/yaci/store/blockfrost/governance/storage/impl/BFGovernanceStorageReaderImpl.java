@@ -390,6 +390,7 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
                         latest.field("latest_id", String.class).as("drep_id"),
                         latest.field("latest_status", String.class).as("status"),
                         latest.field("latest_epoch", Integer.class).as("last_active_epoch"),
+                        DSL.val((String) null, String.class).as("drep_type"),
                         orderSlot.as("order_slot"),
                         orderTxIndex.as("order_tx_index"),
                         orderCertIndex.as("order_cert_index")
@@ -427,6 +428,7 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
                                 .as("drep_id"),
                         DSL.inline("REGISTERED").as("status"),
                         DSL.val((Integer) null, Integer.class).as("last_active_epoch"),
+                        DSL.val((String) null, String.class).as("drep_type"),
                         specialRanked.field("special_slot", Long.class).as("order_slot"),
                         specialRanked.field("special_tx_index", Integer.class).as("order_tx_index"),
                         specialRanked.field("special_cert_index", Integer.class).as("order_cert_index")
@@ -434,18 +436,57 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
                 .from(specialRanked)
                 .where(specialRanked.field("rn", Integer.class).eq(1));
 
-        var allDreps = regularDreps.unionAll(specialDreps).asTable("all_dreps");
+        // DReps that received delegations but never registered have no drep row either. Like the
+        // protocol-defined DReps, their first delegation sets their position.
+        var unregisteredRanked = dsl.select(
+                        DELEGATION_VOTE.DREP_HASH.as("unregistered_hash"),
+                        DELEGATION_VOTE.DREP_ID.as("unregistered_id"),
+                        DELEGATION_VOTE.DREP_TYPE.as("unregistered_type"),
+                        DELEGATION_VOTE.SLOT.as("unregistered_slot"),
+                        DELEGATION_VOTE.TX_INDEX.as("unregistered_tx_index"),
+                        DELEGATION_VOTE.CERT_INDEX.as("unregistered_cert_index"),
+                        DSL.rowNumber().over(DSL.partitionBy(DELEGATION_VOTE.DREP_ID)
+                                .orderBy(DELEGATION_VOTE.SLOT.asc(),
+                                        DELEGATION_VOTE.TX_INDEX.asc(),
+                                        DELEGATION_VOTE.CERT_INDEX.asc()))
+                                .as("rn")
+                )
+                .from(DELEGATION_VOTE)
+                .where(DELEGATION_VOTE.DREP_TYPE.in(
+                        DrepType.ADDR_KEYHASH.name(),
+                        DrepType.SCRIPTHASH.name()
+                ))
+                .and(DELEGATION_VOTE.DREP_ID.isNotNull())
+                .andNotExists(dsl.selectOne().from(DREP).where(DREP.DREP_ID.eq(DELEGATION_VOTE.DREP_ID)))
+                .asTable("unregistered_ranked");
+
+        var unregisteredDreps = dsl.select(
+                        unregisteredRanked.field("unregistered_hash", String.class).as("drep_hash"),
+                        unregisteredRanked.field("unregistered_id", String.class).as("drep_id"),
+                        DSL.val((String) null, String.class).as("status"),
+                        DSL.val((Integer) null, Integer.class).as("last_active_epoch"),
+                        unregisteredRanked.field("unregistered_type", String.class).as("drep_type"),
+                        unregisteredRanked.field("unregistered_slot", Long.class).as("order_slot"),
+                        unregisteredRanked.field("unregistered_tx_index", Integer.class).as("order_tx_index"),
+                        unregisteredRanked.field("unregistered_cert_index", Integer.class).as("order_cert_index")
+                )
+                .from(unregisteredRanked)
+                .where(unregisteredRanked.field("rn", Integer.class).eq(1));
+
+        var allDreps = regularDreps.unionAll(specialDreps).unionAll(unregisteredDreps).asTable("all_dreps");
         var allDrepHash = allDreps.field("drep_hash", String.class);
         var allDrepId = allDreps.field("drep_id", String.class);
+        var allDrepType = allDreps.field("drep_type", String.class);
         SortOrder sortOrder = order == Order.desc ? SortOrder.DESC : SortOrder.ASC;
 
-        // Apply pagination only after regular and protocol-defined DReps share one stable order.
+        // Apply pagination only after regular, protocol-defined and unregistered DReps share one stable order.
         // Use the DRep ID as a final deterministic tie-breaker when chain coordinates are identical.
         List<BFDRep> dReps = dsl.select(
                         allDrepHash,
                         allDrepId,
                         allDreps.field("status", String.class),
-                        allDreps.field("last_active_epoch", Integer.class)
+                        allDreps.field("last_active_epoch", Integer.class),
+                        allDrepType
                 )
                 .from(allDreps)
                 .orderBy(
@@ -461,6 +502,7 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
                         .drepId(r.get(allDrepId))
                         .status(r.get(allDreps.field("status", String.class)))
                         .epoch(r.get(allDreps.field("last_active_epoch", Integer.class)))
+                        .hasScript(DrepType.SCRIPTHASH.name().equals(r.get(allDrepType)))
                         .build());
 
         enrichDRepList(dReps);
@@ -487,7 +529,8 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
             dRep.setAmount(isSpecialDRep(dRep)
                     ? specialAmounts.getOrDefault(drepId, 0L)
                     : amounts.getOrDefault(drepId, 0L));
-            dRep.setHasScript(scriptFlags.getOrDefault(drepId, false));
+            // Delegation-only DReps have no registration row; keep the flag taken from their delegation.
+            dRep.setHasScript(scriptFlags.getOrDefault(drepId, Boolean.TRUE.equals(dRep.getHasScript())));
 
             Integer lastVoteEpoch = lastVoteEpochs.get(drepId);
             if (lastVoteEpoch != null && (dRep.getEpoch() == null || lastVoteEpoch > dRep.getEpoch())) {
@@ -697,7 +740,7 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
                 .orderBy(DREP.SLOT.desc(), DREP.TX_INDEX.desc(), DREP.CERT_INDEX.desc())
                 .limit(1)
                 .fetchOne();
-        if (record == null) return Optional.empty();
+        if (record == null) return findDelegationOnlyDRep(identity);
 
         String drepId = record.get(DREP.DREP_ID);
         String drepHash = record.get(DREP.DREP_HASH);
@@ -764,6 +807,28 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
                 .hasScript(hasScript)
                 .expired(expired)
                 .build());
+    }
+
+    /**
+     * A DRep that received vote delegations but never registered has no drep row. It is still a
+     * DRep with no lifecycle data: no registration or activity epoch, not retired.
+     */
+    private Optional<BFDRep> findDelegationOnlyDRep(BFDRepIdentity identity) {
+        if (identity.drepId() == null) {
+            return Optional.empty();
+        }
+        return dsl.select(DELEGATION_VOTE.DREP_HASH, DELEGATION_VOTE.DREP_TYPE)
+                .from(DELEGATION_VOTE)
+                .where(DELEGATION_VOTE.DREP_ID.eq(identity.drepId()))
+                .limit(1)
+                .fetchOptional()
+                .map(r -> BFDRep.builder()
+                        .drepId(identity.drepId())
+                        .drepHash(r.get(DELEGATION_VOTE.DREP_HASH))
+                        .amount(fetchLatestDRepAmounts(List.of(identity.drepId())).get(identity.drepId()))
+                        .hasScript(DrepType.SCRIPTHASH.name().equals(r.get(DELEGATION_VOTE.DREP_TYPE)))
+                        .expired(false)
+                        .build());
     }
 
     /**
