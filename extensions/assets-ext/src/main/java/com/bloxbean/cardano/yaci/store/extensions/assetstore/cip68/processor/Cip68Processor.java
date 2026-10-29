@@ -128,18 +128,25 @@ public class Cip68Processor {
     }
 
     /**
-     * Whether one of the transaction's outputs holds a reference NFT. An output this check cannot read is counted as
-     * one, so that the transaction is kept and {@link #processTransaction} skips and records it as it does for any
-     * output it fails on, instead of the exception stopping the block thread here.
+     * Whether one of the transaction's outputs holds an asset whose name starts with the reference NFT prefix
+     * ({@code 000643b0}). It runs on the block thread before the per-output error handling of
+     * {@link #processTransaction}, so it only reads the units and cannot throw: a missing list or unit counts as no
+     * reference NFT. It is broader than {@link Cip68TokenService#isReferenceNft}, which also requires a quantity of 1;
+     * {@link #processTransaction} applies the exact check, and its error handling, to what is kept.
      */
-    private boolean hasReferenceNftOutput(TxInputOutput txIo) {
+    private static boolean hasReferenceNftOutput(TxInputOutput txIo) {
+        if (txIo.getOutputs() == null) {
+            return false;
+        }
         for (AddressUtxo output : txIo.getOutputs()) {
-            try {
-                if (!cip68TokenService.extractReferenceNfts(output).isEmpty()) {
+            if (output == null || output.getAmounts() == null) {
+                continue;
+            }
+            for (Amt amount : output.getAmounts()) {
+                if (amount != null && amount.getUnit() != null
+                        && AssetType.fromUnit(amount.getUnit()).assetName().startsWith(Cip68Constants.REFERENCE_TOKEN_PREFIX)) {
                     return true;
                 }
-            } catch (RuntimeException e) {
-                return true;
             }
         }
         return false;

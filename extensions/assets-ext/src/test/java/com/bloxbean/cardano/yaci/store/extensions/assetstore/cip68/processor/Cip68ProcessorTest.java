@@ -42,6 +42,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -587,14 +588,41 @@ class Cip68ProcessorTest {
         }
 
         @Test
-        void aTransactionWhoseOutputCannotBeCheckedIsKeptForTheIndexingToRecord() {
-            AddressUtxo unreadable = output(TX_HASH, 0, REF_NFT_ASSET_NAME, "d8799fa0ff");
-            when(cip68TokenService.extractReferenceNfts(unreadable)).thenThrow(new IllegalArgumentException("bad unit"));
+        void aReferenceNftUnitWithAnotherQuantityKeepsItsTransactionForTheExactCheck() {
+            // the filter does not check the quantity: processTransaction applies the exact rules to what is kept
+            AddressUtxo two = AddressUtxo.builder().txHash(TX_HASH).txIndex(0).outputIndex(0)
+                    .amounts(List.of(Amt.builder().unit(POLICY_ID + REF_NFT_ASSET_NAME).quantity(BigInteger.TWO).build()))
+                    .build();
 
-            processor.collectForBatch(blockOf(10, tx(TX_HASH, unreadable)));
+            processor.collectForBatch(blockOf(10, tx(TX_HASH, two)));
 
-            assertThat(processor.keptForBatch().get(10L).getTxInputOutputs())
-                    .singleElement().satisfies(txIo -> assertThat(txIo.getOutputs()).containsExactly(unreadable));
+            assertThat(processor.keptForBatch()).containsOnlyKeys(10L);
+        }
+
+        @Test
+        void aUnitWithADotBetweenPolicyAndAssetNameIsRecognised() {
+            AddressUtxo dotted = AddressUtxo.builder().txHash(TX_HASH).txIndex(0).outputIndex(0)
+                    .amounts(List.of(Amt.builder().unit(POLICY_ID + "." + REF_NFT_ASSET_NAME).quantity(BigInteger.ONE).build()))
+                    .build();
+
+            processor.collectForBatch(blockOf(10, tx(TX_HASH, dotted)));
+
+            assertThat(processor.keptForBatch()).containsOnlyKeys(10L);
+        }
+
+        @Test
+        void outputsWithoutAmountsOrUnitsKeepNothingAndDoNotThrow() {
+            // read on the block thread, before the per-output error handling: nothing in an output may throw here
+            AddressUtxo noAmounts = AddressUtxo.builder().txHash(TX_HASH).txIndex(0).outputIndex(0).build();
+            AddressUtxo noUnit = AddressUtxo.builder().txHash(TX_HASH).txIndex(0).outputIndex(1)
+                    .amounts(List.of(Amt.builder().quantity(BigInteger.ONE).build())).build();
+            AddressUtxo shortUnit = AddressUtxo.builder().txHash(TX_HASH).txIndex(0).outputIndex(2)
+                    .amounts(List.of(Amt.builder().unit("000643b0").quantity(BigInteger.ONE).build())).build();
+            TxInputOutput noOutputs = TxInputOutput.builder().txHash(OTHER_TX_HASH).build();
+
+            assertThatCode(() -> processor.collectForBatch(blockOf(10, tx(TX_HASH, noAmounts, noUnit, shortUnit), noOutputs)))
+                    .doesNotThrowAnyException();
+            assertThat(processor.keptForBatch()).isEmpty();
         }
 
         @Test
