@@ -2,6 +2,8 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.processor;
 
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
+import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
+import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.AssetType;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.metrics.Cip68Metrics;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Constants;
@@ -31,12 +33,14 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Locale;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @Component
@@ -60,6 +64,12 @@ public class Cip68Processor {
     private final Cip68Metrics metrics;
     private final InvalidTokenRecorder invalidTokenRecorder;
     private final Clock clock;
+
+    /**
+     * The {@link AddressUtxoEvent}s of the blocks of the current batch, by block number, indexed in chain order on
+     * {@link PreCommitEvent} ({@link #indexBatchInChainOrder}). Filled by the block threads of a parallel sync.
+     */
+    private final Map<Long, AddressUtxoEvent> eventsOfBatch = new ConcurrentHashMap<>();
 
     @Autowired
     public Cip68Processor(Cip68TokenService cip68TokenService, Cip68DatumParser cip68DatumParser,
@@ -85,7 +95,52 @@ public class Cip68Processor {
         this(cip68TokenService, cip68DatumParser, cip68MetadataRepository, Cip68Metrics.noop());
     }
 
+    /**
+     * Keeps the block's outputs for the end of the batch instead of indexing them now.
+     * <p>
+     * Indexing depends on the order of the blocks: a datum without a user token and without token fields, or one whose
+     * transaction has the 222 NFT and no 333 or 444 token, is stored only if its reference NFT is already stored (ADR
+     * 0002, ADR 0009). During a parallel sync ({@code store.executor.enable-parallel-processing}) the blocks of a batch
+     * run in partitions at the same time, so "already stored" would depend on which partition finishes first. This
+     * module therefore opts out of the parallel order: it indexes the blocks of a batch one by one, in chain order, at
+     * the end of the batch, as {@code AccountBalanceProcessor} does for balances. The rest of the store stays parallel.
+     * At the tip {@link PreCommitEvent} follows every block, so a block is indexed right after it is processed.
+     */
     @EventListener
+    public void collectForBatch(AddressUtxoEvent addressUtxoEvent) {
+        eventsOfBatch.put(addressUtxoEvent.getMetadata().getBlock(), addressUtxoEvent);
+    }
+
+    /**
+     * Indexes the blocks kept by {@link #collectForBatch}, in chain order. {@link PreCommitEvent} is published after
+     * the last block of a batch during a parallel sync, once every partition has finished, and after every block
+     * otherwise, in both cases before the cursor moves: if the process stops before it, the blocks are processed again.
+     */
+    @EventListener
+    @Transactional
+    public void indexBatchInChainOrder(PreCommitEvent preCommitEvent) {
+        if (eventsOfBatch.isEmpty()) {
+            return;
+        }
+        try {
+            List<AddressUtxoEvent> inChainOrder = eventsOfBatch.values().stream()
+                    .sorted(Comparator.comparingLong(event -> event.getMetadata().getBlock()))
+                    .toList();
+            for (AddressUtxoEvent event : inChainOrder) {
+                processTransaction(event);
+            }
+        } finally {
+            eventsOfBatch.clear();
+        }
+    }
+
+    /** The blocks kept for the end of the batch are removed by a rollback, or processed again after a failed batch. */
+    @EventListener
+    public void dropBatch(RollbackEvent rollbackEvent) {
+        eventsOfBatch.clear();
+    }
+
+    /** Indexes the CIP-68 reference NFTs of one block; called in chain order by {@link #indexBatchInChainOrder}. */
     @Transactional
     public void processTransaction(AddressUtxoEvent addressUtxoEvent) {
         Long slot = addressUtxoEvent.getMetadata().getSlot();

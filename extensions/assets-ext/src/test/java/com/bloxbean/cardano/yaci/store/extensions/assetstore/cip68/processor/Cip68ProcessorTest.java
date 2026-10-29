@@ -5,9 +5,12 @@ import org.junit.jupiter.api.BeforeEach;
 import java.time.ZoneOffset;
 import java.time.Instant;
 import java.time.Clock;
+import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
+import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
+import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.metrics.Cip68Metrics;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Constants;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.Cip68Metadata;
@@ -405,6 +408,90 @@ class Cip68ProcessorTest {
                         .extracting(e -> e.subStandard() + ":" + e.fieldName() + ":" + e.fieldCategory() + ":" + e.code())
                         .containsExactly("333:description:MANDATORY:chunked_text");
             });
+        }
+    }
+
+    /**
+     * During a parallel sync the blocks of a batch run in partitions at the same time, so a later block can be processed
+     * before an earlier one. The module keeps the blocks of the batch and indexes them in chain order at the end of the
+     * batch, so that "already stored" sees exactly the earlier blocks.
+     */
+    @Nested
+    @DisplayName("Blocks of a batch indexed in chain order")
+    class BatchInChainOrder {
+
+        private static final String MINT_DATUM = "d8799fa1446e616d65444e616d65ff";
+        private static final String CLEARED_DATUM = "d8799fa001ff";
+
+        private final List<Cip68Metadata> stored = new ArrayList<>();
+
+        private AddressUtxoEvent block(long block, long slot, String datum) {
+            Amt refNftAmt = Amt.builder().unit(POLICY_ID + REF_NFT_ASSET_NAME).quantity(BigInteger.ONE).build();
+            AddressUtxo utxo = AddressUtxo.builder().txHash(TX_HASH).txIndex(0).outputIndex(0)
+                    .inlineDatum(datum).amounts(List.of(refNftAmt)).build();
+            lenient().when(cip68TokenService.extractReferenceNfts(utxo)).thenReturn(List.of(refNftAmt));
+            return AddressUtxoEvent.builder()
+                    .metadata(EventMetadata.builder().block(block).slot(slot).build())
+                    .txInputOutputs(List.of(TxInputOutput.builder().outputs(List.of(utxo)).build()))
+                    .build();
+        }
+
+        private void storeForReal() {
+            // the repository answers "already stored" from what was saved so far, as the database would
+            lenient().when(metadataReferenceNftRepository.saveAll(any())).thenAnswer(invocation -> {
+                Iterable<Cip68Metadata> rows = invocation.getArgument(0);
+                rows.forEach(stored::add);
+                return rows;
+            });
+            lenient().when(metadataReferenceNftRepository.existsByPolicyIdAndAssetName(POLICY_ID, REF_NFT_ASSET_NAME))
+                    .thenAnswer(invocation -> !stored.isEmpty());
+            lenient().when(cip68DatumParser.parseDetailed(eq(MINT_DATUM), any())).thenReturn(new ParseOutcome.Parsed(
+                    new ParsedCip68Datum(null, null, null, "House of Titans #1001", null, null, 1L, null, null, null)));
+            lenient().when(cip68DatumParser.parseDetailed(eq(CLEARED_DATUM), any())).thenReturn(new ParseOutcome.Parsed(
+                    new ParsedCip68Datum(null, null, null, null, null, null, 1L, null, null, null)));
+        }
+
+        @Test
+        void aBlockIsNotIndexedBeforeTheEndOfTheBatch() {
+            processor.collectForBatch(block(10, 100L, MINT_DATUM));
+
+            verifyNoInteractions(metadataReferenceNftRepository, cip68DatumParser);
+        }
+
+        @Test
+        void aClearedDatumProcessedBeforeTheMintIsStoredOnceTheBatchIsIndexedInChainOrder() {
+            // House of Titans #1001 on mainnet: the datum is cleared 20 blocks after the mint, and the later block's
+            // partition ran first
+            storeForReal();
+
+            processor.collectForBatch(block(30, 500L, CLEARED_DATUM));
+            processor.collectForBatch(block(10, 100L, MINT_DATUM));
+            processor.indexBatchInChainOrder(new PreCommitEvent(EventMetadata.builder().block(99).build()));
+
+            assertThat(stored).extracting(Cip68Metadata::getSlot).containsExactly(100L, 500L);
+            assertThat(stored.getLast().getName()).isNull();
+            verify(metrics, never()).notTokenMetadata();
+        }
+
+        @Test
+        void theBlocksOfABatchAreIndexedOnce() {
+            storeForReal();
+            processor.collectForBatch(block(10, 100L, MINT_DATUM));
+
+            processor.indexBatchInChainOrder(new PreCommitEvent(EventMetadata.builder().block(10).build()));
+            processor.indexBatchInChainOrder(new PreCommitEvent(EventMetadata.builder().block(11).build()));
+
+            assertThat(stored).hasSize(1);
+        }
+
+        @Test
+        void aRollbackDropsTheBlocksKeptForTheEndOfTheBatch() {
+            processor.collectForBatch(block(10, 100L, MINT_DATUM));
+
+            processor.dropBatch(RollbackEvent.builder().rollbackTo(new Point(50L, "ab".repeat(32))).build());
+            processor.indexBatchInChainOrder(new PreCommitEvent(EventMetadata.builder().block(10).build()));
+
+            verifyNoInteractions(metadataReferenceNftRepository, cip68DatumParser);
         }
     }
 
