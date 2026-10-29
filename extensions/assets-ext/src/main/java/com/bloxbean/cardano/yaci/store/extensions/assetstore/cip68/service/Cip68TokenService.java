@@ -153,17 +153,15 @@ public class Cip68TokenService {
 
     /**
      * The logo to serve. A rich fungible token (444) has no {@code logo} in CIP-68: its picture is the {@code image},
-     * which is served as the logo, as cf-token-metadata-registry does, so that wallets show it unchanged. Whether the
-     * token is an RFT is the label of the subject asked for, not the label the row was stored with, which may have been
+     * which is served as the logo, as cf-token-metadata-registry does, so that wallets show it unchanged. A {@code logo}
+     * in its datum is not part of CIP-68 for a 444, so it is not served, also when there is no image. Whether the token
+     * is an RFT is the label of the subject asked for, not the label the row was stored with, which may have been
      * guessed. The image is served as written even when it is not a URI with an allowed scheme; the validation errors
      * say so.
      */
     @Nullable
     private static String logoOf(Cip68Metadata row, int label) {
-        if (row.getLogo() == null && label == LABEL_RFT) {
-            return row.getImage();
-        }
-        return row.getLogo();
+        return label == LABEL_RFT ? row.getImage() : row.getLogo();
     }
 
     /** The label of a fungible ({@code 0014df10}) or rich fungible ({@code 001bc280}) token subject. */
