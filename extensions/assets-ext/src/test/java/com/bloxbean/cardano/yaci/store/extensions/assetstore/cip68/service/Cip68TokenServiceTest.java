@@ -530,6 +530,24 @@ class Cip68TokenServiceTest {
 
             assertThat(service.findSubject(POLICY, REF_NAME, LABEL_FT, List.of()).orElseThrow().logo()).isEqualTo("ipfs://QmLogo");
         }
+
+        @Test
+        void aRichFungibleTokensLogoIsNotServedOnlyItsImage() {
+            // CIP-68 gives a 444 no logo: one in its datum is not served, also when the image is missing
+            Cip68Metadata withImage = Cip68Metadata.builder()
+                    .policyId(POLICY).assetName(REF_NAME).slot(200L).label(LABEL_RFT)
+                    .name("Edition").logo("ipfs://QmLogo").image("ipfs://QmImage").version(1L).build();
+            when(repository.findFirstByPolicyIdAndAssetNameOrderBySlotDescTxIndexDesc(POLICY, REF_NAME))
+                    .thenReturn(Optional.of(withImage));
+            assertThat(service.findSubject(POLICY, REF_NAME, LABEL_RFT, List.of()).orElseThrow().logo()).isEqualTo("ipfs://QmImage");
+
+            Cip68Metadata withoutImage = Cip68Metadata.builder()
+                    .policyId(POLICY).assetName(REF_NAME).slot(200L).label(LABEL_RFT)
+                    .name("Edition").logo("ipfs://QmLogo").version(1L).build();
+            when(repository.findFirstByPolicyIdAndAssetNameOrderBySlotDescTxIndexDesc(POLICY, REF_NAME))
+                    .thenReturn(Optional.of(withoutImage));
+            assertThat(service.findSubject(POLICY, REF_NAME, LABEL_RFT, List.of()).orElseThrow().logo()).isNull();
+        }
     }
 
     private static AddressUtxo utxoWith(String unit, BigInteger quantity) {
