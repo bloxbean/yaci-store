@@ -33,6 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -66,8 +67,9 @@ public class Cip68Processor {
     private final Clock clock;
 
     /**
-     * The {@link AddressUtxoEvent}s of the blocks of the current batch, by block number, indexed in chain order on
-     * {@link PreCommitEvent} ({@link #indexBatchInChainOrder}). Filled by the block threads of a parallel sync.
+     * What indexing needs of the blocks of the current batch, by block number: the transactions with a reference NFT
+     * output, with their outputs only ({@link #collectForBatch}). Indexed in chain order on {@link PreCommitEvent}
+     * ({@link #indexBatchInChainOrder}). Filled by the block threads of a parallel sync.
      */
     private final Map<Long, AddressUtxoEvent> eventsOfBatch = new ConcurrentHashMap<>();
 
@@ -105,10 +107,42 @@ public class Cip68Processor {
      * module therefore opts out of the parallel order: it indexes the blocks of a batch one by one, in chain order, at
      * the end of the batch, as {@code AccountBalanceProcessor} does for balances. The rest of the store stays parallel.
      * At the tip {@link PreCommitEvent} follows every block, so a block is indexed right after it is processed.
+     * <p>
+     * Only what indexing reads is kept, so that the memory held until the end of the batch grows with the CIP-68
+     * activity of the batch, not with the size of its blocks: the transactions with an output that holds a reference
+     * NFT, each with all its outputs (they carry the user tokens paired with it) and none of its inputs. A block without
+     * such a transaction keeps nothing.
      */
     @EventListener
     public void collectForBatch(AddressUtxoEvent addressUtxoEvent) {
-        eventsOfBatch.put(addressUtxoEvent.getMetadata().getBlock(), addressUtxoEvent);
+        List<TxInputOutput> withReferenceNft = new ArrayList<>();
+        for (TxInputOutput txIo : addressUtxoEvent.getTxInputOutputs()) {
+            if (hasReferenceNftOutput(txIo)) {
+                withReferenceNft.add(new TxInputOutput(txIo.getTxHash(), List.of(), txIo.getOutputs()));
+            }
+        }
+        if (!withReferenceNft.isEmpty()) {
+            eventsOfBatch.put(addressUtxoEvent.getMetadata().getBlock(),
+                    new AddressUtxoEvent(addressUtxoEvent.getMetadata(), withReferenceNft));
+        }
+    }
+
+    /**
+     * Whether one of the transaction's outputs holds a reference NFT. An output this check cannot read is counted as
+     * one, so that the transaction is kept and {@link #processTransaction} skips and records it as it does for any
+     * output it fails on, instead of the exception stopping the block thread here.
+     */
+    private boolean hasReferenceNftOutput(TxInputOutput txIo) {
+        for (AddressUtxo output : txIo.getOutputs()) {
+            try {
+                if (!cip68TokenService.extractReferenceNfts(output).isEmpty()) {
+                    return true;
+                }
+            } catch (RuntimeException e) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -132,6 +166,11 @@ public class Cip68Processor {
         } finally {
             eventsOfBatch.clear();
         }
+    }
+
+    /** What is kept for the end of the batch, by block number (tests). */
+    Map<Long, AddressUtxoEvent> keptForBatch() {
+        return Collections.unmodifiableMap(eventsOfBatch);
     }
 
     /** The blocks kept for the end of the batch are removed by a rollback, or processed again after a failed batch. */
