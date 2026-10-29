@@ -226,6 +226,10 @@ class Cip68StrictImageTest {
 
     /** Indexes one transaction (reference NFT with the datum, plus its paired user token) and returns the saved row, if any. */
     private Optional<Cip68Metadata> index(String datum, String policy, String base, String userTokenPrefix) {
+        // an NFT's datum is stored once its reference NFT is (ADR 0002): these tests are about what is stored for it
+        if (Cip68Constants.NFT_TOKEN_PREFIX.equals(userTokenPrefix)) {
+            org.mockito.Mockito.when(repository.existsByPolicyIdAndAssetName(policy, Cip68Constants.REFERENCE_TOKEN_PREFIX + base)).thenReturn(true);
+        }
         AddressUtxo refNft = AddressUtxo.builder().txHash(TX_HASH).txIndex(0).inlineDatum(datum)
                 .amounts(List.of(amount(policy + Cip68Constants.REFERENCE_TOKEN_PREFIX + base))).build();
         AddressUtxo userToken = AddressUtxo.builder().txHash(TX_HASH).txIndex(1)

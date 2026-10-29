@@ -26,8 +26,11 @@ import java.util.List;
 import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
  * The label of a reference NFT comes from the user token paired with it: the same policy and the
@@ -118,7 +121,17 @@ class Cip68LabelPairingTest {
     }
 
     @Test
-    void labelsAsNftWhenTheNftUserTokenIsPaired() {
+    void doesNotStoreADatumWhoseOnlyPairedUserTokenIsTheNft() {
+        // an NFT's metadata is not served: stored, it would answer for a 333 and a 444 subject never minted
+        index(FLDT_POLICY, FLDT_BASE, IMAGE_DATUM, List.of(FLDT_POLICY + NFT + FLDT_BASE));
+
+        verify(repository, never()).saveAll(any());
+    }
+
+    @Test
+    void labelsAsNftWhenTheNftUserTokenIsPairedWithAReferenceNftAlreadyStored() {
+        when(repository.existsByPolicyIdAndAssetName(FLDT_POLICY, REF + FLDT_BASE)).thenReturn(true);
+
         assertThat(labelOf(FLDT_POLICY, FLDT_BASE, IMAGE_DATUM, List.of(FLDT_POLICY + NFT + FLDT_BASE)))
                 .isEqualTo(Cip68Constants.LABEL_NFT);
     }
@@ -142,13 +155,26 @@ class Cip68LabelPairingTest {
 
     @Test
     void matchesUnitsRegardlessOfHexCase() {
-        List<String> others = List.of((FLDT_POLICY + NFT + FLDT_BASE).toUpperCase());
+        List<String> others = List.of((FLDT_POLICY + RFT + FLDT_BASE).toUpperCase());
 
-        assertThat(labelOf(FLDT_POLICY, FLDT_BASE, IMAGE_DATUM, others)).isEqualTo(Cip68Constants.LABEL_NFT);
+        assertThat(labelOf(FLDT_POLICY, FLDT_BASE, IMAGE_DATUM, others)).isEqualTo(Cip68Constants.LABEL_RFT);
+    }
+
+    /** Runs a transaction with the reference NFT (carrying the datum) plus one output per other unit; returns the stored label. */
+    private int labelOf(String policy, String baseName, String datum, List<String> otherUnits) {
+        index(policy, baseName, datum, otherUnits);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Iterable<Cip68Metadata>> captor = ArgumentCaptor.forClass(Iterable.class);
+        verify(repository).saveAll(captor.capture());
+        List<Cip68Metadata> rows = new ArrayList<>();
+        captor.getValue().forEach(rows::add);
+        assertThat(rows).hasSize(1);
+        return rows.getFirst().getLabel();
     }
 
     /** Runs a transaction with the reference NFT (carrying the datum) plus one output per other unit. */
-    private int labelOf(String policy, String baseName, String datum, List<String> otherUnits) {
+    private void index(String policy, String baseName, String datum, List<String> otherUnits) {
         List<AddressUtxo> outputs = new ArrayList<>();
         outputs.add(AddressUtxo.builder().txHash(TX_HASH).txIndex(0).inlineDatum(datum)
                 .amounts(List.of(amount(policy + REF + baseName))).build());
@@ -160,14 +186,6 @@ class Cip68LabelPairingTest {
                 .metadata(EventMetadata.builder().slot(100L).build())
                 .txInputOutputs(List.of(TxInputOutput.builder().outputs(outputs).build()))
                 .build());
-
-        @SuppressWarnings("unchecked")
-        ArgumentCaptor<Iterable<Cip68Metadata>> captor = ArgumentCaptor.forClass(Iterable.class);
-        verify(repository).saveAll(captor.capture());
-        List<Cip68Metadata> rows = new ArrayList<>();
-        captor.getValue().forEach(rows::add);
-        assertThat(rows).hasSize(1);
-        return rows.getFirst().getLabel();
     }
 
     /** Distinct 222 NFTs of one policy, like a collection minted in the same transaction. */

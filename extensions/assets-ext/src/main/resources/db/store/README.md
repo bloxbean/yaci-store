@@ -62,6 +62,11 @@ One row per *reference-NFT update*. Holds rows for all three CIP-68 label types
 `Cip68Processor` classifies each row at index time using cross-output detection
 (observing the co-minted user-token prefix in the same transaction's outputs).
 
+A datum whose transaction has the reference NFT's 222 NFT and no 333 or 444 token is **not stored** while the
+reference NFT has no row (metric reason `nft_only`): it is an NFT's metadata, which is not served, and stored it
+would answer for the 333 and 444 subjects of a token that was never minted. A 222 row is an update of a reference NFT
+already stored, or a datum whose transaction also has a 333 or 444 token. See ADR 0002.
+
 Primary key is `(policy_id, asset_name, slot, tx_hash)` — keying on `tx_hash` (like the rest of
 yaci-store: stake_registration, governance, etc.) means the table preserves the full history of
 reference-NFT updates, including multiple updates within the same slot (intra-block tx chaining),

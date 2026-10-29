@@ -31,6 +31,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigInteger;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -219,8 +220,27 @@ class Cip68ProcessorTest {
         }
 
         @Test
-        void labelsAsNftWhenCoMintedWithNftUserToken() {
-            verifyLabel(NFT_USER_TOKEN_NAME, Cip68Constants.LABEL_NFT);
+        void skipsAnNftWhoseTransactionHasOnlyItsNftUserToken() {
+            // an NFT's metadata is not served: stored, it would answer for a 333 and a 444 subject never minted
+            index(List.of(NFT_USER_TOKEN_NAME));
+
+            verify(metadataReferenceNftRepository, never()).saveAll(any());
+            verify(metrics).nftOnly();
+        }
+
+        @Test
+        void labelsAsNftAnNftOnlyUpdateOfAReferenceNftAlreadyStored() {
+            when(metadataReferenceNftRepository.existsByPolicyIdAndAssetName(POLICY_ID, REF_NFT_ASSET_NAME)).thenReturn(true);
+
+            verifyLabel(List.of(NFT_USER_TOKEN_NAME), Cip68Constants.LABEL_NFT);
+            verify(metrics, never()).nftOnly();
+        }
+
+        @Test
+        void storesADatumWhoseTransactionHasTheNftAndTheFungibleToken() {
+            // the row is stored with the first label, 222; each token is checked for its own label when it is served
+            verifyLabel(List.of(NFT_USER_TOKEN_NAME, FT_USER_TOKEN_NAME), Cip68Constants.LABEL_NFT);
+            verify(metrics, never()).nftOnly();
         }
 
         @Test
@@ -249,6 +269,17 @@ class Cip68ProcessorTest {
         // Helper: build a tx with the ref-NFT output + a co-minted user-token output
         // having the given asset name; assert the saved row's label matches expected.
         private void verifyLabel(String coMintedAssetName, int expectedLabel) {
+            verifyLabel(List.of(coMintedAssetName), expectedLabel);
+        }
+
+        private void verifyLabel(List<String> coMintedAssetNames, int expectedLabel) {
+            index(coMintedAssetNames);
+
+            assertThat(captureSavedLabel()).isEqualTo(expectedLabel);
+        }
+
+        // Helper: index a tx with the ref-NFT output + one output per co-minted user token
+        private void index(List<String> coMintedAssetNames) {
             String datum = "d8799fa34446756e6e";
             ParsedCip68Datum metadata = new ParsedCip68Datum(
                     6L, "Test", null, "Test", "TST", null, 1L, null, null, null);
@@ -257,22 +288,24 @@ class Cip68ProcessorTest {
             AddressUtxo refNftUtxo = AddressUtxo.builder()
                     .txHash(TX_HASH).inlineDatum(datum).amounts(List.of(refNftAmt)).build();
 
-            // Co-minted user token in another output of the same tx
-            Amt userTokenAmt = Amt.builder()
-                    .unit(POLICY_ID + coMintedAssetName)
-                    .quantity(BigInteger.ONE)
-                    .build();
-            AddressUtxo userTokenUtxo = AddressUtxo.builder()
-                    .txHash(TX_HASH).amounts(List.of(userTokenAmt)).build();
+            // Co-minted user tokens in other outputs of the same tx
+            List<AddressUtxo> outputs = new ArrayList<>(List.of(refNftUtxo));
+            for (String coMintedAssetName : coMintedAssetNames) {
+                Amt userTokenAmt = Amt.builder()
+                        .unit(POLICY_ID + coMintedAssetName)
+                        .quantity(BigInteger.ONE)
+                        .build();
+                AddressUtxo userTokenUtxo = AddressUtxo.builder()
+                        .txHash(TX_HASH).amounts(List.of(userTokenAmt)).build();
+                when(cip68TokenService.extractReferenceNfts(userTokenUtxo)).thenReturn(List.of());
+                outputs.add(userTokenUtxo);
+            }
 
             when(cip68TokenService.extractReferenceNfts(refNftUtxo)).thenReturn(List.of(refNftAmt));
-            when(cip68TokenService.extractReferenceNfts(userTokenUtxo)).thenReturn(List.of());
             when(cip68DatumParser.parseDetailed(eq(datum), any())).thenReturn(new ParseOutcome.Parsed(metadata));
 
-            // Both outputs in the same tx — that's how cross-output detection sees them.
-            processor.processTransaction(buildEvent(100L, List.of(refNftUtxo, userTokenUtxo)));
-
-            assertThat(captureSavedLabel()).isEqualTo(expectedLabel);
+            // All outputs in the same tx — that's how cross-output detection sees them.
+            processor.processTransaction(buildEvent(100L, outputs));
         }
 
         private Amt refNftAmount() {

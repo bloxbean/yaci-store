@@ -236,6 +236,10 @@ class Cip68OrphanLabelTest {
 
     /** Indexes one transaction (the reference NFT with the datum and, if given, its paired user token). */
     private Optional<Cip68Metadata> index(String datum, String policy, String base, String userTokenPrefix) {
+        // an NFT's datum is stored once its reference NFT is (ADR 0002): these tests are about what is stored for it
+        if (Cip68Constants.NFT_TOKEN_PREFIX.equals(userTokenPrefix)) {
+            org.mockito.Mockito.when(repository.existsByPolicyIdAndAssetName(policy, Cip68Constants.REFERENCE_TOKEN_PREFIX + base)).thenReturn(true);
+        }
         List<AddressUtxo> outputs = new ArrayList<>();
         outputs.add(AddressUtxo.builder().txHash(TX_HASH).txIndex(0).inlineDatum(datum)
                 .amounts(List.of(amount(policy + Cip68Constants.REFERENCE_TOKEN_PREFIX + base))).build());

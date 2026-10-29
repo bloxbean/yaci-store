@@ -160,6 +160,11 @@ class Cip68NftWithoutDescriptionTest {
 
     /** A transaction with the reference NFT (with the datum) and, optionally, a co-minted user token. */
     private AddressUtxoEvent event(String datum, String userTokenPrefix) {
+        // an NFT's datum is stored once its reference NFT is (ADR 0002): these tests are about what is stored for it
+        if ("000de140".equals(userTokenPrefix)) {
+            org.mockito.Mockito.when(repository.existsByPolicyIdAndAssetName(
+                    org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString())).thenReturn(true);
+        }
         AddressUtxo refNft = AddressUtxo.builder()
                 .txHash(TX_HASH).txIndex(0).inlineDatum(datum)
                 .amounts(List.of(amount("000643b0" + BASE_NAME)))

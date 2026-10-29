@@ -264,6 +264,16 @@ public class Cip68Processor {
             metrics.notTokenMetadata();
             return Optional.empty();
         }
+        // A datum whose transaction has the 222 NFT and no 333 or 444 token is an NFT's metadata, which is not served:
+        // stored, it would answer for the 333 and 444 subjects of a token that was never minted. Once a reference NFT is
+        // indexed (a 333 or 444 token was paired with it, or its datum came without a user token), every later datum is.
+        if (isNftOnly(pairedLabels)
+                && !cip68MetadataRepository.existsByPolicyIdAndAssetName(refNft.policyId(), refNft.assetName())) {
+            log.debug("Skipping CIP-68 datum of {}/{}: its transaction has the 222 NFT and no 333 or 444 token",
+                    refNft.policyId(), refNft.assetName());
+            metrics.nftOnly();
+            return Optional.empty();
+        }
         List<Integer> labels = pairedLabels.isEmpty() ? List.of(inferLabel(refNft, parsed)) : pairedLabels;
         // what is wrong with the datum itself does not depend on the label: the parser's errors, and the logo
         List<ValidationError> errors = new ArrayList<>(parsed.validationErrors());
@@ -390,6 +400,12 @@ public class Cip68Processor {
             labels.add(Cip68Constants.LABEL_RFT);
         }
         return labels;
+    }
+
+    /** Whether the transaction pairs the reference NFT with its 222 NFT and with no 333 or 444 token. */
+    private static boolean isNftOnly(List<Integer> pairedLabels) {
+        return pairedLabels.contains(Cip68Constants.LABEL_NFT)
+                && !pairedLabels.contains(Cip68Constants.LABEL_FT) && !pairedLabels.contains(Cip68Constants.LABEL_RFT);
     }
 
     /** The label of a reference NFT without a paired user token in the transaction, see {@link #inferLabelFromDatum}. */

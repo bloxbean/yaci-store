@@ -49,6 +49,9 @@ class Cip68MetricsTest {
         registry = new SimpleMeterRegistry();
         Cip68Metrics metrics = new Cip68Metrics(registry);
         Cip68MetadataRepository repository = mock(Cip68MetadataRepository.class);
+        // the reference NFTs are already stored, so an NFT's datum is indexed (ADR 0002): these tests count what is stored
+        org.mockito.Mockito.when(repository.existsByPolicyIdAndAssetName(
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString())).thenReturn(true);
         processor = new Cip68Processor(new Cip68TokenService(repository), new Cip68DatumParser(metrics), repository, metrics);
     }
 
