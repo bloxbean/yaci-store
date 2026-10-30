@@ -112,6 +112,11 @@ public class Cip68Processor {
      * activity of the batch, not with the size of its blocks: the transactions with an output that holds a reference
      * NFT, each with all its outputs (they carry the user tokens paired with it) and none of its inputs. A block without
      * such a transaction keeps nothing.
+     * <p>
+     * Not supported on a remote consumer ({@code store.remote.consumer-enabled}): {@link PreCommitEvent} is internal and
+     * is never published to it, so nothing would be indexed. {@code AccountBalanceProcessor}, {@code DatumStorageImpl}
+     * and other stores that finish their work on {@link PreCommitEvent} or {@code CommitEvent} share this limitation
+     * (yaci-store #1311).
      */
     @EventListener
     public void collectForBatch(AddressUtxoEvent addressUtxoEvent) {
