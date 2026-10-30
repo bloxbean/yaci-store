@@ -57,12 +57,14 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
                 .orderBy(STAKE_REGISTRATION.SLOT.asc(), STAKE_REGISTRATION.TX_INDEX.asc(), STAKE_REGISTRATION.CERT_INDEX.asc())
                 .fetch();
 
-        if (registrations.isEmpty()) {
+        // A stake address that was never registered is still an account: Blockfrost answers 200 with
+        // registered = false for it, and 404 only when the address never appeared on chain.
+        if (registrations.isEmpty() && !seenOnChain(stakeAddress)) {
             return Optional.empty();
         }
 
-        var firstReg = registrations.get(0);
-        var lastReg = registrations.get(registrations.size() - 1);
+        var firstReg = registrations.isEmpty() ? null : registrations.get(0);
+        var lastReg = registrations.isEmpty() ? null : registrations.get(registrations.size() - 1);
 
         String lastType = lastReg != null ? lastReg.get(STAKE_REGISTRATION.TYPE) : null;
         boolean registered = lastType != null
@@ -81,7 +83,7 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
                 break;
             }
         }
-        if (activeEpoch == null) {
+        if (activeEpoch == null && firstReg != null) {
             activeEpoch = firstReg.get(STAKE_REGISTRATION.EPOCH);
         }
 
@@ -219,6 +221,18 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
 
         return Optional.of(new AccountInfo(stakeAddress, active, registered, activeEpoch,
                 totalControlled, rewardsSum, withdrawalsSum, reservesSum, treasurySum, poolId, drepId));
+    }
+
+    /**
+     * Whether an address with no registration appeared on chain; for such an address only outputs can
+     * hold it. {@code address} is checked first because UTXO pruning never deletes from it.
+     */
+    boolean seenOnChain(String stakeAddress) {
+        if (utxoStoreProperties.isSaveAddress()
+                && dsl.fetchExists(dsl.selectOne().from(ADDRESS).where(ADDRESS.STAKE_ADDRESS.eq(stakeAddress)))) {
+            return true;
+        }
+        return dsl.fetchExists(dsl.selectOne().from(ADDRESS_UTXO).where(ADDRESS_UTXO.OWNER_STAKE_ADDR.eq(stakeAddress)));
     }
 
     /**
