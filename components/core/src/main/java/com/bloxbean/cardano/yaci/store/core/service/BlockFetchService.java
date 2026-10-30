@@ -129,7 +129,9 @@ public class BlockFetchService implements BlockChainDataListener {
             if (newEra || newEpoch) { //Also add epoch change
                 log.info("Publish EpochChangeEvent >>>");
                 //Incase of era change. Process all pending blocks and then process era change block first
-                postShelleyBlockEventPublisher.processBlocksInParallel();
+                if (parallelMode) {
+                    postShelleyBlockEventPublisher.processBlocksInParallel();
+                }
 
                 //Publish epoch change event first and then process first block of the epoch
                 publishEpochChangeEvent(eventMetadata);
@@ -144,8 +146,6 @@ public class BlockFetchService implements BlockChainDataListener {
                     //Not stored yet, so the expected previous block stays as it is
                     postShelleyBlockEventPublisher.publishBlockEventsInParallel(eventMetadata, block, transactions);
                 } else {
-                    //Blocks still waiting in a batch must be written first, or they are never written
-                    postShelleyBlockEventPublisher.processBlocksInParallel();
                     postShelleyBlockEventPublisher.publishBlockEvents(eventMetadata, block, transactions);
                     expectedPrevBlockHash = eventMetadata.getBlockHash();
                 }
@@ -212,7 +212,9 @@ public class BlockFetchService implements BlockChainDataListener {
                     .build();
 
             if (newEpoch) {
-                byronBlockEventPublisher.processBlocksInParallel();
+                if (parallelMode) {
+                    byronBlockEventPublisher.processBlocksInParallel();
+                }
 
                 log.info("Publish EpochChangeEvent >>>");
                 //Publish epoch change event
@@ -228,8 +230,6 @@ public class BlockFetchService implements BlockChainDataListener {
                     //Not stored yet, so the expected previous block stays as it is
                     byronBlockEventPublisher.publishBlockEventsInParallel(eventMetadata, byronBlock, Collections.emptyList());
                 } else {
-                    //Blocks still waiting in a batch must be written first, or they are never written
-                    byronBlockEventPublisher.processBlocksInParallel();
                     byronBlockEventPublisher.publishBlockEvents(eventMetadata, byronBlock, Collections.emptyList());
                     expectedPrevBlockHash = eventMetadata.getBlockHash();
                 }
