@@ -67,6 +67,14 @@ of ADR 0002 decision 2: the same policy and the same base name.
 - An NFT whose reference NFT is updated later without a user token, with token fields, is stored from that datum on, guessed as a 333 or 444 by
   its shape, and served. This is the case of a reference NFT whose 333 or 444 token is minted apart from it, which cannot be told apart without a
   cross-transaction lookup (ADR 0002 decision 2). Not measured.
+- **Known issue: "already stored" depends on the processing order during a parallel sync.** With
+  `store.executor.enable-parallel-processing=true`, the blocks of a batch run in partitions at the same time, so the check can miss an earlier row
+  that is not stored yet, or see a row that a later block stored first. A later datum is then skipped (House of Titans #1001, #3377 and #4102 on
+  mainnet kept their old metadata after it was cleared), or an NFT's datum is stored. This also applies to `not_token_metadata` (ADR 0002 decision 2).
+  At the tip the check is exact. The fix and its alternatives are discussed in #1309; the proposed one, #1310, indexes the blocks of a batch in
+  chain order on `PreCommitEvent`. That event is internal and is never published to a remote consumer (`store.remote.consumer-enabled`), so with
+  #1310 the module indexes nothing there, like the other stores that finish their work on `PreCommitEvent` or `CommitEvent`
+  (`AccountBalanceProcessor`, `DatumStorageImpl`, ...; #1311). There are no known users of remote consumers.
 
 ## Alternatives considered
 
