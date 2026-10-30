@@ -10,6 +10,7 @@ import com.bloxbean.cardano.client.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
+import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.parser.Cip68DatumParser;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service.Cip68TokenService;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.Cip68Metadata;
@@ -96,6 +97,29 @@ class Cip68ProcessorH2IT {
                     assertThat(e.fieldCategory().name()).isEqualTo("MANDATORY");
                     assertThat(e.code()).isEqualTo("invalid_version");
                 }));
+    }
+
+    @Test
+    void theBlocksOfABatchAreIndexedInChainOrderWhateverOrderTheyArrivedIn() {
+        // a parallel sync can deliver the later block first: the datum cleared in it (an empty map, no user token) is
+        // stored only if the earlier mint is, which the earlier block saves first within the same transaction
+        processor.collectForBatch(eventAt(2L, 500L, "d8799fa001ff"));
+        processor.collectForBatch(eventAt(1L, 100L, datum("A name", true)));
+        processor.indexBatchInChainOrder(new PreCommitEvent(EventMetadata.builder().block(2L).build()));
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(repository.findAll()).extracting(Cip68Metadata::getSlot).containsExactlyInAnyOrder(100L, 500L);
+        assertThat(repository.findFirstByPolicyIdAndAssetNameOrderBySlotDescTxIndexDesc(POLICY_ID, REF_NFT_ASSET_NAME))
+                .hasValueSatisfying(latest -> assertThat(latest.getName()).isNull());
+    }
+
+    private static AddressUtxoEvent eventAt(long block, long slot, String inlineDatum) {
+        AddressUtxoEvent event = eventWithDatum(inlineDatum);
+        return AddressUtxoEvent.builder()
+                .metadata(EventMetadata.builder().block(block).slot(slot).build())
+                .txInputOutputs(event.getTxInputOutputs())
+                .build();
     }
 
     private void processAndFlush(String name) {
