@@ -9,6 +9,7 @@ import com.bloxbean.cardano.yaci.store.common.domain.Cursor;
 import com.bloxbean.cardano.yaci.store.common.service.CursorService;
 import com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig;
 import com.bloxbean.cardano.yaci.store.core.metrics.MetricsService;
+import com.bloxbean.cardano.yaci.store.core.storage.api.ErrorStorage;
 import com.bloxbean.cardano.yaci.store.core.service.publisher.ByronBlockEventPublisher;
 import com.bloxbean.cardano.yaci.store.core.service.publisher.ShelleyBlockEventPublisher;
 import org.junit.jupiter.api.BeforeEach;
@@ -48,7 +49,8 @@ class BlockFetchServiceRollbackTest {
                 mock(StoreProperties.class),
                 genesisConfig,
                 mock(ShelleyBlockEventPublisher.class),
-                mock(ByronBlockEventPublisher.class));
+                mock(ByronBlockEventPublisher.class),
+                mock(ErrorStorage.class));
     }
 
     @Test
