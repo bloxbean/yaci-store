@@ -20,6 +20,7 @@ import com.bloxbean.cardano.yaci.store.common.util.ErrorCode;
 import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig;
 import com.bloxbean.cardano.yaci.store.core.metrics.MetricsService;
+import com.bloxbean.cardano.yaci.store.core.storage.api.ErrorStorage;
 import com.bloxbean.cardano.yaci.store.core.service.publisher.ByronBlockEventPublisher;
 import com.bloxbean.cardano.yaci.store.core.service.publisher.ShelleyBlockEventPublisher;
 import com.bloxbean.cardano.yaci.store.core.util.SlotLeaderUtil;
@@ -55,11 +56,17 @@ public class BlockFetchService implements BlockChainDataListener {
     private final GenesisConfig genesisConfig;
     private final ShelleyBlockEventPublisher postShelleyBlockEventPublisher;
     private final ByronBlockEventPublisher byronBlockEventPublisher;
+    private final ErrorStorage errorStorage;
 
-    private boolean syncMode;
+    //Written by the thread that starts the sync and read by the yaci network thread
+    private volatile boolean syncMode;
     private AtomicBoolean isError = new AtomicBoolean(false);
     private AtomicBoolean scheduledToStop = new AtomicBoolean(false);
     private Thread keepAliveThread;
+
+    //Hash of the last block written. In sync mode the next block must link to it, otherwise a block was skipped.
+    //Null means there is nothing to check against, e.g. right after a block was skipped as a parse error.
+    private volatile String expectedPrevBlockHash;
 
     //Required to publish EpochChangeEvent
     private Integer previousEpoch;
@@ -78,45 +85,51 @@ public class BlockFetchService implements BlockChainDataListener {
 
         checkError();
         lastReceivedBlockTime = System.currentTimeMillis();
-        byronBlockEventPublisher.processBlocksInParallel();
 
         final BlockHeader blockHeader = block.getHeader();
-        final long slot = blockHeader.getHeaderBody().getSlot();
-        final boolean newEra = eraService.checkIfNewEra(era, blockHeader);
-        final int epochNumber = eraService.getEpochNo(era, slot);
-        final int epochSlot = eraService.getShelleyEpochSlot(slot);
-        final long blockTime = eraService.blockTime(era, slot);
-        final String slotLeader = SlotLeaderUtil.getShelleySlotLeader(blockHeader.getHeaderBody().getIssuerVkey());
-        final boolean newEpoch = detectIfNewEpoch(epochNumber, slot);
+        EventMetadata eventMetadata = null;
 
-        //paralleMode is true when not fully synced and parallel processing is enabled
-        boolean parallelMode = !syncMode && storeProperties.isEnableParallelProcessing();
-
-        EventMetadata eventMetadata = EventMetadata.builder()
-                .mainnet(storeProperties.isMainnet())
-                .protocolMagic(storeProperties.getProtocolMagic())
-                .era(era)
-                .block(blockHeader.getHeaderBody().getBlockNumber())
-                .epochNumber(epochNumber)
-                .slotLeader(slotLeader)
-                .blockHash(blockHeader.getHeaderBody().getBlockHash())
-                .blockTime(blockTime)
-                .prevBlockHash(blockHeader.getHeaderBody().getPrevHash())
-                .slot(slot)
-                .epochSlot(epochSlot)
-                .noOfTxs(transactions.size())
-                .syncMode(syncMode)
-                .parallelMode(parallelMode)
-                .build();
-
-
+        //Everything below can fail on a database error (era/cursor lookups, saving the block). Any failure must stop
+        //the sync. If it escapes to yaci instead, yaci reports it as a parse error and moves on to the next block.
         try {
+            if (!isLinkedToPreviousBlock(blockHeader.getHeaderBody().getBlockNumber(),
+                    blockHeader.getHeaderBody().getBlockHash(), blockHeader.getHeaderBody().getPrevHash()))
+                return;
+
+            byronBlockEventPublisher.processBlocksInParallel();
+
+            final long slot = blockHeader.getHeaderBody().getSlot();
+            final boolean newEra = eraService.checkIfNewEra(era, blockHeader);
+            final int epochNumber = eraService.getEpochNo(era, slot);
+            final int epochSlot = eraService.getShelleyEpochSlot(slot);
+            final long blockTime = eraService.blockTime(era, slot);
+            final String slotLeader = SlotLeaderUtil.getShelleySlotLeader(blockHeader.getHeaderBody().getIssuerVkey());
+            final boolean newEpoch = detectIfNewEpoch(epochNumber, slot);
+
+            //paralleMode is true when not fully synced and parallel processing is enabled
+            boolean parallelMode = !syncMode && storeProperties.isEnableParallelProcessing();
+
+            eventMetadata = EventMetadata.builder()
+                    .mainnet(storeProperties.isMainnet())
+                    .protocolMagic(storeProperties.getProtocolMagic())
+                    .era(era)
+                    .block(blockHeader.getHeaderBody().getBlockNumber())
+                    .epochNumber(epochNumber)
+                    .slotLeader(slotLeader)
+                    .blockHash(blockHeader.getHeaderBody().getBlockHash())
+                    .blockTime(blockTime)
+                    .prevBlockHash(blockHeader.getHeaderBody().getPrevHash())
+                    .slot(slot)
+                    .epochSlot(epochSlot)
+                    .noOfTxs(transactions.size())
+                    .syncMode(syncMode)
+                    .parallelMode(parallelMode)
+                    .build();
+
             if (newEra || newEpoch) { //Also add epoch change
                 log.info("Publish EpochChangeEvent >>>");
                 //Incase of era change. Process all pending blocks and then process era change block first
-                if (parallelMode) {
-                    postShelleyBlockEventPublisher.processBlocksInParallel();
-                }
+                postShelleyBlockEventPublisher.processBlocksInParallel();
 
                 //Publish epoch change event first and then process first block of the epoch
                 publishEpochChangeEvent(eventMetadata);
@@ -125,19 +138,24 @@ public class BlockFetchService implements BlockChainDataListener {
                 log.info("Processing first block of the epoch {}, block {}", eventMetadata.getEpochNumber(), eventMetadata.getBlock());
                 //Published on the sequential path, so it must not be marked parallel (it is never part of a batch)
                 postShelleyBlockEventPublisher.publishBlockEvents(eventMetadata.toBuilder().parallelMode(false).build(), block, transactions);
+                expectedPrevBlockHash = eventMetadata.getBlockHash();
             } else {
                 if (parallelMode) {
+                    //Not stored yet, so the expected previous block stays as it is
                     postShelleyBlockEventPublisher.publishBlockEventsInParallel(eventMetadata, block, transactions);
                 } else {
+                    //Blocks still waiting in a batch must be written first, or they are never written
+                    postShelleyBlockEventPublisher.processBlocksInParallel();
                     postShelleyBlockEventPublisher.publishBlockEvents(eventMetadata, block, transactions);
+                    expectedPrevBlockHash = eventMetadata.getBlockHash();
                 }
             }
 
             previousEpoch = eventMetadata.getEpochNumber();
             previousEra = eventMetadata.getEra();
 
-        } catch (Exception e) {
-            log.error("Error saving : " + eventMetadata, e);
+        } catch (Throwable e) {
+            log.error("Error saving : " + (eventMetadata != null ? eventMetadata : blockHeader.getHeaderBody()), e);
             log.error("Stopping fetcher");
             log.error("Error at block no #" + blockHeader.getHeaderBody().getBlockNumber());
             stopSyncOnError();
@@ -167,6 +185,9 @@ public class BlockFetchService implements BlockChainDataListener {
             final long blockTime = eraService.blockTime(Era.Byron, absoluteSlot);
 
             long blockNumber = byronBlock.getHeader().getConsensusData().getDifficulty().longValue();
+            if (!isLinkedToPreviousBlock(blockNumber, byronBlock.getHeader().getBlockHash(), byronBlock.getHeader().getPrevBlock()))
+                return;
+
             final String slotLeader = SlotLeaderUtil
                     .getByronSlotLeader(byronBlock.getHeader().getConsensusData().getPubKey());
             final boolean newEpoch = detectIfNewEpochByronEra((int)epochNumber);
@@ -191,9 +212,7 @@ public class BlockFetchService implements BlockChainDataListener {
                     .build();
 
             if (newEpoch) {
-                if (parallelMode) {
-                    byronBlockEventPublisher.processBlocksInParallel();
-                }
+                byronBlockEventPublisher.processBlocksInParallel();
 
                 log.info("Publish EpochChangeEvent >>>");
                 //Publish epoch change event
@@ -202,19 +221,24 @@ public class BlockFetchService implements BlockChainDataListener {
                 log.info("Processing first block of the epoch {}, block {}", eventMetadata.getEpochNumber(), eventMetadata.getBlock());
                 //Process single block (First block of epoch)
                 byronBlockEventPublisher.publishBlockEvents(eventMetadata.toBuilder().parallelMode(false).build(), byronBlock, Collections.emptyList());
+                expectedPrevBlockHash = eventMetadata.getBlockHash();
 
             } else {
                 if (parallelMode) {
+                    //Not stored yet, so the expected previous block stays as it is
                     byronBlockEventPublisher.publishBlockEventsInParallel(eventMetadata, byronBlock, Collections.emptyList());
                 } else {
+                    //Blocks still waiting in a batch must be written first, or they are never written
+                    byronBlockEventPublisher.processBlocksInParallel();
                     byronBlockEventPublisher.publishBlockEvents(eventMetadata, byronBlock, Collections.emptyList());
+                    expectedPrevBlockHash = eventMetadata.getBlockHash();
                 }
             }
 
             previousEpoch = eventMetadata.getEpochNumber();
             previousEra = eventMetadata.getEra();
 
-        } catch (Exception e) {
+        } catch (Throwable e) {
             log.error("Error saving : Slot >>" + byronBlock.getHeader().getConsensusData().getSlotId(), e);
             log.error("Error at block hash #" + byronBlock.getHeader().getBlockHash());
             log.error("Stopping fetcher");
@@ -235,6 +259,8 @@ public class BlockFetchService implements BlockChainDataListener {
             final long blockTime = eraService.blockTime(Era.Byron, absoluteSlot);
 
             long blockNumber = byronEbBlock.getHeader().getConsensusData().getDifficulty().longValue();
+            if (!isLinkedToPreviousBlock(blockNumber, byronEbBlock.getHeader().getBlockHash(), byronEbBlock.getHeader().getPrevBlock()))
+                return;
 
             EventMetadata eventMetadata = EventMetadata.builder()
                     .mainnet(storeProperties.isMainnet())
@@ -255,7 +281,8 @@ public class BlockFetchService implements BlockChainDataListener {
             //Finally Set the cursor
             cursorService.setCursor(new Cursor(eventMetadata.getSlot(), eventMetadata.getBlockHash(),
                     eventMetadata.getBlock(), eventMetadata.getPrevBlockHash(), eventMetadata.getEra()));
-        } catch (Exception e) {
+            expectedPrevBlockHash = eventMetadata.getBlockHash();
+        } catch (Throwable e) {
             log.error("Error saving EbBlock : epoch >>" + byronEbBlock.getHeader().getConsensusData().getEpoch(), e);
             log.error("Error at block hash #" + byronEbBlock.getHeader().getBlockHash());
             log.error("Stopping fetcher");
@@ -307,6 +334,13 @@ public class BlockFetchService implements BlockChainDataListener {
 
         cursorService.rollback(point.getSlot());
         restoreEpochStateFromCursor();
+        //The next block must build on the rollback point. A point after the last stored block means yaci holds a
+        //block that was never stored. Keep the old expectation so the next block fails the link check and sync
+        //restarts from the cursor.
+        if (point.getSlot() <= currentPoint.getSlot())
+            expectedPrevBlockHash = point.getHash();
+        else
+            log.warn("Rollback point {} is after the last stored block {}", point, currentPoint);
 
         //Publish Pre-rollback event
         PreRollbackEvent preRollbackEvent = PreRollbackEvent
@@ -375,6 +409,13 @@ public class BlockFetchService implements BlockChainDataListener {
 
     @Override
     public void onParsingError(BlockParseRuntimeException e) {
+        //yaci also reports exceptions thrown by onBlock as parse errors. onBlock stops the sync before it throws,
+        //so this is a block that could not be stored, not one that could not be decoded. Never skip it.
+        if (isError.get()) {
+            log.error("Sync is stopped after a failure to store block {}. The block is not skipped.", e.getBlockNumber());
+            return;
+        }
+
         log.error("Block parsing error", e);
         if (storeProperties.isContinueOnParseError()) {
             log.info("Continue on parse error is enabled. Continuing sync ...");
@@ -392,11 +433,47 @@ public class BlockFetchService implements BlockChainDataListener {
                     .reason(e.getMessage())
                     .details(cbor)
                     .build();
-            publisher.publishEvent(errorEvent);
+
+            //A block is only skipped once the error row that records the skip is saved
+            try {
+                errorStorage.save(errorEvent);
+            } catch (Exception ex) {
+                log.error("Could not record parse error for block {}. Stopping sync instead of skipping the block.",
+                        e.getBlockNumber(), ex);
+                stopSyncOnError();
+                throw new RuntimeException(e);
+            }
+
+            //The skipped block's hash is not known, so accept the next block without the link check
+            expectedPrevBlockHash = null;
         } else {
             stopSyncOnError();
             throw new RuntimeException(e);
         }
+    }
+
+    /**
+     * In sync mode, checks that a block builds on the last block written. If it does not, a block was skipped:
+     * stop the sync without storing this block and restart from the cursor, the last stored block.
+     */
+    private boolean isLinkedToPreviousBlock(long blockNumber, String blockHash, String prevBlockHash) {
+        String expected = expectedPrevBlockHash;
+        if (!syncMode || expected == null || expected.equals(prevBlockHash))
+            return true;
+
+        log.error("Block {} ({}) does not build on the last block written. Expected previous block hash {}, found {}. " +
+                "Stopping sync to fetch again from the last stored block.", blockNumber, blockHash, expected, prevBlockHash);
+        stopSyncOnError();
+
+        publisher.publishEvent(RequiredSyncRestartEvent.builder()
+                .reason("BlockNotLinkedToPreviousBlock")
+                .errorCode("BLOCK_NOT_LINKED")
+                .timestamp(System.currentTimeMillis())
+                .source("BlockFetchService")
+                .details(String.format("Block %d (%s) has previous block hash %s, expected %s",
+                        blockNumber, blockHash, prevBlockHash, expected))
+                .build());
+        return false;
     }
 
     public synchronized void startFetch(Point from, Point to) {
@@ -404,10 +481,11 @@ public class BlockFetchService implements BlockChainDataListener {
         scheduledToStop.set(false);
 
         stopKeepAliveThread();
-        blockRangeSync.restart(this);
-        blockRangeSync.fetch(from, to);
+        //Set the mode before fetching starts, because the first blocks can arrive before fetch() returns
         syncMode = false;
         cursorService.setSyncMode(syncMode);
+        blockRangeSync.restart(this);
+        blockRangeSync.fetch(from, to);
 
         startKeepAliveThread(syncMode);
     }
@@ -417,9 +495,16 @@ public class BlockFetchService implements BlockChainDataListener {
         scheduledToStop.set(false);
 
         stopKeepAliveThread();
-        blockSync.startSync(from, this);
+        //Set the mode before connecting. BlockSync.startSync waits for the handshake, and blocks can arrive
+        //during that wait. A block seen with syncMode still false would go to a batch that is never written.
         syncMode = true;
         cursorService.setSyncMode(syncMode);
+        //Sync restarts from the last stored block, so blocks still waiting in a batch are fetched again. Drop them,
+        //or they would be written a second time when the batch is flushed.
+        reset();
+        //The first block from chain sync must build on the start point
+        expectedPrevBlockHash = from.getHash();
+        blockSync.startSync(from, this);
         startKeepAliveThread(syncMode);
     }
 
