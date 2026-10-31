@@ -1,5 +1,7 @@
 package com.bloxbean.cardano.yaci.store.blockfrost.account.storage.impl;
 
+import com.bloxbean.cardano.client.address.Address;
+import com.bloxbean.cardano.client.util.HexUtil;
 import com.bloxbean.cardano.yaci.core.util.Constants;
 import com.bloxbean.cardano.yaci.store.blockfrost.account.storage.BFAccountStorageReader;
 import com.bloxbean.cardano.yaci.store.blockfrost.account.storage.impl.model.*;
@@ -30,7 +32,9 @@ import static com.bloxbean.cardano.yaci.store.adapot.jooq.Tables.INSTANT_REWARD;
 import static com.bloxbean.cardano.yaci.store.adapot.jooq.Tables.REWARD;
 import static com.bloxbean.cardano.yaci.store.adapot.jooq.Tables.REWARD_REST;
 import static com.bloxbean.cardano.yaci.store.governance.jooq.Tables.DELEGATION_VOTE;
+import static com.bloxbean.cardano.yaci.store.governance.jooq.Tables.GOV_ACTION_PROPOSAL;
 import static com.bloxbean.cardano.yaci.store.staking.jooq.Tables.DELEGATION;
+import static com.bloxbean.cardano.yaci.store.staking.jooq.Tables.POOL_REGISTRATION;
 import static com.bloxbean.cardano.yaci.store.staking.jooq.Tables.STAKE_REGISTRATION;
 import static com.bloxbean.cardano.yaci.store.transaction.jooq.Tables.TRANSACTION;
 import static com.bloxbean.cardano.yaci.store.transaction.jooq.Tables.WITHDRAWAL;
@@ -47,6 +51,7 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
     private final UtxoStoreProperties utxoStoreProperties;
     private static final String TX_SIDE_IN = "in";
     private static final String TX_SIDE_OUT = "out";
+    private static final String TREASURY_WITHDRAWALS_ACTION = "TREASURY_WITHDRAWALS_ACTION";
 
     @Override
     public Optional<AccountInfo> getAccountInfo(String stakeAddress) {
@@ -224,15 +229,42 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
     }
 
     /**
-     * Whether an address with no registration appeared on chain; for such an address only outputs can
-     * hold it. {@code address} is checked first because UTXO pruning never deletes from it.
+     * Whether an address with no registration appeared on chain: in an output, or named by a pool
+     * registration (reward account, owner), a MIR, or a governance proposal (return address, treasury
+     * withdrawal). These are the places db-sync records an account without a registration.
+     * Cheapest lookups run first; {@code address} survives UTXO pruning.
      */
     boolean seenOnChain(String stakeAddress) {
-        if (utxoStoreProperties.isSaveAddress()
-                && dsl.fetchExists(dsl.selectOne().from(ADDRESS).where(ADDRESS.STAKE_ADDRESS.eq(stakeAddress)))) {
+        if (utxoStoreProperties.isSaveAddress() && exists(ADDRESS, ADDRESS.STAKE_ADDRESS.eq(stakeAddress))) {
             return true;
         }
-        return dsl.fetchExists(dsl.selectOne().from(ADDRESS_UTXO).where(ADDRESS_UTXO.OWNER_STAKE_ADDR.eq(stakeAddress)));
+        if (exists(ADDRESS_UTXO, ADDRESS_UTXO.OWNER_STAKE_ADDR.eq(stakeAddress))
+                || exists(POOL_REGISTRATION, POOL_REGISTRATION.REWARD_ACCOUNT.eq(stakeAddress))
+                || exists(DSL.table(DSL.name("mir")), DSL.field(DSL.name("mir", "address"), String.class).eq(stakeAddress))
+                || exists(GOV_ACTION_PROPOSAL, GOV_ACTION_PROPOSAL.RETURN_ADDRESS.eq(stakeAddress))) {
+            return true;
+        }
+
+        Address rewardAddress;
+        try {
+            rewardAddress = new Address(stakeAddress);
+        } catch (RuntimeException e) {
+            return false;
+        }
+        // Pool owners are stored as key hashes, treasury withdrawals keyed by reward-account hex.
+        Optional<byte[]> credentialHash = rewardAddress.getDelegationCredentialHash();
+        if (rewardAddress.isStakeKeyHashInDelegationPart() && credentialHash.isPresent()
+                && exists(POOL_REGISTRATION,
+                        POOL_REGISTRATION.POOL_OWNERS.cast(String.class).contains(HexUtil.encodeHexString(credentialHash.get())))) {
+            return true;
+        }
+        return exists(GOV_ACTION_PROPOSAL, GOV_ACTION_PROPOSAL.TYPE.eq(TREASURY_WITHDRAWALS_ACTION)
+                .and(GOV_ACTION_PROPOSAL.DETAILS.cast(String.class)
+                        .contains("\"" + HexUtil.encodeHexString(rewardAddress.getBytes()) + "\"")));
+    }
+
+    private boolean exists(Table<?> table, Condition condition) {
+        return dsl.fetchExists(dsl.selectOne().from(table).where(condition));
     }
 
     /**

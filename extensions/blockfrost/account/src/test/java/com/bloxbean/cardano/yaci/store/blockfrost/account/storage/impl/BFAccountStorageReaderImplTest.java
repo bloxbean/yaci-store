@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
@@ -24,11 +25,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 class BFAccountStorageReaderImplTest {
 
     private static final String STAKE_ADDRESS = "stake_test1upyxd0pgmepw5je3s7tekv0puwx33au8nsaq6y08f9yptecct8flv";
+    // Preprod pool owner that never registered and never received an output.
+    private static final String OWNER_ADDRESS = "stake_test1uzly0q2cnpxrjrqm9vpnr9dwkr0j945gulhhgs3dx33l47sfnz8a7";
+    private static final String OWNER_KEY_HASH = "be478158984c390c1b2b033195aeb0df22d688e7ef74422d3463fafa";
+    private static final List<String> ALL_PROBES = List.of(
+            "address_utxo", "pool_reward_account", "mir", "gov_return_address", "pool_owner", "treasury_withdrawal");
     private static final DSLContext CREATE = DSL.using(SQLDialect.POSTGRES);
 
     @Test
     void getAccountInfo_neverRegisteredButSeenInOutputs_returnsUnregisteredAccount() {
-        var db = new FakeDb(List.of(), false, true);
+        var db = new FakeDb(List.of(), "address_utxo");
 
         Optional<AccountInfo> info = db.reader(false).getAccountInfo(STAKE_ADDRESS);
 
@@ -49,16 +55,16 @@ class BFAccountStorageReaderImplTest {
     }
 
     @Test
-    void getAccountInfo_neverSeenOnChain_returnsEmpty() {
-        var db = new FakeDb(List.of(), false, false);
+    void getAccountInfo_neverSeenOnChain_returnsEmptyAfterEverySource() {
+        var db = new FakeDb(List.of());
 
         assertThat(db.reader(true).getAccountInfo(STAKE_ADDRESS)).isEmpty();
-        assertThat(db.probes()).containsExactly("address", "address_utxo");
+        assertThat(db.probes()).containsExactlyElementsOf(concat("address", ALL_PROBES));
     }
 
     @Test
     void getAccountInfo_saveAddressEnabled_probesAddressTableFirst() {
-        var db = new FakeDb(List.of(), true, false);
+        var db = new FakeDb(List.of(), "address");
 
         assertThat(db.reader(true).getAccountInfo(STAKE_ADDRESS)).isPresent();
         // The address table survives UTXO pruning, so a hit there settles it without address_utxo.
@@ -67,16 +73,80 @@ class BFAccountStorageReaderImplTest {
 
     @Test
     void getAccountInfo_saveAddressDisabled_skipsAddressTable() {
-        var db = new FakeDb(List.of(), true, false);
+        var db = new FakeDb(List.of(), "address");
 
         assertThat(db.reader(false).getAccountInfo(STAKE_ADDRESS)).isEmpty();
-        assertThat(db.probes()).containsExactly("address_utxo");
+        assertThat(db.probes()).containsExactlyElementsOf(ALL_PROBES);
+    }
+
+    @Test
+    void getAccountInfo_poolRewardAccountOnlyInCertificate_returnsUnregisteredAccount() {
+        var db = new FakeDb(List.of(), "pool_reward_account");
+
+        assertThat(db.reader(false).getAccountInfo(OWNER_ADDRESS))
+                .hasValueSatisfying(account -> assertThat(account.registered()).isFalse());
+        assertThat(db.probes()).containsExactly("address_utxo", "pool_reward_account");
+    }
+
+    @Test
+    void getAccountInfo_mirTargetOnly_returnsUnregisteredAccount() {
+        var db = new FakeDb(List.of(), "mir");
+
+        assertThat(db.reader(false).getAccountInfo(OWNER_ADDRESS)).isPresent();
+        assertThat(db.probes()).endsWith("mir");
+    }
+
+    @Test
+    void getAccountInfo_proposalReturnAddressOnly_returnsUnregisteredAccount() {
+        var db = new FakeDb(List.of(), "gov_return_address");
+
+        assertThat(db.reader(false).getAccountInfo(OWNER_ADDRESS)).isPresent();
+        assertThat(db.probes()).endsWith("gov_return_address");
+    }
+
+    @Test
+    void getAccountInfo_poolOwnerOnly_matchesOwnerKeyHash() {
+        var db = new FakeDb(List.of(), "pool_owner");
+
+        assertThat(db.reader(false).getAccountInfo(OWNER_ADDRESS)).isPresent();
+        assertThat(db.probes()).endsWith("pool_owner");
+        // pool_owners holds key hashes, not stake addresses.
+        assertThat(db.probeSql("pool_owner")).contains(OWNER_KEY_HASH).doesNotContain(OWNER_ADDRESS);
+    }
+
+    @Test
+    void getAccountInfo_treasuryWithdrawalTargetOnly_matchesRewardAccountHex() {
+        var db = new FakeDb(List.of(), "treasury_withdrawal");
+
+        assertThat(db.reader(false).getAccountInfo(OWNER_ADDRESS)).isPresent();
+        // Withdrawals are keyed by the hex of the reward account: header e0 (testnet, key hash) + hash.
+        assertThat(db.probeSql("treasury_withdrawal"))
+                .contains("TREASURY_WITHDRAWALS_ACTION")
+                .contains("\"e0" + OWNER_KEY_HASH + "\"");
+    }
+
+    @Test
+    void getAccountInfo_scriptStakeAddress_skipsPoolOwnerProbe() {
+        // Script credential: header f0. Pool owners are always key hashes.
+        var db = new FakeDb(List.of());
+
+        assertThat(db.reader(false).getAccountInfo("stake_test17pcy992j0jy9c95frpyccupklvjz3tcr959zf0wl45wsa5s5fhk5g"))
+                .isEmpty();
+        assertThat(db.probes()).doesNotContain("pool_owner").endsWith("treasury_withdrawal");
+    }
+
+    @Test
+    void getAccountInfo_malformedAddress_returnsEmptyWithoutDecodingProbes() {
+        var db = new FakeDb(List.of());
+
+        assertThat(db.reader(false).getAccountInfo("not-a-stake-address")).isEmpty();
+        assertThat(db.probes()).doesNotContain("pool_owner", "treasury_withdrawal");
     }
 
     @Test
     void getAccountInfo_withRegistrationHistory_doesNotProbeOutputs() {
         var db = new FakeDb(List.of(registration("STAKE_REGISTRATION", 10, 100L),
-                registration("STAKE_DEREGISTRATION", 12, 200L)), false, false);
+                registration("STAKE_DEREGISTRATION", 12, 200L)));
 
         Optional<AccountInfo> info = db.reader(true).getAccountInfo(STAKE_ADDRESS);
 
@@ -98,24 +168,46 @@ class BFAccountStorageReaderImplTest {
         return rec;
     }
 
+    private static List<String> concat(String first, List<String> rest) {
+        var all = new ArrayList<String>();
+        all.add(first);
+        all.addAll(rest);
+        return all;
+    }
+
+    /** Which source an existence probe reads, named after the column it matches. */
+    private static String probeName(String sql) {
+        if (sql.contains("\"address_utxo\"")) return "address_utxo";
+        if (sql.contains("\"pool_owners\"")) return "pool_owner";
+        if (sql.contains("\"pool_registration\"")) return "pool_reward_account";
+        if (sql.contains("\"mir\"")) return "mir";
+        if (sql.contains("\"details\"")) return "treasury_withdrawal";
+        if (sql.contains("\"gov_action_proposal\"")) return "gov_return_address";
+        return "address";
+    }
+
     /**
      * Answers each query of {@code getAccountInfo} by the table it reads: the given registration rows,
-     * the given probe results, no MIR rows, and a {@code NULL} sum for every aggregate.
+     * a hit only for the named probe sources, no MIR rows, and a {@code NULL} sum for every aggregate.
      */
     private static final class FakeDb {
         private final List<Record> registrations;
-        private final boolean inAddressTable;
-        private final boolean inAddressUtxo;
+        private final List<String> hits;
         private final List<String> sqls = new ArrayList<>();
 
-        FakeDb(List<Record> registrations, boolean inAddressTable, boolean inAddressUtxo) {
+        FakeDb(List<Record> registrations, String... hits) {
             this.registrations = registrations;
-            this.inAddressTable = inAddressTable;
-            this.inAddressUtxo = inAddressUtxo;
+            this.hits = List.of(hits);
+        }
+
+        String probeSql(String name) {
+            return sqls.stream()
+                    .filter(sql -> isExistsProbe(sql) && probeName(sql).equals(name))
+                    .findFirst().orElseThrow();
         }
 
         BFAccountStorageReaderImpl reader(boolean saveAddress) {
-            DSLContext dsl = DSL.using(new MockConnection(ctx -> new MockResult[]{answer(ctx.sql())}),
+            DSLContext dsl = DSL.using(new MockConnection(ctx -> new MockResult[]{answer(ctx.sql() + " -- binds " + Arrays.toString(ctx.bindings()))}),
                     SQLDialect.POSTGRES);
             return new BFAccountStorageReaderImpl(dsl, UtxoStoreProperties.builder().saveAddress(saveAddress).build());
         }
@@ -124,7 +216,7 @@ class BFAccountStorageReaderImplTest {
         List<String> probes() {
             return sqls.stream()
                     .filter(BFAccountStorageReaderImplTest::isExistsProbe)
-                    .map(sql -> sql.contains("\"address_utxo\"") ? "address_utxo" : "address")
+                    .map(BFAccountStorageReaderImplTest::probeName)
                     .toList();
         }
 
@@ -137,7 +229,7 @@ class BFAccountStorageReaderImplTest {
                 return new MockResult(result.size(), result);
             }
             if (isExistsProbe(sql)) {
-                boolean hit = sql.contains("\"address_utxo\"") ? inAddressUtxo : inAddressTable;
+                boolean hit = hits.contains(probeName(sql));
                 Field<Boolean> exists = DSL.field("exists", Boolean.class);
                 Result<Record> result = result(exists);
                 Record rec = CREATE.newRecord(exists);
