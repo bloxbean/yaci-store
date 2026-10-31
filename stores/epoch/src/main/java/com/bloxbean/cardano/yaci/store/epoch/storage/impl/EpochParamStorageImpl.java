@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashMap;
 import java.util.Optional;
 
 @RequiredArgsConstructor
@@ -61,6 +62,7 @@ public class EpochParamStorageImpl implements EpochParamStorage {
                 .filter(costModelHash -> costModelHash != null)
                 .map(costModelHash -> costModelRepository.findById(costModelHash))
                 .map(costModelEntity -> costModelEntity.get().getCosts())
+                .map(HashMap::new) //don't hand out the managed entity's map
                 .orElse(null);
 
         epochParamOpt
@@ -79,6 +81,7 @@ public class EpochParamStorageImpl implements EpochParamStorage {
                 .filter(costModelHash -> costModelHash != null)
                 .flatMap(costModelHash -> costModelRepository.findById(costModelHash))
                 .map(CostModelEntity::getCosts)
+                .map(HashMap::new)
                 .orElse(null);
 
         epochParamOpt
