@@ -26,8 +26,8 @@ import static com.bloxbean.cardano.yaci.store.extensions.assetstore.validation.V
  * <ul>
  *   <li>{@code name} for every label;</li>
  *   <li>{@code description} for the 333 fungible token only (for 222 and 444 it is {@code ? description}). A
- *       description of the wrong type, given as chunks, or not valid UTF-8, is reported with the category of the label
- *       asked for;</li>
+ *       description of the wrong type or not valid UTF-8 is reported with the category of the label asked for. One given
+ *       as chunks is reported for the label too, but always as optional: it is joined and served, so it is there;</li>
  *   <li>{@code image} for the 222 NFT and the 444 RFT, as a URI whose scheme is one of {@code https}, {@code ipfs},
  *       {@code ar} or {@code data}. A missing or empty image, or another scheme (for example {@code iagon://}, or free
  *       text), is an error: wallets and explorers follow the CIP and could not show such a token.</li>
@@ -64,7 +64,7 @@ public final class Cip68Validator {
             if (isDescriptionForm(error)) {
                 descriptionForms.add(error);
             } else {
-                errors.add(error);
+                errors.add(asServed(error));
             }
         }
         // a name of the wrong type is already reported by the parser as mandatory, so it is not reported as missing too
@@ -72,11 +72,13 @@ public final class Cip68Validator {
             errors.add(missing(subStandard, NAME));
         }
         // the form of a description (a wrong type, chunks, bytes that are not UTF-8) is stored by the parser without a
-        // label; it is reported for the label asked for, with its category: only the 333 fungible token requires one
+        // label; it is reported for the label asked for, with its category: only the 333 fungible token requires one.
+        // Chunks are joined and served, so a description given that way is there: its form is optional for every label
         boolean descriptionRequired = label == LABEL_FT;
         for (ValidationError descriptionForm : descriptionForms) {
+            boolean mandatory = descriptionRequired && !isChunkedText(descriptionForm);
             errors.add(new ValidationError(CIP_68, subStandard, DESCRIPTION,
-                    descriptionRequired ? FieldCategory.MANDATORY : FieldCategory.OPTIONAL,
+                    mandatory ? FieldCategory.MANDATORY : FieldCategory.OPTIONAL,
                     descriptionForm.code(), descriptionForm.error()));
         }
         if (descriptionForms.isEmpty() && descriptionRequired && row.getDescription() == null) {
@@ -107,6 +109,21 @@ public final class Cip68Validator {
         }
         return ValidationError.optional(CIP_68, null, "logo", INVALID_URI_SCHEME,
                 "logo '" + abbreviate(logo) + "' is not a URI with one of the schemes CIP-68 allows (https, ipfs, ar, data)");
+    }
+
+    /**
+     * A stored error of the datum as it is served. A text given as chunks is joined and served, so its form is optional;
+     * a row indexed before that rule stored a chunked {@code name} as mandatory, and is served by the rule of today
+     * without a resync.
+     */
+    private static ValidationError asServed(ValidationError error) {
+        return isChunkedText(error) && error.fieldCategory() == FieldCategory.MANDATORY
+                ? ValidationError.optional(error.cip(), error.subStandard(), error.fieldName(), error.code(), error.error())
+                : error;
+    }
+
+    private static boolean isChunkedText(ValidationError error) {
+        return ValidationCode.CHUNKED_TEXT.equals(error.code());
     }
 
     private static boolean isDescriptionForm(ValidationError error) {
