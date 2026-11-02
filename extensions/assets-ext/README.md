@@ -132,7 +132,9 @@ the entry is stored without a logo, and the logo is an `invalid_token` row (`log
 Upgrading is **in place and needs no resync to keep working**: the migrations only add. A row written before `validation_errors` existed has
 `NULL` (never checked, not the same as "no errors"): the API leaves `validation_errors` out for it, and `metadata.valid` falls back to the rule
 it had before, name and description both present. A **full resync** fills the errors in and brings back the tokens that used to be dropped, which
-exist nowhere until then; there is no backfill.
+exist nowhere until then; there is no backfill. It also removes the rows an earlier build stored that are no longer stored (the datums
+of an NFT, `nft_only`, and the datums that are not token metadata, `not_token_metadata`): until then they stay, and a 333 or 444 subject
+answered from such a row is served with its errors.
 
 **Batch request:**
 
