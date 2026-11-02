@@ -354,8 +354,8 @@ public class Cip68DatumParser {
      * Reads a text property. CIP-68 says text is UTF-8, so valid UTF-8 is stored as text. Bytes that are
      * not valid UTF-8 are stored as hex, the same rule as for additional properties, instead of being
      * decoded with replacement characters, which would lose the original bytes; the error says so. A list of byte
-     * strings is joined and reported as {@code chunked_text}; any other value that is not a byte string is left out,
-     * with an error.
+     * strings is joined and reported as an optional {@code chunked_text}; any other value that is not a byte string is
+     * left out, with an error.
      */
     @Nullable
     private String readText(String propertyName, MapPlutusData map, List<ValidationError> errors) {
@@ -368,8 +368,9 @@ public class Cip68DatumParser {
         }
         if (isChunks(property)) {
             // CIP-68 defines these texts as one byte string, but minting tools split a text over 64 bytes into chunks
-            // the way CIP-25 does: the text is joined and served, and the form is reported
-            errors.add(textError(propertyName, CHUNKED_TEXT,
+            // the way CIP-25 does: the text is joined and served, so only its form is off, which is optional whatever the
+            // field (a name or a description given as chunks is there and readable)
+            errors.add(ValidationError.optional(CIP_68, null, propertyName, CHUNKED_TEXT,
                     propertyName + " is a list of byte strings, not one byte string; the chunks are joined"));
             return typedBytesToText(propertyName, joinChunks((ListPlutusData) property), errors);
         }
