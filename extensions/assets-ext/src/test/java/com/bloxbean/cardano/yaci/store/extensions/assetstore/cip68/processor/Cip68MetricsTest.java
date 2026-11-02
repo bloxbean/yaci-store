@@ -29,6 +29,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * The counters behind {@code /actuator/prometheus}: datums indexed (by label), datums skipped (only what is not metadata at
@@ -50,7 +51,7 @@ class Cip68MetricsTest {
         Cip68Metrics metrics = new Cip68Metrics(registry);
         Cip68MetadataRepository repository = mock(Cip68MetadataRepository.class);
         // the reference NFTs are already stored, so an NFT's datum is indexed (ADR 0002): these tests count what is stored
-        org.mockito.Mockito.when(repository.existsByPolicyIdAndAssetName(
+        when(repository.existsByPolicyIdAndAssetName(
                 org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString())).thenReturn(true);
         processor = new Cip68Processor(new Cip68TokenService(repository), new Cip68DatumParser(metrics), repository, metrics);
     }

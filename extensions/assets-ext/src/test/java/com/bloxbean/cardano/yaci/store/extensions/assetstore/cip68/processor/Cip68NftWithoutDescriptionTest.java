@@ -24,6 +24,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
  * CIP-68 declares {@code ? description} for the 222 NFT and the 444 RFT, but {@code description}
@@ -162,7 +163,7 @@ class Cip68NftWithoutDescriptionTest {
     private AddressUtxoEvent event(String datum, String userTokenPrefix) {
         // an NFT's datum is stored once its reference NFT is (ADR 0002): these tests are about what is stored for it
         if ("000de140".equals(userTokenPrefix)) {
-            org.mockito.Mockito.when(repository.existsByPolicyIdAndAssetName(
+            when(repository.existsByPolicyIdAndAssetName(
                     org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString())).thenReturn(true);
         }
         AddressUtxo refNft = AddressUtxo.builder()
