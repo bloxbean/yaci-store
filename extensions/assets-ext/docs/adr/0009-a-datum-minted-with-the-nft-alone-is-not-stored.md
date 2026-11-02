@@ -5,6 +5,9 @@
 Proposed. Implemented in PR #1220 (`0b382b706`) and in its 2.0.x backport, PR #1242 (`d4261bde2`). Amends ADR 0002 (decision 2, what is
 indexed) and ADR 0008 (its consequence that NFTs keep answering for their 333 and 444 subjects).
 
+> **Amended by ADR 0010 (2026-11-02):** "unless its reference NFT is already stored" (decision 1) is decided in chain order: the CIP-68 outputs
+> of a batch are indexed sorted by block on `PreCommitEvent`, so a parallel sync gives the same rows as one in chain order.
+
 ## Date
 
 2026-10-29
@@ -67,14 +70,9 @@ of ADR 0002 decision 2: the same policy and the same base name.
 - An NFT whose reference NFT is updated later without a user token, with token fields, is stored from that datum on, guessed as a 333 or 444 by
   its shape, and served. This is the case of a reference NFT whose 333 or 444 token is minted apart from it, which cannot be told apart without a
   cross-transaction lookup (ADR 0002 decision 2). Not measured.
-- **Known issue: "already stored" depends on the processing order during a parallel sync.** With
-  `store.executor.enable-parallel-processing=true`, the blocks of a batch run in partitions at the same time, so the check can miss an earlier row
-  that is not stored yet, or see a row that a later block stored first. A later datum is then skipped (House of Titans #1001, #3377 and #4102 on
-  mainnet kept their old metadata after it was cleared), or an NFT's datum is stored. This also applies to `not_token_metadata` (ADR 0002 decision 2).
-  At the tip the check is exact. The fix and its alternatives are discussed in #1309; the proposed one, #1310, indexes the blocks of a batch in
-  chain order on `PreCommitEvent`. That event is internal and is never published to a remote consumer (`store.remote.consumer-enabled`), so with
-  #1310 the module indexes nothing there, like the other stores that finish their work on `PreCommitEvent` or `CommitEvent`
-  (`AccountBalanceProcessor`, `DatumStorageImpl`, ...; #1311). There are no known users of remote consumers.
+- "Already stored" depends on the order of the blocks. During a parallel sync, the blocks of a batch run in partitions at the same time.
+  [ADR 0010](0010-cip-68-outputs-of-a-batch-are-indexed-in-chain-order.md) therefore indexes the CIP-68 outputs of a batch in chain order. That
+  also covers `not_token_metadata` (ADR 0002 decision 2).
 
 ## Alternatives considered
 
@@ -88,7 +86,7 @@ of ADR 0002 decision 2: the same policy and the same base name.
 ## References
 
 - ADR 0002 (decision 2: the stored label and what is indexed), ADR 0007 (`invalid_token`), ADR 0008 (a reference NFT answers for its 333 and 444
-  subjects)
+  subjects), ADR 0010 (the CIP-68 outputs of a batch are indexed in chain order)
 - PR #1220, PR #1242; review of PR #1220 (2026-10-26, point 1: the stored label is a guess)
 - cardano-foundation/cf-token-metadata-registry ADR-019 and #121: the same rule, and a datum without a user token stored whatever its shape
 - `Cip68Processor.indexDatum`, `Cip68Metrics.NFT_ONLY`

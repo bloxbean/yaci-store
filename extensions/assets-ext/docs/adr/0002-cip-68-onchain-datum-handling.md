@@ -7,6 +7,9 @@ to 9 apply ADR 0006 (validation errors are reported, not enforced).
 
 > **Amended by ADR 0009 (2026-10-29):** a datum whose transaction has the 222 NFT and no 333 or 444 token is not stored, unless its reference NFT
 > already is (decision 2, decision 9).
+>
+> **Amended by ADR 0010 (2026-11-02):** "unless its reference NFT is already stored" is decided in chain order: the CIP-68 outputs of a batch are
+> indexed sorted by block on `PreCommitEvent`, so a parallel sync gives the same rows as one in chain order (decision 2).
 
 ## Date
 
