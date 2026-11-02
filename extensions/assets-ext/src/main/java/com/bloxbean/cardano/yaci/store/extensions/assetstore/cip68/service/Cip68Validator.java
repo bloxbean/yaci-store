@@ -26,8 +26,8 @@ import static com.bloxbean.cardano.yaci.store.extensions.assetstore.validation.V
  * <ul>
  *   <li>{@code name} for every label;</li>
  *   <li>{@code description} for the 333 fungible token only (for 222 and 444 it is {@code ? description}). A
- *       description of the wrong type, given as chunks, or not valid UTF-8, is reported with the category of the label
- *       asked for;</li>
+ *       description of the wrong type or not valid UTF-8 is reported with the category of the label asked for. One given
+ *       as a list of byte strings is joined and served as the description, with no error;</li>
  *   <li>{@code image} for the 222 NFT and the 444 RFT, as a URI whose scheme is one of {@code https}, {@code ipfs},
  *       {@code ar} or {@code data}. A missing or empty image, or another scheme (for example {@code iagon://}, or free
  *       text), is an error: wallets and explorers follow the CIP and could not show such a token.</li>
@@ -43,6 +43,12 @@ public final class Cip68Validator {
     private static final String NAME = "name";
     private static final String DESCRIPTION = "description";
 
+    /**
+     * A code an earlier build stored for a text given as a list of byte strings. Such a text is accepted now (ADR 0002
+     * decision 5), so the error is left out when the token is served, and a row indexed before needs no resync.
+     */
+    private static final String CHUNKED_TEXT_OF_AN_EARLIER_BUILD = "chunked_text";
+
     private Cip68Validator() {
     }
 
@@ -56,7 +62,11 @@ public final class Cip68Validator {
      * @param label the label of the subject asked for: {@code 333} (FT) or {@code 444} (RFT)
      */
     public static List<ValidationError> validate(Cip68Metadata row, int label) {
-        List<ValidationError> datumErrors = row.getValidationErrors();
+        // a text given as a list of byte strings is accepted (ADR 0002 decision 5); a row indexed by an earlier build may
+        // still hold a chunked_text error for it, which is not served, so no resync is needed
+        List<ValidationError> datumErrors = row.getValidationErrors().stream()
+                .filter(error -> !CHUNKED_TEXT_OF_AN_EARLIER_BUILD.equals(error.code()))
+                .toList();
         String subStandard = String.valueOf(label);
         List<ValidationError> errors = new ArrayList<>();
         List<ValidationError> descriptionForms = new ArrayList<>();
@@ -71,8 +81,8 @@ public final class Cip68Validator {
         if (row.getName() == null && datumErrors.stream().noneMatch(e -> NAME.equals(e.fieldName()))) {
             errors.add(missing(subStandard, NAME));
         }
-        // the form of a description (a wrong type, chunks, bytes that are not UTF-8) is stored by the parser without a
-        // label; it is reported for the label asked for, with its category: only the 333 fungible token requires one
+        // the form of a description (a wrong type, bytes that are not UTF-8) is stored by the parser without a label; it
+        // is reported for the label asked for, with its category: only the 333 fungible token requires one
         boolean descriptionRequired = label == LABEL_FT;
         for (ValidationError descriptionForm : descriptionForms) {
             errors.add(new ValidationError(CIP_68, subStandard, DESCRIPTION,
@@ -111,8 +121,7 @@ public final class Cip68Validator {
 
     private static boolean isDescriptionForm(ValidationError error) {
         return DESCRIPTION.equals(error.fieldName())
-                && (ValidationCode.WRONG_TYPE.equals(error.code()) || ValidationCode.CHUNKED_TEXT.equals(error.code())
-                || ValidationCode.NOT_UTF8.equals(error.code()));
+                && (ValidationCode.WRONG_TYPE.equals(error.code()) || ValidationCode.NOT_UTF8.equals(error.code()));
     }
 
     private static ValidationError missing(String subStandard, String field) {

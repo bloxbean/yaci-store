@@ -198,15 +198,13 @@ class Cip68ValidatorTest {
         }
 
         @Test
-        void aChunkedDescriptionIsReportedPerLabelAndIsNotMissing() {
+        void aChunkedTextErrorStoredByAnEarlierBuildIsNotServedForAnyLabel() {
+            // a list of byte strings is accepted as the text; a row indexed before still holds chunked_text, which is left out
+            // (mainnet: 591 fungible tokens were hidden by ?validation=MANDATORY_ONLY with a readable description)
             Cip68Metadata parsed = withDescription("Templar Protocol - Templar lets you borrow", CHUNKED);
 
-            assertThat(Cip68Validator.validate(parsed, Cip68Constants.LABEL_FT))
-                    .extracting(ValidationError::subStandard, ValidationError::fieldCategory, ValidationError::code)
-                    .containsExactly(tuple("333", FieldCategory.MANDATORY, "chunked_text"));
-            assertThat(Cip68Validator.validate(parsed, Cip68Constants.LABEL_RFT))
-                    .extracting(ValidationError::subStandard, ValidationError::fieldCategory, ValidationError::code)
-                    .containsExactly(tuple("444", FieldCategory.OPTIONAL, "chunked_text"));
+            assertThat(Cip68Validator.validate(parsed, Cip68Constants.LABEL_FT)).isEmpty();
+            assertThat(Cip68Validator.validate(parsed, Cip68Constants.LABEL_RFT)).isEmpty();
         }
 
         @Test
@@ -217,8 +215,25 @@ class Cip68ValidatorTest {
 
             assertThat(Cip68Validator.validate(row("n", "d", null, List.of(CHUNKED, tickerNotUtf8, nameChunked)), Cip68Constants.LABEL_FT))
                     .extracting(ValidationError::subStandard, ValidationError::fieldName, ValidationError::code)
-                    .containsExactly(tuple(null, "ticker", "not_utf8"), tuple(null, "name", "chunked_text"),
-                            tuple("333", "description", "chunked_text"));
+                    .containsExactly(tuple(null, "ticker", "not_utf8"));
+        }
+
+        @Test
+        void aChunkedNameStoredAsMandatoryByAnEarlierBuildIsNotServed() {
+            // a row indexed before a list was accepted: served by the rule of today, without a resync
+            ValidationError storedBefore = ValidationError.mandatory("CIP-68", null, "name", "chunked_text",
+                    "name is a list of byte strings, not one byte string; the chunks are joined");
+
+            assertThat(Cip68Validator.validate(row("Stable coin", "d", null, List.of(storedBefore)), Cip68Constants.LABEL_FT)).isEmpty();
+        }
+
+        @Test
+        void aNameThatIsNotUtf8StaysMandatory() {
+            ValidationError nameNotUtf8 = ValidationError.mandatory("CIP-68", null, "name", "not_utf8", "name is not valid UTF-8");
+
+            assertThat(Cip68Validator.validate(row("ff00", "d", null, List.of(nameNotUtf8)), Cip68Constants.LABEL_FT))
+                    .extracting(ValidationError::fieldName, ValidationError::fieldCategory, ValidationError::code)
+                    .containsExactly(tuple("name", FieldCategory.MANDATORY, "not_utf8"));
         }
 
         @Test
@@ -234,11 +249,10 @@ class Cip68ValidatorTest {
 
         @Test
         void everyFormErrorOfADescriptionIsReportedForTheLabel() {
-            // chunks that join into bytes that are not UTF-8
+            // a list that joins into bytes that are not UTF-8: the list is accepted, the hex is not the text a 333 needs
             assertThat(Cip68Validator.validate(row("n", "ff00c3", null, List.of(CHUNKED, NOT_UTF8)), Cip68Constants.LABEL_FT))
                     .extracting(ValidationError::subStandard, ValidationError::fieldCategory, ValidationError::code)
-                    .containsExactly(tuple("333", FieldCategory.MANDATORY, "chunked_text"),
-                            tuple("333", FieldCategory.MANDATORY, "not_utf8"));
+                    .containsExactly(tuple("333", FieldCategory.MANDATORY, "not_utf8"));
         }
     }
 

@@ -4,6 +4,7 @@ import com.bloxbean.cardano.client.common.cbor.CborSerializationUtil;
 import com.bloxbean.cardano.client.plutus.spec.BigIntPlutusData;
 import com.bloxbean.cardano.client.plutus.spec.BytesPlutusData;
 import com.bloxbean.cardano.client.plutus.spec.ConstrPlutusData;
+import com.bloxbean.cardano.client.plutus.spec.ListPlutusData;
 import com.bloxbean.cardano.client.plutus.spec.MapPlutusData;
 import com.bloxbean.cardano.client.plutus.spec.PlutusData;
 import com.bloxbean.cardano.client.util.HexUtil;
@@ -149,6 +150,38 @@ class Cip68ProcessorH2IT {
         assertThat(batch).containsOnlyKeys(emptyNameSubject, namedSubject);
         assertThat(batch.get(emptyNameSubject).name()).isEqualTo("Empty name");
         assertThat(batch.get(namedSubject).name()).isEqualTo("Named");
+    }
+
+    @Test
+    void aDescriptionGivenAsAListOfByteStringsIsStoredAndServedWithNoError() {
+        // a long text split into a list the way CIP-25 does (Awkward Seal on mainnet): accepted as the description
+        MapPlutusData properties = new MapPlutusData();
+        properties.put(BytesPlutusData.of("name"), BytesPlutusData.of("Awkward Seal"));
+        properties.put(BytesPlutusData.of("description"), ListPlutusData.of(
+                BytesPlutusData.of("That awkward moment when you called yourself Snekfun\u2026 but everyone"),
+                BytesPlutusData.of("\u2019s having fun on Solada.")));
+        String inlineDatum;
+        try {
+            inlineDatum = HexUtil.encodeHexString(CborSerializationUtil.serialize(
+                    ConstrPlutusData.of(0, properties, BigIntPlutusData.of(1)).serialize()));
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+        AddressUtxo ref = output(0, POLICY_ID + REF_NFT_ASSET_NAME, inlineDatum);
+        AddressUtxo userToken = output(1, POLICY_ID + "0014df10" + REF_NFT_ASSET_NAME.substring(8), null);
+        processor.processTransaction(AddressUtxoEvent.builder()
+                .metadata(EventMetadata.builder().slot(100L).build())
+                .txInputOutputs(List.of(TxInputOutput.builder().outputs(List.of(ref, userToken)).build()))
+                .build());
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(repository.findAll()).singleElement().satisfies(row -> assertThat(row.getValidationErrors()).isEmpty());
+        Cip68StorageReaderImpl reader = new Cip68StorageReaderImpl(new Cip68TokenService(repository));
+        assertThat(reader.findBySubject(POLICY_ID + "0014df10" + REF_NFT_ASSET_NAME.substring(8))).hasValueSatisfying(token -> {
+            assertThat(token.description()).isEqualTo("That awkward moment when you called yourself Snekfun\u2026 but everyone\u2019s having fun on Solada.");
+            assertThat(token.validationErrors()).isEmpty();
+        });
     }
 
     private static AddressUtxo output(int outputIndex, String unit, String inlineDatum) {

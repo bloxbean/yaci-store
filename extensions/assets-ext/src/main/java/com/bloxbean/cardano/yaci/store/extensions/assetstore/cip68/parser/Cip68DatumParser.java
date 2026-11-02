@@ -78,7 +78,6 @@ public class Cip68DatumParser {
     public static final String TOO_DEEP = ValidationCode.TOO_DEEP;
     public static final String INVALID_FILES_ENTRY = ValidationCode.INVALID_FILES_ENTRY;
     public static final String NO_NESTED_ENTRY = ValidationCode.NO_NESTED_ENTRY;
-    public static final String CHUNKED_TEXT = ValidationCode.CHUNKED_TEXT;
 
     /**
      * Deepest nesting allowed in the value of an additional property (a list inside a list counts as two levels). The
@@ -354,7 +353,7 @@ public class Cip68DatumParser {
      * Reads a text property. CIP-68 says text is UTF-8, so valid UTF-8 is stored as text. Bytes that are
      * not valid UTF-8 are stored as hex, the same rule as for additional properties, instead of being
      * decoded with replacement characters, which would lose the original bytes; the error says so. A list of byte
-     * strings is joined and reported as {@code chunked_text}; any other value that is not a byte string is left out,
+     * strings is joined and read as the text, with no error; any other value that is not a byte string is left out,
      * with an error.
      */
     @Nullable
@@ -367,10 +366,9 @@ public class Cip68DatumParser {
             return typedBytesToText(propertyName, bytes.getValue(), errors);
         }
         if (isChunks(property)) {
-            // CIP-68 defines these texts as one byte string, but minting tools split a text over 64 bytes into chunks
-            // the way CIP-25 does: the text is joined and served, and the form is reported
-            errors.add(textError(propertyName, CHUNKED_TEXT,
-                    propertyName + " is a list of byte strings, not one byte string; the chunks are joined"));
+            // CIP-68 defines these texts as one byte string, which a long text can be (it is encoded in 64-byte CBOR
+            // chunks). Most minting tools still split a long text into a list, the way CIP-25 must in transaction
+            // metadata; CIP-68 allows that list for a uri. It is accepted as the text, the same way, and not reported
             return typedBytesToText(propertyName, joinChunks((ListPlutusData) property), errors);
         }
         errors.add(wrongType(propertyName));

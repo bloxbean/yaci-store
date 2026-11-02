@@ -433,6 +433,50 @@ class TokenApiEndToEndTest {
         assertThat(statusOf("/api/v1/tokens/subject/{s}", "LOOSE")).isEqualTo(400);
     }
 
+    // a text given as a list of byte strings is accepted as the text, the way CIP-68 accepts a list for a uri (Awkward Seal on
+    // mainnet, with 590 other fungible tokens, was hidden by MANDATORY_ONLY with a readable description)
+
+    @Test
+    void aFungibleTokenWhoseDescriptionWasStoredWithChunkedTextByAnEarlierBuildIsValidEvenForStrict() throws Exception {
+        ValidationError storedBefore = ValidationError.optional("CIP-68", null, "description", "chunked_text",
+                "description is a list of byte strings, not one byte string; the chunks are joined");
+        store(row(333).name("Awkward Seal").description("That awkward moment when you called yourself Snekfun")
+                .validationErrors(List.of(storedBefore)).build());
+
+        mockMvc.perform(get("/api/v1/tokens/subject/{s}", FT_SUBJECT))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.subject.metadata.description.value").value("That awkward moment when you called yourself Snekfun"))
+                .andExpect(jsonPath("$.subject.metadata.valid").value(true))
+                .andExpect(jsonPath("$.subject.validation_errors.length()").value(0));
+        assertThat(statusOf("/api/v1/tokens/subject/{s}", "MANDATORY_ONLY")).isEqualTo(200);
+        assertThat(statusOf("/api/v1/tokens/cip68/ft/{s}", "MANDATORY_ONLY")).isEqualTo(200);
+        assertThat(statusOf("/api/v1/tokens/subject/{s}", "STRICT")).isEqualTo(200);
+    }
+
+    @Test
+    void aDescriptionOfTheWrongTypeIsStillHiddenByMandatoryOnly() throws Exception {
+        // left out, so a 333 has no description: that stays mandatory
+        ValidationError wrongType = ValidationError.optional("CIP-68", null, "description", "wrong_type",
+                "description is not a byte string, left out");
+        store(row(333).name("Coin").validationErrors(List.of(wrongType)).build());
+
+        assertThat(statusOf("/api/v1/tokens/subject/{s}", "ALL")).isEqualTo(200);
+        assertThat(statusOf("/api/v1/tokens/subject/{s}", "MANDATORY_ONLY")).isEqualTo(404);
+    }
+
+    @Test
+    void aChunkedNameStoredAsMandatoryByAnEarlierBuildIsNotServedWithoutAResync() throws Exception {
+        ValidationError storedBefore = ValidationError.mandatory("CIP-68", null, "name", "chunked_text",
+                "name is a list of byte strings, not one byte string; the chunks are joined");
+        store(row(333).name("Stable coin from family Pazinatto").description("A coin").validationErrors(List.of(storedBefore)).build());
+
+        mockMvc.perform(get("/api/v1/tokens/subject/{s}", FT_SUBJECT))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.subject.metadata.valid").value(true))
+                .andExpect(jsonPath("$.subject.validation_errors.length()").value(0));
+        assertThat(statusOf("/api/v1/tokens/subject/{s}", "STRICT")).isEqualTo(200);
+    }
+
     @Test
     void theBatchLeavesOutATokenThatIsNotAccepted() throws Exception {
         store(row(333).name("Coin").validationErrors(List.of()).build());
