@@ -11,8 +11,10 @@ import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.parser.Cip68DatumParser;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service.Cip68TokenService;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.Cip68StorageReaderImpl;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.Cip68Metadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.repository.Cip68MetadataRepository;
 import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxoEvent;
@@ -30,10 +32,12 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import java.math.BigInteger;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 
 /**
  * Runs {@link Cip68Processor} against a real H2 {@code cip68_metadata} table created by the module's
@@ -112,6 +116,49 @@ class Cip68ProcessorH2IT {
         assertThat(repository.findAll()).extracting(Cip68Metadata::getSlot).containsExactlyInAnyOrder(100L, 500L);
         assertThat(repository.findFirstByPolicyIdAndAssetNameOrderBySlotDescTxIndexDesc(POLICY_ID, REF_NFT_ASSET_NAME))
                 .hasValueSatisfying(latest -> assertThat(latest.getName()).isNull());
+    }
+
+    @Test
+    void aTokenWithAnEmptyNameIsIndexedAndServedApartFromANamedTokenOfTheSamePolicy() {
+        // the name after the label prefix can be empty, as the ledger allows (PBG Token on mainnet): the reference NFT is
+        // 000643b0 alone and the fungible token 0014df10 alone. Minted with a named token of the same policy in one transaction.
+        AddressUtxo emptyNameRef = output(0, POLICY_ID + "000643b0", datum("Empty name", true));
+        AddressUtxo namedRef = output(1, POLICY_ID + REF_NFT_ASSET_NAME, datum("Named", true));
+        AddressUtxo userTokens = output(2, POLICY_ID + "0014df10", null);
+        userTokens.setAmounts(List.of(
+                Amt.builder().unit(POLICY_ID + "0014df10").quantity(BigInteger.valueOf(1_000)).build(),
+                Amt.builder().unit(POLICY_ID + "0014df10" + REF_NFT_ASSET_NAME.substring(8)).quantity(BigInteger.valueOf(1_000)).build()));
+        processor.processTransaction(AddressUtxoEvent.builder()
+                .metadata(EventMetadata.builder().slot(100L).build())
+                .txInputOutputs(List.of(TxInputOutput.builder().outputs(List.of(emptyNameRef, namedRef, userTokens)).build()))
+                .build());
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(repository.findAll())
+                .extracting(Cip68Metadata::getAssetName, Cip68Metadata::getLabel)
+                .containsExactlyInAnyOrder(tuple("000643b0", 333), tuple(REF_NFT_ASSET_NAME, 333));
+
+        Cip68StorageReaderImpl reader = new Cip68StorageReaderImpl(new Cip68TokenService(repository));
+        String emptyNameSubject = POLICY_ID + "0014df10";
+        String namedSubject = POLICY_ID + "0014df10" + REF_NFT_ASSET_NAME.substring(8);
+        assertThat(reader.findBySubject(emptyNameSubject)).hasValueSatisfying(t -> assertThat(t.name()).isEqualTo("Empty name"));
+        assertThat(reader.findBySubject(namedSubject)).hasValueSatisfying(t -> assertThat(t.name()).isEqualTo("Named"));
+        // the batch reads both with the native query, keyed by policy id and asset name together
+        Map<String, FungibleTokenMetadata> batch = reader.findBySubjects(List.of(emptyNameSubject, namedSubject), List.of());
+        assertThat(batch).containsOnlyKeys(emptyNameSubject, namedSubject);
+        assertThat(batch.get(emptyNameSubject).name()).isEqualTo("Empty name");
+        assertThat(batch.get(namedSubject).name()).isEqualTo("Named");
+    }
+
+    private static AddressUtxo output(int outputIndex, String unit, String inlineDatum) {
+        return AddressUtxo.builder()
+                .txHash(TX_HASH)
+                .outputIndex(outputIndex)
+                .txIndex(0)
+                .inlineDatum(inlineDatum)
+                .amounts(List.of(Amt.builder().unit(unit).quantity(BigInteger.ONE).build()))
+                .build();
     }
 
     private static AddressUtxoEvent eventAt(long block, long slot, String inlineDatum) {
