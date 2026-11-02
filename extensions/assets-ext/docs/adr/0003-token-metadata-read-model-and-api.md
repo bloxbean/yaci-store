@@ -27,7 +27,8 @@ Two facts shape everything below:
 
 **Not covered: CIP-25.** The metadata of NFTs minted with CIP-25 (the transaction metadata standard, label 721) is not
 indexed and not served. CIP-25 appears in the module's code only as a format that CIP-68 borrows: the nested `"721"` map
-of a version 4 datum and the splitting of long strings into chunks of at most 64 bytes (ADR 0002 decisions 1 and 5). A
+of a version 4 datum, and a long text given as a list of strings, which the 64-byte limit of transaction metadata requires
+in CIP-25 and which minters also use in a datum, where it is not needed (ADR 0002 decisions 1 and 5). A
 token with CIP-25 metadata and no CIP-26 or CIP-68 metadata has no answer from this API.
 
 **NFT support is an initial version, not full support.** The module indexes and stores CIP-68 NFTs (label 222) and RFTs
@@ -96,7 +97,9 @@ purely additive, and it is why the README lists it; the `validation_errors` fiel
 ### 4. Fungible and rich fungible tokens from CIP-68 are served
 
 The CIP-68 table stores rows for labels 222, 333 and 444. A subject with the fungible prefix `0014df10`, or the rich fungible prefix `001bc280`,
-is mapped to its reference NFT (prefix `000643b0`) and the latest row of that reference NFT is returned. The reference NFT holds the metadata and does not say
+is mapped to its reference NFT (prefix `000643b0`) and the latest row of that reference NFT is returned. The name after the prefix can be
+empty, as the ledger allows: `<policy>0014df10` is the token whose reference NFT is `<policy>000643b0` (PR #1317; PBG Token on mainnet). The
+`rawAssetName` endpoint cannot express an empty name, since a path segment cannot be empty: such a token is asked for by its subject. The reference NFT holds the metadata and does not say
 that the token was minted, so the 333 and 444 subjects of burned tokens and of tokens that were never minted answer 200 too (ADR 0008, #1292: kept on
 purpose, so that the metadata of a burned token is still there for history). The datum of an NFT minted alone is not stored (ADR 0009); the 222 rows
 that are stored are not exposed.

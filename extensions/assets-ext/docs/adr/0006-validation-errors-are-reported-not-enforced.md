@@ -164,6 +164,13 @@ that drop a token is on hold.
 
 ## Open questions
 
+- **Notes next to the errors.** Some facts explain how a response was built without being wrong with the token: a label guessed
+  from the datum because the user token was not in the transaction, a 444's `logo` left out for its `image`, one flat datum shared by
+  several reference NFTs, one reference NFT serving user tokens of several labels, a text joined from a list of byte strings. They
+  are logged today, not returned. If they are returned one day, it would be as a separate list (for example
+  `notes: [{code, field_name, note}]`), not as a third `field_category`: `valid`, `STRICT` and `MANDATORY_ONLY` stay as they are,
+  and a client that reads `field_category` sees no new value. Not planned for 3.x.
+
 
 ## References
 

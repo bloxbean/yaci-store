@@ -244,9 +244,10 @@ an allowed scheme, 15 with no `mediaType` and 3 with an entry that is not a map.
 
 ### 5. A value given as a list of chunks is joined as bytes (#1226)
 
-A Plutus byte string is at most 64 bytes, so a longer URI (a `data:` URI, a long URL) can only be stored
-as a list of byte strings. The CIP defines this as `uri = bounded_bytes / [* bounded_bytes]`. The module
-joins the chunks for `logo` and `image`. The chunks are joined as **bytes** and decoded once, so a
+A Plutus byte string of any length is one value: it is encoded in CBOR chunks of at most 64 bytes, which
+libraries write and read automatically. CIP-68 also lets a `uri` be a list of byte strings
+(`uri = bounded_bytes / [* bounded_bytes]`, added in its version 3), and minting tools use it for a long URI
+(a `data:` URI, a long URL). The module joins the list for `logo` and `image`. The chunks are joined as **bytes** and decoded once, so a
 multi-byte character cut by a chunk boundary survives (decoding each chunk on its own corrupted it).
 Elements that are not byte strings are ignored.
 
