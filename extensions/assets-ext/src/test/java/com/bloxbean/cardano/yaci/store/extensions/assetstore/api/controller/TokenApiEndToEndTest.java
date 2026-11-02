@@ -433,27 +433,24 @@ class TokenApiEndToEndTest {
         assertThat(statusOf("/api/v1/tokens/subject/{s}", "LOOSE")).isEqualTo(400);
     }
 
-    // a text given as chunks is joined and served, so it is there: only its form is off, an optional error (Awkward Seal on
+    // a text given as a list of byte strings is accepted as the text, the way CIP-68 accepts a list for a uri (Awkward Seal on
     // mainnet, with 590 other fungible tokens, was hidden by MANDATORY_ONLY with a readable description)
 
     @Test
-    void aFungibleTokenWithAChunkedDescriptionPassesMandatoryOnlyButNotStrict() throws Exception {
-        ValidationError chunked = ValidationError.optional("CIP-68", null, "description", "chunked_text",
+    void aFungibleTokenWhoseDescriptionWasStoredWithChunkedTextByAnEarlierBuildIsValidEvenForStrict() throws Exception {
+        ValidationError storedBefore = ValidationError.optional("CIP-68", null, "description", "chunked_text",
                 "description is a list of byte strings, not one byte string; the chunks are joined");
         store(row(333).name("Awkward Seal").description("That awkward moment when you called yourself Snekfun")
-                .validationErrors(List.of(chunked)).build());
+                .validationErrors(List.of(storedBefore)).build());
 
         mockMvc.perform(get("/api/v1/tokens/subject/{s}", FT_SUBJECT))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.subject.metadata.description.value").value("That awkward moment when you called yourself Snekfun"))
-                .andExpect(jsonPath("$.subject.metadata.valid").value(false))
-                .andExpect(jsonPath("$.subject.validation_errors.length()").value(1))
-                .andExpect(jsonPath("$.subject.validation_errors[0].sub_standard").value("333"))
-                .andExpect(jsonPath("$.subject.validation_errors[0].code").value("chunked_text"))
-                .andExpect(jsonPath("$.subject.validation_errors[0].field_category").value("OPTIONAL"));
+                .andExpect(jsonPath("$.subject.metadata.valid").value(true))
+                .andExpect(jsonPath("$.subject.validation_errors.length()").value(0));
         assertThat(statusOf("/api/v1/tokens/subject/{s}", "MANDATORY_ONLY")).isEqualTo(200);
         assertThat(statusOf("/api/v1/tokens/cip68/ft/{s}", "MANDATORY_ONLY")).isEqualTo(200);
-        assertThat(statusOf("/api/v1/tokens/subject/{s}", "STRICT")).isEqualTo(404);
+        assertThat(statusOf("/api/v1/tokens/subject/{s}", "STRICT")).isEqualTo(200);
     }
 
     @Test
@@ -468,15 +465,16 @@ class TokenApiEndToEndTest {
     }
 
     @Test
-    void aChunkedNameStoredAsMandatoryByAnEarlierBuildPassesMandatoryOnlyWithoutAResync() throws Exception {
+    void aChunkedNameStoredAsMandatoryByAnEarlierBuildIsNotServedWithoutAResync() throws Exception {
         ValidationError storedBefore = ValidationError.mandatory("CIP-68", null, "name", "chunked_text",
                 "name is a list of byte strings, not one byte string; the chunks are joined");
         store(row(333).name("Stable coin from family Pazinatto").description("A coin").validationErrors(List.of(storedBefore)).build());
 
         mockMvc.perform(get("/api/v1/tokens/subject/{s}", FT_SUBJECT))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.subject.validation_errors[0].field_category").value("OPTIONAL"));
-        assertThat(statusOf("/api/v1/tokens/subject/{s}", "MANDATORY_ONLY")).isEqualTo(200);
+                .andExpect(jsonPath("$.subject.metadata.valid").value(true))
+                .andExpect(jsonPath("$.subject.validation_errors.length()").value(0));
+        assertThat(statusOf("/api/v1/tokens/subject/{s}", "STRICT")).isEqualTo(200);
     }
 
     @Test
