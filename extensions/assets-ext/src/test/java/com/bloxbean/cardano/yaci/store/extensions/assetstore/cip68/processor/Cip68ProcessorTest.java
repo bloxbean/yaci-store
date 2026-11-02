@@ -385,7 +385,7 @@ class Cip68ProcessorTest {
         }
 
         @Test
-        void storesAChunkedDescriptionWithoutALabelAndServesItAsOneOptionalErrorOfA333() {
+        void storesAChunkedTextErrorOfAnEarlierBuildButDoesNotServeItForA333() {
             ValidationError chunked = ValidationError.optional("CIP-68", null, "description", "chunked_text",
                     "description is a list of byte strings, not one byte string; the chunks are joined");
             AddressUtxo userToken = AddressUtxo.builder().txHash(TX_HASH)
@@ -409,7 +409,7 @@ class Cip68ProcessorTest {
                 assertThat(entity.getValidationErrors()).containsExactly(chunked);
                 assertThat(Cip68Validator.validate(entity, Cip68Constants.LABEL_FT))
                         .extracting(e -> e.subStandard() + ":" + e.fieldName() + ":" + e.fieldCategory() + ":" + e.code())
-                        .containsExactly("333:description:OPTIONAL:chunked_text");
+                        .isEmpty();
             });
         }
     }

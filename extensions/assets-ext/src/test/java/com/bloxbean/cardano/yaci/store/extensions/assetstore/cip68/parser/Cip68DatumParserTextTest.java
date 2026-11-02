@@ -156,7 +156,7 @@ class Cip68DatumParserTextTest {
     // ---------- texts given as chunks ----------
 
     @Test
-    void joinsATextGivenAsChunksAndReportsItsFormAsOptionalEvenForTheName() throws Exception {
+    void joinsATextGivenAsAListOfByteStringsWithNoError() throws Exception {
         // CIP-68 defines name, description, ticker and url as one bounded_bytes; on mainnet 570 descriptions, 43 urls and
         // 12 names are lists of 64-byte chunks instead, the way CIP-25 splits a long text
         MapPlutusData properties = new MapPlutusData();
@@ -169,21 +169,13 @@ class Cip68DatumParserTextTest {
         assertThat(parsed.name()).isEqualTo("Stable coin from family Pazinatto");
         assertThat(parsed.description()).isEqualTo("Templar Protocol - Templar lets you borrow");
         assertThat(parsed.url()).isEqualTo("https://www.thirdhalf.com/cerisewallet");
-        // the text is joined and served, so it is there: only its form is off, which is optional, also for the name
-        assertThat(parsed.validationErrors()).extracting(ValidationError::fieldName, ValidationError::fieldCategory, ValidationError::code)
-                .containsExactlyInAnyOrder(
-                        tuple("name", FieldCategory.OPTIONAL, "chunked_text"),
-                        tuple("description", FieldCategory.OPTIONAL, "chunked_text"),
-                        tuple("url", FieldCategory.OPTIONAL, "chunked_text"));
-        assertThat(parsed.validationErrors()).allSatisfy(e -> {
-            assertThat(e.subStandard()).isNull();
-            assertThat(e.error()).endsWith("is a list of byte strings, not one byte string; the chunks are joined");
-        });
+        // a list is accepted as the text, the way CIP-68 accepts it for a uri: nothing to report
+        assertThat(parsed.validationErrors()).isEmpty();
     }
 
     @Test
-    void aNameGivenAsChunksThatAreNotUtf8IsStillMandatoryForTheHex() throws Exception {
-        // the chunks are only a form (optional); what they join into is stored as hex, which is not the name a token needs
+    void aNameGivenAsAListThatIsNotUtf8IsStillMandatoryForTheHex() throws Exception {
+        // the list is accepted; what it joins into is stored as hex, which is not the name a token needs
         MapPlutusData properties = new MapPlutusData();
         properties.put(BytesPlutusData.of("name"), ListPlutusData.of(
                 BytesPlutusData.of(new byte[]{(byte) 0xff}), BytesPlutusData.of(new byte[]{0x00})));
@@ -191,9 +183,7 @@ class Cip68DatumParserTextTest {
         ParsedCip68Datum parsed = parse(properties).orElseThrow();
 
         assertThat(parsed.validationErrors()).extracting(ValidationError::fieldName, ValidationError::fieldCategory, ValidationError::code)
-                .containsExactlyInAnyOrder(
-                        tuple("name", FieldCategory.OPTIONAL, "chunked_text"),
-                        tuple("name", FieldCategory.MANDATORY, "not_utf8"));
+                .containsExactly(tuple("name", FieldCategory.MANDATORY, "not_utf8"));
     }
 
     @Test
