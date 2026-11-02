@@ -5,9 +5,12 @@ import org.junit.jupiter.api.BeforeEach;
 import java.time.ZoneOffset;
 import java.time.Instant;
 import java.time.Clock;
+import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
+import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
+import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.metrics.Cip68Metrics;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Constants;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.Cip68Metadata;
@@ -21,6 +24,8 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service.Cip68
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.validation.ValidationError;
 import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxoEvent;
 import com.bloxbean.cardano.yaci.store.utxo.domain.TxInputOutput;
+import com.bloxbean.cardano.yaci.store.common.domain.TxInput;
+import jakarta.annotation.Nullable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -37,6 +42,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -405,6 +411,237 @@ class Cip68ProcessorTest {
                         .extracting(e -> e.subStandard() + ":" + e.fieldName() + ":" + e.fieldCategory() + ":" + e.code())
                         .containsExactly("333:description:MANDATORY:chunked_text");
             });
+        }
+    }
+
+    /**
+     * During a parallel sync the blocks of a batch run in partitions at the same time, so a later block can be processed
+     * before an earlier one. The module keeps the blocks of the batch and indexes them in chain order at the end of the
+     * batch, so that "already stored" sees exactly the earlier blocks.
+     */
+    @Nested
+    @DisplayName("Blocks of a batch indexed in chain order")
+    class BatchInChainOrder {
+
+        private static final String MINT_DATUM = "d8799fa1446e616d65444e616d65ff";
+        private static final String CLEARED_DATUM = "d8799fa001ff";
+
+        private final List<Cip68Metadata> stored = new ArrayList<>();
+
+        private AddressUtxoEvent block(long block, long slot, String datum) {
+            Amt refNftAmt = Amt.builder().unit(POLICY_ID + REF_NFT_ASSET_NAME).quantity(BigInteger.ONE).build();
+            AddressUtxo utxo = AddressUtxo.builder().txHash(TX_HASH).txIndex(0).outputIndex(0)
+                    .inlineDatum(datum).amounts(List.of(refNftAmt)).build();
+            lenient().when(cip68TokenService.extractReferenceNfts(utxo)).thenReturn(List.of(refNftAmt));
+            return AddressUtxoEvent.builder()
+                    .metadata(EventMetadata.builder().block(block).slot(slot).build())
+                    .txInputOutputs(List.of(TxInputOutput.builder().outputs(List.of(utxo)).build()))
+                    .build();
+        }
+
+        private void storeForReal() {
+            // the repository answers "already stored" from what was saved so far, as the database would
+            lenient().when(metadataReferenceNftRepository.saveAll(any())).thenAnswer(invocation -> {
+                Iterable<Cip68Metadata> rows = invocation.getArgument(0);
+                rows.forEach(stored::add);
+                return rows;
+            });
+            lenient().when(metadataReferenceNftRepository.existsByPolicyIdAndAssetName(POLICY_ID, REF_NFT_ASSET_NAME))
+                    .thenAnswer(invocation -> !stored.isEmpty());
+            lenient().when(cip68DatumParser.parseDetailed(eq(MINT_DATUM), any())).thenReturn(new ParseOutcome.Parsed(
+                    new ParsedCip68Datum(null, null, null, "House of Titans #1001", null, null, 1L, null, null, null)));
+            lenient().when(cip68DatumParser.parseDetailed(eq(CLEARED_DATUM), any())).thenReturn(new ParseOutcome.Parsed(
+                    new ParsedCip68Datum(null, null, null, null, null, null, 1L, null, null, null)));
+        }
+
+        @Test
+        void aBlockIsNotIndexedBeforeTheEndOfTheBatch() {
+            processor.collectForBatch(block(10, 100L, MINT_DATUM));
+
+            verifyNoInteractions(metadataReferenceNftRepository, cip68DatumParser);
+        }
+
+        @Test
+        void aClearedDatumProcessedBeforeTheMintIsStoredOnceTheBatchIsIndexedInChainOrder() {
+            // House of Titans #1001 on mainnet: the datum is cleared 20 blocks after the mint, and the later block's
+            // partition ran first
+            storeForReal();
+
+            processor.collectForBatch(block(30, 500L, CLEARED_DATUM));
+            processor.collectForBatch(block(10, 100L, MINT_DATUM));
+            processor.indexBatchInChainOrder(new PreCommitEvent(EventMetadata.builder().block(99).build()));
+
+            assertThat(stored).extracting(Cip68Metadata::getSlot).containsExactly(100L, 500L);
+            assertThat(stored.getLast().getName()).isNull();
+            verify(metrics, never()).notTokenMetadata();
+        }
+
+        @Test
+        void theBlocksOfABatchAreIndexedOnce() {
+            storeForReal();
+            processor.collectForBatch(block(10, 100L, MINT_DATUM));
+
+            processor.indexBatchInChainOrder(new PreCommitEvent(EventMetadata.builder().block(10).build()));
+            processor.indexBatchInChainOrder(new PreCommitEvent(EventMetadata.builder().block(11).build()));
+
+            assertThat(stored).hasSize(1);
+        }
+
+        @Test
+        void aRollbackDropsTheBlocksKeptForTheEndOfTheBatch() {
+            processor.collectForBatch(block(10, 100L, MINT_DATUM));
+
+            processor.dropBatch(RollbackEvent.builder().rollbackTo(new Point(50L, "ab".repeat(32))).build());
+            processor.indexBatchInChainOrder(new PreCommitEvent(EventMetadata.builder().block(10).build()));
+
+            verifyNoInteractions(metadataReferenceNftRepository, cip68DatumParser);
+        }
+    }
+
+    /**
+     * Until the end of the batch only what indexing reads is kept: the transactions with a reference NFT output, with
+     * all their outputs and none of their inputs, so that the memory held grows with the CIP-68 activity of the batch,
+     * not with the size of its blocks.
+     */
+    @Nested
+    @DisplayName("What is kept until the end of the batch")
+    class KeptForBatch {
+
+        private static final String OTHER_TX_HASH = "1111111111111111111111111111111111111111111111111111111111111111";
+        private static final String FT_USER_TOKEN = "0014df10464c4454";
+
+        private AddressUtxo output(String txHash, int outputIndex, String assetName, @Nullable String datum) {
+            return AddressUtxo.builder().txHash(txHash).txIndex(0).outputIndex(outputIndex).inlineDatum(datum)
+                    .amounts(List.of(Amt.builder().unit(POLICY_ID + assetName).quantity(BigInteger.ONE).build()))
+                    .build();
+        }
+
+        private AddressUtxo referenceNftOutput(String txHash, String datum) {
+            AddressUtxo output = output(txHash, 0, REF_NFT_ASSET_NAME, datum);
+            lenient().when(cip68TokenService.extractReferenceNfts(output)).thenReturn(output.getAmounts());
+            return output;
+        }
+
+        private TxInputOutput tx(String txHash, AddressUtxo... outputs) {
+            return TxInputOutput.builder().txHash(txHash)
+                    .inputs(List.of(TxInput.builder().txHash(OTHER_TX_HASH).outputIndex(0).build()))
+                    .outputs(List.of(outputs)).build();
+        }
+
+        private AddressUtxoEvent blockOf(long block, TxInputOutput... txs) {
+            return AddressUtxoEvent.builder()
+                    .metadata(EventMetadata.builder().block(block).slot(block * 20).build())
+                    .txInputOutputs(List.of(txs)).build();
+        }
+
+        @Test
+        void aBlockWithoutAReferenceNftKeepsNothing() {
+            processor.collectForBatch(blockOf(10,
+                    tx(TX_HASH, output(TX_HASH, 0, FT_USER_TOKEN, null)),
+                    tx(OTHER_TX_HASH, output(OTHER_TX_HASH, 0, "deadbeef", null))));
+
+            assertThat(processor.keptForBatch()).isEmpty();
+            processor.indexBatchInChainOrder(new PreCommitEvent(EventMetadata.builder().block(10).build()));
+            verifyNoInteractions(metadataReferenceNftRepository, cip68DatumParser);
+        }
+
+        @Test
+        void keepsOnlyTheTransactionsWithAReferenceNftEachWithAllItsOutputsAndNoInputs() {
+            AddressUtxo refNft = referenceNftOutput(TX_HASH, "d8799fa0ff");
+            AddressUtxo userToken = output(TX_HASH, 1, FT_USER_TOKEN, null);
+            AddressUtxo unrelated = output(OTHER_TX_HASH, 0, "deadbeef", null);
+
+            processor.collectForBatch(blockOf(10, tx(TX_HASH, refNft, userToken), tx(OTHER_TX_HASH, unrelated)));
+
+            assertThat(processor.keptForBatch()).containsOnlyKeys(10L);
+            AddressUtxoEvent kept = processor.keptForBatch().get(10L);
+            assertThat(kept.getMetadata().getBlock()).isEqualTo(10L);
+            assertThat(kept.getMetadata().getSlot()).isEqualTo(200L);
+            assertThat(kept.getTxInputOutputs()).singleElement().satisfies(txIo -> {
+                assertThat(txIo.getTxHash()).isEqualTo(TX_HASH);
+                // the user token is in another output of the transaction: it is kept, so the pairing still sees it
+                assertThat(txIo.getOutputs()).containsExactly(refNft, userToken);
+                assertThat(txIo.getInputs()).isEmpty();
+            });
+        }
+
+        @Test
+        void theUserTokenOfAKeptTransactionStillPairsWithItsReferenceNft() {
+            // name and decimals: an FT datum; the 333 user token in the other output decides the label
+            when(cip68DatumParser.parseDetailed(eq("d8799fa0ff"), any())).thenReturn(new ParseOutcome.Parsed(
+                    new ParsedCip68Datum(6L, "A coin", null, "Coin", null, null, 1L, null, null, null)));
+            AddressUtxo refNft = referenceNftOutput(TX_HASH, "d8799fa0ff");
+            AddressUtxo userToken = output(TX_HASH, 1, FT_USER_TOKEN, null);
+            when(cip68TokenService.extractReferenceNfts(userToken)).thenReturn(List.of());
+
+            processor.collectForBatch(blockOf(10, tx(TX_HASH, refNft, userToken),
+                    tx(OTHER_TX_HASH, output(OTHER_TX_HASH, 0, "deadbeef", null))));
+            processor.indexBatchInChainOrder(new PreCommitEvent(EventMetadata.builder().block(10).build()));
+
+            @SuppressWarnings("unchecked")
+            ArgumentCaptor<Iterable<Cip68Metadata>> captor = ArgumentCaptor.forClass(Iterable.class);
+            verify(metadataReferenceNftRepository).saveAll(captor.capture());
+            assertThat(captor.getValue()).singleElement().satisfies(row -> {
+                assertThat(row.getLabel()).isEqualTo(Cip68Constants.LABEL_FT);
+                assertThat(row.getSlot()).isEqualTo(200L);
+            });
+        }
+
+        @Test
+        void aReferenceNftUnitWithAnotherQuantityKeepsItsTransactionForTheExactCheck() {
+            // the filter does not check the quantity: processTransaction applies the exact rules to what is kept
+            AddressUtxo two = AddressUtxo.builder().txHash(TX_HASH).txIndex(0).outputIndex(0)
+                    .amounts(List.of(Amt.builder().unit(POLICY_ID + REF_NFT_ASSET_NAME).quantity(BigInteger.TWO).build()))
+                    .build();
+
+            processor.collectForBatch(blockOf(10, tx(TX_HASH, two)));
+
+            assertThat(processor.keptForBatch()).containsOnlyKeys(10L);
+        }
+
+        @Test
+        void aUnitWithADotBetweenPolicyAndAssetNameIsRecognised() {
+            AddressUtxo dotted = AddressUtxo.builder().txHash(TX_HASH).txIndex(0).outputIndex(0)
+                    .amounts(List.of(Amt.builder().unit(POLICY_ID + "." + REF_NFT_ASSET_NAME).quantity(BigInteger.ONE).build()))
+                    .build();
+
+            processor.collectForBatch(blockOf(10, tx(TX_HASH, dotted)));
+
+            assertThat(processor.keptForBatch()).containsOnlyKeys(10L);
+        }
+
+        @Test
+        void outputsWithoutAmountsOrUnitsKeepNothingAndDoNotThrow() {
+            // read on the block thread, before the per-output error handling: nothing in an output may throw here
+            AddressUtxo noAmounts = AddressUtxo.builder().txHash(TX_HASH).txIndex(0).outputIndex(0).build();
+            AddressUtxo noUnit = AddressUtxo.builder().txHash(TX_HASH).txIndex(0).outputIndex(1)
+                    .amounts(List.of(Amt.builder().quantity(BigInteger.ONE).build())).build();
+            AddressUtxo shortUnit = AddressUtxo.builder().txHash(TX_HASH).txIndex(0).outputIndex(2)
+                    .amounts(List.of(Amt.builder().unit("000643b0").quantity(BigInteger.ONE).build())).build();
+            TxInputOutput noOutputs = TxInputOutput.builder().txHash(OTHER_TX_HASH).build();
+
+            assertThatCode(() -> processor.collectForBatch(blockOf(10, tx(TX_HASH, noAmounts, noUnit, shortUnit), noOutputs)))
+                    .doesNotThrowAnyException();
+            assertThat(processor.keptForBatch()).isEmpty();
+        }
+
+        @Test
+        void aBlockCollectedAgainReplacesWhatWasKeptForIt() {
+            // a block processed again after a failed batch is not indexed twice
+            processor.collectForBatch(blockOf(10, tx(TX_HASH, referenceNftOutput(TX_HASH, "d8799fa0ff"))));
+            processor.collectForBatch(blockOf(10, tx(TX_HASH, referenceNftOutput(TX_HASH, "d8799fa0ff"))));
+
+            assertThat(processor.keptForBatch()).containsOnlyKeys(10L);
+            assertThat(processor.keptForBatch().get(10L).getTxInputOutputs()).hasSize(1);
+        }
+
+        @Test
+        void nothingIsKeptOnceTheBatchIsIndexed() {
+            processor.collectForBatch(blockOf(10, tx(TX_HASH, referenceNftOutput(TX_HASH, "d8799fa0ff"))));
+
+            processor.indexBatchInChainOrder(new PreCommitEvent(EventMetadata.builder().block(10).build()));
+
+            assertThat(processor.keptForBatch()).isEmpty();
         }
     }
 
