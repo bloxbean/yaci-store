@@ -200,6 +200,60 @@ class TokenApiEndToEndTest {
         mockMvc.perform(get("/api/v1/tokens/cip68/ft/{s}", NFT_SUBJECT)).andExpect(status().isNotFound());
     }
 
+    // a token whose name after the label prefix is empty, as the ledger allows (PBG Token on mainnet): its reference NFT is
+    // the prefix alone, 000643b0
+
+    private static Cip68Metadata.Cip68MetadataBuilder emptyNameRow(int label) {
+        return row(label).assetName("000643b0");
+    }
+
+    @Test
+    void aFungibleTokenWithAnEmptyNameIsServedByItsSubject() throws Exception {
+        store(emptyNameRow(333).name("PBG Token").description("A coin").validationErrors(List.of()).build());
+
+        mockMvc.perform(get("/api/v1/tokens/subject/{s}", POLICY + "0014df10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.subject.subject").value(POLICY + "0014df10"))
+                .andExpect(jsonPath("$.subject.metadata.name.value").value("PBG Token"))
+                .andExpect(jsonPath("$.subject.metadata.valid").value(true));
+        mockMvc.perform(get("/api/v1/tokens/cip68/ft/{s}", POLICY + "0014df10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("PBG Token"));
+    }
+
+    @Test
+    void aRichFungibleTokenWithAnEmptyNameIsServedByItsSubjectWithTheImageAsTheLogo() throws Exception {
+        store(emptyNameRow(444).name("Edition").image("ipfs://QmImage").validationErrors(List.of()).build());
+
+        mockMvc.perform(get("/api/v1/tokens/subject/{s}", POLICY + "001bc280"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.subject.metadata.logo.value").value("ipfs://QmImage"))
+                .andExpect(jsonPath("$.subject.validation_errors.length()").value(0));
+    }
+
+    @Test
+    void anNftSubjectWithAnEmptyNameIsNotServed() throws Exception {
+        store(emptyNameRow(222).name("NFT").image("ipfs://QmImage").validationErrors(List.of()).build());
+
+        mockMvc.perform(get("/api/v1/tokens/subject/{s}", POLICY + "000de140")).andExpect(status().isNotFound());
+        mockMvc.perform(get("/api/v1/tokens/subject/{s}", POLICY + "000643b0")).andExpect(status().isNotFound());
+    }
+
+    @Test
+    void theBatchKeepsATokenWithAnEmptyNameApartFromANamedTokenOfTheSamePolicy() throws Exception {
+        Cip68Metadata named = row(333).name("Coin").description("A coin").validationErrors(List.of()).build();
+        Cip68Metadata empty = emptyNameRow(333).name("PBG Token").description("Another coin").txHash("c".repeat(64))
+                .validationErrors(List.of()).build();
+        when(cip68Repository.findLatestByConcatenatedKeys(anyList())).thenReturn(List.of(named, empty));
+
+        mockMvc.perform(post("/api/v1/tokens/subject/query").contentType(MediaType.APPLICATION_JSON)
+                        .content(new ObjectMapper().writeValueAsString(Map.of("subjects", List.of(FT_SUBJECT, POLICY + "0014df10")))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.subjects.length()").value(2))
+                .andExpect(jsonPath("$.subjects[?(@.subject == '" + FT_SUBJECT + "')].metadata.name.value").value("Coin"))
+                .andExpect(jsonPath("$.subjects[?(@.subject == '" + POLICY + "0014df10')].metadata.name.value").value("PBG Token"));
+    }
+
     @Test
     void aSubjectNothingKnowsIsA404() throws Exception {
         when(cip68Repository.findFirstByPolicyIdAndAssetNameOrderBySlotDescTxIndexDesc(POLICY, REF)).thenReturn(Optional.empty());

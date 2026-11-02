@@ -209,6 +209,8 @@ public class Cip68TokenService {
      * <p>
      * Returns empty if the subject has neither the fungible token prefix ({@code 0014df10}) nor the
      * rich fungible token prefix ({@code 001bc280}), indicating the subject is not served from CIP-68.
+     * The name after the prefix can be empty, as the ledger allows: {@code <policyId>0014df10} is the
+     * token whose reference NFT is {@code <policyId>000643b0}.
      *
      * @param subject the user token unit (policyId + 0014df10 or 001bc280 + hex name)
      * @return the reference NFT AssetType if the subject has a served token prefix, empty otherwise
@@ -218,8 +220,7 @@ public class Cip68TokenService {
         String assetName = assetType.assetName();
         int tokenPrefixLength = REFERENCE_TOKEN_PREFIX.length();
 
-        if (assetName.length() > tokenPrefixLength
-                && (assetName.startsWith(FUNGIBLE_TOKEN_PREFIX) || assetName.startsWith(RICH_FUNGIBLE_TOKEN_PREFIX))) {
+        if (assetName.startsWith(FUNGIBLE_TOKEN_PREFIX) || assetName.startsWith(RICH_FUNGIBLE_TOKEN_PREFIX)) {
             String refNftAssetName = String.format("%s%s", REFERENCE_TOKEN_PREFIX, assetType.assetName().substring(tokenPrefixLength));
             return Optional.of(new AssetType(assetType.policyId(), refNftAssetName));
         }
