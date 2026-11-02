@@ -121,7 +121,8 @@ The other options discussed in PR #1309:
 - **Remote consumer:** a remote consumer (`store.remote.consumer-enabled`) never receives `PreCommitEvent`, because yaci-store does not send it
   (#1311). So the module indexes nothing there. This is the same limitation as the other stores that finish their work on `PreCommitEvent` or
   `CommitEvent` (`AccountBalanceProcessor`, `DatumStorageImpl`, `ScriptStorageImpl`, `AddressProcessor`, ...). It is documented on `Cip68Processor`.
-  There are no known users of remote consumers with this module.
+  There are no known users of remote consumers with this module, so #1311 is closed as not planned for now (2026-11-02), to be reopened
+  if someone needs a remote consumer.
 - **Rows stored before this change** by a parallel sync can differ from a sync in chain order. A resync fixes them, and PR #1220 needs one anyway
   (ADR 0006).
 
@@ -133,7 +134,7 @@ The other options discussed in PR #1309:
 ## References
 
 - ADR 0002 (decision 2: what is indexed and the two skips), ADR 0004 (processing failures), ADR 0009 (an NFT's datum is not stored)
-- PR #1309 (the problem and options A to F, closed for this one), PR #1310 (the implementation), PR #1220, PR #1242, issue #1311 (remote consumer)
+- PR #1309 (the problem and options A to F, closed for this one), PR #1310 (the implementation), PR #1220, PR #1242, issue #1311 (closed as not planned; remote consumer)
 - `Cip68Processor.collectForBatch`, `Cip68Processor.indexBatchInChainOrder`, `Cip68Processor.dropBatch`
 - Tests: `Cip68ProcessorTest.BatchInChainOrder`, `Cip68ProcessorTest.KeptForBatch`, `Cip68ProcessorH2IT`
 - yaci-store core: `ShelleyBlockEventPublisher.processBlocksInParallel` and `ByronBlockEventPublisher.processBlocksInParallel` (partitions, then
