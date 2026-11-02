@@ -186,8 +186,9 @@ that label (`sub_standard`). For example a 333 token with no description is serv
 "field_name": "description", "field_category": "MANDATORY", "code": "missing_value", "error": "description field is missing a mandatory
 value"}`. A value that is present but of the wrong type (a `name` that is an integer) is left out and reported as `wrong_type`; for `name`
 that error is mandatory, so it is not reported as missing too. A `description` of the wrong type, or given as chunks (decision 5), is stored
-without a label and served with the category of the label asked for: `MANDATORY` for a 333, which requires a description, `OPTIONAL` for a
-444; it is not also reported as missing. NFTs and RFTs without a description have no error, which the spec allows. Before #1221 the same rule
+without a label and reported for the label asked for; it is not also reported as missing. One of the wrong type (left out) or not UTF-8
+(kept as hex) has the category of the label: `MANDATORY` for a 333, which requires a description, `OPTIONAL` for a 444. One given as chunks
+is joined and served, so it is there: its `chunked_text` error is `OPTIONAL` for every label. NFTs and RFTs without a description have no error, which the spec allows. Before #1221 the same rule
 was applied to every label and valid NFTs were dropped silently; on mainnet at least 203 datums were affected (a lower bound).
 
 *Why checked when served:* a rule of a label that changes takes effect on the next request, without a resync, and the same row is checked
@@ -202,7 +203,7 @@ The optional properties report as `OPTIONAL` errors, and keep their value:
 | `files` | an entry that is not a map, has no `mediaType` or no `src`, or whose `src` is not a `uri` with an allowed scheme; the entries are kept as written, with one error per bad entry | `invalid_files_entry` |
 | `decimals` | outside [0, 255] (stored as written), not an integer or beyond a `long` (stored as no value) | `out_of_range`, `wrong_type` |
 | text fields | not valid UTF-8 (stored as hex, decision 7); `MANDATORY` for `name`, and for `description` when served as a 333 | `not_utf8` |
-| `name`, `description`, `ticker`, `url`, `mediaType` | a list of byte strings instead of one (joined and kept, decision 5); `MANDATORY` for `name`, and for `description` when served as a 333 | `chunked_text` |
+| `name`, `description`, `ticker`, `url`, `mediaType` | a list of byte strings instead of one (joined and served, decision 5); `OPTIONAL` for every field and label, `name` and a 333's `description` included | `chunked_text` |
 | `ticker`, `url`, `mediaType`, `description` (444) | not a byte string, nor a list of byte strings (left out) | `wrong_type` |
 | additional properties | a constructor anywhere in the value (stored as `{"constructor", "fields"}`), a key with no text form, two keys that read the same (decision 7), a value nested deeper than 100 levels (dropped, decision 6) | `plutus_constructor`, `unsupported_key`, `key_collision`, `too_deep` |
 
@@ -251,11 +252,18 @@ multi-byte character cut by a chunk boundary survives (decoding each chunk on it
 Elements that are not byte strings are ignored.
 
 The other typed texts (`name`, `description`, `ticker`, `url`, `mediaType`) are one `bounded_bytes` in the CIP, but minters give
-longer ones as chunks too. A non-empty list of byte strings only is **joined the same way and served**, with a `chunked_text` error
-(`MANDATORY` for `name`, `OPTIONAL` otherwise; a `description` is reported with the category of the label asked for, decision 3). An
-empty list, or one that holds anything but byte strings, is still left out as `wrong_type`. *Why:* the text is readable and is what the
-minter meant; leaving it out hid it. On mainnet 570 descriptions, 43 urls and 12 names of fungible tokens are given this way (Templar
-Protocol and others); they were left out as `wrong_type`, and a 333 then also had a mandatory `missing_value` for its description.
+longer ones as chunks too. A non-empty list of byte strings only is **joined the same way and served**, with an **`OPTIONAL`**
+`chunked_text` error for every field and label (a `description` is reported for the label asked for, decision 3). An empty list, or one
+that holds anything but byte strings, is still left out as `wrong_type`. *Why:* the text is readable and is what the minter meant; leaving
+it out hid it. On mainnet 570 descriptions, 43 urls and 12 names of fungible tokens are given this way (Templar Protocol and others); they
+were left out as `wrong_type`, and a 333 then also had a mandatory `missing_value` for its description.
+
+*Why `OPTIONAL`, also for a `name` and a 333's `description`:* the value is there and served, so only its form departs from the CIP. A
+`MANDATORY` error says a required field is missing or unusable. The error first took the category of the field (`MANDATORY` for these two),
+which was left from when a chunked description was dropped and a 333 really had none. That hid tokens whose name and description read fine
+from `?validation=MANDATORY_ONLY`: 591 of the 2,024 fungible tokens on mainnet (2026-11-02, Awkward Seal and others; PR #1318). A row
+indexed before stores a chunked `name` as `MANDATORY`; it is served as `OPTIONAL`, so no resync is needed. A text given as chunks that join
+into bytes that are not UTF-8 also has a `not_utf8` error, which keeps the category of the field (decision 7).
 
 On preprod, 240 of the 1,968 fungible tokens (181 with 2 chunks, 42 with 3, 14 with 4, 3 with 21) store
 their logo this way (not measured on mainnet). The CF token metadata registry does not read them and

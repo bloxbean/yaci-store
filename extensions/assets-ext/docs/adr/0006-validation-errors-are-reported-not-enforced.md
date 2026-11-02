@@ -46,7 +46,7 @@ Every response that carries token metadata has a `validation_errors` array, empt
 | `cip` | `CIP-26` or `CIP-68`. |
 | `sub_standard` | For CIP-68, the label the rule was checked for: the label of the subject asked for (`333` or `444`, decision 4). A 333 and a 444 token of the same reference NFT are each checked for their own label. Absent for CIP-26 and for a rule that does not depend on a label (for example a bad `logo`). |
 | `field_name` | The field, for example `description`, `image`, `version`, `files`, `properties.owner`. |
-| `field_category` | `MANDATORY` if the CIP requires the field (for CIP-68, as the label requires it; `name` and `description` for CIP-26), `OPTIONAL` otherwise. |
+| `field_category` | `MANDATORY` if the CIP requires the field (for CIP-68, as the label requires it; `name` and `description` for CIP-26), `OPTIONAL` otherwise. One exception: a CIP-68 text given as chunks (`chunked_text`) is joined and served, so it is there, and its error is `OPTIONAL` whatever the field (ADR 0002 decision 5). |
 | `code` | A stable reason for programs: `missing_value`, `wrong_type`, `invalid_uri_scheme`, `invalid_length`, `invalid_value`, `out_of_range`, `invalid_version`, `plutus_constructor`, `not_utf8`, `invalid_files_entry`, `no_nested_entry`, `too_deep`, `unsupported_key`, `key_collision`, `invalid_base64`, `too_large`, `chunked_text`. |
 | `error` | A message for people, for example `description field is missing a mandatory value`. |
 
