@@ -127,6 +127,50 @@ class Cip68TokenServiceTest {
             assertThat(refNft).isPresent();
             assertThat(refNft.get().toUnit()).isEqualTo(POLICY_ID + REF_ASSET_NAME);
         }
+
+        // the name after the label prefix can be empty, as the ledger allows (PBG Token on mainnet, policy d05c14bb...)
+
+        @Test
+        void convertsAFungibleTokenSubjectWithAnEmptyNameToItsReferenceNft() {
+            Optional<AssetType> result = service.getReferenceNftSubject(POLICY_ID + "0014df10");
+
+            assertThat(result).hasValueSatisfying(refNft -> {
+                assertThat(refNft.policyId()).isEqualTo(POLICY_ID);
+                assertThat(refNft.assetName()).isEqualTo("000643b0");
+            });
+        }
+
+        @Test
+        void convertsARichFungibleTokenSubjectWithAnEmptyNameToItsReferenceNft() {
+            Optional<AssetType> result = service.getReferenceNftSubject(POLICY_ID + "001bc280");
+
+            assertThat(result).hasValueSatisfying(refNft -> assertThat(refNft.toUnit()).isEqualTo(POLICY_ID + "000643b0"));
+        }
+
+        @Test
+        void aRichFungibleTokenSubjectWithAnEmptyNameIsServedAsA444() {
+            assertThat(service.getServedToken(POLICY_ID + "001bc280"))
+                    .hasValueSatisfying(token -> assertThat(token.label()).isEqualTo(LABEL_RFT));
+            assertThat(service.getServedToken(POLICY_ID + "0014df10"))
+                    .hasValueSatisfying(token -> assertThat(token.label()).isEqualTo(LABEL_FT));
+        }
+
+        @Test
+        void returnsEmptyForAReferenceNftOrAnNftWithAnEmptyName() {
+            assertThat(service.getReferenceNftSubject(POLICY_ID + "000643b0")).isEmpty();
+            assertThat(service.getReferenceNftSubject(POLICY_ID + "000de140")).isEmpty();
+        }
+
+        @Test
+        void returnsEmptyForAnAssetNameShorterThanALabelPrefix() {
+            assertThat(service.getReferenceNftSubject(POLICY_ID + "0014df")).isEmpty();
+            assertThat(service.getReferenceNftSubject(POLICY_ID + "001bc2")).isEmpty();
+        }
+
+        @Test
+        void returnsEmptyWhenTheLabelPrefixIsNotAtTheStartOfTheAssetName() {
+            assertThat(service.getReferenceNftSubject(POLICY_ID + "aa0014df10" + BASE_NAME)).isEmpty();
+        }
     }
 
     @Nested
