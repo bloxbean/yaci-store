@@ -41,6 +41,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
  * CIP-68 allows several user tokens for one reference NFT, for example a 222 and a 333 with the same policy and base
@@ -201,7 +202,7 @@ class Cip68MultiLabelTest {
     private Optional<Cip68Metadata> index(String datum, String... userTokenPrefixes) {
         // an NFT's datum is stored once its reference NFT is (ADR 0002): these tests are about what is stored for it
         if (List.of(userTokenPrefixes).equals(List.of(NFT))) {
-            org.mockito.Mockito.when(repository.existsByPolicyIdAndAssetName(POLICY, Cip68Constants.REFERENCE_TOKEN_PREFIX + BASE)).thenReturn(true);
+            when(repository.existsByPolicyIdAndAssetName(POLICY, Cip68Constants.REFERENCE_TOKEN_PREFIX + BASE)).thenReturn(true);
         }
         List<AddressUtxo> outputs = new ArrayList<>();
         outputs.add(AddressUtxo.builder().txHash(TX_HASH).txIndex(0).inlineDatum(datum)

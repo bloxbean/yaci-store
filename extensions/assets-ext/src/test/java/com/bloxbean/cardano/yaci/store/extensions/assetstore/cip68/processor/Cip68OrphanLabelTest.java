@@ -40,6 +40,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
  * A reference NFT whose user token is not in the same transaction cannot be paired, so its label is inferred from
@@ -238,7 +239,7 @@ class Cip68OrphanLabelTest {
     private Optional<Cip68Metadata> index(String datum, String policy, String base, String userTokenPrefix) {
         // an NFT's datum is stored once its reference NFT is (ADR 0002): these tests are about what is stored for it
         if (Cip68Constants.NFT_TOKEN_PREFIX.equals(userTokenPrefix)) {
-            org.mockito.Mockito.when(repository.existsByPolicyIdAndAssetName(policy, Cip68Constants.REFERENCE_TOKEN_PREFIX + base)).thenReturn(true);
+            when(repository.existsByPolicyIdAndAssetName(policy, Cip68Constants.REFERENCE_TOKEN_PREFIX + base)).thenReturn(true);
         }
         List<AddressUtxo> outputs = new ArrayList<>();
         outputs.add(AddressUtxo.builder().txHash(TX_HASH).txIndex(0).inlineDatum(datum)

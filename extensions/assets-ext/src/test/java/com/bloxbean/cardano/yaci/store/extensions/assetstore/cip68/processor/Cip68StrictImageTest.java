@@ -38,6 +38,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
  * CIP-68 requires {@code image} for the 222 NFT and the 444 RFT, as a URI with one of the schemes {@code https},
@@ -228,7 +229,7 @@ class Cip68StrictImageTest {
     private Optional<Cip68Metadata> index(String datum, String policy, String base, String userTokenPrefix) {
         // an NFT's datum is stored once its reference NFT is (ADR 0002): these tests are about what is stored for it
         if (Cip68Constants.NFT_TOKEN_PREFIX.equals(userTokenPrefix)) {
-            org.mockito.Mockito.when(repository.existsByPolicyIdAndAssetName(policy, Cip68Constants.REFERENCE_TOKEN_PREFIX + base)).thenReturn(true);
+            when(repository.existsByPolicyIdAndAssetName(policy, Cip68Constants.REFERENCE_TOKEN_PREFIX + base)).thenReturn(true);
         }
         AddressUtxo refNft = AddressUtxo.builder().txHash(TX_HASH).txIndex(0).inlineDatum(datum)
                 .amounts(List.of(amount(policy + Cip68Constants.REFERENCE_TOKEN_PREFIX + base))).build();
