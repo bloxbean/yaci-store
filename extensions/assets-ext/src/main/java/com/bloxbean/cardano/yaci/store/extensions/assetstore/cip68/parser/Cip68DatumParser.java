@@ -383,8 +383,9 @@ public class Cip68DatumParser {
 
     /**
      * Reads a CIP-68 {@code uri} ({@code uri = bounded_bytes / [* bounded_bytes]}), used for the NFT
-     * {@code image} and the FT {@code logo}: a value longer than 64 bytes, the most a Plutus byte string
-     * holds, is split into a list of byte-string chunks, and this joins them back together. The chunks are
+     * {@code image} and the FT {@code logo}. A long value can be one byte string (encoded in 64-byte CBOR chunks),
+     * but CIP-68 also allows a list of byte strings, which many minting tools write the way CIP-25 must in
+     * transaction metadata; this joins the list back together. The chunks are
      * joined as bytes and decoded once, so a multi-byte character cut by a chunk boundary survives.
      * Elements of the list that are not byte strings are ignored. There is no size cap: a datum is at most one
      * transaction, 16 KB. The scheme is checked by the validator.

@@ -126,9 +126,9 @@ class Cip68DatumParserTest {
 
         @Test
         void shouldHandleChunkedImageUriAsListOfStrings() throws Exception {
-            // CIP-25 inheritance: image may be split into a list of byte-string chunks
-            // when the URI exceeds Cardano's 64-byte raw-string limit. The parser should
-            // concatenate them.
+            // CIP-68 allows a uri to be a list of byte strings, the way CIP-25 splits a long
+            // text in transaction metadata (a datum could hold it as one byte string). The
+            // parser should concatenate them.
             MapPlutusData properties = new MapPlutusData();
             properties.put(BytesPlutusData.of("name"), BytesPlutusData.of("ChunkedToken"));
             properties.put(BytesPlutusData.of("description"), BytesPlutusData.of("Has a long IPFS hash"));

@@ -261,7 +261,7 @@ class Cip68DatumParserTextTest {
         return map;
     }
 
-    /** {@code size} bytes of ASCII as a list of 64-byte chunks, the way a long URI is stored on-chain. */
+    /** {@code size} bytes of ASCII as a list of 64-byte chunks, the way minting tools often write a long URI. */
     private static ListPlutusData chunks(int size) {
         List<PlutusData> list = new ArrayList<>();
         int left = size;

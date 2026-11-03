@@ -171,7 +171,7 @@ class Cip68StrictImageTest {
 
     @Test
     void keepsAChunkedIpfsImage() {
-        // an image longer than 64 bytes is a list of chunks; the joined value is what is checked
+        // an image given as a list of chunks, as many minting tools write a long one; the joined value is what is checked
         String image = "ipfs://" + "Q".repeat(80);
         MapPlutusData properties = new MapPlutusData();
         properties.put(BytesPlutusData.of("name"), BytesPlutusData.of("Long"));
