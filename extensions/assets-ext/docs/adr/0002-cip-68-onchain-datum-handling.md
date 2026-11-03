@@ -259,7 +259,9 @@ has a `not_utf8` error, with the category of the field (decision 7).
 *Why accepted and not reported:*
 - **The 64-byte limit is a metadata rule, not a Plutus Data rule.** In transaction metadata (CIP-25) each text is at most 64 bytes, so
   CIP-25 splits a long text into a list. In a datum, `bounded_bytes` limits each CBOR chunk, not the value: a long text is one byte string
-  in 64-byte chunks, which libraries write and read automatically (the Conway CDDL says so in its comment on `bounded_bytes`).
+  in 64-byte chunks, which libraries write and read automatically (the Conway CDDL says so in its comment on `bounded_bytes`). The
+  ledger accepts them: on mainnet (2026-11-02, latest row per reference NFT) 299 descriptions over 64 bytes are stored as one byte
+  string, the longest 1,406 bytes. So a list is never needed in a datum; it is a habit carried over from CIP-25.
 - **Minters use the list anyway.** On mainnet (2026-11-02, latest row per reference NFT) 592 fungible-token descriptions and 13,480 NFT
   descriptions are lists, against 107 and 171 long descriptions stored as one byte string.
 - **CIP-68 accepts the same list for a `uri`** since its version 3 (`image`, `src`); the texts follow it.
