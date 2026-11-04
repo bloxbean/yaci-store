@@ -33,7 +33,6 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 import static com.bloxbean.cardano.yaci.store.assets.jooq.Tables.ASSETS;
-import static com.bloxbean.cardano.yaci.store.transaction.jooq.Tables.TRANSACTION;
 import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.ADDRESS_UTXO;
 import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.TX_INPUT;
 
@@ -166,123 +165,21 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
      */
     @Override
     public List<BFAssetHistory> findAssetHistory(String unit, int page, int count, Order order) {
-        if (BlockfrostDialectUtil.isPostgres(dsl)) {
-            return findAssetHistoryPostgres(unit, page, count, order);
-        }
-        return findAssetHistoryFallback(unit, page, count, order);
-    }
-
-    /**
-     * Pages an asset's mint and burn events by {@code (slot, tx_index)}. The first phase works only with the
-     * asset rows so the {@code transaction} join used to obtain {@code tx_index} is limited to the page's slot
-     * range. All events in the boundary slots must be included before the final ranking because the provisional
-     * slot-only page may split transactions that share a slot.
-     */
-    private List<BFAssetHistory> findAssetHistoryPostgres(String unit, int page, int count, Order order) {
         int offset = Math.max(page, 0) * count;
-        String slotOrder = order == Order.desc ? "desc nulls last" : "asc nulls last";
-        String txIndexOrder = order == Order.desc ? "desc nulls last" : "asc nulls first";
-        String boundaryStartAgg = order == Order.desc ? "max" : "min";
-        String boundaryEndAgg = order == Order.desc ? "min" : "max";
-        String prefixCmp = order == Order.desc ? ">" : "<";
-        String candLo = order == Order.desc ? "<=" : ">=";
-        String candHi = order == Order.desc ? ">=" : "<=";
-
-        Table<?> historyPage = DSL.table(
-                """
-                (
-                    /* Preserve every mint/burn event for the unit. Materialize the set because the provisional
-                       page, prefix count, and candidate selection all reuse it. */
-                    with events as materialized (
-                        select tx_hash, mint_type, quantity, slot::bigint as slot
-                        from assets
-                        where unit = {2}
-                    ),
-                    /* This page establishes only the slot boundaries; tx_index is not available until the
-                       transaction join below, so these rows are not yet the final page. */
-                    page_window as materialized (
-                        select slot, tx_hash
-                        from events
-                        order by slot %s
-                        offset {0} rows fetch next {1} rows only
-                    ),
-                    boundary as (
-                        select %s(slot) as start_slot, %s(slot) as end_slot
-                        from page_window
-                    ),
-                    /* Events strictly before the first boundary slot already occupy this many global positions.
-                       Same-slot events stay in candidates so tx_index can place them on the correct page. */
-                    prefix as (
-                        select count(*) as cnt
-                        from events
-                        where slot %s (select start_slot from boundary)
-                    ),
-                    /* Expand the inclusive boundary range, then obtain tx_index only for that smaller set. */
-                    candidates as (
-                        select e.tx_hash, e.mint_type, e.quantity, e.slot, t.tx_index
-                        from events e
-                        join transaction t on t.tx_hash = e.tx_hash, boundary b
-                        where e.slot %s b.start_slot
-                          and e.slot %s b.end_slot
-                    ),
-                    /* rn is one-based within candidates; prefix.cnt + rn is its one-based global position. */
-                    ranked as (
-                        select tx_hash, mint_type, quantity,
-                               row_number() over (order by slot %s, tx_index %s) as rn
-                        from candidates
-                    )
-                    select tx_hash, mint_type, quantity
-                    from ranked
-                    /* Select global positions offset + 1 through offset + count. */
-                    where rn > ({0} - (select cnt from prefix))
-                      and rn <= ({0} - (select cnt from prefix) + {1})
-                    order by rn
-                ) as history_page
-                """.formatted(
-                        slotOrder,        // %s 1: provisional page slot order
-                        boundaryStartAgg, // %s 2: first boundary slot in the requested direction
-                        boundaryEndAgg,   // %s 3: last boundary slot in the requested direction
-                        prefixCmp,        // %s 4: slots strictly before the first boundary
-                        candLo,           // %s 5: inclusive comparison with the first boundary
-                        candHi,           // %s 6: inclusive comparison with the last boundary
-                        slotOrder,        // %s 7: final slot order
-                        txIndexOrder      // %s 8: final order within a slot
-                ),
-                DSL.inline(offset), // {0}: number of globally ordered events to skip (page * count)
-                DSL.inline(count),  // {1}: maximum number of events in the requested page
-                DSL.val(unit)       // {2}: bound asset unit used to filter mint/burn events
-        );
-
-        Field<String> txHashField = DSL.field(DSL.name("history_page", "tx_hash"), String.class);
-        Field<String> mintTypeField = DSL.field(DSL.name("history_page", "mint_type"), String.class);
-        Field<BigInteger> quantityField = DSL.field(DSL.name("history_page", "quantity"), BigInteger.class);
-
-        var query = dsl.select(txHashField, mintTypeField, quantityField).from(historyPage);
-        logQuery("findAssetHistoryPostgres", query);
-        return query.fetch(record -> toHistory(
-                record.get(txHashField),
-                record.get(mintTypeField),
-                record.get(quantityField)
-        ));
-    }
-
-    private List<BFAssetHistory> findAssetHistoryFallback(String unit, int page, int count, Order order) {
-        int offset = Math.max(page, 0) * count;
-        Condition assetCondition = buildAssetCondition(unit);
-        SortField<?> slotOrder = order == Order.desc ? ASSETS.SLOT.desc() : ASSETS.SLOT.asc().nullsLast();
+        SortField<?> slotOrder = order == Order.desc ? ASSETS.SLOT.desc().nullsLast() : ASSETS.SLOT.asc().nullsLast();
         SortField<?> txIndexOrder = order == Order.desc
-                ? TRANSACTION.TX_INDEX.desc().nullsLast()
-                : TRANSACTION.TX_INDEX.asc().nullsFirst();
+                ? ASSETS.TX_INDEX.desc().nullsLast()
+                : ASSETS.TX_INDEX.asc().nullsFirst();
+        SortField<?> txHashOrder = order == Order.desc ? ASSETS.TX_HASH.desc() : ASSETS.TX_HASH.asc();
 
         var query = dsl.select(ASSETS.TX_HASH, ASSETS.MINT_TYPE, ASSETS.QUANTITY)
                 .from(ASSETS)
-                .join(TRANSACTION).on(TRANSACTION.TX_HASH.eq(ASSETS.TX_HASH))
-                .where(assetCondition)
-                .orderBy(slotOrder, txIndexOrder)
+                .where(buildAssetCondition(unit))
+                .orderBy(slotOrder, txIndexOrder, txHashOrder)
                 .limit(count)
                 .offset(offset);
 
-        logQuery("findAssetHistoryFallback", query);
+        logQuery("findAssetHistory", query);
         return query.fetch(record -> toHistory(
                 record.get(ASSETS.TX_HASH),
                 record.get(ASSETS.MINT_TYPE),
@@ -495,8 +392,9 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
      *
      * <p>The policy prefix restricts the first-mint pass to units belonging to that policy. The query first
      * identifies each unit's earliest mint slot, then expands the provisional page's boundary slots so
-     * {@code tx_index} can determine the exact Blockfrost order. Transaction lookup and lifetime quantity
-     * aggregation happen only for units that can belong to the requested page.
+     * {@code tx_index} can determine the exact Blockfrost order. The first slot alone is served by the
+     * {@code (unit, slot)} index; the first mint's {@code tx_index} and lifetime quantity are looked up only for
+     * units that can belong to the requested page.
      */
     private List<BFPolicyAsset> findAssetsByPolicyPostgres(String policyId, int page, int count, Order order) {
         int offset = Math.max(page, 0) * count;
@@ -545,10 +443,10 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
                         select c.unit, c.slot, picked.tx_hash, picked.tx_index
                         from candidates c
                         join lateral (
-                            select a.tx_hash, t.tx_index
-                            from assets a join transaction t on t.tx_hash = a.tx_hash
+                            select a.tx_hash, a.tx_index
+                            from assets a
                             where a.mint_type = 'MINT' and a.unit = c.unit and a.slot = c.slot
-                            order by t.tx_index asc
+                            order by a.tx_index asc, a.tx_hash asc
                             fetch next 1 rows only
                         ) picked on true
                     ),
@@ -610,18 +508,18 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
 
         Field<Integer> rnField = DSL.rowNumber()
                 .over(DSL.partitionBy(ASSETS.UNIT)
-                        .orderBy(ASSETS.SLOT.asc().nullsLast(), TRANSACTION.TX_INDEX.asc().nullsFirst()))
+                        .orderBy(ASSETS.SLOT.asc().nullsLast(), ASSETS.TX_INDEX.asc().nullsFirst(),
+                                ASSETS.TX_HASH.asc()))
                 .as("rn");
 
         Table<?> rankedAssets = dsl.select(
                         ASSETS.UNIT.as("unit"),
                         ASSETS.SLOT.as("slot"),
                         ASSETS.TX_HASH.as("tx_hash"),
-                        TRANSACTION.TX_INDEX.as("tx_index"),
+                        ASSETS.TX_INDEX.as("tx_index"),
                         rnField
                 )
                 .from(ASSETS)
-                .join(TRANSACTION).on(TRANSACTION.TX_HASH.eq(ASSETS.TX_HASH))
                 .where(ASSETS.POLICY.eq(policyId).and(ASSETS.MINT_TYPE.eq("MINT")))
                 .asTable("ranked_assets");
 
@@ -675,156 +573,41 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
     }
 
     /**
-     * Returns one page of a unit's transactions, ordered to match Blockfrost.
+     * Returns one page of a unit's transactions, ordered to match Blockfrost. Slot, block, block time and
+     * tx_index are read from {@code address_utxo}; every output of a transaction carries the same values.
      */
     private List<AssetTxRow> assetTxPage(String unit, int page, int count, Order order) {
-        if (BlockfrostDialectUtil.isPostgres(dsl)) {
-            return assetTxPagePostgres(unit, page, count, order);
-        }
-        return assetTxPageFallback(unit, page, count, order);
-    }
-
-    /**
-     * Uses a slot window to postpone the {@code transaction} join until after the requested offset has
-     * narrowed the result. The initial UTXO scan and de-duplication still cover every transaction containing
-     * the unit; the optimization only bounds the rows enriched with transaction metadata.
-     *
-     * <p>The provisional page is ordered by slot alone because {@code tx_index} lives in {@code transaction}.
-     * A page may cut through a slot containing several transactions, so the query expands both boundary slots,
-     * applies the final {@code (slot, tx_index)} order, and then slices the requested page. This assumes a
-     * canonical slot contains at most one block and {@code tx_index} is unique within that block.
-     */
-    private List<AssetTxRow> assetTxPagePostgres(String unit, int page, int count, Order order) {
         int offset = Math.max(page, 0) * count;
-        String slotOrder = order == Order.desc ? "desc nulls last" : "asc nulls last";
-        String txIndexOrder = order == Order.desc ? "desc nulls last" : "asc nulls first";
-        String boundaryStartAgg = order == Order.desc ? "max" : "min";
-        String boundaryEndAgg = order == Order.desc ? "min" : "max";
-        String prefixCmp = order == Order.desc ? ">" : "<";
-        String candLo = order == Order.desc ? "<=" : ">=";
-        String candHi = order == Order.desc ? ">=" : "<=";
+        Field<String> txHashField = ADDRESS_UTXO.TX_HASH.as("utxo_tx_hash");
+        Field<Long> slotField = DSL.min(ADDRESS_UTXO.SLOT).as("first_slot");
+        Field<Integer> txIndexSortField = DSL.min(ADDRESS_UTXO.TX_INDEX).as("tx_index_sort");
+        Field<Long> blockField = DSL.min(ADDRESS_UTXO.BLOCK).as("first_block");
+        Field<Long> blockTimeField = DSL.min(ADDRESS_UTXO.BLOCK_TIME).as("first_block_time");
 
-        String unitJson = "[{\"unit\": \"" + unit + "\"}]";
-
-        Table<?> assetTxPage = DSL.table(
-                """
-                (
-                    /* One transaction may have several outputs containing the unit. Materialize the de-duplicated
-                       set because the page window, prefix count, and candidate selection all reuse it. */
-                    with distinct_tx as materialized (
-                        select tx_hash, min(slot) as slot
-                        from address_utxo
-                        where amounts @> {2}::jsonb
-                        group by tx_hash
-                    ),
-                    /* This is only a cheap provisional page used to discover its boundary slots. It is not safe
-                       to return directly because rows sharing a slot still need tx_index ordering. */
-                    page_window as materialized (
-                        select tx_hash, slot
-                        from distinct_tx
-                        order by slot %s
-                        offset {0} rows fetch next {1} rows only
-                    ),
-                    boundary as (
-                        select %s(slot) as start_slot, %s(slot) as end_slot
-                        from page_window
-                    ),
-                    /* Count only rows strictly before the first boundary slot. Rows tied at that slot remain in
-                       candidates so the final tx_index ordering can decide which side of the page they belong to. */
-                    prefix as (
-                        select count(*) as cnt
-                        from distinct_tx
-                        where slot %s (select start_slot from boundary)
-                    ),
-                    /* Expand the complete inclusive slot range and enrich only those rows with transaction data. */
-                    candidates as (
-                        select dt.tx_hash, dt.slot, t.tx_index, t.block, t.block_time
-                        from distinct_tx dt
-                        join transaction t on t.tx_hash = dt.tx_hash, boundary b
-                        where dt.slot %s b.start_slot
-                          and dt.slot %s b.end_slot
-                    ),
-                    /* rn is one-based within candidates. A row's one-based global position is prefix.cnt + rn. */
-                    ranked as (
-                        select tx_hash, tx_index, block, block_time,
-                               row_number() over (order by slot %s, tx_index %s) as rn
-                        from candidates
-                    )
-                    select tx_hash, coalesce(tx_index, 0) as tx_index, block, block_time
-                    from ranked
-                    /* offset < prefix.cnt + rn <= offset + count, rearranged to use the local rn. */
-                    where rn > ({0} - (select cnt from prefix))
-                      and rn <= ({0} - (select cnt from prefix) + {1})
-                    order by rn
-                ) as asset_tx_page
-                """.formatted(
-                        slotOrder,
-                        boundaryStartAgg, boundaryEndAgg,
-                        prefixCmp,
-                        candLo, candHi,
-                        slotOrder, txIndexOrder
-                ),
-                DSL.inline(offset),  // {0}: number of globally ordered rows to skip (page * count)
-                DSL.inline(count),   // {1}: maximum number of rows in the requested page
-                DSL.val(unitJson)    // {2}: bound JSONB containment value for the requested asset unit
-        );
-
-        Field<String> txHashField = DSL.field(DSL.name("asset_tx_page", "tx_hash"), String.class);
-        Field<Long> txIndexField = DSL.field(DSL.name("asset_tx_page", "tx_index"), Long.class);
-        Field<Long> blockField = DSL.field(DSL.name("asset_tx_page", "block"), Long.class);
-        Field<Long> blockTimeField = DSL.field(DSL.name("asset_tx_page", "block_time"), Long.class);
-
-        var query = dsl.select(txHashField, txIndexField, blockField, blockTimeField).from(assetTxPage);
-        logQuery("assetTxPagePostgres", query);
-        return query.fetch(record -> new AssetTxRow(
-                record.get(txHashField),
-                record.get(txIndexField),
-                record.get(blockField),
-                record.get(blockTimeField)
-        ));
-    }
-
-    /**
-     * Fallback for non-Postgres dialects (H2/MySQL tests): join every UTXO-bearing tx and sort.
-     * Correct but not slot-windowed, which is fine for the small test datasets.
-     */
-    private List<AssetTxRow> assetTxPageFallback(String unit, int page, int count, Order order) {
-        int offset = Math.max(page, 0) * count;
-        Table<?> distinctAssetTx = dsl.select(ADDRESS_UTXO.TX_HASH.as("tx_hash"))
-                .from(ADDRESS_UTXO)
-                .where(buildUnitCondition(unit))
-                .groupBy(ADDRESS_UTXO.TX_HASH)
-                .asTable("distinct_asset_tx");
-        Field<String> distinctTxHashField = distinctAssetTx.field("tx_hash", String.class);
-
-        Field<String> txHashField = TRANSACTION.TX_HASH;
-        Field<Long> blockHeightField = TRANSACTION.BLOCK.as("block_height");
-        Field<Long> blockTimeField = TRANSACTION.BLOCK_TIME.as("block_time");
-        Field<Integer> txIndexSortField = TRANSACTION.TX_INDEX;
-        Field<Long> txIndexField = DSL.coalesce(txIndexSortField, 0).cast(Long.class).as("tx_index");
-
-        SortField<?> blockOrder = order == Order.desc
-                ? TRANSACTION.BLOCK.desc()
-                : TRANSACTION.BLOCK.asc().nullsLast();
+        SortField<?> slotOrder = order == Order.desc ? slotField.desc().nullsLast() : slotField.asc().nullsLast();
         SortField<?> txIndexOrder = order == Order.desc
                 ? txIndexSortField.desc().nullsLast()
                 : txIndexSortField.asc().nullsFirst();
+        SortField<?> txHashOrder = order == Order.desc ? txHashField.desc() : txHashField.asc();
 
-        var query = dsl.select(txHashField, txIndexField, blockHeightField, blockTimeField)
-                .from(distinctAssetTx)
-                .join(TRANSACTION)
-                .on(TRANSACTION.TX_HASH.eq(distinctTxHashField))
-                .orderBy(blockOrder, txIndexOrder)
+        var query = dsl.select(txHashField, slotField, txIndexSortField, blockField, blockTimeField)
+                .from(ADDRESS_UTXO)
+                .where(buildUnitCondition(unit))
+                .groupBy(ADDRESS_UTXO.TX_HASH)
+                .orderBy(slotOrder, txIndexOrder, txHashOrder)
                 .limit(count)
                 .offset(offset);
 
-        logQuery("assetTxPageFallback", query);
-        return query.fetch(record -> new AssetTxRow(
-                record.get(txHashField),
-                record.get(txIndexField),
-                record.get(blockHeightField),
-                record.get(blockTimeField)
-        ));
+        logQuery("assetTxPage", query);
+        return query.fetch(record -> {
+            Integer txIndex = record.get(txIndexSortField);
+            return new AssetTxRow(
+                    record.get(txHashField),
+                    txIndex == null ? 0L : txIndex.longValue(),
+                    record.get(blockField),
+                    record.get(blockTimeField)
+            );
+        });
     }
 
     private record AssetTxRow(String txHash, Long txIndex, Long block, Long blockTime) {
@@ -873,8 +656,8 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
                         where mint_type = 'MINT'
                         order by unit, slot asc nulls last
                     ),
-                    /* The slot/unit order is provisional because tx_index is not available yet. This page exists
-                       only to discover the slots that may contain the requested final page. */
+                    /* The slot/unit order is provisional because tx_index is looked up only for candidates below.
+                       This page exists only to discover the slots that may contain the requested final page. */
                     page_window as materialized (
                         select unit, slot
                         from first_mints
@@ -904,13 +687,12 @@ public class BFAssetStorageReaderImpl implements BFAssetStorageReader {
                         select c.unit, c.slot, picked.tx_hash, picked.tx_index
                         from candidates c
                         join lateral (
-                            select a.tx_hash, t.tx_index
+                            select a.tx_hash, a.tx_index
                             from assets a
-                            join transaction t on t.tx_hash = a.tx_hash
                             where a.mint_type = 'MINT'
                               and a.unit = c.unit
                               and a.slot = c.slot
-                            order by t.tx_index asc
+                            order by a.tx_index asc, a.tx_hash asc
                             fetch next 1 rows only
                         ) picked on true
                     ),
