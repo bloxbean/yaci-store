@@ -10,7 +10,7 @@ import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
-import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
+import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.metrics.Cip68Metrics;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.Cip68Constants;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.Cip68Metadata;
@@ -469,7 +469,7 @@ class Cip68ProcessorTest {
 
             processor.collectForBatch(block(30, 500L, CLEARED_DATUM));
             processor.collectForBatch(block(10, 100L, MINT_DATUM));
-            processor.indexBatchInChainOrder(new PreCommitEvent(EventMetadata.builder().block(99).build()));
+            processor.indexBatchInChainOrder(new CommitEvent<>(EventMetadata.builder().block(99).build(), List.of()));
 
             assertThat(stored).extracting(Cip68Metadata::getSlot).containsExactly(100L, 500L);
             assertThat(stored.getLast().getName()).isNull();
@@ -481,8 +481,8 @@ class Cip68ProcessorTest {
             storeForReal();
             processor.collectForBatch(block(10, 100L, MINT_DATUM));
 
-            processor.indexBatchInChainOrder(new PreCommitEvent(EventMetadata.builder().block(10).build()));
-            processor.indexBatchInChainOrder(new PreCommitEvent(EventMetadata.builder().block(11).build()));
+            processor.indexBatchInChainOrder(new CommitEvent<>(EventMetadata.builder().block(10).build(), List.of()));
+            processor.indexBatchInChainOrder(new CommitEvent<>(EventMetadata.builder().block(11).build(), List.of()));
 
             assertThat(stored).hasSize(1);
         }
@@ -492,7 +492,7 @@ class Cip68ProcessorTest {
             processor.collectForBatch(block(10, 100L, MINT_DATUM));
 
             processor.dropBatch(RollbackEvent.builder().rollbackTo(new Point(50L, "ab".repeat(32))).build());
-            processor.indexBatchInChainOrder(new PreCommitEvent(EventMetadata.builder().block(10).build()));
+            processor.indexBatchInChainOrder(new CommitEvent<>(EventMetadata.builder().block(10).build(), List.of()));
 
             verifyNoInteractions(metadataReferenceNftRepository, cip68DatumParser);
         }
@@ -541,7 +541,7 @@ class Cip68ProcessorTest {
                     tx(OTHER_TX_HASH, output(OTHER_TX_HASH, 0, "deadbeef", null))));
 
             assertThat(processor.keptForBatch()).isEmpty();
-            processor.indexBatchInChainOrder(new PreCommitEvent(EventMetadata.builder().block(10).build()));
+            processor.indexBatchInChainOrder(new CommitEvent<>(EventMetadata.builder().block(10).build(), List.of()));
             verifyNoInteractions(metadataReferenceNftRepository, cip68DatumParser);
         }
 
@@ -576,7 +576,7 @@ class Cip68ProcessorTest {
 
             processor.collectForBatch(blockOf(10, tx(TX_HASH, refNft, userToken),
                     tx(OTHER_TX_HASH, output(OTHER_TX_HASH, 0, "deadbeef", null))));
-            processor.indexBatchInChainOrder(new PreCommitEvent(EventMetadata.builder().block(10).build()));
+            processor.indexBatchInChainOrder(new CommitEvent<>(EventMetadata.builder().block(10).build(), List.of()));
 
             @SuppressWarnings("unchecked")
             ArgumentCaptor<Iterable<Cip68Metadata>> captor = ArgumentCaptor.forClass(Iterable.class);
@@ -639,7 +639,7 @@ class Cip68ProcessorTest {
         void nothingIsKeptOnceTheBatchIsIndexed() {
             processor.collectForBatch(blockOf(10, tx(TX_HASH, referenceNftOutput(TX_HASH, "d8799fa0ff"))));
 
-            processor.indexBatchInChainOrder(new PreCommitEvent(EventMetadata.builder().block(10).build()));
+            processor.indexBatchInChainOrder(new CommitEvent<>(EventMetadata.builder().block(10).build(), List.of()));
 
             assertThat(processor.keptForBatch()).isEmpty();
         }
