@@ -69,6 +69,18 @@ public class Cip26MetadataValidator {
      */
     static final long CIP26_MAX_DECIMALS = 19;
 
+    /** A decimals outside the range CIP-26 allows, or one in the registry file that is not an integer (stored as no value). */
+    private static void addDecimalsErrors(@Nullable Mapping mapping, @Nullable Long decimals, List<ValidationError> errors) {
+        if (decimals != null && (decimals < TokenDecimals.MIN || decimals > CIP26_MAX_DECIMALS)) {
+            errors.add(ValidationError.optional(CIP_26, null, "decimals", OUT_OF_RANGE,
+                    "decimals " + decimals + " is not in the range CIP-26 allows [" + TokenDecimals.MIN + ", " + CIP26_MAX_DECIMALS + "]"));
+        }
+        if (decimals == null && mapping != null && mapping.decimals() != null && mapping.decimals().value() != null) {
+            errors.add(ValidationError.optional(CIP_26, null, "decimals", WRONG_TYPE,
+                    "decimals '" + abbreviate(mapping.decimals().value()) + "' is not an integer"));
+        }
+    }
+
     /**
      * Checks the metadata of one registry entry. {@code mapping} is the entry as read from the registry: it is needed to
      * tell a {@code decimals} that is not a number from one that is absent, since the entity has no value for either.
@@ -97,14 +109,7 @@ public class Cip26MetadataValidator {
         // written; one outside the storage bound is not handed to the library.
         Long decimals = tokenMetadata.getDecimals();
         boolean decimalsOutOfRange = decimals != null && !TokenDecimals.isInRange(decimals);
-        if (decimals != null && (decimals < TokenDecimals.MIN || decimals > CIP26_MAX_DECIMALS)) {
-            errors.add(ValidationError.optional(CIP_26, null, "decimals", OUT_OF_RANGE,
-                    "decimals " + decimals + " is not in the range CIP-26 allows [" + TokenDecimals.MIN + ", " + CIP26_MAX_DECIMALS + "]"));
-        }
-        if (decimals == null && mapping != null && mapping.decimals() != null && mapping.decimals().value() != null) {
-            errors.add(ValidationError.optional(CIP_26, null, "decimals", WRONG_TYPE,
-                    "decimals '" + abbreviate(mapping.decimals().value()) + "' is not an integer"));
-        }
+        addDecimalsErrors(mapping, decimals, errors);
 
         try {
             Metadata cip26Metadata = convertToMetadata(tokenMetadata, decimalsOutOfRange);
