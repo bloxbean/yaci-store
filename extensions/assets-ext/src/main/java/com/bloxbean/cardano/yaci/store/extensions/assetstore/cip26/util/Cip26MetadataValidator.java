@@ -63,6 +63,13 @@ public class Cip26MetadataValidator {
     static final int LOGO_HARD_CAP_CHARS = 1_400_000;
 
     /**
+     * CIP-26 allows {@code decimals} from 0 to 19 (its well-known property: minimum 0, maximum 19). {@link TokenDecimals}
+     * (0 to 255) is the storage bound shared with CIP-68, which sets no range of its own; it is not the CIP-26 rule, and
+     * checking against it let 20 to 255 pass as valid (found in review of #1220; none on mainnet, whose highest is 18).
+     */
+    static final long CIP26_MAX_DECIMALS = 19;
+
+    /**
      * Checks the metadata of one registry entry. {@code mapping} is the entry as read from the registry: it is needed to
      * tell a {@code decimals} that is not a number from one that is absent, since the entity has no value for either.
      *
@@ -85,13 +92,14 @@ public class Cip26MetadataValidator {
             errors.add(missing("description"));
         }
 
-        // cf-tokens-cip26 only checks decimals >= 0, and on an int: range-check the stored Long here, before
-        // convertToMetadata narrows it (4294967301 would otherwise pass as 5). The value is stored as written.
+        // cf-tokens-cip26 only checks decimals >= 0, and on an int: range-check the stored Long here, against the range
+        // CIP-26 allows, before convertToMetadata narrows it (4294967301 would otherwise pass as 5). The value is stored as
+        // written; one outside the storage bound is not handed to the library.
         Long decimals = tokenMetadata.getDecimals();
         boolean decimalsOutOfRange = decimals != null && !TokenDecimals.isInRange(decimals);
-        if (decimalsOutOfRange) {
+        if (decimals != null && (decimals < TokenDecimals.MIN || decimals > CIP26_MAX_DECIMALS)) {
             errors.add(ValidationError.optional(CIP_26, null, "decimals", OUT_OF_RANGE,
-                    "decimals " + decimals + " is not in the range " + TokenDecimals.RANGE));
+                    "decimals " + decimals + " is not in the range CIP-26 allows [" + TokenDecimals.MIN + ", " + CIP26_MAX_DECIMALS + "]"));
         }
         if (decimals == null && mapping != null && mapping.decimals() != null && mapping.decimals().value() != null) {
             errors.add(ValidationError.optional(CIP_26, null, "decimals", WRONG_TYPE,
