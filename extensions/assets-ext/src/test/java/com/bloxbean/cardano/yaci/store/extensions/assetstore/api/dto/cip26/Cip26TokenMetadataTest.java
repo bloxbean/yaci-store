@@ -1,15 +1,27 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.cip26;
 
+import co.nstant.in.cbor.CborException;
+import co.nstant.in.cbor.model.DataItem;
+import co.nstant.in.cbor.model.UnicodeString;
+import co.nstant.in.cbor.model.UnsignedInteger;
+import com.bloxbean.cardano.client.common.cbor.CborSerializationUtil;
+import com.bloxbean.cardano.client.crypto.Blake2bUtil;
+import com.bloxbean.cardano.client.crypto.config.CryptoConfiguration;
+import com.bloxbean.cardano.client.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.Item;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.Mapping;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.Signature;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.Cip26Metadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.util.MappingsUtil;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayOutputStream;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Locale;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -246,6 +258,59 @@ class Cip26TokenMetadataTest {
             Cip26TokenMetadata dto = Cip26TokenMetadata.from(entityWith(mapping), null);
 
             assertThat(dto.getDecimals()).isNull();
+        }
+    }
+
+    @Nested
+    @DisplayName("subject — the one the signatures are made over")
+    class SubjectCase {
+
+        // a mainnet registry entry whose file and subject are written in upper case, with its real signature of "name"
+        private static final String UPPER_CASE_SUBJECT =
+                "0b9bedfbfb62b21a2a41f581c2811ee74ee062ce32b0eca43964cf796D6174726978";
+        private static final String MAINNET_POLICY =
+                "820182018282051a031d46ee8200581caf42351769d63aef1801bd1e971c39ea747b789888329110e48225cc";
+        private static final String NAME_SIGNATURE = "2553dbe2a6006f23aa45c6ea4e5e631587aff5439dd7beb1a3b68095435444eae7c49926f1c2"
+                + "31844348d0639ffd60d6881d8fa82a17e128038de788162e970a";
+        private static final String NAME_PUBLIC_KEY = "b64d5cf236b7aa273794e8b97a1f677777c24d71e56542913108a2a5f3b5f6af";
+
+        @Test
+        void theSubjectIsReturnedAsTheRegistryWritesItSoThatItsSignaturesVerify() {
+            Mapping mapping = new Mapping(UPPER_CASE_SUBJECT, null,
+                    itemWithSig("matrix", 0, new Signature(NAME_SIGNATURE, NAME_PUBLIC_KEY)), null, null, null, MAINNET_POLICY, null);
+            // stored as the sync stores it: the subject in lower case, to look it up
+            Cip26Metadata entity = MappingsUtil.toCip26Metadata(mapping, "test", LocalDateTime.now());
+
+            Cip26TokenMetadata dto = Cip26TokenMetadata.from(entity, null);
+
+            assertThat(entity.getSubject()).isEqualTo(UPPER_CASE_SUBJECT.toLowerCase(Locale.ROOT));
+            assertThat(dto.getSubject()).isEqualTo(UPPER_CASE_SUBJECT);
+            assertThat(nameSignatureVerifies(dto.getSubject(), dto)).isTrue();
+            assertThat(nameSignatureVerifies(entity.getSubject(), dto)).isFalse();
+        }
+
+        /**
+         * CIP-26: the signature is over blake2b-256 of the blake2b-256 hashes of the CBOR of the subject, the property name,
+         * the value and the sequence number, concatenated.
+         */
+        private static boolean nameSignatureVerifies(String subject, Cip26TokenMetadata dto) {
+            ByteArrayOutputStream hashes = new ByteArrayOutputStream();
+            hashes.writeBytes(cborHash(new UnicodeString(subject)));
+            hashes.writeBytes(cborHash(new UnicodeString("name")));
+            hashes.writeBytes(cborHash(new UnicodeString(dto.getName().getValue())));
+            hashes.writeBytes(cborHash(new UnsignedInteger(dto.getName().getSequenceNumber().longValueExact())));
+            byte[] message = Blake2bUtil.blake2bHash256(hashes.toByteArray());
+            var signature = dto.getName().getSignatures().getFirst();
+            return CryptoConfiguration.INSTANCE.getSigningProvider().verify(HexUtil.decodeHexString(signature.getSignature()),
+                    message, HexUtil.decodeHexString(signature.getPublicKey()));
+        }
+
+        private static byte[] cborHash(DataItem item) {
+            try {
+                return Blake2bUtil.blake2bHash256(CborSerializationUtil.serialize(item));
+            } catch (CborException e) {
+                throw new IllegalStateException(e);
+            }
         }
     }
 }

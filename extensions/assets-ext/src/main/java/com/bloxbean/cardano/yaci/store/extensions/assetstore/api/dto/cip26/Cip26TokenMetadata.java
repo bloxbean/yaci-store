@@ -143,6 +143,10 @@ public class Cip26TokenMetadata {
      * {@code Cip26Metadata} table — we re-wrap it using the logo's stored {@code Item} from
      * the same mapping JSON to preserve signatures, while substituting the table copy as
      * the canonical value.
+     * <p>
+     * The {@code subject} is the mapping's, as the registry file writes it, not the entity's: the entity keeps it in
+     * lower case to look it up, but each signature is made over the subject as written, so a client that verifies the
+     * signatures of a subject written in upper case needs that case back.
      *
      * @param entity   the CIP-26 JPA entity
      * @param logoB64  base64-encoded logo string (from {@code Cip26Metadata}), or null
@@ -152,7 +156,7 @@ public class Cip26TokenMetadata {
             @Nullable String logoB64) {
         Mapping mapping = entity.getProperties();
         Cip26TokenMetadataBuilder builder = Cip26TokenMetadata.builder()
-                .subject(entity.getSubject())
+                .subject(mapping.subject() != null ? mapping.subject() : entity.getSubject())
                 .policy(entity.getPolicy())
                 .validationErrors(entity.getValidationErrors() == null ? null : new ArrayList<>(entity.getValidationErrors()));
 
