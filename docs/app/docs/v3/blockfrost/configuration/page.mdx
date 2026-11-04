@@ -71,6 +71,12 @@ SPRING_PROFILES_ACTIVE=ledger-state,blockfrost
 ```
 </Callout>
 
+<Callout type="info">
+**`GET /accounts/{stake_address}` for unregistered stake addresses.** As on Blockfrost, a stake address that was never registered but appears on chain (the stake part of an output, a pool reward account or owner, a MIR, or a governance proposal return address or treasury withdrawal) returns `200` with `registered: false`, `active: false` and `active_epoch`, `pool_id`, `drep_id` set to `null`. Only an address that never appeared on chain returns `404`.
+
+For outputs, yaci-store looks in the `address` table when `store.utxo.save-address=true`, and otherwise in `address_utxo`. With `store.utxo.pruning-enabled=true` and `save-address` off, an unregistered address whose outputs were all spent and pruned returns `404`. Enable `store.utxo.save-address` before the first sync to keep these addresses resolvable.
+</Callout>
+
 ## Transaction submit
 
 `POST /tx/submit` routes through the `submit` component. It tries backends in this order; the first one configured wins:
