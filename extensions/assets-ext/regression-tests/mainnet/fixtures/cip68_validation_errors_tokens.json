@@ -35,5 +35,14 @@
     "expected_errors": [],
     "absent_sub_standard": "222",
     "has_mandatory_error": false
+  },
+  {
+    "subject": "514ec4f99c736e736a315c281e6ff37bc2e7f92ba2c04660190e99c40014df10427579425443",
+    "name": "BuyBTC",
+    "why": "its datum is constructor 1 (d87a), and CIP-68 defines it as constructor 0 (#6.121): read as written with a MANDATORY invalid_constructor error (served as valid before)",
+    "expected_errors": [
+      {"field_name": "constructor", "code": "invalid_constructor", "field_category": "MANDATORY"}
+    ],
+    "has_mandatory_error": true
   }
 ]

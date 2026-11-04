@@ -134,12 +134,19 @@ class Cip68DatumParserTextTest {
     }
 
     @Test
-    void ignoresListElementsThatAreNotByteStrings() throws Exception {
+    void leavesOutListElementsThatAreNotByteStringsWithAnError() throws Exception {
+        // a uri is bounded_bytes / [* bounded_bytes]: the byte strings are joined, the integer is left out and reported
         MapPlutusData properties = props("name", "n");
         properties.put(BytesPlutusData.of("image"), ListPlutusData.of(
                 BytesPlutusData.of("ipfs://"), BigIntPlutusData.of(7), BytesPlutusData.of("Qm")));
 
-        assertThat(parse(properties).orElseThrow().image()).isEqualTo("ipfs://Qm");
+        ParsedCip68Datum parsed = parse(properties).orElseThrow();
+        assertThat(parsed.image()).isEqualTo("ipfs://Qm");
+        assertThat(parsed.validationErrors()).singleElement().satisfies(e -> {
+            assertThat(e.fieldName()).isEqualTo("image");
+            assertThat(e.code()).isEqualTo("wrong_type");
+            assertThat(e.error()).contains("element that is not a byte string");
+        });
     }
 
     @Test

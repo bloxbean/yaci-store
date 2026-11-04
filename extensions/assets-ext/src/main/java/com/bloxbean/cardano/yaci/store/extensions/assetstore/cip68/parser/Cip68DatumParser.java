@@ -78,6 +78,7 @@ public class Cip68DatumParser {
     public static final String TOO_DEEP = ValidationCode.TOO_DEEP;
     public static final String INVALID_FILES_ENTRY = ValidationCode.INVALID_FILES_ENTRY;
     public static final String NO_NESTED_ENTRY = ValidationCode.NO_NESTED_ENTRY;
+    public static final String INVALID_CONSTRUCTOR = ValidationCode.INVALID_CONSTRUCTOR;
 
     /**
      * Deepest nesting allowed in the value of an additional property (a list inside a list counts as two levels). The
@@ -163,8 +164,10 @@ public class Cip68DatumParser {
     /**
      * Strip the CIP-68 datum envelope: a Constr whose first field is the metadata map, followed by the version integer.
      * A datum with the map but without an integer version is still read (the CIP requires the version, so that is a
-     * {@code MANDATORY} error on the row, not a reason to hide the token). Returns empty for any datum that is not a
-     * Constr with a map first.
+     * {@code MANDATORY} error on the row, not a reason to hide the token). The same for a constructor other than 0:
+     * CIP-68 defines the datum as {@code #6.121([metadata, version, extra])}, constructor 0, but the map and the version
+     * are read whatever the constructor (on mainnet BuyBTC, a 333 token, uses constructor 1). Returns empty for any datum
+     * that is not a Constr with a map first.
      */
     private Optional<DatumParts> extractDatumProperties(String inlineDatum) throws com.bloxbean.cardano.client.exception.CborDeserializationException {
         PlutusData plutusData = PlutusData.deserialize(HexUtil.decodeHexString(inlineDatum));
@@ -178,14 +181,15 @@ public class Cip68DatumParser {
             return Optional.empty();
         }
 
+        long constructor = cip68Data.getAlternative();
         if (dataList.size() < 2) {
-            return Optional.of(new DatumParts(properties, null, ABSENT));
+            return Optional.of(new DatumParts(properties, null, ABSENT, constructor));
         }
         if (!(dataList.get(1) instanceof BigIntPlutusData version)) {
-            return Optional.of(new DatumParts(properties, null, typeOf(dataList.get(1))));
+            return Optional.of(new DatumParts(properties, null, typeOf(dataList.get(1)), constructor));
         }
 
-        return Optional.of(new DatumParts(properties, version.getValue(), null));
+        return Optional.of(new DatumParts(properties, version.getValue(), null, constructor));
     }
 
     /**
@@ -249,6 +253,10 @@ public class Cip68DatumParser {
     /** Build the typed {@link ParsedCip68Datum} from the unwrapped (Map, version) pair. */
     private ParsedCip68Datum buildParsedDatum(DatumParts parts, @Nullable AssetType referenceNft) {
         List<ValidationError> errors = new ArrayList<>();
+        if (parts.constructor() != 0) {
+            errors.add(ValidationError.mandatory(CIP_68, null, "constructor", INVALID_CONSTRUCTOR,
+                    "the datum is constructor " + parts.constructor() + ", CIP-68 defines it as constructor 0 (#6.121); read as written"));
+        }
         Long version = readVersion(parts, errors);
 
         Optional<MapPlutusData> metadata = resolveMetadata(parts, referenceNft);
@@ -331,7 +339,8 @@ public class Cip68DatumParser {
     }
 
     /** Internal record for the unwrapped CIP-68 envelope (properties Map, version as written). */
-    private record DatumParts(MapPlutusData properties, @Nullable BigInteger version, @Nullable String versionProblem) {}
+    private record DatumParts(MapPlutusData properties, @Nullable BigInteger version, @Nullable String versionProblem,
+                              long constructor) {}
 
     /** {@code versionProblem} of a datum that has no second field. */
     private static final String ABSENT = "absent";
@@ -387,7 +396,8 @@ public class Cip68DatumParser {
      * but CIP-68 also allows a list of byte strings, which many minting tools write the way CIP-25 must in
      * transaction metadata; this joins the list back together. The chunks are
      * joined as bytes and decoded once, so a multi-byte character cut by a chunk boundary survives.
-     * Elements of the list that are not byte strings are ignored. There is no size cap: a datum is at most one
+     * An element of the list that is not a byte string is left out, with a {@code wrong_type} error: the list is
+     * {@code [* bounded_bytes]}. There is no size cap: a datum is at most one
      * transaction, 16 KB. The scheme is checked by the validator.
      */
     @Nullable
@@ -395,7 +405,13 @@ public class Cip68DatumParser {
         PlutusData property = map.getMap().get(BytesPlutusData.of(propertyName));
         byte[] value = switch (property) {
             case BytesPlutusData bytes -> bytes.getValue();
-            case ListPlutusData list -> joinChunks(list);
+            case ListPlutusData list -> {
+                if (!list.getPlutusDataList().stream().allMatch(BytesPlutusData.class::isInstance)) {
+                    errors.add(textError(propertyName, WRONG_TYPE,
+                            propertyName + " is a list with an element that is not a byte string, that element is left out"));
+                }
+                yield joinChunks(list);
+            }
             case null -> null;
             default -> {
                 errors.add(wrongType(propertyName));
