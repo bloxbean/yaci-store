@@ -18,7 +18,8 @@ Two kinds of CIP-68 datum are stored only if their reference NFT is already stor
 - `nft_only` (ADR 0009): a datum whose transaction has the 222 NFT and no 333 or 444 token.
 
 Both rules exist so that once a reference NFT is indexed, every later datum of it is. That way an owner who clears the metadata is not served the old
-one. `Cip68Processor` checks this with `existsByPolicyIdAndAssetName`, against the rows stored when the block is indexed.
+one. `Cip68Processor` checks this with `existsByPolicyIdAndAssetName`, against the rows stored when the block is indexed, and, since `5564a91d5`,
+against the rows built by the earlier transactions of the same block (`isIndexed`, see Decision 1).
 
 The answer depends on the order of the blocks. With `store.executor.enable-parallel-processing=true` (set in the `config/application.properties`
 shipped with yaci-store), a sync that is not yet at the tip processes the blocks in batches (`blocks-batch-size`, 100 by default). Each batch is split
@@ -51,8 +52,11 @@ The indexing logic and the `existsByPolicyIdAndAssetName` check are unchanged; o
 earlier block has been, so the check is exact again.
 
 Within one `CommitEvent` transaction, Hibernate flushes the rows saved for one block before the next block's query, so a block sees every earlier
-block. The rows of one block are saved together after the whole block is read, as before. So a datum does not see a row from an earlier transaction
-of the same block, in any sync mode.
+block. The rows of one block are saved together after the whole block is read, as before, and until then they are plain objects Hibernate cannot
+flush. So the database alone does not show a datum the row of an earlier transaction of the same block. A transaction can spend an output created
+earlier in its block: a token minted with its metadata and cleared in the next transaction of the same block kept the metadata it was minted with.
+Since `5564a91d5` (found in review), `Cip68Processor` also keeps the reference NFTs indexed in the current block, and a reference NFT in that set
+counts as already stored. Ordering the blocks alone could not fix this: it happens inside one block.
 
 `CommitEvent` is published by yaci-store in two cases, both before the cursor moves:
 
