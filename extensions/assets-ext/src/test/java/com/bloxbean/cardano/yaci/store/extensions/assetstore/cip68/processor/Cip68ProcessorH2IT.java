@@ -11,7 +11,7 @@ import com.bloxbean.cardano.client.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
-import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
+import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.parser.Cip68DatumParser;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service.Cip68TokenService;
@@ -110,7 +110,7 @@ class Cip68ProcessorH2IT {
         // stored only if the earlier mint is, which the earlier block saves first within the same transaction
         processor.collectForBatch(eventAt(2L, 500L, "d8799fa001ff"));
         processor.collectForBatch(eventAt(1L, 100L, datum("A name", true)));
-        processor.indexBatchInChainOrder(new PreCommitEvent(EventMetadata.builder().block(2L).build()));
+        processor.indexBatchInChainOrder(new CommitEvent<>(EventMetadata.builder().block(2L).build(), List.of()));
         entityManager.flush();
         entityManager.clear();
 
