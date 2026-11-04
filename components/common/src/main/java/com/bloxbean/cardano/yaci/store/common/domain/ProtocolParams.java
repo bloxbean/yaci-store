@@ -11,6 +11,7 @@ import lombok.*;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.util.HashMap;
 import java.util.Map;
 
 @Data
@@ -142,7 +143,8 @@ public class ProtocolParams {
         }
         if (other.costModels != null) {
             if (this.costModels == null) {
-                this.costModels = other.getCostModels();
+                //Copy, so later puts don't mutate other's map (it may be a managed JPA entity's map)
+                this.costModels = new HashMap<>(other.getCostModels());
             } else {
                 var keys = other.getCostModels().keySet();
                 keys.forEach(key -> this.costModels.put(key, other.costModels.get(key)));
