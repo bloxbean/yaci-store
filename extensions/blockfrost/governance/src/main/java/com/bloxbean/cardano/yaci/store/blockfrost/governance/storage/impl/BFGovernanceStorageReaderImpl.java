@@ -515,9 +515,7 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
     }
 
     private Map<String, Long> fetchLatestSpecialDRepAmounts() {
-        Integer latestDistEpoch = dsl.select(DSL.max(DREP_DIST.EPOCH))
-                .from(DREP_DIST)
-                .fetchOne(0, Integer.class);
+        Integer latestDistEpoch = findLatestDRepDistEpoch();
         if (latestDistEpoch == null) return Map.of();
 
         Map<String, Long> result = new HashMap<>();
@@ -537,9 +535,7 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
 
     private Map<String, Long> fetchLatestDRepAmounts(List<String> drepIds) {
         Map<String, Long> amounts = new HashMap<>();
-        Integer latestDistEpoch = dsl.select(DSL.max(DREP_DIST.EPOCH))
-                .from(DREP_DIST)
-                .fetchOne(0, Integer.class);
+        Integer latestDistEpoch = findLatestDRepDistEpoch();
         if (latestDistEpoch != null) {
             dsl.select(DREP_DIST.DREP_ID, DREP_DIST.AMOUNT)
                     .from(DREP_DIST)
@@ -865,6 +861,25 @@ public class BFGovernanceStorageReaderImpl implements BFGovernanceStorageReader 
                             .amount(currentBalance + withdrawableReward)
                             .build();
                 });
+    }
+
+    // drep_dist is partitioned by epoch, so max(epoch) without an epoch predicate plans and locks
+    // every partition (#1200). The job that writes the latest stake snapshot (N - 1) also writes
+    // drep_dist for N, so restrict to epoch >= N - 1 first: when that finds a row, its max is the
+    // max of the whole table. Otherwise fall back to the unbounded query.
+    Integer findLatestDRepDistEpoch() {
+        Integer snapshotEpoch = findLatestStakeSnapshotEpoch();
+        if (snapshotEpoch != null) {
+            Integer latestEpoch = dsl.select(DSL.max(DREP_DIST.EPOCH))
+                    .from(DREP_DIST)
+                    .where(DREP_DIST.EPOCH.ge(snapshotEpoch))
+                    .fetchOne(0, Integer.class);
+            if (latestEpoch != null) return latestEpoch;
+        }
+
+        return dsl.select(DSL.max(DREP_DIST.EPOCH))
+                .from(DREP_DIST)
+                .fetchOne(0, Integer.class);
     }
 
     private Integer findLatestStakeSnapshotEpoch() {

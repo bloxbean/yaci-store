@@ -77,3 +77,10 @@
       columns:
         - pool_id
         - earned_epoch
+
+- table: transaction_metadata
+  indexes:
+    - name: idx_txn_metadata_label_slot
+      columns:
+        - label
+        - slot

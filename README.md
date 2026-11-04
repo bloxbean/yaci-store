@@ -4,6 +4,7 @@
 <h3>A Cardano blockchain indexer and datastore built with Yaci</h3>
 
 [![Clean, Build](https://github.com/bloxbean/yaci-store/actions/workflows/build.yml/badge.svg)](https://github.com/bloxbean/yaci-store/actions/workflows/build.yml)
+[![snapshot](https://img.shields.io/maven-metadata/v?metadataUrl=https%3A%2F%2Frepo.bloxbean.org%2Fmaven%2Fsnapshots%2Fcom%2Fbloxbean%2Fcardano%2Fyaci-store-spring-boot-starter%2Fmaven-metadata.xml&strategy=latestProperty&label=snapshot)](https://github.com/bloxbean/yaci-store/releases/tag/snapshot)
 </div>
 
 ## Overview
@@ -123,6 +124,25 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 - `release/2.0.x` → patch fixes for the 2.0.x stable line
 
 Please open pull requests against the `main` branch unless advised otherwise.
+
+### Maven artifacts and snapshots
+
+Releases are on Maven Central (`com.bloxbean.cardano:yaci-store-*`) and, with the same files, in the BloxBean Maven
+repository at `https://repo.bloxbean.org/maven/releases`.
+
+Development snapshots are in the BloxBean Maven repository, one version per commit (e.g.
+`3.0.0-beta6-1a2b3c4-SNAPSHOT`). The newest version and the snapshot downloads are on the
+[Development snapshot](https://github.com/bloxbean/yaci-store/releases/tag/snapshot) page.
+
+```gradle
+repositories {
+    mavenCentral()
+    maven {
+        url = uri('https://repo.bloxbean.org/maven/snapshots')
+        mavenContent { snapshotsOnly() }
+    }
+}
+```
 
 ### Documentation source
 
