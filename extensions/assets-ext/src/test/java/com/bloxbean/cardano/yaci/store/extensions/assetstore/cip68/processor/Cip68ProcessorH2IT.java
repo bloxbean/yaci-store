@@ -119,6 +119,70 @@ class Cip68ProcessorH2IT {
                 .hasValueSatisfying(latest -> assertThat(latest.getName()).isNull());
     }
 
+    // A transaction can spend an output created earlier in its block. The rows of a block are saved after its last
+    // transaction, so "is the reference NFT already indexed" must see the rows of the earlier transactions too.
+
+    @Test
+    void metadataClearedByALaterTransactionOfTheBlockThatMintedTheTokenIsStored() {
+        // tx 0 mints the reference NFT with its 333 token and a name; tx 1 spends it and clears the datum (an empty map,
+        // no user token), which is stored only if the reference NFT is known to be indexed
+        AddressUtxoEvent block = blockOf(1L, 100L,
+                transaction("a", output("a", 0, 0, POLICY_ID + REF_NFT_ASSET_NAME, datum("Initial name", true)),
+                        output("a", 0, 1, FT_UNIT, null)),
+                transaction("b", output("b", 1, 0, POLICY_ID + REF_NFT_ASSET_NAME, "d8799fa001ff")));
+
+        processor.collectForBatch(block);
+        processor.indexBatchInChainOrder(new CommitEvent<>(EventMetadata.builder().block(1L).build(), List.of()));
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(repository.findAll()).extracting(Cip68Metadata::getTxIndex).containsExactlyInAnyOrder(0, 1);
+        assertThat(repository.findFirstByPolicyIdAndAssetNameOrderBySlotDescTxIndexDesc(POLICY_ID, REF_NFT_ASSET_NAME))
+                .hasValueSatisfying(latest -> assertThat(latest.getName()).isNull());
+    }
+
+    @Test
+    void aDatumWithOnlyThe222NftInALaterTransactionOfTheBlockThatMintedThe333TokenIsStored() {
+        // tx 0 mints the reference NFT with its 333 token; tx 1 updates the datum with the 222 NFT and no 333 or 444
+        // token, which is stored only if the reference NFT is known to be indexed
+        AddressUtxoEvent block = blockOf(1L, 100L,
+                transaction("a", output("a", 0, 0, POLICY_ID + REF_NFT_ASSET_NAME, datum("Initial name", true)),
+                        output("a", 0, 1, FT_UNIT, null)),
+                transaction("b", output("b", 1, 0, POLICY_ID + REF_NFT_ASSET_NAME, datum("Updated name", true)),
+                        output("b", 1, 1, POLICY_ID + "000de140" + REF_NFT_ASSET_NAME.substring(8), null)));
+
+        processor.collectForBatch(block);
+        processor.indexBatchInChainOrder(new CommitEvent<>(EventMetadata.builder().block(1L).build(), List.of()));
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(repository.findFirstByPolicyIdAndAssetNameOrderBySlotDescTxIndexDesc(POLICY_ID, REF_NFT_ASSET_NAME))
+                .hasValueSatisfying(latest -> assertThat(latest.getName()).isEqualTo("Updated name"));
+    }
+
+    private static final String FT_UNIT = POLICY_ID + "0014df10" + REF_NFT_ASSET_NAME.substring(8);
+
+    private static AddressUtxoEvent blockOf(long block, long slot, TxInputOutput... transactions) {
+        return AddressUtxoEvent.builder()
+                .metadata(EventMetadata.builder().block(block).slot(slot).build())
+                .txInputOutputs(List.of(transactions))
+                .build();
+    }
+
+    private static TxInputOutput transaction(String hashChar, AddressUtxo... outputs) {
+        return TxInputOutput.builder().txHash(hashChar.repeat(64)).outputs(List.of(outputs)).build();
+    }
+
+    private static AddressUtxo output(String hashChar, int txIndex, int outputIndex, String unit, String inlineDatum) {
+        return AddressUtxo.builder()
+                .txHash(hashChar.repeat(64))
+                .txIndex(txIndex)
+                .outputIndex(outputIndex)
+                .inlineDatum(inlineDatum)
+                .amounts(List.of(Amt.builder().unit(unit).quantity(BigInteger.ONE).build()))
+                .build();
+    }
+
     @Test
     void aTokenWithAnEmptyNameIsIndexedAndServedApartFromANamedTokenOfTheSamePolicy() {
         // the name after the label prefix can be empty, as the ledger allows (PBG Token on mainnet): the reference NFT is

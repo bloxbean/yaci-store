@@ -35,6 +35,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -201,12 +202,15 @@ public class Cip68Processor {
         // the co-minted user token (000de140 / 0014df10 / 001bc280) paired with the reference
         // NFT; a flat-map across all txs would lose that boundary.
         List<Cip68Metadata> entities = new ArrayList<>();
+        // The rows of the block are saved together after its last transaction, so the database does not know a reference
+        // NFT indexed by an earlier transaction of the same block: this set does (see isIndexed).
+        Set<String> indexedInBlock = new HashSet<>();
         for (TxInputOutput txIo : addressUtxoEvent.getTxInputOutputs()) {
             Set<String> assetUnitsInTx = collectAssetUnits(txIo);
 
             for (AddressUtxo output : txIo.getOutputs()) {
                 try {
-                    indexOutput(output, assetUnitsInTx, slot, entities);
+                    indexOutput(output, assetUnitsInTx, slot, entities, indexedInBlock);
                 } catch (RuntimeException e) {
                     skipOutput(output, slot, e);
                 }
@@ -218,7 +222,8 @@ public class Cip68Processor {
         }
     }
 
-    private void indexOutput(AddressUtxo output, Set<String> assetUnitsInTx, Long slot, List<Cip68Metadata> entities) {
+    private void indexOutput(AddressUtxo output, Set<String> assetUnitsInTx, Long slot, List<Cip68Metadata> entities,
+                             Set<String> indexedInBlock) {
         List<Amt> refNfts = cip68TokenService.extractReferenceNfts(output);
         SharedDatum shared = null;
         if (refNfts.size() > 1 && !cip68DatumParser.hasNestedMetadata(output.getInlineDatum())) {
@@ -229,7 +234,10 @@ public class Cip68Processor {
             AssetType refNft = AssetType.fromUnit(refNftAmt.getUnit());
             // one reference NFT failing must not take the others of the output with it: only that one is skipped
             try {
-                toEntity(output, refNft, assetUnitsInTx, slot, shared).ifPresent(entities::add);
+                toEntity(output, refNft, assetUnitsInTx, slot, shared, indexedInBlock).ifPresent(entity -> {
+                    entities.add(entity);
+                    indexedInBlock.add(refNft.toUnit());
+                });
             } catch (RuntimeException e) {
                 skipReferenceNft(output, slot, refNft, e);
             }
@@ -336,12 +344,12 @@ public class Cip68Processor {
      * have in common.
      */
     private Optional<Cip68Metadata> toEntity(AddressUtxo output, AssetType refNft, Set<String> assetUnitsInTx, Long slot,
-                                             @Nullable SharedDatum shared) {
+                                             @Nullable SharedDatum shared, Set<String> indexedInBlock) {
         ParseOutcome outcome = shared != null
                 ? shared.outcome
                 : cip68DatumParser.parseDetailed(output.getInlineDatum(), refNft);
         if (outcome instanceof ParseOutcome.Parsed(ParsedCip68Datum parsed)) {
-            return indexDatum(parsed, output, refNft, assetUnitsInTx, slot, shared);
+            return indexDatum(parsed, output, refNft, assetUnitsInTx, slot, shared, indexedInBlock);
         }
         // a datum shared by several reference NFTs is dropped once for the output: recorded once, for the first
         if (outcome instanceof ParseOutcome.Dropped(String reasonCode, String message) && (shared == null || shared.markReported())) {
@@ -351,20 +359,33 @@ public class Cip68Processor {
     }
 
     /**
+     * Whether the reference NFT already has a row: one saved by an earlier block, or one built by an earlier transaction
+     * of this block. The rows of a block are only saved after its last transaction, and they are plain objects until then,
+     * not entities Hibernate could flush before the query, so the database alone does not see the second kind. A
+     * transaction can spend an output created earlier in its block, so a token minted with its metadata and cleared in the
+     * next transaction of the same block would otherwise keep the metadata it was minted with (found in review of
+     * bloxbean/yaci-store#1220).
+     */
+    private boolean isIndexed(AssetType refNft, Set<String> indexedInBlock) {
+        return indexedInBlock.contains(refNft.toUnit())
+                || cip68MetadataRepository.existsByPolicyIdAndAssetName(refNft.policyId(), refNft.assetName());
+    }
+
+    /**
      * The row for a datum that was read: its label, what is wrong with the datum itself, and what is reported about it.
      * Empty for a datum that is not token metadata. What the label requires is not stored: it is checked when the token
      * is served, for the label asked for ({@link Cip68Validator#validate}).
      */
     private Optional<Cip68Metadata> indexDatum(ParsedCip68Datum parsed, AddressUtxo output, AssetType refNft,
-                                               Set<String> assetUnitsInTx, Long slot, @Nullable SharedDatum shared) {
+                                               Set<String> assetUnitsInTx, Long slot, @Nullable SharedDatum shared,
+                                               Set<String> indexedInBlock) {
         // A reference NFT can have user tokens of several labels (the CIP allows it); the row is stored with the first.
         List<Integer> pairedLabels = pairedLabels(refNft, assetUnitsInTx);
         // Without a user token in the transaction the label can only be inferred from the datum, and a datum with none
         // of the CIP-68 token fields (a dApp's own state under the 000643b0 prefix, an empty map) is not token metadata:
         // it would only be indexed as a 333 fungible token by default. Once a reference NFT is indexed, every later
         // datum is, so that an owner who clears the metadata is not served the old one.
-        if (pairedLabels.isEmpty() && !parsed.hasTokenFields()
-                && !cip68MetadataRepository.existsByPolicyIdAndAssetName(refNft.policyId(), refNft.assetName())) {
+        if (pairedLabels.isEmpty() && !parsed.hasTokenFields() && !isIndexed(refNft, indexedInBlock)) {
             log.debug("Skipping CIP-68 datum of {}/{}: no user token in the transaction and none of the CIP-68 token fields",
                     refNft.policyId(), refNft.assetName());
             metrics.notTokenMetadata();
@@ -373,8 +394,7 @@ public class Cip68Processor {
         // A datum whose transaction has the 222 NFT and no 333 or 444 token is an NFT's metadata, which is not served:
         // stored, it would answer for the 333 and 444 subjects of a token that was never minted. Once a reference NFT is
         // indexed (a 333 or 444 token was paired with it, or its datum came without a user token), every later datum is.
-        if (isNftOnly(pairedLabels)
-                && !cip68MetadataRepository.existsByPolicyIdAndAssetName(refNft.policyId(), refNft.assetName())) {
+        if (isNftOnly(pairedLabels) && !isIndexed(refNft, indexedInBlock)) {
             log.debug("Skipping CIP-68 datum of {}/{}: its transaction has the 222 NFT and no 333 or 444 token",
                     refNft.policyId(), refNft.assetName());
             metrics.nftOnly();
