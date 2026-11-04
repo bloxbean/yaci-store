@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.blockfrost.common.timeout;
 
+import org.hibernate.TransactionException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.transaction.TransactionTimedOutException;
 
@@ -23,6 +24,9 @@ public final class BFQueryTimeouts {
     // MySQL: ER_QUERY_TIMEOUT (max_execution_time exceeded)
     private static final int MYSQL_QUERY_TIMEOUT = 3024;
 
+    // Hibernate: the deadline set on the JDBC coordinator had passed before the statement was prepared
+    private static final String HIBERNATE_TX_TIMEOUT_MESSAGE = "transaction timeout expired";
+
     private BFQueryTimeouts() {
     }
 
@@ -32,6 +36,9 @@ public final class BFQueryTimeouts {
             if (t instanceof QueryTimeoutException
                     || t instanceof TransactionTimedOutException
                     || t instanceof SQLTimeoutException)
+                return true;
+
+            if (t instanceof TransactionException && HIBERNATE_TX_TIMEOUT_MESSAGE.equals(t.getMessage()))
                 return true;
 
             if (t instanceof SQLException sqlException && isTimeout(sqlException))

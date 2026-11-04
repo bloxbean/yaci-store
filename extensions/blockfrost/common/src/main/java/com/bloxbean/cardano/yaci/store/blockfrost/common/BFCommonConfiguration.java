@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.store.blockfrost.common.timeout.BFQueryTimeoutI
 import com.bloxbean.cardano.yaci.store.blockfrost.common.timeout.BFQueryTimeoutProperties;
 import com.bloxbean.cardano.yaci.store.blockfrost.common.timeout.BFRepositoryTimeoutInterceptor;
 import com.bloxbean.cardano.yaci.store.blockfrost.common.timeout.BFRepositoryTimeoutPostProcessor;
+import jakarta.persistence.EntityManagerFactory;
 import lombok.extern.slf4j.Slf4j;
 import org.jooq.ExecuteListenerProvider;
 import org.jooq.impl.DefaultExecuteListenerProvider;
@@ -18,7 +19,7 @@ import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /**
- * Shared Blockfrost beans: the error advices and the per-request query time budget (#1207).
+ * Shared Blockfrost beans: the error advices and the per-request query time budget.
  */
 @Slf4j
 @Configuration
@@ -33,8 +34,10 @@ public class BFCommonConfiguration {
 
     @Bean
     public static BFRepositoryTimeoutPostProcessor bfRepositoryTimeoutPostProcessor(
-            ObjectProvider<PlatformTransactionManager> transactionManager) {
-        return new BFRepositoryTimeoutPostProcessor(new BFRepositoryTimeoutInterceptor(transactionManager));
+            ObjectProvider<PlatformTransactionManager> transactionManager,
+            ObjectProvider<EntityManagerFactory> entityManagerFactory) {
+        return new BFRepositoryTimeoutPostProcessor(
+                new BFRepositoryTimeoutInterceptor(transactionManager, entityManagerFactory));
     }
 
     @Bean

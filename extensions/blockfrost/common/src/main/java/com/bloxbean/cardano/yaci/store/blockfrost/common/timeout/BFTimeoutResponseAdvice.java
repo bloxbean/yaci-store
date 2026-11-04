@@ -14,7 +14,7 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyAdvice;
 
 /**
  * Turns the response of a Blockfrost request into a 504 when one of its queries timed out, even if the code
- * that ran the query caught the exception and went on to build an empty or partial result (see #1171).
+ * that ran the query caught the exception and went on to build an empty or partial result.
  */
 @Slf4j
 @ControllerAdvice(basePackages = BFQueryTimeoutInterceptor.BLOCKFROST_PACKAGE)
