@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.blockfrost.common.timeout;
 
+import jakarta.persistence.EntityManagerFactory;
 import org.aopalliance.intercept.MethodInterceptor;
 import org.aopalliance.intercept.MethodInvocation;
 import org.junit.jupiter.api.AfterEach;
@@ -8,12 +9,15 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.aop.framework.ProxyFactory;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionTimedOutException;
 import org.springframework.transaction.interceptor.TransactionInterceptor;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 
+import java.sql.SQLException;
 import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -35,9 +39,10 @@ class BFRepositoryTimeoutInterceptorTest {
         txManager = mock(PlatformTransactionManager.class);
         when(txManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
 
-        ObjectProvider<PlatformTransactionManager> provider = mock(ObjectProvider.class);
-        when(provider.getIfUnique()).thenReturn(txManager);
-        interceptor = new BFRepositoryTimeoutInterceptor(provider);
+        ObjectProvider<PlatformTransactionManager> transactionManagers = mock(ObjectProvider.class);
+        when(transactionManagers.getIfUnique()).thenReturn(txManager);
+        ObjectProvider<EntityManagerFactory> entityManagerFactories = mock(ObjectProvider.class);
+        interceptor = new BFRepositoryTimeoutInterceptor(transactionManagers, entityManagerFactories);
     }
 
     @AfterEach
@@ -55,7 +60,7 @@ class BFRepositoryTimeoutInterceptorTest {
     }
 
     @Test
-    void withBudget_callRunsInReadOnlyTransactionWithRemainingTime() throws Throwable {
+    void withBudget_callRunsInReadOnlyTransactionWithoutSpringTimeout() throws Throwable {
         BFQueryTimeoutContext.begin(Duration.ofSeconds(30));
         MethodInvocation invocation = mock(MethodInvocation.class);
         when(invocation.proceed()).thenReturn("row");
@@ -65,19 +70,63 @@ class BFRepositoryTimeoutInterceptorTest {
         ArgumentCaptor<TransactionDefinition> definition = ArgumentCaptor.forClass(TransactionDefinition.class);
         verify(txManager).getTransaction(definition.capture());
         assertThat(definition.getValue().isReadOnly()).isTrue();
-        assertThat(definition.getValue().getTimeout()).isBetween(29, 30);
+        assertThat(definition.getValue().getTimeout()).isEqualTo(TransactionDefinition.TIMEOUT_DEFAULT);
         assertThat(definition.getValue().getPropagationBehavior())
                 .isEqualTo(TransactionDefinition.PROPAGATION_REQUIRED);
     }
 
     @Test
-    void timeoutFromRepository_isRethrownAndMarked() throws Throwable {
+    void exhaustedBudget_failsBeforeOpeningATransaction() throws Throwable {
+        BFQueryTimeoutContext.begin(Duration.ofMillis(1));
+        Thread.sleep(5);
+
+        assertThatThrownBy(() -> interceptor.invoke(mock(MethodInvocation.class)))
+                .isInstanceOf(QueryTimeoutException.class);
+        verifyNoInteractions(txManager);
+    }
+
+    @Test
+    void queryTimeoutException_isRethrownAndMarked() throws Throwable {
         BFQueryTimeoutContext.begin(Duration.ofSeconds(30));
         MethodInvocation invocation = mock(MethodInvocation.class);
-        when(invocation.proceed()).thenThrow(new QueryTimeoutException("canceling statement"));
+        QueryTimeoutException timeout = new QueryTimeoutException("canceling statement");
+        when(invocation.proceed()).thenThrow(timeout);
+
+        assertThatThrownBy(() -> interceptor.invoke(invocation)).isSameAs(timeout);
+        assertThat(BFQueryTimeoutContext.isTimedOut()).isTrue();
+    }
+
+    @Test
+    void cancelTranslatedAsResourceFailure_becomesQueryTimeoutException() throws Throwable {
+        BFQueryTimeoutContext.begin(Duration.ofSeconds(30));
+        MethodInvocation invocation = mock(MethodInvocation.class);
+        when(invocation.proceed()).thenThrow(new DataAccessResourceFailureException("jpa",
+                new SQLException("ERROR: canceling statement due to user request", "57014")));
 
         assertThatThrownBy(() -> interceptor.invoke(invocation)).isInstanceOf(QueryTimeoutException.class);
         assertThat(BFQueryTimeoutContext.isTimedOut()).isTrue();
+    }
+
+    @Test
+    void springTransactionDeadline_becomesQueryTimeoutException() throws Throwable {
+        BFQueryTimeoutContext.begin(Duration.ofSeconds(30));
+        MethodInvocation invocation = mock(MethodInvocation.class);
+        when(invocation.proceed()).thenThrow(new TransactionTimedOutException("Transaction timed out"));
+
+        assertThatThrownBy(() -> interceptor.invoke(invocation)).isInstanceOf(QueryTimeoutException.class);
+        assertThat(BFQueryTimeoutContext.isTimedOut()).isTrue();
+    }
+
+    @Test
+    void otherFailure_isRethrownUnchangedAndNotMarked() throws Throwable {
+        BFQueryTimeoutContext.begin(Duration.ofSeconds(30));
+        MethodInvocation invocation = mock(MethodInvocation.class);
+        DataAccessResourceFailureException failure = new DataAccessResourceFailureException("lock",
+                new SQLException("out of shared memory", "53200"));
+        when(invocation.proceed()).thenThrow(failure);
+
+        assertThatThrownBy(() -> interceptor.invoke(invocation)).isSameAs(failure);
+        assertThat(BFQueryTimeoutContext.isTimedOut()).isFalse();
     }
 
     @Test

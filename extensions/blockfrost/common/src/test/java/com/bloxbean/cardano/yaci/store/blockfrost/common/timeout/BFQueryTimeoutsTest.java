@@ -1,9 +1,11 @@
 package com.bloxbean.cardano.yaci.store.blockfrost.common.timeout;
 
+import org.hibernate.TransactionException;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.dao.RecoverableDataAccessException;
+import org.springframework.orm.jpa.JpaSystemException;
 import org.springframework.transaction.TransactionTimedOutException;
 
 import java.sql.SQLException;
@@ -34,6 +36,14 @@ class BFQueryTimeoutsTest {
                 .isTrue();
         assertThat(BFQueryTimeouts.isTimeout(new SQLException("maximum statement execution time exceeded",
                 "HY000", 3024))).isTrue();
+    }
+
+    @Test
+    void hibernateDeadline_insideTranslatedException() {
+        assertThat(BFQueryTimeouts.isTimeout(new JpaSystemException(
+                new TransactionException("transaction timeout expired")))).isTrue();
+        assertThat(BFQueryTimeouts.isTimeout(new JpaSystemException(
+                new TransactionException("rollback failed")))).isFalse();
     }
 
     @Test
