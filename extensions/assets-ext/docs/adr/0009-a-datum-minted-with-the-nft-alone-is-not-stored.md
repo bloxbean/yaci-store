@@ -6,7 +6,7 @@ Proposed. Implemented in PR #1220 (`0b382b706`) and in its 2.0.x backport, PR #1
 indexed) and ADR 0008 (its consequence that NFTs keep answering for their 333 and 444 subjects).
 
 > **Amended by ADR 0010 (2026-11-02):** "unless its reference NFT is already stored" (decision 1) is decided in chain order: the CIP-68 outputs
-> of a batch are indexed sorted by block on `PreCommitEvent`, so a parallel sync gives the same rows as one in chain order.
+> of a batch are indexed sorted by block on `CommitEvent`, so a parallel sync gives the same rows as one in chain order.
 
 ## Date
 

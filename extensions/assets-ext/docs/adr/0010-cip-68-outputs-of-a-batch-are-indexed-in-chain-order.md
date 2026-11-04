@@ -3,7 +3,8 @@
 ## Status
 
 Proposed. Implemented in PR #1310, merged into PR #1220 (`84f50320c`), and in the 2.0.x backport, PR #1242. Amends ADR 0002 (decision 2, the two
-skips) and ADR 0009 (decision 1), which depend on it. Chosen over the alternatives discussed in PR #1309 (closed).
+skips) and ADR 0009 (decision 1), which depend on it. Chosen over the alternatives discussed in PR #1309 (closed). The batch was first indexed on
+`PreCommitEvent`; it is indexed on `CommitEvent` since `89ba8a719` (2026-11-04), as the maintainers asked (decision 1).
 
 ## Date
 
@@ -37,28 +38,32 @@ At the tip, blocks are processed one at a time and the check is exact.
 
 ## Decision
 
-### 1. The module indexes the blocks of a batch in chain order, on `PreCommitEvent`
+### 1. The module indexes the blocks of a batch in chain order, on `CommitEvent`
 
 `Cip68Processor` does not index a block when its `AddressUtxoEvent` arrives:
 
 - **`collectForBatch`:** each block's event is kept in a map by block number. Several block threads fill it at once, so it is a `ConcurrentHashMap`.
-- **`indexBatchInChainOrder`:** on `PreCommitEvent`, the kept blocks are sorted by block number and indexed one by one with the existing
+- **`indexBatchInChainOrder`:** on `CommitEvent`, the kept blocks are sorted by block number and indexed one by one with the existing
   `processTransaction`. The map is then cleared (in `finally`).
 - **`dropBatch`:** a `RollbackEvent` clears the map.
 
 The indexing logic and the `existsByPolicyIdAndAssetName` check are unchanged; only *when* a block is indexed changes. When a block is indexed, every
 earlier block has been, so the check is exact again.
 
-Within one `PreCommitEvent` transaction, Hibernate flushes the rows saved for one block before the next block's query, so a block sees every earlier
+Within one `CommitEvent` transaction, Hibernate flushes the rows saved for one block before the next block's query, so a block sees every earlier
 block. The rows of one block are saved together after the whole block is read, as before. So a datum does not see a row from an earlier transaction
 of the same block, in any sync mode.
 
-`PreCommitEvent` is published by yaci-store in two cases, both before the cursor moves:
+`CommitEvent` is published by yaci-store in two cases, both before the cursor moves:
 
 - **During a parallel sync:** once per batch, after every partition has finished.
 - **At the tip, and with parallel processing off:** after every block, so a block is indexed right after it is processed, as before.
 
 If the process stops before the event, the cursor has not moved, and the blocks are processed again.
+
+yaci-store publishes `PreCommitEvent` right before `CommitEvent`, in the same two cases, so either gives the same rows. `PreCommitEvent` is an
+internal event, used to prepare data for calculations such as those of adapot, so the module uses `CommitEvent`, as the maintainers asked. The
+module reads only its own tables, so it does not depend on the order of the other `CommitEvent` listeners.
 
 ### 2. Only what indexing reads is kept until the end of the batch
 
@@ -80,7 +85,7 @@ to it, as before.
 ### 3. Why this option
 
 This is how yaci-store already handles state that depends on earlier events. The core processors collect during the batch, sort into chain order and
-process on `PreCommitEvent`:
+process at the end of the batch, on `PreCommitEvent` (this module uses `CommitEvent`, decision 1):
 
 | Processor | What it collects | Sorted by | Why order matters |
 |---|---|---|---|
@@ -94,7 +99,7 @@ It is the smallest change to the logic, and its outcome is by construction the o
 The other options discussed in PR #1309:
 
 - **A. Decide at the end of the batch.** An `existsEarlierThan` query, plus an in-memory queue of the datums with no earlier row, decided on
-  `PreCommitEvent`. It gives the same outcome, but changes the indexing logic and adds a concurrent queue. Together these are subtle to review.
+  `CommitEvent`. It gives the same outcome, but changes the indexing logic and adds a concurrent queue. Together these are subtle to review.
 - **B. Store every datum with a flag, and decide when the subject is served.** It is deterministic for any processing order and needs no state
   between blocks. But it stores the NFT datums and the junk that follows them again (about 152,000 reference NFTs on mainnet). That is the case
   ADR 0009 rejected, and it would need a new column.
@@ -118,7 +123,7 @@ The other options discussed in PR #1309:
 - **During a parallel sync, the CIP-68 work of a batch runs on one thread at the end of the batch.** The rest of the store stays parallel. On mainnet
   the sync from genesis took about 27 hours, against 25.5 hours without this change, on a shared host with nothing controlled. That does not show a
   slowdown.
-- **Remote consumer:** a remote consumer (`store.remote.consumer-enabled`) never receives `PreCommitEvent`, because yaci-store does not send it
+- **Remote consumer:** a remote consumer (`store.remote.consumer-enabled`) never receives `CommitEvent`, because yaci-store does not send it
   (#1311). So the module indexes nothing there. This is the same limitation as the other stores that finish their work on `PreCommitEvent` or
   `CommitEvent` (`AccountBalanceProcessor`, `DatumStorageImpl`, `ScriptStorageImpl`, `AddressProcessor`, ...). It is documented on `Cip68Processor`.
   There are no known users of remote consumers with this module, so #1311 is closed as not planned for now (2026-11-02), to be reopened
@@ -128,7 +133,7 @@ The other options discussed in PR #1309:
 
 ## When to revisit
 
-- If #1311 is solved in a way that does not deliver `PreCommitEvent` to a consumer, option B, which needs no core event, may fit better.
+- If #1311 is solved in a way that does not deliver `CommitEvent` to a consumer, option B, which needs no core event, may fit better.
 - If the core gets a chain-order hook (option E), the module can use it instead of keeping the batch itself.
 
 ## References
@@ -138,5 +143,5 @@ The other options discussed in PR #1309:
 - `Cip68Processor.collectForBatch`, `Cip68Processor.indexBatchInChainOrder`, `Cip68Processor.dropBatch`
 - Tests: `Cip68ProcessorTest.BatchInChainOrder`, `Cip68ProcessorTest.KeptForBatch`, `Cip68ProcessorH2IT`
 - yaci-store core: `ShelleyBlockEventPublisher.processBlocksInParallel` and `ByronBlockEventPublisher.processBlocksInParallel` (partitions, then
-  `PreCommitEvent`), `AccountBalanceProcessor`,
+  `PreCommitEvent` and `CommitEvent`), `AccountBalanceProcessor`,
   `PoolStatusProcessor`, `DRepStatusProcessor`
