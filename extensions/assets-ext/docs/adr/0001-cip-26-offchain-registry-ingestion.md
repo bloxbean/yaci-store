@@ -152,7 +152,10 @@ not verify them: the CIP-26 checks of cf-tokens-cip26 are given the values only.
 
 **A subject is served as the registry file writes it** (`standards.cip26.subject`), not in lower case. Each CIP-26 signature is made
 over the CBOR of the subject as written, so the 106 signatures of the 39 entries above only verify against the subject in upper case;
-serving the stored subject broke all of them (found in review, fixed in `712468b58`). It is only looked up in lower case.
+serving the stored subject broke all of them (found in review, fixed in `712468b58`).
+
+**A subject asked for is looked up in lower case**, alone and in a batch, so an entry is found in either case. Before `6be508e7d`
+the subject asked for was looked up as given: the 39 entries were a `404` when asked for as the registry file writes them.
 
 *Why:* the module serves the V2 shape: plain values in `metadata`, and the CIP-26 entry with its signatures in `standards.cip26`. It
 has no V1 API, which is why the regression scripts compare with the CF registry's V2 API only. An earlier version of this ADR said that
