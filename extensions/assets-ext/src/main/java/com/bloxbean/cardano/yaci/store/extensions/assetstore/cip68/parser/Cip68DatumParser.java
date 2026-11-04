@@ -66,6 +66,7 @@ public class Cip68DatumParser {
     public static final String IMAGE       = "image";
     public static final String MEDIA_TYPE  = "mediaType";
     public static final String FILES       = "files";
+    public static final String CONSTRUCTOR = "constructor";
 
     /** The codes of the validation errors the parser reports (the validator has its own for the fields a label requires). */
     public static final String WRONG_TYPE = ValidationCode.WRONG_TYPE;
@@ -254,7 +255,7 @@ public class Cip68DatumParser {
     private ParsedCip68Datum buildParsedDatum(DatumParts parts, @Nullable AssetType referenceNft) {
         List<ValidationError> errors = new ArrayList<>();
         if (parts.constructor() != 0) {
-            errors.add(ValidationError.mandatory(CIP_68, null, "constructor", INVALID_CONSTRUCTOR,
+            errors.add(ValidationError.mandatory(CIP_68, null, CONSTRUCTOR, INVALID_CONSTRUCTOR,
                     "the datum is constructor " + parts.constructor() + ", CIP-68 defines it as constructor 0 (#6.121); read as written"));
         }
         Long version = readVersion(parts, errors);
@@ -604,7 +605,7 @@ public class Cip68DatumParser {
         return switch (key) {
             case ListPlutusData ignored -> "list";
             case MapPlutusData ignored -> "map";
-            case ConstrPlutusData ignored -> "constructor";
+            case ConstrPlutusData ignored -> CONSTRUCTOR;
             case null, default -> "value of an unsupported kind";
         };
     }
@@ -706,7 +707,7 @@ public class Cip68DatumParser {
                     if (u != null) fields.add(u);
                 }
                 Map<String, Object> out = new LinkedHashMap<>();
-                out.put("constructor", constr.getAlternative());
+                out.put(CONSTRUCTOR, constr.getAlternative());
                 out.put("fields", fields);
                 yield out;
             }
