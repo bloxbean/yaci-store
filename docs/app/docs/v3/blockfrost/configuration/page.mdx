@@ -101,6 +101,7 @@ spring.flyway.password=${spring.datasource.password}
 ```
 
 Do not use `spring.flyway.init-sqls=SET statement_timeout = 0` for this: Flyway borrows connections from the application pool, and the `SET` stays on them, silently removing the timeout. If you prefer `ALTER ROLE ... SET statement_timeout`, run Flyway with a different role. Do not set a server-side timeout on an instance that syncs: it would also cancel long-running indexing and rollback statements.
+</Callout>
 
 <Callout type="info">
 **`GET /accounts/{stake_address}` for unregistered stake addresses.** As on Blockfrost, a stake address that was never registered but appears on chain (the stake part of an output, a pool reward account or owner, a MIR, or a governance proposal return address or treasury withdrawal) returns `200` with `registered: false`, `active: false` and `active_epoch`, `pool_id`, `drep_id` set to `null`. Only an address that never appeared on chain returns `404`.
