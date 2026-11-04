@@ -7,6 +7,7 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.*;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.cip26.Cip26TokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.Cip26StorageReader;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.Cip26Metadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.util.MappingsUtil;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.Cip68StorageReader;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.validation.ValidationError;
@@ -214,12 +215,13 @@ public class TokenQueryService {
 
     private Optional<ResolvedMetadata> findCip26MetadataBatch(String subject, List<String> properties,
                                                                     BatchPrefetchData prefetchData) {
-        Cip26Metadata entity = prefetchData.cip26MetadataMap().get(subject);
+        // the CIP-26 maps are keyed by the stored subject, in lower case
+        Cip26Metadata entity = prefetchData.cip26MetadataMap().get(MappingsUtil.normalizeSubject(subject));
         if (entity == null) {
             return Optional.empty();
         }
         String logo = (properties.isEmpty() || properties.contains("logo"))
-                ? prefetchData.cip26LogoMap().get(subject)
+                ? prefetchData.cip26LogoMap().get(MappingsUtil.normalizeSubject(subject))
                 : null;
         Cip26TokenMetadata cip26 = Cip26TokenMetadata.from(entity, logo);
         cip26.setValidationErrors(PropertyErrorFilter.filter(cip26.getValidationErrors(), properties));
