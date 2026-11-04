@@ -54,6 +54,14 @@ public class TxSubmitController {
             ResponseEntity<String> responseEntity = restTemplate
                     .exchange(submitApiUrl, HttpMethod.POST, entity, String.class);
 
+            //cardano-submit-api returns 202 Accepted. Return 200 OK like Blockfrost, as some clients
+            //(e.g. blockfrost-python / PyCardano) treat any other status as a failure
+            if (responseEntity.getStatusCode().is2xxSuccessful()) {
+                return ResponseEntity.ok()
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(responseEntity.getBody());
+            }
+
             return responseEntity;
         }  catch (HttpClientErrorException | HttpServerErrorException e) {
             int statusCode = e.getStatusCode().value();
