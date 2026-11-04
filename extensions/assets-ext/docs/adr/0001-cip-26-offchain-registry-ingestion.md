@@ -88,8 +88,10 @@ entry `{cip: "CIP-26", field_name, field_category, code, error}` (there is no `s
 - **A `url` must be a URI with `https` and a host.** The library checks the scheme only, so `https:/rosen.tech` (one slash) passed. A `url` that
   is not a valid URI, not `https`, or has no host is an `OPTIONAL` `invalid_value` error that quotes it, unless the library already reported the
   `url`. Found on the mainnet validation run of cf-token-metadata-registry (#117).
-- **`decimals` is in [0, 255]** (`TokenDecimals`). The library only checks `>= 0` and does so on an `int`, so the module range-checks the stored
-  `long` first (4294967301 would otherwise pass as 5); a value outside the range is stored and reported as `out_of_range`. A `decimals` that is
+- **`decimals` is in [0, 19]**, the range CIP-26 allows. The library only checks `>= 0` and does so on an `int`, so the module range-checks the
+  stored `long` first (4294967301 would otherwise pass as 5); a value outside the range is stored and reported as `out_of_range`. Until `d687997fc`
+  (found in review) the check used `TokenDecimals`, [0, 255], so 20 to 255 passed; that stays the storage bound shared with CIP-68, which sets no
+  range of its own. None on mainnet: the highest is 18. A `decimals` that is
   not a number is stored as no value, with a `wrong_type` error that quotes it (the raw string stays in the mapping).
 - **The columns have no length limit** (`TEXT`): the CIP-26 limits are reported, not enforced, so a long `name` does not fail the insert.
 
