@@ -111,7 +111,9 @@ for it. A token whose datum has no usable entry (a nested `"721"` datum with non
 one served, with its errors.
 
 A client that wants a stricter view asks for it with `?validation=ALL|MANDATORY_ONLY|STRICT` (default `ALL`): `MANDATORY_ONLY` returns only
-tokens with no `MANDATORY` error and `STRICT` only tokens with no error at all. A token that is not accepted is a `404` (left out of a
+tokens with no `MANDATORY` error and `STRICT` only tokens with no error at all. *No error* means none from the checks the module runs, not full
+CIP compliance: a CIP-68 text given as a list of byte strings, a URI checked for its scheme only, and a CIP-26 logo that is not a PNG are tolerated
+on purpose and reported by no error (the README says which and why; made explicit after the review of #1220). A token that is not accepted is a `404` (left out of a
 batch); the errors of a returned token are never filtered. The check is made in Java on the row already read, so it needs no native query. It is on
 `GET /tokens/subject/{subject}`, `POST /tokens/subject/query`, `/tokens/cip68/ft/**` and `/tokens/cip26/**`. *Why a `404` and not a filtered error list:* a
 client that asks for a stricter view wants to know that the token does not pass, and an empty or shortened `validation_errors` would read as "it does". The `404`
