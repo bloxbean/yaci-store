@@ -143,7 +143,12 @@ written, got a `404`. The subject is lower-cased when the entry and its logo are
 compares the stored subjects with the file names; the file itself is kept as written in the mapping. On 3.x a full resync is required
 anyway (ADR 0006 decision 4), so there is no migration, and 3.x must not run on a database that keeps CIP-26 rows of an earlier release.
 The 2.0.x backport upgrades in place, so it has `V0_1700_4`, which lower-cases the subjects already stored (on MySQL with a binary
-comparison); without it the next full sync would find them stale and delete them. The signatures that registry entries carry are not stored and not verified.
+comparison); without it the next full sync would find them stale and delete them. The signatures that registry entries carry are
+kept in the stored mapping and returned in `standards.cip26`, but not verified.
+
+**A subject is served as the registry file writes it** (`standards.cip26.subject`), not in lower case. Each CIP-26 signature is made
+over the CBOR of the subject as written, so the 106 signatures of the 39 entries above only verify against the subject in upper case;
+serving the stored subject broke all of them (found in review, fixed in `712468b58`). It is only looked up in lower case.
 
 *Why:* the reason is not recorded in the code. What the code shows is that the module serves the
 V2 shape (plain values), and the regression README says a V1 comparison is impossible because
