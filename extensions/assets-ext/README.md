@@ -108,6 +108,17 @@ explorers and wallets can still show historical transactions. To know whether a 
 | `MANDATORY_ONLY` | the token has no `MANDATORY` validation error (optional problems are tolerated) |
 | `STRICT` | the token has no validation error at all (`metadata.valid` is `true`) |
 
+**What `STRICT` does not promise.** No validation error means no error from the checks the module runs; it is not a guarantee that the metadata
+follows every rule of its CIP. Some departures are tolerated on purpose, and reported by no error:
+
+- **A CIP-68 text given as a list of byte strings** (`name`, `description`, `ticker`, `url`). CIP-68 defines these as one byte string (only a
+  `uri` may be a list), but minting tools split long texts into 64-byte chunks the way CIP-25 does: on mainnet about 570 descriptions, 43 urls and
+  12 names. They are joined and served as the text; reporting them would mark these tokens invalid and hide them under `STRICT`.
+- **A URI is checked for its scheme only** (`https`, `ipfs`, `ar`, `data`), not for its full syntax. No mainnet value with an allowed scheme
+  breaks the syntax, and a strict parser would risk rejecting real `data:` URIs and IPFS paths.
+- **A CIP-26 `logo` is checked for base64 and size, not for being a PNG.** CIP-26 asks for an `image/png`; one mainnet logo is a JPEG ("Volume"),
+  which wallets show as well, so flagging it would only hide it under `STRICT`.
+
 A token that is not accepted is a `404` for a single subject and is left out of a batch; the `validation_errors` of the tokens that are returned
 are never filtered. A token indexed before validation existed (no `validation_errors`) is judged by the rule it had before: name and description
 present (under `?property=`, only those of the two that are asked for).

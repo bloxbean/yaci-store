@@ -85,6 +85,8 @@ public class TokenMetadataSubjectController {
             @RequestParam(value = "show_cips_details", defaultValue = "false", required = false) Boolean showCipsDetails,
             @Parameter(description = "which tokens are returned by how well their metadata follows its CIP: ALL (default) returns every indexed token; "
                     + "MANDATORY_ONLY only tokens with no mandatory validation error; STRICT only tokens with no validation error at all. "
+                    + "No error means none from the checks this API runs, not full CIP compliance: a CIP-68 text given as a list of byte "
+                    + "strings is accepted, a URI is checked for its scheme only, and a CIP-26 logo for base64 and size, not for being a PNG. "
                     + "A token that is not accepted is a 404 (or left out of a batch). A token indexed before validation existed is judged by "
                     + "the old rule: name and description present.")
             @RequestParam(value = "validation", defaultValue = "ALL", required = false) ValidationScope validation) {
@@ -122,6 +124,8 @@ public class TokenMetadataSubjectController {
             @RequestParam(value = "show_cips_details", defaultValue = "false", required = false) Boolean showCipsDetails,
             @Parameter(description = "which tokens are returned by how well their metadata follows its CIP: ALL (default) returns every indexed token; "
                     + "MANDATORY_ONLY only tokens with no mandatory validation error; STRICT only tokens with no validation error at all. "
+                    + "No error means none from the checks this API runs, not full CIP compliance: a CIP-68 text given as a list of byte "
+                    + "strings is accepted, a URI is checked for its scheme only, and a CIP-26 logo for base64 and size, not for being a PNG. "
                     + "A token that is not accepted is a 404 (or left out of a batch). A token indexed before validation existed is judged by "
                     + "the old rule: name and description present.")
             @RequestParam(value = "validation", defaultValue = "ALL", required = false) ValidationScope validation) {
