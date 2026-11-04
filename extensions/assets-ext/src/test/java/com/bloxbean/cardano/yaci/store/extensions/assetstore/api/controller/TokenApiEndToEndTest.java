@@ -3,7 +3,11 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.api.controller;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.AssetsExtStoreProperties;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.service.TokenQueryService;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.Cip26StorageReaderImpl;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.Item;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.Mapping;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.Cip26Metadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.repository.Cip26MetadataRepository;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.util.MappingsUtil;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service.Cip68TokenService;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.Cip68StorageReaderImpl;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.Cip68Metadata;
@@ -17,7 +21,9 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
@@ -527,5 +533,44 @@ class TokenApiEndToEndTest {
                 .andExpect(status().isOk());
         mockMvc.perform(get("/api/v1/tokens/subject/{s}", FT_SUBJECT).param("validation", "STRICT"))
                 .andExpect(status().isNotFound());
+    }
+
+    // a CIP-26 entry whose registry file writes the subject in upper case (39 on mainnet): it is stored in lower case, found
+    // in either case, and served with the subject as written, the one its signatures are made over
+
+    private static final String FILE_SUBJECT = "0b9bedfbfb62b21a2a41f581c2811ee74ee062ce32b0eca43964cf796D6174726978";
+    private static final String STORED_SUBJECT = FILE_SUBJECT.toLowerCase(Locale.ROOT);
+
+    private void storeUpperCaseCip26Entry() {
+        Mapping mapping = new Mapping(FILE_SUBJECT, null, new Item(0, "matrix", List.of()), null, null, null,
+                "82018201828200581c" + "bb".repeat(28), new Item(0, "An avatar", List.of()));
+        Cip26Metadata entity = MappingsUtil.toCip26Metadata(mapping, "test", LocalDateTime.now());
+        when(cip26Repository.findById(STORED_SUBJECT)).thenReturn(Optional.of(entity));
+        when(cip26Repository.findAllById(List.of(STORED_SUBJECT))).thenReturn(List.of(entity));
+    }
+
+    @Test
+    void aCip26EntryWrittenInUpperCaseIsFoundInEitherCaseAndServedWithTheSubjectAsWritten() throws Exception {
+        storeUpperCaseCip26Entry();
+
+        for (String asked : List.of(FILE_SUBJECT, STORED_SUBJECT)) {
+            mockMvc.perform(get("/api/v1/tokens/subject/{s}", asked).param("query_priority", "CIP_26").param("show_cips_details", "true"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.subject.metadata.name.value").value("matrix"))
+                    .andExpect(jsonPath("$.subject.standards.cip26.subject").value(FILE_SUBJECT));
+        }
+    }
+
+    @Test
+    void aCip26EntryWrittenInUpperCaseIsFoundInABatchAskedInUpperCase() throws Exception {
+        storeUpperCaseCip26Entry();
+
+        mockMvc.perform(post("/api/v1/tokens/subject/query").param("query_priority", "CIP_26").param("show_cips_details", "true")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(new ObjectMapper().writeValueAsString(Map.of("subjects", List.of(FILE_SUBJECT)))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.subjects.length()").value(1))
+                .andExpect(jsonPath("$.subjects[0].metadata.name.value").value("matrix"))
+                .andExpect(jsonPath("$.subjects[0].standards.cip26.subject").value(FILE_SUBJECT));
     }
 }
