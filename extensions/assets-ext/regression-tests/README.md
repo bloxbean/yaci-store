@@ -13,7 +13,7 @@ API_BASE_URL=http://localhost:8080 uv run pytest
 
 `API_BASE_URL` is the yaci-store host (default `http://localhost:8080`). The CIP-26 tests need the off-chain sync done
 (`assetStoreOffchainSync` UP), the CIP-68 tests need the indexer at the tip. Run one group with a marker:
-`-m cip26`, `-m cip68`, `-m rft`, `-m validation`, `-m batch`, `-m deletion`.
+`-m cip26`, `-m cip68`, `-m rft`, `-m validation`, `-m batch`, `-m deletion`, `-m signatures`.
 
 ## Fixtures
 
@@ -29,6 +29,7 @@ and does not index CIP-113).
 | `cip68_tokens.json` | 675 | CIP-68 fungible tokens (333), a reviewed snapshot of the registry's database |
 | `cip68_rft_tokens.json` | 479 | CIP-68 rich fungible tokens (444), from the chain via Koios |
 | `cip68_validation_errors_tokens.json` | 4 | hand-picked tokens that break CIP-68, with the errors they must report |
+| `cip26_upper_case_subjects.json` | 3 | CIP-26 entries whose registry file writes the subject in upper case (39 on mainnet), with the properties it signs: found in either case, served with the subject as written, and every signature verifies against it (`shared/cip26_signatures.py`) |
 
 Where assets-ext deliberately differs from the registry, the copy says so:
 
