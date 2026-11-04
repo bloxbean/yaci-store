@@ -26,9 +26,9 @@ import java.util.List;
 @AllArgsConstructor
 public class TokenMetadataProperty<T> {
 
-    // Null when the registry entry has no off-chain signature data — matches CF V2,
-    // which emits "signatures": null rather than an empty array. yaci does not
-    // persist signatures, so this is null in practice for every property.
+    // The signatures of the registry entry, as its file has them (stored with the mapping).
+    // Null when the entry has no off-chain signature data — matches CF V2,
+    // which emits "signatures": null rather than an empty array.
     @JsonProperty("signatures")
     @Valid
     @Nullable
