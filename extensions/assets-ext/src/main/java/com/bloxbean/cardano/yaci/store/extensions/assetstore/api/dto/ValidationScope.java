@@ -19,7 +19,11 @@ public enum ValidationScope {
     /** Tokens with no {@link FieldCategory#MANDATORY} error; problems with optional fields are tolerated. */
     MANDATORY_ONLY,
 
-    /** Tokens with no error at all, mandatory or optional (the tokens with {@code metadata.valid == true}). */
+    /**
+     * Tokens with no error at all, mandatory or optional (the tokens with {@code metadata.valid == true}). No error means none from
+     * the checks the module runs, not full CIP compliance: a CIP-68 text given as a list of byte strings is accepted, a URI is checked
+     * for its scheme only, and a CIP-26 logo for base64 and size, not for being a PNG (found in review of #1220; see the README).
+     */
     STRICT;
 
     /** Whether a resolved subject is accepted; {@code valid} is the legacy rule for a token that was never checked. */

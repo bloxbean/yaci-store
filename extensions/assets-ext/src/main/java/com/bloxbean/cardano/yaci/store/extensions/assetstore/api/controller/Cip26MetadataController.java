@@ -35,7 +35,7 @@ public class Cip26MetadataController {
             @Pattern(regexp = TokenPatterns.SUBJECT_REGEX,
                     message = "subject must be 56-120 hex characters (policyId + assetName)")
             String subject,
-            @Parameter(description = "ALL (default), MANDATORY_ONLY (no mandatory validation error) or STRICT (no validation error); a token that is not accepted is a 404")
+            @Parameter(description = "ALL (default), MANDATORY_ONLY (no mandatory validation error) or STRICT (no validation error from the checks this API runs, which are not every CIP rule: see the README); a token that is not accepted is a 404")
             @RequestParam(value = "validation", defaultValue = "ALL", required = false) ValidationScope validation) {
 
         return cip26StorageReader.findBySubject(subject)
@@ -62,7 +62,7 @@ public class Cip26MetadataController {
             @Pattern(regexp = TokenPatterns.ASSET_NAME_REGEX,
                     message = "assetName must be 0-64 hex characters")
             String assetName,
-            @Parameter(description = "ALL (default), MANDATORY_ONLY (no mandatory validation error) or STRICT (no validation error); a token that is not accepted is a 404")
+            @Parameter(description = "ALL (default), MANDATORY_ONLY (no mandatory validation error) or STRICT (no validation error from the checks this API runs, which are not every CIP rule: see the README); a token that is not accepted is a 404")
             @RequestParam(value = "validation", defaultValue = "ALL", required = false) ValidationScope validation) {
 
         return cip26StorageReader.findBySubject(policyId + assetName)
