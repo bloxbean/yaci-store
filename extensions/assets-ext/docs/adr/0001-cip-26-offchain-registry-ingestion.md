@@ -132,7 +132,7 @@ contains no mapping files at all**, in which case the cleanup is skipped and a w
 *Why:* removals matter (a token can be withdrawn), but an empty or broken clone must not wipe the
 table. *Trade-off:* if the registry is really emptied, the local data stays until someone cleans it.
 
-### 7. One row per subject, in lower case, no signatures
+### 7. One row per subject, in lower case, with the registry file and its signatures as written
 
 The table keeps the latest version of a subject (`updated` and `updated_by` come from the Git
 history of the file).
@@ -143,17 +143,21 @@ written, got a `404`. The subject is lower-cased when the entry and its logo are
 compares the stored subjects with the file names; the file itself is kept as written in the mapping. On 3.x a full resync is required
 anyway (ADR 0006 decision 4), so there is no migration, and 3.x must not run on a database that keeps CIP-26 rows of an earlier release.
 The 2.0.x backport upgrades in place, so it has `V0_1700_4`, which lower-cases the subjects already stored (on MySQL with a binary
-comparison); without it the next full sync would find them stale and delete them. The signatures that registry entries carry are
-kept in the stored mapping and returned in `standards.cip26`, but not verified.
+comparison); without it the next full sync would find them stale and delete them.
+
+**The signatures are stored and served, not verified.** The registry file is stored as written in the `properties` column (the
+`Mapping`, each property with its `value`, `sequenceNumber` and `signatures`), and `standards.cip26` returns each property with its
+signatures and sequence number as the file has them (`Cip26TokenMetadata.from`), so a client can verify them itself. The sync does
+not verify them: the CIP-26 checks of cf-tokens-cip26 are given the values only.
 
 **A subject is served as the registry file writes it** (`standards.cip26.subject`), not in lower case. Each CIP-26 signature is made
 over the CBOR of the subject as written, so the 106 signatures of the 39 entries above only verify against the subject in upper case;
 serving the stored subject broke all of them (found in review, fixed in `712468b58`). It is only looked up in lower case.
 
-*Why:* the reason is not recorded in the code. What the code shows is that the module serves the
-V2 shape (plain values), and the regression README says a V1 comparison is impossible because
-signatures are not persisted. *Trade-off:* the module cannot serve or check signature data, so the
-CF registry's V1 API cannot be reproduced from it.
+*Why:* the module serves the V2 shape: plain values in `metadata`, and the CIP-26 entry with its signatures in `standards.cip26`. It
+has no V1 API, which is why the regression scripts compare with the CF registry's V2 API only. An earlier version of this ADR said that
+signatures are not stored; they always were, in `properties`. *Trade-off:* a signature that does not verify is served like any other;
+a client that relies on signatures has to verify them.
 
 ## Consequences
 
