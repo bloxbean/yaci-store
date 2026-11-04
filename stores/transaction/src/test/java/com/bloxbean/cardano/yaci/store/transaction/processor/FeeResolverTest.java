@@ -12,6 +12,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.web.client.ResourceAccessException;
 
 import java.math.BigInteger;
 import java.util.List;
@@ -19,6 +20,7 @@ import java.util.Set;
 
 import static com.bloxbean.cardano.yaci.core.util.Constants.LOVELACE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.BDDMockito.given;
 
@@ -128,5 +130,20 @@ public class FeeResolverTest {
         BigInteger fee = feeResolver.resolveFee(transaction);
 
         assertEquals(new BigInteger("8000"), fee);
+    }
+
+    @Test
+    public void resolveFee_whenRemoteLookupFails_shouldReturnNull() {
+        Transaction transaction = Transaction.builder()
+                .body(TransactionBody.builder()
+                        .txHash("tx")
+                        .collateralInputs(Set.of(new TransactionInput("tx1", 0)))
+                        .fee(new BigInteger("1000"))
+                        .build()).build();
+        transaction.setInvalid(true);
+
+        given(utxoClient.getUtxosByIds(anyList())).willThrow(new ResourceAccessException("Unavailable"));
+
+        assertNull(feeResolver.resolveFee(transaction));
     }
 }

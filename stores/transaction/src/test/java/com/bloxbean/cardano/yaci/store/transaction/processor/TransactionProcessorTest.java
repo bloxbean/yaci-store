@@ -5,11 +5,14 @@ import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.helper.model.Utxo;
 import com.bloxbean.cardano.yaci.store.client.utxo.DummyUtxoClient;
+import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClient;
+import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.common.util.ErrorCode;
 import com.bloxbean.cardano.yaci.store.events.ErrorEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
+import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
 import com.bloxbean.cardano.yaci.store.transaction.domain.InvalidTransaction;
 import com.bloxbean.cardano.yaci.store.transaction.domain.TxWitnessType;
 import com.bloxbean.cardano.yaci.store.transaction.domain.Txn;
@@ -27,6 +30,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.web.client.ResourceAccessException;
 
 import java.math.BigInteger;
 import java.util.List;
@@ -37,7 +41,11 @@ import java.util.stream.Collectors;
 import static com.bloxbean.cardano.yaci.core.util.Constants.LOVELACE;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class TransactionProcessorTest {
@@ -272,6 +280,85 @@ class TransactionProcessorTest {
                     assertThat(errorEvent.getBlock()).isEqualTo(eventMetadata().getBlock());
                     assertThat(errorEvent.getDetails()).contains("f0a6e529be26c2326c447c39159e05bb904ff1f7900b6df3852dd539de0343e8");
                 });
+    }
+
+    @Test
+    void givenRemoteLookupFailure_shouldResolveCollateralFeeAtPreCommit() {
+        var utxoClient = mock(UtxoClient.class);
+        when(utxoClient.getUtxosByIds(anyList()))
+                .thenThrow(new ResourceAccessException("Unavailable"))
+                .thenReturn(List.of(AddressUtxo.builder().lovelaceAmount(BigInteger.valueOf(5_000_000)).build()));
+        var processor = processorWithUtxoClient(utxoClient);
+
+        processor.handleTransactionEvent(invalidTransactionEvent());
+        verify(transactionStorage, never()).saveAll(any());
+        processor.handleCollateralFee(new PreCommitEvent(eventMetadata()));
+
+        verify(transactionStorage).saveAll(txnListCaptor.capture());
+        assertThat(txnListCaptor.getValue().get(0).getFee()).isEqualTo(BigInteger.valueOf(3_000_000));
+        assertThat(publishedEvents()).noneMatch(ErrorEvent.class::isInstance);
+    }
+
+    @Test
+    void givenPersistentRemoteLookupFailure_shouldSaveNullFeeWithoutStoppingSync() {
+        var utxoClient = mock(UtxoClient.class);
+        when(utxoClient.getUtxosByIds(anyList())).thenThrow(new ResourceAccessException("Unavailable"));
+        var processor = processorWithUtxoClient(utxoClient);
+
+        processor.handleTransactionEvent(invalidTransactionEvent());
+        processor.handleCollateralFee(new PreCommitEvent(eventMetadata()));
+
+        verify(transactionStorage).saveAll(txnListCaptor.capture());
+        assertThat(txnListCaptor.getValue().get(0).getFee()).isNull();
+        assertThat(publishedEvents())
+                .filteredOn(ErrorEvent.class::isInstance)
+                .map(ErrorEvent.class::cast)
+                .singleElement()
+                .satisfies(errorEvent -> {
+                    assertThat(errorEvent.getBlock()).isEqualTo(eventMetadata().getBlock());
+                    assertThat(errorEvent.getErrorCode()).isEqualTo(ErrorCode.DATA_MISSING_ERROR.name());
+                    assertThat(errorEvent.getDetails()).contains("tx_hash: invalid-tx")
+                            .contains("block_hash: " + eventMetadata().getBlockHash());
+                });
+    }
+
+    private List<Object> publishedEvents() {
+        ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(publisher, Mockito.atLeastOnce()).publishEvent(eventCaptor.capture());
+        return eventCaptor.getAllValues();
+    }
+
+    private TransactionProcessor processorWithUtxoClient(UtxoClient utxoClient) {
+        TransactionStoreProperties properties = TransactionStoreProperties.builder().build();
+        return new TransactionProcessor(transactionStorage, transactionCborStorage, transactionWitnessStorage,
+                invalidTransactionStorage, new ObjectMapper(), new FeeResolver(utxoClient), publisher, properties);
+    }
+
+    private TransactionEvent invalidTransactionEvent() {
+        Transaction transaction = Transaction.builder()
+                .txHash("invalid-tx")
+                .blockNumber(eventMetadata().getBlock())
+                .body(TransactionBody.builder()
+                        .txHash("invalid-tx")
+                        .inputs(Set.of())
+                        .outputs(List.of())
+                        .collateralInputs(Set.of(new TransactionInput("collateral-tx", 0)))
+                        .collateralReturn(TransactionOutput.builder()
+                                .amounts(List.of(Amount.builder()
+                                        .unit(LOVELACE)
+                                        .assetName(LOVELACE)
+                                        .quantity(BigInteger.valueOf(2_000_000))
+                                        .build()))
+                                .build())
+                        .fee(BigInteger.valueOf(200_000))
+                        .build())
+                .invalid(true)
+                .build();
+
+        return TransactionEvent.builder()
+                .transactions(List.of(transaction))
+                .metadata(eventMetadata())
+                .build();
     }
 
     private void handleWithFullTxCborEnabled(List<Transaction> transactions) {

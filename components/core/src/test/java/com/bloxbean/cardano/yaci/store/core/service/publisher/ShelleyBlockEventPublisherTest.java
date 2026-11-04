@@ -71,6 +71,21 @@ class ShelleyBlockEventPublisherTest {
     }
 
     @Test
+    void shouldSetMintBurnTxIndexCountingInvalidTransactions() {
+        List<Transaction> transactions = List.of(
+                invalidTransactionWithMintData("bbbbbbbbbb9cecf2602f1110e53331a3b305ec668ad57081df98416b30473f5d"),
+                validTransactionWithMintData("aaaaaaaaaa9cecf2602f1110e53331a3b305ec668ad57081df98416b30473f5d")
+        );
+
+        shelleyBlockEventPublisher.publishBlockEvents(eventMetadata(), mockBlock(), transactions);
+
+        var mintBurnEvent = capturePublishedEvent(MintBurnEvent.class);
+        assertThat(mintBurnEvent).isNotNull();
+        assertThat(mintBurnEvent.getTxMintBurns()).hasSize(1);
+        assertThat(mintBurnEvent.getTxMintBurns().get(0).getTxIndex()).isEqualTo(1);
+    }
+
+    @Test
     void shouldNotPublishCertificateDataForInvalidTransactions() {
         List<Transaction> transactions = List.of(
                 validTransactionWithCertificateData("aaaaaaaaaa9cecf2602f1110e53331a3b305ec668ad57081df98416b30473f5d"),

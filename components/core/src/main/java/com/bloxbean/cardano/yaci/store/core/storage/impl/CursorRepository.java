@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Optional;
 
@@ -25,12 +26,19 @@ public interface CursorRepository extends JpaRepository<CursorEntity, CursorId> 
     // objects and throws OutOfMemoryError; the cursor then never prunes, so the failure is permanent
     // and self-reinforcing. A @Modifying @Query issues one SQL DELETE with memory independent of the
     // number of rows removed.
+    //
+    // A bulk delete needs a transaction, so the methods carry their own instead of relying on the caller's.
+    // CursorStorageImpl's @Transactional is not applied in the native image: the @Bean method returns the
+    // CursorStorage interface, so AOT creates no proxy, and getStartCursor() then ran these deletes with no
+    // transaction (TransactionRequiredException on every restart, #1205).
     @Modifying
+    @Transactional
     @Query("delete from CursorEntity c where c.id = :id and c.slot > :slot")
     int deleteByIdAndSlotGreaterThan(@Param("id") Long id, @Param("slot") Long slot);
 
     //Required for history cleanup
     @Modifying
+    @Transactional
     @Query("delete from CursorEntity c where c.id = :id and c.block < :block")
     int deleteByIdAndBlockLessThan(@Param("id") Long id, @Param("block") Long block);
 }

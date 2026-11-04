@@ -304,7 +304,8 @@ public abstract class BFTransactionMapper {
             Integer outputIndex = refNode.has("output_index")
                     ? refNode.path("output_index").asInt() : null;
             String address = jsonNode.path("address").asText(null);
-            List<BFAmountDto> amounts = parseCollateralReturnAmounts(jsonNode.path("amounts"));
+            // Lovelace only, like collateral inputs: Blockfrost does not report assets on collateral outputs
+            List<BFAmountDto> amounts = lovelaceOnlyAmount(parseCollateralReturnLovelace(jsonNode.path("amounts")));
             String inlineDatum = jsonNode.path("inlineDatum").isNull()
                     ? null : jsonNode.path("inlineDatum").asText(null);
             String dataHash = DatumHashUtil.resolveDataHash(jsonNode.path("dataHash").isNull()
@@ -322,19 +323,14 @@ public abstract class BFTransactionMapper {
         }
     }
 
-    private List<BFAmountDto> parseCollateralReturnAmounts(JsonNode amountsNode) {
-        if (amountsNode == null || !amountsNode.isArray()) return Collections.emptyList();
-        List<BFAmountDto> result = new ArrayList<>();
+    private Long parseCollateralReturnLovelace(JsonNode amountsNode) {
+        if (amountsNode == null || !amountsNode.isArray()) return null;
         for (JsonNode a : amountsNode) {
-            String unit = a.path("unit").asText(null);
-            if (unit != null) {
-                result.add(BFAmountDto.builder()
-                        .unit(unit)
-                        .quantity(a.path("quantity").asText("0"))
-                        .build());
+            if (Constants.LOVELACE.equals(a.path("unit").asText(null))) {
+                return a.path("quantity").asLong(0);
             }
         }
-        return result;
+        return null;
     }
 
     private List<String> parseOwners(String json) {

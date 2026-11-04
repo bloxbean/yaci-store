@@ -16,5 +16,8 @@ public abstract class ProtocolParamsMapper {
     @Mapping(target = "params.costModels", ignore = true) //set as null
     @Mapping(target = "params.nOpt", source = "params.NOpt")
     public abstract EpochParamEntity toEntity(EpochParam epochParam);
+    //Copies params instead of sharing the managed entity's object; cost models are set from cost_model by storage
+    @Mapping(target = "params.costModels", ignore = true)
+    @Mapping(target = "params.nOpt", source = "params.NOpt")
     public abstract EpochParam toDomain(EpochParamEntity entity);
 }

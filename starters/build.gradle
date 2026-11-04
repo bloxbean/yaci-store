@@ -49,9 +49,7 @@ subprojects {
     ext.isReleaseVersion = !version.endsWith("SNAPSHOT")
 
     if (isReleaseVersion && !project.hasProperty("skipSigning")) {
-        signing {
-            sign publishing.publications
-        }
+        rootProject.configureReleaseSigning(project)
     }
 
 }
