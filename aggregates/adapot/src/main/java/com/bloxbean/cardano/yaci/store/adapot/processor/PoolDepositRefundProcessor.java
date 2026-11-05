@@ -17,7 +17,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigInteger;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
+import java.util.stream.Stream;
 
 import static com.bloxbean.cardano.yaci.store.adapot.AdaPotConfiguration.STORE_ADAPOT_ENABLED;
 
@@ -47,16 +50,16 @@ public class PoolDepositRefundProcessor {
         //Process pool deposit refund
         for (Pool pool: poolRetiredEvent.getRetiredPools()) {
             //TODO -- check if we can get pool params from the pool registration certificate in one call
+            //Use the latest of REGISTRATION / UPDATE. A pool registered again after retiring can have an older UPDATE.
             var recentPoolUpdate = poolStorage.findRecentPoolUpdate(pool.getPoolId(), poolRetiredEvent.getMetadata().getEpochNumber() - 1); //in previous epoch
-            if (recentPoolUpdate.isEmpty()) {
-                recentPoolUpdate = poolStorage.findRecentPoolRegistration(pool.getPoolId(), poolRetiredEvent.getMetadata().getEpochNumber() - 1); //in previous epoch
-            }
+            var recentPoolRegistration = poolStorage.findRecentPoolRegistration(pool.getPoolId(), poolRetiredEvent.getMetadata().getEpochNumber() - 1); //in previous epoch
 
-            if (recentPoolUpdate.isEmpty()) {
-                throw new IllegalStateException("No recent pool registration or update found for pool : " + pool.getPoolId());
-            }
-
-            var recentPool = recentPoolUpdate.get();
+            var recentPool = Stream.of(recentPoolUpdate, recentPoolRegistration)
+                    .flatMap(Optional::stream)
+                    .max(Comparator.comparing(Pool::getSlot)
+                            .thenComparing(Pool::getTxIndex)
+                            .thenComparing(Pool::getCertIndex))
+                    .orElseThrow(() -> new IllegalStateException("No recent pool registration or update found for pool : " + pool.getPoolId()));
 
             //For each retired pool, process the refund
             var poolRegistration = poolCertificateStorageReader.findPoolRegistration(recentPool.getTxHash(), recentPool.getCertIndex())
