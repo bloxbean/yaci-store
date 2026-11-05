@@ -1,6 +1,9 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model;
 
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.Mapping;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.validation.ValidationError;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import jakarta.annotation.Nullable;
 import jakarta.persistence.*;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -9,6 +12,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Entity
 @Table(name = "cip26_metadata")
@@ -54,26 +58,32 @@ public class Cip26Metadata {
      * @see <a href="https://github.com/cardano-foundation/CIPs/blob/main/CIP-0026/README.md">CIP-0026</a>
      */
     @Column(columnDefinition = "TEXT")
+    @Nullable
     private String policy;
 
-    /** CIP-26 name: max 50 chars (enforced by cf-tokens-cip26 validator). */
-    @Column(length = 50)
+    /** CIP-26 name: max 50 chars per spec. A longer one is stored as written and reported in {@link #validationErrors}. */
+    @Column(columnDefinition = "TEXT")
+    @Nullable
     private String name;
 
-    /** CIP-26 ticker: 2-9 chars (enforced by cf-tokens-cip26 validator). */
-    @Column(length = 9)
+    /** CIP-26 ticker: 2-9 chars per spec. Out-of-spec values are stored as written and reported. */
+    @Column(columnDefinition = "TEXT")
+    @Nullable
     private String ticker;
 
-    /** CIP-26 url: max 250 chars (enforced by cf-tokens-cip26 validator). */
-    @Column(length = 250)
+    /** CIP-26 url: max 250 chars per spec. Out-of-spec values are stored as written and reported. */
+    @Column(columnDefinition = "TEXT")
+    @Nullable
     private String url;
 
-    /** CIP-26 description: max 500 chars per spec. */
-    @Column(length = 500)
+    /** CIP-26 description: max 500 chars per spec. Out-of-spec values are stored as written and reported. */
+    @Column(columnDefinition = "TEXT")
+    @Nullable
     private String description;
 
-    /** CIP-26 decimals (well-known property 'decimals'): 0–19 in practice; the write path rejects
-     *  anything outside {@link com.bloxbean.cardano.yaci.store.extensions.assetstore.util.TokenDecimals}. */
+    /** CIP-26 decimals (well-known property 'decimals'): 0–19 in practice. A value outside
+     *  {@link com.bloxbean.cardano.yaci.store.extensions.assetstore.util.TokenDecimals} is stored as written and reported. */
+    @Nullable
     private Long decimals;
 
     /**
@@ -83,6 +93,7 @@ public class Cip26Metadata {
      * pay no scan-time cost.
      */
     @Column(columnDefinition = "TEXT")
+    @Nullable
     private String logo;
 
     @Temporal(TemporalType.TIMESTAMP)
@@ -92,6 +103,16 @@ public class Cip26Metadata {
 
     @JdbcTypeCode(SqlTypes.JSON)
     private Mapping properties;
+
+    /**
+     * How the registry entry departs from CIP-26. The entry is stored and served anyway; see ADR 0006.
+     * Null on rows written before the column existed.
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "validation_errors")
+    @JsonProperty("validation_errors")
+    @Nullable
+    private List<ValidationError> validationErrors;
 
     @Temporal(TemporalType.TIMESTAMP)
     private LocalDateTime lastSyncedAt;

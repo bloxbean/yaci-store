@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.NetworkType;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.AssetsExtStoreProperties;
+import jakarta.annotation.Nullable;
 import jakarta.annotation.PostConstruct;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -35,10 +36,13 @@ public class Cip26NetworkDefaults {
     private final StoreProperties storeProperties;
     private final AssetsExtStoreProperties assetsStoreProperties;
 
+    @Nullable
     @Getter
     private String organization;
+    @Nullable
     @Getter
     private String projectName;
+    @Nullable
     @Getter
     private String mappingsFolder;
     @Getter

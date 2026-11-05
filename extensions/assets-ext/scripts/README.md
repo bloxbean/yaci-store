@@ -86,6 +86,16 @@ This clones `cardano-foundation/cardano-token-registry`, iterates every subject,
 and reports CIP-26 byte-level agreement plus CIP-68 sub-tally for subjects that
 have both. Use `--help` for the full flag list.
 
+- **`--cf-url`** compares against a cf-token-metadata-registry instance instead of
+  the public `tokens.cardano.org`, which runs the registry's last release: point it
+  at an instance of the build under test.
+- **Known differences** (`KNOWN_DIFFERENCES` in the script) are fields the registry
+  has and yaci-store does not, by design, and are not counted as divergences:
+  `subject.type` and `subject.extensions`, which come from the registry's CIP-113
+  support (assets-ext does not index CIP-113, ADR 0007).
+- Subjects are compared in lower case: both services store them so (ADR 0001
+  decision 7), and the registry has files written in upper case (39 on mainnet).
+
 **With DB access** (fast; exhaustive):
 
 ```sh

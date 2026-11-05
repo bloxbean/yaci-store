@@ -9,6 +9,7 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.cip26.wellk
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.Item;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.Mapping;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.Signature;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.validation.ValidationError;
 import com.fasterxml.jackson.annotation.JsonAnyGetter;
 import com.fasterxml.jackson.annotation.JsonAnySetter;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
@@ -102,6 +103,17 @@ public class Cip26TokenMetadata {
     @Schema(name = "updatedBy")
     private String updatedBy;
 
+    /**
+     * How the registry entry departs from CIP-26; empty when it follows it. The entry is served as it is in the
+     * registry whatever is wrong with it (ADR 0006). Not part of the CF V2 wire shape: it is an addition.
+     */
+    @JsonProperty("validation_errors")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    @Schema(name = "validation_errors", nullable = true,
+            description = "How the registry entry departs from CIP-26; empty when it follows it, absent when the row was indexed before validation existed.")
+    @Nullable
+    private List<ValidationError> validationErrors;
+
     @Builder.Default
     private Map<String, TokenMetadataProperty<?>> additionalProperties = new HashMap<>();
 
@@ -131,6 +143,10 @@ public class Cip26TokenMetadata {
      * {@code Cip26Metadata} table — we re-wrap it using the logo's stored {@code Item} from
      * the same mapping JSON to preserve signatures, while substituting the table copy as
      * the canonical value.
+     * <p>
+     * The {@code subject} is the mapping's, as the registry file writes it, not the entity's: the entity keeps it in
+     * lower case to look it up, but each signature is made over the subject as written, so a client that verifies the
+     * signatures of a subject written in upper case needs that case back.
      *
      * @param entity   the CIP-26 JPA entity
      * @param logoB64  base64-encoded logo string (from {@code Cip26Metadata}), or null
@@ -138,25 +154,20 @@ public class Cip26TokenMetadata {
     public static Cip26TokenMetadata from(
             com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.Cip26Metadata entity,
             @Nullable String logoB64) {
-        if (entity == null) {
-            return null;
-        }
-
         Mapping mapping = entity.getProperties();
         Cip26TokenMetadataBuilder builder = Cip26TokenMetadata.builder()
-                .subject(entity.getSubject())
-                .policy(entity.getPolicy());
+                .subject(mapping.subject() != null ? mapping.subject() : entity.getSubject())
+                .policy(entity.getPolicy())
+                .validationErrors(entity.getValidationErrors() == null ? null : new ArrayList<>(entity.getValidationErrors()));
 
-        if (mapping != null) {
-            builder.name(stringProperty(mapping.name(), NameProperty::new));
-            builder.description(stringProperty(mapping.description(), DescriptionProperty::new));
-            builder.url(stringProperty(mapping.url(), UrlProperty::new));
-            builder.ticker(stringProperty(mapping.ticker(), TickerProperty::new));
-            builder.decimals(decimalsProperty(mapping.decimals()));
-            if (logoB64 != null) {
-                // Preserve signatures from mapping.logo() but use the canonical base64 string from Cip26Metadata.
-                builder.logo(logoProperty(mapping.logo(), logoB64));
-            }
+        builder.name(stringProperty(mapping.name(), NameProperty::new));
+        builder.description(stringProperty(mapping.description(), DescriptionProperty::new));
+        builder.url(stringProperty(mapping.url(), UrlProperty::new));
+        builder.ticker(stringProperty(mapping.ticker(), TickerProperty::new));
+        builder.decimals(decimalsProperty(mapping.decimals()));
+        if (logoB64 != null) {
+            // Preserve signatures from mapping.logo() but use the canonical base64 string from Cip26Metadata.
+            builder.logo(logoProperty(mapping.logo(), logoB64));
         }
 
         // CF's preprod V2 API does not emit `updated` / `updatedBy` (the fields end up null
@@ -168,7 +179,8 @@ public class Cip26TokenMetadata {
         return builder.build();
     }
 
-    private static <P extends TokenMetadataProperty<String>> P stringProperty(Item item, Supplier<P> ctor) {
+    @Nullable
+    private static <P extends TokenMetadataProperty<String>> P stringProperty(@Nullable Item item, Supplier<P> ctor) {
         if (item == null || item.value() == null) {
             return null;
         }
@@ -179,7 +191,8 @@ public class Cip26TokenMetadata {
         return property;
     }
 
-    private static DecimalsProperty decimalsProperty(Item item) {
+    @Nullable
+    private static DecimalsProperty decimalsProperty(@Nullable Item item) {
         if (item == null || item.value() == null) {
             return null;
         }
