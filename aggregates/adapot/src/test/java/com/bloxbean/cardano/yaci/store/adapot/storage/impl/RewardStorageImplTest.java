@@ -4,6 +4,7 @@ import com.bloxbean.cardano.yaci.store.adapot.AdaPotProperties;
 import com.bloxbean.cardano.yaci.store.adapot.domain.RewardRest;
 import com.bloxbean.cardano.yaci.store.adapot.storage.RewardStorage;
 import com.bloxbean.cardano.yaci.store.adapot.storage.impl.mapper.MapperImpl;
+import com.bloxbean.cardano.yaci.store.adapot.storage.impl.model.RewardEntity;
 import com.bloxbean.cardano.yaci.store.adapot.storage.impl.model.RewardRestEntity;
 import com.bloxbean.cardano.yaci.store.adapot.storage.impl.model.UnclaimedRewardRestEntity;
 import com.bloxbean.cardano.yaci.store.adapot.storage.impl.repository.InstantRewardRepository;
@@ -11,11 +12,24 @@ import com.bloxbean.cardano.yaci.store.adapot.storage.impl.repository.RewardRepo
 import com.bloxbean.cardano.yaci.store.adapot.storage.impl.repository.RewardRestRepository;
 import com.bloxbean.cardano.yaci.store.adapot.storage.impl.repository.UnclaimedRewardRestRepository;
 import com.bloxbean.cardano.yaci.store.events.domain.RewardRestType;
+import com.bloxbean.cardano.yaci.store.events.domain.RewardType;
+import org.jooq.SQLDialect;
+import org.jooq.conf.RenderQuotedNames;
+import org.jooq.conf.Settings;
+import org.jooq.impl.DSL;
+import org.jooq.tools.jdbc.MockConnection;
+import org.jooq.tools.jdbc.MockResult;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.jdbc.datasource.TransactionAwareDataSourceProxy;
 
+import javax.sql.DataSource;
+import java.math.BigInteger;
+
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
@@ -33,6 +47,8 @@ class RewardStorageImplTest {
     private RewardRepository rewardRepository;
     @Autowired
     private UnclaimedRewardRestRepository unclaimedRewardRestRepository;
+    @Autowired
+    private DataSource dataSource;
 
     private RewardStorage rewardStorage;
 
@@ -87,6 +103,58 @@ class RewardStorageImplTest {
         assertThat(treasuryWithdrawals).hasSize(2);
         assertThat(treasuryWithdrawals.get(0).getAmount()).isEqualTo(adaToLovelace(20));
         assertThat(treasuryWithdrawals.get(1).getAmount()).isEqualTo(adaToLovelace(10));
+    }
+
+    @Test
+    void deleteRewardsBySlotGreaterThan() {
+        rewardRepository.saveAllAndFlush(List.of(
+                reward("stake_test1_kept", 5, 6, 600L),
+                reward("stake_test1_deleted_1", 6, 7, 700L),
+                reward("stake_test1_deleted_2", 7, 8, 800L)));
+
+        // TransactionAwareDataSourceProxy: jOOQ runs in the test transaction and sees the saved rows
+        var dsl = DSL.using(new TransactionAwareDataSourceProxy(dataSource), SQLDialect.H2,
+                new Settings().withRenderQuotedNames(RenderQuotedNames.NEVER));
+        var storage = new RewardStorageImpl(instantRewardRepository, rewardRestRepository, rewardRepository,
+                unclaimedRewardRestRepository, new MapperImpl(), dsl, new AdaPotProperties());
+
+        int count = storage.deleteRewardsBySlotGreaterThan(600L, 6);
+
+        assertThat(count).isEqualTo(2);
+        assertThat(rewardRepository.findAll()).extracting(RewardEntity::getAddress)
+                .containsExactly("stake_test1_kept");
+    }
+
+    @Test
+    void deleteRewardsBySlotGreaterThan_inlinesTheEpochForPartitionPruning() {
+        List<String> sqls = new ArrayList<>();
+        List<List<Object>> bindings = new ArrayList<>();
+        var dsl = DSL.using(new MockConnection(ctx -> {
+            sqls.add(ctx.sql());
+            bindings.add(Arrays.asList(ctx.bindings()));
+            return new MockResult[]{new MockResult(0)};
+        }), SQLDialect.POSTGRES);
+        var storage = new RewardStorageImpl(instantRewardRepository, rewardRestRepository, rewardRepository,
+                unclaimedRewardRestRepository, new MapperImpl(), dsl, new AdaPotProperties());
+
+        storage.deleteRewardsBySlotGreaterThan(119084867L, 320);
+
+        assertThat(sqls).singleElement().asString()
+                .contains("\"slot\" > ?")
+                .contains("\"spendable_epoch\" >= 320");
+        assertThat(bindings).containsExactly(List.of(119084867L));
+    }
+
+    private static RewardEntity reward(String address, int earnedEpoch, int spendableEpoch, long slot) {
+        return RewardEntity.builder()
+                .address(address)
+                .earnedEpoch(earnedEpoch)
+                .spendableEpoch(spendableEpoch)
+                .type(RewardType.member)
+                .poolId("pool1")
+                .amount(BigInteger.TEN)
+                .slot(slot)
+                .build();
     }
 
     @Test
