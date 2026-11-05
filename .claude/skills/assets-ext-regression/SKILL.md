@@ -9,8 +9,8 @@ End-to-end regression for `extensions/assets-ext`. Compares yaci-store's
 CIP-26 and CIP-68 FT API responses against the cf-token-metadata-registry
 **V2 API** on Cardano mainnet, byte-for-byte.
 
-CF V1 endpoints are intentionally not exercised — yaci-store does not persist
-off-chain signatures, so a faithful V1 comparison is impossible.
+CF V1 endpoints are intentionally not exercised — yaci-store has no V1 API. The
+off-chain signatures are compared all the same, in the V2 `standards.cip26` block.
 
 ## When to invoke
 
