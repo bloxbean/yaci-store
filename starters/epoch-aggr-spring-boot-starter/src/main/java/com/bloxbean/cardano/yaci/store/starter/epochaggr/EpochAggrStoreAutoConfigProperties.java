@@ -14,7 +14,7 @@ public class EpochAggrStoreAutoConfigProperties {
     @Getter
     @Setter
     public static final class EpochAggr {
-        private boolean enabled = false;
+        private boolean enabled = com.bloxbean.cardano.yaci.store.common.config.StoreModuleConfig.defaultEnabled("epoch-aggr");
         private boolean apiEnabled = true;
 
         private int epochCalculationInterval = 120; //in seconds

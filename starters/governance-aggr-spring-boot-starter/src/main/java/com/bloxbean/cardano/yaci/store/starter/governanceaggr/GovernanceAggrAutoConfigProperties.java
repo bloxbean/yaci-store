@@ -13,7 +13,7 @@ public class GovernanceAggrAutoConfigProperties {
     @Getter
     @Setter
     public static final class GovernanceAggr {
-        private boolean enabled = false;
+        private boolean enabled = com.bloxbean.cardano.yaci.store.common.config.StoreModuleConfig.defaultEnabled("governance-aggr");
         private boolean apiEnabled = true;
         private Endpoints endpoints = new Endpoints();
         private boolean devnetConwayBootstrapAvailable = false;

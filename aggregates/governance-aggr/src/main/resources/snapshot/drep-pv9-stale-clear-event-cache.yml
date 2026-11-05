@@ -1,0 +1,11 @@
+snapshot-table:
+  id: drep-pv9-stale-clear-event-cache
+  spec-version: 1
+  module: governance-aggr
+  kind: CONTROL_STATE
+  restore: EMPTY_EXPECTED
+  reason: >-
+    cache for the protocol-version-9 migration event, rebuilt on demand
+
+  import:
+    target-table: drep_pv9_stale_clear_event_cache

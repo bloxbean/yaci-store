@@ -1,0 +1,430 @@
+package com.bloxbean.cardano.yaci.store.admin.cli.snapshot;
+
+import com.bloxbean.cardano.yaci.store.snapshot.export.ExportOptions;
+import com.bloxbean.cardano.yaci.store.snapshot.load.ImportOptions;
+import com.bloxbean.cardano.yaci.store.snapshot.load.PgSchema;
+import com.bloxbean.cardano.yaci.store.snapshot.load.TargetTable;
+import com.bloxbean.cardano.yaci.store.snapshot.manifest.SnapshotSignature;
+import com.bloxbean.cardano.yaci.store.snapshot.remote.S3SnapshotStore;
+import com.bloxbean.cardano.yaci.store.snapshot.remote.SnapshotLocations;
+import com.bloxbean.cardano.yaci.store.snapshot.remote.SnapshotStore;
+import com.bloxbean.cardano.yaci.store.snapshot.spec.SnapshotSpecRegistry;
+import lombok.RequiredArgsConstructor;
+import com.bloxbean.cardano.yaci.store.common.config.StoreModuleConfig;
+import com.bloxbean.cardano.yaci.store.common.config.SchemaProfile;
+import org.springframework.core.env.Environment;
+import org.springframework.stereotype.Component;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+
+/**
+ * Turns the admin CLI's existing Spring configuration into the plain option records the snapshot
+ * component expects.
+ *
+ * <p>Datasource credentials are read from the same configuration the CLI already uses; they are
+ * never accepted as command arguments and never written to a manifest, report or log.
+ */
+@Component
+@RequiredArgsConstructor
+public class SnapshotCliSupport {
+
+    private final Environment environment;
+
+    public String jdbcUrl() {
+        return required("spring.datasource.url");
+    }
+
+    public String dbUser() {
+        return environment.getProperty("spring.datasource.username", "");
+    }
+
+    public String dbPassword() {
+        return environment.getProperty("spring.datasource.password", "");
+    }
+
+    /** Target schema, taken from {@code currentSchema} in the JDBC URL as the rest of the CLI does. */
+    public String schema() {
+        String url = jdbcUrl();
+        if (url.contains("currentSchema=")) {
+            return url.split("currentSchema=")[1].split("&")[0];
+        }
+        return "public";
+    }
+
+    public long protocolMagic() {
+        return Long.parseLong(environment.getProperty("store.cardano.protocol-magic", "764824073"));
+    }
+
+    public String network() {
+        return networkOf(protocolMagic());
+    }
+
+    public static String networkOf(long protocolMagic) {
+        return switch ((int) protocolMagic) {
+            case 764824073 -> "mainnet";
+            case 1 -> "preprod";
+            case 2 -> "preview";
+            case 4 -> "sanchonet";
+            default -> "custom-" + protocolMagic;
+        };
+    }
+
+    public long eventPublisherId() {
+        return Long.parseLong(environment.getProperty("store.event-publisher-id", "1"));
+    }
+
+    public int cursorBlocksToKeep() {
+        return Integer.parseInt(environment.getProperty("store.cardano.cursor-no-of-blocks-to-keep", "2160"));
+    }
+
+    public String analyticsDataDir() {
+        return environment.getProperty("yaci.store.analytics.export-path", "./data/analytics");
+    }
+
+    public String yaciStoreVersion() {
+        return environment.getProperty("yaci.store.version",
+                getClass().getPackage().getImplementationVersion() != null
+                        ? getClass().getPackage().getImplementationVersion() : "unknown");
+    }
+
+    /**
+     * The git commit this build was made from, or null when unknown. A snapshot build's version
+     * already names its commit ({@code 3.0.0-beta6-5e97d04ca-SNAPSHOT}), taken from the checkout it was
+     * built in, and that wins: in a git worktree, {@code git.properties} describes the main checkout's
+     * HEAD instead. A release version names none, so it comes from {@code git.properties}.
+     */
+    public String yaciStoreCommit() {
+        java.util.regex.Matcher inVersion = java.util.regex.Pattern.compile("-([0-9a-f]{7,40})-SNAPSHOT$")
+                .matcher(yaciStoreVersion());
+        if (inVersion.find()) {
+            return inVersion.group(1);
+        }
+        try (java.io.InputStream in = getClass().getResourceAsStream("/git.properties")) {
+            if (in == null) {
+                return null;
+            }
+            java.util.Properties p = new java.util.Properties();
+            p.load(in);
+            String commit = p.getProperty("git.commit.id.abbrev");
+            return commit == null || commit.isBlank() ? null : commit.trim();
+        } catch (java.io.IOException e) {
+            return null;
+        }
+    }
+
+    public Connection connect() throws SQLException {
+        return DriverManager.getConnection(jdbcUrl(), dbUser(), dbPassword());
+    }
+
+    /** Modules considered enabled, recorded in the manifest as the snapshot's profile. */
+    public List<String> enabledModules() {
+        return StoreModuleConfig.configured(environment).entrySet().stream()
+                .filter(Map.Entry::getValue).map(Map.Entry::getKey).sorted().toList();
+    }
+
+    /** Use the consuming application's recorded classpath and effective flags, not CLI dependencies. */
+    public SnapshotSpecRegistry importRegistry(String specFile, boolean allowCustomSpecs) throws SQLException {
+        SnapshotSpecRegistry registry = registry(specFile, allowCustomSpecs);
+        try (Connection conn = connect()) {
+            Map<String, Boolean> profile = SchemaProfile.read(conn, schema());
+            if (profile.isEmpty()) {
+                throw new IllegalStateException("Target schema has no store profile. Run the consuming application once "
+                        + "with store.schema-only=true and the intended store flags, then retry import.");
+            }
+            for (var module : StoreModuleConfig.MODULES.entrySet()) {
+                String property = module.getValue().property();
+                if (property != null && environment.containsProperty(property)
+                        && !environment.getProperty(property, Boolean.class).equals(profile.get(module.getKey()))) {
+                    throw new IllegalStateException("Configured " + property + " differs from the target schema-only profile. "
+                            + "Use the same application configuration for initialization and import.");
+                }
+            }
+            // Custom snapshot modules need an explicit enabled flag and existing target tables.
+            for (var spec : registry.all()) {
+                if (!StoreModuleConfig.MODULES.containsKey(spec.module())) {
+                    profile = new LinkedHashMap<>(profile);
+                    profile.put(spec.module(), environment.getProperty("store." + spec.module() + ".enabled", Boolean.class, false));
+                }
+            }
+            // Optional tables (transaction_cbor, block_cbor) only when the target saves them (ADR 0006).
+            return registry.selectModules(profile.entrySet().stream().filter(Map.Entry::getValue)
+                    .map(Map.Entry::getKey).collect(java.util.stream.Collectors.toSet()))
+                    .withoutDisabledOptionalTables(this::setting);
+        }
+    }
+
+    /**
+     * Specs for producing a snapshot from this source: the imported tables of store modules the
+     * source has disabled are left out, since it never writes their history.
+     */
+    public SnapshotSpecRegistry exportRegistry(String specFile, boolean allowCustomSpecs) {
+        java.util.Set<String> disabled = StoreModuleConfig.configured(environment).entrySet().stream()
+                .filter(e -> !e.getValue()).map(Map.Entry::getKey)
+                .collect(java.util.stream.Collectors.toSet());
+        return registry(specFile, allowCustomSpecs).withoutImportedTablesOf(disabled)
+                .withoutDisabledOptionalTables(this::setting);
+    }
+
+    /** A boolean store setting, false when unset. */
+    private Boolean setting(String property) {
+        return environment.getProperty(property, Boolean.class, false);
+    }
+
+    public Map<String, String> pruningSettings() {
+        Map<String, String> out = new LinkedHashMap<>();
+        out.put("store.utxo.pruning-enabled", environment.getProperty("store.utxo.pruning-enabled", "false"));
+        out.put("store.transaction.pruning-enabled",
+                environment.getProperty("store.transaction.pruning-enabled", "false"));
+        out.put("store.adapot.reward-pruning-enabled",
+                environment.getProperty("store.adapot.reward-pruning-enabled", "false"));
+        out.put("store.adapot.epoch-stake-pruning-enabled",
+                environment.getProperty("store.adapot.epoch-stake-pruning-enabled", "false"));
+        out.put("store.account.pruning-enabled",
+                environment.getProperty("store.account.pruning-enabled", "false"));
+        // What the optional CBOR tables hold (ADR 0006): a target must match the transaction form.
+        for (String cbor : List.of("store.blocks.save-cbor", "store.transaction.save-cbor",
+                "store.transaction.save-full-tx-cbor")) {
+            out.put(cbor, environment.getProperty(cbor, "false"));
+        }
+        return out;
+    }
+
+    public SnapshotSpecRegistry registry(String specFile, boolean allowCustomSpecs) {
+        List<Path> custom = new ArrayList<>();
+        if (specFile != null && !specFile.isBlank()) {
+            for (String s : specFile.split(",")) {
+                custom.add(Path.of(s.trim()));
+            }
+        }
+        return SnapshotSpecRegistry.load(custom, allowCustomSpecs);
+    }
+
+    public ExportOptions exportOptions(SnapshotSpecRegistry registry, String dataDir, String outputDir,
+                                       String workDir, String partSize, int targetEpoch, long minConfirmations,
+                                       boolean allowIncomplete, boolean unsigned, String memoryLimit)
+            throws SQLException {
+        String schemaFingerprint;
+        String flywayFingerprint;
+        Map<String, String> tableSchemaFingerprints;
+        Map<String, TargetTable> targetTables = new LinkedHashMap<>();
+        Map<String, Map<String, Long>> completedPartitions = new LinkedHashMap<>();
+        try (Connection conn = connect()) {
+            PgSchema pgs = new PgSchema(conn, schema());
+            schemaFingerprint = pgs.fingerprint();
+            flywayFingerprint = pgs.flywayFingerprint();
+            tableSchemaFingerprints = pgs.tableFingerprints();
+            // This source runs the release the snapshot is for, so its tables are the import targets.
+            for (var spec : registry.importedTables()) {
+                if (pgs.tableExists(spec.targetTable())) {
+                    targetTables.put(spec.targetTable(), pgs.table(spec.targetTable()));
+                }
+            }
+            String stateTable = com.bloxbean.cardano.yaci.store.snapshot.util.Identifiers.quote(schema())
+                    + ".analytics_export_state";
+            try (var st = conn.createStatement();
+                 var rs = st.executeQuery("SELECT table_name, partition_value, row_count FROM " + stateTable
+                         + " WHERE export_status = 'COMPLETED' AND row_count IS NOT NULL")) {
+                while (rs.next()) {
+                    completedPartitions.computeIfAbsent(rs.getString(1), k -> new LinkedHashMap<>())
+                            .put(rs.getString(2), rs.getLong(3));
+                }
+            }
+        }
+        return new ExportOptions(
+                Path.of(dataDir != null ? dataDir : analyticsDataDir()).toAbsolutePath().normalize(),
+                Path.of(workDir).toAbsolutePath().normalize(),
+                Path.of(outputDir).toAbsolutePath().normalize(),
+                network(), protocolMagic(), null,
+                parseSize(partSize), targetEpoch, minConfirmations, allowIncomplete, unsigned,
+                yaciStoreVersion(), enabledModules(), pruningSettings(),
+                schemaFingerprint, flywayFingerprint, completedPartitions, tableSchemaFingerprints,
+                memoryLimit, targetTables).withCommit(yaciStoreCommit());
+    }
+
+    public ImportOptions importOptions(String manifest, String workDir, int workers, String memoryLimit,
+                                       long minFreeDiskGb, boolean allowUnsigned, String specFile,
+                                       boolean allowCustomSpecs, boolean keepExtracted, boolean tunePostgres) {
+        return importOptions(manifest, workDir, workers, memoryLimit, minFreeDiskGb, allowUnsigned, specFile,
+                allowCustomSpecs, keepExtracted, tunePostgres, 0);
+    }
+
+    /**
+     * The target's settings an import's retention depends on: whether it prunes a table, and how much
+     * it keeps ({@code Retention.forTarget}).
+     */
+    public Map<String, String> targetSettings() {
+        Map<String, String> out = new LinkedHashMap<>(pruningSettings());
+        out.put("store.utxo.pruning-safe-blocks", environment.getProperty("store.utxo.pruning-safe-blocks", "2160"));
+        out.put("store.adapot.epoch-stake-safe-epochs", environment.getProperty("store.adapot.epoch-stake-safe-epochs", "8"));
+        return out;
+    }
+
+    /**
+     * The newest epochs of {@code epoch_stake} an import loads: {@code requested} when positive, otherwise
+     * the target's own {@code store.adapot.epoch-stake-safe-epochs} when it prunes epoch_stake, otherwise
+     * 0 for every epoch.
+     */
+    public int epochStakeEpochs(int requested) {
+        if (requested > 0) {
+            return requested;
+        }
+        Map<String, String> settings = targetSettings();
+        return "true".equalsIgnoreCase(settings.get("store.adapot.epoch-stake-pruning-enabled"))
+                ? Integer.parseInt(settings.get("store.adapot.epoch-stake-safe-epochs").trim()) : 0;
+    }
+
+    /** @param epochStakeEpochs keep only the newest N epochs of {@code epoch_stake}; 0 keeps every epoch */
+    public ImportOptions importOptions(String manifest, String workDir, int workers, String memoryLimit,
+                                       long minFreeDiskGb, boolean allowUnsigned, String specFile,
+                                       boolean allowCustomSpecs, boolean keepExtracted, boolean tunePostgres,
+                                       int epochStakeEpochs) {
+        Path manifestPath = Path.of(manifest).toAbsolutePath().normalize();
+        List<Path> custom = new ArrayList<>();
+        if (specFile != null && !specFile.isBlank()) {
+            for (String s : specFile.split(",")) {
+                custom.add(Path.of(s.trim()));
+            }
+        }
+        return new ImportOptions(manifestPath, manifestPath.getParent(),
+                Path.of(workDir).toAbsolutePath().normalize(),
+                jdbcUrl(), dbUser(), dbPassword(), schema(), network(), protocolMagic(),
+                eventPublisherId(), cursorBlocksToKeep(), workers, memoryLimit, minFreeDiskGb,
+                allowUnsigned, allowCustomSpecs, custom, keepExtracted, false, tunePostgres,
+                com.bloxbean.cardano.yaci.store.snapshot.manifest.Retention.epochStake(epochStakeEpochs),
+                targetSettings());
+    }
+
+    /**
+     * S3 settings from {@code store.snapshot.remote.*}. Credentials come from configuration or the
+     * environment ({@code STORE_SNAPSHOT_REMOTE_ACCESS_KEY_ID}, ...), never from command arguments;
+     * unset means the AWS default credential chain.
+     */
+    public S3SnapshotStore.Settings s3Settings() {
+        String endpoint = environment.getProperty("store.snapshot.remote.endpoint");
+        boolean custom = endpoint != null && !endpoint.isBlank();
+        return new S3SnapshotStore.Settings(endpoint,
+                environment.getProperty("store.snapshot.remote.region", custom ? "auto" : "us-east-1"),
+                environment.getProperty("store.snapshot.remote.path-style", Boolean.class, custom),
+                environment.getProperty("store.snapshot.remote.access-key-id"),
+                environment.getProperty("store.snapshot.remote.secret-access-key"),
+                parseSize(environment.getProperty("store.snapshot.remote.piece-size", "64MiB")),
+                environment.getProperty("store.snapshot.remote.upload-threads", Integer.class,
+                        S3SnapshotStore.Settings.DEFAULT_UPLOAD_THREADS));
+    }
+
+    /** The store at {@code location}, or at {@code store.snapshot.remote.url} when it is blank. */
+    public SnapshotStore remoteStore(String location) {
+        String url = location != null && !location.isBlank() ? location
+                : environment.getProperty("store.snapshot.remote.url");
+        return SnapshotLocations.open(url, s3Settings());
+    }
+
+    /**
+     * The signing key: {@code option}, or {@code store.snapshot.signing-key}; null when neither is set.
+     * Its public half is {@code store.snapshot.signing-public-key}, or the same path ending in {@code .pub}.
+     */
+    public SigningKey signingKey(String option) throws java.io.IOException {
+        String path = option != null && !option.isBlank() ? option : environment.getProperty("store.snapshot.signing-key");
+        if (path == null || path.isBlank()) {
+            return null;
+        }
+        Path priv = Path.of(path.trim()).toAbsolutePath().normalize();
+        String pubProperty = environment.getProperty("store.snapshot.signing-public-key");
+        Path pub = pubProperty != null && !pubProperty.isBlank() && (option == null || option.isBlank())
+                ? Path.of(pubProperty.trim())
+                : priv.resolveSibling(priv.getFileName().toString().replaceFirst("\\.pem$", "") + ".pub");
+        if (!Files.isRegularFile(pub)) {
+            throw new IllegalArgumentException("No public key at " + pub + " for signing key " + priv
+                    + "; write it with 'openssl pkey -in <key> -pubout -out " + pub.getFileName() + "'");
+        }
+        return new SigningKey(SnapshotSignature.readPrivateKey(priv), SnapshotSignature.readPublicKey(pub));
+    }
+
+    public record SigningKey(java.security.PrivateKey privateKey, java.security.PublicKey publicKey) {
+        @Override
+        public String toString() {
+            return "SigningKey[" + SnapshotSignature.keyId(publicKey) + "]";
+        }
+    }
+
+    /** Public keys from {@code option}, or {@code store.snapshot.trusted-keys}: comma-separated PEM files. */
+    public List<java.security.PublicKey> trustedKeys(String option) throws java.io.IOException {
+        String paths = option != null && !option.isBlank() ? option : environment.getProperty("store.snapshot.trusted-keys");
+        List<java.security.PublicKey> keys = new ArrayList<>();
+        if (paths != null) {
+            for (String p : paths.split(",")) {
+                if (!p.isBlank()) {
+                    keys.add(SnapshotSignature.readPublicKey(Path.of(p.trim())));
+                }
+            }
+        }
+        return keys;
+    }
+
+    public static void ensureDirectory(Path path) {
+        try {
+            Files.createDirectories(path);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Cannot create directory " + path + ": " + e.getMessage());
+        }
+    }
+
+    /** Accepts {@code 8GiB}, {@code 512MiB}, {@code 2GB} or a plain byte count. */
+    public static long parseSize(String value) {
+        if (value == null || value.isBlank()) {
+            return 0;
+        }
+        String v = value.trim().toUpperCase(Locale.ROOT).replace(" ", "");
+        long multiplier = 1;
+        if (v.endsWith("GIB") || v.endsWith("GB")) {
+            multiplier = 1024L * 1024 * 1024;
+            v = v.substring(0, v.length() - (v.endsWith("GIB") ? 3 : 2));
+        } else if (v.endsWith("MIB") || v.endsWith("MB")) {
+            multiplier = 1024L * 1024;
+            v = v.substring(0, v.length() - (v.endsWith("MIB") ? 3 : 2));
+        } else if (v.endsWith("KIB") || v.endsWith("KB")) {
+            multiplier = 1024L;
+            v = v.substring(0, v.length() - (v.endsWith("KIB") ? 3 : 2));
+        }
+        return (long) (Double.parseDouble(v) * multiplier);
+    }
+
+    public static String humanBytes(long bytes) {
+        if (bytes < 1024) {
+            return bytes + " B";
+        }
+        String[] units = {"KiB", "MiB", "GiB", "TiB"};
+        double v = bytes / 1024.0;
+        int i = 0;
+        while (v >= 1024 && i < units.length - 1) {
+            v /= 1024;
+            i++;
+        }
+        return String.format("%.1f %s", v, units[i]);
+    }
+
+    public static String humanMillis(long millis) {
+        long s = millis / 1000;
+        if (s < 60) {
+            return s + "s";
+        }
+        return String.format("%dm %02ds", s / 60, s % 60);
+    }
+
+    private String required(String key) {
+        String v = environment.getProperty(key);
+        if (v == null || v.isBlank()) {
+            throw new IllegalStateException("Required property '" + key + "' is not configured");
+        }
+        return v;
+    }
+}

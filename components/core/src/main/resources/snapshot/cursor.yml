@@ -1,0 +1,12 @@
+snapshot-table:
+  id: cursor
+  spec-version: 1
+  module: core
+  kind: CONTROL_STATE
+  restore: HANDLER
+  reason: >-
+    rebuilt from the imported block tail so a restart can roll back normally
+
+  import:
+    target-table: cursor_
+    handler: cursor-tail

@@ -46,6 +46,7 @@ _rocksdb
 /docs/.next/
 /docs/node_modules/
 /docker/compose/.env
+/docker/snapshots/
 /docs/node_modules/
 /docs/.playwright-mcp/
 /docs/.playwright-mcp/

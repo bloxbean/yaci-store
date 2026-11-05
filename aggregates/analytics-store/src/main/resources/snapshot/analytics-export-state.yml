@@ -1,0 +1,12 @@
+snapshot-table:
+  id: analytics-export-state
+  spec-version: 1
+  module: analytics-store
+  kind: CONTROL_STATE
+  restore: EMPTY_EXPECTED
+  reason: >-
+    analytics export progress belongs to the producing instance; a restored instance exports
+    from its own starting point
+
+  import:
+    target-table: analytics_export_state

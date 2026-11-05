@@ -54,7 +54,8 @@ public class TransactionMetadataExporter extends AbstractTableExporter {
                     tm.cbor,
                     tm.block,
                     to_timestamp(COALESCE(tm.block_time, 0)) as block_time,
-                    tm.update_datetime
+                    tm.update_datetime,
+                    tm.tx_index
                 FROM %s.transaction_metadata tm
                 WHERE tm.slot >= %d
                   AND tm.slot < %d

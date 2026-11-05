@@ -1,0 +1,35 @@
+snapshot-table:
+  id: unclaimed-reward-rest
+  spec-version: 2
+  module: adapot
+  kind: DERIVED_DATA
+  restore: IMPORT
+
+  source:
+    exporter-id: unclaimed_reward_rest
+    ducklake-relation: unclaimed_reward_rest
+    partition:
+      strategy: EPOCH
+      column: epoch
+
+  consistency:
+    # Rows are written by the AdaPot job of the epoch after earned_epoch (one epoch earlier than
+    # regular rewards), so an earned-epoch offset drops rows the seeded jobs will not recreate.
+    # The slot of the boundary block that wrote them separates imported from replayed rows exactly.
+    cutoff:
+      type: SLOT_LTE
+      column: slot
+
+  import:
+    target-table: unclaimed_reward_rest
+    mode: MAPPED
+    columns:
+      earned_epoch:
+        source: epoch
+    use-target-defaults: [create_datetime]
+    batch-boundary: SINGLE_BATCH
+
+  validation:
+    key: [id]
+    bounds: [epoch, spendable_epoch]
+    required-columns: [id]

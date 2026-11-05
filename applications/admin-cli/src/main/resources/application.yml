@@ -8,6 +8,11 @@ spring:
     location: classpath:/banner.txt
   devtools:
     add-properties:logging: false
+  # The CLI shares config/ with the node, whose pool keeps maximum-pool-size connections open. Snapshot
+  # import and validate open their own connections, so the pool opens one up front and grows on demand.
+  datasource:
+    hikari:
+      minimum-idle: 1
 
 logging:
   level:
