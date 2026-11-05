@@ -2,10 +2,10 @@
 
 ## Status
 
-Proposed
+Accepted
 
 Decisions 3, 4 and 5 and the `validation_errors` field apply ADR 0006 (validation errors are reported, not enforced) and are implemented in
-PR #1220 (open).
+PR #1220 (merged 2026-11-05, `d187db632`).
 
 ## Date
 

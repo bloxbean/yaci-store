@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed. Implemented in PR #1220 (open).
+Accepted. Implemented in PR #1220 (merged 2026-11-05, `d187db632`).
 
 ## Date
 

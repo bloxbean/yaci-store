@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed. Implemented in PR #1220 (open, not merged; issues #1221, #1222, #1225, #1226, #1228, #1231, #1232, #1234 to #1238 and #1240). Decisions 3
+Accepted. Implemented in PR #1220 (merged 2026-11-05, `d187db632`; issues #1221, #1222, #1225, #1226, #1228, #1231, #1232, #1234 to #1238 and #1240). Decisions 3
 to 9 apply ADR 0006 (validation errors are reported, not enforced).
 
 > **Amended by ADR 0009 (2026-10-29):** a datum whose transaction has the 222 NFT and no 333 or 444 token is not stored, unless its reference NFT

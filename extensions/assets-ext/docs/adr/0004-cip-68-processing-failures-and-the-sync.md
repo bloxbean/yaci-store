@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed. Partly implemented by PR #1220 (open): option B below, plus an early write of the `properties` as JSON, which
+Accepted. Partly implemented by PR #1220 (merged 2026-11-05, `d187db632`): option B below, plus an early write of the `properties` as JSON, which
 covers the failure we have seen (#1240). Option C, the savepoint, is not implemented and is still the recommendation for
 a failure inside the database, which still stops the sync as in option A. The record asks for the choice about that
 remainder and gives a recommendation. #1243 is closed by #1220 for the failures it covers; the remainder is #1265 (low

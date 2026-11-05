@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed. Implemented in PR #1220 (open). It is meant for yaci-store 3; decision 8 says what a 2.x backport would need.
+Accepted. Implemented in PR #1220 (merged 2026-11-05, `d187db632`). It is meant for yaci-store 3; decision 8 says what a 2.x backport would need.
 
 ## Date
 

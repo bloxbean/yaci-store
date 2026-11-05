@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed. Implemented in PR #1220. An entry that breaks CIP-26 is stored with `validation_errors` instead of being rejected (decisions
+Accepted. Implemented in PR #1220 (merged 2026-11-05, `d187db632`). An entry that breaks CIP-26 is stored with `validation_errors` instead of being rejected (decisions
 3 to 5, ADR 0006).
 
 ## Date

@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed. Implemented in PR #1310, merged into PR #1220 (`84f50320c`), and in the 2.0.x backport, PR #1242. Amends ADR 0002 (decision 2, the two
+Accepted. Implemented in PR #1310, merged into PR #1220 (`84f50320c`; #1220 merged 2026-11-05, `d187db632`), and in the 2.0.x backport, PR #1242. Amends ADR 0002 (decision 2, the two
 skips) and ADR 0009 (decision 1), which depend on it. Chosen over the alternatives discussed in PR #1309 (closed). The batch was first indexed on
 `PreCommitEvent`; it is indexed on `CommitEvent` since `89ba8a719` (2026-11-04), as the maintainers asked (decision 1).
 

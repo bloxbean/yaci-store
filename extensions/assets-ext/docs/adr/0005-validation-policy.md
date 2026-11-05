@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed. It applies ADR 0006 (validation errors are reported, not enforced) and is implemented in PR #1220 (open).
+Accepted. It applies ADR 0006 (validation errors are reported, not enforced) and is implemented in PR #1220 (merged 2026-11-05, `d187db632`).
 
 ## Date
 

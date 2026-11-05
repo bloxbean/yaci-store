@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed. Implemented in PR #1220 (`0b382b706`) and in its 2.0.x backport, PR #1242 (`d4261bde2`). Amends ADR 0002 (decision 2, what is
+Accepted. Implemented in PR #1220 (`0b382b706`, merged 2026-11-05, `d187db632`) and in its 2.0.x backport, PR #1242 (`d4261bde2`). Amends ADR 0002 (decision 2, what is
 indexed) and ADR 0008 (its consequence that NFTs keep answering for their 333 and 444 subjects).
 
 > **Amended by ADR 0010 (2026-11-02):** "unless its reference NFT is already stored" (decision 1) is decided in chain order: the CIP-68 outputs
