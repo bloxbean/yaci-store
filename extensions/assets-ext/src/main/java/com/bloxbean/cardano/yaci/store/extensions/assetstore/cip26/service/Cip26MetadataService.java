@@ -5,6 +5,11 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.Mapping
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.repository.Cip26MetadataRepository;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.util.MappingsUtil;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.util.Cip26MetadataValidator;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.util.Cip26Validation;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.invalidtoken.InvalidTokenReason;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.invalidtoken.InvalidTokenRecorder;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.invalidtoken.InvalidTokenReport;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.validation.ValidationError;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.NonTransientDataAccessException;
@@ -12,7 +17,9 @@ import org.springframework.dao.TransientDataAccessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -25,17 +32,19 @@ public class Cip26MetadataService {
 
     private final Cip26MetadataRepository cip26MetadataRepository;
     private final Cip26MetadataValidator cip26MetadataValidator;
+    private final InvalidTokenRecorder invalidTokenRecorder;
+    private final Clock clock;
 
     /**
-     * Validates and inserts CIP-26 metadata for one mapping.
+     * Checks and inserts CIP-26 metadata for one mapping. An entry that breaks CIP-26 is stored as written, with the
+     * errors in {@code validation_errors} (ADR 0006): it is dropped only when its subject cannot be a key.
      * <p>
      * Logo is intentionally <em>not</em> set here — see {@link #insertLogo(Mapping)}, which
      * runs a separate validation pass and updates the same row. The two-step flow predates
-     * the schema merge and is preserved so the validation paths stay independent (a row
-     * with valid metadata but a too-large logo can still be saved with the metadata only).
+     * the schema merge and is preserved so the validation paths stay independent.
      *
      * @return {@link InsertOutcome#INSERTED} on success;
-     *         {@link InsertOutcome#PERMANENTLY_SKIPPED} when validation fails
+     *         {@link InsertOutcome#PERMANENTLY_SKIPPED} when the entry is dropped as unstorable
      *         or the database rejects the row with a non-transient error;
      *         {@link InsertOutcome#TRANSIENTLY_FAILED} when the database error
      *         looks recoverable (or is an unfamiliar exception we can't
@@ -45,13 +54,23 @@ public class Cip26MetadataService {
     public InsertOutcome insertMapping(Mapping mapping, LocalDateTime updatedAt, String updateBy) {
         Cip26Metadata cip26Metadata = MappingsUtil.toCip26Metadata(mapping, updateBy, updatedAt);
 
-        if (!cip26MetadataValidator.validate(cip26Metadata)) {
-            // Validator already logged the specific reason at WARN.
+        Cip26Validation validation = cip26MetadataValidator.validate(mapping, cip26Metadata);
+        if (validation.isDropped()) {
+            // Validator already logged the specific reason. The file is named after the subject here (the sync drops a
+            // mismatch before this call), so the file name is the origin.
+            invalidTokenRecorder.report(InvalidTokenReport.builder()
+                    .standard(InvalidTokenReason.CIP_26)
+                    .reasonCode(validation.droppedCode())
+                    .reason(validation.byzantineReason())
+                    .subject(mapping.subject())
+                    .origin(mapping.subject() + ".json")
+                    .build());
             return InsertOutcome.PERMANENTLY_SKIPPED;
         }
+        cip26Metadata.setValidationErrors(validation.errors());
 
         try {
-            cip26Metadata.setLastSyncedAt(LocalDateTime.now());
+            cip26Metadata.setLastSyncedAt(LocalDateTime.now(clock));
             cip26MetadataRepository.save(cip26Metadata);
             return InsertOutcome.INSERTED;
         } catch (NonTransientDataAccessException e) {
@@ -83,7 +102,8 @@ public class Cip26MetadataService {
     @Transactional
     public DeleteOutcome deleteMapping(String subject) {
         try {
-            cip26MetadataRepository.deleteById(subject);
+            // the subject comes from a file name, stored entries are in lower case
+            cip26MetadataRepository.deleteById(MappingsUtil.normalizeSubject(subject));
             return DeleteOutcome.DELETED;
         } catch (NonTransientDataAccessException e) {
             log.error("Permanent delete failure for token subject '{}', skipping: {}",
@@ -110,8 +130,10 @@ public class Cip26MetadataService {
     }
 
     /**
-     * Validates the logo and writes it onto the existing {@link Cip26Metadata} row for
-     * this subject. Same outcome semantics as {@link #insertMapping(Mapping, LocalDateTime, String)}.
+     * Checks the logo and writes it onto the existing {@link Cip26Metadata} row for
+     * this subject, with its errors added to the row's {@code validation_errors}. A logo that breaks CIP-26 is kept
+     * as written; only one far beyond any real size is dropped. Same outcome semantics as
+     * {@link #insertMapping(Mapping, LocalDateTime, String)}.
      * <p>
      * If no metadata row exists for the subject (either because {@code insertMapping}
      * skipped it earlier in this sync, or because of an upstream registry oddity where a
@@ -120,10 +142,20 @@ public class Cip26MetadataService {
      */
     @Transactional
     public InsertOutcome insertLogo(Mapping mapping) {
-        String subject = mapping.subject();
+        // the row was stored under the lower-case subject, see MappingsUtil.normalizeSubject
+        String subject = MappingsUtil.normalizeSubject(mapping.subject());
         String logo = extractLogo(mapping);
 
-        if (!cip26MetadataValidator.validateLogo(subject, logo)) {
+        Cip26Validation logoValidation = cip26MetadataValidator.validateLogo(subject, logo);
+        if (logoValidation.isDropped()) {
+            // the entry is stored without its logo; the logo is in the same registry file as the entry
+            invalidTokenRecorder.report(InvalidTokenReport.builder()
+                    .standard(InvalidTokenReason.CIP_26)
+                    .reasonCode(logoValidation.droppedCode())
+                    .reason(logoValidation.byzantineReason())
+                    .subject(subject)
+                    .origin(mapping.subject() + ".json")
+                    .build());
             return InsertOutcome.PERMANENTLY_SKIPPED;
         }
 
@@ -137,7 +169,11 @@ public class Cip26MetadataService {
             }
             Cip26Metadata row = existing.get();
             row.setLogo(logo);
-            row.setLastSyncedAt(LocalDateTime.now());
+            List<ValidationError> errors = new ArrayList<>(row.getValidationErrors() == null ? List.of() : row.getValidationErrors());
+            errors.removeIf(e -> "logo".equals(e.fieldName()));
+            errors.addAll(logoValidation.errors());
+            row.setValidationErrors(errors);
+            row.setLastSyncedAt(LocalDateTime.now(clock));
             cip26MetadataRepository.save(row);
             return InsertOutcome.INSERTED;
         } catch (NonTransientDataAccessException e) {

@@ -76,14 +76,15 @@ public class AssetsReader {
      *
      * @param subjects      list of subject identifiers
      * @param queryPriority ordered list of CIP standards
-     * @return list of subjects with valid metadata (invalid/not-found subjects are excluded)
+     * @return the subjects that have something indexed (subjects no standard knows are excluded); each is returned as
+     *         indexed, with its validation errors
      */
     public List<Subject> getSubjects(List<String> subjects, List<QueryPriority> queryPriority) {
         BatchPrefetchData prefetchData = tokenQueryService.prefetchBatch(subjects, List.of());
         return subjects.stream()
                 .map(subject -> tokenQueryService.querySubjectBatch(
                         subject, queryPriority, List.of(), prefetchData, false))
-                .filter(subject -> subject.metadata() != null && subject.metadata().isValid())
+                .flatMap(Optional::stream)
                 .toList();
     }
 

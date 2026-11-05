@@ -28,6 +28,9 @@ public interface Cip68MetadataRepository extends JpaRepository<Cip68Metadata, Ci
     Optional<Cip68Metadata> findFirstByPolicyIdAndAssetNameOrderBySlotDescTxIndexDesc(
             String policyId, String assetName);
 
+    /** Whether any datum of this reference NFT is stored, whatever its label. */
+    boolean existsByPolicyIdAndAssetName(String policyId, String assetName);
+
     /**
      * Returns the latest reference NFT row per {@code (policy_id, asset_name)} pair, regardless of label.
      * Replaces the N+1 per-subject query pattern with a single round-trip.
