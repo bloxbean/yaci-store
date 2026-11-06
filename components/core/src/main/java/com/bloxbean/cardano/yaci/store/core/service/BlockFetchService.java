@@ -431,10 +431,12 @@ public class BlockFetchService implements BlockChainDataListener {
         try {
             if (blockRangeSync != null)
                 blockRangeSync.stop();
-        } catch (Exception e) {
-            //Usually a session that was never started or is already closed (#1314). Not worth a stack trace.
-            log.warn("Could not stop blockRangeSync: {}", e.toString());
+        } catch (NullPointerException e) {
+            //yaci throws this when the session was never started or is already closed (#1314)
+            log.warn("blockRangeSync was not running, nothing to stop");
             log.debug("Error stopping blockRangeSync", e);
+        } catch (Exception e) {
+            log.error("Error stopping blockRangeSync", e);
         }
     }
 
@@ -442,10 +444,12 @@ public class BlockFetchService implements BlockChainDataListener {
         try {
             if (blockSync != null)
                 blockSync.stop();
-        } catch (Exception e) {
-            //Usually a session that was never started or is already closed (#1314). Not worth a stack trace.
-            log.warn("Could not stop blockSync: {}", e.toString());
+        } catch (NullPointerException e) {
+            //yaci throws this when the session was never started or is already closed (#1314)
+            log.warn("blockSync was not running, nothing to stop");
             log.debug("Error stopping blockSync", e);
+        } catch (Exception e) {
+            log.error("Error stopping blockSync", e);
         }
     }
 
