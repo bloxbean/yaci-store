@@ -45,12 +45,41 @@ public class SyncSessionGuard {
     /**
      * Marks the calling thread as working for the given session, until {@link #exit()}.
      */
-    public void enter(long session) {
+    public Long enter(long session) {
+        Long previous = callerSession.get();
         callerSession.set(session);
+        return previous;
+    }
+
+    /**
+     * Ends the mark set by {@link #enter(long)}, restoring the one before it (null: none).
+     */
+    public void exit(Long previous) {
+        if (previous == null)
+            callerSession.remove();
+        else
+            callerSession.set(previous);
     }
 
     public void exit() {
         callerSession.remove();
+    }
+
+    /**
+     * The session the calling thread works for, or null if it is not marked. Pass it to worker threads that write for
+     * the caller, and check it there with {@link #check(Long)}.
+     */
+    public Long callerSession() {
+        return callerSession.get();
+    }
+
+    /**
+     * Throws {@link StaleSyncSessionException} if the given session (from {@link #callerSession()}) is no longer
+     * current. A null session is never stale.
+     */
+    public void check(Long session) {
+        if (session != null && session != currentSession.get())
+            throw new StaleSyncSessionException(session, currentSession.get());
     }
 
     /**

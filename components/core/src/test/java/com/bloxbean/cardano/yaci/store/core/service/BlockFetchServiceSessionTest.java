@@ -119,6 +119,21 @@ class BlockFetchServiceSessionTest {
     }
 
     @Test
+    void anyErrorInAnOldSessionsThreadDoesNotStopTheCurrentOne() {
+        //e.g. the shared batch list was reset by the new session while the old thread waited
+        BlockChainDataListener session = startSyncAndGetListener();
+        doAnswer(inv -> {
+            guard.newSession();
+            throw new java.util.NoSuchElementException("batch emptied by the new session");
+        }).when(shelleyPublisher).publishBlockEvents(any(), any(), any());
+
+        assertThatThrownBy(() -> session.onBlock(Era.Conway, block(101, "h101", START_HASH), List.of()))
+                .isInstanceOf(java.util.NoSuchElementException.class);
+
+        assertThat(blockFetchService.isError()).isFalse();
+    }
+
+    @Test
     void oldSessionCannotStartAnotherSession() {
         //e.g. an old range session that finishes a long batchDone after a restart already started a new session
         startSyncAndGetListener();
