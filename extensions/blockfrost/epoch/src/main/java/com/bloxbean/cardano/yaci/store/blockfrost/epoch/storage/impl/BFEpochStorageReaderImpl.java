@@ -11,12 +11,14 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigInteger;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 import static com.bloxbean.cardano.yaci.store.blocks.jooq.Tables.BLOCK;
 import static com.bloxbean.cardano.yaci.store.epoch_aggr.jooq.Tables.EPOCH;
+import static com.bloxbean.cardano.yaci.store.adapot.jooq.Tables.ADAPOT;
 import static com.bloxbean.cardano.yaci.store.adapot.jooq.Tables.EPOCH_STAKE;
 import static org.jooq.impl.DSL.sum;
 
@@ -91,6 +93,33 @@ public class BFEpochStorageReaderImpl implements BFEpochStorageReader {
     @Override
     public Map<Integer, BigInteger> getActiveStakesByEpochs(List<Integer> activeEpochs) {
         if (activeEpochs == null || activeEpochs.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        // adapot[e].total_epoch_stake is the total of the snapshot taken by the AdaPot job of epoch e,
+        // which is the active stake of epoch e + 1.
+        List<Integer> adaPotEpochs = activeEpochs.stream()
+                .map(e -> e - 1)
+                .toList();
+
+        Map<Integer, BigInteger> activeStakes = new HashMap<>();
+        dsl.select(ADAPOT.EPOCH, ADAPOT.TOTAL_EPOCH_STAKE)
+                .from(ADAPOT)
+                .where(ADAPOT.EPOCH.in(adaPotEpochs))
+                .and(ADAPOT.TOTAL_EPOCH_STAKE.isNotNull())
+                .forEach(r -> activeStakes.put(r.get(ADAPOT.EPOCH) + 1, r.get(ADAPOT.TOTAL_EPOCH_STAKE)));
+
+        // Fall back to summing the snapshot for epochs without a stored total
+        List<Integer> missingEpochs = activeEpochs.stream()
+                .filter(e -> !activeStakes.containsKey(e))
+                .toList();
+        activeStakes.putAll(sumActiveStakesByEpochs(missingEpochs));
+
+        return activeStakes;
+    }
+
+    private Map<Integer, BigInteger> sumActiveStakesByEpochs(List<Integer> activeEpochs) {
+        if (activeEpochs.isEmpty()) {
             return Collections.emptyMap();
         }
 

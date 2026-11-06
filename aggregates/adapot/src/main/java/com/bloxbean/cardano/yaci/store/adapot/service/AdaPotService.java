@@ -113,6 +113,23 @@ public class AdaPotService {
         return true;
     }
 
+    /**
+     * Store the total stake of the snapshot taken at the start of the given epoch (epoch_stake.epoch = epoch - 1).
+     * This snapshot is the active stake of epoch + 1.
+     */
+    @Transactional
+    public boolean updateTotalEpochStake(int epoch, BigInteger totalEpochStake) {
+        var adaPot = adaPotStorage.findByEpoch(epoch).orElse(null);
+        if(adaPot == null) {
+            log.error("AdaPot not found for epoch to update total epoch stake: {}", epoch);
+            return false;
+        }
+
+        adaPot.setTotalEpochStake(totalEpochStake);
+        adaPotStorage.save(adaPot);
+        return true;
+    }
+
     @Transactional
     public boolean updateAdaPot(int epoch, EpochCalculationResult epochCalculationResult) {
         var adaPot = adaPotStorage.findByEpoch(epoch).orElse(null);
