@@ -7,6 +7,7 @@ import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.Cursor;
 import com.bloxbean.cardano.yaci.store.common.service.CursorService;
 import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
+import com.bloxbean.cardano.yaci.store.core.service.SyncSessionGuard;
 import com.bloxbean.cardano.yaci.store.events.*;
 import com.bloxbean.cardano.yaci.store.events.domain.*;
 import com.bloxbean.cardano.yaci.store.events.internal.BatchBlocksProcessedEvent;
@@ -55,6 +56,14 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
 
     private List<BatchBlock> batchBlockList = new ArrayList<>();
 
+    //Shared with BlockFetchService. A default instance keeps hand-built instances (tests) working.
+    private SyncSessionGuard sessionGuard = new SyncSessionGuard();
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setSessionGuard(SyncSessionGuard sessionGuard) {
+        this.sessionGuard = sessionGuard;
+    }
+
     public void reset() {
         batchBlockList.clear();
     }
@@ -62,6 +71,8 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
     @Transactional
     public void publishBlockEvents(EventMetadata eventMetadata, Block block, List<Transaction> transactions) {
         processBlockSingleThread(eventMetadata, block, transactions);
+        //A thread from an old sync session (e.g. a listener that hung past a restart) must not commit this block
+        sessionGuard.checkCaller();
         publisher.publishEvent(new PreCommitEvent(eventMetadata));
         publisher.publishEvent(new CommitEvent(eventMetadata, List.of(new BatchBlock(eventMetadata, block, transactions))));
 
@@ -106,6 +117,13 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
                 .join();
 
         BatchBlock lastBatchBlock = batchBlockList.getLast();
+
+        //A batch from an old sync session is not committed and the cursor is not moved. Its blocks are fetched
+        //again by the current session.
+        if (sessionGuard.isCallerStale()) {
+            batchBlockList.clear();
+            sessionGuard.checkCaller();
+        }
 
         //Publish BatchProcessedEvent. This may be useful for some scenarios where we need to do some processing before CommitEvent
         publisher.publishEvent(new BatchBlocksProcessedEvent(lastBatchBlock.getMetadata(), batchBlockList));
