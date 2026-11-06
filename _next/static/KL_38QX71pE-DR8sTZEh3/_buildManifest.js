@@ -3,7 +3,7 @@ self.__BUILD_MANIFEST = {
     "static/chunks/0ah65akmi9dgb.js"
   ],
   "/admin-cli/rollback": [
-    "static/chunks/09xnec-sl55.5.js"
+    "static/chunks/01_d6cgwpnkhg.js"
   ],
   "__rewrites": {
     "afterFiles": [],
