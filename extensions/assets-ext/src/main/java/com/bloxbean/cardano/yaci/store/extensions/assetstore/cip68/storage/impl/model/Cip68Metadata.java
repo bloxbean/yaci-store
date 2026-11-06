@@ -1,11 +1,14 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model;
 
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.validation.ValidationError;
+import jakarta.annotation.Nullable;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 
 @Entity
@@ -21,13 +24,6 @@ import java.util.Map;
 // Lombok's generated equals uses `instanceof` (proxy-safe for lazy-loaded associations).
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 public class Cip68Metadata {
-
-    // Widths of the fixed-length text columns. The datum is unbounded on-chain input, so the
-    // parser drops longer values rather than letting the insert fail and stop the sync.
-    public static final int NAME_MAX_LENGTH = 255;
-    public static final int TICKER_MAX_LENGTH = 32;
-    public static final int URL_MAX_LENGTH = 250;
-    public static final int MEDIA_TYPE_MAX_LENGTH = 255;
 
     /** Policy id: exactly 28 bytes = 56 hex chars (Blake2b-224). Protocol-bounded. */
     @Id
@@ -76,26 +72,31 @@ public class Cip68Metadata {
     @Column(nullable = false)
     private Integer label;
 
-    /** CIP-68 metadata 'name': variable UTF-8 string from the datum. */
-    @Column(length = NAME_MAX_LENGTH)
+    /** CIP-68 metadata 'name': variable UTF-8 string from the datum. Unbounded: what is on-chain is stored, a datum is at most one transaction (16 KB). */
+    @Column(columnDefinition = "TEXT")
+    @Nullable
     private String name;
 
     /** CIP-68 'description': arbitrary multi-sentence text; stored as TEXT. */
     @Column(columnDefinition = "TEXT")
+    @Nullable
     private String description;
 
     /** CIP-68 'ticker': short symbol (typically only label 333/444). */
-    @Column(length = TICKER_MAX_LENGTH)
+    @Column(columnDefinition = "TEXT")
+    @Nullable
     private String ticker;
 
-    /** CIP-68 'url': aligns with CIP-26 url cap of 250 chars. */
-    @Column(length = URL_MAX_LENGTH)
+    /** CIP-68 'url'. */
+    @Column(columnDefinition = "TEXT")
+    @Nullable
     private String url;
 
     /** CIP-68 'decimals': unsigned integer from the datum. In practice 0–19 per CIP-26 convention;
      *  the parser drops values outside {@link com.bloxbean.cardano.yaci.store.extensions.assetstore.util.TokenDecimals}.
      *  Long to match the {@code BIGINT} column and the rest of the pipeline (ParsedCip68Datum,
      *  FungibleTokenMetadata, LongProperty) — uniform type avoids boundary conversions. */
+    @Nullable
     private Long decimals;
 
     /** CIP-68 logo: base64-encoded image (mostly label 333 FTs). Loaded eagerly: lazy
@@ -103,6 +104,7 @@ public class Cip68Metadata {
      *  not configure. Add the {@code org.hibernate.orm} gradle plugin if eager loading
      *  of this column ever becomes a hotspot. */
     @Column(columnDefinition = "TEXT")
+    @Nullable
     private String logo;
 
     /**
@@ -111,13 +113,16 @@ public class Cip68Metadata {
      * (a reference) while FTs typically use {@code logo} (inlined base64).
      */
     @Column(columnDefinition = "TEXT")
+    @Nullable
     private String image;
 
     /** CIP-68 NFT 'mediaType': MIME type of the image (e.g. image/png). */
-    @Column(name = "media_type", length = MEDIA_TYPE_MAX_LENGTH)
+    @Column(name = "media_type", columnDefinition = "TEXT")
+    @Nullable
     private String mediaType;
 
-    @Column(nullable = false)
+    /** The CIP-68 version. Null when the datum holds a version that is not an integer in the range of a long. */
+    @Nullable
     private Long version;
 
     /** Full CBOR hex of the inline datum. Variable length; kept for re-parsing/auditing.
@@ -133,7 +138,19 @@ public class Cip68Metadata {
      * (attributes, royalties, custom traits) that don't map to a typed column.
      */
     @JdbcTypeCode(SqlTypes.JSON)
+    @Nullable
     private Map<String, Object> properties;
+
+    /**
+     * How the datum itself departs from CIP-68, whatever the label of the token. What the label requires is checked
+     * when the token is served, for the label asked for ({@code Cip68Validator#validate}): the label is often guessed
+     * when the datum is indexed, and one reference NFT can serve a 333 and a 444 token. The token is indexed and served
+     * anyway; see ADR 0006. Null on rows written before the column existed.
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "validation_errors")
+    @Nullable
+    private List<ValidationError> validationErrors;
 
     @Temporal(TemporalType.TIMESTAMP)
     private LocalDateTime lastSyncedAt;

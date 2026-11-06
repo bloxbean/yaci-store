@@ -16,6 +16,8 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 
+import java.time.Clock;
+
 @Configuration
 // Master gate, blockfrost-extension pattern (see BFAutoConfiguration): the master flag is
 // OFF by default (matchIfMissing = false), so enabling the single store.assets.ext.enabled
@@ -33,6 +35,13 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 @EnableTransactionManagement
 @EnableScheduling
 public class AssetsExtConfiguration {
+
+    /** The clock behind every timestamp of the module, so that a test can fix it. The system clock and zone unless the application defines one. */
+    @Bean
+    @ConditionalOnMissingBean
+    public Clock assetsExtClock() {
+        return Clock.systemDefaultZone();
+    }
 
     @Bean
     @ConditionalOnMissingBean

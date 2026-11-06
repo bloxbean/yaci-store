@@ -72,10 +72,20 @@ from dataclasses import dataclass, field
 from typing import Any
 
 # CIP-26 spec: subject = policyId (28 bytes / 56 hex) + optional assetName
-# (0-32 bytes / 0-64 hex), total 56-120 lowercase hex chars. CF and yaci-store
-# both reject anything else; we filter client-side so junk entries in the
-# upstream registry don't pollute the run.
+# (0-32 bytes / 0-64 hex), total 56-120 hex chars, compared in lower case. CF and
+# yaci-store both reject anything else; we filter client-side so junk entries in
+# the upstream registry don't pollute the run.
 SUBJECT_REGEX = re.compile(r"^[0-9a-f]{56,120}$")
+
+# Fields the cf-token-metadata-registry V2 response has and yaci-store's does not, by design. They are reported
+# per subject as known differences, not as divergences:
+#   subject.type        NATIVE / PROGRAMMABLE, from the registry's CIP-113 support; assets-ext does not index
+#                       CIP-113 (ADR 0007), so it cannot tell a programmable token from a native one.
+#   subject.extensions  the CIP-113 registry node of a programmable token, for the same reason.
+KNOWN_DIFFERENCES = {
+    "subject.type": "registry-only: CIP-113 is not indexed by assets-ext",
+    "subject.extensions": "registry-only: CIP-113 is not indexed by assets-ext",
+}
 
 # Per-network config. The two registries differ in three ways:
 #   - repo URL (testnet under input-output-hk; mainnet under cardano-foundation)
@@ -242,6 +252,9 @@ def list_subjects_from_clone(repo_dir: pathlib.Path, registry_subdir: str) -> li
         if not isinstance(inner, str) or not inner:
             skipped_unparseable += 1
             continue
+        # A subject is base16 and both services store it in lower case (ADR 0001 decision 7); 39 mainnet files are
+        # written in upper case, and are compared under their lower-case subject
+        inner = inner.lower() if isinstance(inner, str) else inner
         if not SUBJECT_REGEX.match(inner):
             # Junk entries in the upstream registry — too short, too long, or
             # non-hex. CF and yaci both reject these; comparing them produces
@@ -377,6 +390,8 @@ def subset_diff(expected: Any, actual: Any, label_actual: str, path: str = "") -
     if isinstance(expected, dict) and isinstance(actual, dict):
         for key in sorted(expected):
             sub = f"{path}.{key}" if path else key
+            if sub in KNOWN_DIFFERENCES:
+                continue
             if key not in actual:
                 diffs.append(f"  {sub}: missing in {label_actual} "
                              f"(registry has {_short(expected[key])})")
@@ -580,6 +595,9 @@ def main() -> int:
     parser.add_argument("--network", choices=tuple(NETWORKS.keys()), default=DEFAULT_NETWORK,
                         help=f"Which Cardano network to verify against (default: {DEFAULT_NETWORK}). "
                              f"Switches the CF V2 API host AND the registry repo.")
+    parser.add_argument("--cf-url", default=None,
+                        help="CF V2 base URL instead of the network's public one, for example a cf-token-metadata-registry "
+                             "instance on the build under test (the public one runs its last release)")
     parser.add_argument("--yaci-url", default=DEFAULT_YACI_BASE,
                         help=f"Base URL for yaci-store (default: {DEFAULT_YACI_BASE})")
     parser.add_argument("--ssh-host", default=DEFAULT_SSH_HOST,
@@ -612,7 +630,7 @@ def main() -> int:
     check_cf = args.check in ("cf", "both")
     check_yaci = args.check in ("yaci", "both")
     netcfg = NETWORKS[args.network]
-    cf_base = netcfg["cf_base"]
+    cf_base = args.cf_url or netcfg["cf_base"]
     repo_url = netcfg["repo_url"]
     registry_subdir = netcfg["registry_subdir"]
     if args.repo_cache is None:
@@ -683,6 +701,7 @@ def main() -> int:
     if check_cf and check_yaci:
         print(f"  CF vs yaci      : agree={len(result.contract.matched)} "
               f"diverged={len(result.contract.diverged)}")
+        print(f"  known differences, not counted: {', '.join(sorted(KNOWN_DIFFERENCES))}")
         cip68_total = (len(result.cip68.agree) + len(result.cip68.diverged)
                        + len(result.cip68.cf_only) + len(result.cip68.yaci_only))
         print(f"  CIP-68 standards: total={cip68_total} "
