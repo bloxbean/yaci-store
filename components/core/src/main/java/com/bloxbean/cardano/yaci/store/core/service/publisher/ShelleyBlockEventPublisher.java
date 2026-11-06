@@ -7,6 +7,7 @@ import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.Cursor;
 import com.bloxbean.cardano.yaci.store.common.service.CursorService;
 import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
+import com.bloxbean.cardano.yaci.store.core.service.SyncSessionGuard;
 import com.bloxbean.cardano.yaci.store.events.*;
 import com.bloxbean.cardano.yaci.store.events.domain.*;
 import com.bloxbean.cardano.yaci.store.events.internal.BatchBlocksProcessedEvent;
@@ -55,13 +56,25 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
 
     private List<BatchBlock> batchBlockList = new ArrayList<>();
 
+    //Shared with BlockFetchService. A default instance keeps hand-built instances (tests) working.
+    private SyncSessionGuard sessionGuard = new SyncSessionGuard();
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setSessionGuard(SyncSessionGuard sessionGuard) {
+        this.sessionGuard = sessionGuard;
+    }
+
     public void reset() {
-        batchBlockList.clear();
+        synchronized (batchBlockList) {
+            batchBlockList.clear();
+        }
     }
 
     @Transactional
     public void publishBlockEvents(EventMetadata eventMetadata, Block block, List<Transaction> transactions) {
         processBlockSingleThread(eventMetadata, block, transactions);
+        //A thread from an old sync session (e.g. a listener that hung past a restart) must not commit this block
+        sessionGuard.checkCaller();
         publisher.publishEvent(new PreCommitEvent(eventMetadata));
         publisher.publishEvent(new CommitEvent(eventMetadata, List.of(new BatchBlock(eventMetadata, block, transactions))));
 
@@ -75,8 +88,14 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
     }
 
     private void handleBlockBatchInParallel(EventMetadata eventMetadata, Block block, List<Transaction> transactions) {
-        batchBlockList.add(new BatchBlock(eventMetadata, block, transactions));
-        if (batchBlockList.size() != storeProperties.getBlocksBatchSize())
+        //A thread of an old sync session must not add to the batch the current session is filling
+        sessionGuard.checkCaller();
+        int size;
+        synchronized (batchBlockList) {
+            batchBlockList.add(new BatchBlock(eventMetadata, block, transactions));
+            size = batchBlockList.size();
+        }
+        if (size < storeProperties.getBlocksBatchSize())
             return;
 
         processBlocksInParallel();
@@ -84,14 +103,24 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
     }
 
     public void processBlocksInParallel() {
-        if (batchBlockList.size() == 0)
-            return;
+        sessionGuard.checkCaller();
+        //Work on a copy: the list may be reset or refilled by another sync session while this batch is written
+        List<BatchBlock> batch;
+        synchronized (batchBlockList) {
+            if (batchBlockList.isEmpty())
+                return;
+            batch = new ArrayList<>(batchBlockList);
+            batchBlockList.clear();
+        }
 
-        List<List<BatchBlock>> partitions = partition(batchBlockList, storeProperties.getBlocksPartitionSize());
+        //The workers check the caller's session before each block, so an old session stops writing early
+        Long session = sessionGuard.callerSession();
+        List<List<BatchBlock>> partitions = partition(batch, storeProperties.getBlocksPartitionSize());
         List<CompletableFuture> futures = new ArrayList<>();
         for (List<BatchBlock> partition : partitions) {
             var future = CompletableFuture.supplyAsync(() -> {
                 for (BatchBlock blockCache : partition) {
+                    sessionGuard.check(session);
                     processBlockInParallel(blockCache.getMetadata(), blockCache.getBlock(), blockCache.getTransactions());
                 }
 
@@ -105,18 +134,21 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
                 .orTimeout(storeProperties.getProcessingThreadsTimeout(), TimeUnit.MINUTES)
                 .join();
 
-        BatchBlock lastBatchBlock = batchBlockList.getLast();
+        //A batch of an old sync session is not committed and the cursor is not moved. Its blocks are fetched again
+        //by the current session.
+        sessionGuard.checkCaller();
+
+        BatchBlock lastBatchBlock = batch.getLast();
 
         //Publish BatchProcessedEvent. This may be useful for some scenarios where we need to do some processing before CommitEvent
-        publisher.publishEvent(new BatchBlocksProcessedEvent(lastBatchBlock.getMetadata(), batchBlockList));
+        publisher.publishEvent(new BatchBlocksProcessedEvent(lastBatchBlock.getMetadata(), batch));
 
         publisher.publishEvent(new PreCommitEvent(lastBatchBlock.getMetadata()));
-        publisher.publishEvent(new CommitEvent(lastBatchBlock.getMetadata(), batchBlockList));
+        publisher.publishEvent(new CommitEvent(lastBatchBlock.getMetadata(), batch));
 
         //Finally Set the cursor
         cursorService.setCursor(new Cursor(lastBatchBlock.getMetadata().getSlot(), lastBatchBlock.getMetadata().getBlockHash(), lastBatchBlock.getMetadata().getBlock(),
                 lastBatchBlock.getMetadata().getPrevBlockHash(), lastBatchBlock.getMetadata().getEra()));
-        batchBlockList.clear();
     }
 
     private void processBlockInParallel(EventMetadata eventMetadata, Block block, List<Transaction> transactions) {
