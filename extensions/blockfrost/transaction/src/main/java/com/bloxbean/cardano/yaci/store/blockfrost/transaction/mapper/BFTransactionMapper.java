@@ -105,7 +105,7 @@ public abstract class BFTransactionMapper {
                 .index(raw.getTxIndex() != null ? raw.getTxIndex() : 0)
                 .fees(raw.getFees() != null ? raw.getFees().toString() : "0")
                 .deposit(deposit)
-                .size(raw.getCborSize())
+                .size(raw.getSize())
                 .invalidBefore(raw.getValidityIntervalStart() != null && raw.getValidityIntervalStart() > 0
                         ? raw.getValidityIntervalStart().toString() : null)
                 .invalidHereafter(raw.getTtl() != null && raw.getTtl() > 0

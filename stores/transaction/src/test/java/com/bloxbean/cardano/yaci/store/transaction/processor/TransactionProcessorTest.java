@@ -139,7 +139,8 @@ class TransactionProcessorTest {
             assertThat(txnCbor.getTxHash()).isEqualTo("f0a6e529be26c2326c447c39159e05bb904ff1f7900b6df3852dd539de0343e8");
             assertThat(txnCbor.getSlot()).isEqualTo(eventMetadata().getSlot());
             assertThat(txnCbor.getCborData()).isEqualTo(HexUtil.decodeHexString(TX_CBOR_HEX));
-            assertThat(txnCbor.getCborSize()).isEqualTo(3);
+            //Body-only cbor: the ledger size is unknown
+            assertThat(txnCbor.getCborSize()).isNull();
         });
     }
 
@@ -259,6 +260,8 @@ class TransactionProcessorTest {
         assertThat(txnCborCaptor.getValue()).singleElement().satisfies(txnCbor -> {
             assertThat(txnCbor.getTxHash()).isEqualTo("f0a6e529be26c2326c447c39159e05bb904ff1f7900b6df3852dd539de0343e8");
             assertThat(txnCbor.getCborData()).isEqualTo(HexUtil.decodeHexString(FULL_TX_CBOR_HEX));
+            //Ledger size: the 4-byte Alonzo+ envelope without the is_valid byte
+            assertThat(txnCbor.getCborSize()).isEqualTo(3);
         });
     }
 
