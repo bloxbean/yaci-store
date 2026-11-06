@@ -6,50 +6,64 @@ import com.bloxbean.cardano.yaci.helper.BlockSync;
 import com.bloxbean.cardano.yaci.helper.listener.BlockChainDataListener;
 import lombok.extern.slf4j.Slf4j;
 
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CancellationException;
 
 @Slf4j
 public class BlockFinder {
-    private BlockSync blockSync;
+    private final BlockSync blockSync;
 
     public BlockFinder(BlockSync blockSync) {
         this.blockSync = blockSync;
         log.info("BlockFinder initialized >>");
     }
 
-    public synchronized boolean blockExists(Point point) {
-        try {
-            AtomicBoolean blockExists = new AtomicBoolean(false);
-            CountDownLatch countDownLatch = new CountDownLatch(1);
+    public boolean blockExists(Point point) {
+        return blockExists(point, NodeCalls.DEFAULT_TIMEOUT_MS);
+    }
 
-            blockSync.startSync(point, new BlockChainDataListener() {
-                @Override
-                public void intersactFound(Tip tip, Point point) {
-                    log.info("Intersection found: " + point);
-                    blockExists.set(true);
-                    countDownLatch.countDown();
-                }
-
-                @Override
-                public void intersactNotFound(Tip tip) {
-                    log.info("Intersection not found: " + point);
-                    blockExists.set(false);
-                    countDownLatch.countDown();
-                }
-            });
-
-            try {
-                countDownLatch.await(40, TimeUnit.SECONDS);
-            } catch (InterruptedException e) {
-                log.error("Error waiting for blockExists", e);
-                throw new IllegalStateException("Unable verify if block exists. Server could not be started. Point: " + point);
+    /**
+     * Asks the node whether the block at {@code point} is on its chain.
+     *
+     * @param timeoutMs how long to wait for the answer, 0 for no limit
+     * @return true if the node found the point, false if the node said it is not on its chain
+     * @throws NodeNotAnsweringException if the node did not answer in time. A missing answer is not a "no": treating
+     *                                   it as one would make the caller step back to an older cursor and delete
+     *                                   newer ones.
+     */
+    public synchronized boolean blockExists(Point point, long timeoutMs) {
+        CompletableFuture<Boolean> answer = new CompletableFuture<>();
+        BlockChainDataListener listener = new BlockChainDataListener() {
+            @Override
+            public void intersactFound(Tip tip, Point point) {
+                log.info("Intersection found: " + point);
+                answer.complete(true);
             }
 
-            return blockExists.get();
+            @Override
+            public void intersactNotFound(Tip tip) {
+                log.info("Intersection not found: " + point);
+                answer.complete(false);
+            }
+        };
+
+        try {
+            return NodeCalls.call("check if block " + point + " exists", timeoutMs, () -> {
+                blockSync.startSync(point, listener);
+                return answer.get();
+            }, () -> {
+                // Also releases the worker if yaci swallowed the interrupt and returned without an answer
+                answer.cancel(true);
+                blockSync.stop();
+            });
+        } catch (CancellationException e) {
+            throw new NodeNotAnsweringException("No answer from the node. Could not check if block " + point + " exists");
         } finally {
-            blockSync.stop();
+            try {
+                blockSync.stop();
+            } catch (Exception e) {
+                log.debug("Error stopping the block finder connection", e);
+            }
         }
     }
 }
