@@ -309,22 +309,21 @@ public class BlockFetchService implements BlockChainDataListener {
             return;
         }
 
-        // A node never rolls back more than k blocks, and k blocks always fit in 3k/f slots. Note that k counts
-        // blocks: comparing a slot distance with k directly would refuse every rollback deeper than ~36 minutes.
-        long maxRollbackSlots = maxRollbackSlots();
-        if (currentPoint.getSlot() - point.getSlot() > maxRollbackSlots) {
+        // A node never rolls back more than k blocks. Note that k counts blocks: comparing it with a distance in
+        // slots, as before, refused every rollback deeper than ~36 minutes on mainnet.
+        String refusal = checkRollbackDepth(point, currentPoint, currentBlockNum);
+        if (refusal != null) {
             // Ignoring the rollback and carrying on would write the blocks that follow it on top of newer data.
             // Stop this session instead; the restart resumes from the cursor.
-            log.error("Rollback to {} is {} slots behind the cursor {}, more than the maximum of {} slots. " +
-                            "Refusing it and restarting the sync from the cursor.",
-                    point, currentPoint.getSlot() - point.getSlot(), currentPoint, maxRollbackSlots);
+            log.error("Refusing rollback to {} from cursor {} (block {}): {}. Restarting the sync from the cursor.",
+                    point, currentPoint, currentBlockNum, refusal);
             stopSyncOnError();
             publisher.publishEvent(RequiredSyncRestartEvent.builder()
                     .reason("RollbackTooDeep")
                     .errorCode("ROLLBACK_TOO_DEEP")
                     .timestamp(System.currentTimeMillis())
                     .source("BlockFetchService")
-                    .details(String.format("Rollback to %s, cursor at %s", point, currentPoint))
+                    .details(String.format("Rollback to %s, cursor at %s: %s", point, currentPoint, refusal))
                     .build());
             return;
         }
@@ -354,16 +353,44 @@ public class BlockFetchService implements BlockChainDataListener {
     }
 
     /**
-     * The deepest rollback that can be valid, in slots: 3k/f, the window in which the chain is guaranteed to
-     * have at least k blocks. 129600 slots on mainnet and preprod.
+     * Returns why a rollback must be refused, or null if it is fine.
+     * <p>
+     * The depth is counted in blocks, using the block number stored for the rollback point in the cursor table.
+     * The cursor table has one row per block in chain-sync, but only one row per batch for blocks written by the
+     * range fetch, and old rows are cleaned up. When the point has no row, fall back to slots: 3k/f slots is the
+     * window in which the chain normally has k blocks (129600 slots on mainnet and preprod).
      */
-    long maxRollbackSlots() {
-        int k = genesisConfig.getSecurityParam();
-        double f = genesisConfig.getActiveSlotsCoeff();
-        if (k <= 0 || f <= 0) {
-            k = DEFAULT_SECURITY_PARAM;
-            f = 0.05;
+    String checkRollbackDepth(Point point, Point currentPoint, long currentBlockNum) {
+        long k = securityParam();
+        Optional<Cursor> pointCursor = point.getHash() != null
+                ? cursorService.getCursorByBlockHash(point.getHash())
+                : Optional.empty();
+
+        if (pointCursor.isPresent() && pointCursor.get().getBlock() != null && currentBlockNum >= 0) {
+            long depthBlocks = currentBlockNum - pointCursor.get().getBlock();
+            return depthBlocks > k
+                    ? String.format("%d blocks deep, more than k = %d", depthBlocks, k)
+                    : null;
         }
+
+        long depthSlots = currentPoint.getSlot() - point.getSlot();
+        long maxSlots = maxRollbackSlots();
+        return depthSlots > maxSlots
+                ? String.format("rollback point not in the cursor table and %d slots deep, more than 3k/f = %d slots",
+                        depthSlots, maxSlots)
+                : null;
+    }
+
+    private long securityParam() {
+        int k = genesisConfig.getSecurityParam();
+        return k > 0 ? k : DEFAULT_SECURITY_PARAM;
+    }
+
+    long maxRollbackSlots() {
+        long k = securityParam();
+        double f = genesisConfig.getActiveSlotsCoeff();
+        if (f <= 0)
+            f = 0.05;
         return (long) Math.ceil(3 * k / f);
     }
 

@@ -201,6 +201,53 @@ class BlockFetchServiceRollbackTest {
     }
 
     @Test
+    void depthIsCountedInBlocksWhenThePointIsInTheCursorTable() {
+        mainnetLikeGenesis();
+        var currentCursor = cursor(5_000_000L, 10_000L, "current", Era.Conway);
+        when(cursorService.getCursor()).thenReturn(Optional.of(currentCursor));
+        // exactly k blocks back, even though it is far more than 3k/f slots back (a long gap in the chain)
+        when(cursorService.getCursorByBlockHash("k-back"))
+                .thenReturn(Optional.of(cursor(4_000_000L, 10_000L - 2160, "k-back", Era.Conway)));
+
+        blockFetchService.onRollback(new Point(4_000_000L, "k-back"));
+
+        verify(cursorService).rollback(4_000_000L);
+        assertThat(blockFetchService.isError()).isFalse();
+    }
+
+    @Test
+    void moreThanKBlocksIsRefusedEvenIfFewSlots() {
+        mainnetLikeGenesis();
+        var currentCursor = cursor(200_000L, 10_000L, "current", Era.Conway);
+        when(cursorService.getCursor()).thenReturn(Optional.of(currentCursor));
+        when(cursorService.getCursorByBlockHash("too-deep"))
+                .thenReturn(Optional.of(cursor(150_000L, 10_000L - 2161, "too-deep", Era.Conway)));
+
+        blockFetchService.onRollback(new Point(150_000L, "too-deep"));
+
+        verify(cursorService, never()).rollback(anyLong());
+        assertThat(blockFetchService.isError()).isTrue();
+    }
+
+    @Test
+    void sparseDevnetRollbackOfOneBlockAcrossAGapIsApplied() {
+        // k = 10, f = 1: 3k/f is only 30 slots, but the rollback is one block, so it is valid
+        when(genesisConfig.getSecurityParam()).thenReturn(10);
+        when(genesisConfig.getActiveSlotsCoeff()).thenReturn(1.0);
+        var currentCursor = cursor(632L, 51L, "current", Era.Conway);
+        when(cursorService.getCursor())
+                .thenReturn(Optional.of(currentCursor))
+                .thenReturn(Optional.of(cursor(100L, 50L, "parent", Era.Conway)));
+        when(cursorService.getCursorByBlockHash("parent"))
+                .thenReturn(Optional.of(cursor(100L, 50L, "parent", Era.Conway)));
+
+        blockFetchService.onRollback(new Point(100L, "parent"));
+
+        verify(cursorService).rollback(100L);
+        assertThat(blockFetchService.isError()).isFalse();
+    }
+
+    @Test
     void missingGenesisValuesFallBackToMainnetParameters() {
         assertThat(blockFetchService.maxRollbackSlots()).isEqualTo(129_600L);
     }
