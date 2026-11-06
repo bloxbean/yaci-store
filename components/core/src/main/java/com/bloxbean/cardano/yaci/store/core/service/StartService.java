@@ -65,6 +65,8 @@ public class StartService {
         String prevBlockHash = null;
         Era era = null;
         Long blockNumber = 0L;
+        //Block number of the start point if it is a block that is already processed (resuming from the cursor)
+        Long processedBlockNumber = null;
         Optional<Cursor> optional = cursorService.getStartCursor();
         if (optional.isPresent()) {
             log.info("Last block in DB : " + optional.get().getBlock());
@@ -72,6 +74,7 @@ public class StartService {
             prevBlockHash = optional.get().getBlockHash();
             era = optional.get().getEra();
             blockNumber = optional.get().getBlock();
+            processedBlockNumber = optional.get().getBlock();
         } else {
             if (storeProperties.getSyncStartSlot() == 0 || storeProperties.getSyncStartBlockhash() == null
                     || storeProperties.getSyncStartBlockhash().isEmpty()) {
@@ -152,13 +155,13 @@ public class StartService {
         if (storeProperties.isPrimaryInstance()) {
             if (diff > storeProperties.getBlockDiffToStartSyncProtocol()) {
                 log.info("Start BlockRangeSync");
-                blockFetchService.startFetch(from, to);
+                blockFetchService.startFetch(from, to, processedBlockNumber);
             } else {
                 log.info("Start BlockSync");
-                blockFetchService.startSync(from);
+                blockFetchService.startSync(from, processedBlockNumber);
             }
         } else {
-            blockFetchService.startFetch(from, to);
+            blockFetchService.startFetch(from, to, processedBlockNumber);
         }
     }
 

@@ -234,6 +234,99 @@ class BlockFetchServiceBlockSkipTest {
         assertThat(blockFetchService.isError()).isTrue();
     }
 
+    // --- Range fetch (initial sync, parallel batches) and re-delivered blocks
+
+    private static final Point TO = new Point(10_000, "tip");
+
+    @Test
+    void rangeFetchSkipsTheCursorBlockItDeliversAgain() {
+        //The range fetch starts at the cursor and delivers the cursor block itself again
+        blockFetchService.startFetch(new Point(100, START_HASH), TO, 100L);
+
+        Block cursorBlock = block(100, START_HASH, "h99");
+        Block next = block(101, "h101", START_HASH);
+        deliver(cursorBlock);
+        deliver(next);
+
+        verify(shelleyPublisher, never()).publishBlockEventsInParallel(any(), eq(cursorBlock), any());
+        verify(shelleyPublisher, never()).publishBlockEvents(any(), eq(cursorBlock), any());
+        verify(shelleyPublisher).publishBlockEventsInParallel(any(), eq(next), any());
+        assertThat(blockFetchService.isError()).isFalse();
+    }
+
+    @Test
+    void freshStartProcessesTheFirstBlock() {
+        //No cursor yet: the start point is the first block, which has never been processed
+        blockFetchService.startFetch(new Point(0, "h0"), TO, null);
+
+        Block first = block(0, "h0", "genesis");
+        deliver(first);
+
+        verify(shelleyPublisher).publishBlockEventsInParallel(any(), eq(first), any());
+        assertThat(blockFetchService.isError()).isFalse();
+    }
+
+    @Test
+    void rangeBatchWithAMissingBlockStopsTheSync() {
+        blockFetchService.startFetch(new Point(100, START_HASH), TO, 100L);
+
+        deliver(block(101, "h101", START_HASH));
+        Block afterHole = block(103, "h103", "h102"); //102 never arrives
+        deliver(afterHole);
+
+        verify(shelleyPublisher, never()).publishBlockEventsInParallel(any(), eq(afterHole), any());
+        assertThat(blockFetchService.isError()).isTrue();
+        verify(publisher).publishEvent(any(RequiredSyncRestartEvent.class));
+    }
+
+    @Test
+    void blockDeliveredAgainInsideABatchIsSkippedOnce() {
+        //e.g. a reconnect in the middle of a batch (#1319): blocks not yet written come again
+        blockFetchService.startFetch(new Point(100, START_HASH), TO, 100L);
+
+        Block b101 = block(101, "h101", START_HASH);
+        Block b102 = block(102, "h102", "h101");
+        deliver(b101);
+        deliver(b102);
+        deliver(block(101, "h101", START_HASH));
+        deliver(block(102, "h102", "h101"));
+        Block b103 = block(103, "h103", "h102");
+        deliver(b103);
+
+        verify(shelleyPublisher, times(1)).publishBlockEventsInParallel(any(), eq(b101), any());
+        verify(shelleyPublisher, times(1)).publishBlockEventsInParallel(any(), eq(b102), any());
+        verify(shelleyPublisher).publishBlockEventsInParallel(any(), eq(b103), any());
+        assertThat(blockFetchService.isError()).isFalse();
+    }
+
+    @Test
+    void chainSyncSkipsABlockThatIsAlreadyStored() {
+        blockFetchService.startSync(new Point(100, START_HASH), 100L);
+        when(cursorService.getCursorByBlockHash("h50")).thenReturn(Optional.of(cursor(50, "h50")));
+
+        Block stored = block(50, "h50", "h49");
+        deliver(stored);
+        Block next = block(101, "h101", START_HASH);
+        deliver(next);
+
+        verify(shelleyPublisher, never()).publishBlockEvents(any(), eq(stored), any());
+        verify(shelleyPublisher).publishBlockEvents(any(), eq(next), any());
+        assertThat(blockFetchService.isError()).isFalse();
+    }
+
+    @Test
+    void unknownBlockBelowTheCursorStopsTheSync() {
+        //A block from another fork, without a rollback first
+        blockFetchService.startSync(new Point(100, START_HASH), 100L);
+        when(cursorService.getCursorByBlockHash("x99")).thenReturn(Optional.empty());
+
+        Block other = block(99, "x99", "h98");
+        deliver(other);
+
+        verify(shelleyPublisher, never()).publishBlockEvents(any(), eq(other), any());
+        assertThat(blockFetchService.isError()).isTrue();
+    }
+
     //Same dispatch as yaci 0.4.7 BlockfetchAgent: an exception from the listener becomes onParsingError
     private void deliver(Block block) {
         try {
