@@ -10,6 +10,7 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Lock;
@@ -29,13 +30,16 @@ public class RequiredRestartProcessor {
 
     // Pause between stop and start, so the old session can shut down. Not final so tests can shorten it.
     long shutdownWaitMs = 5000;
+    // Delay of the follow-up check after a restart request was dropped or failed. 0: use the debounce window.
+    long retryCheckDelayMs = 0;
+    private final AtomicBoolean retryCheckScheduled = new AtomicBoolean(false);
 
     @EventListener
     public void handleRequiredRestart(RequiredSyncRestartEvent event) {
         Thread.startVirtualThread(() -> handleRestartInterval(event));
     }
 
-    private void handleRestartInterval(RequiredSyncRestartEvent event) {
+    void handleRestartInterval(RequiredSyncRestartEvent event) {
         if (!storeProperties.isAutoRestartEnabled()) {
             log.warn("Auto-restart is disabled. Ignoring event: {}", event.getReason());
             return;
@@ -43,12 +47,14 @@ public class RequiredRestartProcessor {
 
         if (!restartLock.tryLock()) {
             log.info("Restart already in progress. Ignoring event: {}", event.getReason());
+            scheduleRetryCheck(event);
             return;
         }
 
         try {
             int attemptNumber = evaluateRestartAttempt(System.currentTimeMillis(), event);
             if (attemptNumber <= 0) {
+                scheduleRetryCheck(event);
                 return; // debounced or rate-limited
             }
 
@@ -65,9 +71,40 @@ public class RequiredRestartProcessor {
 
         } catch (Exception e) {
             log.error("Error during sync restart", e);
+            scheduleRetryCheck(event);
         } finally {
             restartLock.unlock();
         }
+    }
+
+    /**
+     * A restart request that was dropped (debounce, another restart running, attempt limit) or a restart that
+     * failed must not be the end of it: the health check that would ask again is optional and off by default.
+     * Check again once the debounce window has passed, and restart if the sync is still stopped by an error.
+     * At most one check is pending at a time.
+     */
+    private void scheduleRetryCheck(RequiredSyncRestartEvent event) {
+        if (!retryCheckScheduled.compareAndSet(false, true))
+            return;
+
+        long delayMs = retryCheckDelayMs > 0
+                ? retryCheckDelayMs
+                : Math.max(storeProperties.getAutoRestartDebounceWindowMs(), 1000L);
+        Thread.startVirtualThread(() -> {
+            try {
+                TimeUnit.MILLISECONDS.sleep(delayMs);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                retryCheckScheduled.set(false);
+                return;
+            }
+            retryCheckScheduled.set(false);
+
+            if (startService.isSyncFailed()) {
+                log.info("Sync is still stopped after an error. Trying the restart again for: {}", event.getReason());
+                handleRestartInterval(event);
+            }
+        });
     }
 
     /**

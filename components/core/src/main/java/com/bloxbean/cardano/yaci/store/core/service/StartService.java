@@ -70,6 +70,9 @@ public class StartService {
         log.info("Max Lovelace Supply     : " + genesisConfig.getMaxLovelaceSupply());
         log.info("###########################");
 
+        // A failed restart leaves the error flag set so the health check retries. Clear it before starting:
+        // the startup path (e.g. writing the genesis cursor) refuses to run while it is set.
+        blockFetchService.clearError();
         initService.init();
         blockFetchService.reset();
 
@@ -179,12 +182,12 @@ public class StartService {
     public synchronized void stop() {
         log.info("Stopping the StartService >>>> ");
         stopCount++;
-        if (blockFetchService.isRunning()) {
-            try {
-                blockFetchService.stop();
-            } catch (Exception e) {
-                log.debug("Error stopping blockFetchService", e);
-            }
+        // Always record the stop, even when no session is running (for example, after a restart that failed).
+        // Otherwise the health check would see "not running, not stopped" and start the sync again.
+        try {
+            blockFetchService.stop();
+        } catch (Exception e) {
+            log.debug("Error stopping blockFetchService", e);
         }
 
         alreadyStarted = false;
@@ -226,6 +229,14 @@ public class StartService {
             blockFetchService.markRestartFailed();
             throw e;
         }
+    }
+
+    /**
+     * True when the sync stopped because of an error and was not stopped on purpose since, so it should be
+     * restarted.
+     */
+    public boolean isSyncFailed() {
+        return blockFetchService.isError() && !blockFetchService.isScheduledToStop();
     }
 
     public boolean isStarted() {
