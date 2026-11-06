@@ -285,6 +285,7 @@ public class YaciStoreAutoConfiguration {
         storeProperties.setAutoRestartMaxAttempts(properties.getAutoRestart().getMaxAttempts());
         storeProperties.setAutoRestartBackoffBaseMs(properties.getAutoRestart().getBackoffBaseMs());
         storeProperties.setAutoRestartWindowMs(properties.getAutoRestart().getWindowMs());
+        storeProperties.setAutoRestartRetryIntervalAfterMaxMs(properties.getAutoRestart().getRetryIntervalAfterMaxMs());
 
         return storeProperties;
     }

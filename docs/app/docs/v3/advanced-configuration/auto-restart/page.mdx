@@ -13,15 +13,17 @@ store.auto-restart.debounce-window-ms=30000
 store.auto-restart.max-attempts=5
 store.auto-restart.backoff-base-ms=5000
 store.auto-restart.window-ms=600000
+store.auto-restart.retry-interval-after-max-ms=60000
 ```
 
 ## Configuration Options
 
 - **`store.auto-restart.enabled`** (default: `true`): Enable or disable the auto-restart feature
 - **`store.auto-restart.debounce-window-ms`** (default: `30000`): Time window in milliseconds to prevent multiple restart attempts. If multiple restart events occur within this window, only the first one will be processed
-- **`store.auto-restart.max-attempts`** (default: `5`): Maximum number of restart attempts allowed within a sliding window (~10 min). Once the limit is reached within the window, new restarts pause until the window elapses and then resume automatically — no manual restart required
+- **`store.auto-restart.max-attempts`** (default: `5`): Maximum number of restart attempts allowed within a sliding window (~10 min). Once the limit is reached within the window, restarts continue at a slower pace (see `retry-interval-after-max-ms`)
 - **`store.auto-restart.backoff-base-ms`** (default: `5000`): Base delay in milliseconds for exponential backoff between restart attempts
 - **`store.auto-restart.window-ms`** (default: `600000` = 10 min): Sliding window for the `max-attempts` limit. If no restart has been attempted for this long, the attempt counter resets so a later outage is treated as a fresh incident and retries resume automatically
+- **`store.auto-restart.retry-interval-after-max-ms`** (default: `60000`): After `max-attempts` is reached within the window, restarts are still tried, at most once per this interval, so the sync comes back soon after the fault clears. Set it to `0` to pause restarts until the window resets instead
 
 ## How It Works
 
@@ -33,7 +35,9 @@ The system includes safeguards to prevent restart storms and enable automatic re
 - **Debouncing**: Ignores rapid restart requests within the configured window
 - **Exponential backoff**: Increases delay between retry attempts (5s, 10s, 20s, 40s, 60s max)
 - **Sliding-window rate limiting**: Resets the retry counter if no restart has been attempted within ~10 minutes, allowing fresh restart attempts for new or recovered outages without manual intervention
-- **Max-attempts per window**: Within the sliding window, stops attempting restarts after reaching the configured limit to prevent excessive restart storms
+- **Max-attempts per window**: Within the sliding window, slows restarts down to one per `retry-interval-after-max-ms` after reaching the configured limit, to prevent restart storms
+- **Failed restarts are retried**: If a restart stops the sync but cannot start it again (for example, the database is down), the next health check sees an error and schedules another restart. Only a deliberate stop (admin API, snapshot jobs) keeps the sync stopped
+- **Grace period for a new session**: After a restart, the health check waits `store.block-receive-delay-seconds` from the start of the new session before it treats the sync as stalled again
 
 <Callout>
 The auto-restart feature is enabled by default since IntersectionNotFound is a valid scenario that should be handled automatically, especially in production environments.

@@ -67,6 +67,9 @@ public class BlockFetchService implements BlockChainDataListener {
 
     @Getter
     private long lastReceivedBlockTime;
+    // When the current session was started. The health check gives a new session the full block-receive delay
+    // before it treats it as stalled, even if the last block was received long ago.
+    private volatile long lastSessionStartTime;
 
     @Transactional
     @Override
@@ -406,6 +409,7 @@ public class BlockFetchService implements BlockChainDataListener {
         stopKeepAliveThread();
         blockRangeSync.restart(this);
         blockRangeSync.fetch(from, to);
+        lastSessionStartTime = System.currentTimeMillis();
         syncMode = false;
         cursorService.setSyncMode(syncMode);
 
@@ -418,6 +422,7 @@ public class BlockFetchService implements BlockChainDataListener {
 
         stopKeepAliveThread();
         blockSync.startSync(from, this);
+        lastSessionStartTime = System.currentTimeMillis();
         syncMode = true;
         cursorService.setSyncMode(syncMode);
         startKeepAliveThread(syncMode);
@@ -471,6 +476,20 @@ public class BlockFetchService implements BlockChainDataListener {
 
     public boolean isScheduledToStop() {
         return scheduledToStop.get();
+    }
+
+    /**
+     * Called when a restart stopped the sync but could not start it again (for example, the database was down).
+     * Clears the stop flag so the health check does not mistake this for a deliberate stop, and sets the error
+     * flag so it schedules another restart.
+     */
+    public void markRestartFailed() {
+        scheduledToStop.set(false);
+        isError.set(true);
+    }
+
+    public long getLastSessionStartTime() {
+        return lastSessionStartTime;
     }
 
     public boolean isError() {

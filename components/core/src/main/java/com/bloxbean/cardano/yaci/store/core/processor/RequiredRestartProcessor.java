@@ -27,6 +27,9 @@ public class RequiredRestartProcessor {
     private final AtomicInteger restartCount = new AtomicInteger(0);
     private final Lock restartLock = new ReentrantLock();
 
+    // Pause between stop and start, so the old session can shut down. Not final so tests can shorten it.
+    long shutdownWaitMs = 5000;
+
     @EventListener
     public void handleRequiredRestart(RequiredSyncRestartEvent event) {
         Thread.startVirtualThread(() -> handleRestartInterval(event));
@@ -92,31 +95,50 @@ public class RequiredRestartProcessor {
         }
 
         if (restartCount.get() >= storeProperties.getAutoRestartMaxAttempts()) {
-            log.warn("Reached max restart attempts ({}) within the last {} ms. " +
-                     "Pausing further restarts until the window resets.",
-                     storeProperties.getAutoRestartMaxAttempts(), windowMs);
-            return 0;
+            long retryIntervalMs = storeProperties.getAutoRestartRetryIntervalAfterMaxMs();
+            if (retryIntervalMs <= 0) {
+                log.warn("Reached max restart attempts ({}) within the last {} ms. " +
+                         "Pausing further restarts until the window resets.",
+                         storeProperties.getAutoRestartMaxAttempts(), windowMs);
+                return 0;
+            }
+
+            // Keep trying, but slowly. Pausing for the whole window kept the sync down for minutes after the
+            // fault had already cleared.
+            if (now - lastAttemptEpochMs < retryIntervalMs) {
+                log.warn("Reached max restart attempts ({}) within the last {} ms. " +
+                         "Next restart allowed {} ms after the previous one.",
+                         storeProperties.getAutoRestartMaxAttempts(), windowMs, retryIntervalMs);
+                return 0;
+            }
         }
 
         lastRestartAttempt.set(now);
         return restartCount.incrementAndGet();
     }
 
-    private void performRestart(RequiredSyncRestartEvent event) {
+    void performRestart(RequiredSyncRestartEvent event) {
         log.info("Stopping sync service...");
         startService.stop();
 
         // Wait for clean shutdown
         try {
-            TimeUnit.SECONDS.sleep(5);
-            log.debug("Waited 5 seconds for clean shutdown");
+            TimeUnit.MILLISECONDS.sleep(shutdownWaitMs);
+            log.debug("Waited {} ms for clean shutdown", shutdownWaitMs);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             log.warn("Interrupted while waiting for shutdown");
         }
 
         log.info("Starting sync service...");
-        startService.start();
+        try {
+            startService.start();
+        } catch (RuntimeException e) {
+            // stop() set the "scheduled to stop" flag, and only a successful start clears it. Left set, the health
+            // check would treat this as a deliberate stop and never try again (#959).
+            startService.markRestartFailed();
+            throw e;
+        }
 
         log.info("Sync restart completed for reason: {}", event.getReason());
     }
