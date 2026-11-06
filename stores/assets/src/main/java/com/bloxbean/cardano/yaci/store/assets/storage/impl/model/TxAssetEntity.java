@@ -29,6 +29,9 @@ public class TxAssetEntity extends BlockAwareEntity {
     @Column(name = "tx_hash")
     private String txHash;
 
+    @Column(name = "tx_index")
+    private Integer txIndex;
+
     @Column(name = "policy")
     private String policy;
 

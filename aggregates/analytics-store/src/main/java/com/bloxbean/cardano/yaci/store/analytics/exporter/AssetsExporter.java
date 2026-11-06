@@ -49,6 +49,7 @@ public class AssetsExporter extends AbstractTableExporter {
                     a.id,
                     a.slot,
                     a.tx_hash,
+                    a.tx_index,
                     a.policy,
                     a.asset_name,
                     a.unit,

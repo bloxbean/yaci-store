@@ -3,14 +3,18 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.parser;
 import com.bloxbean.cardano.client.common.cbor.CborSerializationUtil;
 import com.bloxbean.cardano.client.plutus.spec.*;
 import com.bloxbean.cardano.client.util.HexUtil;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.metrics.Cip68Metrics;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.AssetType;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.ParsedCip68Datum;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigInteger;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -122,9 +126,9 @@ class Cip68DatumParserTest {
 
         @Test
         void shouldHandleChunkedImageUriAsListOfStrings() throws Exception {
-            // CIP-25 inheritance: image may be split into a list of byte-string chunks
-            // when the URI exceeds Cardano's 64-byte raw-string limit. The parser should
-            // concatenate them.
+            // CIP-68 allows a uri to be a list of byte strings, the way CIP-25 splits a long
+            // text in transaction metadata (a datum could hold it as one byte string). The
+            // parser should concatenate them.
             MapPlutusData properties = new MapPlutusData();
             properties.put(BytesPlutusData.of("name"), BytesPlutusData.of("ChunkedToken"));
             properties.put(BytesPlutusData.of("description"), BytesPlutusData.of("Has a long IPFS hash"));
@@ -248,31 +252,65 @@ class Cip68DatumParserTest {
                     .hasValueSatisfying(m -> assertThat(m.decimals()).isEqualTo(255L));
         }
 
-        @Test
-        void shouldDropDecimalsAboveUpperBoundButKeepMetadata() throws Exception {
-            assertThat(parseWithDecimals(BigInteger.valueOf(256))).hasValueSatisfying(m -> {
-                assertThat(m.name()).isEqualTo("Token");
-                assertThat(m.decimals()).isNull();
+        private void assertDecimalsError(ParsedCip68Datum m) {
+            assertThat(m.validationErrors()).singleElement().satisfies(e -> {
+                assertThat(e.cip()).isEqualTo("CIP-68");
+                assertThat(e.fieldName()).isEqualTo("decimals");
+                assertThat(e.fieldCategory().name()).isEqualTo("OPTIONAL");
+                assertThat(e.code()).isEqualTo("out_of_range");
+                assertThat(e.error()).contains("outside the range CIP-68 allows");
             });
         }
 
         @Test
-        void shouldDropDecimalsBeyondIntRange() throws Exception {
-            assertThat(parseWithDecimals(BigInteger.TWO.pow(40)))
-                    .hasValueSatisfying(m -> assertThat(m.decimals()).isNull());
+        void shouldKeepDecimalsAboveUpperBoundAndReportThem() throws Exception {
+            assertThat(parseWithDecimals(BigInteger.valueOf(256))).hasValueSatisfying(m -> {
+                assertThat(m.name()).isEqualTo("Token");
+                assertThat(m.decimals()).isEqualTo(256L);
+                assertDecimalsError(m);
+            });
         }
 
         @Test
-        void shouldDropDecimalsThatWouldWrapWhenNarrowedToLong() throws Exception {
+        void shouldKeepDecimalsBeyondIntRangeAndReportThem() throws Exception {
+            assertThat(parseWithDecimals(BigInteger.TWO.pow(40))).hasValueSatisfying(m -> {
+                assertThat(m.decimals()).isEqualTo(1L << 40);
+                assertDecimalsError(m);
+            });
+        }
+
+        @Test
+        void shouldStoreNoDecimalsWhenTheyWouldWrapWhenNarrowedToLong() throws Exception {
             // 2^64 + 3: longValue() gives 3, which would otherwise look valid.
-            assertThat(parseWithDecimals(BigInteger.TWO.pow(64).add(BigInteger.valueOf(3))))
-                    .hasValueSatisfying(m -> assertThat(m.decimals()).isNull());
+            assertThat(parseWithDecimals(BigInteger.TWO.pow(64).add(BigInteger.valueOf(3)))).hasValueSatisfying(m -> {
+                assertThat(m.decimals()).isNull();
+                assertDecimalsError(m);
+            });
         }
 
         @Test
-        void shouldDropNegativeDecimals() throws Exception {
-            assertThat(parseWithDecimals(BigInteger.valueOf(-1)))
-                    .hasValueSatisfying(m -> assertThat(m.decimals()).isNull());
+        void shouldKeepNegativeDecimalsAndReportThem() throws Exception {
+            assertThat(parseWithDecimals(BigInteger.valueOf(-1))).hasValueSatisfying(m -> {
+                assertThat(m.decimals()).isEqualTo(-1L);
+                assertDecimalsError(m);
+            });
+        }
+
+        @Test
+        void shouldReportDecimalsThatAreNotAnInteger() throws Exception {
+            MapPlutusData properties = new MapPlutusData();
+            properties.put(BytesPlutusData.of("name"), BytesPlutusData.of("Token"));
+            properties.put(BytesPlutusData.of("decimals"), BytesPlutusData.of("six"));
+            ConstrPlutusData datum = ConstrPlutusData.of(0, properties, BigIntPlutusData.of(1));
+
+            assertThat(parser.parse(HexUtil.encodeHexString(CborSerializationUtil.serialize(datum.serialize()))))
+                    .hasValueSatisfying(m -> {
+                        assertThat(m.decimals()).isNull();
+                        assertThat(m.validationErrors()).singleElement().satisfies(e -> {
+                            assertThat(e.code()).isEqualTo("wrong_type");
+                            assertThat(e.fieldName()).isEqualTo("decimals");
+                        });
+                    });
         }
     }
 
@@ -305,44 +343,50 @@ class Cip68DatumParserTest {
         }
 
         @Test
-        void shouldDropStringsWiderThanColumnButKeepMetadata() throws Exception {
+        void shouldKeepStringsWiderThanTheOldColumnsAndReportNothing() throws Exception {
+            // the columns are TEXT and a datum is at most one transaction: what is on-chain is stored as written
             assertThat(parse("ticker", "T".repeat(33))).hasValueSatisfying(m -> {
-                assertThat(m.ticker()).isNull();
+                assertThat(m.ticker()).hasSize(33);
                 assertThat(m.name()).isEqualTo("Token");
+                assertThat(m.validationErrors()).isEmpty();
             });
-            assertThat(parse("url", "u".repeat(251)))
-                    .hasValueSatisfying(m -> assertThat(m.url()).isNull());
-            assertThat(parse("mediaType", "m".repeat(256)))
-                    .hasValueSatisfying(m -> assertThat(m.mediaType()).isNull());
+            assertThat(parse("url", "u".repeat(251))).hasValueSatisfying(m -> assertThat(m.url()).hasSize(251));
+            assertThat(parse("mediaType", "m".repeat(256))).hasValueSatisfying(m -> assertThat(m.mediaType()).hasSize(256));
         }
 
         @Test
-        void shouldDropOversizedNameSoDatumFailsRequiredFieldCheck() throws Exception {
-            assertThat(parse("name", "N".repeat(256)))
-                    .hasValueSatisfying(m -> assertThat(m.name()).isNull());
+        void shouldKeepALongNameWhateverItsCharacters() throws Exception {
+            assertThat(parse("name", "N".repeat(256))).hasValueSatisfying(m -> assertThat(m.name()).hasSize(256));
+            // 300 emoji = 600 UTF-16 units
+            assertThat(parse("name", "🚀".repeat(300))).hasValueSatisfying(m -> assertThat(m.name()).isEqualTo("🚀".repeat(300)));
         }
 
         @Test
-        void shouldCountUtf16UnitsNotCodePoints() throws Exception {
-            // 128 emoji = 128 code points but 256 UTF-16 units, which H2 rejects for VARCHAR(255)
-            assertThat(parse("name", "🚀".repeat(128)))
-                    .hasValueSatisfying(m -> assertThat(m.name()).isNull());
-            // 127 emoji = 254 UTF-16 units: fits on every database
-            assertThat(parse("name", "🚀".repeat(127)))
-                    .hasValueSatisfying(m -> assertThat(m.name()).hasSize(254));
-        }
-
-        @Test
-        void shouldRejectDatumWhoseVersionWouldWrapWhenNarrowedToLong() throws Exception {
+        void shouldIndexADatumWhoseVersionWouldWrapWhenNarrowedToLongWithoutAVersion() throws Exception {
             // 2^64 + 1: longValue() gives 1, which would otherwise look like a valid version
-            assertThat(parse("ticker", "TT", BigInteger.TWO.pow(64).add(BigInteger.ONE))).isEmpty();
+            assertThat(parse("ticker", "TT", BigInteger.TWO.pow(64).add(BigInteger.ONE))).hasValueSatisfying(m -> {
+                assertThat(m.version()).isNull();
+                assertThat(m.ticker()).isEqualTo("TT");
+                assertThat(m.validationErrors()).singleElement().satisfies(e -> assertThat(e.code()).isEqualTo("invalid_version"));
+            });
         }
 
         @Test
-        void shouldAcceptVersionUpToLongMaxAndRejectBeyond() throws Exception {
-            assertThat(parse("ticker", "TT", BigInteger.valueOf(Long.MAX_VALUE)))
-                    .hasValueSatisfying(m -> assertThat(m.version()).isEqualTo(Long.MAX_VALUE));
-            assertThat(parse("ticker", "TT", BigInteger.TWO.pow(63))).isEmpty();
+        void shouldIndexEveryVersionAndReportTheOnesCip68DoesNotDefine() throws Exception {
+            for (long version = 1; version <= 4; version++) {
+                final long v = version;
+                assertThat(parse("ticker", "TT", BigInteger.valueOf(v))).hasValueSatisfying(m -> {
+                    assertThat(m.version()).isEqualTo(v);
+                    assertThat(m.validationErrors()).isEmpty();
+                });
+            }
+            for (BigInteger version : new BigInteger[]{BigInteger.ZERO, BigInteger.valueOf(5), BigInteger.valueOf(Long.MAX_VALUE)}) {
+                assertThat(parse("ticker", "TT", version)).hasValueSatisfying(m -> {
+                    assertThat(m.version()).isEqualTo(version.longValue());
+                    assertThat(m.validationErrors()).singleElement().satisfies(e -> assertThat(e.code()).isEqualTo("invalid_version"));
+                });
+            }
+            assertThat(parse("ticker", "TT", BigInteger.TWO.pow(63))).hasValueSatisfying(m -> assertThat(m.version()).isNull());
         }
     }
 
@@ -363,8 +407,13 @@ class Cip68DatumParserTest {
 
         /** {"721": {policy_id: {asset_name: metadata}}} with raw-byte policy and asset keys, per CIP-68 version 4. */
         private static MapPlutusData nested(String policyId, String assetNameHex, MapPlutusData metadata) {
+            return nestedEntry(policyId, assetNameHex, metadata);
+        }
+
+        /** Same, with any value as the entry, to build an entry that is not a map. */
+        private static MapPlutusData nestedEntry(String policyId, String assetNameHex, PlutusData entry) {
             MapPlutusData byAsset = new MapPlutusData();
-            byAsset.put(BytesPlutusData.of(HexUtil.decodeHexString(assetNameHex)), metadata);
+            byAsset.put(BytesPlutusData.of(HexUtil.decodeHexString(assetNameHex)), entry);
             MapPlutusData byPolicy = new MapPlutusData();
             byPolicy.put(BytesPlutusData.of(HexUtil.decodeHexString(policyId)), byAsset);
             MapPlutusData root = new MapPlutusData();
@@ -375,6 +424,37 @@ class Cip68DatumParserTest {
         private static String datum(MapPlutusData properties, long version) throws Exception {
             ConstrPlutusData datum = ConstrPlutusData.of(0, properties, BigIntPlutusData.of(version));
             return HexUtil.encodeHexString(CborSerializationUtil.serialize(datum.serialize()));
+        }
+
+        @Test
+        void shouldReportANestedDatumAsNested() throws Exception {
+            String hex = datum(nested(POLICY_ID, ASSET_NAME_HEX, metadata("Nested")), 4);
+
+            assertThat(parser.hasNestedMetadata(hex)).isTrue();
+        }
+
+        @Test
+        void shouldNotReportAFlatDatumAsNested() throws Exception {
+            assertThat(parser.hasNestedMetadata(datum(metadata("Flat"), 1))).isFalse();
+            // version 4 without the "721" key is read as a flat map
+            assertThat(parser.hasNestedMetadata(datum(metadata("Flat v4"), 4))).isFalse();
+        }
+
+        @Test
+        void shouldReportA721KeyAsNestedWhateverTheVersion() throws Exception {
+            // the CIP's step 4 tells nested from direct metadata by the "721" key, not by the version
+            for (long version : new long[]{1, 3, 4, 5, 100}) {
+                assertThat(parser.hasNestedMetadata(datum(nested(POLICY_ID, ASSET_NAME_HEX, metadata("Any")), version)))
+                        .as("version %d", version).isTrue();
+            }
+        }
+
+        @Test
+        void shouldNotReportAnythingThatIsNotACip68DatumAsNested() {
+            assertThat(parser.hasNestedMetadata(null)).isFalse();
+            assertThat(parser.hasNestedMetadata("")).isFalse();
+            assertThat(parser.hasNestedMetadata("not-hex")).isFalse();
+            assertThat(parser.hasNestedMetadata("d8799f00ff")).isFalse();
         }
 
         @Test
@@ -400,11 +480,51 @@ class Cip68DatumParserTest {
                     .hasValueSatisfying(m -> assertThat(m.name()).isEqualTo("Mine"));
         }
 
+        private void assertNoNestedEntry(java.util.Optional<ParsedCip68Datum> parsed) {
+            assertThat(parsed).hasValueSatisfying(m -> {
+                assertThat(m.name()).isNull();
+                assertThat(m.properties()).isNull();
+                assertThat(m.validationErrors()).singleElement().satisfies(e -> {
+                    assertThat(e.code()).isEqualTo("no_nested_entry");
+                    assertThat(e.fieldName()).isEqualTo("721");
+                    assertThat(e.fieldCategory().name()).isEqualTo("MANDATORY");
+                });
+            });
+        }
+
         @Test
-        void shouldReturnEmptyWhenNestedMapHasNoEntryForReferenceNft() throws Exception {
+        void shouldIndexANestedDatumWithoutAnEntryForTheReferenceNftWithAnError() throws Exception {
+            // the token is indexed with no metadata, and the error says why (ADR 0006)
             String datum = datum(nested(OTHER_POLICY_ID, ASSET_NAME_HEX, metadata("Foreign")), 4);
 
-            assertThat(parser.parse(datum, REFERENCE_NFT)).isEmpty();
+            assertNoNestedEntry(parser.parse(datum, REFERENCE_NFT));
+        }
+
+        @Test
+        void shouldReportNoNestedEntryOnlyWhenTheEntryIsMissing() throws Exception {
+            // an entry that is there and valid, and a flat datum: no error
+            assertThat(parser.parse(datum(nested(POLICY_ID, ASSET_NAME_HEX, metadata("Mine")), 4), REFERENCE_NFT))
+                    .hasValueSatisfying(m -> assertThat(m.validationErrors()).isEmpty());
+            assertThat(parser.parse(datum(metadata("Flat"), 4), REFERENCE_NFT))
+                    .hasValueSatisfying(m -> assertThat(m.validationErrors()).isEmpty());
+
+            // another policy
+            assertNoNestedEntry(parser.parse(datum(nested(OTHER_POLICY_ID, ASSET_NAME_HEX, metadata("Foreign")), 4), REFERENCE_NFT));
+
+            // the right policy, another asset name
+            assertNoNestedEntry(parser.parse(datum(nested(POLICY_ID, HexUtil.encodeHexString("Other".getBytes()), metadata("Other")), 4),
+                    REFERENCE_NFT));
+
+            // an entry that is not a map
+            assertNoNestedEntry(parser.parse(datum(nestedEntry(POLICY_ID, ASSET_NAME_HEX, BytesPlutusData.of("not a map")), 4),
+                    REFERENCE_NFT));
+
+            // more than one entry and no token to choose by
+            MapPlutusData root = nested(POLICY_ID, ASSET_NAME_HEX, metadata("A"));
+            MapPlutusData byPolicy = (MapPlutusData) root.getMap().get(BytesPlutusData.of("721"));
+            MapPlutusData byAsset = (MapPlutusData) byPolicy.getMap().get(BytesPlutusData.of(HexUtil.decodeHexString(POLICY_ID)));
+            byAsset.put(BytesPlutusData.of("Other".getBytes()), metadata("B"));
+            assertNoNestedEntry(parser.parse(datum(root, 4)));
         }
 
         @Test
@@ -485,6 +605,124 @@ class Cip68DatumParserTest {
     }
 
     @Nested
+    class AdditionalPropertyValues {
+
+        /** Preprod NFT from bloxbean/yaci-store#1159: {@code contractData} is a Plutus constructor. */
+        private static final String NFT_WITH_CONSTRUCTOR_PROPERTY =
+                "d87982a3446e616d65464e465420233145696d616765404c636f6e747261637444617461d879860181581cdc9acfee35"
+                + "243d123e8f10bc58692a6bc5aa3135c7eafc2aac9daafcd87a80581c9abc17656a6d1c24688292777c18c1ce599845a5"
+                + "88f4d893c1884da2d87a80d87a8001";
+
+        /** Preprod fungible token (Wrapped pUSDC): {@code seed} is a constructor, {@code oracles} are key hashes. */
+        private static final String FT_WITH_CONSTRUCTOR_PROPERTY =
+                "d8799fae46737570706c791a1a449c8b44747970654c5772617070656441737365744576656e75654845746865726575"
+                + "6d46706f6c696379582a3078413062383639393163363231386233366331643139443461326539456230634533363036"
+                + "65423438476163636f756e74582a30783732423530393631423237343734624433363241436346393638616630316633"
+                + "6338323863336432467469636b6572457055534443446e616d654d577261707065642070555344434b64657363726970"
+                + "74696f6e582057726170706564207055534443206f70657261746564206279205042472e696f48646563696d616c7306"
+                + "4375726c4e68747470733a2f2f7062672e696f446c6f676f582868747470733a2f2f70726570726f642e706267746f6b"
+                + "656e2e696f2f7277612d6c6f676f2e706e674671756f72756d02476f7261636c65739f581c80edfa909a3d40a54fca4c"
+                + "3ee852c7ba2a79391738911dc363580dc2581cab25d3b9476a3e3343a2f353b08b40913c573de7d286ef37ac4013e058"
+                + "1c7bd1ebc8230f961193fb772204542e85425af4f7a8f36acb5543da08ff4473656564d8799fd8799f582042f5390b27"
+                + "9a4b49d56fe594b2d5eaf02e8e387fa1612f87bafd2feed7c836afff02ff01d87980ff";
+
+        /**
+         * Mainnet "PBG Token Voucher" datums that {@code main} dropped (the same NullPointerException as
+         * #1159): {@code owner} is a constructor. Three picked at random from the 434 distinct datums seen
+         * in a full mainnet sync, keyed by hex with the expected name.
+         */
+        private static final Map<String, String> MAINNET_VOUCHERS_WITH_CONSTRUCTOR_OWNER = Map.of(
+                "d8799fa9456f776e6572d8799fd8799f581c3e8242c26c999d22ecfc760cdc7a34508637c4351b3187ee20eb77ebffd8"
+                + "7a80ff45646174756d0046746f6b656e731a001cf2c046706572696f64034570726963659f1b0000023fff1df4ed1b00"
+                + "000005242abee5ff446e616d655450424720546f6b656e20566f75636865722038394b6465736372697074696f6e5821"
+                + "5375636365737320666565207265696d62757273656d656e7420766f75636865724375726c5768747470733a2f2f7062"
+                + "672e696f2f766f75636865727345696d616765582568747470733a2f2f746f6b656e2e7062672e696f2f766f75636865"
+                + "722d6c6f676f2e706e6701d87980ff",
+                "PBG Token Voucher 89",
+                "d8799fa9456f776e6572d8799fd8799f581c90c98fa2c409dcaf2cec7770e8a614df2322fb08c545ddae0b285209ffd8"
+                + "799fd8799fd8799f581cebffd86359482e97a1d7755cdae86739ffcafa6033713b735c4f4031ffffffff45646174756d"
+                + "0046746f6b656e731b00000001ea0659e846706572696f64014570726963659f1b00000001c09103241a04748ab2ff44"
+                + "6e616d655350424720546f6b656e20566f756368657220394b6465736372697074696f6e582153756363657373206665"
+                + "65207265696d62757273656d656e7420766f75636865724375726c5768747470733a2f2f7062672e696f2f766f756368"
+                + "65727345696d616765582568747470733a2f2f746f6b656e2e7062672e696f2f766f75636865722d6c6f676f2e706e67"
+                + "01d87980ff",
+                "PBG Token Voucher 9",
+                "d8799fa9456f776e6572d8799fd8799f581ce29e15bf7d0deaabdb963a1f9ffc9adc661dbf6889ae73a17ae39843ffd8"
+                + "799fd8799fd8799f581c8b4e2900167bf48e98803bb0ed0cd7c2f6b699a08716e8a520b507f9ffffffff45646174756d"
+                + "0046746f6b656e731a00b1505246706572696f64044570726963659f1b0000029ff9d4b0d31b00000005d2138378ff44"
+                + "6e616d655550424720546f6b656e20566f7563686572203132384b6465736372697074696f6e58215375636365737320"
+                + "666565207265696d62757273656d656e7420766f75636865724375726c5768747470733a2f2f7062672e696f2f766f75"
+                + "636865727345696d616765582568747470733a2f2f746f6b656e2e7062672e696f2f766f75636865722d6c6f676f2e70"
+                + "6e6701d87980ff",
+                "PBG Token Voucher 128");
+
+        @SuppressWarnings("unchecked")
+        private static Map<String, Object> additionalProperties(ParsedCip68Datum datum) {
+            return (Map<String, Object>) datum.properties().get("additional_properties");
+        }
+
+        @Test
+        void shouldKeepTheTokenAndThePropertyAndReportWhenItIsAConstructor() {
+            assertThat(parser.parse(NFT_WITH_CONSTRUCTOR_PROPERTY)).hasValueSatisfying(m -> {
+                assertThat(m.name()).isEqualTo("NFT #1");
+                // contractData is the only additional property: kept, in the {constructor, fields} form
+                assertThat(additionalProperties(m)).containsOnlyKeys("contractData");
+                assertThat(additionalProperties(m).get("contractData")).asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.MAP).containsKeys("constructor", "fields");
+                assertThat(m.validationErrors()).singleElement().satisfies(e -> {
+                    assertThat(e.fieldName()).isEqualTo("properties.contractData");
+                    assertThat(e.code()).isEqualTo("plutus_constructor");
+                });
+            });
+        }
+
+        @Test
+        void shouldKeepFungibleTokenMetadataAndReportTheConstructorProperty() {
+            assertThat(parser.parse(FT_WITH_CONSTRUCTOR_PROPERTY)).hasValueSatisfying(m -> {
+                assertThat(m.name()).isEqualTo("Wrapped pUSDC");
+                assertThat(m.ticker()).isEqualTo("pUSDC");
+                assertThat(m.decimals()).isEqualTo(6L);
+
+                Map<String, Object> additional = additionalProperties(m);
+                assertThat(additional).containsKey("seed");
+                assertThat(m.validationErrors()).singleElement().satisfies(e -> assertThat(e.fieldName()).isEqualTo("properties.seed"));
+                assertThat(additional.get("oracles")).isEqualTo(List.of(
+                        "80edfa909a3d40a54fca4c3ee852c7ba2a79391738911dc363580dc2",
+                        "ab25d3b9476a3e3343a2f353b08b40913c573de7d286ef37ac4013e0",
+                        "7bd1ebc8230f961193fb772204542e85425af4f7a8f36acb5543da08"));
+                assertThat(additional.get("venue")).isEqualTo("Ethereum");
+            });
+        }
+
+        @Test
+        void shouldKeepMainnetVouchersWithTheirConstructorOwnerAndReportIt() {
+            MAINNET_VOUCHERS_WITH_CONSTRUCTOR_OWNER.forEach((datum, name) ->
+                    assertThat(parser.parse(datum)).as(name).hasValueSatisfying(m -> {
+                        assertThat(m.name()).isEqualTo(name);
+                        assertThat(m.version()).isEqualTo(1L);
+                        assertThat(m.url()).isEqualTo("https://pbg.io/vouchers");
+                        assertThat(additionalProperties(m)).containsKeys("datum", "tokens", "period", "price", "owner");
+                        assertThat(m.validationErrors()).singleElement().satisfies(e -> assertThat(e.fieldName()).isEqualTo("properties.owner"));
+                    }));
+        }
+
+        @Test
+        void shouldStoreUtf8BytesAsTextAndOtherBytesAsHex() throws Exception {
+            MapPlutusData properties = new MapPlutusData();
+            properties.put(BytesPlutusData.of("name"), BytesPlutusData.of("Token"));
+            properties.put(BytesPlutusData.of("description"), BytesPlutusData.of("Desc"));
+            properties.put(BytesPlutusData.of("label"), BytesPlutusData.of("caf\u00e9"));
+            properties.put(BytesPlutusData.of("hash"), BytesPlutusData.of(new byte[]{(byte) 0xff, 0x00, (byte) 0xc3}));
+            ConstrPlutusData datum = ConstrPlutusData.of(0, properties, BigIntPlutusData.of(1));
+
+            assertThat(parser.parse(HexUtil.encodeHexString(CborSerializationUtil.serialize(datum.serialize()))))
+                    .hasValueSatisfying(m -> {
+                        assertThat(additionalProperties(m).get("label")).isEqualTo("caf\u00e9");
+                        assertThat(additionalProperties(m).get("hash")).isEqualTo("ff00c3");
+                    });
+        }
+    }
+
+    @Nested
     class ParseInvalidDatum {
 
         @Test
@@ -528,7 +766,8 @@ class Cip68DatumParserTest {
         }
 
         @Test
-        void shouldReturnEmptyWhenDataListTooSmall() throws Exception {
+        void shouldIndexADatumWithoutAVersionAndReportItAsMandatory() throws Exception {
+            // the CIP requires the version: the datum is read (its metadata is there) and flagged, not hidden
             MapPlutusData properties = new MapPlutusData();
             properties.put(BytesPlutusData.of("name"), BytesPlutusData.of("Test"));
 
@@ -538,7 +777,24 @@ class Cip68DatumParserTest {
 
             Optional<ParsedCip68Datum> result = parser.parse(hexDatum);
 
-            assertThat(result).isEmpty();
+            assertThat(result).hasValueSatisfying(m -> {
+                assertThat(m.name()).isEqualTo("Test");
+                assertThat(m.version()).isNull();
+                assertThat(m.validationErrors()).singleElement().satisfies(e -> {
+                    assertThat(e.fieldName()).isEqualTo("version");
+                    assertThat(e.fieldCategory().name()).isEqualTo("MANDATORY");
+                    assertThat(e.code()).isEqualTo("missing_value");
+                });
+            });
+        }
+
+        @Test
+        void shouldStillReturnEmptyForAnEmptyConstructor() throws Exception {
+            ConstrPlutusData datum = ConstrPlutusData.of(0);
+
+            String hexDatum = HexUtil.encodeHexString(CborSerializationUtil.serialize(datum.serialize()));
+
+            assertThat(parser.parse(hexDatum)).isEmpty();
         }
 
         @Test
@@ -555,7 +811,7 @@ class Cip68DatumParserTest {
         }
 
         @Test
-        void shouldReturnEmptyWhenVersionIsNotBigInt() throws Exception {
+        void shouldIndexADatumWhoseVersionIsNotAnIntegerAndReportItAsMandatory() throws Exception {
             MapPlutusData properties = new MapPlutusData();
             properties.put(BytesPlutusData.of("name"), BytesPlutusData.of("Test"));
             properties.put(BytesPlutusData.of("description"), BytesPlutusData.of("Desc"));
@@ -568,7 +824,33 @@ class Cip68DatumParserTest {
 
             Optional<ParsedCip68Datum> result = parser.parse(hexDatum);
 
-            assertThat(result).isEmpty();
+            assertThat(result).hasValueSatisfying(m -> {
+                assertThat(m.name()).isEqualTo("Test");
+                assertThat(m.description()).isEqualTo("Desc");
+                assertThat(m.version()).isNull();
+                assertThat(m.validationErrors()).singleElement().satisfies(e -> {
+                    assertThat(e.fieldName()).isEqualTo("version");
+                    assertThat(e.fieldCategory().name()).isEqualTo("MANDATORY");
+                    assertThat(e.code()).isEqualTo("invalid_version");
+                    assertThat(e.error()).contains("bytes");
+                });
+            });
+        }
+
+        @Test
+        void shouldReportAVersionThatIsAMapOrAListWithItsType() throws Exception {
+            for (PlutusData version : new PlutusData[]{new MapPlutusData(), ListPlutusData.of(BigIntPlutusData.of(1))}) {
+                MapPlutusData properties = new MapPlutusData();
+                properties.put(BytesPlutusData.of("name"), BytesPlutusData.of("Test"));
+                String hexDatum = HexUtil.encodeHexString(CborSerializationUtil.serialize(
+                        ConstrPlutusData.of(0, properties, version).serialize()));
+
+                assertThat(parser.parse(hexDatum)).hasValueSatisfying(m ->
+                        assertThat(m.validationErrors()).singleElement().satisfies(e -> {
+                            assertThat(e.code()).isEqualTo("invalid_version");
+                            assertThat(e.fieldCategory().name()).isEqualTo("MANDATORY");
+                        }));
+            }
         }
     }
 

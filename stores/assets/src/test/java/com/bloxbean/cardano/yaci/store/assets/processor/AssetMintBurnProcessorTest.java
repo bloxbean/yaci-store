@@ -60,6 +60,7 @@ class AssetMintBurnProcessorTest {
         assertThat(txAssets.get(0).getAssetName()).isEqualTo("ATADAcoin");
         assertThat(txAssets.get(0).getFingerprint()).isEqualTo("asset1ee0u29k4xwauf0r7w8g30klgraxw0y4rz2t7xs");
         assertThat(txAssets.get(0).getSlot()).isEqualTo(11218439L);
+        assertThat(txAssets.get(0).getTxIndex()).isEqualTo(0);
         assertThat(txAssets.get(0).getBlockNumber()).isEqualTo(204450);
         assertThat(txAssets.get(0).getBlockTime()).isEqualTo(1666901639L);
         assertThat(txAssets.get(0).getMintType()).isEqualTo(MintType.MINT);
@@ -71,6 +72,7 @@ class AssetMintBurnProcessorTest {
         assertThat(txAssets.get(1).getAssetName()).isEqualTo("dtsNFT");
         assertThat(txAssets.get(1).getFingerprint()).isEqualTo("asset179arv9zfxjw8qsuw7jx20qnyf3ltgy7czsqhg4");
         assertThat(txAssets.get(1).getSlot()).isEqualTo(11218439L);
+        assertThat(txAssets.get(1).getTxIndex()).isEqualTo(3);
         assertThat(txAssets.get(1).getBlockNumber()).isEqualTo(204450);
         assertThat(txAssets.get(1).getBlockTime()).isEqualTo(1666901639L);
         assertThat(txAssets.get(1).getMintType()).isEqualTo(MintType.BURN);
@@ -134,6 +136,7 @@ class AssetMintBurnProcessorTest {
 
         TxMintBurn txMintBurn1 = TxMintBurn.builder()
                 .txHash("fd960815810b788da1f1d8719e3fdb47c5e4a82b9527f9c337a49512d255d545")
+                .txIndex(0)
                 .amounts(List.of(
                         Amount.builder()
                                 .unit("34250edd1e9836f5378702fbf9416b709bc140e04f668cc3552085184154414441636f696e")
@@ -146,6 +149,7 @@ class AssetMintBurnProcessorTest {
 
         TxMintBurn txMintBurn2 = TxMintBurn.builder()
                 .txHash("2f6ca7f9e7d31e60c8445b7ac793d8fe20506a471784cec2c1ee1627acf256f7")
+                .txIndex(3)
                 .amounts(List.of(
                         Amount.builder()
                                 .unit("3bc07438218b280dc651d825bd0e3276fc01e9faf73f0bda13c083276474734e4654")

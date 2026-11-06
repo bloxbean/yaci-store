@@ -20,7 +20,8 @@ services:
       "-c", "wal_level=minimal",
       "-c", "max_wal_senders=0",
       "-c", "work_mem=256MB",
-      "-c", "maintenance_work_mem=1GB"
+      "-c", "maintenance_work_mem=1GB",
+      "-c", "max_locks_per_transaction=1024"
       # optionally:
       # "-c", "shared_buffers=1GB"
     ]

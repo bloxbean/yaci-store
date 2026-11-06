@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.controller.TokenPatterns;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.annotation.Nullable;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
@@ -28,5 +29,6 @@ public class BatchRequest {
     @JsonProperty("properties")
     @Valid
     @Schema(name = "properties")
+    @Nullable
     private List<String> properties = null;
 }

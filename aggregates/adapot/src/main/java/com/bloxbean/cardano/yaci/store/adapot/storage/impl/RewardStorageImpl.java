@@ -18,6 +18,7 @@ import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVPrinter;
 import org.jooq.DSLContext;
 import org.jooq.SQLDialect;
+import org.jooq.impl.DSL;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
@@ -263,8 +264,13 @@ public class RewardStorageImpl implements RewardStorage {
     }
 
     @Override
-    public int deleteRewardsBySlotGreaterThan(long slot) {
-        return rewardRepository.deleteBySlotGreaterThan(slot);
+    public int deleteRewardsBySlotGreaterThan(long slot, int fromSpendableEpoch) {
+        // reward is partitioned by spendable_epoch. The epoch is inlined as a literal so PostgreSQL prunes
+        // (and locks) only the partitions from that epoch on, even with a generic plan.
+        return dsl.deleteFrom(REWARD)
+                .where(REWARD.SLOT.gt(slot))
+                .and(REWARD.SPENDABLE_EPOCH.ge(DSL.inline(fromSpendableEpoch)))
+                .execute();
     }
 
     @Override

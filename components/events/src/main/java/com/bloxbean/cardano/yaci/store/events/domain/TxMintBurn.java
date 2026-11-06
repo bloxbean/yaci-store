@@ -14,5 +14,6 @@ import java.util.List;
 @Builder
 public class TxMintBurn {
     private String txHash;
+    private Integer txIndex;
     private List<Amount> amounts;
 }
