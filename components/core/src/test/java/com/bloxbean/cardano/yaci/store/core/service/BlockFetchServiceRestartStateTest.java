@@ -30,7 +30,8 @@ class BlockFetchServiceRestartStateTest {
                 mock(StoreProperties.class),
                 mock(GenesisConfig.class),
                 mock(ShelleyBlockEventPublisher.class),
-                mock(ByronBlockEventPublisher.class));
+                mock(ByronBlockEventPublisher.class),
+                mock(com.bloxbean.cardano.yaci.store.core.storage.api.ErrorStorage.class));
     }
 
     @Test
