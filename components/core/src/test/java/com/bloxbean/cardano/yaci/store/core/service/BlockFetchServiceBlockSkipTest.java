@@ -327,6 +327,90 @@ class BlockFetchServiceBlockSkipTest {
         assertThat(blockFetchService.isError()).isTrue();
     }
 
+    @Test
+    void epochBoundaryBlockAfterASkippedParseErrorIsAccepted() {
+        //Byron: the epoch boundary block has the same number as the main block before it
+        blockFetchService.startSync(new Point(100, START_HASH), 100L);
+        blockFetchService.onParsingError(new BlockParseRuntimeException(101L, null, new RuntimeException("bad cbor")));
+
+        blockFetchService.onByronEbBlock(ebBlock(101, "eb101", "h101"));
+
+        verify(publisher).publishEvent(any(com.bloxbean.cardano.yaci.store.events.ByronEbBlockEvent.class));
+        assertThat(blockFetchService.isError()).isFalse();
+    }
+
+    @Test
+    void gapAfterASkippedParseErrorStopsTheSync() {
+        blockFetchService.startSync(new Point(100, START_HASH), 100L);
+        blockFetchService.onParsingError(new BlockParseRuntimeException(101L, null, new RuntimeException("bad cbor")));
+
+        Block afterGap = block(103, "h103", "h102");
+        deliver(afterGap);
+
+        verify(shelleyPublisher, never()).publishBlockEvents(any(), eq(afterGap), any());
+        assertThat(blockFetchService.isError()).isTrue();
+    }
+
+    @Test
+    void epochBoundaryBlockReDeliveredIsSkipped() {
+        blockFetchService.startSync(new Point(100, START_HASH), 100L);
+        blockFetchService.onByronEbBlock(ebBlock(100, "eb100", START_HASH));
+        blockFetchService.onByronEbBlock(ebBlock(100, "eb100", START_HASH));
+
+        verify(publisher, times(1)).publishEvent(any(com.bloxbean.cardano.yaci.store.events.ByronEbBlockEvent.class));
+        assertThat(blockFetchService.isError()).isFalse();
+    }
+
+    @Test
+    void placeholderCursorOfAFreshStartDoesNotCountAsProcessed() {
+        //StartService saves the start point as cursor before the block is processed, with no previous hash
+        blockFetchService.startSync(new Point(100, START_HASH), 100L);
+        when(cursorService.getCursorByBlockHash("p50"))
+                .thenReturn(Optional.of(Cursor.builder().slot(50L).block(50L).blockHash("p50").era(Era.Conway).build()));
+
+        Block notProcessed = block(50, "p50", "h49");
+        deliver(notProcessed);
+
+        verify(shelleyPublisher, never()).publishBlockEvents(any(), eq(notProcessed), any());
+        assertThat(blockFetchService.isError()).isTrue();
+    }
+
+    @Test
+    void parseErrorWithoutABlockNumberIsSkippedWithoutFailing() {
+        blockFetchService.startSync(new Point(100, START_HASH), 100L);
+
+        blockFetchService.onParsingError(new BlockParseRuntimeException(null, null, new RuntimeException("bad header")));
+
+        assertThat(blockFetchService.isError()).isFalse();
+        Block next = block(102, "h102", "h101");
+        deliver(next);
+        verify(shelleyPublisher).publishBlockEvents(any(), eq(next), any());
+    }
+
+    @Test
+    void rollbackThatLeavesNoCursorStillChecksTheNextBlock() {
+        blockFetchService.startSync(new Point(100, START_HASH), 100L);
+        when(cursorService.getCursor())
+                .thenReturn(Optional.of(cursor(100, START_HASH)))
+                .thenReturn(Optional.empty());
+
+        blockFetchService.onRollback(new Point(90, "h90"));
+        Block notLinked = block(92, "h92", "h91");
+        deliver(notLinked);
+
+        verify(shelleyPublisher, never()).publishBlockEvents(any(), eq(notLinked), any());
+        assertThat(blockFetchService.isError()).isTrue();
+    }
+
+    private com.bloxbean.cardano.yaci.core.model.byron.ByronEbBlock ebBlock(long number, String hash, String prevHash) {
+        var eb = mock(com.bloxbean.cardano.yaci.core.model.byron.ByronEbBlock.class, RETURNS_DEEP_STUBS);
+        when(eb.getHeader().getConsensusData().getDifficulty()).thenReturn(java.math.BigInteger.valueOf(number));
+        when(eb.getHeader().getConsensusData().getEpoch()).thenReturn(5L);
+        when(eb.getHeader().getBlockHash()).thenReturn(hash);
+        when(eb.getHeader().getPrevBlock()).thenReturn(prevHash);
+        return eb;
+    }
+
     //Same dispatch as yaci 0.4.7 BlockfetchAgent: an exception from the listener becomes onParsingError
     private void deliver(Block block) {
         try {
@@ -348,6 +432,6 @@ class BlockFetchServiceBlockSkipTest {
     }
 
     private Cursor cursor(long number, String hash) {
-        return Cursor.builder().slot(number).block(number).blockHash(hash).era(Era.Conway).build();
+        return Cursor.builder().slot(number).block(number).blockHash(hash).prevBlockHash("prev-" + hash).era(Era.Conway).build();
     }
 }
