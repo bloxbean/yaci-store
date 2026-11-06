@@ -57,15 +57,30 @@ class StartServiceTest {
     }
 
     @Test
-    void start_farFromTip_rangeFetchReprocessesCursorBlock() {
+    void start_farFromTip_rangeFetchSkipsTheProcessedCursorBlock() {
+        //The range fetch delivers the cursor block again, but BlockFetchService skips it because it is processed
+        //(#1313), so stores keep its rows
+        tipAt(CURSOR_SLOT + storeProperties.getBlockDiffToStartSyncProtocol() + 1);
+
+        startService.start();
+
+        assertThat(rollbackEvent().isRollbackPointReprocessed()).isFalse();
+        assertThat(rollbackEvent().generatedKeyRollbackSlot()).isEqualTo(CURSOR_SLOT);
+        verify(blockFetchService).startFetch(eq(new Point(CURSOR_SLOT, "cursor_hash")), any(), eq(10_000_000L));
+        verify(blockFetchService, never()).startSync(any(), any());
+    }
+
+    @Test
+    void start_fromAPlaceholderCursor_rangeFetchReprocessesTheStartBlock() {
+        //A fresh start saved its start point as cursor (no previous hash) but never processed that block
+        when(cursorService.getStartCursor()).thenReturn(Optional.of(
+                new Cursor(CURSOR_SLOT, "cursor_hash", 10_000_000L, null, Era.Babbage)));
         tipAt(CURSOR_SLOT + storeProperties.getBlockDiffToStartSyncProtocol() + 1);
 
         startService.start();
 
         assertThat(rollbackEvent().isRollbackPointReprocessed()).isTrue();
-        assertThat(rollbackEvent().generatedKeyRollbackSlot()).isEqualTo(CURSOR_SLOT - 1);
-        verify(blockFetchService).startFetch(eq(new Point(CURSOR_SLOT, "cursor_hash")), any());
-        verify(blockFetchService, never()).startSync(any());
+        verify(blockFetchService).startFetch(eq(new Point(CURSOR_SLOT, "cursor_hash")), any(), eq((Long) null));
     }
 
     @Test
@@ -76,20 +91,20 @@ class StartServiceTest {
 
         assertThat(rollbackEvent().isRollbackPointReprocessed()).isFalse();
         assertThat(rollbackEvent().generatedKeyRollbackSlot()).isEqualTo(CURSOR_SLOT);
-        verify(blockFetchService).startSync(new Point(CURSOR_SLOT, "cursor_hash"));
-        verify(blockFetchService, never()).startFetch(any(), any());
+        verify(blockFetchService).startSync(new Point(CURSOR_SLOT, "cursor_hash"), 10_000_000L);
+        verify(blockFetchService, never()).startFetch(any(), any(), any());
     }
 
     @Test
-    void start_withStopSlot_rangeFetchReprocessesCursorBlock() {
+    void start_withStopSlot_rangeFetchSkipsTheProcessedCursorBlock() {
         storeProperties.setSyncStopSlot(CURSOR_SLOT + 10);
         storeProperties.setSyncStopBlockhash("stop_hash");
         tipAt(CURSOR_SLOT + 10);
 
         startService.start();
 
-        assertThat(rollbackEvent().isRollbackPointReprocessed()).isTrue();
-        verify(blockFetchService).startFetch(new Point(CURSOR_SLOT, "cursor_hash"), new Point(CURSOR_SLOT + 10, "stop_hash"));
+        assertThat(rollbackEvent().isRollbackPointReprocessed()).isFalse();
+        verify(blockFetchService).startFetch(new Point(CURSOR_SLOT, "cursor_hash"), new Point(CURSOR_SLOT + 10, "stop_hash"), 10_000_000L);
     }
 
     private void tipAt(long slot) {
