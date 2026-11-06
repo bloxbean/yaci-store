@@ -190,6 +190,11 @@ public class BlockFetchService implements BlockChainDataListener {
     @Transactional
     @Override
     public void onByronBlock(ByronMainBlock byronBlock) {
+        if (scheduledToStop.get()) {
+            log.debug("Stopping BlockFetchService as scheduled");
+            return;
+        }
+
         checkError();
         lastReceivedBlockTime = System.currentTimeMillis();
         try {
@@ -266,6 +271,11 @@ public class BlockFetchService implements BlockChainDataListener {
     @Transactional
     @Override
     public void onByronEbBlock(ByronEbBlock byronEbBlock) {
+        if (scheduledToStop.get()) {
+            log.debug("Stopping BlockFetchService as scheduled");
+            return;
+        }
+
         checkError();
         lastReceivedBlockTime = System.currentTimeMillis();
         try {
@@ -292,6 +302,9 @@ public class BlockFetchService implements BlockChainDataListener {
                     .syncMode(syncMode)
                     .build();
 
+            //The EB block writes the cursor itself. Write the Byron blocks still waiting in a batch first, or the cursor
+            //would move past blocks that are not written yet.
+            byronBlockEventPublisher.processBlocksInParallel();
             publisher.publishEvent(new ByronEbBlockEvent(eventMetadata, byronEbBlock));
 
             //Finally Set the cursor
@@ -353,9 +366,12 @@ public class BlockFetchService implements BlockChainDataListener {
         //The next block must build on the rollback point. A point after the last stored block means yaci holds a
         //block that was never stored. Keep the old expectation so the next block fails the link check and sync
         //restarts from the cursor.
-        if (point.getSlot() <= currentPoint.getSlot())
+        if (point.getSlot() <= currentPoint.getSlot()) {
             resetAcceptedBlock(point.getHash(), cursorService.getCursor().map(Cursor::getBlock).orElse(null));
-        else
+            //Chain sync continues right after the rollback point, so the next block must build on it, even when its
+            //block number is not known (no cursor left)
+            expectedPrevBlockHash = point.getHash();
+        } else
             log.warn("Rollback point {} is after the last stored block {}", point, currentPoint);
 
         //Publish Pre-rollback event
@@ -462,8 +478,10 @@ public class BlockFetchService implements BlockChainDataListener {
 
             //The skipped block's hash is not known, so accept the next block without the link check
             expectedPrevBlockHash = null;
-            if (e.getBlockNumber() > lastAcceptedBlockNumber)
-                lastAcceptedBlockNumber = e.getBlockNumber();
+            //The next block must be the one after the skipped block, or a Byron epoch boundary block with the same
+            //number. If the skipped block's number is not known, accept the next block without a number check.
+            Long skippedBlockNumber = e.getBlockNumber(); //null when yaci could not decode the header either
+            lastAcceptedBlockNumber = skippedBlockNumber != null && skippedBlockNumber > 0 ? skippedBlockNumber : -1;
         } else {
             stopSyncOnError();
             throw new RuntimeException(e);
@@ -500,9 +518,15 @@ public class BlockFetchService implements BlockChainDataListener {
                 log.info("Block {} ({}) was already processed. Skipping the re-delivered block.", blockNumber, blockHash);
                 return false;
             }
+            //After a skipped parse error the hash is unknown. A Byron epoch boundary block has the same number as
+            //the block before it.
+            if (expected == null && !previousBlockLost && blockNumber == lastNumber)
+                return true;
         } else if (expected == null && !previousBlockLost) {
-            //Nothing to check against: the first block of a fresh start, or the block after a skipped parse error
-            return true;
+            //Nothing to check the hash against: the first block of a fresh start, or the block after a skipped parse
+            //error. In the second case it must be the next block.
+            if (lastNumber < 0 || blockNumber == lastNumber + 1)
+                return true;
         }
 
         log.error("Block {} ({}) does not build on the last block accepted (block {}{}). Expected previous block hash {}, " +
@@ -527,8 +551,11 @@ public class BlockFetchService implements BlockChainDataListener {
             return false;
         if (recentAcceptedHashes.containsKey(blockHash))
             return true;
-        //A cursor row is written only after the block (or its batch) is fully written
-        return cursorService.getCursorByBlockHash(blockHash).isPresent();
+        //Publishers write a cursor row only after the block (or its batch) is fully written. The placeholder cursor of a
+        //fresh start has no previous hash and does not count.
+        return cursorService.getCursorByBlockHash(blockHash)
+                .filter(cursor -> cursor.getPrevBlockHash() != null)
+                .isPresent();
     }
 
     private void blockAccepted(long blockNumber, String blockHash, boolean inBatch) {
