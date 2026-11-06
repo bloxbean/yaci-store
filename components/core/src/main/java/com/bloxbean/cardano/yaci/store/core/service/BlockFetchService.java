@@ -60,6 +60,14 @@ public class BlockFetchService implements BlockChainDataListener {
     private final ByronBlockEventPublisher byronBlockEventPublisher;
     private final ErrorStorage errorStorage;
 
+    //Only the current sync session may write. A default instance keeps hand-built instances (tests) working.
+    private SyncSessionGuard sessionGuard = new SyncSessionGuard();
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setSessionGuard(SyncSessionGuard sessionGuard) {
+        this.sessionGuard = sessionGuard;
+    }
+
     //Written by the thread that starts the sync and read by the yaci network thread
     private volatile boolean syncMode;
     private AtomicBoolean isError = new AtomicBoolean(false);
@@ -170,6 +178,10 @@ public class BlockFetchService implements BlockChainDataListener {
             previousEpoch = eventMetadata.getEpochNumber();
             previousEra = eventMetadata.getEra();
 
+        } catch (SyncSessionGuard.StaleSyncSessionException e) {
+            //An old session's thread: its writes are rolled back. The current session is fine, leave it running.
+            log.warn(e.getMessage());
+            throw e;
         } catch (Throwable e) {
             log.error("Error saving : " + (eventMetadata != null ? eventMetadata : blockHeader.getHeaderBody()), e);
             log.error("Stopping fetcher");
@@ -259,6 +271,10 @@ public class BlockFetchService implements BlockChainDataListener {
             previousEpoch = eventMetadata.getEpochNumber();
             previousEra = eventMetadata.getEra();
 
+        } catch (SyncSessionGuard.StaleSyncSessionException e) {
+            //An old session's thread: its writes are rolled back. The current session is fine, leave it running.
+            log.warn(e.getMessage());
+            throw e;
         } catch (Throwable e) {
             log.error("Error saving : Slot >>" + byronBlock.getHeader().getConsensusData().getSlotId(), e);
             log.error("Error at block hash #" + byronBlock.getHeader().getBlockHash());
@@ -308,9 +324,14 @@ public class BlockFetchService implements BlockChainDataListener {
             publisher.publishEvent(new ByronEbBlockEvent(eventMetadata, byronEbBlock));
 
             //Finally Set the cursor
+            sessionGuard.checkCaller();
             cursorService.setCursor(new Cursor(eventMetadata.getSlot(), eventMetadata.getBlockHash(),
                     eventMetadata.getBlock(), eventMetadata.getPrevBlockHash(), eventMetadata.getEra()));
             blockAccepted(eventMetadata.getBlock(), eventMetadata.getBlockHash(), false);
+        } catch (SyncSessionGuard.StaleSyncSessionException e) {
+            //An old session's thread: its writes are rolled back. The current session is fine, leave it running.
+            log.warn(e.getMessage());
+            throw e;
         } catch (Throwable e) {
             log.error("Error saving EbBlock : epoch >>" + byronEbBlock.getHeader().getConsensusData().getEpoch(), e);
             log.error("Error at block hash #" + byronEbBlock.getHeader().getBlockHash());
@@ -339,6 +360,8 @@ public class BlockFetchService implements BlockChainDataListener {
     }
 
     public void stop() {
+        //Callbacks still on their way from the stopped session are ignored
+        sessionGuard.endSession();
         scheduledToStop.set(true);
         shutdownRangeSync();
         shutdownSync();
@@ -594,6 +617,10 @@ public class BlockFetchService implements BlockChainDataListener {
      *                        already processed.
      */
     public synchronized void startFetch(Point from, Point to, Long fromBlockNumber) {
+        if (sessionGuard.isCallerStale()) {
+            log.warn("Not starting a range fetch from {}: asked by an old sync session", from);
+            return;
+        }
         isError.set(false);
         scheduledToStop.set(false);
         resetAcceptedBlock(from.getHash(), fromBlockNumber);
@@ -602,7 +629,7 @@ public class BlockFetchService implements BlockChainDataListener {
         //Set the mode before fetching starts, because the first blocks can arrive before fetch() returns
         syncMode = false;
         cursorService.setSyncMode(syncMode);
-        blockRangeSync.restart(this);
+        blockRangeSync.restart(new SessionListener(sessionGuard.newSession()));
         blockRangeSync.fetch(from, to);
 
         startKeepAliveThread(syncMode);
@@ -617,6 +644,11 @@ public class BlockFetchService implements BlockChainDataListener {
      *                        null. Chain sync delivers the blocks after {@code from}, so the first one must build on it.
      */
     public synchronized void startSync(Point from, Long fromBlockNumber) {
+        //e.g. an old range session finishing a long batchDone after a restart started a new session
+        if (sessionGuard.isCallerStale()) {
+            log.warn("Not starting chain sync from {}: asked by an old sync session", from);
+            return;
+        }
         isError.set(false);
         scheduledToStop.set(false);
 
@@ -631,7 +663,7 @@ public class BlockFetchService implements BlockChainDataListener {
         //The first block from chain sync must build on the start point
         resetAcceptedBlock(from.getHash(), fromBlockNumber);
         expectedPrevBlockHash = from.getHash();
-        blockSync.startSync(from, this);
+        blockSync.startSync(from, new SessionListener(sessionGuard.newSession()));
         startKeepAliveThread(syncMode);
     }
 
@@ -798,5 +830,66 @@ public class BlockFetchService implements BlockChainDataListener {
                 .build();
         
         publisher.publishEvent(restartEvent);
+    }
+
+    /**
+     * The listener handed to yaci for one sync session. Callbacks that arrive after a newer session started, or after
+     * the sync was stopped, are ignored. While a callback runs, the thread is marked as working for this session, so
+     * the publishers can refuse to commit if a restart starts a new session in the meantime.
+     */
+    private class SessionListener implements BlockChainDataListener {
+        private final long session;
+
+        SessionListener(long session) {
+            this.session = session;
+        }
+
+        private void call(String what, Runnable callback) {
+            if (!sessionGuard.isCurrent(session)) {
+                log.warn("Ignoring {} from old sync session {} (current: {})", what, session, sessionGuard.currentSession());
+                return;
+            }
+            sessionGuard.enter(session);
+            try {
+                callback.run();
+            } finally {
+                sessionGuard.exit();
+            }
+        }
+
+        @Override
+        public void onBlock(Era era, Block block, List<Transaction> transactions) {
+            call("block", () -> BlockFetchService.this.onBlock(era, block, transactions));
+        }
+
+        @Override
+        public void onByronBlock(ByronMainBlock byronBlock) {
+            call("Byron block", () -> BlockFetchService.this.onByronBlock(byronBlock));
+        }
+
+        @Override
+        public void onByronEbBlock(ByronEbBlock byronEbBlock) {
+            call("Byron EB block", () -> BlockFetchService.this.onByronEbBlock(byronEbBlock));
+        }
+
+        @Override
+        public void onRollback(Point point) {
+            call("rollback to " + point, () -> BlockFetchService.this.onRollback(point));
+        }
+
+        @Override
+        public void batchDone() {
+            call("batch done", BlockFetchService.this::batchDone);
+        }
+
+        @Override
+        public void onParsingError(BlockParseRuntimeException e) {
+            call("parse error", () -> BlockFetchService.this.onParsingError(e));
+        }
+
+        @Override
+        public void intersactNotFound(Tip tip) {
+            call("intersect not found", () -> BlockFetchService.this.intersactNotFound(tip));
+        }
     }
 }

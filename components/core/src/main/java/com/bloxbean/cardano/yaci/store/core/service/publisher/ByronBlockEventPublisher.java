@@ -6,6 +6,7 @@ import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.Cursor;
 import com.bloxbean.cardano.yaci.store.common.service.CursorService;
 import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
+import com.bloxbean.cardano.yaci.store.core.service.SyncSessionGuard;
 import com.bloxbean.cardano.yaci.store.events.ByronMainBlockEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
@@ -50,12 +51,22 @@ public class ByronBlockEventPublisher implements BlockEventPublisher<ByronMainBl
         byronBatchBlockList.clear();
     }
 
+    //Shared with BlockFetchService. A default instance keeps hand-built instances (tests) working.
+    private SyncSessionGuard sessionGuard = new SyncSessionGuard();
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setSessionGuard(SyncSessionGuard sessionGuard) {
+        this.sessionGuard = sessionGuard;
+    }
+
     @Transactional
     @Override
     public void publishBlockEvents(EventMetadata eventMetadata, ByronMainBlock byronBlock, List<Transaction> transactions) {
         ByronMainBlockEvent byronMainBlockEvent = new ByronMainBlockEvent(eventMetadata, byronBlock);
 
         publisher.publishEvent(byronMainBlockEvent);
+        //A thread from an old sync session must not commit this block
+        sessionGuard.checkCaller();
         publisher.publishEvent(new PreCommitEvent(eventMetadata));
         publisher.publishEvent(new CommitEvent<>(eventMetadata, List.of(new BatchByronBlock(eventMetadata, byronBlock))));
 
@@ -96,6 +107,12 @@ public class ByronBlockEventPublisher implements BlockEventPublisher<ByronMainBl
                 .join();
 
         BatchByronBlock lastBlockCache = byronBatchBlockList.getLast();
+
+        //A batch from an old sync session is not committed and the cursor is not moved
+        if (sessionGuard.isCallerStale()) {
+            byronBatchBlockList.clear();
+            sessionGuard.checkCaller();
+        }
         publisher.publishEvent(new PreCommitEvent(lastBlockCache.getMetadata()));
         publisher.publishEvent(new CommitEvent(lastBlockCache.getMetadata(), byronBatchBlockList));
 
