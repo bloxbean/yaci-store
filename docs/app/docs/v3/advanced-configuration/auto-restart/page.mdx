@@ -36,7 +36,7 @@ The system includes safeguards to prevent restart storms and enable automatic re
 - **Exponential backoff**: Increases delay between retry attempts (5s, 10s, 20s, 40s, 60s max)
 - **Sliding-window rate limiting**: Resets the retry counter if no restart has been attempted within ~10 minutes, allowing fresh restart attempts for new or recovered outages without manual intervention
 - **Max-attempts per window**: Within the sliding window, slows restarts down to one per `retry-interval-after-max-ms` after reaching the configured limit, to prevent restart storms
-- **Failed restarts are retried**: If a restart stops the sync but cannot start it again (for example, the database is down), the next health check sees an error and schedules another restart. Only a deliberate stop (admin API, snapshot jobs) keeps the sync stopped
+- **Failed restarts are retried**: If a restart stops the sync but cannot start it again (for example, the database is down), or a restart request is dropped by the debounce or the attempt limit, the restart is checked again after the debounce window and retried while the sync is still stopped by an error. This does not need the health-check service. Only a deliberate stop (admin API, snapshot jobs) keeps the sync stopped
 - **Grace period for a new session**: After a restart, the health check waits `store.block-receive-delay-seconds` from the start of the new session before it treats the sync as stalled again
 
 <Callout>

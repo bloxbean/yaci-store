@@ -488,6 +488,13 @@ public class BlockFetchService implements BlockChainDataListener {
         isError.set(true);
     }
 
+    /**
+     * Clears the error left by a previous session or a failed restart, before a new start.
+     */
+    public void clearError() {
+        isError.set(false);
+    }
+
     public long getLastSessionStartTime() {
         return lastSessionStartTime;
     }

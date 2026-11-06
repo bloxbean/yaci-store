@@ -71,4 +71,24 @@ class StartServiceRestartTest {
         verify(cursorService, never()).getStartCursor();
         verify(blockFetchService, never()).markRestartFailed();
     }
+
+    @Test
+    void stopIsRecordedEvenWhenNothingIsRunning() {
+        when(blockFetchService.isRunning()).thenReturn(false);
+
+        startService.stop();
+
+        verify(blockFetchService).stop();
+    }
+
+    @Test
+    void startClearsTheErrorLeftByAFailedRestart() {
+        when(cursorService.getStartCursor()).thenThrow(new IllegalStateException("stop here"));
+
+        assertThatThrownBy(() -> startService.start()).hasMessage("stop here");
+
+        var order = inOrder(blockFetchService);
+        order.verify(blockFetchService).clearError();
+        order.verify(blockFetchService).reset();
+    }
 }

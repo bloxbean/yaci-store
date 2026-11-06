@@ -15,6 +15,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -136,5 +138,45 @@ class RequiredRestartProcessorTest {
         for (int attempt : new int[]{5, 52, 64, 1_000, Integer.MAX_VALUE}) {
             assertThat(processor.calculateBackoff(attempt)).isEqualTo(60_000L);
         }
+    }
+
+    @Test
+    void failedRestartIsTriedAgainWithoutTheHealthCheck() throws Exception {
+        when(storeProperties.isAutoRestartEnabled()).thenReturn(true);
+        when(storeProperties.getAutoRestartDebounceWindowMs()).thenReturn(0L);
+        when(storeProperties.getAutoRestartBackoffBaseMs()).thenReturn(0L);
+        processor.shutdownWaitMs = 0;
+        processor.retryCheckDelayMs = 20;
+        when(startService.stopForRestart()).thenReturn(1L);
+        var secondStart = new java.util.concurrent.CountDownLatch(1);
+        when(startService.startAfterRestart(1L))
+                .thenThrow(new IllegalStateException("database down"))
+                .thenAnswer(inv -> {
+                    secondStart.countDown();
+                    return true;
+                });
+        when(startService.isSyncFailed()).thenReturn(true);
+
+        processor.handleRestartInterval(event);
+
+        assertThat(secondStart.await(5, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+    }
+
+    @Test
+    void droppedRequestIsNotRetriedOnceTheSyncIsHealthy() throws Exception {
+        when(storeProperties.isAutoRestartEnabled()).thenReturn(true);
+        processor.retryCheckDelayMs = 20;
+        processor.evaluateRestartAttempt(System.currentTimeMillis(), event); // next request is inside the debounce window
+        var checked = new java.util.concurrent.CountDownLatch(1);
+        when(startService.isSyncFailed()).thenAnswer(inv -> {
+            checked.countDown();
+            return false;
+        });
+
+        processor.handleRestartInterval(event);
+
+        assertThat(checked.await(5, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+        Thread.sleep(100);
+        verify(startService, never()).stopForRestart();
     }
 }
