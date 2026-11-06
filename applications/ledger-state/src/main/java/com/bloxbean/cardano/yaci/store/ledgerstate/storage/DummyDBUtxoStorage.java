@@ -21,7 +21,8 @@ public class DummyDBUtxoStorage extends UtxoStorageImpl {
                               DSLContext dsl,
                               UtxoCache utxoCache,
                               PlatformTransactionManager transactionManager) {
-        super(utxoRepository, spentOutputRepository, dsl, utxoCache, transactionManager);
+        // No writes here, so there is no address_utxo_unspent to keep current
+        super(utxoRepository, spentOutputRepository, dsl, utxoCache, transactionManager, null);
     }
 
     @Override

@@ -11,6 +11,7 @@ import com.bloxbean.cardano.yaci.store.dbutils.index.service.RollbackService;
 import com.bloxbean.cardano.yaci.store.dbutils.index.util.DatabaseUtils;
 import com.bloxbean.cardano.yaci.store.dbutils.index.util.IndexLoader;
 import com.bloxbean.cardano.yaci.store.dbutils.index.util.RollbackLoader;
+import com.bloxbean.cardano.yaci.store.dbutils.utxo.UnspentUtxoBackfillService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -21,6 +22,7 @@ import org.springframework.shell.command.annotation.Option;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 import static com.bloxbean.cardano.yaci.store.admin.cli.common.ConsoleWriter.*;
@@ -36,6 +38,7 @@ public class DBCommands {
     private final IndexService indexService;
     private final RollbackService rollbackService;
     private final DatabaseUtils databaseUtils;
+    private final UnspentUtxoBackfillService unspentUtxoBackfillService;
 
     @Value("${store.admin-cli.db.rollback.rollback-files:rollback.yml}")
     private String rollbackFiles;
@@ -156,6 +159,38 @@ public class DBCommands {
         if (!result.getSecond().isEmpty()) {
             log.warn(">> Failed to apply these indexes : " + result.getSecond());
         }
+    }
+
+    @Command(description = "Build address_utxo_unspent for a store synced before store.utxo.unspent-table-enabled was turned on. Stop the store first.")
+    public void backfillUnspentUtxos(
+            @Option(longNames = "from-output-index", defaultValue = "0", description = "0 rebuilds the table from scratch; to resume an interrupted run, pass the output_index it last reported") int fromOutputIndex) {
+        if (!databaseUtils.tableExists("address_utxo_unspent") || !databaseUtils.tableExists("store_state")) {
+            writeLn(error("Table address_utxo_unspent or store_state not found. Start the store once with this version so its migrations run."));
+            return;
+        }
+
+        if (unspentUtxoBackfillService.maxOutputIndex() < 0) {
+            writeLn(warn("address_utxo is empty, nothing to build"));
+            return;
+        }
+
+        boolean hasCursor = databaseUtils.tableExists("cursor_");
+        Long cursorBefore = hasCursor ? unspentUtxoBackfillService.cursorSlot() : null;
+        writeLn(info("Building address_utxo_unspent at cursor slot %s from output_index %d. The store must stay stopped until this finishes.",
+                cursorBefore, fromOutputIndex));
+        long copied = unspentUtxoBackfillService.rebuild(fromOutputIndex);
+
+        Long cursorAfter = hasCursor ? unspentUtxoBackfillService.cursorSlot() : null;
+        if (!Objects.equals(cursorBefore, cursorAfter)) {
+            writeLn(error("The store's cursor moved from slot %s to %s while the table was built, so the store was running and the table may be wrong. "
+                    + "Stop the store and run this command again.", cursorBefore, cursorAfter));
+            return;
+        }
+
+        unspentUtxoBackfillService.markCurrentAtCursor();
+        writeLn(success("Copied %d unspent outputs.", copied));
+        writeLn(info("Now start the store with store.utxo.unspent-table-enabled=true (it keeps the table current from slot %s) "
+                + "and store.utxo.unspent-table-read-enabled=true.", cursorAfter));
     }
 
     @Command(description = "List missing read indexes")

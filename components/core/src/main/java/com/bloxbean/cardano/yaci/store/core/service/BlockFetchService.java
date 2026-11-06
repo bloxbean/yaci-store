@@ -25,6 +25,7 @@ import com.bloxbean.cardano.yaci.store.core.service.publisher.ByronBlockEventPub
 import com.bloxbean.cardano.yaci.store.core.service.publisher.ShelleyBlockEventPublisher;
 import com.bloxbean.cardano.yaci.store.core.util.SlotLeaderUtil;
 import com.bloxbean.cardano.yaci.store.events.*;
+import com.bloxbean.cardano.yaci.store.events.internal.PreBlockSyncEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.RequiredSyncRestartEvent;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -721,7 +722,7 @@ public class BlockFetchService implements BlockChainDataListener {
         startKeepAliveThread(syncMode);
     }
 
-    public synchronized void startSync(Point from) {
+    public void startSync(Point from) {
         startSync(from, null);
     }
 
@@ -729,8 +730,19 @@ public class BlockFetchService implements BlockChainDataListener {
      * @param fromBlockNumber the block number of {@code from} if that block is already processed (the cursor), or
      *                        null. Chain sync delivers the blocks after {@code from}, so the first one must build on it.
      */
-    public synchronized void startSync(Point from, Long fromBlockNumber) {
+    public void startSync(Point from, Long fromBlockNumber) {
         //e.g. an old range session finishing a long batchDone after a restart started a new session
+        if (sessionGuard.isCallerStale()) {
+            log.warn("Not starting chain sync from {}: asked by an old sync session", from);
+            return;
+        }
+        //Outside the lock: a listener may run for a while
+        publisher.publishEvent(new PreBlockSyncEvent(from));
+        doStartSync(from, fromBlockNumber);
+    }
+
+    private synchronized void doStartSync(Point from, Long fromBlockNumber) {
+        //Checked again: the session may have been replaced while the listeners ran
         if (sessionGuard.isCallerStale()) {
             log.warn("Not starting chain sync from {}: asked by an old sync session", from);
             return;
