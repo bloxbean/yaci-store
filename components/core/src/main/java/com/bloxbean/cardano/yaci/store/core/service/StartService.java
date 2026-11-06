@@ -46,6 +46,17 @@ public class StartService {
         if (alreadyStarted)
             throw new RuntimeException("StartService has already been started");
 
+        try {
+            doStart();
+        } catch (RuntimeException e) {
+            // Leave the service startable: a later start() must not fail with "already been started".
+            alreadyStarted = false;
+            throw e;
+        }
+    }
+
+    private void doStart() {
+
         log.info("###### Genesis Config #####");
         log.info("Epoch Length            : " + genesisConfig.getEpochLength());
         log.info("ByronEra Slot Duration  : " + genesisConfig.slotDuration(Era.Byron));
@@ -173,6 +184,15 @@ public class StartService {
         }
 
         alreadyStarted = false;
+    }
+
+    /**
+     * Called by the auto-restart when {@link #start()} failed after {@link #stop()}. Puts the service back in a
+     * state the health check sees as failed (not as a deliberate stop), so the restart is tried again.
+     */
+    public void markRestartFailed() {
+        alreadyStarted = false;
+        blockFetchService.markRestartFailed();
     }
 
     public boolean isStarted() {

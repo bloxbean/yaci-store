@@ -21,10 +21,15 @@ public class HealthService {
         long blockReceiveDelayThreshold = getBlockReceiveDelayThreshold();
         long timeSinceLastReceivedBlock = (lastReceivedBlockTime == 0) ? 0 : (currentTime - lastReceivedBlockTime);
 
+        // A new session gets the full threshold to receive its first block, counted from when it started.
+        // Without this, a restart that has not received a block yet is judged by the time of the last block
+        // before the outage and is restarted again at the next check.
+        long lastActivityTime = Math.max(lastReceivedBlockTime, blockFetchService.getLastSessionStartTime());
+
         // Consider blocks are being received if:
-        // - No blocks received yet (lastReceivedBlockTime == 0) OR
-        // - Time since last block is within threshold
-        boolean isReceivingBlocks = (lastReceivedBlockTime == 0) || (timeSinceLastReceivedBlock <= blockReceiveDelayThreshold);
+        // - No session started and no block received yet OR
+        // - Time since the last block, or since the session started, is within the threshold
+        boolean isReceivingBlocks = (lastActivityTime == 0) || (currentTime - lastActivityTime <= blockReceiveDelayThreshold);
 
         boolean isConnectionAlive = blockFetchService.isRunning();
 

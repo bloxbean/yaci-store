@@ -11,8 +11,14 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class RequiredRestartProcessorTest {
@@ -82,5 +88,44 @@ class RequiredRestartProcessorTest {
         processor.evaluateRestartAttempt(BASE_NOW + 60_000, event);
 
         verifyNoInteractions(startService);
+    }
+
+    @Test
+    void keepsRetryingOncePerIntervalAfterMaxAttempts() {
+        when(storeProperties.getAutoRestartRetryIntervalAfterMaxMs()).thenReturn(60_000L);
+        processor.evaluateRestartAttempt(BASE_NOW, event);
+        processor.evaluateRestartAttempt(BASE_NOW + 60_000, event);
+        processor.evaluateRestartAttempt(BASE_NOW + 120_000, event); // budget used up
+
+        // 40 s after the last attempt: still too soon
+        assertThat(processor.evaluateRestartAttempt(BASE_NOW + 160_000, event)).isZero();
+        // 60 s after the last attempt: allowed, without waiting for the 10-minute window
+        assertThat(processor.evaluateRestartAttempt(BASE_NOW + 180_000, event)).isEqualTo(4);
+        // and again 60 s after that
+        assertThat(processor.evaluateRestartAttempt(BASE_NOW + 210_000, event)).isZero();
+        assertThat(processor.evaluateRestartAttempt(BASE_NOW + 240_000, event)).isEqualTo(5);
+    }
+
+    @Test
+    void failedStartIsMarkedSoTheHealthCheckRetries() {
+        processor.shutdownWaitMs = 0;
+        doThrow(new IllegalStateException("database down")).when(startService).start();
+
+        assertThatThrownBy(() -> processor.performRestart(event)).hasMessage("database down");
+
+        var order = inOrder(startService);
+        order.verify(startService).stop();
+        order.verify(startService).start();
+        order.verify(startService).markRestartFailed();
+    }
+
+    @Test
+    void successfulStartIsNotMarkedFailed() {
+        processor.shutdownWaitMs = 0;
+
+        processor.performRestart(event);
+
+        verify(startService).start();
+        verify(startService, never()).markRestartFailed();
     }
 }
