@@ -299,9 +299,32 @@ public class BlockFetchService implements BlockChainDataListener {
                 .orElse(-1L);
 
         log.info("Current cursor point >> " + currentPoint);
-        if ((point.getSlot() == 0 && point.getHash() == null)
-                || (currentPoint.getSlot() - point.getSlot()) > DEFAULT_SECURITY_PARAM) {
-            log.error("Rollback point doesn't seem to be valid. Ignoring rollback event to slot. " + point);
+        if (point.getSlot() == 0 && point.getHash() == null) {
+            log.warn("Rollback point doesn't seem to be valid. Ignoring rollback event to slot. " + point);
+            return;
+        }
+
+        if (currentPoint == null) {
+            log.info("Nothing stored yet. Nothing to roll back for rollback event to " + point);
+            return;
+        }
+
+        // A node never rolls back more than k blocks. Note that k counts blocks: comparing it with a distance in
+        // slots, as before, refused every rollback deeper than ~36 minutes on mainnet.
+        String refusal = checkRollbackDepth(point, currentPoint, currentBlockNum);
+        if (refusal != null) {
+            // Ignoring the rollback and carrying on would write the blocks that follow it on top of newer data.
+            // Stop this session instead; the restart resumes from the cursor.
+            log.error("Refusing rollback to {} from cursor {} (block {}): {}. Restarting the sync from the cursor.",
+                    point, currentPoint, currentBlockNum, refusal);
+            stopSyncOnError();
+            publisher.publishEvent(RequiredSyncRestartEvent.builder()
+                    .reason("RollbackTooDeep")
+                    .errorCode("ROLLBACK_TOO_DEEP")
+                    .timestamp(System.currentTimeMillis())
+                    .source("BlockFetchService")
+                    .details(String.format("Rollback to %s, cursor at %s: %s", point, currentPoint, refusal))
+                    .build());
             return;
         }
 
@@ -327,6 +350,48 @@ public class BlockFetchService implements BlockChainDataListener {
                 .build();
         log.info("Publishing rollback event : " + rollbackEvent);
         publisher.publishEvent(rollbackEvent);
+    }
+
+    /**
+     * Returns why a rollback must be refused, or null if it is fine.
+     * <p>
+     * The depth is counted in blocks, using the block number stored for the rollback point in the cursor table.
+     * The cursor table has one row per block in chain-sync, but only one row per batch for blocks written by the
+     * range fetch, and old rows are cleaned up. When the point has no row, fall back to slots: 3k/f slots is the
+     * window in which the chain normally has k blocks (129600 slots on mainnet and preprod).
+     */
+    String checkRollbackDepth(Point point, Point currentPoint, long currentBlockNum) {
+        long k = securityParam();
+        Optional<Cursor> pointCursor = point.getHash() != null
+                ? cursorService.getCursorByBlockHash(point.getHash())
+                : Optional.empty();
+
+        if (pointCursor.isPresent() && pointCursor.get().getBlock() != null && currentBlockNum >= 0) {
+            long depthBlocks = currentBlockNum - pointCursor.get().getBlock();
+            return depthBlocks > k
+                    ? String.format("%d blocks deep, more than k = %d", depthBlocks, k)
+                    : null;
+        }
+
+        long depthSlots = currentPoint.getSlot() - point.getSlot();
+        long maxSlots = maxRollbackSlots();
+        return depthSlots > maxSlots
+                ? String.format("rollback point not in the cursor table and %d slots deep, more than 3k/f = %d slots",
+                        depthSlots, maxSlots)
+                : null;
+    }
+
+    private long securityParam() {
+        int k = genesisConfig.getSecurityParam();
+        return k > 0 ? k : DEFAULT_SECURITY_PARAM;
+    }
+
+    long maxRollbackSlots() {
+        long k = securityParam();
+        double f = genesisConfig.getActiveSlotsCoeff();
+        if (f <= 0)
+            f = 0.05;
+        return (long) Math.ceil(3 * k / f);
     }
 
     private void restoreEpochStateFromCursor() {
