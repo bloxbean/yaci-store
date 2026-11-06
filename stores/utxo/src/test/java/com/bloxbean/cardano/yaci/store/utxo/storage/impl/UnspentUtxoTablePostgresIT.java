@@ -150,7 +150,9 @@ class UnspentUtxoTablePostgresIT {
         commit();
         jdbc.update("insert into tx_input (tx_hash, output_index, spent_at_slot) values (?, 0, 200)", hash(4));   //a spend the table missed
 
-        assertThat(table.build()).isEqualTo(1);   //truncated, not deleted, on PostgreSQL
+        long[] copied = new long[1];
+        table.build(copied);
+        assertThat(copied[0]).isEqualTo(1);   //truncated, not deleted, on PostgreSQL
 
         assertThat(unspentKeys()).containsExactly(hash(5) + "#0").isEqualTo(expectedKeys());
     }

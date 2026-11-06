@@ -401,7 +401,7 @@ class UnspentUtxoTableIT {
     }
 
     /** A store with its own table and cursor, so the shared beans stay in from-genesis mode with no cursor. */
-    private record Store(UnspentUtxoTable table, UtxoStorageImpl storage, TransactionTemplate tx) {
+    private record Store(UnspentUtxoTable table, UtxoStorageImpl storage, TransactionTemplate tx, Long cursorSlot) {
         void commit() {
             storage.handleCommit(new CommitEvent<>(EventMetadata.builder().build(), List.of()));
         }
@@ -410,8 +410,15 @@ class UnspentUtxoTableIT {
             storage.handleCommit(commitAt(slot));
         }
 
+        /** The sync starts near the tip: the table is built (inline here), then switched on at the next commit. */
         void reachTip() {
             table.handlePreBlockSync(new PreBlockSyncEvent(new Point(0, "tip")));
+            switchOnAtNextCommit();
+        }
+
+        void switchOnAtNextCommit() {
+            if (table.phase() == UnspentUtxoTable.Phase.CATCHING_UP)
+                commit(cursorSlot != null ? cursorSlot : 0);
         }
 
         /** As UtxoRollbackProcessor does, in a transaction: this storage is not a Spring proxy. */
@@ -428,8 +435,9 @@ class UnspentUtxoTableIT {
         when(cursorService.getCursor()).thenReturn(cursorSlot == null ? Optional.empty()
                 : Optional.of(Cursor.builder().slot(cursorSlot).block(cursorSlot / 10).blockHash("bh" + cursorSlot).build()));
         UnspentUtxoTable table = new UnspentUtxoTable(storeProperties, dsl, transactionManager, storeStateService, cursorService);
+        table.buildExecutor = Runnable::run;   //build inline, so the tests see its result at once
         return new Store(table, new UtxoStorageImpl(utxoRepository, txInputRepository, dsl, new UtxoCache(), transactionManager, table),
-                new TransactionTemplate(transactionManager));
+                new TransactionTemplate(transactionManager), cursorSlot);
     }
 
     private Store atTip() {
@@ -576,6 +584,8 @@ class UnspentUtxoTableIT {
     @Test
     void aBatchAfterSkippedBlocksSwitchesTheTableOffUntilItIsBuiltAgain() {
         Store store = fromGenesisAt(null);
+        List<Runnable> builds = new ArrayList<>();
+        store.table().buildExecutor = builds::add;   //run the background build when the test says so
         store.storage().saveUnspent(List.of(output(hash(59), 0, 100)));
         store.storage().handleCommit(batch(10, 100));      //the table holds blocks up to 10
 
@@ -592,7 +602,9 @@ class UnspentUtxoTableIT {
         store.storage().handleCommit(batch(320, 320));
         assertThat(unspentKeys()).containsExactly(hash(59) + "#0");
 
-        store.reachTip();   //the next sync start builds it again
+        assertThat(builds).hasSize(1);   //the gap started a rebuild in the background; the sync did not wait for it
+        builds.getFirst().run();
+        store.switchOnAtNextCommit();
 
         assertThat(store.table().isActive()).isTrue();
         assertThat(state()).containsEntry("STATUS", "CURRENT");
@@ -629,6 +641,92 @@ class UnspentUtxoTableIT {
         tableOff().rollbackTo(150);
 
         assertThat(state()).containsEntry("STATUS", "CURRENT").containsEntry("SLOT", 100L);
+    }
+
+    // --- #1328: background build, catch-up, genesis cursor, replayed blocks
+
+    @Test
+    void theGenesisCursorCountsAsNothingSyncedYet() {
+        //The genesis block event writes a cursor at slot -1 before the first block
+        Store store = fromGenesisAt(-1L);
+
+        assertThat(store.table().isActive()).isTrue();
+    }
+
+    @Test
+    void blocksSyncedDuringTheBuildAreCaughtUpWhenTheTableIsSwitchedOn() {
+        Store store = store(UtxoStoreProperties.builder()
+                .unspentTableEnabled(true).unspentTableBackfillAtTip(true).unspentTableReadEnabled(true).build(), 100L);
+        List<Runnable> builds = new ArrayList<>();
+        store.table().buildExecutor = builds::add;
+        store.storage().saveUnspent(List.of(output(hash(70), 0, 50), output(hash(71), 0, 60)));
+        store.commit(100);
+
+        store.table().handlePreBlockSync(new PreBlockSyncEvent(new Point(100, "bh100")));
+        assertThat(builds).hasSize(1);   //the sync does not wait for the build
+        builds.getFirst().run();          //builds the view as of the cursor, slot 100
+        assertThat(store.table().phase()).isEqualTo(UnspentUtxoTable.Phase.CATCHING_UP);
+        assertThat(store.table().isReadable()).isFalse();
+
+        //Blocks synced meanwhile: written to address_utxo and tx_input only
+        store.storage().saveUnspent(List.of(output(hash(72), 0, 150)));
+        store.storage().saveSpent(List.of(spend(hash(70), 0, 160)));
+        store.storage().handleCommit(commitAt(160));   //close to the build: switched on, with the last catch-up
+
+        assertThat(store.table().isActive()).isTrue();
+        assertThat(unspentKeys()).containsExactly(hash(71) + "#0", hash(72) + "#0").isEqualTo(expectedKeys());
+        assertThat(state()).containsEntry("STATUS", "CURRENT").containsEntry("SLOT", 160L);
+    }
+
+    @Test
+    void aRollbackWhileCatchingUpIsAppliedToTheTable() {
+        Store store = store(UtxoStoreProperties.builder()
+                .unspentTableEnabled(true).unspentTableBackfillAtTip(true).unspentTableReadEnabled(true).build(), 200L);
+        store.storage().saveUnspent(List.of(output(hash(73), 0, 100), output(hash(74), 0, 180)));
+        store.storage().saveSpent(List.of(spend(hash(73), 0, 190)));
+        store.commit(200);
+        store.table().handlePreBlockSync(new PreBlockSyncEvent(new Point(200, "bh200")));   //built inline
+        assertThat(store.table().phase()).isEqualTo(UnspentUtxoTable.Phase.CATCHING_UP);
+        assertThat(unspentKeys()).containsExactly(hash(74) + "#0");
+
+        store.rollbackTo(150);   //hash(74) is gone, the spend of hash(73) too
+
+        assertThat(unspentKeys()).containsExactly(hash(73) + "#0").isEqualTo(expectedKeys());
+        store.storage().handleCommit(commitAt(150));
+        assertThat(store.table().isActive()).isTrue();
+        assertThat(unspentKeys()).isEqualTo(expectedKeys());
+    }
+
+    @Test
+    void aRollbackBelowTheBuildsStartDuringTheBuildBuildsAgain() {
+        Store store = store(UtxoStoreProperties.builder()
+                .unspentTableEnabled(true).unspentTableBackfillAtTip(true).unspentTableReadEnabled(true).build(), 200L);
+        List<Runnable> builds = new ArrayList<>();
+        store.table().buildExecutor = builds::add;
+        store.table().handlePreBlockSync(new PreBlockSyncEvent(new Point(200, "bh200")));
+        assertThat(store.table().phase()).isEqualTo(UnspentUtxoTable.Phase.BUILDING);
+
+        store.rollbackTo(150);   //before the build knew its starting point
+        builds.getFirst().run();
+
+        assertThat(builds).hasSize(2);   //thrown away and started again
+    }
+
+    @Test
+    void aBlockProcessedAgainDoesNotBringBackAnOutputSpentLater() {
+        //#1328 J07: a hung listener finished an old block after newer blocks had spent its outputs
+        Store store = fromGenesisAt(null);
+        store.storage().saveUnspent(List.of(output(hash(75), 0, 100)));
+        store.storage().handleCommit(batch(100, 100));
+        store.storage().saveSpent(List.of(spend(hash(75), 0, 110)));
+        store.storage().handleCommit(batch(110, 110));
+        assertThat(unspentKeys()).isEmpty();
+
+        store.storage().saveUnspent(List.of(output(hash(75), 0, 100)));   //block 10 again
+        store.storage().handleCommit(batch(100, 100));
+
+        assertThat(unspentKeys()).isEmpty();
+        assertThat(store.table().isActive()).isTrue();
     }
 
     @Test

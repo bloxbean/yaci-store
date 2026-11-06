@@ -30,6 +30,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
@@ -161,11 +162,14 @@ public class UtxoStorageImpl implements UtxoStorage {
     @Override
     @Transactional
     public int deleteUnspentBySlotGreaterThan(Long slot) {
-        if (isUnspentTableEnabled()) {
-            int deleted = dsl.deleteFrom(ADDRESS_UTXO_UNSPENT)
-                    .where(ADDRESS_UTXO_UNSPENT.SLOT.gt(slot))
-                    .execute();
-            log.info("Rollback -- {} address_utxo_unspent records", deleted);
+        //Also while the table is built and catching up: it must follow the rollback
+        if (unspentUtxoTable != null && unspentUtxoTable.isKeptOnRollback()) {
+            unspentUtxoTable.runLockedUntilTransactionEnds(() -> {
+                int deleted = dsl.deleteFrom(ADDRESS_UTXO_UNSPENT)
+                        .where(ADDRESS_UTXO_UNSPENT.SLOT.gt(slot))
+                        .execute();
+                log.info("Rollback -- {} address_utxo_unspent records", deleted);
+            });
         }
 
         return utxoRepository.deleteBySlotGreaterThan(slot);
@@ -174,10 +178,12 @@ public class UtxoStorageImpl implements UtxoStorage {
     @Override
     @Transactional
     public int deleteSpentBySlotGreaterThan(Long slot) {
-        if (isUnspentTableEnabled()) {
+        if (unspentUtxoTable != null && unspentUtxoTable.isKeptOnRollback()) {
             //Must run before tx_input is trimmed: the outputs to restore are the ones whose spend is removed
-            int restored = restoreUnspentSpentAfter(slot);
-            log.info("Rollback -- {} address_utxo_unspent records restored", restored);
+            unspentUtxoTable.runLockedUntilTransactionEnds(() -> {
+                int restored = restoreUnspentSpentAfter(slot);
+                log.info("Rollback -- {} address_utxo_unspent records restored", restored);
+            });
 
             //Outputs and spends not yet committed belong to the blocks being rolled back
             pendingOutputs.clear();
@@ -335,8 +341,13 @@ public class UtxoStorageImpl implements UtxoStorage {
     @Override
     public void handleCommit(CommitEvent commitEvent) {
         try {
-            if (isUnspentTableEnabled())
+            if (isUnspentTableEnabled()) {
                 commitUnspentTable(commitEvent);
+            } else if (unspentUtxoTable != null) {
+                //A table built in the background is switched on at a commit, in the commit's transaction
+                commitTransactionTemplate.executeWithoutResult(status ->
+                        unspentUtxoTable.switchOnAtCommit(commitEvent.getMetadata()));
+            }
         } finally {
             utxoCache.clear();
         }
@@ -380,8 +391,12 @@ public class UtxoStorageImpl implements UtxoStorage {
                     .toList();
             deleted[0] = toDelete.size();
 
-            for (int from = 0; from < unspent.size(); from += UNSPENT_WRITE_BATCH_SIZE) {
-                dsl.batch(unspent.subList(from, Math.min(from + UNSPENT_WRITE_BATCH_SIZE, unspent.size())).stream()
+            //A block processed again (at or before the kept slot) can carry outputs that a later block, already in
+            //the table, spent. They must not be written back (#1328 J07: a hung listener finished an old block late).
+            List<PendingOutput> toWrite = withoutLaterSpends(unspent, keptSlot);
+
+            for (int from = 0; from < toWrite.size(); from += UNSPENT_WRITE_BATCH_SIZE) {
+                dsl.batch(toWrite.subList(from, Math.min(from + UNSPENT_WRITE_BATCH_SIZE, toWrite.size())).stream()
                         .map(output -> upsert(ADDRESS_UTXO_UNSPENT, mapper.toAddressUtxoEntity(output.addressUtxo()), output.savedAt()))
                         .toList()).execute();
             }
@@ -401,12 +416,49 @@ public class UtxoStorageImpl implements UtxoStorage {
         pendingOutputs.keySet().removeAll(outputs.keySet());
         pendingSpentKeys.removeAll(spentKeys);
 
-        if (gap[0])
+        if (gap[0]) {
+            unspentUtxoTable.startBuild("blocks were missed");
             return;
+        }
 
         if (log.isDebugEnabled())
             log.debug("address_utxo_unspent: {} outputs written, {} spent in the same batch, {} spent outputs deleted",
                     unspent.size(), outputs.size() - unspent.size(), deleted[0]);
+    }
+
+    /**
+     * Drops the outputs of blocks the table already holds (slot at or before {@code keptSlot}) that have a spend in
+     * tx_input. New blocks are not looked up, so the normal path costs nothing.
+     */
+    private List<PendingOutput> withoutLaterSpends(List<PendingOutput> outputs, Long keptSlot) {
+        if (keptSlot == null)
+            return outputs;
+
+        List<PendingOutput> replayed = outputs.stream()
+                .filter(output -> output.addressUtxo().getSlot() != null && output.addressUtxo().getSlot() <= keptSlot)
+                .toList();
+        if (replayed.isEmpty())
+            return outputs;
+
+        Set<UtxoKey> spent = new HashSet<>();
+        for (int from = 0; from < replayed.size(); from += UNSPENT_WRITE_BATCH_SIZE) {
+            var keys = replayed.subList(from, Math.min(from + UNSPENT_WRITE_BATCH_SIZE, replayed.size())).stream()
+                    .map(output -> row(output.addressUtxo().getTxHash(), output.addressUtxo().getOutputIndex()))
+                    .toList();
+            dsl.select(TX_INPUT.TX_HASH, TX_INPUT.OUTPUT_INDEX)
+                    .from(TX_INPUT)
+                    .where(row(TX_INPUT.TX_HASH, TX_INPUT.OUTPUT_INDEX).in(keys))
+                    .fetch()
+                    .forEach(r -> spent.add(new UtxoKey(r.value1(), r.value2())));
+        }
+        if (spent.isEmpty())
+            return outputs;
+
+        log.warn("address_utxo_unspent: not writing back {} outputs of blocks processed again, they are spent already",
+                spent.size());
+        return outputs.stream()
+                .filter(output -> !spent.contains(new UtxoKey(output.addressUtxo().getTxHash(), output.addressUtxo().getOutputIndex())))
+                .toList();
     }
 
     /** The lowest block number in the batch, or null if the event carries no blocks. */
