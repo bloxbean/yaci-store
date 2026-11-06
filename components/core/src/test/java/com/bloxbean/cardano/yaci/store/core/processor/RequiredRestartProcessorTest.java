@@ -15,8 +15,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -107,25 +105,36 @@ class RequiredRestartProcessorTest {
     }
 
     @Test
-    void failedStartIsMarkedSoTheHealthCheckRetries() {
+    void restartStopsThenStartsWithTheTokenFromItsOwnStop() {
         processor.shutdownWaitMs = 0;
-        doThrow(new IllegalStateException("database down")).when(startService).start();
-
-        assertThatThrownBy(() -> processor.performRestart(event)).hasMessage("database down");
-
-        var order = inOrder(startService);
-        order.verify(startService).stop();
-        order.verify(startService).start();
-        order.verify(startService).markRestartFailed();
-    }
-
-    @Test
-    void successfulStartIsNotMarkedFailed() {
-        processor.shutdownWaitMs = 0;
+        when(startService.stopForRestart()).thenReturn(7L);
+        when(startService.startAfterRestart(7L)).thenReturn(true);
 
         processor.performRestart(event);
 
-        verify(startService).start();
-        verify(startService, never()).markRestartFailed();
+        var order = inOrder(startService);
+        order.verify(startService).stopForRestart();
+        order.verify(startService).startAfterRestart(7L);
+    }
+
+    @Test
+    void failedStartPropagatesSoItIsLogged() {
+        processor.shutdownWaitMs = 0;
+        when(startService.stopForRestart()).thenReturn(1L);
+        doThrow(new IllegalStateException("database down")).when(startService).startAfterRestart(1L);
+
+        assertThatThrownBy(() -> processor.performRestart(event)).hasMessage("database down");
+    }
+
+    @Test
+    void backoffStaysPositiveForLargeAttemptNumbers() {
+        when(storeProperties.getAutoRestartBackoffBaseMs()).thenReturn(5_000L);
+
+        assertThat(processor.calculateBackoff(1)).isEqualTo(5_000L);
+        assertThat(processor.calculateBackoff(4)).isEqualTo(40_000L);
+        // attempts keep counting during a long outage; the backoff must stay at the 1-minute cap
+        for (int attempt : new int[]{5, 52, 64, 1_000, Integer.MAX_VALUE}) {
+            assertThat(processor.calculateBackoff(attempt)).isEqualTo(60_000L);
+        }
     }
 }

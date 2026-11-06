@@ -119,7 +119,7 @@ public class RequiredRestartProcessor {
 
     void performRestart(RequiredSyncRestartEvent event) {
         log.info("Stopping sync service...");
-        startService.stop();
+        long stopToken = startService.stopForRestart();
 
         // Wait for clean shutdown
         try {
@@ -131,21 +131,19 @@ public class RequiredRestartProcessor {
         }
 
         log.info("Starting sync service...");
-        try {
-            startService.start();
-        } catch (RuntimeException e) {
-            // stop() set the "scheduled to stop" flag, and only a successful start clears it. Left set, the health
-            // check would treat this as a deliberate stop and never try again (#959).
-            startService.markRestartFailed();
-            throw e;
-        }
+        // If this start fails, startAfterRestart leaves the sync in an error state rather than "scheduled to stop",
+        // so the health check tries again (#959).
+        if (!startService.startAfterRestart(stopToken))
+            return;
 
         log.info("Sync restart completed for reason: {}", event.getReason());
     }
 
-    private long calculateBackoff(int attemptNumber) {
+    long calculateBackoff(int attemptNumber) {
         return Math.min(
-            storeProperties.getAutoRestartBackoffBaseMs() * (long)Math.pow(2, attemptNumber - 1),
+            // The exponent is capped: attempts keep counting past max-attempts during a long outage, and an
+            // uncapped 2^n overflows to a negative sleep, which would stop the auto-restart for good.
+            storeProperties.getAutoRestartBackoffBaseMs() * (1L << Math.min(Math.max(attemptNumber - 1, 0), 16)),
             60000L // Max 1 minute
         );
     }

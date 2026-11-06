@@ -40,9 +40,12 @@ public class StartService {
     @Value("${store.cardano.protocol-magic}")
     private long protocolMagic;
 
-    private boolean alreadyStarted;
+    private volatile boolean alreadyStarted;
+    // Incremented by every stop(), so the auto-restart can tell whether someone else stopped the sync while it
+    // was waiting between its own stop and start.
+    private long stopCount;
 
-    public void start() {
+    public synchronized void start() {
         if (alreadyStarted)
             throw new RuntimeException("StartService has already been started");
 
@@ -173,8 +176,9 @@ public class StartService {
         }
     }
 
-    public void stop() {
+    public synchronized void stop() {
         log.info("Stopping the StartService >>>> ");
+        stopCount++;
         if (blockFetchService.isRunning()) {
             try {
                 blockFetchService.stop();
@@ -187,12 +191,41 @@ public class StartService {
     }
 
     /**
-     * Called by the auto-restart when {@link #start()} failed after {@link #stop()}. Puts the service back in a
-     * state the health check sees as failed (not as a deliberate stop), so the restart is tried again.
+     * First half of an auto-restart: stops the sync and returns a token for {@link #startAfterRestart(long)}.
      */
-    public void markRestartFailed() {
-        alreadyStarted = false;
-        blockFetchService.markRestartFailed();
+    public synchronized long stopForRestart() {
+        stop();
+        return stopCount;
+    }
+
+    /**
+     * Second half of an auto-restart. Starts the sync again, unless someone else stopped or started it since
+     * {@link #stopForRestart()}: a deliberate stop (admin API, snapshot job) must stay stopped, and a sync that is
+     * already running must not get a second session.
+     * <p>
+     * If the start fails (for example, the database is down), the service is left in a state the health check
+     * sees as an error, not as a deliberate stop, so the restart is tried again (#959). Then the exception is
+     * rethrown.
+     *
+     * @return true if the sync was started
+     */
+    public synchronized boolean startAfterRestart(long stopToken) {
+        if (stopCount != stopToken) {
+            log.info("The sync was stopped again while the restart was waiting. Leaving it stopped.");
+            return false;
+        }
+        if (alreadyStarted) {
+            log.info("The sync was started by someone else while the restart was waiting. Nothing to do.");
+            return false;
+        }
+
+        try {
+            start();
+            return true;
+        } catch (RuntimeException e) {
+            blockFetchService.markRestartFailed();
+            throw e;
+        }
     }
 
     public boolean isStarted() {
