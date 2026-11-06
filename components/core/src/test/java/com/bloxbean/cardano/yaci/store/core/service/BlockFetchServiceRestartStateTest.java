@@ -14,16 +14,19 @@ import org.springframework.context.ApplicationEventPublisher;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class BlockFetchServiceRestartStateTest {
     private BlockFetchService blockFetchService;
+    private BlockRangeSync blockRangeSync;
 
     @BeforeEach
     void setUp() {
+        blockRangeSync = mock(BlockRangeSync.class);
         blockFetchService = new BlockFetchService(
                 mock(ApplicationEventPublisher.class),
                 mock(MetricsService.class),
-                mock(BlockRangeSync.class),
+                blockRangeSync,
                 mock(BlockSync.class),
                 mock(CursorService.class),
                 mock(EraService.class),
@@ -53,5 +56,17 @@ class BlockFetchServiceRestartStateTest {
         blockFetchService.startSync(new com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point(1, "aa"));
 
         assertThat(blockFetchService.getLastSessionStartTime()).isGreaterThanOrEqualTo(before);
+    }
+
+    @Test
+    void aClientThatWasNeverStartedIsNotRunning() {
+        // yaci throws NullPointerException from these getters until the client has been started
+        when(blockRangeSync.isRunning()).thenThrow(new NullPointerException("blockFetcher is null"));
+        when(blockRangeSync.getLastKeepAliveResponseCookie()).thenThrow(new NullPointerException("blockFetcher is null"));
+        when(blockRangeSync.getLastKeepAliveResponseTime()).thenThrow(new NullPointerException("blockFetcher is null"));
+
+        assertThat(blockFetchService.isRunning()).isFalse();
+        assertThat(blockFetchService.getLastKeepAliveResponseCookie()).isZero();
+        assertThat(blockFetchService.getLastKeepAliveResponseTime()).isZero();
     }
 }
