@@ -450,32 +450,47 @@ public class BlockFetchService implements BlockChainDataListener {
         }
     }
 
-    public boolean isRunning() {
-        if (syncMode) {
-            return blockSync.isRunning();
-        }
+    // yaci's BlockSync and BlockRangeSync create their connection in start(). Before the first start (for example
+    // while the startup is still waiting for the node) these getters throw NullPointerException. Answer "not
+    // running" instead, so the health check can still decide what to do.
 
-        return blockRangeSync.isRunning();
+    public boolean isRunning() {
+        try {
+            return syncMode ? blockSync.isRunning() : blockRangeSync.isRunning();
+        } catch (NullPointerException e) {
+            return false;
+        }
     }
 
     public int getLastKeepAliveResponseCookie() {
-        if (syncMode) {
-            return blockSync.getLastKeepAliveResponseCookie();
+        try {
+            return syncMode ? blockSync.getLastKeepAliveResponseCookie() : blockRangeSync.getLastKeepAliveResponseCookie();
+        } catch (NullPointerException e) {
+            return 0;
         }
-
-        return blockRangeSync.getLastKeepAliveResponseCookie();
     }
 
     public long getLastKeepAliveResponseTime() {
-        if (syncMode) {
-            return blockSync.getLastKeepAliveResponseTime();
+        try {
+            return syncMode ? blockSync.getLastKeepAliveResponseTime() : blockRangeSync.getLastKeepAliveResponseTime();
+        } catch (NullPointerException e) {
+            return 0;
         }
-
-        return blockRangeSync.getLastKeepAliveResponseTime();
     }
 
     public boolean isScheduledToStop() {
         return scheduledToStop.get();
+    }
+
+    // True while StartService.start() runs. The connection is not up yet, so the health check must not judge it.
+    private volatile boolean starting;
+
+    public boolean isStarting() {
+        return starting;
+    }
+
+    public void setStarting(boolean starting) {
+        this.starting = starting;
     }
 
     /**

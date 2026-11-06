@@ -49,12 +49,15 @@ public class StartService {
         if (alreadyStarted)
             throw new RuntimeException("StartService has already been started");
 
+        blockFetchService.setStarting(true);
         try {
             doStart();
         } catch (RuntimeException e) {
             // Leave the service startable: a later start() must not fail with "already been started".
             alreadyStarted = false;
             throw e;
+        } finally {
+            blockFetchService.setStarting(false);
         }
     }
 
@@ -92,7 +95,9 @@ public class StartService {
         } else {
             if (storeProperties.getSyncStartSlot() == 0 || storeProperties.getSyncStartBlockhash() == null
                     || storeProperties.getSyncStartBlockhash().isEmpty()) {
-                Optional<StartPoint> startPoint = genesisBlockFinder.getGenesisAndFirstBlock();
+                // GenesisBlockFinder keeps its connection private: on a timeout the interrupt ends its wait
+                Optional<StartPoint> startPoint = NodeCalls.call("find the genesis and first block",
+                        NodeCalls.timeoutMs(storeProperties), genesisBlockFinder::getGenesisAndFirstBlock, () -> {});
                 if (startPoint.isPresent()) {
                     String genesisHash = startPoint.get().getGenesisHash();
                     if (genesisHash == null) {
@@ -117,7 +122,8 @@ public class StartService {
                     from = startPoint.get().getFirstBlock();
                     era = startPoint.get().getFirstBlockEra();
                 } else
-                    throw new IllegalStateException("Genesis points not found. From point could not be decided.");
+                    // yaci returns empty when the node did not answer within its own 20 s wait
+                    throw new NodeNotAnsweringException("Genesis points not found: the node did not answer. From point could not be decided.");
             } else {
                 from = new Point(storeProperties.getSyncStartSlot(), storeProperties.getSyncStartBlockhash());
                 blockNumber = storeProperties.getSyncStartByronBlockNumber();
@@ -126,7 +132,7 @@ public class StartService {
 
         //Reset cursor
         cursorService.setCursor(new Cursor(from.getSlot(), from.getHash(), blockNumber, prevBlockHash, era));
-        Tip tip = tipFinderService.getTip().block();
+        Tip tip = tipFinderService.findTip(NodeCalls.timeoutMs(storeProperties));
 
         Point to;
         if (storeProperties.getSyncStopSlot() != 0) {

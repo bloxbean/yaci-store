@@ -31,11 +31,15 @@ public class HealthService {
         // - Time since the last block, or since the session started, is within the threshold
         boolean isReceivingBlocks = (lastActivityTime == 0) || (currentTime - lastActivityTime <= blockReceiveDelayThreshold);
 
+        // Read "starting" before the connection: read the other way round, a start that finishes in between
+        // would look like a dead connection that is not starting.
+        boolean isStarting = blockFetchService.isStarting();
         boolean isConnectionAlive = blockFetchService.isRunning();
 
         return HealthStatus.builder()
                 .isConnectionAlive(isConnectionAlive)
                 .isScheduleToStop(blockFetchService.isScheduledToStop())
+                .isStarting(isStarting)
                 .isError(blockFetchService.isError())
                 .lastKeepAliveResponseCookie(blockFetchService.getLastKeepAliveResponseCookie())
                 .lastKeepAliveResponseTime(blockFetchService.getLastKeepAliveResponseTime())
