@@ -713,6 +713,22 @@ class UnspentUtxoTableIT {
     }
 
     @Test
+    void spentOutputsAreNotPrunedWhileTheTableIsBuilt() {
+        Store store = store(UtxoStoreProperties.builder()
+                .unspentTableEnabled(true).unspentTableBackfillAtTip(true).unspentTableReadEnabled(true).build(), 200L);
+        List<Runnable> builds = new ArrayList<>();
+        store.table().buildExecutor = builds::add;
+        store.storage().saveUnspent(List.of(output(hash(76), 0, 100)));
+        store.storage().saveSpent(List.of(spend(hash(76), 0, 110)));
+        store.commit(200);
+        store.table().handlePreBlockSync(new PreBlockSyncEvent(new Point(200, "bh200")));
+
+        Integer pruned = store.tx().execute(status -> store.storage().deleteBySpentAndBlockLessThan(1_000L));
+        assertThat(pruned).isZero();
+        assertThat(jdbc.queryForObject("select count(*) from tx_input where tx_hash = ?", Integer.class, hash(76))).isEqualTo(1);
+    }
+
+    @Test
     void aBlockProcessedAgainDoesNotBringBackAnOutputSpentLater() {
         //#1328 J07: a hung listener finished an old block after newer blocks had spent its outputs
         Store store = fromGenesisAt(null);
@@ -727,6 +743,7 @@ class UnspentUtxoTableIT {
 
         assertThat(unspentKeys()).isEmpty();
         assertThat(store.table().isActive()).isTrue();
+        assertThat(state()).containsEntry("BLOCK", 11L);   //the late block does not move the state back
     }
 
     @Test

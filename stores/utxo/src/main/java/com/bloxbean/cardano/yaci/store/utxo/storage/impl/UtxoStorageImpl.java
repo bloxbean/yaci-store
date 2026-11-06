@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.store.common.domain.StoreState;
 import com.bloxbean.cardano.yaci.store.common.domain.TxInput;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.common.util.JsonUtil;
+import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import com.bloxbean.cardano.yaci.store.events.model.internal.BatchEvent;
 import com.bloxbean.cardano.yaci.store.plugin.aspect.Plugin;
@@ -162,9 +163,13 @@ public class UtxoStorageImpl implements UtxoStorage {
     @Override
     @Transactional
     public int deleteUnspentBySlotGreaterThan(Long slot) {
-        //Also while the table is built and catching up: it must follow the rollback
-        if (unspentUtxoTable != null && unspentUtxoTable.isKeptOnRollback()) {
+        //The table lock is held until the rollback commits, so its phase cannot change half way through the
+        //rollback, and no background pass interleaves with it. While built and catching up the table follows the
+        //rollback too.
+        if (unspentUtxoTable != null) {
             unspentUtxoTable.runLockedUntilTransactionEnds(() -> {
+                if (!unspentUtxoTable.isKeptOnRollback())
+                    return;
                 int deleted = dsl.deleteFrom(ADDRESS_UTXO_UNSPENT)
                         .where(ADDRESS_UTXO_UNSPENT.SLOT.gt(slot))
                         .execute();
@@ -178,19 +183,22 @@ public class UtxoStorageImpl implements UtxoStorage {
     @Override
     @Transactional
     public int deleteSpentBySlotGreaterThan(Long slot) {
-        if (unspentUtxoTable != null && unspentUtxoTable.isKeptOnRollback()) {
-            //Must run before tx_input is trimmed: the outputs to restore are the ones whose spend is removed
+        if (unspentUtxoTable != null) {
+            //Decided under the table lock, held until the rollback commits (see deleteUnspentBySlotGreaterThan)
             unspentUtxoTable.runLockedUntilTransactionEnds(() -> {
-                int restored = restoreUnspentSpentAfter(slot);
-                log.info("Rollback -- {} address_utxo_unspent records restored", restored);
-            });
+                if (unspentUtxoTable.isKeptOnRollback()) {
+                    //Must run before tx_input is trimmed: the outputs to restore are the ones whose spend is removed
+                    int restored = restoreUnspentSpentAfter(slot);
+                    log.info("Rollback -- {} address_utxo_unspent records restored", restored);
 
-            //Outputs and spends not yet committed belong to the blocks being rolled back
-            pendingOutputs.clear();
-            pendingSpentKeys.clear();
-            unspentUtxoTable.rolledBackTo(slot, true);
-        } else if (unspentUtxoTable != null) {
-            unspentUtxoTable.rolledBackTo(slot, false);
+                    //Outputs and spends not yet committed belong to the blocks being rolled back
+                    pendingOutputs.clear();
+                    pendingSpentKeys.clear();
+                    unspentUtxoTable.rolledBackTo(slot, true);
+                } else {
+                    unspentUtxoTable.rolledBackTo(slot, false);
+                }
+            });
         }
 
         return spentOutputRepository.deleteBySpentAtSlotGreaterThan(slot);
@@ -214,6 +222,11 @@ public class UtxoStorageImpl implements UtxoStorage {
     @Override
     @Transactional
     public int deleteBySpentAndBlockLessThan(Long block) {
+        //The background catch-up deletes the outputs spent after the build's start from tx_input: keep them until then
+        if (unspentUtxoTable != null && unspentUtxoTable.isBuildingOrCatchingUp()) {
+            log.info("Pruning of spent outputs skipped while address_utxo_unspent is built");
+            return 0;
+        }
         int count = 0;
         int totalCount = 0;
 
@@ -409,7 +422,10 @@ public class UtxoStorageImpl implements UtxoStorage {
                         .toList()).execute();
             }
 
-            unspentUtxoTable.keptTo(commitEvent.getMetadata());
+            //A block finished late (older than what the table holds) must not move the state back
+            EventMetadata metadata = commitEvent.getMetadata();
+            if (kept == null || kept.getBlock() == null || metadata.getBlock() >= kept.getBlock())
+                unspentUtxoTable.keptTo(metadata);
         });
 
         //Only after the transaction succeeded: on failure the batch stays for the next commit
@@ -417,7 +433,8 @@ public class UtxoStorageImpl implements UtxoStorage {
         pendingSpentKeys.removeAll(spentKeys);
 
         if (gap[0]) {
-            unspentUtxoTable.startBuild("blocks were missed");
+            //After the commit that marked the table stale: a build started earlier would conflict with that update
+            runAfterCommit(() -> unspentUtxoTable.startBuild("blocks were missed"));
             return;
         }
 
@@ -459,6 +476,20 @@ public class UtxoStorageImpl implements UtxoStorage {
         return outputs.stream()
                 .filter(output -> !spent.contains(new UtxoKey(output.addressUtxo().getTxHash(), output.addressUtxo().getOutputIndex())))
                 .toList();
+    }
+
+    private static void runAfterCommit(Runnable work) {
+        if (!org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            work.run();
+            return;
+        }
+        org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                new org.springframework.transaction.support.TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        work.run();
+                    }
+                });
     }
 
     /** The lowest block number in the batch, or null if the event carries no blocks. */

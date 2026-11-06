@@ -106,6 +106,12 @@ public class UnspentUtxoTable {
     //Serializes the background catch-up passes with rollbacks and the switch-on, which touch the same rows
     private final ReentrantLock tableLock = new ReentrantLock();
     private final java.util.concurrent.atomic.AtomicBoolean catchUpRunning = new java.util.concurrent.atomic.AtomicBoolean();
+    //The last background pass ended close to the cursor: the next commit may switch the table on, however far its
+    //block is from the previous one
+    private volatile boolean closeToCursor;
+    //ACTIVE, but the commit that switched it on has not committed yet: written, not read
+    private volatile boolean switchCommitPending;
+    static final int BUILD_ATTEMPTS = 3;
     private final TransactionTemplate catchUpTransactionTemplate;
     //Runs the background build. Tests replace it to run the build inline or at a chosen moment.
     java.util.concurrent.Executor buildExecutor = work -> Thread.ofVirtual().name("address-utxo-unspent-build").start(work);
@@ -147,6 +153,11 @@ public class UnspentUtxoTable {
         return phase;
     }
 
+    /** True while the table is built or caught up in the background: tx_input rows must not be pruned meanwhile. */
+    public boolean isBuildingOrCatchingUp() {
+        return phase == Phase.BUILDING || phase == Phase.CATCHING_UP;
+    }
+
     private boolean checkCurrent() {
         if (storeStateService == null) {
             log.warn("address_utxo_unspent is not used: there is no store_state service to record how far it is kept");
@@ -175,7 +186,7 @@ public class UnspentUtxoTable {
 
     /** Whether the unspent-output queries can be served from the table. */
     public boolean isReadable() {
-        return properties != null && properties.isUnspentTableReadEnabled() && isActive();
+        return properties != null && properties.isUnspentTableReadEnabled() && isActive() && !switchCommitPending;
     }
 
     @EventListener
@@ -212,23 +223,37 @@ public class UnspentUtxoTable {
         long start = System.currentTimeMillis();
         try {
             long[] copied = new long[1];
-            long snapshotSlot = build(copied);
+            long snapshotSlot = buildWithRetry(copied);
 
             boolean again;
-            synchronized (this) {
-                again = buildInvalidated;
-                if (again) {
-                    phase = Phase.OFF;
-                } else {
-                    caughtUpToSlot = snapshotSlot;
-                    phase = Phase.CATCHING_UP;
+            tableLock.lock();   //no rollback is half applied while the phase changes
+            try {
+                synchronized (this) {
+                    again = buildInvalidated;
+                    if (again) {
+                        phase = Phase.OFF;
+                    } else {
+                        caughtUpToSlot = snapshotSlot;
+                        closeToCursor = false;
+                        phase = Phase.CATCHING_UP;
+                    }
                 }
+            } finally {
+                tableLock.unlock();
             }
             if (again) {
-                log.warn("address_utxo_unspent: a rollback went below the build's starting point while it ran. Building again.");
+                log.warn("address_utxo_unspent: blocks were rolled back while it was built. Building again.");
                 startBuild("a rollback during the build");
                 return;
             }
+
+            //Recorded once the build is committed, in its own short transaction, so a long build never holds or
+            //conflicts with an update of the state row
+            catchUpTransactionTemplate.executeWithoutResult(status -> storeStateService.saveState(StoreState.builder()
+                    .stateId(STATE_ID)
+                    .status(STATUS_BUILT)
+                    .slot(snapshotSlot)
+                    .build()));
 
             log.info("address_utxo_unspent built: {} unspent outputs as of slot {} in {} s. Catching up with the blocks "
                     + "synced meanwhile; it is switched on at a commit close to the tip.",
@@ -241,6 +266,19 @@ public class UnspentUtxoTable {
             }
             log.error("address_utxo_unspent build failed. Queries keep using address_utxo and tx_input; it is built "
                     + "again when the sync next starts", e);
+        }
+    }
+
+    /** A build can fail on a transient conflict (e.g. a serialization failure): try it again a few times. */
+    private long buildWithRetry(long[] copied) {
+        for (int attempt = 1; ; attempt++) {
+            try {
+                return build(copied);
+            } catch (org.springframework.dao.TransientDataAccessException e) {
+                if (attempt >= BUILD_ATTEMPTS)
+                    throw e;
+                log.warn("address_utxo_unspent build attempt {} failed on a transient error, trying again: {}", attempt, e.getMessage());
+            }
         }
     }
 
@@ -262,20 +300,23 @@ public class UnspentUtxoTable {
 
     private void catchUpPasses() {
         while (phase == Phase.CATCHING_UP) {
-            Long cursorSlot = cursorService != null ? cursorService.getCursor().map(Cursor::getSlot).orElse(null) : null;
-            if (cursorSlot == null || cursorSlot - caughtUpToSlot <= SWITCH_ON_LAG_SLOTS)
-                return; //close enough: the next commit switches it on
-
             tableLock.lock();
             try {
                 if (phase != Phase.CATCHING_UP)
                     return;
+                //Read under the lock: a rollback holds it until it commits, so this cursor is after any rollback
+                Long cursorSlot = cursorService != null ? cursorService.getCursor().map(Cursor::getSlot).orElse(null) : null;
+                if (cursorSlot == null || cursorSlot - caughtUpToSlot <= SWITCH_ON_LAG_SLOTS) {
+                    closeToCursor = true;
+                    return; //close enough: the next commit switches it on
+                }
+                closeToCursor = false;
                 long from = caughtUpToSlot;
                 int[] changed = catchUpTransactionTemplate.execute(status -> catchUp(from));
-                //The pass saw everything committed up to the cursor read before it, and maybe more. Rows past it are
+                //The pass saw everything committed up to the cursor read above, and maybe more. Rows past it are
                 //looked at again by the next pass; that is harmless, catchUp is idempotent.
                 caughtUpToSlot = Math.max(from, cursorSlot);
-                log.info("address_utxo_unspent catch-up: slots {} to {}, {} outputs added, {} spent outputs deleted",
+                log.info("address_utxo_unspent catch-up: slots {} to {}, {} outputs written, {} spent outputs deleted",
                         from, cursorSlot, changed != null ? changed[0] : 0, changed != null ? changed[1] : 0);
             } finally {
                 tableLock.unlock();
@@ -290,6 +331,9 @@ public class UnspentUtxoTable {
      * @return the outputs added and the spent outputs deleted
      */
     int[] catchUp(long fromSlot) {
+        //Rows after fromSlot are written again from address_utxo: their columns can change after they were copied
+        //(e.g. a pointer address resolved at its batch's commit)
+        dsl.deleteFrom(ADDRESS_UTXO_UNSPENT).where(ADDRESS_UTXO_UNSPENT.SLOT.gt(fromSlot)).execute();
         int added = dsl.insertInto(ADDRESS_UTXO_UNSPENT, ADDRESS_UTXO_UNSPENT.fields())
                 .select(select(addressUtxoColumns())
                         .from(ADDRESS_UTXO)
@@ -321,7 +365,7 @@ public class UnspentUtxoTable {
     boolean switchOnAtCommit(EventMetadata metadata) {
         if (phase != Phase.CATCHING_UP || metadata == null)
             return false;
-        if (metadata.getSlot() - caughtUpToSlot > SWITCH_ON_LAG_SLOTS) {
+        if (metadata.getSlot() - caughtUpToSlot > SWITCH_ON_LAG_SLOTS && !closeToCursor) {
             //The sync pulled ahead again: let the background passes close the distance
             if (!catchUpRunning.get())
                 buildExecutor.execute(this::catchUpInBackground);
@@ -338,16 +382,17 @@ public class UnspentUtxoTable {
             keptTo(metadata);
             phase = Phase.ACTIVE;
 
-            //If the commit fails, the catch-up and the state are rolled back with it: go back to catching up
+            //Read only once this commit is visible to other connections. If the commit fails, the catch-up and the
+            //state are rolled back with it: go back to catching up.
             if (TransactionSynchronizationManager.isSynchronizationActive()) {
+                switchCommitPending = true;
                 TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                     @Override
                     public void afterCompletion(int status) {
-                        if (status != STATUS_COMMITTED) {
-                            synchronized (UnspentUtxoTable.this) {
-                                if (phase == Phase.ACTIVE)
-                                    phase = Phase.CATCHING_UP;
-                            }
+                        synchronized (UnspentUtxoTable.this) {
+                            if (status != STATUS_COMMITTED && phase == Phase.ACTIVE)
+                                phase = Phase.CATCHING_UP;
+                            switchCommitPending = false;
                         }
                     }
                 });
@@ -405,14 +450,6 @@ public class UnspentUtxoTable {
             Optional<Cursor> cursor = cursorService != null ? cursorService.getCursor() : Optional.empty();
             long snapshotSlot = cursor.map(Cursor::getSlot).orElse(-1L);
             buildSnapshotSlot = snapshotSlot;
-            //Not current yet: blocks after the snapshot still have to be caught up
-            storeStateService.saveState(StoreState.builder()
-                    .stateId(STATE_ID)
-                    .status(STATUS_BUILT)
-                    .slot(cursor.map(Cursor::getSlot).orElse(null))
-                    .block(cursor.map(Cursor::getBlock).orElse(null))
-                    .blockHash(cursor.map(Cursor::getBlockHash).orElse(null))
-                    .build());
 
             Integer maxOutputIndex = dsl.select(max(ADDRESS_UTXO.OUTPUT_INDEX)).from(ADDRESS_UTXO).fetchOne(0, Integer.class);
             if (maxOutputIndex == null)
@@ -504,8 +541,12 @@ public class UnspentUtxoTable {
         }
 
         if (phase == Phase.BUILDING) {
+            //At the tip each block commits with its cursor, so the build's view holds nothing after its cursor and a
+            //rollback at or after it changes nothing the build copied. In the range fetch, parallel workers commit
+            //rows ahead of the cursor, so any rollback may touch the build's view.
             Long snapshot = buildSnapshotSlot;
-            if (snapshot == null || slot < snapshot)
+            boolean rangeMode = cursorService != null && !cursorService.isSyncMode();
+            if (snapshot == null || slot < snapshot || rangeMode)
                 buildInvalidated = true;
         }
 
@@ -548,6 +589,20 @@ public class UnspentUtxoTable {
         long copied = 0;
         for (int from = 0; from < txHashes.size(); from += COPY_BATCH_SIZE) {
             List<String> batch = txHashes.subList(from, Math.min(from + COPY_BATCH_SIZE, txHashes.size()));
+            if (dsl.dialect().family() == SQLDialect.MYSQL) {
+                //On MySQL an INSERT ... SELECT under repeatable read takes shared locks on address_utxo for the whole
+                //build and reads the latest rows, not the snapshot. A plain SELECT reads the snapshot without locks.
+                var rows = dsl.select(addressUtxoColumns())
+                        .from(ADDRESS_UTXO)
+                        .where(ADDRESS_UTXO.OUTPUT_INDEX.eq(outputIndex))
+                        .and(ADDRESS_UTXO.TX_HASH.in(batch))
+                        .fetch();
+                if (!rows.isEmpty())
+                    copied += dsl.insertInto(ADDRESS_UTXO_UNSPENT, ADDRESS_UTXO_UNSPENT.fields())
+                            .valuesOfRecords(rows)
+                            .execute();
+                continue;
+            }
             copied += dsl.insertInto(ADDRESS_UTXO_UNSPENT, ADDRESS_UTXO_UNSPENT.fields())
                     .select(select(addressUtxoColumns())
                             .from(ADDRESS_UTXO)
