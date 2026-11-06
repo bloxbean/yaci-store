@@ -299,9 +299,33 @@ public class BlockFetchService implements BlockChainDataListener {
                 .orElse(-1L);
 
         log.info("Current cursor point >> " + currentPoint);
-        if ((point.getSlot() == 0 && point.getHash() == null)
-                || (currentPoint.getSlot() - point.getSlot()) > DEFAULT_SECURITY_PARAM) {
-            log.error("Rollback point doesn't seem to be valid. Ignoring rollback event to slot. " + point);
+        if (point.getSlot() == 0 && point.getHash() == null) {
+            log.warn("Rollback point doesn't seem to be valid. Ignoring rollback event to slot. " + point);
+            return;
+        }
+
+        if (currentPoint == null) {
+            log.info("Nothing stored yet. Nothing to roll back for rollback event to " + point);
+            return;
+        }
+
+        // A node never rolls back more than k blocks, and k blocks always fit in 3k/f slots. Note that k counts
+        // blocks: comparing a slot distance with k directly would refuse every rollback deeper than ~36 minutes.
+        long maxRollbackSlots = maxRollbackSlots();
+        if (currentPoint.getSlot() - point.getSlot() > maxRollbackSlots) {
+            // Ignoring the rollback and carrying on would write the blocks that follow it on top of newer data.
+            // Stop this session instead; the restart resumes from the cursor.
+            log.error("Rollback to {} is {} slots behind the cursor {}, more than the maximum of {} slots. " +
+                            "Refusing it and restarting the sync from the cursor.",
+                    point, currentPoint.getSlot() - point.getSlot(), currentPoint, maxRollbackSlots);
+            stopSyncOnError();
+            publisher.publishEvent(RequiredSyncRestartEvent.builder()
+                    .reason("RollbackTooDeep")
+                    .errorCode("ROLLBACK_TOO_DEEP")
+                    .timestamp(System.currentTimeMillis())
+                    .source("BlockFetchService")
+                    .details(String.format("Rollback to %s, cursor at %s", point, currentPoint))
+                    .build());
             return;
         }
 
@@ -327,6 +351,20 @@ public class BlockFetchService implements BlockChainDataListener {
                 .build();
         log.info("Publishing rollback event : " + rollbackEvent);
         publisher.publishEvent(rollbackEvent);
+    }
+
+    /**
+     * The deepest rollback that can be valid, in slots: 3k/f, the window in which the chain is guaranteed to
+     * have at least k blocks. 129600 slots on mainnet and preprod.
+     */
+    long maxRollbackSlots() {
+        int k = genesisConfig.getSecurityParam();
+        double f = genesisConfig.getActiveSlotsCoeff();
+        if (k <= 0 || f <= 0) {
+            k = DEFAULT_SECURITY_PARAM;
+            f = 0.05;
+        }
+        return (long) Math.ceil(3 * k / f);
     }
 
     private void restoreEpochStateFromCursor() {
