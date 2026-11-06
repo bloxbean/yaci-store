@@ -65,13 +65,21 @@ public class StartService {
         String prevBlockHash = null;
         Era era = null;
         Long blockNumber = 0L;
+        //Block number of the start point if it is a block that is already processed (resuming from the cursor)
+        Long processedBlockNumber = null;
         Optional<Cursor> optional = cursorService.getStartCursor();
         if (optional.isPresent()) {
             log.info("Last block in DB : " + optional.get().getBlock());
             from = new Point(optional.get().getSlot(), optional.get().getBlockHash());
-            prevBlockHash = optional.get().getBlockHash();
+            //Keep the cursor's own previous hash. A null one marks the placeholder written below on a fresh start.
+            prevBlockHash = optional.get().getPrevBlockHash();
             era = optional.get().getEra();
             blockNumber = optional.get().getBlock();
+            //A fresh start saves a placeholder cursor at its start point before that block is processed (see
+            //"Reset cursor" below), with no previous hash. If the first block never got written, the placeholder
+            //is all there is: the block must still be processed, not skipped as already done.
+            if (optional.get().getPrevBlockHash() != null)
+                processedBlockNumber = optional.get().getBlock();
         } else {
             if (storeProperties.getSyncStartSlot() == 0 || storeProperties.getSyncStartBlockhash() == null
                     || storeProperties.getSyncStartBlockhash().isEmpty()) {
@@ -152,13 +160,13 @@ public class StartService {
         if (storeProperties.isPrimaryInstance()) {
             if (diff > storeProperties.getBlockDiffToStartSyncProtocol()) {
                 log.info("Start BlockRangeSync");
-                blockFetchService.startFetch(from, to);
+                blockFetchService.startFetch(from, to, processedBlockNumber);
             } else {
                 log.info("Start BlockSync");
-                blockFetchService.startSync(from);
+                blockFetchService.startSync(from, processedBlockNumber);
             }
         } else {
-            blockFetchService.startFetch(from, to);
+            blockFetchService.startFetch(from, to, processedBlockNumber);
         }
     }
 
