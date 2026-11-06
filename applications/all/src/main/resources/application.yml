@@ -38,15 +38,6 @@ spring:
   flyway:
     locations: classpath:db/store/{vendor}
     out-of-order: true
-    # Wait for the database at startup instead of exiting, e.g. when the app and Postgres start together after a
-    # host restart and Postgres is still recovering. Retries back off up to 10 s apart, about 5 minutes in all.
-    connect-retries: 30
-    connect-retries-interval: 10
-
-  datasource:
-    hikari:
-      # Do not fail at pool creation when the database is not up yet; the first connection is retried (see flyway)
-      initialization-fail-timeout: -1
 
 apiPrefix: /api/v1
 
