@@ -153,8 +153,14 @@ public class StartService {
         log.info("From >> " + from);
         log.info("TO >> " + to);
 
-        //Send a rollback event to rollback data at and after this slot.
-        //This is because, during start up the from block will be processed again (For BlockFetch).
+        log.debug("Block diff configuration to start sync >>> " + storeProperties.getBlockDiffToStartSyncProtocol());
+        long diff = tip.getPoint().getSlot() - from.getSlot();
+        //BlockFetch requests the range from the from block inclusive, so the from block is processed again.
+        //ChainSync starts after the intersection, so it is not.
+        boolean fetchRange = !storeProperties.isPrimaryInstance() || diff > storeProperties.getBlockDiffToStartSyncProtocol();
+
+        //Send a rollback event to rollback data after this slot, and at this slot for stores
+        //that cannot overwrite the from block's rows when it is processed again (For BlockFetch).
         if (from.getSlot() > 0) {
             //Publish pre-rollback event to clean data
             PreRollbackEvent preRollbackEvent = PreRollbackEvent.builder()
@@ -170,6 +176,9 @@ public class StartService {
                     .rollbackTo(new Point(from.getSlot(), from.getHash()))
                     .currentBlock(tip.getBlock())
                     .currentPoint(new Point(tip.getPoint().getSlot(), tip.getPoint().getHash()))
+                    //BlockFetchService skips the from block when it is already processed (#1313), so it is processed
+                    //again only on a range fetch from a point that is not processed yet
+                    .rollbackPointReprocessed(fetchRange && processedBlockNumber == null)
                     .build();
             log.info("Publishing rollback event to clean data after restart >>> " + rollbackEvent);
             publisher.publishEvent(rollbackEvent);
@@ -178,18 +187,13 @@ public class StartService {
         if (blockNumber != null && blockNumber > 0L)
             publisher.publishEvent(new PreSyncEvent(blockNumber));
 
-        log.debug("Block diff configuration to start sync >>> " + storeProperties.getBlockDiffToStartSyncProtocol());
-        long diff = tip.getPoint().getSlot() - from.getSlot();
-        if (storeProperties.isPrimaryInstance()) {
-            if (diff > storeProperties.getBlockDiffToStartSyncProtocol()) {
+        if (fetchRange) {
+            if (storeProperties.isPrimaryInstance())
                 log.info("Start BlockRangeSync");
-                blockFetchService.startFetch(from, to, processedBlockNumber);
-            } else {
-                log.info("Start BlockSync");
-                blockFetchService.startSync(from, processedBlockNumber);
-            }
-        } else {
             blockFetchService.startFetch(from, to, processedBlockNumber);
+        } else {
+            log.info("Start BlockSync");
+            blockFetchService.startSync(from, processedBlockNumber);
         }
     }
 
