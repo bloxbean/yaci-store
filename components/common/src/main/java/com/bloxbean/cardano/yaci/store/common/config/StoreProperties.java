@@ -165,4 +165,7 @@ public class StoreProperties { //TODO - replace this with YaciStoreProperties fr
     private int autoRestartMaxAttempts = 5;
     private long autoRestartBackoffBaseMs = 5000;
     private long autoRestartWindowMs = 600000;
+    // After max-attempts is reached within the window, keep restarting at most once per this interval.
+    // 0 or less: pause until the window resets (the old behaviour).
+    private long autoRestartRetryIntervalAfterMaxMs = 60000;
 }

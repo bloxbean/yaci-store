@@ -182,6 +182,11 @@ public class YaciStoreProperties {
         private int maxAttempts = 5;
         private long backoffBaseMs = 5000;
         private long windowMs = 600000;
+        /**
+         * After max-attempts is reached within the window, keep restarting at most once per this interval.
+         * 0 or less pauses restarts until the window resets.
+         */
+        private long retryIntervalAfterMaxMs = 60000;
     }
 
 }

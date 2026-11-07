@@ -67,6 +67,9 @@ public class BlockFetchService implements BlockChainDataListener {
 
     @Getter
     private long lastReceivedBlockTime;
+    // When the current session was started. The health check gives a new session the full block-receive delay
+    // before it treats it as stalled, even if the last block was received long ago.
+    private volatile long lastSessionStartTime;
 
     @Transactional
     @Override
@@ -405,6 +408,7 @@ public class BlockFetchService implements BlockChainDataListener {
         stopKeepAliveThread();
         blockRangeSync.restart(this);
         blockRangeSync.fetch(from, to);
+        lastSessionStartTime = System.currentTimeMillis();
         syncMode = false;
         cursorService.setSyncMode(syncMode);
 
@@ -417,6 +421,7 @@ public class BlockFetchService implements BlockChainDataListener {
 
         stopKeepAliveThread();
         blockSync.startSync(from, this);
+        lastSessionStartTime = System.currentTimeMillis();
         syncMode = true;
         cursorService.setSyncMode(syncMode);
         startKeepAliveThread(syncMode);
@@ -444,32 +449,68 @@ public class BlockFetchService implements BlockChainDataListener {
         }
     }
 
-    public boolean isRunning() {
-        if (syncMode) {
-            return blockSync.isRunning();
-        }
+    // yaci's BlockSync and BlockRangeSync create their connection in start(). Before the first start (for example
+    // while the startup is still waiting for the node) these getters throw NullPointerException. Answer "not
+    // running" instead, so the health check can still decide what to do.
 
-        return blockRangeSync.isRunning();
+    public boolean isRunning() {
+        try {
+            return syncMode ? blockSync.isRunning() : blockRangeSync.isRunning();
+        } catch (NullPointerException e) {
+            return false;
+        }
     }
 
     public int getLastKeepAliveResponseCookie() {
-        if (syncMode) {
-            return blockSync.getLastKeepAliveResponseCookie();
+        try {
+            return syncMode ? blockSync.getLastKeepAliveResponseCookie() : blockRangeSync.getLastKeepAliveResponseCookie();
+        } catch (NullPointerException e) {
+            return 0;
         }
-
-        return blockRangeSync.getLastKeepAliveResponseCookie();
     }
 
     public long getLastKeepAliveResponseTime() {
-        if (syncMode) {
-            return blockSync.getLastKeepAliveResponseTime();
+        try {
+            return syncMode ? blockSync.getLastKeepAliveResponseTime() : blockRangeSync.getLastKeepAliveResponseTime();
+        } catch (NullPointerException e) {
+            return 0;
         }
-
-        return blockRangeSync.getLastKeepAliveResponseTime();
     }
 
     public boolean isScheduledToStop() {
         return scheduledToStop.get();
+    }
+
+    // True while StartService.start() runs. The connection is not up yet, so the health check must not judge it.
+    private volatile boolean starting;
+
+    public boolean isStarting() {
+        return starting;
+    }
+
+    public void setStarting(boolean starting) {
+        this.starting = starting;
+    }
+
+    /**
+     * Called when a restart stopped the sync but could not start it again (for example, the database was down).
+     * Clears the stop flag so the health check does not mistake this for a deliberate stop, and sets the error
+     * flag so it schedules another restart.
+     */
+    public void markRestartFailed() {
+        scheduledToStop.set(false);
+        isError.set(true);
+    }
+
+    /**
+     * Clears the error left by a previous session or a failed restart, before a new start.
+     */
+    public void clearError() {
+        isError.set(false);
+    }
+
+    public long getLastSessionStartTime() {
+        return lastSessionStartTime;
     }
 
     public boolean isError() {

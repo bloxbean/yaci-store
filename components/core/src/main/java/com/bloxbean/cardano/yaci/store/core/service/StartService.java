@@ -40,11 +40,28 @@ public class StartService {
     @Value("${store.cardano.protocol-magic}")
     private long protocolMagic;
 
-    private boolean alreadyStarted;
+    private volatile boolean alreadyStarted;
+    // Incremented by every stop(), so the auto-restart can tell whether someone else stopped the sync while it
+    // was waiting between its own stop and start.
+    private long stopCount;
 
-    public void start() {
+    public synchronized void start() {
         if (alreadyStarted)
             throw new RuntimeException("StartService has already been started");
+
+        blockFetchService.setStarting(true);
+        try {
+            doStart();
+        } catch (RuntimeException e) {
+            // Leave the service startable: a later start() must not fail with "already been started".
+            alreadyStarted = false;
+            throw e;
+        } finally {
+            blockFetchService.setStarting(false);
+        }
+    }
+
+    private void doStart() {
 
         log.info("###### Genesis Config #####");
         log.info("Epoch Length            : " + genesisConfig.getEpochLength());
@@ -56,6 +73,9 @@ public class StartService {
         log.info("Max Lovelace Supply     : " + genesisConfig.getMaxLovelaceSupply());
         log.info("###########################");
 
+        // A failed restart leaves the error flag set so the health check retries. Clear it before starting:
+        // the startup path (e.g. writing the genesis cursor) refuses to run while it is set.
+        blockFetchService.clearError();
         initService.init();
         blockFetchService.reset();
 
@@ -75,7 +95,9 @@ public class StartService {
         } else {
             if (storeProperties.getSyncStartSlot() == 0 || storeProperties.getSyncStartBlockhash() == null
                     || storeProperties.getSyncStartBlockhash().isEmpty()) {
-                Optional<StartPoint> startPoint = genesisBlockFinder.getGenesisAndFirstBlock();
+                // GenesisBlockFinder keeps its connection private: on a timeout the interrupt ends its wait
+                Optional<StartPoint> startPoint = NodeCalls.call("find the genesis and first block",
+                        NodeCalls.timeoutMs(storeProperties), genesisBlockFinder::getGenesisAndFirstBlock, () -> {});
                 if (startPoint.isPresent()) {
                     String genesisHash = startPoint.get().getGenesisHash();
                     if (genesisHash == null) {
@@ -100,7 +122,8 @@ public class StartService {
                     from = startPoint.get().getFirstBlock();
                     era = startPoint.get().getFirstBlockEra();
                 } else
-                    throw new IllegalStateException("Genesis points not found. From point could not be decided.");
+                    // yaci returns empty when the node did not answer within its own 20 s wait
+                    throw new NodeNotAnsweringException("Genesis points not found: the node did not answer. From point could not be decided.");
             } else {
                 from = new Point(storeProperties.getSyncStartSlot(), storeProperties.getSyncStartBlockhash());
                 blockNumber = storeProperties.getSyncStartByronBlockNumber();
@@ -109,7 +132,7 @@ public class StartService {
 
         //Reset cursor
         cursorService.setCursor(new Cursor(from.getSlot(), from.getHash(), blockNumber, prevBlockHash, era));
-        Tip tip = tipFinderService.getTip().block();
+        Tip tip = tipFinderService.findTip(NodeCalls.timeoutMs(storeProperties));
 
         Point to;
         if (storeProperties.getSyncStopSlot() != 0) {
@@ -162,17 +185,64 @@ public class StartService {
         }
     }
 
-    public void stop() {
+    public synchronized void stop() {
         log.info("Stopping the StartService >>>> ");
-        if (blockFetchService.isRunning()) {
-            try {
-                blockFetchService.stop();
-            } catch (Exception e) {
-                log.debug("Error stopping blockFetchService", e);
-            }
+        stopCount++;
+        // Always record the stop, even when no session is running (for example, after a restart that failed).
+        // Otherwise the health check would see "not running, not stopped" and start the sync again.
+        try {
+            blockFetchService.stop();
+        } catch (Exception e) {
+            log.debug("Error stopping blockFetchService", e);
         }
 
         alreadyStarted = false;
+    }
+
+    /**
+     * First half of an auto-restart: stops the sync and returns a token for {@link #startAfterRestart(long)}.
+     */
+    public synchronized long stopForRestart() {
+        stop();
+        return stopCount;
+    }
+
+    /**
+     * Second half of an auto-restart. Starts the sync again, unless someone else stopped or started it since
+     * {@link #stopForRestart()}: a deliberate stop (admin API, snapshot job) must stay stopped, and a sync that is
+     * already running must not get a second session.
+     * <p>
+     * If the start fails (for example, the database is down), the service is left in a state the health check
+     * sees as an error, not as a deliberate stop, so the restart is tried again (#959). Then the exception is
+     * rethrown.
+     *
+     * @return true if the sync was started
+     */
+    public synchronized boolean startAfterRestart(long stopToken) {
+        if (stopCount != stopToken) {
+            log.info("The sync was stopped again while the restart was waiting. Leaving it stopped.");
+            return false;
+        }
+        if (alreadyStarted) {
+            log.info("The sync was started by someone else while the restart was waiting. Nothing to do.");
+            return false;
+        }
+
+        try {
+            start();
+            return true;
+        } catch (RuntimeException e) {
+            blockFetchService.markRestartFailed();
+            throw e;
+        }
+    }
+
+    /**
+     * True when the sync stopped because of an error and was not stopped on purpose since, so it should be
+     * restarted.
+     */
+    public boolean isSyncFailed() {
+        return blockFetchService.isError() && !blockFetchService.isScheduledToStop();
     }
 
     public boolean isStarted() {
