@@ -1,0 +1,73 @@
+# Test-only faults, armed by creating a file named after the rule in the directory -Drt.trig points to.
+# One-shot rules delete the file when they fire, persistent ones keep firing until it is removed.
+RULE tx-listener-fail
+CLASS com.bloxbean.cardano.yaci.store.transaction.processor.TransactionProcessor
+METHOD handleTransactionEvent
+AT ENTRY
+BIND f:java.io.File = new java.io.File(System.getProperty("rt.trig"), "tx-listener-fail")
+IF f.exists() AND f.delete()
+DO traceln("[byteman] tx-listener-fail"); throw new java.lang.RuntimeException("[byteman] injected failure in TransactionProcessor")
+ENDRULE
+
+RULE oom-first-lookup
+CLASS com.bloxbean.cardano.yaci.store.core.service.EraService
+METHOD checkIfNewEra
+AT ENTRY
+BIND f:java.io.File = new java.io.File(System.getProperty("rt.trig"), "oom-first-lookup")
+IF f.exists() AND f.delete()
+DO traceln("[byteman] oom-first-lookup"); throw new java.lang.OutOfMemoryError("[byteman] injected")
+ENDRULE
+
+RULE db-fail-first-lookup
+CLASS com.bloxbean.cardano.yaci.store.core.service.EraService
+METHOD checkIfNewEra
+AT ENTRY
+BIND f:java.io.File = new java.io.File(System.getProperty("rt.trig"), "db-fail-first-lookup")
+IF f.exists() AND f.delete()
+DO traceln("[byteman] db-fail-first-lookup"); throw new java.lang.RuntimeException("[byteman] injected db failure")
+ENDRULE
+
+RULE listener-hang
+CLASS com.bloxbean.cardano.yaci.store.blocks.processor.BlockProcessor
+METHOD handleBlockHeaderEvent
+AT ENTRY
+BIND f:java.io.File = new java.io.File(System.getProperty("rt.trig"), "listener-hang")
+IF f.exists() AND f.delete()
+DO traceln("[byteman] listener-hang start"); Thread.sleep(300000L); traceln("[byteman] listener-hang end")
+ENDRULE
+
+RULE cursor-fail
+CLASS com.bloxbean.cardano.yaci.store.core.service.CursorServiceImpl
+METHOD setCursor
+AT ENTRY
+BIND f:java.io.File = new java.io.File(System.getProperty("rt.trig"), "cursor-fail")
+IF f.exists() AND f.delete()
+DO traceln("[byteman] cursor-fail"); throw new java.lang.RuntimeException("[byteman] injected failure in setCursor")
+ENDRULE
+
+RULE error-save-fail
+CLASS com.bloxbean.cardano.yaci.store.core.storage.ErrorStorageImpl
+METHOD save
+AT ENTRY
+BIND f:java.io.File = new java.io.File(System.getProperty("rt.trig"), "error-save-fail")
+IF f.exists()
+DO traceln("[byteman] error-save-fail"); throw new java.lang.RuntimeException("[byteman] injected failure saving the error row")
+ENDRULE
+
+RULE init-fail
+CLASS com.bloxbean.cardano.yaci.store.core.service.InitService
+METHOD init
+AT ENTRY
+BIND f:java.io.File = new java.io.File(System.getProperty("rt.trig"), "init-fail")
+IF f.exists()
+DO traceln("[byteman] init-fail"); throw new java.lang.RuntimeException("[byteman] injected failure in StartService init")
+ENDRULE
+
+RULE rollback-listener-fail
+CLASS com.bloxbean.cardano.yaci.store.utxo.processor.UtxoRollbackProcessor
+METHOD handleRollbackEvent
+AT ENTRY
+BIND f:java.io.File = new java.io.File(System.getProperty("rt.trig"), "rollback-listener-fail")
+IF f.exists() AND f.delete()
+DO traceln("[byteman] rollback-listener-fail"); throw new java.lang.RuntimeException("[byteman] injected failure in a rollback listener")
+ENDRULE
