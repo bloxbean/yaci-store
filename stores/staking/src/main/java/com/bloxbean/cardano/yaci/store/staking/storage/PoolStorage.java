@@ -17,6 +17,13 @@ public interface PoolStorage {
     Optional<Pool> findRecentPoolRegistration(String poolId, Integer maxEpoch);
 
     /**
+     * Find the latest registration of a pool that comes before the given certificate in chain order
+     * (slot, then tx index, then cert index). Rows of the certificate itself and of later certificates are ignored,
+     * so the answer is the same when a block is processed again after a restart.
+     */
+    Optional<Pool> findRecentPoolRegistrationBefore(String poolId, Integer maxEpoch, long slot, int txIndex, int certIndex);
+
+    /**
      * Find recent pool update
      * @param poolId pool id
      * @param maxEpoch max epoch
