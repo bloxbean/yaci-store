@@ -57,6 +57,12 @@ PROPS
     ;;
   proxy)
     [ "$PROXIED" = 1 ] || { echo "no proxies for $N"; exit 0; }
+    #A proxy left from an earlier run would answer on these ports, and faults would go to it instead
+    for p in $NP $NC $DBP $DC; do
+      if (exec 3<>/dev/tcp/127.0.0.1/$p) 2>/dev/null; then
+        echo "port $p is already in use (an old fault-proxy.py?): stop that process first"; exit 2
+      fi
+    done
     setsid nohup python3 "$KIT/fault-proxy.py" --mux --listen $NP --target $RELAY --ctl $NC >> "$D/logs/node-proxy.log" 2>&1 < /dev/null &
     setsid nohup python3 "$KIT/fault-proxy.py" --listen $DBP --target 127.0.0.1:$PG --ctl $DC >> "$D/logs/db-proxy.log" 2>&1 < /dev/null &
     sleep 1; python3 "$KIT/faultctl.py" $NC status; python3 "$KIT/faultctl.py" $DC status

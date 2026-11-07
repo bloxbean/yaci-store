@@ -36,6 +36,7 @@ The kit and its full documentation are in `scripts/fault-injection/README.md`. R
 ## Pitfalls seen in earlier runs
 
 - **`inst.sh start` takes the newest `<jar>-*.jar`.** Adding a new jar while a matrix runs mixes builds within one run. Keep new jars outside `jars/` until the matrix ends. Then re-run the scenarios you need with `runner.py <name> <mode> --only ID`, after moving the old result line out of `results/<name>.jsonl` (the runner skips IDs already there).
+- **Old proxies from an earlier run can keep their ports.** `inst.sh proxy` now refuses to start if a port is in use. Find the old process by port (`ss -ltnp`) and stop it by PID: it may have been started with a relative path, so `pkill -f <full path>` misses it.
 - **A Byteman rule that never fires looks like a pass.** For J04–J08, B08, C04 and RB07, check `console.out` for `[byteman] <rule>`. Rules name internal classes, so a rename silently disables them.
 - **At the tip the scenarios share one database.** A gap or duplicate is reported again by every later scenario. Count it only where it first appears.
 - **B04 leaves a gap on purpose** (`continue-on-parse-error=true`): skipping the block is the configured behaviour.
