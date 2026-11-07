@@ -59,7 +59,6 @@ class TxMetadataStorageImplTest {
     private TxMetadataLabel label(String label, String body) {
         return TxMetadataLabel.builder()
                 .txHash(TX_HASH)
-                .txIndex(0)
                 .slot(10700060L)
                 .label(label)
                 .body(body)
