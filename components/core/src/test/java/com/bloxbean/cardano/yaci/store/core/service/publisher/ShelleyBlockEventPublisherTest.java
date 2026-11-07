@@ -86,6 +86,48 @@ class ShelleyBlockEventPublisherTest {
     }
 
     @Test
+    void shouldDropZeroQuantityMintEntries() {
+        String policyId = "10bebfc941207811e62882f02c0a69c0086f86186a4ef6ec1b5a2b0c";
+        Amount zeroMint = Amount.builder()
+                .unit(policyId + ".54554e41")
+                .policyId(policyId)
+                .assetName("TUNA")
+                .assetNameBytes("TUNA".getBytes())
+                .quantity(BigInteger.ZERO)
+                .build();
+        Amount positiveMint = Amount.builder()
+                .unit(policyId + ".4c4f5244")
+                .policyId(policyId)
+                .assetName("LORD")
+                .assetNameBytes("LORD".getBytes())
+                .quantity(BigInteger.ONE)
+                .build();
+
+        List<Transaction> transactions = List.of(
+                transactionWithMint("aaaaaaaaaa9cecf2602f1110e53331a3b305ec668ad57081df98416b30473f5d", List.of(zeroMint, positiveMint)),
+                transactionWithMint("bbbbbbbbbb9cecf2602f1110e53331a3b305ec668ad57081df98416b30473f5d", List.of(zeroMint))
+        );
+
+        shelleyBlockEventPublisher.publishBlockEvents(eventMetadata(), mockBlock(), transactions);
+
+        var mintBurnEvent = capturePublishedEvent(MintBurnEvent.class);
+        assertThat(mintBurnEvent).isNotNull();
+        assertThat(mintBurnEvent.getTxMintBurns()).singleElement().satisfies(txMintBurn -> {
+            assertThat(txMintBurn.getTxHash()).isEqualTo("aaaaaaaaaa9cecf2602f1110e53331a3b305ec668ad57081df98416b30473f5d");
+            assertThat(txMintBurn.getAmounts()).extracting(Amount::getUnit).containsExactly(policyId + "4c4f5244");
+        });
+    }
+
+    private Transaction transactionWithMint(String txHash, List<Amount> mint) {
+        return Transaction.builder()
+                .txHash(txHash)
+                .body(TransactionBody.builder().mint(mint).build())
+                .witnesses(emptyWitnesses())
+                .invalid(false)
+                .build();
+    }
+
+    @Test
     void shouldNotPublishCertificateDataForInvalidTransactions() {
         List<Transaction> transactions = List.of(
                 validTransactionWithCertificateData("aaaaaaaaaa9cecf2602f1110e53331a3b305ec668ad57081df98416b30473f5d"),

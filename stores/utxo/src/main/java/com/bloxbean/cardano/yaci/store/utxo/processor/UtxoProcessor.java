@@ -13,6 +13,7 @@ import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.common.domain.TxInput;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
+import com.bloxbean.cardano.yaci.store.common.util.AmountUtil;
 import com.bloxbean.cardano.yaci.store.common.util.PointerAddress;
 import com.bloxbean.cardano.yaci.store.common.util.ScriptReferenceUtil;
 import com.bloxbean.cardano.yaci.store.common.util.StringUtil;
@@ -179,7 +180,7 @@ public class UtxoProcessor {
 
     private AddressUtxo getAddressUtxo(@NonNull EventMetadata eventMetadata, @NonNull Utxo utxo, int txIndex) {
         //Fix -- some asset name contains \u0000 -- postgres can't convert this to text. so replace
-        List<Amt> amounts = utxo.getAmounts().stream().map(amount ->
+        List<Amt> amounts = AmountUtil.withoutZeroQuantityAssets(utxo.getAmounts()).stream().map(amount ->
                         Amt.builder()
                                 .unit(amount.getUnit() != null? amount.getUnit().replace(".", ""): null) //remove . from unit as yaci provides policy.assetName as unit
                                 .policyId(amount.getPolicyId())
