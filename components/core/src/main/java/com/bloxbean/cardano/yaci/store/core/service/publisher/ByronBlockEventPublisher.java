@@ -6,6 +6,7 @@ import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.Cursor;
 import com.bloxbean.cardano.yaci.store.common.service.CursorService;
 import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
+import com.bloxbean.cardano.yaci.store.core.service.SyncSessionGuard;
 import com.bloxbean.cardano.yaci.store.events.ByronMainBlockEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
@@ -47,7 +48,17 @@ public class ByronBlockEventPublisher implements BlockEventPublisher<ByronMainBl
     }
 
     public void reset() {
-        byronBatchBlockList.clear();
+        synchronized (byronBatchBlockList) {
+            byronBatchBlockList.clear();
+        }
+    }
+
+    //Shared with BlockFetchService. A default instance keeps hand-built instances (tests) working.
+    private SyncSessionGuard sessionGuard = new SyncSessionGuard();
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setSessionGuard(SyncSessionGuard sessionGuard) {
+        this.sessionGuard = sessionGuard;
     }
 
     @Transactional
@@ -56,6 +67,8 @@ public class ByronBlockEventPublisher implements BlockEventPublisher<ByronMainBl
         ByronMainBlockEvent byronMainBlockEvent = new ByronMainBlockEvent(eventMetadata, byronBlock);
 
         publisher.publishEvent(byronMainBlockEvent);
+        //A thread from an old sync session must not commit this block
+        sessionGuard.checkCaller();
         publisher.publishEvent(new PreCommitEvent(eventMetadata));
         publisher.publishEvent(new CommitEvent<>(eventMetadata, List.of(new BatchByronBlock(eventMetadata, byronBlock))));
 
@@ -66,23 +79,38 @@ public class ByronBlockEventPublisher implements BlockEventPublisher<ByronMainBl
 
     @Override
     public void publishBlockEventsInParallel(EventMetadata eventMetadata, ByronMainBlock byronBlock, List<Transaction> transactions) {
-        byronBatchBlockList.add(new BatchByronBlock(eventMetadata, byronBlock));
-        if (byronBatchBlockList.size() != storeProperties.getBlocksBatchSize())
+        //A thread of an old sync session must not add to the batch the current session is filling
+        sessionGuard.checkCaller();
+        int size;
+        synchronized (byronBatchBlockList) {
+            byronBatchBlockList.add(new BatchByronBlock(eventMetadata, byronBlock));
+            size = byronBatchBlockList.size();
+        }
+        if (size < storeProperties.getBlocksBatchSize())
             return;
 
         processBlocksInParallel();
     }
 
     public void processBlocksInParallel() {
-        if (byronBatchBlockList.size() == 0)
-            return;
+        sessionGuard.checkCaller();
+        //Work on a copy: the list may be reset or refilled by another sync session while this batch is written
+        List<BatchByronBlock> batch;
+        synchronized (byronBatchBlockList) {
+            if (byronBatchBlockList.isEmpty())
+                return;
+            batch = new ArrayList<>(byronBatchBlockList);
+            byronBatchBlockList.clear();
+        }
 
-        List<List<BatchByronBlock>> partitions = partition(byronBatchBlockList, storeProperties.getBlocksPartitionSize());
+        Long session = sessionGuard.callerSession();
+        List<List<BatchByronBlock>> partitions = partition(batch, storeProperties.getBlocksPartitionSize());
 
         List<CompletableFuture> futures = new ArrayList<>();
         for (List<BatchByronBlock> partition : partitions) {
             var future = CompletableFuture.supplyAsync(() -> {
                 for (BatchByronBlock blockCache : partition) {
+                    sessionGuard.check(session);
                     ByronMainBlockEvent byronMainBlockEvent = new ByronMainBlockEvent(blockCache.getMetadata(), blockCache.getBlock());
                     publisher.publishEvent(byronMainBlockEvent);
                 }
@@ -95,15 +123,16 @@ public class ByronBlockEventPublisher implements BlockEventPublisher<ByronMainBl
                 .orTimeout(storeProperties.getProcessingThreadsTimeout(), TimeUnit.MINUTES)
                 .join();
 
-        BatchByronBlock lastBlockCache = byronBatchBlockList.getLast();
+        //A batch of an old sync session is not committed and the cursor is not moved
+        sessionGuard.checkCaller();
+
+        BatchByronBlock lastBlockCache = batch.getLast();
         publisher.publishEvent(new PreCommitEvent(lastBlockCache.getMetadata()));
-        publisher.publishEvent(new CommitEvent(lastBlockCache.getMetadata(), byronBatchBlockList));
+        publisher.publishEvent(new CommitEvent(lastBlockCache.getMetadata(), batch));
 
         cursorService.setCursor(new Cursor(lastBlockCache.getMetadata().getSlot(), lastBlockCache.getMetadata().getBlockHash(),
                 lastBlockCache.getMetadata().getBlock(), lastBlockCache.getMetadata().getPrevBlockHash(),
                 lastBlockCache.getMetadata().getEra()));
-
-        byronBatchBlockList.clear();
     }
 
 }

@@ -222,6 +222,53 @@ class ShelleyBlockEventPublisherTest {
         assertThat(mintBurnEvent.getTxMintBurns()).isEmpty();
     }
 
+    @Test
+    void blockFromAnOldSyncSessionIsNotCommitted() {
+        var guard = new com.bloxbean.cardano.yaci.store.core.service.SyncSessionGuard();
+        shelleyBlockEventPublisher.setSessionGuard(guard);
+        long oldSession = guard.newSession();
+        guard.newSession(); //a restart started a new session while this thread was still writing
+
+        guard.enter(oldSession);
+        try {
+            org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                            shelleyBlockEventPublisher.publishBlockEvents(eventMetadata(), mockBlock(), List.of()))
+                    .isInstanceOf(com.bloxbean.cardano.yaci.store.core.service.SyncSessionGuard.StaleSyncSessionException.class);
+        } finally {
+            guard.exit();
+        }
+
+        verify(cursorService, never()).setCursor(any());
+        verify(publisher, never()).publishEvent(any(com.bloxbean.cardano.yaci.store.events.internal.CommitEvent.class));
+    }
+
+    @Test
+    void flushFromAnOldSyncSessionLeavesTheCurrentBatchAlone() {
+        var guard = new com.bloxbean.cardano.yaci.store.core.service.SyncSessionGuard();
+        shelleyBlockEventPublisher.setSessionGuard(guard);
+        long oldSession = guard.newSession();
+        long newSession = guard.newSession();
+
+        guard.enter(newSession);
+        try {
+            shelleyBlockEventPublisher.publishBlockEventsInParallel(eventMetadata(), mock(Block.class), List.of());
+        } finally {
+            guard.exit();
+        }
+
+        guard.enter(oldSession);
+        try {
+            org.assertj.core.api.Assertions.assertThatThrownBy(shelleyBlockEventPublisher::processBlocksInParallel)
+                    .isInstanceOf(com.bloxbean.cardano.yaci.store.core.service.SyncSessionGuard.StaleSyncSessionException.class);
+        } finally {
+            guard.exit();
+        }
+
+        List<?> batch = (List<?>) org.springframework.test.util.ReflectionTestUtils.getField(shelleyBlockEventPublisher, "batchBlockList");
+        assertThat(batch).hasSize(1);
+        verify(cursorService, never()).setCursor(any());
+    }
+
     private EventMetadata eventMetadata() {
         return EventMetadata.builder()
                 .era(Era.Babbage)
