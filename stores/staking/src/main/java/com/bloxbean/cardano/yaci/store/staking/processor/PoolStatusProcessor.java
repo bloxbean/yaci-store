@@ -24,7 +24,7 @@ import java.util.List;
 
 import static com.bloxbean.cardano.yaci.store.staking.StakingStoreConfiguration.STORE_STAKING_ENABLED;
 
-//TODO -- Add tests
+// Replay of pool registrations: see PoolStatusProcessorReplayIT
 @Component
 @RequiredArgsConstructor
 @EnableIf(STORE_STAKING_ENABLED)
@@ -111,7 +111,10 @@ public class PoolStatusProcessor {
         List<Pool> poolRegsUpdates = new ArrayList<>();
         for (var poolRegistration : poolRegistrationEvent.getPoolRegistrations()) {
             var poolId = poolRegistration.getPoolId();
-            var poolRegistrationOpt = poolStorage.findRecentPoolRegistration(poolId, metadata.getEpochNumber());
+            // Only look at registrations before this certificate. When a block is processed again after a restart,
+            // its own row is already stored and must not turn this registration into an update.
+            var poolRegistrationOpt = poolStorage.findRecentPoolRegistrationBefore(poolId, metadata.getEpochNumber(),
+                    metadata.getSlot(), poolRegistration.getTxIndex(), poolRegistration.getCertIndex());
             var poolRetiredOpt = poolStorage.findRecentPoolRetired(poolId, metadata.getEpochNumber());
 
             var poolRegistrationSlot = poolRegistrationOpt.map(Pool::getSlot).orElse(-1L);
