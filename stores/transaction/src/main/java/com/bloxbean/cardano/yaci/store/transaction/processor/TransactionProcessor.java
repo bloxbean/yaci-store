@@ -12,6 +12,7 @@ import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.common.domain.TxOuput;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
+import com.bloxbean.cardano.yaci.store.common.util.AmountUtil;
 import com.bloxbean.cardano.yaci.store.common.util.ErrorCode;
 import com.bloxbean.cardano.yaci.store.events.ErrorEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
@@ -322,7 +323,7 @@ public class TransactionProcessor {
     private TxOuput convertOutput(TransactionOutput output) {
         if (output == null)
             return null;
-        List<Amt> amounts = output.getAmounts().stream().map(amount ->
+        List<Amt> amounts = AmountUtil.withoutZeroQuantityAssets(output.getAmounts()).stream().map(amount ->
                         Amt.builder()
                                 .unit(amount.getUnit())
                                 .policyId(amount.getPolicyId())

@@ -10,6 +10,8 @@ import com.bloxbean.cardano.yaci.store.events.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
@@ -19,6 +21,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import java.math.BigInteger;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
@@ -83,6 +86,86 @@ class ShelleyBlockEventPublisherTest {
         assertThat(mintBurnEvent).isNotNull();
         assertThat(mintBurnEvent.getTxMintBurns()).hasSize(1);
         assertThat(mintBurnEvent.getTxMintBurns().get(0).getTxIndex()).isEqualTo(1);
+    }
+
+    @Test
+    void shouldDropZeroQuantityMintEntries() {
+        String policyId = "10bebfc941207811e62882f02c0a69c0086f86186a4ef6ec1b5a2b0c";
+        Amount zeroMint = Amount.builder()
+                .unit(policyId + ".54554e41")
+                .policyId(policyId)
+                .assetName("TUNA")
+                .assetNameBytes("TUNA".getBytes())
+                .quantity(BigInteger.ZERO)
+                .build();
+        Amount positiveMint = Amount.builder()
+                .unit(policyId + ".4c4f5244")
+                .policyId(policyId)
+                .assetName("LORD")
+                .assetNameBytes("LORD".getBytes())
+                .quantity(BigInteger.ONE)
+                .build();
+
+        List<Transaction> transactions = List.of(
+                transactionWithMint("aaaaaaaaaa9cecf2602f1110e53331a3b305ec668ad57081df98416b30473f5d", List.of(zeroMint, positiveMint)),
+                transactionWithMint("bbbbbbbbbb9cecf2602f1110e53331a3b305ec668ad57081df98416b30473f5d", List.of(zeroMint))
+        );
+
+        shelleyBlockEventPublisher.publishBlockEvents(eventMetadata(), mockBlock(), transactions);
+
+        var mintBurnEvent = capturePublishedEvent(MintBurnEvent.class);
+        assertThat(mintBurnEvent).isNotNull();
+        assertThat(mintBurnEvent.getTxMintBurns()).singleElement().satisfies(txMintBurn -> {
+            assertThat(txMintBurn.getTxHash()).isEqualTo("aaaaaaaaaa9cecf2602f1110e53331a3b305ec668ad57081df98416b30473f5d");
+            assertThat(txMintBurn.getAmounts()).extracting(Amount::getUnit).containsExactly(policyId + "4c4f5244");
+        });
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldKeepTxIndexWhenZeroOnlyMintIsDropped(boolean parallel) {
+        String policyId = "10bebfc941207811e62882f02c0a69c0086f86186a4ef6ec1b5a2b0c";
+        Amount zeroMint = Amount.builder()
+                .unit(policyId + ".54554e41").policyId(policyId).assetName("TUNA")
+                .assetNameBytes("TUNA".getBytes()).quantity(BigInteger.ZERO).build();
+        Amount positiveMint = Amount.builder()
+                .unit(policyId + ".4c4f5244").policyId(policyId).assetName("LORD")
+                .assetNameBytes("LORD".getBytes()).quantity(BigInteger.ONE).build();
+        List<Transaction> transactions = List.of(
+                transactionWithMint("bbbbbbbbbb9cecf2602f1110e53331a3b305ec668ad57081df98416b30473f5d", List.of(zeroMint)),
+                transactionWithMint("aaaaaaaaaa9cecf2602f1110e53331a3b305ec668ad57081df98416b30473f5d", List.of(positiveMint))
+        );
+
+        if (parallel) {
+            ExecutorService executor = Executors.newFixedThreadPool(2);
+            try {
+                ShelleyBlockEventPublisher parallelPublisher = new ShelleyBlockEventPublisher(executor, executor, publisher, cursorService,
+                        StoreProperties.builder().blocksBatchSize(100).blocksPartitionSize(15).processingThreadsTimeout(1).build());
+                parallelPublisher.publishBlockEventsInParallel(eventMetadata(), mockBlock(), transactions);
+                parallelPublisher.processBlocksInParallel();
+            } finally {
+                executor.shutdownNow();
+            }
+        } else {
+            shelleyBlockEventPublisher.publishBlockEvents(eventMetadata(), mockBlock(), transactions);
+        }
+
+        var mintBurnEvent = capturePublishedEvent(MintBurnEvent.class);
+        assertThat(mintBurnEvent).isNotNull();
+        assertThat(mintBurnEvent.getTxMintBurns()).singleElement().satisfies(txMintBurn -> {
+            assertThat(txMintBurn.getTxHash()).isEqualTo("aaaaaaaaaa9cecf2602f1110e53331a3b305ec668ad57081df98416b30473f5d");
+            assertThat(txMintBurn.getTxIndex()).isEqualTo(1);
+            assertThat(txMintBurn.getAmounts()).extracting(Amount::getUnit).containsExactly(policyId + "4c4f5244");
+        });
+    }
+
+    private Transaction transactionWithMint(String txHash, List<Amount> mint) {
+        return Transaction.builder()
+                .txHash(txHash)
+                .body(TransactionBody.builder().mint(mint).build())
+                .witnesses(emptyWitnesses())
+                .invalid(false)
+                .build();
     }
 
     @Test
