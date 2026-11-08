@@ -689,19 +689,26 @@ public class BlockFetchService implements BlockChainDataListener {
         //First, before anything is reset: fails if a commit of the old session is still running, and the error state
         //is left as it was, so the restart is tried again
         long session = sessionGuard.newSession();
-        isError.set(false);
-        scheduledToStop.set(false);
-        resetAcceptedBlock(from.getHash(), fromBlockNumber);
-        restoreEpochStateForStart(from, fromBlockNumber);
+        //The rest of the start (e.g. reading the cursor) belongs to the new session. The calling thread can still be
+        //marked with the session this start replaces (batchDone at the end of the range fetch).
+        Long previous = sessionGuard.enter(session);
+        try {
+            isError.set(false);
+            scheduledToStop.set(false);
+            resetAcceptedBlock(from.getHash(), fromBlockNumber);
+            restoreEpochStateForStart(from, fromBlockNumber);
 
-        stopKeepAliveThread();
-        //Set the mode before fetching starts, because the first blocks can arrive before fetch() returns
-        syncMode = false;
-        cursorService.setSyncMode(syncMode);
-        blockRangeSync.restart(new SessionListener(session));
-        blockRangeSync.fetch(from, to);
+            stopKeepAliveThread();
+            //Set the mode before fetching starts, because the first blocks can arrive before fetch() returns
+            syncMode = false;
+            cursorService.setSyncMode(syncMode);
+            blockRangeSync.restart(new SessionListener(session));
+            blockRangeSync.fetch(from, to);
 
-        startKeepAliveThread(syncMode);
+            startKeepAliveThread(syncMode);
+        } finally {
+            sessionGuard.exit(previous);
+        }
     }
 
     public synchronized void startSync(Point from) {
@@ -721,23 +728,30 @@ public class BlockFetchService implements BlockChainDataListener {
         //First, before anything is reset: fails if a commit of the old session is still running, and the error state
         //is left as it was, so the restart is tried again
         long session = sessionGuard.newSession();
-        isError.set(false);
-        scheduledToStop.set(false);
+        //The rest of the start (e.g. reading the cursor) belongs to the new session. The calling thread can still be
+        //marked with the session this start replaces (batchDone at the end of the range fetch).
+        Long previous = sessionGuard.enter(session);
+        try {
+            isError.set(false);
+            scheduledToStop.set(false);
 
-        stopKeepAliveThread();
-        //Set the mode before connecting. BlockSync.startSync waits for the handshake, and blocks can arrive
-        //during that wait. A block seen with syncMode still false would go to a batch that is never written.
-        syncMode = true;
-        cursorService.setSyncMode(syncMode);
-        //Sync restarts from the last stored block, so blocks still waiting in a batch are fetched again. Drop them,
-        //or they would be written a second time when the batch is flushed.
-        reset();
-        //The first block from chain sync must build on the start point
-        resetAcceptedBlock(from.getHash(), fromBlockNumber);
-        expectedPrevBlockHash = from.getHash();
-        restoreEpochStateForStart(from, fromBlockNumber);
-        blockSync.startSync(from, new SessionListener(session));
-        startKeepAliveThread(syncMode);
+            stopKeepAliveThread();
+            //Set the mode before connecting. BlockSync.startSync waits for the handshake, and blocks can arrive
+            //during that wait. A block seen with syncMode still false would go to a batch that is never written.
+            syncMode = true;
+            cursorService.setSyncMode(syncMode);
+            //Sync restarts from the last stored block, so blocks still waiting in a batch are fetched again. Drop them,
+            //or they would be written a second time when the batch is flushed.
+            reset();
+            //The first block from chain sync must build on the start point
+            resetAcceptedBlock(from.getHash(), fromBlockNumber);
+            expectedPrevBlockHash = from.getHash();
+            restoreEpochStateForStart(from, fromBlockNumber);
+            blockSync.startSync(from, new SessionListener(session));
+            startKeepAliveThread(syncMode);
+        } finally {
+            sessionGuard.exit(previous);
+        }
     }
 
     public synchronized void shutdown() {

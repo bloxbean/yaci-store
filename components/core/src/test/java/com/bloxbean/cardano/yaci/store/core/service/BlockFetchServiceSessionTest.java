@@ -81,6 +81,29 @@ class BlockFetchServiceSessionTest {
     }
 
     @Test
+    void theRestOfAStartRunsAsTheNewSession() {
+        //batchDone at the end of the range fetch starts chain sync on a thread of the range session. That session
+        //becomes stale as chain sync opens its own, so the start's own reads (the cursor) must run as the new one,
+        //or the commit fence would roll them back.
+        long rangeSession = guard.newSession();
+        var sessionDuringCursorRead = new java.util.concurrent.atomic.AtomicReference<Long>();
+        when(cursorService.getCursorByBlockHash("aa")).thenAnswer(inv -> {
+            sessionDuringCursorRead.set(guard.callerSession());
+            return java.util.Optional.empty();
+        });
+
+        guard.enter(rangeSession);
+        try {
+            blockFetchService.startSync(new Point(100, "aa"), 10L);
+
+            assertThat(sessionDuringCursorRead.get()).isEqualTo(guard.currentSession());
+            assertThat(guard.callerSession()).isEqualTo(rangeSession); //restored for the rest of batchDone
+        } finally {
+            guard.exit();
+        }
+    }
+
+    @Test
     void chainSyncDoesNotStartWhileACommitOfTheOldSessionIsRunning() throws Exception {
         //e.g. batchDone after a parallel worker timed out: the error is set, and a worker of the old range session
         //has passed the commit fence and is still committing
