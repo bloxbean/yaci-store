@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.core.service;
 
+import com.bloxbean.cardano.yaci.store.common.executor.SyncSessionContext;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,7 +28,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 @Slf4j
 public class SyncSessionGuard {
     private final AtomicLong currentSession = new AtomicLong();
-    private final ThreadLocal<Long> callerSession = new ThreadLocal<>();
+    //The mark of the threads working for a session lives in common, so stores can pass it on to their own threads
     //Read lock: held by a commit of a session's transaction, from its session check until the commit is done.
     //Write lock: taken to change the session, so no commit of the old session is in flight when it changes.
     private final ReentrantReadWriteLock commitLock = new ReentrantReadWriteLock();
@@ -112,17 +113,7 @@ public class SyncSessionGuard {
      * so the transactions of the task are fenced like the caller's. Without a session, the executor itself.
      */
     public Executor propagating(Executor executor) {
-        Long session = callerSession.get();
-        if (session == null)
-            return executor;
-        return task -> executor.execute(() -> {
-            Long previous = enter(session);
-            try {
-                task.run();
-            } finally {
-                exit(previous);
-            }
-        });
+        return SyncSessionContext.propagating(executor);
     }
 
     public long currentSession() {
@@ -137,23 +128,18 @@ public class SyncSessionGuard {
      * Marks the calling thread as working for the given session, until {@link #exit()}.
      */
     public Long enter(long session) {
-        Long previous = callerSession.get();
-        callerSession.set(session);
-        return previous;
+        return SyncSessionContext.enter(session);
     }
 
     /**
      * Ends the mark set by {@link #enter(long)}, restoring the one before it (null: none).
      */
     public void exit(Long previous) {
-        if (previous == null)
-            callerSession.remove();
-        else
-            callerSession.set(previous);
+        SyncSessionContext.exit(previous);
     }
 
     public void exit() {
-        callerSession.remove();
+        SyncSessionContext.exit(null);
     }
 
     /**
@@ -161,7 +147,7 @@ public class SyncSessionGuard {
      * the caller, and check it there with {@link #check(Long)}.
      */
     public Long callerSession() {
-        return callerSession.get();
+        return SyncSessionContext.current();
     }
 
     /**
@@ -178,7 +164,7 @@ public class SyncSessionGuard {
      * (startup, tests, a restart) is never stale.
      */
     public boolean isCallerStale() {
-        Long session = callerSession.get();
+        Long session = SyncSessionContext.current();
         return session != null && session != currentSession.get();
     }
 
@@ -187,7 +173,7 @@ public class SyncSessionGuard {
      * Call it before anything is committed.
      */
     public void checkCaller() {
-        Long session = callerSession.get();
+        Long session = SyncSessionContext.current();
         if (session != null && session != currentSession.get())
             throw new StaleSyncSessionException(session, currentSession.get());
     }
