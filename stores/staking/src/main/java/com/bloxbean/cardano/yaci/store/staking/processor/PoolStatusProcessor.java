@@ -59,14 +59,21 @@ public class PoolStatusProcessor {
     @EventListener
     @Transactional
     public void processPoolRegistrationEvent(PoolRegistrationEvent poolRegistrationEvent) {
-        // A block processed again before pre-commit (e.g. after a failed batch) replaces its earlier copy,
-        // so its registrations are counted once in StakingDepositEvent.
+        // One event per transaction. A transaction processed again before pre-commit (e.g. after a failed batch)
+        // replaces its earlier copy, so its registrations are counted once in StakingDepositEvent.
         var metadata = poolRegistrationEvent.getMetadata();
+        var txHash = txHashOf(poolRegistrationEvent);
         synchronized (poolRegistrationsCache) {
             poolRegistrationsCache.removeIf(cached -> cached.getMetadata().getSlot() == metadata.getSlot()
-                    && Objects.equals(cached.getMetadata().getBlockHash(), metadata.getBlockHash()));
+                    && Objects.equals(cached.getMetadata().getBlockHash(), metadata.getBlockHash())
+                    && Objects.equals(txHashOf(cached), txHash));
             poolRegistrationsCache.add(poolRegistrationEvent);
         }
+    }
+
+    private static String txHashOf(PoolRegistrationEvent event) {
+        var registrations = event.getPoolRegistrations();
+        return registrations == null || registrations.isEmpty() ? null : registrations.get(0).getTxHash();
     }
 
     @EventListener
