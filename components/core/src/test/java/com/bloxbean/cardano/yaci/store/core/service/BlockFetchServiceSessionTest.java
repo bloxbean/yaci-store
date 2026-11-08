@@ -81,6 +81,43 @@ class BlockFetchServiceSessionTest {
     }
 
     @Test
+    void chainSyncDoesNotStartWhileACommitOfTheOldSessionIsRunning() throws Exception {
+        //e.g. batchDone after a parallel worker timed out: the error is set, and a worker of the old range session
+        //has passed the commit fence and is still committing
+        guard.sessionChangeWaitMs = 100;
+        long old = guard.newSession();
+        ((java.util.concurrent.atomic.AtomicBoolean) org.springframework.test.util.ReflectionTestUtils
+                .getField(blockFetchService, "isError")).set(true);
+        var inCommit = new java.util.concurrent.CountDownLatch(1);
+        var done = new java.util.concurrent.CountDownLatch(1);
+        Thread committer = new Thread(() -> {
+            Runnable release = guard.enterCommit(old);
+            inCommit.countDown();
+            try {
+                done.await(5, java.util.concurrent.TimeUnit.SECONDS);
+            } catch (InterruptedException ignored) {
+            } finally {
+                release.run();
+            }
+        });
+        committer.start();
+        try {
+            org.assertj.core.api.Assertions.assertThat(inCommit.await(5, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+
+            org.assertj.core.api.Assertions.assertThatThrownBy(
+                    () -> blockFetchService.startSync(new Point(100, "aa"), null))
+                    .isInstanceOf(IllegalStateException.class);
+
+            //the error is kept, so the restart is tried again, and nothing was started
+            org.assertj.core.api.Assertions.assertThat(blockFetchService.isError()).isTrue();
+            verify(blockSync, never()).startSync(any(), any());
+        } finally {
+            done.countDown();
+            committer.join(5_000);
+        }
+    }
+
+    @Test
     void blockFromAnOldSessionIsIgnored() {
         BlockChainDataListener oldSession = startSyncAndGetListener();
         BlockChainDataListener newSession = startSyncAndGetListener();

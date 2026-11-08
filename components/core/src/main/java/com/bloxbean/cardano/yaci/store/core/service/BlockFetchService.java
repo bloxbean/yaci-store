@@ -686,6 +686,9 @@ public class BlockFetchService implements BlockChainDataListener {
             log.warn("Not starting a range fetch from {}: asked by an old sync session", from);
             return;
         }
+        //First, before anything is reset: fails if a commit of the old session is still running, and the error state
+        //is left as it was, so the restart is tried again
+        long session = sessionGuard.newSession();
         isError.set(false);
         scheduledToStop.set(false);
         resetAcceptedBlock(from.getHash(), fromBlockNumber);
@@ -695,7 +698,7 @@ public class BlockFetchService implements BlockChainDataListener {
         //Set the mode before fetching starts, because the first blocks can arrive before fetch() returns
         syncMode = false;
         cursorService.setSyncMode(syncMode);
-        blockRangeSync.restart(new SessionListener(sessionGuard.newSession()));
+        blockRangeSync.restart(new SessionListener(session));
         blockRangeSync.fetch(from, to);
 
         startKeepAliveThread(syncMode);
@@ -715,6 +718,9 @@ public class BlockFetchService implements BlockChainDataListener {
             log.warn("Not starting chain sync from {}: asked by an old sync session", from);
             return;
         }
+        //First, before anything is reset: fails if a commit of the old session is still running, and the error state
+        //is left as it was, so the restart is tried again
+        long session = sessionGuard.newSession();
         isError.set(false);
         scheduledToStop.set(false);
 
@@ -730,7 +736,7 @@ public class BlockFetchService implements BlockChainDataListener {
         resetAcceptedBlock(from.getHash(), fromBlockNumber);
         expectedPrevBlockHash = from.getHash();
         restoreEpochStateForStart(from, fromBlockNumber);
-        blockSync.startSync(from, new SessionListener(sessionGuard.newSession()));
+        blockSync.startSync(from, new SessionListener(session));
         startKeepAliveThread(syncMode);
     }
 

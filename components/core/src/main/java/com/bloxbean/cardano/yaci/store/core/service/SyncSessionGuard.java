@@ -36,20 +36,37 @@ public class SyncSessionGuard {
     long sessionChangeWaitMs = 30_000;
 
     /**
-     * Opens a new session. All earlier sessions become stale.
+     * Opens a new session. All earlier sessions become stale, then this waits for their commits in flight.
+     *
+     * @throws IllegalStateException if a commit of an earlier session is still running after the wait. The earlier
+     *                               sessions are stale all the same, but the caller must not start syncing yet.
      */
     public long newSession() {
-        return changeSession();
+        return changeSession(true);
     }
 
     /**
-     * Ends the current session without opening a new one, e.g. when the sync is stopped.
+     * Ends the current session without opening a new one, e.g. when the sync is stopped. Waits for its commits in
+     * flight only for a bounded time and never fails, so a stop always goes through. The next start waits strictly
+     * (see {@link #awaitCommitsOfOldSessions()}).
      */
     public void endSession() {
-        changeSession();
+        changeSession(false);
     }
 
-    private long changeSession() {
+    /**
+     * Ends the current session and waits until none of its commits is in flight. Commits that come to the fence later
+     * see a stale session and are rolled back, so once this returns, nothing of an old session can still be written.
+     * Called before a start reads the cursor and rolls back to it.
+     *
+     * @throws IllegalStateException if a commit is still running after the wait. The start fails, and the restart is
+     *                               tried again later.
+     */
+    public void awaitCommitsOfOldSessions() {
+        changeSession(true);
+    }
+
+    private long changeSession(boolean strict) {
         Lock writeLock = commitLock.writeLock();
         boolean locked = false;
         try {
@@ -58,39 +75,21 @@ public class SyncSessionGuard {
             Thread.currentThread().interrupt();
         }
         try {
-            //Changing anyway keeps a stop or restart from hanging. The start waits strictly before it reads the cursor
-            //(awaitCommitsOfOldSessions), so the late commit cannot land after the restart's rollback.
-            if (!locked)
-                log.warn("A commit of sync session {} did not finish within {} ms. Changing the session anyway.",
-                        currentSession.get(), sessionChangeWaitMs);
-            return currentSession.incrementAndGet();
+            //Always make the old session stale, so its commits that have not reached the fence are rolled back
+            long previous = currentSession.get();
+            long next = currentSession.incrementAndGet();
+            if (!locked) {
+                if (strict)
+                    throw new IllegalStateException("A commit of sync session " + previous + " is still running after "
+                            + sessionChangeWaitMs + " ms. Not starting the sync yet.");
+                log.warn("A commit of sync session {} did not finish within {} ms. Ending the session anyway.",
+                        previous, sessionChangeWaitMs);
+            }
+            return next;
         } finally {
             if (locked)
                 writeLock.unlock();
         }
-    }
-
-    /**
-     * Waits until no commit of a sync session is in flight. Commits that start after the session changed see a stale
-     * session and are rolled back, so once this returns, nothing of an old session can still be written. Called before
-     * a start reads the cursor and rolls back to it: a session change only waits a bounded time, so a commit that hung
-     * in the database may still be in flight.
-     *
-     * @throws IllegalStateException if a commit is still in flight after the wait. The start fails, and the restart
-     *                               is tried again later.
-     */
-    public void awaitCommitsOfOldSessions() {
-        Lock writeLock = commitLock.writeLock();
-        boolean locked = false;
-        try {
-            locked = writeLock.tryLock(sessionChangeWaitMs, TimeUnit.MILLISECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-        if (!locked)
-            throw new IllegalStateException("A commit of an old sync session is still running after "
-                    + sessionChangeWaitMs + " ms. Not starting the sync yet.");
-        writeLock.unlock();
     }
 
     /**
