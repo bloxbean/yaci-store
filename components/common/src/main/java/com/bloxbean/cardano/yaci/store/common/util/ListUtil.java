@@ -1,5 +1,7 @@
 package com.bloxbean.cardano.yaci.store.common.util;
 
+import com.bloxbean.cardano.yaci.store.common.executor.SyncSessionContext;
+
 import lombok.SneakyThrows;
 
 import java.util.ArrayList;
@@ -55,10 +57,10 @@ public class ListUtil {
             List<List<T>> partitions = partition(new ArrayList<>(list), batchSize);
             List<CompletableFuture> futures = new ArrayList<>();
             for (var partition: partitions) {
-                var completableFuture = CompletableFuture.supplyAsync(() -> {
+                var completableFuture = CompletableFuture.supplyAsync(SyncSessionContext.propagating(() -> {
                     applyFunc.accept(partition);
                     return true;
-                });
+                }));
                 futures.add(completableFuture);
             }
 
@@ -83,7 +85,7 @@ public class ListUtil {
                 var completableFuture = CompletableFuture.supplyAsync(() -> {
                     applyFunc.accept(partition);
                     return true;
-                }, executor);
+                }, SyncSessionContext.propagating(executor));
                 futures.add(completableFuture);
             }
 
