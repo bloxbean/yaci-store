@@ -12,14 +12,15 @@ import java.util.concurrent.Executors;
 public class ParallelExecutor {
     private Executor virtualThreadExecutor = Executors.newVirtualThreadPerTaskExecutor();
 
+    //The tasks run as part of the caller's sync session, if any (see SyncSessionContext)
     public Executor getVirtualThreadExecutor() {
-        return virtualThreadExecutor;
+        return SyncSessionContext.propagating(virtualThreadExecutor);
     }
 
     public void executesInParallel(Runnable... runnable) {
         List<CompletableFuture> futures = new ArrayList<>();
         for (Runnable r: runnable) {
-            var future = CompletableFuture.runAsync(r, virtualThreadExecutor);
+            var future = CompletableFuture.runAsync(r, SyncSessionContext.propagating(virtualThreadExecutor));
             futures.add(future);
         }
 
