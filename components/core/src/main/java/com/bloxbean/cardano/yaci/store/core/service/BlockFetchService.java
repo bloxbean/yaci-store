@@ -330,10 +330,9 @@ public class BlockFetchService implements BlockChainDataListener {
             sessionGuard.checkCaller();
             publisher.publishEvent(new ByronEbBlockEvent(eventMetadata, byronEbBlock));
 
-            //Finally Set the cursor
-            sessionGuard.checkCaller();
-            cursorService.setCursor(new Cursor(eventMetadata.getSlot(), eventMetadata.getBlockHash(),
-                    eventMetadata.getBlock(), eventMetadata.getPrevBlockHash(), eventMetadata.getEra()));
+            //Finally Set the cursor, only for the current session (checked again after the write, in its transaction)
+            sessionGuard.writeIfCurrent(() -> cursorService.setCursor(new Cursor(eventMetadata.getSlot(), eventMetadata.getBlockHash(),
+                    eventMetadata.getBlock(), eventMetadata.getPrevBlockHash(), eventMetadata.getEra())));
             blockAccepted(eventMetadata.getBlock(), eventMetadata.getBlockHash(), false);
         } catch (Throwable e) {
             if (sessionGuard.isCallerStale()) {
@@ -446,8 +445,10 @@ public class BlockFetchService implements BlockChainDataListener {
                 previousEpoch, previousEra);
     }
 
+    //Synchronized like startFetch/startSync, which open the new session: the check below and the shutdown happen
+    //together, so a late batchDone cannot stop the connection of the session that replaced it
     @Override
-    public void batchDone() {
+    public synchronized void batchDone() {
 
         //An old range session must not stop the fetcher of the session that replaced it
         if (sessionGuard.isCallerStale()) {
