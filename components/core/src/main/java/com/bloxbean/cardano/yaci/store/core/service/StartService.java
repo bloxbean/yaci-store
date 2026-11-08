@@ -180,13 +180,13 @@ public class StartService {
         if (storeProperties.isPrimaryInstance()) {
             if (diff > storeProperties.getBlockDiffToStartSyncProtocol()) {
                 log.info("Start BlockRangeSync");
-                blockFetchService.startFetch(from, to, sessionTimeoutMs);
+                blockFetchService.startFetchWithTimeout(from, to, sessionTimeoutMs);
             } else {
                 log.info("Start BlockSync");
-                blockFetchService.startSync(from, sessionTimeoutMs);
+                blockFetchService.startSyncWithTimeout(from, sessionTimeoutMs);
             }
         } else {
-            blockFetchService.startFetch(from, to, sessionTimeoutMs);
+            blockFetchService.startFetchWithTimeout(from, to, sessionTimeoutMs);
         }
     }
 
