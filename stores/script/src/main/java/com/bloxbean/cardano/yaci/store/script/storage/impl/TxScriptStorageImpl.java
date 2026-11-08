@@ -9,6 +9,7 @@ import com.bloxbean.cardano.yaci.store.script.storage.impl.model.TxScriptEntity;
 import com.bloxbean.cardano.yaci.store.script.storage.impl.repository.TxScriptRepository;
 import lombok.RequiredArgsConstructor;
 import org.jooq.DSLContext;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -26,6 +27,7 @@ public class TxScriptStorageImpl implements TxScriptStorage {
 
     @Override
     @Plugin(key = PLUGIN_SCRIPT_TX_SCRIPT_SAVE)
+    @Transactional //Called from parallel workers without the caller's transaction, keep the batch all or nothing
     public void saveAll(List<TxScript> txScripts) {
         List<TxScriptEntity> txScriptEntities = txScripts.stream().map(scriptMapper::toTxScriptEntity).collect(Collectors.toList());
 

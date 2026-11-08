@@ -10,7 +10,6 @@ import com.bloxbean.cardano.yaci.store.script.storage.impl.model.TxScriptEntity;
 import com.bloxbean.cardano.yaci.store.script.storage.impl.repository.TxScriptRepository;
 import org.jooq.DSLContext;
 import org.jooq.conf.RenderQuotedNames;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.jooq.DefaultConfigurationCustomizer;
@@ -19,11 +18,15 @@ import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigInteger;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.groups.Tuple.tuple;
 
 @DataJpaTest
@@ -36,15 +39,9 @@ class TxScriptStorageImplTest {
     @Autowired
     private TxScriptRepository repository;
 
+    //Spring bean, so it goes through the transaction proxy as in the app
     @Autowired
-    private DSLContext dsl;
-
     private TxScriptStorage txScriptStorage;
-
-    @BeforeEach
-    void setUp() {
-        txScriptStorage = new TxScriptStorageImpl(repository, new ScriptMapperImpl(), dsl);
-    }
 
     @Test
     void saveAll_sameRowsTwice_keepsOneRowPerRedeemer() {
@@ -70,6 +67,23 @@ class TxScriptStorageImplTest {
                         UUIDUtil.nameUUID(TX_HASH, "Mint", "0"));
     }
 
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void saveAll_failureInBatch_writesNoRows() {
+        //Like a parallel worker: no transaction from the caller
+        assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
+        try {
+            //Second row fails, script_hash is longer than the column
+            TxScript badRow = txScript(RedeemerTag.Spend, 1, 100);
+            badRow.setScriptHash(SCRIPT_HASH + SCRIPT_HASH);
+
+            assertThatThrownBy(() -> txScriptStorage.saveAll(List.of(txScript(RedeemerTag.Spend, 0, 100), badRow)));
+            assertThat(repository.count()).isZero();
+        } finally {
+            repository.deleteAll();
+        }
+    }
+
     private TxScript txScript(RedeemerTag purpose, int redeemerIndex, long unitMem) {
         return TxScript.builder()
                 .txHash(TX_HASH)
@@ -89,6 +103,11 @@ class TxScriptStorageImplTest {
 
     @TestConfiguration
     static class JooqTestConfig {
+        @Bean
+        TxScriptStorage txScriptStorage(TxScriptRepository repository, DSLContext dsl) {
+            return new TxScriptStorageImpl(repository, new ScriptMapperImpl(), dsl);
+        }
+
         @Bean
         DefaultConfigurationCustomizer jooqSettings() {
             return configuration -> configuration.settings()
