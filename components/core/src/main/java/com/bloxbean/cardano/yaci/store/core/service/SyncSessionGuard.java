@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.core.service;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -99,6 +100,19 @@ public class SyncSessionGuard {
         Long session = callerSession.get();
         if (session != null && session != currentSession.get())
             throw new StaleSyncSessionException(session, currentSession.get());
+    }
+
+    /**
+     * Runs a commit step, such as the cursor write, only for the current session. The session is checked before and
+     * after the write, in one transaction (the caller's, if it has one). A thread of an old session can pass the
+     * earlier checks and then wait, for example in a commit listener or for a database connection, while a restart
+     * starts a new session. The check after the write then rolls the write back.
+     */
+    @Transactional
+    public void writeIfCurrent(Runnable write) {
+        checkCaller();
+        write.run();
+        checkCaller();
     }
 
     public static class StaleSyncSessionException extends RuntimeException {

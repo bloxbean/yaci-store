@@ -36,6 +36,8 @@ public class ByronBlockEventPublisher implements BlockEventPublisher<ByronMainBl
     private final StoreProperties storeProperties;
 
     private List<BatchByronBlock> byronBatchBlockList = new ArrayList<>();
+    //The sync session the blocks in byronBatchBlockList belong to. Guarded by byronBatchBlockList.
+    private Long batchSession;
 
     public ByronBlockEventPublisher(@Qualifier("blockExecutor") ExecutorService blockExecutor,
                                     ApplicationEventPublisher publisher,
@@ -50,6 +52,23 @@ public class ByronBlockEventPublisher implements BlockEventPublisher<ByronMainBl
     public void reset() {
         synchronized (byronBatchBlockList) {
             byronBatchBlockList.clear();
+            batchSession = null;
+        }
+    }
+
+    /**
+     * Call with the byronBatchBlockList lock held. A thread of an old sync session must not add to, or take, the batch
+     * of the session that replaced it, so the session is checked under the same lock. Blocks left by an older session
+     * are dropped: the current session fetches them again from the cursor.
+     */
+    private void ownBatch() {
+        sessionGuard.checkCaller();
+        Long session = sessionGuard.callerSession();
+        if (session != null && !session.equals(batchSession)) {
+            if (!byronBatchBlockList.isEmpty())
+                log.warn("Dropping {} batched Byron blocks of old sync session {}", byronBatchBlockList.size(), batchSession);
+            byronBatchBlockList.clear();
+            batchSession = session;
         }
     }
 
@@ -72,17 +91,17 @@ public class ByronBlockEventPublisher implements BlockEventPublisher<ByronMainBl
         publisher.publishEvent(new PreCommitEvent(eventMetadata));
         publisher.publishEvent(new CommitEvent<>(eventMetadata, List.of(new BatchByronBlock(eventMetadata, byronBlock))));
 
-        //Finally Set the cursor
-        cursorService.setCursor(new Cursor(eventMetadata.getSlot(), eventMetadata.getBlockHash(),
-                eventMetadata.getBlock(), eventMetadata.getPrevBlockHash(), eventMetadata.getEra()));
+        //Finally Set the cursor. Checked again: a commit listener can hang while a restart starts a new session. In
+        //this block's transaction, so a stale block is rolled back with its cursor.
+        sessionGuard.writeIfCurrent(() -> cursorService.setCursor(new Cursor(eventMetadata.getSlot(), eventMetadata.getBlockHash(),
+                eventMetadata.getBlock(), eventMetadata.getPrevBlockHash(), eventMetadata.getEra())));
     }
 
     @Override
     public void publishBlockEventsInParallel(EventMetadata eventMetadata, ByronMainBlock byronBlock, List<Transaction> transactions) {
-        //A thread of an old sync session must not add to the batch the current session is filling
-        sessionGuard.checkCaller();
         int size;
         synchronized (byronBatchBlockList) {
+            ownBatch();
             byronBatchBlockList.add(new BatchByronBlock(eventMetadata, byronBlock));
             size = byronBatchBlockList.size();
         }
@@ -93,10 +112,10 @@ public class ByronBlockEventPublisher implements BlockEventPublisher<ByronMainBl
     }
 
     public void processBlocksInParallel() {
-        sessionGuard.checkCaller();
         //Work on a copy: the list may be reset or refilled by another sync session while this batch is written
         List<BatchByronBlock> batch;
         synchronized (byronBatchBlockList) {
+            ownBatch();
             if (byronBatchBlockList.isEmpty())
                 return;
             batch = new ArrayList<>(byronBatchBlockList);
@@ -130,9 +149,11 @@ public class ByronBlockEventPublisher implements BlockEventPublisher<ByronMainBl
         publisher.publishEvent(new PreCommitEvent(lastBlockCache.getMetadata()));
         publisher.publishEvent(new CommitEvent(lastBlockCache.getMetadata(), batch));
 
-        cursorService.setCursor(new Cursor(lastBlockCache.getMetadata().getSlot(), lastBlockCache.getMetadata().getBlockHash(),
-                lastBlockCache.getMetadata().getBlock(), lastBlockCache.getMetadata().getPrevBlockHash(),
-                lastBlockCache.getMetadata().getEra()));
+        //Checked again (a commit listener can hang while a restart starts a new session), and once more after the
+        //write in the cursor's transaction
+        sessionGuard.writeIfCurrent(() -> cursorService.setCursor(new Cursor(lastBlockCache.getMetadata().getSlot(),
+                lastBlockCache.getMetadata().getBlockHash(), lastBlockCache.getMetadata().getBlock(),
+                lastBlockCache.getMetadata().getPrevBlockHash(), lastBlockCache.getMetadata().getEra())));
     }
 
 }
