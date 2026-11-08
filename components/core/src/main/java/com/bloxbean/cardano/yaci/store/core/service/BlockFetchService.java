@@ -779,23 +779,33 @@ public class BlockFetchService implements BlockChainDataListener {
             log.warn("Not starting a range fetch from {}: asked by an old sync session", from);
             return;
         }
-        isError.set(false);
-        scheduledToStop.set(false);
-        resetAcceptedBlock(from.getHash(), fromBlockNumber);
-        restoreEpochStateForStart(from, fromBlockNumber);
+        //First, before anything is reset: fails if a commit of the old session is still running, and the error state
+        //is left as it was, so the restart is tried again
+        long session = sessionGuard.newSession();
+        //The rest of the start (e.g. reading the cursor) belongs to the new session. The calling thread can still be
+        //marked with the session this start replaces (batchDone at the end of the range fetch).
+        Long previous = sessionGuard.enter(session);
+        try {
+            isError.set(false);
+            scheduledToStop.set(false);
+            resetAcceptedBlock(from.getHash(), fromBlockNumber);
+            restoreEpochStateForStart(from, fromBlockNumber);
 
-        stopKeepAliveThread();
-        //Set the mode before fetching starts, because the first blocks can arrive before fetch() returns
-        syncMode = false;
-        cursorService.setSyncMode(syncMode);
-        blockRangeSync.restart(new SessionListener(sessionGuard.newSession()));
-        // yaci logs a cancelled handshake and returns: do not go on with a closed connection
-        if (cancelled.get())
-            throw new NodeNotAnsweringException("Cancelled: start the block fetch");
-        blockRangeSync.fetch(from, to);
-        lastSessionStartTime = System.currentTimeMillis();
+            stopKeepAliveThread();
+            //Set the mode before fetching starts, because the first blocks can arrive before fetch() returns
+            syncMode = false;
+            cursorService.setSyncMode(syncMode);
+            blockRangeSync.restart(new SessionListener(session));
+            // yaci logs a cancelled handshake and returns: do not go on with a closed connection
+            if (cancelled.get())
+                throw new NodeNotAnsweringException("Cancelled: start the block fetch");
+            blockRangeSync.fetch(from, to);
+            lastSessionStartTime = System.currentTimeMillis();
 
-        startKeepAliveThread(syncMode);
+            startKeepAliveThread(syncMode);
+        } finally {
+            sessionGuard.exit(previous);
+        }
     }
 
     public void startSync(Point from) {
@@ -843,26 +853,36 @@ public class BlockFetchService implements BlockChainDataListener {
             log.warn("Not starting chain sync from {}: asked by an old sync session", from);
             return;
         }
-        isError.set(false);
-        scheduledToStop.set(false);
+        //First, before anything is reset: fails if a commit of the old session is still running, and the error state
+        //is left as it was, so the restart is tried again
+        long session = sessionGuard.newSession();
+        //The rest of the start (e.g. reading the cursor) belongs to the new session. The calling thread can still be
+        //marked with the session this start replaces (batchDone at the end of the range fetch).
+        Long previous = sessionGuard.enter(session);
+        try {
+            isError.set(false);
+            scheduledToStop.set(false);
 
-        stopKeepAliveThread();
-        //Set the mode before connecting. BlockSync.startSync waits for the handshake, and blocks can arrive
-        //during that wait. A block seen with syncMode still false would go to a batch that is never written.
-        syncMode = true;
-        cursorService.setSyncMode(syncMode);
-        //Sync restarts from the last stored block, so blocks still waiting in a batch are fetched again. Drop them,
-        //or they would be written a second time when the batch is flushed.
-        reset();
-        //The first block from chain sync must build on the start point
-        resetAcceptedBlock(from.getHash(), fromBlockNumber);
-        expectedPrevBlockHash = from.getHash();
-        restoreEpochStateForStart(from, fromBlockNumber);
-        blockSync.startSync(from, new SessionListener(sessionGuard.newSession()));
-        if (cancelled.get())
-            throw new NodeNotAnsweringException("Cancelled: start the block sync");
-        lastSessionStartTime = System.currentTimeMillis();
-        startKeepAliveThread(syncMode);
+            stopKeepAliveThread();
+            //Set the mode before connecting. BlockSync.startSync waits for the handshake, and blocks can arrive
+            //during that wait. A block seen with syncMode still false would go to a batch that is never written.
+            syncMode = true;
+            cursorService.setSyncMode(syncMode);
+            //Sync restarts from the last stored block, so blocks still waiting in a batch are fetched again. Drop them,
+            //or they would be written a second time when the batch is flushed.
+            reset();
+            //The first block from chain sync must build on the start point
+            resetAcceptedBlock(from.getHash(), fromBlockNumber);
+            expectedPrevBlockHash = from.getHash();
+            restoreEpochStateForStart(from, fromBlockNumber);
+            blockSync.startSync(from, new SessionListener(session));
+            if (cancelled.get())
+                throw new NodeNotAnsweringException("Cancelled: start the block sync");
+            lastSessionStartTime = System.currentTimeMillis();
+            startKeepAliveThread(syncMode);
+        } finally {
+            sessionGuard.exit(previous);
+        }
     }
 
     private void startWithTimeout(String what, long timeoutMs, Consumer<AtomicBoolean> start, Runnable closeConnection) {
