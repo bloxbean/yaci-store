@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 
 import static com.bloxbean.cardano.yaci.store.staking.StakingStoreConfiguration.STORE_STAKING_ENABLED;
 
@@ -58,7 +59,14 @@ public class PoolStatusProcessor {
     @EventListener
     @Transactional
     public void processPoolRegistrationEvent(PoolRegistrationEvent poolRegistrationEvent) {
-        poolRegistrationsCache.add(poolRegistrationEvent);
+        // A block processed again before pre-commit (e.g. after a failed batch) replaces its earlier copy,
+        // so its registrations are counted once in StakingDepositEvent.
+        var metadata = poolRegistrationEvent.getMetadata();
+        synchronized (poolRegistrationsCache) {
+            poolRegistrationsCache.removeIf(cached -> cached.getMetadata().getSlot() == metadata.getSlot()
+                    && Objects.equals(cached.getMetadata().getBlockHash(), metadata.getBlockHash()));
+            poolRegistrationsCache.add(poolRegistrationEvent);
+        }
     }
 
     @EventListener
@@ -252,6 +260,13 @@ public class PoolStatusProcessor {
     @EventListener
     @Transactional
     public void handleRollback(RollbackEvent rollbackEvent) {
+        // Events cached for blocks that were not committed must not be counted or saved at the next pre-commit.
+        // A restart also publishes a rollback event before it processes blocks again.
+        poolRegistrationsCache.clear();
+        poolRetirementsCache.clear();
+        stakeKeyRegCache.clear();
+        stakeKeyDeRegCache.clear();
+
         long rollBackToSlot = rollbackEvent.getRollbackTo().getSlot();
         int deleted = poolStorage.deleteBySlotGreaterThan(rollBackToSlot);
         log.info("Rollback -- {} pool records", deleted);
