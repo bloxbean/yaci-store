@@ -864,14 +864,22 @@ public class BlockFetchService implements BlockChainDataListener {
             return;
         }
 
-        NodeCalls.call(what, timeoutMs, () -> {
-            start.accept(cancelled);
-            return null;
-        }, () -> {
+        Runnable cancel = () -> {
             cancelled.set(true);
             // Not through shutdownRangeSync()/shutdownSync(): the stalled start holds this object's monitor.
             closeConnection.run();
-        });
+        };
+        try {
+            NodeCalls.call(what, timeoutMs, () -> {
+                start.accept(cancelled);
+                return null;
+            }, cancel);
+        } catch (RuntimeException e) {
+            // The start can finish just after the time limit, when the cancel is no longer run. The caller treats
+            // this start as failed, so close the connection in every case.
+            cancel.run();
+            throw e;
+        }
     }
 
     public synchronized void shutdown() {

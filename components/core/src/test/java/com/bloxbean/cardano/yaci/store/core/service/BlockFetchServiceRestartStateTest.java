@@ -63,6 +63,22 @@ class BlockFetchServiceRestartStateTest {
     }
 
     @Test
+    void aTimedStartThatFailsClosesItsConnection() {
+        // The start can also finish just after the time limit, when NodeCalls no longer runs the cancel. Either way
+        // the caller treats the start as failed, so the connection must not stay open.
+        org.mockito.Mockito.doThrow(new IllegalStateException("connection refused"))
+                .when(blockRangeSync).restart(org.mockito.ArgumentMatchers.any());
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> blockFetchService.startFetchWithTimeout(
+                new com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point(1, "aa"),
+                new com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point(9, "bb"), 5_000));
+
+        org.mockito.Mockito.verify(blockRangeSync).stop();
+        org.mockito.Mockito.verify(blockRangeSync, org.mockito.Mockito.never())
+                .fetch(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
     void startingASessionRecordsItsStartTime() {
         assertThat(blockFetchService.getLastSessionStartTime()).isZero();
 

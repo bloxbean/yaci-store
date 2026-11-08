@@ -226,12 +226,18 @@ public class StartService {
 
     /**
      * First half of an auto-restart: stops the sync and returns a token for {@link #startAfterRestart(long)}.
-     * Does nothing and returns -1 if the sync was stopped since {@code stopCountBefore} was read: a deliberate stop
-     * during the restart's backoff must stay.
+     * Does nothing and returns -1 if the sync was stopped since {@code stopCountBefore} was read, or is stopped on
+     * purpose: a deliberate stop, during the restart's backoff or before it, must stay.
      */
     public synchronized long stopForRestart(long stopCountBefore) {
         if (stopCount != stopCountBefore) {
             log.info("The sync was stopped while the restart was waiting. Leaving it stopped.");
+            return -1;
+        }
+        // Stopped on purpose before this restart read the count (the request can come from the closing connection,
+        // or wait in the queue). A failed restart clears this flag, so it is only set by a deliberate stop.
+        if (blockFetchService.isScheduledToStop()) {
+            log.info("The sync is stopped on purpose. Not restarting it.");
             return -1;
         }
         stop();
