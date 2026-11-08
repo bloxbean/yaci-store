@@ -58,10 +58,10 @@ class DatabaseStartupWaitTest {
 
         fakeTimeWait("1").postProcessAfterInitialization(dataSource, "dataSource");
 
-        //sleeps only the remaining 1 s, then gives up without another attempt
+        //sleeps only the remaining 1 s, tries once more at the deadline, then gives up
         assertThat(sleeps).containsExactly(1_000L);
         assertThat(now.get() - start).isLessThanOrEqualTo(1_000);
-        verify(dataSource, times(1)).getConnection();
+        verify(dataSource, times(2)).getConnection();
     }
 
     @Test
@@ -71,7 +71,20 @@ class DatabaseStartupWaitTest {
         fakeTimeWait("12").postProcessAfterInitialization(dataSource, "dataSource");
 
         assertThat(sleeps).containsExactly(5_000L, 5_000L, 2_000L);
-        verify(dataSource, times(3)).getConnection();
+        verify(dataSource, times(4)).getConnection();
+    }
+
+    @Test
+    void databaseThatAnswersAtTheDeadlineIsUsed() throws Exception {
+        DataSource dataSource = mock(DataSource.class);
+        when(dataSource.getConnection())
+                .thenThrow(new SQLException("Connection refused"))
+                .thenReturn(mock(Connection.class));
+
+        fakeTimeWait("1").postProcessAfterInitialization(dataSource, "dataSource");
+
+        assertThat(sleeps).containsExactly(1_000L);
+        verify(dataSource, times(2)).getConnection();
     }
 
     @Test
@@ -98,7 +111,7 @@ class DatabaseStartupWaitTest {
         wait.postProcessAfterInitialization(dataSource, "dataSource");
         long tookMs = (System.nanoTime() - start) / 1_000_000;
 
-        //1 s budget; the old code always slept 5 s. Wide margin for slow CI machines.
+        //1 s budget; the old code always slept 5 s before its second attempt. Wide margin for slow CI machines.
         assertThat(tookMs).isLessThan(3_500);
         verify(dataSource, atLeast(1)).getConnection();
         verify(dataSource, atMost(2)).getConnection();
