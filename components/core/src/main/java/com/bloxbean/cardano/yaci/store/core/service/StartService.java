@@ -56,6 +56,8 @@ public class StartService {
         log.info("Max Lovelace Supply     : " + genesisConfig.getMaxLovelaceSupply());
         log.info("###########################");
 
+        //A commit of the stopped session must not land after the cursor is read and the rollback below has run
+        blockFetchService.awaitCommitsOfOldSessions();
         initService.init();
         blockFetchService.reset();
 

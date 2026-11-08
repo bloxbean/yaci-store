@@ -41,7 +41,10 @@ class SyncSessionTransactionFenceTest {
         jdbc.execute("delete from cursor_probe");
         inCommit = null;
         releaseCommit = null;
+        fence = null;
     }
+
+    private SyncSessionTransactionFence fence;
 
     private TransactionTemplate transactions() {
         DataSourceTransactionManager tm = new DataSourceTransactionManager(dataSource) {
@@ -55,7 +58,9 @@ class SyncSessionTransactionFenceTest {
                 super.doCommit(status);
             }
         };
-        tm.setTransactionExecutionListeners(List.of(new SyncSessionTransactionFence(guard)));
+        if (fence == null)
+            fence = new SyncSessionTransactionFence(guard);
+        tm.setTransactionExecutionListeners(List.of(fence));
         return new TransactionTemplate(tm);
     }
 
@@ -145,6 +150,61 @@ class SyncSessionTransactionFenceTest {
     }
 
     @Test
+    void aStartWaitsForACommitThatOutlivedTheSessionChange() throws Exception {
+        guard.sessionChangeWaitMs = 200;
+        long session = guard.newSession();
+        inCommit = new CountDownLatch(1);
+        releaseCommit = new CountDownLatch(1);
+        ExecutorService pool = Executors.newSingleThreadExecutor();
+        try {
+            var commit = CompletableFuture.runAsync(() -> {
+                guard.enter(session);
+                try {
+                    transactions().executeWithoutResult(status -> jdbc.update("insert into cursor_probe values (101)"));
+                } finally {
+                    guard.exit();
+                }
+            }, pool);
+            assertThat(inCommit.await(5, TimeUnit.SECONDS)).isTrue();
+
+            //stop: the session changes after the bounded wait, with the commit still in flight
+            CompletableFuture.runAsync(guard::endSession).get(5, TimeUnit.SECONDS);
+            //start: refuses to go on (and is retried later) while that commit can still land
+            assertThatThrownBy(() -> CompletableFuture.runAsync(guard::awaitCommitsOfOldSessions).join())
+                    .hasCauseInstanceOf(IllegalStateException.class);
+
+            releaseCommit.countDown();
+            commit.get(5, TimeUnit.SECONDS);
+            CompletableFuture.runAsync(guard::awaitCommitsOfOldSessions).get(5, TimeUnit.SECONDS);
+        } finally {
+            releaseCommit.countDown();
+            pool.shutdownNow();
+        }
+    }
+
+    @Test
+    void aCommitThatFailsBeforeTheFenceLeavesNothingBehind() {
+        long session = guard.newSession();
+        guard.enter(session);
+        try {
+            assertThatThrownBy(() -> transactions().executeWithoutResult(status -> {
+                jdbc.update("insert into cursor_probe values (101)");
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void beforeCommit(boolean readOnly) {
+                        throw new org.springframework.transaction.TransactionTimedOutException("timed out");
+                    }
+                });
+            })).isInstanceOf(org.springframework.transaction.TransactionTimedOutException.class);
+        } finally {
+            guard.exit();
+        }
+
+        assertThat(fence.tracked()).isZero();
+        assertThat(CompletableFuture.supplyAsync(guard::newSession).join()).isEqualTo(session + 1);
+    }
+
+    @Test
     void aTransactionOutsideAnySessionIsNotFenced() {
         guard.newSession();
 
@@ -205,6 +265,7 @@ class SyncSessionTransactionFenceTest {
         }
 
         assertThat(rows()).isEqualTo(2);
+        assertThat(fence.tracked()).isZero();
         //nothing is left holding the commit lock
         assertThat(CompletableFuture.supplyAsync(guard::newSession).join()).isEqualTo(session + 1);
     }
