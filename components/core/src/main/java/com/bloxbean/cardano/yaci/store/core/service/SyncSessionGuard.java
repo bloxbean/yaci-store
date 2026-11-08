@@ -4,7 +4,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * Makes sure only the current sync session writes.
@@ -14,25 +18,87 @@ import java.util.concurrent.atomic.AtomicLong;
  * inside an old session, for example a listener that hung while a restart started a new session (#1129), must not
  * write: {@link #checkCaller()} throws before the block is committed, so its transaction is rolled back and the
  * cursor is not moved.
+ * <p>
+ * The checks in the code can pass just before a new session starts. The commit itself is fenced too: see
+ * {@link SyncSessionTransactionFence}. A transaction begun by a thread of a session commits only while that session
+ * is current, and a session change waits for commits that are already running (see {@link #enterCommit(long)}).
  */
 @Component
 @Slf4j
 public class SyncSessionGuard {
     private final AtomicLong currentSession = new AtomicLong();
     private final ThreadLocal<Long> callerSession = new ThreadLocal<>();
+    //Read lock: held by a commit of a session's transaction, from its session check until the commit is done.
+    //Write lock: taken to change the session, so no commit of the old session is in flight when it changes.
+    private final ReentrantReadWriteLock commitLock = new ReentrantReadWriteLock();
+    //How long a session change waits for commits in flight. Bounded, so a commit that hangs in the database cannot
+    //stop the recovery. Not final so tests can shorten it.
+    long sessionChangeWaitMs = 30_000;
 
     /**
      * Opens a new session. All earlier sessions become stale.
      */
     public long newSession() {
-        return currentSession.incrementAndGet();
+        return changeSession();
     }
 
     /**
      * Ends the current session without opening a new one, e.g. when the sync is stopped.
      */
     public void endSession() {
-        currentSession.incrementAndGet();
+        changeSession();
+    }
+
+    private long changeSession() {
+        Lock writeLock = commitLock.writeLock();
+        boolean locked = false;
+        try {
+            locked = writeLock.tryLock(sessionChangeWaitMs, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        try {
+            if (!locked)
+                log.warn("A commit of sync session {} did not finish within {} ms. Changing the session anyway.",
+                        currentSession.get(), sessionChangeWaitMs);
+            return currentSession.incrementAndGet();
+        } finally {
+            if (locked)
+                writeLock.unlock();
+        }
+    }
+
+    /**
+     * Called right before a transaction of the given session commits. Throws {@link StaleSyncSessionException} if the
+     * session is no longer current, so the transaction is rolled back. Otherwise returns the release to call once the
+     * commit is done: until then, the session cannot change.
+     */
+    Runnable enterCommit(long session) {
+        Lock readLock = commitLock.readLock();
+        readLock.lock();
+        if (session != currentSession.get()) {
+            readLock.unlock();
+            throw new StaleSyncSessionException(session, currentSession.get());
+        }
+        return readLock::unlock;
+    }
+
+    /**
+     * An executor that runs each task as part of the calling thread's session (taken when this method is called),
+     * so the transactions of the task are fenced like the caller's. Without a session, the executor itself.
+     */
+    public Executor propagating(Executor executor) {
+        Long session = callerSession.get();
+        if (session == null)
+            return executor;
+        return task -> executor.execute(() -> {
+            Long previous = enter(session);
+            try {
+                task.run();
+            } finally {
+                exit(previous);
+            }
+        });
     }
 
     public long currentSession() {
