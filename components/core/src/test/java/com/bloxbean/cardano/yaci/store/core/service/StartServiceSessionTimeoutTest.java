@@ -57,7 +57,8 @@ class StartServiceSessionTimeoutTest {
         storeProperties = new StoreProperties(); // auto-restart is on by default
         blockFetchService = new BlockFetchService(mock(ApplicationEventPublisher.class), mock(MetricsService.class),
                 blockRangeSync, blockSync, mock(CursorService.class), mock(EraService.class), storeProperties,
-                mock(GenesisConfig.class), mock(ShelleyBlockEventPublisher.class), mock(ByronBlockEventPublisher.class));
+                mock(GenesisConfig.class), mock(ShelleyBlockEventPublisher.class), mock(ByronBlockEventPublisher.class),
+                mock(com.bloxbean.cardano.yaci.store.core.storage.api.ErrorStorage.class));
 
         CursorService cursorService = mock(CursorService.class);
         when(cursorService.getStartCursor()).thenReturn(Optional.of(new Cursor(from.getSlot(), from.getHash(), 10L, "bb", Era.Babbage)));
