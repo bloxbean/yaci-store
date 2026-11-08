@@ -13,12 +13,16 @@ import com.bloxbean.cardano.yaci.store.core.service.publisher.ByronBlockEventPub
 import com.bloxbean.cardano.yaci.store.core.service.publisher.ShelleyBlockEventPublisher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import com.bloxbean.cardano.yaci.store.events.internal.RequiredSyncRestartEvent;
+import org.mockito.ArgumentCaptor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -123,6 +127,148 @@ class BlockFetchServiceRollbackTest {
         verify(eraService, never()).getEpochNo(Era.Byron, rollbackCursor.getSlot());
         assertThat(ReflectionTestUtils.getField(blockFetchService, "previousEpoch")).isNull();
         assertThat(ReflectionTestUtils.getField(blockFetchService, "previousEra")).isEqualTo(Era.Byron);
+    }
+
+    // Preprod and mainnet: k = 2160 blocks, f = 0.05, so the slot fallback allows 3k/f = 129600 slots.
+    private void mainnetLikeGenesis() {
+        when(genesisConfig.getSecurityParam()).thenReturn(2160);
+        when(genesisConfig.getActiveSlotsCoeff()).thenReturn(0.05);
+    }
+
+    @Test
+    void rollbackDeeperThan2160SlotsIsApplied() {
+        // 13581 slots (about 3.8 hours, ~680 blocks) is well within k blocks. It used to be ignored because
+        // 2160 (k, a number of blocks) was compared with a number of slots.
+        mainnetLikeGenesis();
+        var currentCursor = cursor(138_221_557L, 5_377_000L, "current", Era.Conway);
+        var rollbackCursor = cursor(138_207_976L, 5_376_320L, "rollback", Era.Conway);
+        when(cursorService.getCursor())
+                .thenReturn(Optional.of(currentCursor))
+                .thenReturn(Optional.of(rollbackCursor));
+
+        blockFetchService.onRollback(new Point(rollbackCursor.getSlot(), rollbackCursor.getBlockHash()));
+
+        verify(cursorService).rollback(rollbackCursor.getSlot());
+        assertThat(blockFetchService.isError()).isFalse();
+    }
+
+    @Test
+    void rollbackDeeperThanStabilityWindowIsRefusedAndSyncRestarts() {
+        mainnetLikeGenesis();
+        var currentCursor = cursor(138_221_557L, 5_377_000L, "current", Era.Conway);
+        when(cursorService.getCursor()).thenReturn(Optional.of(currentCursor));
+
+        blockFetchService.onRollback(new Point(138_221_557L - 129_601L, "too-old"));
+
+        verify(cursorService, never()).rollback(anyLong());
+        assertThat(blockFetchService.isError()).isTrue();
+        var captor = ArgumentCaptor.forClass(Object.class);
+        verify(publisher).publishEvent(captor.capture());
+        assertThat(captor.getValue()).isInstanceOfSatisfying(RequiredSyncRestartEvent.class,
+                e -> assertThat(e.getReason()).isEqualTo("RollbackTooDeep"));
+    }
+
+    @Test
+    void rollbackAtTheStabilityWindowLimitIsApplied() {
+        mainnetLikeGenesis();
+        var currentCursor = cursor(200_000L, 9_000L, "current", Era.Conway);
+        when(cursorService.getCursor()).thenReturn(Optional.of(currentCursor));
+
+        blockFetchService.onRollback(new Point(200_000L - 129_600L, "limit"));
+
+        verify(cursorService).rollback(200_000L - 129_600L);
+    }
+
+    @Test
+    void genesisPointWithoutHashIsIgnoredWithoutRestart() {
+        when(cursorService.getCursor()).thenReturn(Optional.of(cursor(500L, 20L, "current", Era.Conway)));
+
+        blockFetchService.onRollback(new Point(0, null));
+
+        verify(cursorService, never()).rollback(anyLong());
+        verify(publisher, never()).publishEvent(any());
+        assertThat(blockFetchService.isError()).isFalse();
+    }
+
+    @Test
+    void rollbackWithNoCursorDoesNothing() {
+        when(cursorService.getCursor()).thenReturn(Optional.empty());
+
+        blockFetchService.onRollback(new Point(100L, "rollback"));
+
+        verify(cursorService, never()).rollback(anyLong());
+        verify(publisher, never()).publishEvent(any());
+    }
+
+    @Test
+    void depthIsCountedInBlocksWhenThePointIsInTheCursorTable() {
+        mainnetLikeGenesis();
+        var currentCursor = cursor(5_000_000L, 10_000L, "current", Era.Conway);
+        when(cursorService.getCursor()).thenReturn(Optional.of(currentCursor));
+        // exactly k blocks back, even though it is far more than 3k/f slots back (a long gap in the chain)
+        when(cursorService.getCursorByBlockHash("k-back"))
+                .thenReturn(Optional.of(cursor(4_000_000L, 10_000L - 2160, "k-back", Era.Conway)));
+
+        blockFetchService.onRollback(new Point(4_000_000L, "k-back"));
+
+        verify(cursorService).rollback(4_000_000L);
+        assertThat(blockFetchService.isError()).isFalse();
+    }
+
+    @Test
+    void moreThanKBlocksIsRefusedEvenIfFewSlots() {
+        mainnetLikeGenesis();
+        var currentCursor = cursor(200_000L, 10_000L, "current", Era.Conway);
+        when(cursorService.getCursor()).thenReturn(Optional.of(currentCursor));
+        when(cursorService.getCursorByBlockHash("too-deep"))
+                .thenReturn(Optional.of(cursor(150_000L, 10_000L - 2161, "too-deep", Era.Conway)));
+
+        blockFetchService.onRollback(new Point(150_000L, "too-deep"));
+
+        verify(cursorService, never()).rollback(anyLong());
+        assertThat(blockFetchService.isError()).isTrue();
+    }
+
+    @Test
+    void sparseDevnetRollbackOfOneBlockAcrossAGapIsApplied() {
+        // k = 10, f = 1: 3k/f is only 30 slots, but the rollback is one block, so it is valid
+        when(genesisConfig.getSecurityParam()).thenReturn(10);
+        when(genesisConfig.getActiveSlotsCoeff()).thenReturn(1.0);
+        var currentCursor = cursor(632L, 51L, "current", Era.Conway);
+        when(cursorService.getCursor())
+                .thenReturn(Optional.of(currentCursor))
+                .thenReturn(Optional.of(cursor(100L, 50L, "parent", Era.Conway)));
+        when(cursorService.getCursorByBlockHash("parent"))
+                .thenReturn(Optional.of(cursor(100L, 50L, "parent", Era.Conway)));
+
+        blockFetchService.onRollback(new Point(100L, "parent"));
+
+        verify(cursorService).rollback(100L);
+        assertThat(blockFetchService.isError()).isFalse();
+    }
+
+    @Test
+    void sparseRollbackWithoutCursorRowTakesTheRestartPath() {
+        // The slot fallback is a heuristic: one block back across a 40-slot gap, but the point has no cursor row
+        // (range-fetched or cleaned up), so only the slot distance is known. It is refused, and the sync restarts
+        // from the cursor instead of writing on top of newer data.
+        when(genesisConfig.getSecurityParam()).thenReturn(10);
+        when(genesisConfig.getActiveSlotsCoeff()).thenReturn(1.0);
+        when(cursorService.getCursor()).thenReturn(Optional.of(cursor(140L, 51L, "current", Era.Conway)));
+        when(cursorService.getCursorByBlockHash("parent")).thenReturn(Optional.empty());
+
+        blockFetchService.onRollback(new Point(100L, "parent"));
+
+        verify(cursorService, never()).rollback(anyLong());
+        assertThat(blockFetchService.isError()).isTrue();
+        var captor = ArgumentCaptor.forClass(Object.class);
+        verify(publisher).publishEvent(captor.capture());
+        assertThat(captor.getValue()).isInstanceOf(RequiredSyncRestartEvent.class);
+    }
+
+    @Test
+    void missingGenesisValuesFallBackToMainnetParameters() {
+        assertThat(blockFetchService.maxRollbackSlots()).isEqualTo(129_600L);
     }
 
     private Cursor cursor(long slot, long block, String hash, Era era) {
