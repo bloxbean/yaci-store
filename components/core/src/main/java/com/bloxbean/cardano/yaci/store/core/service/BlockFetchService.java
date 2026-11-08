@@ -423,7 +423,9 @@ public class BlockFetchService implements BlockChainDataListener {
         //A rollback from an old session (it may have waited a long time) must not delete the current session's data
         sessionGuard.checkCaller();
         cursorService.rollback(point.getSlot());
-        restoreEpochStateFromCursor();
+        restoreEpochStateFromCursor(cursorService.getCursor());
+        log.info("Restored epoch state after rollback. previousEpoch: {}, previousEra: {}",
+                previousEpoch, previousEra);
         //The next block must build on the rollback point. A point after the last stored block means yaci holds a
         //block that was never stored. Keep the old expectation so the next block fails the link check and sync
         //restarts from the cursor.
@@ -503,8 +505,8 @@ public class BlockFetchService implements BlockChainDataListener {
         return (long) Math.ceil(3 * k / f);
     }
 
-    private void restoreEpochStateFromCursor() {
-        cursorService.getCursor().ifPresentOrElse(cursor -> {
+    private void restoreEpochStateFromCursor(Optional<Cursor> cursorOptional) {
+        cursorOptional.ifPresentOrElse(cursor -> {
             previousEra = cursor.getEra();
             // Byron blocks carry their epoch, but the cursor does not. AdaPot starts after Byron,
             // so leave it unset and let the next Byron block provide the epoch if this ever occurs.
@@ -515,9 +517,19 @@ public class BlockFetchService implements BlockChainDataListener {
             previousEpoch = null;
             previousEra = null;
         });
+    }
 
-        log.info("Restored epoch state after rollback. previousEpoch: {}, previousEra: {}",
-                previousEpoch, previousEra);
+    /**
+     * A start block that is already processed is skipped, so it never sets the epoch state. Take it from that block's
+     * cursor instead. Otherwise an in-process restart keeps the epoch of the old session, which can be ahead of the
+     * start block, and the first block of the next epoch would not be seen as a new epoch.
+     */
+    private void restoreEpochStateForStart(Point from, Long fromBlockNumber) {
+        if (fromBlockNumber == null || from.getHash() == null)
+            return;
+        restoreEpochStateFromCursor(cursorService.getCursorByBlockHash(from.getHash()));
+        log.info("Restored epoch state from start block {}. previousEpoch: {}, previousEra: {}",
+                fromBlockNumber, previousEpoch, previousEra);
     }
 
     @Override
@@ -564,6 +576,20 @@ public class BlockFetchService implements BlockChainDataListener {
 
         log.error("Block parsing error", e);
         if (storeProperties.isContinueOnParseError()) {
+            //Only the block after the last accepted one may be skipped, or a Byron epoch boundary block with the same
+            //number. Otherwise another block is missing before the failed one: fetch again from the last stored block.
+            Long failedBlockNumber = e.getBlockNumber(); //null when yaci could not decode the header either
+            long lastNumber = lastAcceptedBlockNumber;
+            if (failedBlockNumber != null && failedBlockNumber > 0 && lastNumber >= 0
+                    && failedBlockNumber != lastNumber + 1 && failedBlockNumber != lastNumber) {
+                log.error("Block {} could not be parsed, but the last block accepted is {}. A block is missing before " +
+                        "it. Stopping sync to fetch again from the last stored block.", failedBlockNumber, lastNumber);
+                stopSyncAndRefetch("ParseErrorAfterMissingBlock", "BLOCK_NOT_LINKED",
+                        String.format("Block %d could not be parsed, last block accepted is %d",
+                                failedBlockNumber, lastNumber));
+                return;
+            }
+
             log.info("Continue on parse error is enabled. Continuing sync ...");
             String cbor = null;
             if (e.getBlockCbor() != null) {
@@ -647,17 +673,23 @@ public class BlockFetchService implements BlockChainDataListener {
                 "found {}. Stopping sync to fetch again from the last stored block.",
                 blockNumber, blockHash, lastNumber, previousBlockLost ? ", left in a batch that chain sync never writes" : "",
                 expected, prevBlockHash);
+        stopSyncAndRefetch("BlockNotLinkedToPreviousBlock", "BLOCK_NOT_LINKED",
+                String.format("Block %d (%s) has previous block hash %s, expected %s",
+                        blockNumber, blockHash, prevBlockHash, expected));
+        return false;
+    }
+
+    //Stops the sync and asks for a restart from the cursor, the last stored block
+    private void stopSyncAndRefetch(String reason, String errorCode, String details) {
         stopSyncOnError();
 
         publisher.publishEvent(RequiredSyncRestartEvent.builder()
-                .reason("BlockNotLinkedToPreviousBlock")
-                .errorCode("BLOCK_NOT_LINKED")
+                .reason(reason)
+                .errorCode(errorCode)
                 .timestamp(System.currentTimeMillis())
                 .source("BlockFetchService")
-                .details(String.format("Block %d (%s) has previous block hash %s, expected %s",
-                        blockNumber, blockHash, prevBlockHash, expected))
+                .details(details)
                 .build());
-        return false;
     }
 
     private boolean isAlreadyAccepted(String blockHash) {
@@ -715,6 +747,7 @@ public class BlockFetchService implements BlockChainDataListener {
         isError.set(false);
         scheduledToStop.set(false);
         resetAcceptedBlock(from.getHash(), fromBlockNumber);
+        restoreEpochStateForStart(from, fromBlockNumber);
 
         stopKeepAliveThread();
         //Set the mode before fetching starts, because the first blocks can arrive before fetch() returns
@@ -766,6 +799,7 @@ public class BlockFetchService implements BlockChainDataListener {
         //The first block from chain sync must build on the start point
         resetAcceptedBlock(from.getHash(), fromBlockNumber);
         expectedPrevBlockHash = from.getHash();
+        restoreEpochStateForStart(from, fromBlockNumber);
         blockSync.startSync(from, new SessionListener(sessionGuard.newSession()));
         lastSessionStartTime = System.currentTimeMillis();
         startKeepAliveThread(syncMode);
