@@ -67,21 +67,31 @@ public class DBCommands {
     @Value("${store.account.pruning-enabled:false}")
     private boolean accountPruningEnabled;
 
+    private static final String PARALLEL_HELP = "Indexes built at the same time, one database connection each"
+            + " (largest tables first). Each build uses up to maintenance_work_mem.";
+
     @Command(description = "Apply the default indexes required for read operations.")
-    public void applyIndexes(@Option(longNames = "skip-extra-indexes", defaultValue = "false", description = "Skip additional optional indexes.") boolean skipExtraIndexes) {
+    public void applyIndexes(@Option(longNames = "skip-extra-indexes", defaultValue = "false", description = "Skip additional optional indexes.") boolean skipExtraIndexes,
+                             @Option(longNames = "parallel", defaultValue = "4", description = PARALLEL_HELP) int parallel) {
+        if (parallel > 1 && !skipExtraIndexes) {
+            // One queue for both files, so the connections stay busy across them.
+            writeLn(info("Start to apply index and extra index on %d connections ...", parallel));
+            applyIndexesFromFiles(parallel, INDEX_FILE, EXTRA_INDEX_FILE);
+            return;
+        }
         writeLn(info("Start to apply index ..."));
-        applyIndexesFromFiles(INDEX_FILE);
+        applyIndexesFromFiles(parallel, INDEX_FILE);
 
         if (!skipExtraIndexes) {
             writeLn(info("Start to apply extra index ..."));
-            applyIndexesFromFiles(EXTRA_INDEX_FILE);
+            applyIndexesFromFiles(parallel, EXTRA_INDEX_FILE);
         }
     }
 
     @Command(description = "Apply only additional optional read indexes")
-    public void applyExtraIndexes() {
+    public void applyExtraIndexes(@Option(longNames = "parallel", defaultValue = "4", description = PARALLEL_HELP) int parallel) {
         writeLn(info("Start to apply extra index ..."));
-        applyIndexesFromFiles(EXTRA_INDEX_FILE);
+        applyIndexesFromFiles(parallel, EXTRA_INDEX_FILE);
     }
 
     @Command(description = "Apply one or more optional index definitions")
@@ -91,9 +101,10 @@ public class DBCommands {
             String indexes,
             @Option(longNames = "index-files", label = "index-files",
                     description = "Comma-separated index definition file paths (e.g., 'file:///path/to/index.yml')")
-            String indexFiles) {
+            String indexFiles,
+            @Option(longNames = "parallel", defaultValue = "4", description = PARALLEL_HELP) int parallel) {
         writeLn(info("Start to apply optional indexes ..."));
-        applyIndexesFromFiles(getIndexFiles(indexes, indexFiles));
+        applyIndexesFromFiles(parallel, getIndexFiles(indexes, indexFiles));
     }
 
     @Command(description = "Rollback data to a previous epoch")
@@ -142,7 +153,7 @@ public class DBCommands {
         }
     }
 
-    private void applyIndexesFromFiles(String... indexFiles) {
+    private void applyIndexesFromFiles(int parallel, String... indexFiles) {
         IndexLoader indexLoader = new IndexLoader();
         List<IndexDefinition> indexDefinitionList = indexLoader.loadIndexesFromMultipleFiles(indexFiles);
         if (indexDefinitionList == null || indexDefinitionList.isEmpty()) {
@@ -151,7 +162,7 @@ public class DBCommands {
             return;
         }
 
-        var result = indexService.applyIndexes(indexDefinitionList);
+        var result = indexService.applyIndexes(indexDefinitionList, parallel);
 
         if (!result.getSecond().isEmpty()) {
             log.warn(">> Failed to apply these indexes : " + result.getSecond());

@@ -1,0 +1,35 @@
+snapshot-table:
+  id: script
+  spec-version: 1
+  module: script
+  kind: CHAIN_DATA
+  restore: IMPORT
+
+  source:
+    exporter-id: script
+    ducklake-relation: script
+    partition:
+      strategy: DAILY
+      column: block_date
+
+  consistency:
+    cutoff:
+      type: SLOT_LTE
+      column: slot
+
+  import:
+    target-table: script
+    mode: MAPPED
+    columns:
+      content:
+        source: content
+        converter: "varchar-to-jsonb"
+    ignore-source-columns: [block_date, date]
+    use-target-defaults: [create_datetime, update_datetime]
+    batch-boundary: FILE_SET
+    batch-size: 64
+
+  validation:
+    key: [script_hash]
+    bounds: [slot]
+    required-columns: [script_hash]

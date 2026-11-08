@@ -209,7 +209,8 @@ public class ContinuousSyncScheduler {
 
         Set<Integer> allMissingEpochs = new TreeSet<>();
         for (String tableName : enabledEpochTables) {
-            List<Integer> tableMissingEpochs = gapDetectionService.findMissingEpochExports(tableName);
+            List<Integer> tableMissingEpochs = gapDetectionService.findMissingEpochExports(tableName,
+                    registry.getExporter(tableName).includesByronEpochs());
             allMissingEpochs.addAll(tableMissingEpochs);
             if (!tableMissingEpochs.isEmpty()) {
                 log.debug("Table {} has {} missing epoch exports", tableName, tableMissingEpochs.size());
@@ -273,7 +274,8 @@ public class ContinuousSyncScheduler {
         // Find union of missing epochs across all enabled epoch tables
         Set<Integer> allMissingEpochs = new HashSet<>();
         for (String tableName : enabledEpochTables) {
-            List<Integer> tableMissingEpochs = gapDetectionService.findMissingEpochExports(tableName);
+            List<Integer> tableMissingEpochs = gapDetectionService.findMissingEpochExports(tableName,
+                    registry.getExporter(tableName).includesByronEpochs());
             allMissingEpochs.addAll(tableMissingEpochs);
         }
 

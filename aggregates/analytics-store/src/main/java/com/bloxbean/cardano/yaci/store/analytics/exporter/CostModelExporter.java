@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.analytics.exporter;
 
+import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.store.adapot.job.storage.AdaPotJobStorage;
 import com.bloxbean.cardano.yaci.store.analytics.config.AnalyticsStoreProperties;
 import com.bloxbean.cardano.yaci.store.analytics.state.ExportStateService;
@@ -41,6 +42,25 @@ public class CostModelExporter extends AbstractTableExporter {
     @Override
     public PartitionStrategy getPartitionStrategy() {
         return PartitionStrategy.DAILY;
+    }
+
+    /**
+     * Cost models are written with the epoch parameters: before Conway at the epoch transition, from
+     * Conway on in the AdaPot job's pre-processing for the epoch, which can run long after the sync has
+     * passed the day (about 10 hours behind during a mainnet initial sync). A day exported before then
+     * misses the row for good, so a day waits for the AdaPot job of the last epoch it reaches. That
+     * job always runs after the epoch transition, so the same rule is safe for every non-Byron epoch.
+     */
+    @Override
+    public boolean preExportValidation(PartitionValue partition) {
+        if (adaPotJobStorage instanceof NoOpAdaPotJobStorage) {
+            return true;
+        }
+        long lastSlot = partition.toSlotRange(eraService).endSlot() - 1;
+        if (lastSlot < eraService.getFirstNonByronSlot()) {
+            return true;
+        }
+        return isRewardCalcAdaPotJobCompleted(eraService.getEpochNo(Era.Shelley, lastSlot));
     }
 
     @Override

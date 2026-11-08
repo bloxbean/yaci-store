@@ -1,0 +1,10 @@
+{
+  "properties": [
+    {
+      "name": "store.schema-only",
+      "type": "java.lang.Boolean",
+      "defaultValue": false,
+      "description": "Run configured Flyway migrations and record the target store profile, then exit before application processors or chain sync start."
+    }
+  ]
+}

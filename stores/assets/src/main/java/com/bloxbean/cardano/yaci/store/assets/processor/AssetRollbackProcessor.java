@@ -22,9 +22,9 @@ public class AssetRollbackProcessor {
 
     @EventListener
     @Transactional
-    //TODO -- tests
     public void handleRollbackEvent(RollbackEvent rollbackEvent) {
-        int count = assetStorage.deleteBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
+        //Rows have random ids, so a block processed again must not find its rows still there
+        int count = assetStorage.deleteBySlotGreaterThan(rollbackEvent.generatedKeyRollbackSlot());
 
         log.info("Rollback -- {} transaction_assets records", count);
     }

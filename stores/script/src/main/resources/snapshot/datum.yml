@@ -1,0 +1,31 @@
+snapshot-table:
+  id: datum
+  spec-version: 1
+  module: script
+  kind: CHAIN_DATA
+  restore: IMPORT
+
+  source:
+    exporter-id: datum
+    ducklake-relation: datum
+    partition:
+      strategy: DAILY
+      column: block_date
+
+  consistency:
+    cutoff:
+      type: SLOT_LTE
+      column: slot
+
+  import:
+    target-table: datum
+    mode: MAPPED
+    ignore-source-columns: [block_date, date]
+    use-target-defaults: [create_datetime, update_datetime]
+    batch-boundary: FILE_SET
+    batch-size: 64
+
+  validation:
+    key: [hash]
+    bounds: [slot]
+    required-columns: [hash]
