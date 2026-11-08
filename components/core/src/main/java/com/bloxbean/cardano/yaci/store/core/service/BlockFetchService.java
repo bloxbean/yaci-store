@@ -413,7 +413,7 @@ public class BlockFetchService implements BlockChainDataListener {
      *
      * @throws NodeNotAnsweringException if the node did not answer in time
      */
-    public void startFetch(Point from, Point to, long timeoutMs) {
+    public void startFetchWithTimeout(Point from, Point to, long timeoutMs) {
         startWithTimeout("start the block fetch", timeoutMs, cancelled -> startFetch(from, to, cancelled), blockRangeSync::stop);
     }
 
@@ -444,7 +444,7 @@ public class BlockFetchService implements BlockChainDataListener {
      *
      * @throws NodeNotAnsweringException if the node did not answer in time
      */
-    public void startSync(Point from, long timeoutMs) {
+    public void startSyncWithTimeout(Point from, long timeoutMs) {
         startWithTimeout("start the block sync", timeoutMs, cancelled -> startSync(from, cancelled), blockSync::stop);
     }
 
