@@ -371,6 +371,14 @@ public class BlockFetchService implements BlockChainDataListener {
         shutdownSync();
     }
 
+    /**
+     * Waits until nothing of an earlier sync session can still be committed. See
+     * {@link SyncSessionGuard#awaitCommitsOfOldSessions()}.
+     */
+    public void awaitCommitsOfOldSessions() {
+        sessionGuard.awaitCommitsOfOldSessions();
+    }
+
     public void stop() {
         //Callbacks still on their way from the stopped session are ignored
         sessionGuard.endSession();

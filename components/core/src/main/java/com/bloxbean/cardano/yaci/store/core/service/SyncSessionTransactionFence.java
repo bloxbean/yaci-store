@@ -18,7 +18,9 @@ import java.util.concurrent.ConcurrentHashMap;
  * while the old thread is still committing. So, right before the commit, the session is checked once more under the
  * read lock of {@link SyncSessionGuard}: a stale transaction is rolled back, and a current one keeps the session from
  * changing until its commit is done. Only the commit is inside the lock, not the listener code, so a listener that
- * hangs does not hold up a restart; when it resumes, its transaction is rolled back here.
+ * hangs does not hold up a restart; when it resumes, its transaction is rolled back here. A session change waits
+ * for commits in flight only for a bounded time; a start waits for them strictly (see
+ * {@link SyncSessionGuard#awaitCommitsOfOldSessions()}).
  * <p>
  * Spring Boot registers this listener with the transaction manager. It applies to transactions begun on a thread
  * marked with a session: the chain-sync and range-fetch callbacks, and the publishers' worker threads
@@ -38,8 +40,31 @@ public class SyncSessionTransactionFence implements TransactionExecutionListener
     @Override
     public void afterBegin(TransactionExecution transaction, Throwable beginFailure) {
         Long session = sessionGuard.callerSession();
-        if (beginFailure == null && session != null)
-            sessions.put(transaction, session);
+        if (beginFailure != null || session == null)
+            return;
+        sessions.put(transaction, session);
+        //Spring calls afterCompletion on every path, also when the commit fails before beforeCommit below runs (then
+        //it skips this listener's afterCommit/afterRollback). Synchronization is already active here.
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public int getOrder() {
+                    return Ordered.HIGHEST_PRECEDENCE;
+                }
+
+                //Right after the commit, before the after-commit listeners run
+                @Override
+                public void afterCommit() {
+                    release(transaction);
+                }
+
+                @Override
+                public void afterCompletion(int status) {
+                    sessions.remove(transaction);
+                    release(transaction);
+                }
+            });
+        }
     }
 
     @Override
@@ -49,25 +74,6 @@ public class SyncSessionTransactionFence implements TransactionExecutionListener
             return;
         //Throws if the session is stale, and the transaction is rolled back
         releases.put(transaction, sessionGuard.enterCommit(session));
-        //Release right after the commit, before the after-commit listeners run
-        if (TransactionSynchronizationManager.isSynchronizationActive()) {
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public int getOrder() {
-                    return Ordered.HIGHEST_PRECEDENCE;
-                }
-
-                @Override
-                public void afterCommit() {
-                    release(transaction);
-                }
-
-                @Override
-                public void afterCompletion(int status) {
-                    release(transaction);
-                }
-            });
-        }
     }
 
     @Override
@@ -79,6 +85,11 @@ public class SyncSessionTransactionFence implements TransactionExecutionListener
     public void afterRollback(TransactionExecution transaction, Throwable rollbackFailure) {
         sessions.remove(transaction);
         release(transaction);
+    }
+
+    //For tests: transactions still tracked
+    int tracked() {
+        return sessions.size() + releases.size();
     }
 
     private void release(TransactionExecution transaction) {
