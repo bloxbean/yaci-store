@@ -17,7 +17,7 @@ import java.util.function.LongSupplier;
  * <p>
  * Runs right after the DataSource bean is created, before anything uses it. Retries every 5 s for up to
  * {@code store.db.startup-wait-seconds} (default 300, 0 to turn it off), then lets the startup fail as before.
- * No new attempt starts after that budget is used up.
+ * The last pause ends at the deadline, so the last attempt starts at the deadline and no attempt starts after it.
  * <p>
  * The budget does not cut short a single {@code getConnection()} call that hangs (for example a host that drops
  * packets). That call is bounded by the pool/driver connection timeout instead
@@ -84,11 +84,7 @@ public class DatabaseStartupWait implements BeanPostProcessor, EnvironmentAware 
                     log.warn("Interrupted while waiting for database '{}'. Not waiting any longer.", name);
                     return;
                 }
-                //don't start an attempt after the budget is used up
-                if (clockMillis.getAsLong() >= deadline) {
-                    giveUp(name, attempt);
-                    return;
-                }
+                //the pause ends at the deadline at the latest, so the next attempt starts within the budget
             }
         }
     }
