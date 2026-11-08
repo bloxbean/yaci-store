@@ -75,6 +75,9 @@ public class StartService {
         log.info("Max Lovelace Supply     : " + genesisConfig.getMaxLovelaceSupply());
         log.info("###########################");
 
+        //A commit of the stopped session must not land after the cursor is read and the rollback below has run.
+        //First, so a failure keeps the error flag set and the restart is tried again.
+        blockFetchService.awaitCommitsOfOldSessions();
         // A failed restart leaves the error flag set so the health check retries. Clear it before starting:
         // the startup path (e.g. writing the genesis cursor) refuses to run while it is set.
         blockFetchService.clearError();
