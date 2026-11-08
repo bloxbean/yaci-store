@@ -1,10 +1,17 @@
 package com.bloxbean.cardano.yaci.store.staking.processor;
 
+import com.bloxbean.cardano.yaci.core.model.certs.CertificateType;
+import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
+import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
+import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
 import com.bloxbean.cardano.yaci.store.staking.domain.Pool;
 import com.bloxbean.cardano.yaci.store.staking.domain.PoolRegistration;
 import com.bloxbean.cardano.yaci.store.staking.domain.PoolStatusType;
+import com.bloxbean.cardano.yaci.store.staking.domain.StakeRegistrationDetail;
 import com.bloxbean.cardano.yaci.store.staking.domain.event.PoolRegistrationEvent;
+import com.bloxbean.cardano.yaci.store.staking.domain.event.StakeRegDeregEvent;
+import com.bloxbean.cardano.yaci.store.staking.domain.event.StakingDepositEvent;
 import com.bloxbean.cardano.yaci.store.staking.service.DepositParamService;
 import com.bloxbean.cardano.yaci.store.staking.storage.PoolStorage;
 import com.bloxbean.cardano.yaci.store.staking.storage.impl.model.PoolEntity;
@@ -14,6 +21,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.event.ApplicationEvents;
+import org.springframework.test.context.event.RecordApplicationEvents;
 
 import java.math.BigInteger;
 import java.util.ArrayList;
@@ -29,8 +38,11 @@ import static org.mockito.Mockito.when;
  * pool registration again must store the same row as the first time.
  */
 @SpringBootTest
+@RecordApplicationEvents
 class PoolStatusProcessorReplayIT {
     private static final String POOL = "7cc911f04229b39ac3760d9458e4bfe32c62a7898f8421175ee191dc";
+    private static final String POOL_B = "b0b911f04229b39ac3760d9458e4bfe32c62a7898f8421175ee191dc";
+    private static final String POOL_C = "c0c911f04229b39ac3760d9458e4bfe32c62a7898f8421175ee191dc";
     private static final BigInteger DEPOSIT = BigInteger.valueOf(500_000_000);
 
     @Autowired
@@ -44,6 +56,9 @@ class PoolStatusProcessorReplayIT {
 
     @MockBean
     private DepositParamService depositParamService;
+
+    @Autowired
+    private ApplicationEvents events;
 
     @BeforeEach
     void setUp() {
@@ -148,6 +163,57 @@ class PoolStatusProcessorReplayIT {
         assertThat(after.get(2).getAmount()).isEqualTo(DEPOSIT);
     }
 
+    @Test
+    void aBlockProcessedAgainBeforePreCommitIsCountedOnce() {
+        processor.processPoolRegistrationEvent(registration(62368918L, 148, "tx1", 0, 0));
+        // A later listener failed, so there was no pre-commit. The block is processed again.
+        processor.processPoolRegistrationEvent(registration(62368918L, 148, "tx1", 0, 0));
+        processor.handleCommitEventToProcessPoolStatus(preCommit(62368918L, 148));
+
+        assertThat(depositEvent().getStakePoolRegistrationCount()).isEqualTo(1);
+        assertThat(rows()).extracting(PoolEntity::getStatus).containsExactly(PoolStatusType.REGISTRATION);
+    }
+
+    @Test
+    void aRestartRollbackDropsCachedEventsOfTheFailedBatch() {
+        // A batch fails before pre-commit
+        processor.processStakeKeyRegDeregs(stakeRegistration(62368918L, "tx0"));
+        processor.processPoolRegistrationEvent(registration(62368918L, 148, "tx1", 0, 0));
+        processor.processPoolRegistrationEvent(registration(POOL_B, 62368950L, 148, "tx2", 0, 0));
+
+        // The restart rolls back to the cursor. The chain it then follows no longer has the block of pool B.
+        processor.handleRollback(rollbackTo(62368900L));
+        processor.processPoolRegistrationEvent(registration(62368918L, 148, "tx1", 0, 0));
+        processor.processPoolRegistrationEvent(registration(POOL_C, 62368960L, 148, "tx3", 0, 0));
+        processor.handleCommitEventToProcessPoolStatus(preCommit(62368960L, 148));
+
+        var deposit = depositEvent();
+        assertThat(deposit.getStakePoolRegistrationCount()).isEqualTo(2);
+        assertThat(deposit.getStakeKeyRegistrationCount()).isZero();
+        assertThat(rows()).extracting(PoolEntity::getPoolId).containsExactly(POOL, POOL_C);
+    }
+
+    private StakingDepositEvent depositEvent() {
+        var published = events.stream(StakingDepositEvent.class).toList();
+        assertThat(published).hasSize(1);
+        return published.get(0);
+    }
+
+    private static PreCommitEvent preCommit(long slot, int epoch) {
+        return new PreCommitEvent(EventMetadata.builder().slot(slot).epochNumber(epoch).blockHash("block-" + slot).build());
+    }
+
+    private static RollbackEvent rollbackTo(long slot) {
+        return RollbackEvent.builder().rollbackTo(new Point(slot, "block-" + slot)).build();
+    }
+
+    private static StakeRegDeregEvent stakeRegistration(long slot, String txHash) {
+        var metadata = EventMetadata.builder().slot(slot).blockHash("block-" + slot).build();
+        var detail = StakeRegistrationDetail.builder()
+                .txHash(txHash).type(CertificateType.STAKE_REGISTRATION).slot(slot).build();
+        return new StakeRegDeregEvent(metadata, List.of(detail));
+    }
+
     private List<PoolEntity> rows() {
         var all = new ArrayList<>(repository.findAll());
         all.sort(Comparator.comparing(PoolEntity::getSlot).thenComparing(PoolEntity::getTxIndex)
@@ -156,6 +222,11 @@ class PoolStatusProcessorReplayIT {
     }
 
     private static PoolRegistrationEvent registration(long slot, int epoch, String txHash, int txIndex, int certIndex) {
+        return registration(POOL, slot, epoch, txHash, txIndex, certIndex);
+    }
+
+    private static PoolRegistrationEvent registration(String poolId, long slot, int epoch, String txHash, int txIndex,
+                                                      int certIndex) {
         var metadata = EventMetadata.builder()
                 .slot(slot)
                 .epochNumber(epoch)
@@ -164,13 +235,17 @@ class PoolStatusProcessorReplayIT {
                 .blockTime(slot)
                 .build();
         var certs = new ArrayList<PoolRegistration>();
-        certs.add(cert(txHash, txIndex, certIndex, slot));
+        certs.add(cert(poolId, txHash, txIndex, certIndex, slot));
         return new PoolRegistrationEvent(metadata, certs);
     }
 
     private static PoolRegistration cert(String txHash, int txIndex, int certIndex, long slot) {
+        return cert(POOL, txHash, txIndex, certIndex, slot);
+    }
+
+    private static PoolRegistration cert(String poolId, String txHash, int txIndex, int certIndex, long slot) {
         return PoolRegistration.builder()
-                .poolId(POOL)
+                .poolId(poolId)
                 .txHash(txHash)
                 .txIndex(txIndex)
                 .certIndex(certIndex)
