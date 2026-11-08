@@ -1,5 +1,9 @@
 package com.bloxbean.cardano.yaci.store.mir.storage.impl;
 
+import com.bloxbean.cardano.client.address.AddressProvider;
+import com.bloxbean.cardano.client.address.Credential;
+import com.bloxbean.cardano.client.common.model.Networks;
+import com.bloxbean.cardano.client.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.common.util.UUIDUtil;
 import com.bloxbean.cardano.yaci.store.mir.domain.MirPot;
 import com.bloxbean.cardano.yaci.store.mir.domain.MoveInstataneousReward;
@@ -22,6 +26,7 @@ import java.math.BigInteger;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.groups.Tuple.tuple;
 
 @DataJpaTest
 @AutoConfigureJooq
@@ -59,12 +64,34 @@ class MIRStorageImplTest {
                 .containsExactlyInAnyOrder(BigInteger.valueOf(101), BigInteger.valueOf(201), BigInteger.valueOf(301));
     }
 
+    @Test
+    void save_keyAndScriptCredentialWithSameHash_keepsBothRows() {
+        //One cert pays a key credential and a script credential that have the same hash bytes
+        String keyAddress = AddressProvider.getRewardAddress(Credential.fromKey(HexUtil.decodeHexString(CREDENTIAL_1)), Networks.testnet()).getAddress();
+        String scriptAddress = AddressProvider.getRewardAddress(Credential.fromScript(HexUtil.decodeHexString(CREDENTIAL_1)), Networks.testnet()).getAddress();
+
+        mirStorage.save(List.of(mir(0, CREDENTIAL_1, keyAddress, 100), mir(0, CREDENTIAL_1, scriptAddress, 200)));
+        mirStorage.save(List.of(mir(0, CREDENTIAL_1, keyAddress, 101), mir(0, CREDENTIAL_1, scriptAddress, 201)));
+
+        List<MIREntity> rows = repository.findAll();
+        assertThat(rows).hasSize(2);
+        assertThat(rows).extracting(MIREntity::getAddress, MIREntity::getAmount)
+                .containsExactlyInAnyOrder(tuple(keyAddress, BigInteger.valueOf(101)), tuple(scriptAddress, BigInteger.valueOf(201)));
+        //Key credential keeps the (tx_hash, cert_index, credential) id
+        assertThat(rows).extracting(MIREntity::getId).contains(UUIDUtil.nameUUID(TX_HASH, "0", CREDENTIAL_1));
+    }
+
     private MoveInstataneousReward mir(int certIndex, String credential, long amount) {
+        return mir(certIndex, credential, null, amount);
+    }
+
+    private MoveInstataneousReward mir(int certIndex, String credential, String address, long amount) {
         return MoveInstataneousReward.builder()
                 .pot(MirPot.reserves)
                 .txHash(TX_HASH)
                 .certIndex(certIndex)
                 .credential(credential)
+                .address(address)
                 .amount(BigInteger.valueOf(amount))
                 .epoch(236)
                 .slot(13220525L)
