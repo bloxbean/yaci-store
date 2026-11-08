@@ -63,11 +63,14 @@ public class RequiredRestartProcessor {
             log.info("Scheduling sync restart. Reason: {}, Attempt: {}, Backoff: {}ms",
                      event.getReason(), attemptNumber, backoffMs);
 
+            // Read before the backoff, so a deliberate stop during the wait is seen
+            long stopCountBefore = startService.getStopCount();
+
             // Wait for backoff
             Thread.sleep(backoffMs);
 
             // Perform restart
-            performRestart(event);
+            performRestart(event, stopCountBefore);
 
         } catch (Exception e) {
             log.error("Error during sync restart", e);
@@ -154,9 +157,11 @@ public class RequiredRestartProcessor {
         return restartCount.incrementAndGet();
     }
 
-    void performRestart(RequiredSyncRestartEvent event) {
+    void performRestart(RequiredSyncRestartEvent event, long stopCountBefore) {
         log.info("Stopping sync service...");
-        long stopToken = startService.stopForRestart();
+        long stopToken = startService.stopForRestart(stopCountBefore);
+        if (stopToken < 0)
+            return;
 
         // Wait for clean shutdown
         try {
