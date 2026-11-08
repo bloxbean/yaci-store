@@ -63,6 +63,8 @@ class BlockFetchServiceBlockSkipTest {
         when(storeProperties.isContinueOnParseError()).thenReturn(true);
         when(storeProperties.getKeepAliveInterval()).thenReturn(60_000);
         when(eraService.getEpochNo(eq(Era.Conway), anyLong())).thenReturn(100);
+        //The start block of most tests is a stored block in epoch 100
+        when(cursorService.getCursorByBlockHash(START_HASH)).thenReturn(Optional.of(cursor(100, START_HASH)));
 
         blockFetchService = new BlockFetchService(
                 publisher,
@@ -220,6 +222,48 @@ class BlockFetchServiceBlockSkipTest {
         deliver(afterGap);
         verify(shelleyPublisher, never()).publishBlockEvents(any(), eq(afterGap), any());
         assertThat(blockFetchService.isError()).isTrue();
+    }
+
+    @Test
+    void parseErrorAfterAMissingBlockStopsTheSync() {
+        blockFetchService.startSync(new Point(100, START_HASH), 100L);
+
+        //101 never arrives, then 102 fails to parse. Skipping 102 would let 103 through and hide 101.
+        blockFetchService.onParsingError(new BlockParseRuntimeException(102L, null, new RuntimeException("bad cbor")));
+        Block next = block(103, "h103", "h102");
+        deliver(next);
+
+        verify(errorStorage, never()).save(any());
+        verify(shelleyPublisher, never()).publishBlockEvents(any(), eq(next), any());
+        assertThat(blockFetchService.isError()).isTrue();
+        verify(publisher).publishEvent(any(RequiredSyncRestartEvent.class));
+    }
+
+    @Test
+    void parseErrorAfterAMissingBlockInARangeBatchStopsTheSync() {
+        blockFetchService.startFetch(new Point(100, START_HASH), TO, 100L);
+        deliver(block(100, START_HASH, "h99"));
+        deliver(block(101, "h101", START_HASH));
+
+        //102 never arrives, then 103 fails to parse
+        blockFetchService.onParsingError(new BlockParseRuntimeException(103L, null, new RuntimeException("bad cbor")));
+        Block next = block(104, "h104", "h103");
+        deliver(next);
+
+        verify(errorStorage, never()).save(any());
+        verify(shelleyPublisher, never()).publishBlockEventsInParallel(any(), eq(next), any());
+        assertThat(blockFetchService.isError()).isTrue();
+    }
+
+    @Test
+    void parseErrorOfAByronEpochBoundaryBlockIsSkipped() {
+        //The epoch boundary block has the same number as the main block before it
+        blockFetchService.startSync(new Point(100, START_HASH), 100L);
+
+        blockFetchService.onParsingError(new BlockParseRuntimeException(100L, null, new RuntimeException("bad cbor")));
+
+        verify(errorStorage).save(any(ErrorEvent.class));
+        assertThat(blockFetchService.isError()).isFalse();
     }
 
     @Test
@@ -400,6 +444,41 @@ class BlockFetchServiceBlockSkipTest {
 
         verify(shelleyPublisher, never()).publishBlockEvents(any(), eq(notLinked), any());
         assertThat(blockFetchService.isError()).isTrue();
+    }
+
+    // --- Epoch state when a restart skips the start block
+
+    @Test
+    void restartToACursorInAnEarlierEpochSeesTheNextEpoch() {
+        //The old session reached epoch 101. After a restart in the same process, the start block is the last stored
+        //block, still in epoch 100. It is skipped as already processed, so it does not set the epoch.
+        ReflectionTestUtils.setField(blockFetchService, "previousEpoch", 101);
+        when(eraService.getEpochNo(Era.Conway, 100L)).thenReturn(100);
+        when(eraService.getEpochNo(Era.Conway, 101L)).thenReturn(101);
+
+        blockFetchService.startFetch(new Point(100, START_HASH), TO, 100L);
+        deliver(block(100, START_HASH, "h99"));
+        Block firstOfEpoch = block(101, "h101", START_HASH);
+        deliver(firstOfEpoch);
+
+        verify(publisher).publishEvent(argThat((Object ev) -> ev instanceof com.bloxbean.cardano.yaci.store.events.EpochChangeEvent epochChange
+                && epochChange.getPreviousEpoch() == 100 && epochChange.getEpoch() == 101));
+        //Written on its own after the epoch change, not left in a batch
+        verify(shelleyPublisher).publishBlockEvents(any(), eq(firstOfEpoch), any());
+        verify(shelleyPublisher, never()).publishBlockEventsInParallel(any(), eq(firstOfEpoch), any());
+    }
+
+    @Test
+    void chainSyncRestartToACursorInAnEarlierEpochSeesTheNextEpoch() {
+        ReflectionTestUtils.setField(blockFetchService, "previousEpoch", 101);
+        when(eraService.getEpochNo(Era.Conway, 100L)).thenReturn(100);
+        when(eraService.getEpochNo(Era.Conway, 101L)).thenReturn(101);
+
+        blockFetchService.startSync(new Point(100, START_HASH), 100L);
+        deliver(block(101, "h101", START_HASH));
+
+        verify(publisher).publishEvent(argThat((Object ev) -> ev instanceof com.bloxbean.cardano.yaci.store.events.EpochChangeEvent epochChange
+                && epochChange.getPreviousEpoch() == 100 && epochChange.getEpoch() == 101));
     }
 
     private com.bloxbean.cardano.yaci.core.model.byron.ByronEbBlock ebBlock(long number, String hash, String prevHash) {
