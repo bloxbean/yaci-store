@@ -106,7 +106,8 @@ public class SyncSessionGuard {
      * Runs a commit step, such as the cursor write, only for the current session. The session is checked before and
      * after the write, in one transaction (the caller's, if it has one). A thread of an old session can pass the
      * earlier checks and then wait, for example in a commit listener or for a database connection, while a restart
-     * starts a new session. The check after the write then rolls the write back.
+     * starts a new session. The check after the write then rolls the write back. The cursor write is flushed
+     * before that check, so the only window left is the commit itself.
      */
     @Transactional
     public void writeIfCurrent(Runnable write) {
