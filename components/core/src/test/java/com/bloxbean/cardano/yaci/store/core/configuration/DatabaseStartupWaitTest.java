@@ -88,6 +88,22 @@ class DatabaseStartupWaitTest {
     }
 
     @Test
+    void noAttemptAfterAPauseThatEndsLate() throws Exception {
+        DataSource dataSource = refusing();
+        //the thread wakes up 1 s after the pause should have ended, past the deadline
+        DatabaseStartupWait wait = new DatabaseStartupWait(now::get, ms -> {
+            sleeps.add(ms);
+            now.addAndGet(ms + 1_000);
+        });
+        wait.setEnvironment(new MockEnvironment().withProperty(DatabaseStartupWait.WAIT_SECONDS_PROPERTY, "1"));
+
+        wait.postProcessAfterInitialization(dataSource, "dataSource");
+
+        assertThat(sleeps).containsExactly(1_000L);
+        verify(dataSource, times(1)).getConnection();
+    }
+
+    @Test
     void noPauseWhenAnAttemptUsesUpTheBudget() throws Exception {
         DataSource dataSource = mock(DataSource.class);
         when(dataSource.getConnection()).thenAnswer(inv -> {
