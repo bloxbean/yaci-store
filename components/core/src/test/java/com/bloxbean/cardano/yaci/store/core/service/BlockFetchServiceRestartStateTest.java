@@ -71,7 +71,7 @@ class BlockFetchServiceRestartStateTest {
 
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> blockFetchService.startFetchWithTimeout(
                 new com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point(1, "aa"),
-                new com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point(9, "bb"), 5_000));
+                new com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point(9, "bb"), null, 5_000));
 
         org.mockito.Mockito.verify(blockRangeSync).stop();
         org.mockito.Mockito.verify(blockRangeSync, org.mockito.Mockito.never())

@@ -57,7 +57,8 @@ class RequiredRestartProcessorRecoveryTest {
         storeProperties.setAutoRestartBackoffBaseMs(0);
         blockFetchService = new BlockFetchService(fetchPublisher, mock(MetricsService.class), blockRangeSync, blockSync,
                 mock(CursorService.class), mock(EraService.class), storeProperties, mock(GenesisConfig.class),
-                mock(ShelleyBlockEventPublisher.class), mock(ByronBlockEventPublisher.class));
+                mock(ShelleyBlockEventPublisher.class), mock(ByronBlockEventPublisher.class),
+                mock(com.bloxbean.cardano.yaci.store.core.storage.api.ErrorStorage.class));
         cursorService = mock(CursorService.class);
         // Stop the restarted start early; the test only needs to see that a start was attempted
         doThrow(new IllegalStateException("start attempted")).when(cursorService).getStartCursor();

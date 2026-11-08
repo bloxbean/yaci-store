@@ -66,8 +66,8 @@ class StartServiceTest {
 
         assertThat(rollbackEvent().isRollbackPointReprocessed()).isFalse();
         assertThat(rollbackEvent().generatedKeyRollbackSlot()).isEqualTo(CURSOR_SLOT);
-        verify(blockFetchService).startFetch(eq(new Point(CURSOR_SLOT, "cursor_hash")), any(), eq(10_000_000L));
-        verify(blockFetchService, never()).startSync(any(), any());
+        verify(blockFetchService).startFetchWithTimeout(eq(new Point(CURSOR_SLOT, "cursor_hash")), any(), eq(10_000_000L), anyLong());
+        verify(blockFetchService, never()).startSyncWithTimeout(any(), any(), anyLong());
     }
 
     @Test
@@ -80,7 +80,7 @@ class StartServiceTest {
         startService.start();
 
         assertThat(rollbackEvent().isRollbackPointReprocessed()).isTrue();
-        verify(blockFetchService).startFetch(eq(new Point(CURSOR_SLOT, "cursor_hash")), any(), eq((Long) null));
+        verify(blockFetchService).startFetchWithTimeout(eq(new Point(CURSOR_SLOT, "cursor_hash")), any(), eq((Long) null), anyLong());
     }
 
     @Test
@@ -91,8 +91,8 @@ class StartServiceTest {
 
         assertThat(rollbackEvent().isRollbackPointReprocessed()).isFalse();
         assertThat(rollbackEvent().generatedKeyRollbackSlot()).isEqualTo(CURSOR_SLOT);
-        verify(blockFetchService).startSync(new Point(CURSOR_SLOT, "cursor_hash"), 10_000_000L);
-        verify(blockFetchService, never()).startFetch(any(), any(), any());
+        verify(blockFetchService).startSyncWithTimeout(eq(new Point(CURSOR_SLOT, "cursor_hash")), eq(10_000_000L), anyLong());
+        verify(blockFetchService, never()).startFetchWithTimeout(any(), any(), any(), anyLong());
     }
 
     @Test
@@ -104,7 +104,7 @@ class StartServiceTest {
         startService.start();
 
         assertThat(rollbackEvent().isRollbackPointReprocessed()).isFalse();
-        verify(blockFetchService).startFetch(new Point(CURSOR_SLOT, "cursor_hash"), new Point(CURSOR_SLOT + 10, "stop_hash"), 10_000_000L);
+        verify(blockFetchService).startFetchWithTimeout(eq(new Point(CURSOR_SLOT, "cursor_hash")), eq(new Point(CURSOR_SLOT + 10, "stop_hash")), eq(10_000_000L), anyLong());
     }
 
     private void tipAt(long slot) {
