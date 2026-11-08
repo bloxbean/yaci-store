@@ -87,16 +87,16 @@ class RequiredRestartProcessorRecoveryTest {
 
         // ... and the node answers that it does not have the start point
         blockFetchService.intersactNotFound(new Tip(new Point(5000, "cc"), 50));
-        ArgumentCaptor<Object> event = ArgumentCaptor.forClass(Object.class);
+        //startSync also publishes PreBlockSyncEvent (#1271)
+        ArgumentCaptor<RequiredSyncRestartEvent> event = ArgumentCaptor.forClass(RequiredSyncRestartEvent.class);
         verify(fetchPublisher).publishEvent(event.capture());
-        assertThat(event.getValue()).isInstanceOf(RequiredSyncRestartEvent.class);
 
         var startAttempted = new CountDownLatch(1);
         doAnswer(inv -> {
             startAttempted.countDown();
             throw new IllegalStateException("start attempted");
         }).when(cursorService).getStartCursor();
-        processor.handleRestartInterval((RequiredSyncRestartEvent) event.getValue());
+        processor.handleRestartInterval(event.getValue());
 
         // The dropped request is tried again once the debounce window has passed
         assertThat(startAttempted.await(5, TimeUnit.SECONDS)).isTrue();
