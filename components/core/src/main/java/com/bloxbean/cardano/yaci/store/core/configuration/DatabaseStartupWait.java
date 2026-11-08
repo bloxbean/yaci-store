@@ -84,7 +84,12 @@ public class DatabaseStartupWait implements BeanPostProcessor, EnvironmentAware 
                     log.warn("Interrupted while waiting for database '{}'. Not waiting any longer.", name);
                     return;
                 }
-                //the pause ends at the deadline at the latest, so the next attempt starts within the budget
+                //The pause ends at the deadline at the latest, but the thread can wake up late (scheduling, GC,
+                //a suspended process). An attempt at the deadline is still made; a late one is not.
+                if (clockMillis.getAsLong() > deadline) {
+                    giveUp(name, attempt);
+                    return;
+                }
             }
         }
     }
