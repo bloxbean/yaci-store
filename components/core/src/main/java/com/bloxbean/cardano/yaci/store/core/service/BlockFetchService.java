@@ -37,6 +37,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 
 import static com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig.DEFAULT_SECURITY_PARAM;
 
@@ -402,11 +403,29 @@ public class BlockFetchService implements BlockChainDataListener {
     }
 
     public synchronized void startFetch(Point from, Point to) {
+        startFetch(from, to, new AtomicBoolean());
+    }
+
+    /**
+     * Like {@link #startFetch(Point, Point)}, but gives up if the node has not completed the connection within
+     * {@code timeoutMs} (0: no limit). yaci opens the connection and waits for the handshake inside the call, with
+     * no time limit.
+     *
+     * @throws NodeNotAnsweringException if the node did not answer in time
+     */
+    public void startFetch(Point from, Point to, long timeoutMs) {
+        startWithTimeout("start the block fetch", timeoutMs, cancelled -> startFetch(from, to, cancelled), blockRangeSync::stop);
+    }
+
+    private synchronized void startFetch(Point from, Point to, AtomicBoolean cancelled) {
         isError.set(false);
         scheduledToStop.set(false);
 
         stopKeepAliveThread();
         blockRangeSync.restart(this);
+        // yaci logs a cancelled handshake and returns: do not go on with a closed connection
+        if (cancelled.get())
+            throw new NodeNotAnsweringException("Cancelled: start the block fetch");
         blockRangeSync.fetch(from, to);
         lastSessionStartTime = System.currentTimeMillis();
         syncMode = false;
@@ -416,15 +435,48 @@ public class BlockFetchService implements BlockChainDataListener {
     }
 
     public synchronized void startSync(Point from) {
+        startSync(from, new AtomicBoolean());
+    }
+
+    /**
+     * Like {@link #startSync(Point)}, but gives up if the node has not completed the connection within
+     * {@code timeoutMs} (0: no limit).
+     *
+     * @throws NodeNotAnsweringException if the node did not answer in time
+     */
+    public void startSync(Point from, long timeoutMs) {
+        startWithTimeout("start the block sync", timeoutMs, cancelled -> startSync(from, cancelled), blockSync::stop);
+    }
+
+    private synchronized void startSync(Point from, AtomicBoolean cancelled) {
         isError.set(false);
         scheduledToStop.set(false);
 
         stopKeepAliveThread();
         blockSync.startSync(from, this);
+        if (cancelled.get())
+            throw new NodeNotAnsweringException("Cancelled: start the block sync");
         lastSessionStartTime = System.currentTimeMillis();
         syncMode = true;
         cursorService.setSyncMode(syncMode);
         startKeepAliveThread(syncMode);
+    }
+
+    private void startWithTimeout(String what, long timeoutMs, Consumer<AtomicBoolean> start, Runnable closeConnection) {
+        AtomicBoolean cancelled = new AtomicBoolean();
+        if (timeoutMs <= 0) {
+            start.accept(cancelled);
+            return;
+        }
+
+        NodeCalls.call(what, timeoutMs, () -> {
+            start.accept(cancelled);
+            return null;
+        }, () -> {
+            cancelled.set(true);
+            // Not through shutdownRangeSync()/shutdownSync(): the stalled start holds this object's monitor.
+            closeConnection.run();
+        });
     }
 
     public synchronized void shutdown() {
@@ -615,7 +667,11 @@ public class BlockFetchService implements BlockChainDataListener {
     @Override
     public void intersactNotFound(Tip tip) {
         log.error("Intersection not found. Current tip: {}", tip);
-        
+
+        // Mark the session failed first. A restart request that is dropped (another restart is running, or within
+        // the debounce window) is only tried again while the sync is in the error state.
+        setError();
+
         // Publish restart event
         RequiredSyncRestartEvent restartEvent = RequiredSyncRestartEvent.builder()
                 .reason("IntersectionNotFound")

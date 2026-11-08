@@ -40,7 +40,7 @@ class StartServiceRestartTest {
     @Test
     void failedRestartLeavesAnErrorNotADeliberateStop() {
         when(cursorService.getStartCursor()).thenThrow(new IllegalStateException("database down"));
-        long token = startService.stopForRestart();
+        long token = startService.stopForRestart(startService.getStopCount());
 
         assertThatThrownBy(() -> startService.startAfterRestart(token)).hasMessage("database down");
 
@@ -50,7 +50,7 @@ class StartServiceRestartTest {
 
     @Test
     void deliberateStopDuringTheRestartWaitIsKept() {
-        long token = startService.stopForRestart();
+        long token = startService.stopForRestart(startService.getStopCount());
         startService.stop(); // e.g. the admin API or a balance snapshot
 
         assertThat(startService.startAfterRestart(token)).isFalse();
@@ -60,9 +60,19 @@ class StartServiceRestartTest {
     }
 
     @Test
+    void deliberateStopDuringTheBackoffIsKept() {
+        long before = startService.getStopCount();
+        startService.stop(); // during the restart's backoff
+
+        assertThat(startService.stopForRestart(before)).isNegative();
+
+        verify(blockFetchService, times(1)).stop();
+    }
+
+    @Test
     void startBySomeoneElseDuringTheRestartWaitIsKept() {
         when(cursorService.getStartCursor()).thenThrow(new IllegalStateException("stop here"));
-        long token = startService.stopForRestart();
+        long token = startService.stopForRestart(startService.getStopCount());
         // pretend another caller started the sync successfully while the restart was waiting
         org.springframework.test.util.ReflectionTestUtils.setField(startService, "alreadyStarted", true);
 

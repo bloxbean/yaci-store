@@ -27,7 +27,8 @@ final class NodeCalls {
 
     /**
      * With auto-restart on, a call that times out fails the start and the restart tries again later. With it off,
-     * nothing would retry, so keep the old behaviour and wait for the node as long as it takes.
+     * nothing would retry, so keep the old behaviour and wait for the connection as long as it takes. (The
+     * cursor check still limits the wait for the node's answer, see {@link BlockFinder}.)
      */
     static long timeoutMs(StoreProperties storeProperties) {
         return storeProperties != null && storeProperties.isAutoRestartEnabled() ? DEFAULT_TIMEOUT_MS : 0;

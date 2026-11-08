@@ -8,10 +8,15 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CancellationException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 @Slf4j
 public class BlockFinder {
     private final BlockSync blockSync;
+    // Once connected, how long to wait for the node's answer, even when the call itself has no limit.
+    // Not final so tests can shorten it.
+    long answerTimeoutMs = NodeCalls.DEFAULT_TIMEOUT_MS;
 
     public BlockFinder(BlockSync blockSync) {
         this.blockSync = blockSync;
@@ -25,7 +30,8 @@ public class BlockFinder {
     /**
      * Asks the node whether the block at {@code point} is on its chain.
      *
-     * @param timeoutMs how long to wait for the answer, 0 for no limit
+     * @param timeoutMs how long to wait for the connection and the answer, 0 for no limit on the connection. The
+     *                  answer itself is never waited for longer than {@link #answerTimeoutMs}.
      * @return true if the node found the point, false if the node said it is not on its chain
      * @throws NodeNotAnsweringException if the node did not answer in time. A missing answer is not a "no": treating
      *                                   it as one would make the caller step back to an older cursor and delete
@@ -50,7 +56,12 @@ public class BlockFinder {
         try {
             return NodeCalls.call("check if block " + point + " exists", timeoutMs, () -> {
                 blockSync.startSync(point, listener);
-                return answer.get();
+                try {
+                    return answer.get(answerTimeoutMs, TimeUnit.MILLISECONDS);
+                } catch (TimeoutException e) {
+                    throw new NodeNotAnsweringException("The node did not answer within " + (answerTimeoutMs / 1000)
+                            + " s: check if block " + point + " exists");
+                }
             }, () -> {
                 // Also releases the worker if yaci swallowed the interrupt and returned without an answer
                 answer.cancel(true);
