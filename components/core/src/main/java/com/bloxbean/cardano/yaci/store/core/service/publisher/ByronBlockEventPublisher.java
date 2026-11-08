@@ -134,7 +134,7 @@ public class ByronBlockEventPublisher implements BlockEventPublisher<ByronMainBl
                     publisher.publishEvent(byronMainBlockEvent);
                 }
                 return true;
-            }, blockExecutor);
+            }, sessionGuard.propagating(blockExecutor));
             futures.add(future);
         }
 

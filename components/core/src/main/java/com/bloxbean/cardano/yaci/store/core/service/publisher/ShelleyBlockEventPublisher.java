@@ -145,7 +145,7 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
                 }
 
                 return true;
-            }, blockExecutor);
+            }, sessionGuard.propagating(blockExecutor));
 
             futures.add(future);
         }
@@ -189,7 +189,7 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
             List<TxScripts> txScriptsList = getTxScripts(validTransactions);
             publisher.publishEvent(new ScriptEvent(eventMetadata, txScriptsList));
             return true;
-        }, eventExecutor);
+        }, sessionGuard.propagating(eventExecutor));
 
         //AuxData event
         var txAuxDataEvent = CompletableFuture.supplyAsync(() -> {
@@ -205,7 +205,7 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
                     ).collect(Collectors.toList());
             publisher.publishEvent(new AuxDataEvent(eventMetadata, txAuxDataList));
             return true;
-        }, eventExecutor);
+        }, sessionGuard.propagating(eventExecutor));
 
         //Certificate event
         var txCertificateEvent = CompletableFuture.supplyAsync(() -> {
@@ -226,7 +226,7 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
                             .collect(Collectors.toList());
             publisher.publishEvent(new CertificateEvent(eventMetadata, txCertificatesList));
             return true;
-        }, eventExecutor);
+        }, sessionGuard.propagating(eventExecutor));
 
         //Mints
         var txMintBurnEvent = CompletableFuture.supplyAsync(() -> {
@@ -243,7 +243,7 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
                     ).collect(Collectors.toList());
             publisher.publishEvent(new MintBurnEvent(eventMetadata, txMintBurnEvents));
             return true;
-        }, eventExecutor);
+        }, sessionGuard.propagating(eventExecutor));
 
         //Updates
         var txUpdateEvent = CompletableFuture.supplyAsync(() -> {
@@ -255,7 +255,7 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
             if (txUpdates.size() > 0)
                 publisher.publishEvent(new UpdateEvent(eventMetadata, txUpdates));
             return true;
-        }, eventExecutor);
+        }, sessionGuard.propagating(eventExecutor));
 
         //Governance
         var governanceEvent = CompletableFuture.supplyAsync(() -> {
@@ -280,7 +280,7 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
             if (txGovernanceList.size() > 0)
                 publisher.publishEvent(new GovernanceEvent(eventMetadata, txGovernanceList));
             return true;
-        }, eventExecutor);
+        }, sessionGuard.propagating(eventExecutor));
 
         CompletableFuture.allOf(eraEventCf, blockEventCf, blockHeaderEventCf, txnEventCf, txScriptEvent, txAuxDataEvent,
                 txCertificateEvent, txMintBurnEvent, txUpdateEvent, governanceEvent)
@@ -385,7 +385,7 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
         return CompletableFuture.supplyAsync(() -> {
             publisher.publishEvent(event);
             return true;
-        }, eventExecutor);
+        }, sessionGuard.propagating(eventExecutor));
     }
 
     //Replace asset name contains \u0000 -- postgres can't convert this to text. so replace
