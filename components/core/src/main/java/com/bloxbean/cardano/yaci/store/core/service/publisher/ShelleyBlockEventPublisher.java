@@ -7,6 +7,7 @@ import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.Cursor;
 import com.bloxbean.cardano.yaci.store.common.service.CursorService;
 import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
+import com.bloxbean.cardano.yaci.store.core.service.SyncSessionGuard;
 import com.bloxbean.cardano.yaci.store.events.*;
 import com.bloxbean.cardano.yaci.store.events.domain.*;
 import com.bloxbean.cardano.yaci.store.events.internal.BatchBlocksProcessedEvent;
@@ -54,19 +55,52 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
     }
 
     private List<BatchBlock> batchBlockList = new ArrayList<>();
+    //The sync session the blocks in batchBlockList belong to. Guarded by batchBlockList.
+    private Long batchSession;
+
+    //Shared with BlockFetchService. A default instance keeps hand-built instances (tests) working.
+    private SyncSessionGuard sessionGuard = new SyncSessionGuard();
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setSessionGuard(SyncSessionGuard sessionGuard) {
+        this.sessionGuard = sessionGuard;
+    }
 
     public void reset() {
-        batchBlockList.clear();
+        synchronized (batchBlockList) {
+            batchBlockList.clear();
+            batchSession = null;
+        }
+    }
+
+    /**
+     * Call with the batchBlockList lock held. A thread of an old sync session must not add to, or take, the batch of
+     * the session that replaced it, so the session is checked under the same lock. Blocks left by an older session are
+     * dropped: the current session fetches them again from the cursor.
+     */
+    private void ownBatch() {
+        sessionGuard.checkCaller();
+        Long session = sessionGuard.callerSession();
+        if (session != null && !session.equals(batchSession)) {
+            if (!batchBlockList.isEmpty())
+                log.warn("Dropping {} batched blocks of old sync session {}", batchBlockList.size(), batchSession);
+            batchBlockList.clear();
+            batchSession = session;
+        }
     }
 
     @Transactional
     public void publishBlockEvents(EventMetadata eventMetadata, Block block, List<Transaction> transactions) {
         processBlockSingleThread(eventMetadata, block, transactions);
+        //A thread from an old sync session (e.g. a listener that hung past a restart) must not commit this block
+        sessionGuard.checkCaller();
         publisher.publishEvent(new PreCommitEvent(eventMetadata));
         publisher.publishEvent(new CommitEvent(eventMetadata, List.of(new BatchBlock(eventMetadata, block, transactions))));
 
-        cursorService.setCursor(new Cursor(eventMetadata.getSlot(), eventMetadata.getBlockHash(), eventMetadata.getBlock(),
-                eventMetadata.getPrevBlockHash(), eventMetadata.getEra()));
+        //Checked again: a commit listener can hang while a restart starts a new session. In this block's transaction,
+        //so a stale block is rolled back with its cursor.
+        sessionGuard.writeIfCurrent(() -> cursorService.setCursor(new Cursor(eventMetadata.getSlot(), eventMetadata.getBlockHash(),
+                eventMetadata.getBlock(), eventMetadata.getPrevBlockHash(), eventMetadata.getEra())));
     }
 
     //Don't add transactional annotation here
@@ -75,8 +109,13 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
     }
 
     private void handleBlockBatchInParallel(EventMetadata eventMetadata, Block block, List<Transaction> transactions) {
-        batchBlockList.add(new BatchBlock(eventMetadata, block, transactions));
-        if (batchBlockList.size() != storeProperties.getBlocksBatchSize())
+        int size;
+        synchronized (batchBlockList) {
+            ownBatch();
+            batchBlockList.add(new BatchBlock(eventMetadata, block, transactions));
+            size = batchBlockList.size();
+        }
+        if (size < storeProperties.getBlocksBatchSize())
             return;
 
         processBlocksInParallel();
@@ -84,19 +123,29 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
     }
 
     public void processBlocksInParallel() {
-        if (batchBlockList.size() == 0)
-            return;
+        //Work on a copy: the list may be reset or refilled by another sync session while this batch is written
+        List<BatchBlock> batch;
+        synchronized (batchBlockList) {
+            ownBatch();
+            if (batchBlockList.isEmpty())
+                return;
+            batch = new ArrayList<>(batchBlockList);
+            batchBlockList.clear();
+        }
 
-        List<List<BatchBlock>> partitions = partition(batchBlockList, storeProperties.getBlocksPartitionSize());
+        //The workers check the caller's session before each block, so an old session stops writing early
+        Long session = sessionGuard.callerSession();
+        List<List<BatchBlock>> partitions = partition(batch, storeProperties.getBlocksPartitionSize());
         List<CompletableFuture> futures = new ArrayList<>();
         for (List<BatchBlock> partition : partitions) {
             var future = CompletableFuture.supplyAsync(() -> {
                 for (BatchBlock blockCache : partition) {
+                    sessionGuard.check(session);
                     processBlockInParallel(blockCache.getMetadata(), blockCache.getBlock(), blockCache.getTransactions());
                 }
 
                 return true;
-            }, blockExecutor);
+            }, sessionGuard.propagating(blockExecutor));
 
             futures.add(future);
         }
@@ -105,18 +154,23 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
                 .orTimeout(storeProperties.getProcessingThreadsTimeout(), TimeUnit.MINUTES)
                 .join();
 
-        BatchBlock lastBatchBlock = batchBlockList.getLast();
+        //A batch of an old sync session is not committed and the cursor is not moved. Its blocks are fetched again
+        //by the current session.
+        sessionGuard.checkCaller();
+
+        BatchBlock lastBatchBlock = batch.getLast();
 
         //Publish BatchProcessedEvent. This may be useful for some scenarios where we need to do some processing before CommitEvent
-        publisher.publishEvent(new BatchBlocksProcessedEvent(lastBatchBlock.getMetadata(), batchBlockList));
+        publisher.publishEvent(new BatchBlocksProcessedEvent(lastBatchBlock.getMetadata(), batch));
 
         publisher.publishEvent(new PreCommitEvent(lastBatchBlock.getMetadata()));
-        publisher.publishEvent(new CommitEvent(lastBatchBlock.getMetadata(), batchBlockList));
+        publisher.publishEvent(new CommitEvent(lastBatchBlock.getMetadata(), batch));
 
-        //Finally Set the cursor
-        cursorService.setCursor(new Cursor(lastBatchBlock.getMetadata().getSlot(), lastBatchBlock.getMetadata().getBlockHash(), lastBatchBlock.getMetadata().getBlock(),
-                lastBatchBlock.getMetadata().getPrevBlockHash(), lastBatchBlock.getMetadata().getEra()));
-        batchBlockList.clear();
+        //Finally Set the cursor. Checked again (a commit listener can hang while a restart starts a new session), and
+        //once more after the write in the cursor's transaction.
+        sessionGuard.writeIfCurrent(() -> cursorService.setCursor(new Cursor(lastBatchBlock.getMetadata().getSlot(),
+                lastBatchBlock.getMetadata().getBlockHash(), lastBatchBlock.getMetadata().getBlock(),
+                lastBatchBlock.getMetadata().getPrevBlockHash(), lastBatchBlock.getMetadata().getEra())));
     }
 
     private void processBlockInParallel(EventMetadata eventMetadata, Block block, List<Transaction> transactions) {
@@ -135,7 +189,7 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
             List<TxScripts> txScriptsList = getTxScripts(validTransactions);
             publisher.publishEvent(new ScriptEvent(eventMetadata, txScriptsList));
             return true;
-        }, eventExecutor);
+        }, sessionGuard.propagating(eventExecutor));
 
         //AuxData event
         var txAuxDataEvent = CompletableFuture.supplyAsync(() -> {
@@ -151,7 +205,7 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
                     ).collect(Collectors.toList());
             publisher.publishEvent(new AuxDataEvent(eventMetadata, txAuxDataList));
             return true;
-        }, eventExecutor);
+        }, sessionGuard.propagating(eventExecutor));
 
         //Certificate event
         var txCertificateEvent = CompletableFuture.supplyAsync(() -> {
@@ -172,7 +226,7 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
                             .collect(Collectors.toList());
             publisher.publishEvent(new CertificateEvent(eventMetadata, txCertificatesList));
             return true;
-        }, eventExecutor);
+        }, sessionGuard.propagating(eventExecutor));
 
         //Mints
         var txMintBurnEvent = CompletableFuture.supplyAsync(() -> {
@@ -189,7 +243,7 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
                     ).collect(Collectors.toList());
             publisher.publishEvent(new MintBurnEvent(eventMetadata, txMintBurnEvents));
             return true;
-        }, eventExecutor);
+        }, sessionGuard.propagating(eventExecutor));
 
         //Updates
         var txUpdateEvent = CompletableFuture.supplyAsync(() -> {
@@ -201,7 +255,7 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
             if (txUpdates.size() > 0)
                 publisher.publishEvent(new UpdateEvent(eventMetadata, txUpdates));
             return true;
-        }, eventExecutor);
+        }, sessionGuard.propagating(eventExecutor));
 
         //Governance
         var governanceEvent = CompletableFuture.supplyAsync(() -> {
@@ -226,7 +280,7 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
             if (txGovernanceList.size() > 0)
                 publisher.publishEvent(new GovernanceEvent(eventMetadata, txGovernanceList));
             return true;
-        }, eventExecutor);
+        }, sessionGuard.propagating(eventExecutor));
 
         CompletableFuture.allOf(eraEventCf, blockEventCf, blockHeaderEventCf, txnEventCf, txScriptEvent, txAuxDataEvent,
                 txCertificateEvent, txMintBurnEvent, txUpdateEvent, governanceEvent)
@@ -331,7 +385,7 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
         return CompletableFuture.supplyAsync(() -> {
             publisher.publishEvent(event);
             return true;
-        }, eventExecutor);
+        }, sessionGuard.propagating(eventExecutor));
     }
 
     //Replace asset name contains \u0000 -- postgres can't convert this to text. so replace
