@@ -39,6 +39,7 @@ class StartServiceRestartTest {
 
     @Test
     void failedRestartLeavesAnErrorNotADeliberateStop() {
+        syncFailed();
         when(cursorService.getStartCursor()).thenThrow(new IllegalStateException("database down"));
         long token = startService.stopForRestart(startService.getStopCount());
 
@@ -50,6 +51,7 @@ class StartServiceRestartTest {
 
     @Test
     void deliberateStopDuringTheRestartWaitIsKept() {
+        syncFailed();
         long token = startService.stopForRestart(startService.getStopCount());
         startService.stop(); // e.g. the admin API or a balance snapshot
 
@@ -70,7 +72,27 @@ class StartServiceRestartTest {
     }
 
     @Test
+    void deliberateStopBeforeTheRestartReadTheCountIsKept() {
+        // stop() sets scheduledToStop, so the sync is stopped but not failed. The restart request that the closing
+        // connection sends, or one that waited in the queue, reads the count only after that stop.
+        startService.stop();
+        when(blockFetchService.isScheduledToStop()).thenReturn(true); // set by blockFetchService.stop()
+
+        assertThat(startService.stopForRestart(startService.getStopCount())).isNegative();
+
+        verify(blockFetchService, times(1)).stop();
+    }
+
+    @Test
+    void failedSyncIsRestartedEvenWhenNothingIsRunning() {
+        syncFailed();
+
+        assertThat(startService.stopForRestart(startService.getStopCount())).isPositive();
+    }
+
+    @Test
     void startBySomeoneElseDuringTheRestartWaitIsKept() {
+        syncFailed();
         when(cursorService.getStartCursor()).thenThrow(new IllegalStateException("stop here"));
         long token = startService.stopForRestart(startService.getStopCount());
         // pretend another caller started the sync successfully while the restart was waiting
@@ -100,5 +122,10 @@ class StartServiceRestartTest {
         var order = inOrder(blockFetchService);
         order.verify(blockFetchService).clearError();
         order.verify(blockFetchService).reset();
+    }
+
+    private void syncFailed() {
+        when(blockFetchService.isError()).thenReturn(true);
+        when(blockFetchService.isScheduledToStop()).thenReturn(false);
     }
 }
