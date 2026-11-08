@@ -175,6 +175,20 @@ class PoolStatusProcessorReplayIT {
     }
 
     @Test
+    void twoTransactionsRegisteringPoolsInOneBlockAreBothKept() {
+        // One PoolRegistrationEvent is published per transaction, so one block can bring several
+        processor.processPoolRegistrationEvent(registration(62368918L, 148, "tx1", 0, 0));
+        processor.processPoolRegistrationEvent(registration(POOL_B, 62368918L, 148, "tx2", 1, 0));
+        // The block is processed again before pre-commit
+        processor.processPoolRegistrationEvent(registration(62368918L, 148, "tx1", 0, 0));
+        processor.processPoolRegistrationEvent(registration(POOL_B, 62368918L, 148, "tx2", 1, 0));
+        processor.handleCommitEventToProcessPoolStatus(preCommit(62368918L, 148));
+
+        assertThat(depositEvent().getStakePoolRegistrationCount()).isEqualTo(2);
+        assertThat(rows()).extracting(PoolEntity::getPoolId).containsExactly(POOL, POOL_B);
+    }
+
+    @Test
     void aRestartRollbackDropsCachedEventsOfTheFailedBatch() {
         // A batch fails before pre-commit
         processor.processStakeKeyRegDeregs(stakeRegistration(62368918L, "tx0"));
