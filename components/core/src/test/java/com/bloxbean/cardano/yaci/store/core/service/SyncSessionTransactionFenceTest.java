@@ -123,7 +123,7 @@ class SyncSessionTransactionFenceTest {
     }
 
     @Test
-    void aCommitThatHangsDoesNotHoldUpTheSessionChangeForever() throws Exception {
+    void aCommitThatHangsDoesNotHoldUpAStopOrAStartForever() throws Exception {
         guard.sessionChangeWaitMs = 200;
         long session = guard.newSession();
         inCommit = new CountDownLatch(1);
@@ -141,8 +141,13 @@ class SyncSessionTransactionFenceTest {
             assertThat(inCommit.await(5, TimeUnit.SECONDS)).isTrue();
 
             long start = System.nanoTime();
-            assertThat(CompletableFuture.supplyAsync(guard::newSession).get(5, TimeUnit.SECONDS)).isEqualTo(session + 1);
+            //a stop goes through
+            CompletableFuture.runAsync(guard::endSession).get(5, TimeUnit.SECONDS);
+            //opening a new session fails rather than starting while the old commit can still land
+            assertThatThrownBy(() -> CompletableFuture.supplyAsync(guard::newSession).join())
+                    .hasCauseInstanceOf(IllegalStateException.class);
             assertThat((System.nanoTime() - start) / 1_000_000).isLessThan(3_000);
+            assertThat(guard.isCurrent(session)).isFalse();
         } finally {
             releaseCommit.countDown();
             pool.shutdownNow();
