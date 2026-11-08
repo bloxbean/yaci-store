@@ -60,6 +60,14 @@ public class BlockFetchService implements BlockChainDataListener {
     private final ByronBlockEventPublisher byronBlockEventPublisher;
     private final ErrorStorage errorStorage;
 
+    //Only the current sync session may write. A default instance keeps hand-built instances (tests) working.
+    private SyncSessionGuard sessionGuard = new SyncSessionGuard();
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setSessionGuard(SyncSessionGuard sessionGuard) {
+        this.sessionGuard = sessionGuard;
+    }
+
     //Written by the thread that starts the sync and read by the yaci network thread
     private volatile boolean syncMode;
     private AtomicBoolean isError = new AtomicBoolean(false);
@@ -150,6 +158,7 @@ public class BlockFetchService implements BlockChainDataListener {
                 }
 
                 //Publish epoch change event first and then process first block of the epoch
+                sessionGuard.checkCaller();
                 publishEpochChangeEvent(eventMetadata);
 
                 //Now process first block
@@ -171,6 +180,12 @@ public class BlockFetchService implements BlockChainDataListener {
             previousEra = eventMetadata.getEra();
 
         } catch (Throwable e) {
+            if (sessionGuard.isCallerStale()) {
+                //An old session's thread, whatever went wrong in it (the stale check, or state the new session
+                //changed underneath it). Its writes are not committed. The current session is fine: leave it running.
+                log.warn("Error in a thread of an old sync session, not stopping the current one: {}", e.toString());
+                throw e instanceof RuntimeException re ? re : new RuntimeException(e);
+            }
             log.error("Error saving : " + (eventMetadata != null ? eventMetadata : blockHeader.getHeaderBody()), e);
             log.error("Stopping fetcher");
             log.error("Error at block no #" + blockHeader.getHeaderBody().getBlockNumber());
@@ -239,6 +254,7 @@ public class BlockFetchService implements BlockChainDataListener {
 
                 log.info("Publish EpochChangeEvent >>>");
                 //Publish epoch change event
+                sessionGuard.checkCaller();
                 publishEpochChangeEvent(eventMetadata);
 
                 log.info("Processing first block of the epoch {}, block {}", eventMetadata.getEpochNumber(), eventMetadata.getBlock());
@@ -260,6 +276,12 @@ public class BlockFetchService implements BlockChainDataListener {
             previousEra = eventMetadata.getEra();
 
         } catch (Throwable e) {
+            if (sessionGuard.isCallerStale()) {
+                //An old session's thread, whatever went wrong in it (the stale check, or state the new session
+                //changed underneath it). Its writes are not committed. The current session is fine: leave it running.
+                log.warn("Error in a thread of an old sync session, not stopping the current one: {}", e.toString());
+                throw e instanceof RuntimeException re ? re : new RuntimeException(e);
+            }
             log.error("Error saving : Slot >>" + byronBlock.getHeader().getConsensusData().getSlotId(), e);
             log.error("Error at block hash #" + byronBlock.getHeader().getBlockHash());
             log.error("Stopping fetcher");
@@ -305,13 +327,20 @@ public class BlockFetchService implements BlockChainDataListener {
             //The EB block writes the cursor itself. Write the Byron blocks still waiting in a batch first, or the cursor
             //would move past blocks that are not written yet.
             byronBlockEventPublisher.processBlocksInParallel();
+            sessionGuard.checkCaller();
             publisher.publishEvent(new ByronEbBlockEvent(eventMetadata, byronEbBlock));
 
-            //Finally Set the cursor
-            cursorService.setCursor(new Cursor(eventMetadata.getSlot(), eventMetadata.getBlockHash(),
-                    eventMetadata.getBlock(), eventMetadata.getPrevBlockHash(), eventMetadata.getEra()));
+            //Finally Set the cursor, only for the current session (checked again after the write, in its transaction)
+            sessionGuard.writeIfCurrent(() -> cursorService.setCursor(new Cursor(eventMetadata.getSlot(), eventMetadata.getBlockHash(),
+                    eventMetadata.getBlock(), eventMetadata.getPrevBlockHash(), eventMetadata.getEra())));
             blockAccepted(eventMetadata.getBlock(), eventMetadata.getBlockHash(), false);
         } catch (Throwable e) {
+            if (sessionGuard.isCallerStale()) {
+                //An old session's thread, whatever went wrong in it (the stale check, or state the new session
+                //changed underneath it). Its writes are not committed. The current session is fine: leave it running.
+                log.warn("Error in a thread of an old sync session, not stopping the current one: {}", e.toString());
+                throw e instanceof RuntimeException re ? re : new RuntimeException(e);
+            }
             log.error("Error saving EbBlock : epoch >>" + byronEbBlock.getHeader().getConsensusData().getEpoch(), e);
             log.error("Error at block hash #" + byronEbBlock.getHeader().getBlockHash());
             log.error("Stopping fetcher");
@@ -338,7 +367,17 @@ public class BlockFetchService implements BlockChainDataListener {
         shutdownSync();
     }
 
+    /**
+     * Waits until nothing of an earlier sync session can still be committed. See
+     * {@link SyncSessionGuard#awaitCommitsOfOldSessions()}.
+     */
+    public void awaitCommitsOfOldSessions() {
+        sessionGuard.awaitCommitsOfOldSessions();
+    }
+
     public void stop() {
+        //Callbacks still on their way from the stopped session are ignored
+        sessionGuard.endSession();
         scheduledToStop.set(true);
         shutdownRangeSync();
         shutdownSync();
@@ -361,6 +400,8 @@ public class BlockFetchService implements BlockChainDataListener {
             return;
         }
 
+        //A rollback from an old session (it may have waited a long time) must not delete the current session's data
+        sessionGuard.checkCaller();
         cursorService.rollback(point.getSlot());
         restoreEpochStateFromCursor(cursorService.getCursor());
         log.info("Restored epoch state after rollback. previousEpoch: {}, previousEra: {}",
@@ -424,8 +465,16 @@ public class BlockFetchService implements BlockChainDataListener {
                 fromBlockNumber, previousEpoch, previousEra);
     }
 
+    //Synchronized like startFetch/startSync, which open the new session: the check below and the shutdown happen
+    //together, so a late batchDone cannot stop the connection of the session that replaced it
     @Override
-    public void batchDone() {
+    public synchronized void batchDone() {
+
+        //An old range session must not stop the fetcher of the session that replaced it
+        if (sessionGuard.isCallerStale()) {
+            log.warn("Ignoring batch done from an old sync session");
+            return;
+        }
 
         if (!syncMode) {
             log.info("Batch Done >>>");
@@ -633,19 +682,33 @@ public class BlockFetchService implements BlockChainDataListener {
      *                        already processed.
      */
     public synchronized void startFetch(Point from, Point to, Long fromBlockNumber) {
-        isError.set(false);
-        scheduledToStop.set(false);
-        resetAcceptedBlock(from.getHash(), fromBlockNumber);
-        restoreEpochStateForStart(from, fromBlockNumber);
+        if (sessionGuard.isCallerStale()) {
+            log.warn("Not starting a range fetch from {}: asked by an old sync session", from);
+            return;
+        }
+        //First, before anything is reset: fails if a commit of the old session is still running, and the error state
+        //is left as it was, so the restart is tried again
+        long session = sessionGuard.newSession();
+        //The rest of the start (e.g. reading the cursor) belongs to the new session. The calling thread can still be
+        //marked with the session this start replaces (batchDone at the end of the range fetch).
+        Long previous = sessionGuard.enter(session);
+        try {
+            isError.set(false);
+            scheduledToStop.set(false);
+            resetAcceptedBlock(from.getHash(), fromBlockNumber);
+            restoreEpochStateForStart(from, fromBlockNumber);
 
-        stopKeepAliveThread();
-        //Set the mode before fetching starts, because the first blocks can arrive before fetch() returns
-        syncMode = false;
-        cursorService.setSyncMode(syncMode);
-        blockRangeSync.restart(this);
-        blockRangeSync.fetch(from, to);
+            stopKeepAliveThread();
+            //Set the mode before fetching starts, because the first blocks can arrive before fetch() returns
+            syncMode = false;
+            cursorService.setSyncMode(syncMode);
+            blockRangeSync.restart(new SessionListener(session));
+            blockRangeSync.fetch(from, to);
 
-        startKeepAliveThread(syncMode);
+            startKeepAliveThread(syncMode);
+        } finally {
+            sessionGuard.exit(previous);
+        }
     }
 
     public synchronized void startSync(Point from) {
@@ -657,23 +720,38 @@ public class BlockFetchService implements BlockChainDataListener {
      *                        null. Chain sync delivers the blocks after {@code from}, so the first one must build on it.
      */
     public synchronized void startSync(Point from, Long fromBlockNumber) {
-        isError.set(false);
-        scheduledToStop.set(false);
+        //e.g. an old range session finishing a long batchDone after a restart started a new session
+        if (sessionGuard.isCallerStale()) {
+            log.warn("Not starting chain sync from {}: asked by an old sync session", from);
+            return;
+        }
+        //First, before anything is reset: fails if a commit of the old session is still running, and the error state
+        //is left as it was, so the restart is tried again
+        long session = sessionGuard.newSession();
+        //The rest of the start (e.g. reading the cursor) belongs to the new session. The calling thread can still be
+        //marked with the session this start replaces (batchDone at the end of the range fetch).
+        Long previous = sessionGuard.enter(session);
+        try {
+            isError.set(false);
+            scheduledToStop.set(false);
 
-        stopKeepAliveThread();
-        //Set the mode before connecting. BlockSync.startSync waits for the handshake, and blocks can arrive
-        //during that wait. A block seen with syncMode still false would go to a batch that is never written.
-        syncMode = true;
-        cursorService.setSyncMode(syncMode);
-        //Sync restarts from the last stored block, so blocks still waiting in a batch are fetched again. Drop them,
-        //or they would be written a second time when the batch is flushed.
-        reset();
-        //The first block from chain sync must build on the start point
-        resetAcceptedBlock(from.getHash(), fromBlockNumber);
-        expectedPrevBlockHash = from.getHash();
-        restoreEpochStateForStart(from, fromBlockNumber);
-        blockSync.startSync(from, this);
-        startKeepAliveThread(syncMode);
+            stopKeepAliveThread();
+            //Set the mode before connecting. BlockSync.startSync waits for the handshake, and blocks can arrive
+            //during that wait. A block seen with syncMode still false would go to a batch that is never written.
+            syncMode = true;
+            cursorService.setSyncMode(syncMode);
+            //Sync restarts from the last stored block, so blocks still waiting in a batch are fetched again. Drop them,
+            //or they would be written a second time when the batch is flushed.
+            reset();
+            //The first block from chain sync must build on the start point
+            resetAcceptedBlock(from.getHash(), fromBlockNumber);
+            expectedPrevBlockHash = from.getHash();
+            restoreEpochStateForStart(from, fromBlockNumber);
+            blockSync.startSync(from, new SessionListener(session));
+            startKeepAliveThread(syncMode);
+        } finally {
+            sessionGuard.exit(previous);
+        }
     }
 
     public synchronized void shutdown() {
@@ -839,5 +917,66 @@ public class BlockFetchService implements BlockChainDataListener {
                 .build();
         
         publisher.publishEvent(restartEvent);
+    }
+
+    /**
+     * The listener handed to yaci for one sync session. Callbacks that arrive after a newer session started, or after
+     * the sync was stopped, are ignored. While a callback runs, the thread is marked as working for this session, so
+     * the publishers can refuse to commit if a restart starts a new session in the meantime.
+     */
+    private class SessionListener implements BlockChainDataListener {
+        private final long session;
+
+        SessionListener(long session) {
+            this.session = session;
+        }
+
+        private void call(String what, Runnable callback) {
+            if (!sessionGuard.isCurrent(session)) {
+                log.warn("Ignoring {} from old sync session {} (current: {})", what, session, sessionGuard.currentSession());
+                return;
+            }
+            Long previous = sessionGuard.enter(session);
+            try {
+                callback.run();
+            } finally {
+                sessionGuard.exit(previous);
+            }
+        }
+
+        @Override
+        public void onBlock(Era era, Block block, List<Transaction> transactions) {
+            call("block", () -> BlockFetchService.this.onBlock(era, block, transactions));
+        }
+
+        @Override
+        public void onByronBlock(ByronMainBlock byronBlock) {
+            call("Byron block", () -> BlockFetchService.this.onByronBlock(byronBlock));
+        }
+
+        @Override
+        public void onByronEbBlock(ByronEbBlock byronEbBlock) {
+            call("Byron EB block", () -> BlockFetchService.this.onByronEbBlock(byronEbBlock));
+        }
+
+        @Override
+        public void onRollback(Point point) {
+            call("rollback to " + point, () -> BlockFetchService.this.onRollback(point));
+        }
+
+        @Override
+        public void batchDone() {
+            call("batch done", BlockFetchService.this::batchDone);
+        }
+
+        @Override
+        public void onParsingError(BlockParseRuntimeException e) {
+            call("parse error", () -> BlockFetchService.this.onParsingError(e));
+        }
+
+        @Override
+        public void intersactNotFound(Tip tip) {
+            call("intersect not found", () -> BlockFetchService.this.intersactNotFound(tip));
+        }
     }
 }
