@@ -38,6 +38,8 @@ class BlockFetchServiceSessionTest {
     private static final String START_HASH = "h100";
 
     private BlockSync blockSync;
+    private BlockRangeSync blockRangeSync;
+    private StoreProperties storeProperties;
     private CursorService cursorService;
     private ShelleyBlockEventPublisher shelleyPublisher;
     private SyncSessionGuard guard;
@@ -46,17 +48,18 @@ class BlockFetchServiceSessionTest {
     @BeforeEach
     void setUp() {
         blockSync = mock(BlockSync.class);
+        blockRangeSync = mock(BlockRangeSync.class);
         cursorService = mock(CursorService.class);
         shelleyPublisher = mock(ShelleyBlockEventPublisher.class);
         EraService eraService = mock(EraService.class);
-        StoreProperties storeProperties = mock(StoreProperties.class);
+        storeProperties = mock(StoreProperties.class);
         when(storeProperties.getKeepAliveInterval()).thenReturn(60_000);
         when(eraService.getEpochNo(eq(Era.Conway), anyLong())).thenReturn(100);
 
         blockFetchService = new BlockFetchService(
                 mock(ApplicationEventPublisher.class),
                 mock(MetricsService.class),
-                mock(BlockRangeSync.class),
+                blockRangeSync,
                 blockSync,
                 cursorService,
                 eraService,
@@ -148,6 +151,48 @@ class BlockFetchServiceSessionTest {
         }
 
         verify(blockSync, times(1)).startSync(any(), any());
+    }
+
+    @Test
+    void lateBatchDoneDoesNotStopTheSessionThatReplacedIt() throws Exception {
+        //#1344 finding 3: the old range session's batchDone passes the session check, then waits for the lock while a
+        //restart starts a new range fetch. It must not stop the new fetch.
+        when(storeProperties.isPrimaryInstance()).thenReturn(true);
+        when(cursorService.getCursor()).thenReturn(Optional.of(
+                Cursor.builder().slot(100L).block(100L).blockHash(START_HASH).prevBlockHash("h99").era(Era.Conway).build()));
+        blockFetchService.startFetch(new Point(100, START_HASH), new Point(200, "h200"), 100L);
+        var captor = ArgumentCaptor.forClass(BlockChainDataListener.class);
+        verify(blockRangeSync).restart(captor.capture());
+        BlockChainDataListener oldSession = captor.getValue();
+
+        var error = new java.util.concurrent.atomic.AtomicReference<Throwable>();
+        Thread lateBatchDone;
+        synchronized (blockFetchService) {
+            lateBatchDone = new Thread(() -> {
+                try {
+                    oldSession.batchDone();
+                } catch (Throwable e) {
+                    error.set(e);
+                }
+            });
+            lateBatchDone.start();
+            long deadline = System.currentTimeMillis() + 10_000;
+            while (lateBatchDone.getState() != Thread.State.BLOCKED) {
+                if (System.currentTimeMillis() > deadline)
+                    throw new AssertionError("batchDone did not wait for the lock: " + lateBatchDone.getState());
+                Thread.sleep(5);
+            }
+
+            //The restart
+            blockFetchService.startFetch(new Point(100, START_HASH), new Point(200, "h200"), 100L);
+            clearInvocations(blockRangeSync, blockSync);
+        }
+        lateBatchDone.join(10_000);
+        assertThat(lateBatchDone.isAlive()).isFalse();
+
+        assertThat(error.get()).isNull();
+        verify(blockRangeSync, never()).stop();
+        verify(blockSync, never()).startSync(any(), any());
     }
 
     private BlockChainDataListener startSyncAndGetListener() {
