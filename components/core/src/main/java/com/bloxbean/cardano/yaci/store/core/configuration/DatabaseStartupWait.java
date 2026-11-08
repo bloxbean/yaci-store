@@ -8,22 +8,45 @@ import org.springframework.stereotype.Component;
 
 import javax.sql.DataSource;
 import java.sql.Connection;
+import java.util.function.LongSupplier;
 
 /**
  * Waits for the database when the app starts before it is reachable, for example when the app and PostgreSQL start
  * together after a host restart and PostgreSQL is still recovering. Without it the first use of the DataSource
  * (Flyway resolving its locations) fails and the app exits.
  * <p>
- * Runs right after the DataSource bean is created, before anything uses it. Waits up to
+ * Runs right after the DataSource bean is created, before anything uses it. Retries every 5 s for up to
  * {@code store.db.startup-wait-seconds} (default 300, 0 to turn it off), then lets the startup fail as before.
+ * No new attempt starts after that budget is used up.
+ * <p>
+ * The budget does not cut short a single {@code getConnection()} call that hangs (for example a host that drops
+ * packets). That call is bounded by the pool/driver connection timeout instead
+ * ({@code spring.datasource.hikari.connection-timeout}, 30 s by default), so the total wait can exceed the budget
+ * by up to one such timeout.
  */
 @Component
 @Slf4j
 public class DatabaseStartupWait implements BeanPostProcessor, EnvironmentAware {
     static final String WAIT_SECONDS_PROPERTY = "store.db.startup-wait-seconds";
-    private static final long RETRY_INTERVAL_MS = 5_000;
+    static final long RETRY_INTERVAL_MS = 5_000;
 
+    interface Sleeper {
+        void sleep(long millis) throws InterruptedException;
+    }
+
+    private final LongSupplier clockMillis;
+    private final Sleeper sleeper;
     private long waitSeconds = 300;
+
+    public DatabaseStartupWait() {
+        this(() -> System.nanoTime() / 1_000_000, Thread::sleep);
+    }
+
+    //for tests
+    DatabaseStartupWait(LongSupplier clockMillis, Sleeper sleeper) {
+        this.clockMillis = clockMillis;
+        this.sleeper = sleeper;
+    }
 
     @Override
     public void setEnvironment(Environment environment) {
@@ -38,7 +61,7 @@ public class DatabaseStartupWait implements BeanPostProcessor, EnvironmentAware 
     }
 
     void waitFor(DataSource dataSource, String name) {
-        long deadline = System.currentTimeMillis() + waitSeconds * 1000;
+        long deadline = clockMillis.getAsLong() + waitSeconds * 1000;
         int attempt = 0;
         while (true) {
             attempt++;
@@ -47,20 +70,32 @@ public class DatabaseStartupWait implements BeanPostProcessor, EnvironmentAware 
                     log.info("Database '{}' is reachable after {} attempts", name, attempt);
                 return;
             } catch (Exception e) {
-                if (System.currentTimeMillis() >= deadline) {
-                    log.error("Database '{}' still not reachable after {} s. Giving up.", name, waitSeconds);
-                    return; //the startup continues and fails on the first use, as without this wait
+                long remaining = deadline - clockMillis.getAsLong();
+                if (remaining <= 0) {
+                    giveUp(name, attempt);
+                    return;
                 }
-                log.warn("Database '{}' not reachable yet ({}). Trying again in {} s ...", name, rootMessage(e),
-                        RETRY_INTERVAL_MS / 1000);
+                long pause = Math.min(RETRY_INTERVAL_MS, remaining);
+                log.warn("Database '{}' not reachable yet ({}). Trying again in {} ms ...", name, rootMessage(e), pause);
                 try {
-                    Thread.sleep(RETRY_INTERVAL_MS);
+                    sleeper.sleep(pause);
                 } catch (InterruptedException ie) {
                     Thread.currentThread().interrupt();
+                    log.warn("Interrupted while waiting for database '{}'. Not waiting any longer.", name);
+                    return;
+                }
+                //don't start an attempt after the budget is used up
+                if (clockMillis.getAsLong() >= deadline) {
+                    giveUp(name, attempt);
                     return;
                 }
             }
         }
+    }
+
+    private void giveUp(String name, int attempts) {
+        //the startup continues and fails on the first use, as without this wait
+        log.error("Database '{}' still not reachable after {} s ({} attempts). Giving up.", name, waitSeconds, attempts);
     }
 
     private static String rootMessage(Throwable e) {
