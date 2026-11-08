@@ -27,7 +27,8 @@ public class CursorStorageImpl implements CursorStorage {
                 .era(cursor.getEra() != null? cursor.getEra().getValue(): null)
                 .build();
 
-        cursorRepository.save(cursorEntity);
+        //Flush now, not at commit: SyncSessionGuard.writeIfCurrent checks the session again after this write
+        cursorRepository.saveAndFlush(cursorEntity);
     }
 
     @Transactional
