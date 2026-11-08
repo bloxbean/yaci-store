@@ -142,6 +142,10 @@ def frames(mode_proto, payload):
     return b"".join(frame(mode_proto, payload[i:i + MAX_SEG]) for i in range(0, len(payload), MAX_SEG))
 
 
+# Most bytes of stalled frames kept per connection before the proxy stops reading from the node
+HELD_CAP = 64 * 1024 * 1024
+
+
 class State:
     def __init__(self, a):
         self.a = a
@@ -172,6 +176,7 @@ class Conn:
         self.st, self.cr, self.cw, self.ur, self.uw = st, cr, cw, ur, uw
         self.fetch_buf = bytearray()
         self.held = []
+        self.held_bytes = 0
         self.closed = False
         self.s2c_lock = asyncio.Lock()   # frames must reach the client in order, also while held ones are released
 
@@ -255,7 +260,14 @@ class Conn:
                 async with self.s2c_lock:
                     if proto in st.stalled:
                         self.held.append((mp, p, hdr))
+                        self.held_bytes += len(p) + len(hdr)
                         st.c["frames_held"] += 1
+                        if self.held_bytes > HELD_CAP:
+                            # Stop reading from the node while the stall lasts, so TCP holds it back. Without this
+                            # a range fetch keeps streaming blocks and every one is kept in memory (gigabytes).
+                            st.c["held_cap_waits"] += 1
+                            while proto in st.stalled and not self.closed:
+                                await asyncio.sleep(0.2)
                         continue
                     await self.release_locked()
                     await self.on_frame(mp, p, hdr)
@@ -276,6 +288,7 @@ class Conn:
             else:
                 await self.on_frame(*f)
         self.held = keep
+        self.held_bytes = sum(len(f[1]) + len(f[2]) for f in keep)
 
     async def on_frame(self, mp, p, hdr):
         proto = mp & 0x7fff
