@@ -131,7 +131,7 @@ class BlockFetchServiceRollbackTest {
         assertThat(ReflectionTestUtils.getField(blockFetchService, "previousEra")).isEqualTo(Era.Byron);
     }
 
-    // Preprod and mainnet: k = 2160 blocks, f = 0.05, so the deepest valid rollback is 3k/f = 129600 slots.
+    // Preprod and mainnet: k = 2160 blocks, f = 0.05, so the slot fallback allows 3k/f = 129600 slots.
     private void mainnetLikeGenesis() {
         when(genesisConfig.getSecurityParam()).thenReturn(2160);
         when(genesisConfig.getActiveSlotsCoeff()).thenReturn(0.05);
@@ -247,6 +247,25 @@ class BlockFetchServiceRollbackTest {
 
         verify(cursorService).rollback(100L);
         assertThat(blockFetchService.isError()).isFalse();
+    }
+
+    @Test
+    void sparseRollbackWithoutCursorRowTakesTheRestartPath() {
+        // The slot fallback is a heuristic: one block back across a 40-slot gap, but the point has no cursor row
+        // (range-fetched or cleaned up), so only the slot distance is known. It is refused, and the sync restarts
+        // from the cursor instead of writing on top of newer data.
+        when(genesisConfig.getSecurityParam()).thenReturn(10);
+        when(genesisConfig.getActiveSlotsCoeff()).thenReturn(1.0);
+        when(cursorService.getCursor()).thenReturn(Optional.of(cursor(140L, 51L, "current", Era.Conway)));
+        when(cursorService.getCursorByBlockHash("parent")).thenReturn(Optional.empty());
+
+        blockFetchService.onRollback(new Point(100L, "parent"));
+
+        verify(cursorService, never()).rollback(anyLong());
+        assertThat(blockFetchService.isError()).isTrue();
+        var captor = ArgumentCaptor.forClass(Object.class);
+        verify(publisher).publishEvent(captor.capture());
+        assertThat(captor.getValue()).isInstanceOf(RequiredSyncRestartEvent.class);
     }
 
     @Test

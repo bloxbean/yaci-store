@@ -463,6 +463,11 @@ public class BlockFetchService implements BlockChainDataListener {
      * The cursor table has one row per block in chain-sync, but only one row per batch for blocks written by the
      * range fetch, and old rows are cleaned up. When the point has no row, fall back to slots: 3k/f slots is the
      * window in which the chain normally has k blocks (129600 slots on mainnet and preprod).
+     * <p>
+     * The slot check is only a heuristic. It is not the deepest valid rollback in slots: after a long run of empty
+     * slots, a rollback of fewer than k blocks can be more than 3k/f slots deep. It is refused only when the point has
+     * no cursor row. A refused rollback is not lost: the session stops and the restart finds the intersection again
+     * from the stored cursors, so the cost is a restart, not wrong data.
      */
     String checkRollbackDepth(Point point, Point currentPoint, long currentBlockNum) {
         long k = securityParam();
