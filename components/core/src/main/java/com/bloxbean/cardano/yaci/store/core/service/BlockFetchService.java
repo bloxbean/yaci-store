@@ -40,6 +40,7 @@ import java.util.Map;
 import java.util.LinkedHashMap;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 
 import static com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig.DEFAULT_SECURITY_PARAM;
 
@@ -747,6 +748,22 @@ public class BlockFetchService implements BlockChainDataListener {
      *                        already processed.
      */
     public synchronized void startFetch(Point from, Point to, Long fromBlockNumber) {
+        startFetch(from, to, fromBlockNumber, new AtomicBoolean());
+    }
+
+    /**
+     * Like {@link #startFetch(Point, Point, Long)}, but gives up if the node has not completed the connection within
+     * {@code timeoutMs} (0: no limit). yaci opens the connection and waits for the handshake inside the call, with
+     * no time limit.
+     *
+     * @throws NodeNotAnsweringException if the node did not answer in time
+     */
+    public void startFetchWithTimeout(Point from, Point to, Long fromBlockNumber, long timeoutMs) {
+        startWithTimeout("start the block fetch", timeoutMs,
+                cancelled -> startFetch(from, to, fromBlockNumber, cancelled), blockRangeSync::stop);
+    }
+
+    private synchronized void startFetch(Point from, Point to, Long fromBlockNumber, AtomicBoolean cancelled) {
         if (sessionGuard.isCallerStale()) {
             log.warn("Not starting a range fetch from {}: asked by an old sync session", from);
             return;
@@ -761,6 +778,9 @@ public class BlockFetchService implements BlockChainDataListener {
         syncMode = false;
         cursorService.setSyncMode(syncMode);
         blockRangeSync.restart(new SessionListener(sessionGuard.newSession()));
+        // yaci logs a cancelled handshake and returns: do not go on with a closed connection
+        if (cancelled.get())
+            throw new NodeNotAnsweringException("Cancelled: start the block fetch");
         blockRangeSync.fetch(from, to);
         lastSessionStartTime = System.currentTimeMillis();
 
@@ -776,6 +796,21 @@ public class BlockFetchService implements BlockChainDataListener {
      *                        null. Chain sync delivers the blocks after {@code from}, so the first one must build on it.
      */
     public synchronized void startSync(Point from, Long fromBlockNumber) {
+        startSync(from, fromBlockNumber, new AtomicBoolean());
+    }
+
+    /**
+     * Like {@link #startSync(Point, Long)}, but gives up if the node has not completed the connection within
+     * {@code timeoutMs} (0: no limit).
+     *
+     * @throws NodeNotAnsweringException if the node did not answer in time
+     */
+    public void startSyncWithTimeout(Point from, Long fromBlockNumber, long timeoutMs) {
+        startWithTimeout("start the block sync", timeoutMs,
+                cancelled -> startSync(from, fromBlockNumber, cancelled), blockSync::stop);
+    }
+
+    private synchronized void startSync(Point from, Long fromBlockNumber, AtomicBoolean cancelled) {
         //e.g. an old range session finishing a long batchDone after a restart started a new session
         if (sessionGuard.isCallerStale()) {
             log.warn("Not starting chain sync from {}: asked by an old sync session", from);
@@ -797,8 +832,27 @@ public class BlockFetchService implements BlockChainDataListener {
         expectedPrevBlockHash = from.getHash();
         restoreEpochStateForStart(from, fromBlockNumber);
         blockSync.startSync(from, new SessionListener(sessionGuard.newSession()));
+        if (cancelled.get())
+            throw new NodeNotAnsweringException("Cancelled: start the block sync");
         lastSessionStartTime = System.currentTimeMillis();
         startKeepAliveThread(syncMode);
+    }
+
+    private void startWithTimeout(String what, long timeoutMs, Consumer<AtomicBoolean> start, Runnable closeConnection) {
+        AtomicBoolean cancelled = new AtomicBoolean();
+        if (timeoutMs <= 0) {
+            start.accept(cancelled);
+            return;
+        }
+
+        NodeCalls.call(what, timeoutMs, () -> {
+            start.accept(cancelled);
+            return null;
+        }, () -> {
+            cancelled.set(true);
+            // Not through shutdownRangeSync()/shutdownSync(): the stalled start holds this object's monitor.
+            closeConnection.run();
+        });
     }
 
     public synchronized void shutdown() {
@@ -997,7 +1051,11 @@ public class BlockFetchService implements BlockChainDataListener {
     @Override
     public void intersactNotFound(Tip tip) {
         log.error("Intersection not found. Current tip: {}", tip);
-        
+
+        // Mark the session failed first. A restart request that is dropped (another restart is running, or within
+        // the debounce window) is only tried again while the sync is in the error state.
+        setError();
+
         // Publish restart event
         RequiredSyncRestartEvent restartEvent = RequiredSyncRestartEvent.builder()
                 .reason("IntersectionNotFound")

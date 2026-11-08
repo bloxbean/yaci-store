@@ -109,23 +109,23 @@ class RequiredRestartProcessorTest {
     @Test
     void restartStopsThenStartsWithTheTokenFromItsOwnStop() {
         processor.shutdownWaitMs = 0;
-        when(startService.stopForRestart()).thenReturn(7L);
+        when(startService.stopForRestart(3L)).thenReturn(7L);
         when(startService.startAfterRestart(7L)).thenReturn(true);
 
-        processor.performRestart(event);
+        processor.performRestart(event, 3L);
 
         var order = inOrder(startService);
-        order.verify(startService).stopForRestart();
+        order.verify(startService).stopForRestart(3L);
         order.verify(startService).startAfterRestart(7L);
     }
 
     @Test
     void failedStartPropagatesSoItIsLogged() {
         processor.shutdownWaitMs = 0;
-        when(startService.stopForRestart()).thenReturn(1L);
+        when(startService.stopForRestart(0L)).thenReturn(1L);
         doThrow(new IllegalStateException("database down")).when(startService).startAfterRestart(1L);
 
-        assertThatThrownBy(() -> processor.performRestart(event)).hasMessage("database down");
+        assertThatThrownBy(() -> processor.performRestart(event, 0L)).hasMessage("database down");
     }
 
     @Test
@@ -147,7 +147,7 @@ class RequiredRestartProcessorTest {
         when(storeProperties.getAutoRestartBackoffBaseMs()).thenReturn(0L);
         processor.shutdownWaitMs = 0;
         processor.retryCheckDelayMs = 20;
-        when(startService.stopForRestart()).thenReturn(1L);
+        when(startService.stopForRestart(0L)).thenReturn(1L);
         var secondStart = new java.util.concurrent.CountDownLatch(1);
         when(startService.startAfterRestart(1L))
                 .thenThrow(new IllegalStateException("database down"))
@@ -177,6 +177,6 @@ class RequiredRestartProcessorTest {
 
         assertThat(checked.await(5, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
         Thread.sleep(100);
-        verify(startService, never()).stopForRestart();
+        verify(startService, never()).stopForRestart(org.mockito.ArgumentMatchers.anyLong());
     }
 }

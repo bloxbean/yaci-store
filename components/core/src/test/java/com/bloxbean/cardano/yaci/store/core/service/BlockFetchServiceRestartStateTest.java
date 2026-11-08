@@ -23,6 +23,10 @@ class BlockFetchServiceRestartStateTest {
     @BeforeEach
     void setUp() {
         blockRangeSync = mock(BlockRangeSync.class);
+        StoreProperties storeProperties = mock(StoreProperties.class);
+        // A started session runs a keep-alive thread. With the mock's interval of 0 it would spin and record
+        // calls on the mock until the test JVM runs out of memory.
+        when(storeProperties.getKeepAliveInterval()).thenReturn(60_000);
         blockFetchService = new BlockFetchService(
                 mock(ApplicationEventPublisher.class),
                 mock(MetricsService.class),
@@ -30,7 +34,7 @@ class BlockFetchServiceRestartStateTest {
                 mock(BlockSync.class),
                 mock(CursorService.class),
                 mock(EraService.class),
-                mock(StoreProperties.class),
+                storeProperties,
                 mock(GenesisConfig.class),
                 mock(ShelleyBlockEventPublisher.class),
                 mock(ByronBlockEventPublisher.class),
@@ -46,6 +50,16 @@ class BlockFetchServiceRestartStateTest {
 
         assertThat(blockFetchService.isScheduledToStop()).isFalse();
         assertThat(blockFetchService.isError()).isTrue();
+    }
+
+    @Test
+    void intersectionNotFoundMarksTheSessionFailed() {
+        blockFetchService.intersactNotFound(new com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Tip(
+                new com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point(9, "bb"), 2));
+
+        // a dropped restart request is only tried again while the sync is in the error state
+        assertThat(blockFetchService.isError()).isTrue();
+        assertThat(blockFetchService.isScheduledToStop()).isFalse();
     }
 
     @Test
