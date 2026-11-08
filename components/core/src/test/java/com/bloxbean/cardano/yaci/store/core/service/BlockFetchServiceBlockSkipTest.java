@@ -256,6 +256,47 @@ class BlockFetchServiceBlockSkipTest {
     }
 
     @Test
+    void parseErrorWithUnknownNumberAfterAMissingBlockStopsTheSync() {
+        blockFetchService.startSync(new Point(100, START_HASH), 100L);
+
+        //101 never arrives, then a block fails to parse and yaci could not read its number either
+        blockFetchService.onParsingError(new BlockParseRuntimeException(null, null, new RuntimeException("bad cbor")));
+        Block next = block(103, "h103", "h102");
+        deliver(next);
+
+        verify(shelleyPublisher, never()).publishBlockEvents(any(), eq(next), any());
+        assertThat(blockFetchService.isError()).isTrue();
+        verify(publisher).publishEvent(any(RequiredSyncRestartEvent.class));
+    }
+
+    @Test
+    void parseErrorWithUnknownNumberOfTheNextBlockIsSkipped() {
+        blockFetchService.startSync(new Point(100, START_HASH), 100L);
+        deliver(block(101, "h101", START_HASH));
+
+        //102 fails to parse, number unknown: 103 is the block after it
+        blockFetchService.onParsingError(new BlockParseRuntimeException(null, null, new RuntimeException("bad cbor")));
+        Block next = block(103, "h103", "h102");
+        deliver(next);
+
+        verify(shelleyPublisher).publishBlockEvents(any(), eq(next), any());
+        assertThat(blockFetchService.isError()).isFalse();
+    }
+
+    @Test
+    void parseErrorWithUnknownNumberOfAByronEpochBoundaryBlockIsSkipped() {
+        blockFetchService.startSync(new Point(100, START_HASH), 100L);
+
+        //The epoch boundary block after 100 fails to parse, number unknown: 101 is the next main block
+        blockFetchService.onParsingError(new BlockParseRuntimeException(null, null, new RuntimeException("bad cbor")));
+        Block next = block(101, "h101", "ebb");
+        deliver(next);
+
+        verify(shelleyPublisher).publishBlockEvents(any(), eq(next), any());
+        assertThat(blockFetchService.isError()).isFalse();
+    }
+
+    @Test
     void parseErrorOfAByronEpochBoundaryBlockIsSkipped() {
         //The epoch boundary block has the same number as the main block before it
         blockFetchService.startSync(new Point(100, START_HASH), 100L);

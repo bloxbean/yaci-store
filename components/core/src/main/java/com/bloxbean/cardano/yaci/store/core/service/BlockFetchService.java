@@ -505,9 +505,16 @@ public class BlockFetchService implements BlockChainDataListener {
             //The skipped block's hash is not known, so accept the next block without the link check
             expectedPrevBlockHash = null;
             //The next block must be the one after the skipped block, or a Byron epoch boundary block with the same
-            //number. If the skipped block's number is not known, accept the next block without a number check.
+            //number. If the skipped block's number is not known, take it as the block after the last accepted one:
+            //then the next block may be the one after it (or, for a skipped Byron epoch boundary block, the one after
+            //the last accepted block), and any other number is a missing block.
             Long skippedBlockNumber = e.getBlockNumber(); //null when yaci could not decode the header either
-            lastAcceptedBlockNumber = skippedBlockNumber != null && skippedBlockNumber > 0 ? skippedBlockNumber : -1;
+            if (skippedBlockNumber != null && skippedBlockNumber > 0)
+                lastAcceptedBlockNumber = skippedBlockNumber;
+            else if (lastNumber >= 0)
+                lastAcceptedBlockNumber = lastNumber + 1;
+            else
+                lastAcceptedBlockNumber = -1;
         } else {
             stopSyncOnError();
             throw new RuntimeException(e);
