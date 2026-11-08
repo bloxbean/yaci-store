@@ -6,12 +6,14 @@ import com.bloxbean.cardano.yaci.helper.BlockSync;
 import com.bloxbean.cardano.yaci.helper.listener.BlockChainDataListener;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
@@ -103,6 +105,20 @@ class BlockFinderTimeoutTest {
 
         // The late answer must not throw or change anything
         listener.get().intersactFound(new Tip(point, 1), point);
+    }
+
+    @Test
+    void withNoLimitOnTheConnectionTheAnswerIsStillWaitedForOnlySoLong() {
+        // auto-restart off: no limit on the connection, but a node that connects and never answers must not
+        // hold the startup forever
+        BlockSync silent = mock(BlockSync.class); // connects, then never answers
+        BlockFinder blockFinder = new BlockFinder(silent);
+        blockFinder.answerTimeoutMs = 300;
+
+        assertTimeoutPreemptively(Duration.ofSeconds(10), () ->
+                assertThatThrownBy(() -> blockFinder.blockExists(point, 0))
+                        .isInstanceOf(NodeNotAnsweringException.class));
+        verify(silent, atLeastOnce()).stop();
     }
 
     @Test

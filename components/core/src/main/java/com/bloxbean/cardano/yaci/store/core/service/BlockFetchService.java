@@ -41,6 +41,7 @@ import java.util.Map;
 import java.util.LinkedHashMap;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 
 import static com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig.DEFAULT_SECURITY_PARAM;
 
@@ -534,12 +535,22 @@ public class BlockFetchService implements BlockChainDataListener {
     //Synchronized like startFetch/startSync, which open the new session: the check below and the shutdown happen
     //together, so a late batchDone cannot stop the connection of the session that replaced it
     @Override
-    public synchronized void batchDone() {
+    public void batchDone() {
+        //Chain sync starts after the lock is released: its PreBlockSyncEvent listeners may run for a while
+        Cursor next = batchDoneUnderLock();
+        if (next != null) {
+            log.info("Start N2N sync from block >> " + next.getBlock());
+            startSync(new Point(next.getSlot(), next.getBlockHash()), next.getBlock());
+        }
+    }
+
+    //Returns the cursor to start chain sync from, or null
+    private synchronized Cursor batchDoneUnderLock() {
 
         //An old range session must not stop the fetcher of the session that replaced it
         if (sessionGuard.isCallerStale()) {
             log.warn("Ignoring batch done from an old sync session");
-            return;
+            return null;
         }
 
         if (!syncMode) {
@@ -550,20 +561,12 @@ public class BlockFetchService implements BlockChainDataListener {
                 shutdownRangeSync();
 
                 //If primary instance, start sync
-                //start sync
-                cursorService.getCursor()
-                        .ifPresent(cursor -> {
-                            String blockHash = cursor.getBlockHash();
-                            long slot = cursor.getSlot();
-
-                            log.info("Start N2N sync from block >> " + cursor.getBlock());
-                            //Start sync
-                            startSync(new Point(slot, blockHash), cursor.getBlock());
-                        });
+                return cursorService.getCursor().orElse(null);
             } else {
                 log.info("Blockfetch done");
             }
         }
+        return null;
     }
 
     @Override
@@ -748,6 +751,22 @@ public class BlockFetchService implements BlockChainDataListener {
      *                        already processed.
      */
     public synchronized void startFetch(Point from, Point to, Long fromBlockNumber) {
+        startFetch(from, to, fromBlockNumber, new AtomicBoolean());
+    }
+
+    /**
+     * Like {@link #startFetch(Point, Point, Long)}, but gives up if the node has not completed the connection within
+     * {@code timeoutMs} (0: no limit). yaci opens the connection and waits for the handshake inside the call, with
+     * no time limit.
+     *
+     * @throws NodeNotAnsweringException if the node did not answer in time
+     */
+    public void startFetchWithTimeout(Point from, Point to, Long fromBlockNumber, long timeoutMs) {
+        startWithTimeout("start the block fetch", timeoutMs,
+                cancelled -> startFetch(from, to, fromBlockNumber, cancelled), blockRangeSync::stop);
+    }
+
+    private synchronized void startFetch(Point from, Point to, Long fromBlockNumber, AtomicBoolean cancelled) {
         if (sessionGuard.isCallerStale()) {
             log.warn("Not starting a range fetch from {}: asked by an old sync session", from);
             return;
@@ -762,6 +781,9 @@ public class BlockFetchService implements BlockChainDataListener {
         syncMode = false;
         cursorService.setSyncMode(syncMode);
         blockRangeSync.restart(new SessionListener(sessionGuard.newSession()));
+        // yaci logs a cancelled handshake and returns: do not go on with a closed connection
+        if (cancelled.get())
+            throw new NodeNotAnsweringException("Cancelled: start the block fetch");
         blockRangeSync.fetch(from, to);
         lastSessionStartTime = System.currentTimeMillis();
 
@@ -777,18 +799,38 @@ public class BlockFetchService implements BlockChainDataListener {
      *                        null. Chain sync delivers the blocks after {@code from}, so the first one must build on it.
      */
     public void startSync(Point from, Long fromBlockNumber) {
+        if (!beforeChainSync(from))
+            return;
+        startSync(from, fromBlockNumber, new AtomicBoolean());
+    }
+
+    //Publishes PreBlockSyncEvent before chain sync starts. Outside the lock and outside any start time limit: a
+    //listener may run for a while (e.g. the unspent table build, #1271). False if the caller is an old session.
+    private boolean beforeChainSync(Point from) {
         //e.g. an old range session finishing a long batchDone after a restart started a new session
         if (sessionGuard.isCallerStale()) {
             log.warn("Not starting chain sync from {}: asked by an old sync session", from);
-            return;
+            return false;
         }
-        //Outside the lock: a listener may run for a while
         publisher.publishEvent(new PreBlockSyncEvent(from));
-        doStartSync(from, fromBlockNumber);
+        return true;
     }
 
-    private synchronized void doStartSync(Point from, Long fromBlockNumber) {
-        //Checked again: the session may have been replaced while the listeners ran
+    /**
+     * Like {@link #startSync(Point, Long)}, but gives up if the node has not completed the connection within
+     * {@code timeoutMs} (0: no limit).
+     *
+     * @throws NodeNotAnsweringException if the node did not answer in time
+     */
+    public void startSyncWithTimeout(Point from, Long fromBlockNumber, long timeoutMs) {
+        if (!beforeChainSync(from))
+            return;
+        startWithTimeout("start the block sync", timeoutMs,
+                cancelled -> startSync(from, fromBlockNumber, cancelled), blockSync::stop);
+    }
+
+    private synchronized void startSync(Point from, Long fromBlockNumber, AtomicBoolean cancelled) {
+        //Checked again: the session may have been replaced while the PreBlockSyncEvent listeners ran
         if (sessionGuard.isCallerStale()) {
             log.warn("Not starting chain sync from {}: asked by an old sync session", from);
             return;
@@ -809,8 +851,27 @@ public class BlockFetchService implements BlockChainDataListener {
         expectedPrevBlockHash = from.getHash();
         restoreEpochStateForStart(from, fromBlockNumber);
         blockSync.startSync(from, new SessionListener(sessionGuard.newSession()));
+        if (cancelled.get())
+            throw new NodeNotAnsweringException("Cancelled: start the block sync");
         lastSessionStartTime = System.currentTimeMillis();
         startKeepAliveThread(syncMode);
+    }
+
+    private void startWithTimeout(String what, long timeoutMs, Consumer<AtomicBoolean> start, Runnable closeConnection) {
+        AtomicBoolean cancelled = new AtomicBoolean();
+        if (timeoutMs <= 0) {
+            start.accept(cancelled);
+            return;
+        }
+
+        NodeCalls.call(what, timeoutMs, () -> {
+            start.accept(cancelled);
+            return null;
+        }, () -> {
+            cancelled.set(true);
+            // Not through shutdownRangeSync()/shutdownSync(): the stalled start holds this object's monitor.
+            closeConnection.run();
+        });
     }
 
     public synchronized void shutdown() {
@@ -1009,7 +1070,11 @@ public class BlockFetchService implements BlockChainDataListener {
     @Override
     public void intersactNotFound(Tip tip) {
         log.error("Intersection not found. Current tip: {}", tip);
-        
+
+        // Mark the session failed first. A restart request that is dropped (another restart is running, or within
+        // the debounce window) is only tried again while the sync is in the error state.
+        setError();
+
         // Publish restart event
         RequiredSyncRestartEvent restartEvent = RequiredSyncRestartEvent.builder()
                 .reason("IntersectionNotFound")

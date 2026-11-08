@@ -42,8 +42,10 @@ public class StartService {
 
     private volatile boolean alreadyStarted;
     // Incremented by every stop(), so the auto-restart can tell whether someone else stopped the sync while it
-    // was waiting between its own stop and start.
-    private long stopCount;
+    // was waiting (its backoff, or between its own stop and start). Written only under the lock.
+    private volatile long stopCount;
+    // Time limit for opening the live session when auto-restart is on. Not final so tests can shorten it.
+    long sessionStartTimeoutMs = NodeCalls.DEFAULT_TIMEOUT_MS;
 
     public synchronized void start() {
         if (alreadyStarted)
@@ -187,13 +189,16 @@ public class StartService {
         if (blockNumber != null && blockNumber > 0L)
             publisher.publishEvent(new PreSyncEvent(blockNumber));
 
+        // The live connection has a time limit too: a node that stops answering after the checks above would
+        // otherwise hold start() (and the restart lock) forever.
+        long sessionTimeoutMs = NodeCalls.timeoutMs(storeProperties) > 0 ? sessionStartTimeoutMs : 0;
         if (fetchRange) {
             if (storeProperties.isPrimaryInstance())
                 log.info("Start BlockRangeSync");
-            blockFetchService.startFetch(from, to, processedBlockNumber);
+            blockFetchService.startFetchWithTimeout(from, to, processedBlockNumber, sessionTimeoutMs);
         } else {
             log.info("Start BlockSync");
-            blockFetchService.startSync(from, processedBlockNumber);
+            blockFetchService.startSyncWithTimeout(from, processedBlockNumber, sessionTimeoutMs);
         }
     }
 
@@ -212,16 +217,30 @@ public class StartService {
     }
 
     /**
-     * First half of an auto-restart: stops the sync and returns a token for {@link #startAfterRestart(long)}.
+     * The number of stops so far. An auto-restart reads it before its backoff and passes it to
+     * {@link #stopForRestart(long)}.
      */
-    public synchronized long stopForRestart() {
+    public long getStopCount() {
+        return stopCount;
+    }
+
+    /**
+     * First half of an auto-restart: stops the sync and returns a token for {@link #startAfterRestart(long)}.
+     * Does nothing and returns -1 if the sync was stopped since {@code stopCountBefore} was read: a deliberate stop
+     * during the restart's backoff must stay.
+     */
+    public synchronized long stopForRestart(long stopCountBefore) {
+        if (stopCount != stopCountBefore) {
+            log.info("The sync was stopped while the restart was waiting. Leaving it stopped.");
+            return -1;
+        }
         stop();
         return stopCount;
     }
 
     /**
      * Second half of an auto-restart. Starts the sync again, unless someone else stopped or started it since
-     * {@link #stopForRestart()}: a deliberate stop (admin API, snapshot job) must stay stopped, and a sync that is
+     * {@link #stopForRestart(long)}: a deliberate stop (admin API, snapshot job) must stay stopped, and a sync that is
      * already running must not get a second session.
      * <p>
      * If the start fails (for example, the database is down), the service is left in a state the health check
