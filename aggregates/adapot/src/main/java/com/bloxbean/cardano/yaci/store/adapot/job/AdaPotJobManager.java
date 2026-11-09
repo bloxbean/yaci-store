@@ -7,6 +7,7 @@ import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobType;
 import com.bloxbean.cardano.yaci.store.adapot.job.storage.AdaPotJobStorage;
 import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
+import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.event.EventListener;
@@ -35,7 +36,9 @@ public class AdaPotJobManager {
     //Package-private so that tests can run without the delays
     long initialDelayMillis = 5000;
     long retryBaseDelayMillis = 10_000;
-    long retryMaxDelayMillis = 300_000;
+    long retryMaxDelayMillis = 1_800_000;
+
+    private volatile Thread processorThread;
 
     private final AdaPotJobStorage adaPotJobStorage;
     private final AdaPotJobProcessor adaPotJobProcessor;
@@ -57,7 +60,7 @@ public class AdaPotJobManager {
 
         if (startProcessor) {
             // Start a virtual thread for job processing
-            Thread.startVirtualThread(this::processJobs);
+            processorThread = Thread.startVirtualThread(this::processJobs);
         }
     }
 
@@ -138,7 +141,7 @@ public class AdaPotJobManager {
                 job = jobQueue.take();
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-                log.warn("AdaPot job processor interrupted. Stopping.");
+                log.info("AdaPot job processor interrupted. Stopping.");
                 return;
             }
 
@@ -161,24 +164,25 @@ public class AdaPotJobManager {
         ActiveJob runningJob = activateJob(job);
         try {
             for (int attempt = 1; ; attempt++) {
-                if (!sleep(initialDelayMillis))
+                if (!sleepUnlessCancelled(initialDelayMillis, runningJob))
                     return false;
 
                 try {
                     if (adaPotJobProcessor.processJob(job, runningJob::isCancelled))
                         return true;
-                    log.error("Reward calculation failed for epoch : {} (attempt {}). Retrying",
-                            job.getEpoch(), attempt);
+                    log.error("Reward calculation failed for epoch : {} (attempt {}). Retrying in {} s",
+                            job.getEpoch(), attempt, retryDelayMillis(attempt) / 1000);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     return false;
-                } catch (Exception e) {
-                    log.error("Error processing reward calc job for epoch : {} (attempt {}). Retrying",
-                            job.getEpoch(), attempt, e);
+                } catch (Throwable e) {
+                    //Also errors such as StackOverflowError: anything that escapes would end the job thread
+                    log.error("Error processing reward calc job for epoch : {} (attempt {}). Retrying in {} s",
+                            job.getEpoch(), attempt, retryDelayMillis(attempt) / 1000, e);
                 }
 
                 //The job stays active while it waits, so that a rollback can still cancel it
-                if (!sleep(retryDelayMillis(attempt)))
+                if (!runningJob.isCancelled() && !sleepUnlessCancelled(retryDelayMillis(attempt), runningJob))
                     return false;
 
                 if (runningJob.isCancelled()) {
@@ -193,20 +197,33 @@ public class AdaPotJobManager {
     }
 
     long retryDelayMillis(int attempt) {
-        long delay = retryBaseDelayMillis << Math.min(attempt - 1, 10);
+        long delay = retryBaseDelayMillis << Math.min(attempt - 1, 20);
         return Math.min(delay, retryMaxDelayMillis);
     }
 
-    private boolean sleep(long millis) {
-        if (millis <= 0)
-            return true;
+    /**
+     * Sleeps in short slices so that a rollback cancelling the job ends the wait early.
+     *
+     * @return false if the thread was interrupted
+     */
+    private boolean sleepUnlessCancelled(long millis, ActiveJob runningJob) {
+        long deadline = System.currentTimeMillis() + millis;
         try {
-            Thread.sleep(millis);
+            for (long left = millis; left > 0 && !runningJob.isCancelled(); left = deadline - System.currentTimeMillis()) {
+                Thread.sleep(Math.min(left, 1000));
+            }
             return true;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return false;
         }
+    }
+
+    @PreDestroy
+    void stop() {
+        Thread thread = processorThread;
+        if (thread != null)
+            thread.interrupt();
     }
 
     int queuedJobCount() {
