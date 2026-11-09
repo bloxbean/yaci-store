@@ -45,6 +45,9 @@ MARKERS = {
  "publishing_rollback": r"Publishing rollback event",
  "unspent_stale": r"(?i)unspent.*(stale|gap)",
  "error_lines": r"\bERROR\b",
+ "adapot_job_failed": r"Adapot job processing failed|Reward calculation failed|Error processing reward calc job",
+ "adapot_mismatch": r"Expected (reserves|treasury):",
+ "adapot_matched": r"Treasury and reserves value matched",
 }
 
 class ReachedTip(Exception):
@@ -58,6 +61,8 @@ class Ctx:
         s.pg = f"yaci-store-postgres-rt-{inst}"
         s.d = f"{R}/inst/{inst}"
         s.logf = f"{s.d}/logs/yaci-store.log"
+        s.consolef = f"{s.d}/logs/console.out"   # Byteman's traceln lines go to stdout only
+        s.job_epoch = None
         s.notes = []
         s.bg = []
         s.stop_bg = threading.Event()
@@ -119,6 +124,27 @@ class Ctx:
             if re.search(pattern, s.log_since(off)): return True
             time.sleep(0.5)
         return False
+    def console_size(s):
+        try: return os.path.getsize(s.consolef)
+        except OSError: return 0
+    def wait_console(s, off, pattern, timeout):
+        t = time.time()
+        while time.time() - t < timeout:
+            try:
+                with open(s.consolef, errors="replace") as f:
+                    f.seek(off if off <= os.path.getsize(s.consolef) else 0)
+                    if re.search(pattern, f.read()): return True
+            except OSError:
+                pass
+            time.sleep(1)
+        return False
+    def has_table(s, t):
+        return s.sql(f"select count(*) from information_schema.tables where table_name='{t}'", timeout=30) == "1"
+    def job(s, epoch):
+        r = s.sql(f"select status, coalesce(left(error_message, 160), '') from adapot_jobs where type='REWARD_CALC' and epoch={epoch}", timeout=30)
+        if not r: return None, None
+        a = r.split(" ", 1)
+        return a[0], (a[1] if len(a) > 1 else "")
     def repeat(s, fn, every, dur):
         def run():
             end = time.time() + dur
@@ -211,6 +237,33 @@ def _kill_backend(c):
 def _machine_crash(c):
     c.signal(signal.SIGKILL); c.docker("kill", c.pg); time.sleep(15); c.docker("start", c.pg); time.sleep(10); c.inst_cmd("start")
 
+CONWAY_SLOT = 68774400   # preprod: first slot of epoch 163, the first Conway epoch
+
+def in_step(rule, action, conway=False, timeout=5400):
+    """Arms a ledger-state Byteman rule, waits until the step runs (the next epoch boundary for the AdaPot job), then acts."""
+    def f(c):
+        if conway:
+            t = time.time()
+            while time.time() - t < 36000:
+                cur = c.cursor()
+                if cur and cur[1] >= CONWAY_SLOT: break
+                time.sleep(30)
+        c.job_epoch = None
+        off = c.console_size(); c.trig(rule)
+        if not c.wait_console(off, r"\[byteman\] " + re.escape(rule) + r"\b", timeout):
+            c.untrig(rule); c.notes.append(f"{rule}: the step did not run within {timeout} s"); return
+        r = c.sql("select epoch from adapot_jobs where type='REWARD_CALC' and status='STARTED' order by epoch desc limit 1") if rule != "account-pause-commit" else None
+        c.job_epoch = int(r) if r else None
+        c.notes.append(f"{rule} fired" + (f" in the job for epoch {c.job_epoch}" if c.job_epoch else ""))
+        action(c)
+    return f
+
+def _kill_restart(down=10):
+    return lambda c: (c.signal(signal.SIGKILL), time.sleep(down), c.inst_cmd("start"))
+def _blocked_on_reward(after):
+    """The reward write starts by deleting the epoch's rewards: lock the table so it blocks there, then act."""
+    return lambda c: (c.lock_table("reward", 150), time.sleep(55), after(c))
+
 BOTH = ("range", "tip"); TIP = ("tip",); RANGE = ("range",)
 SCENARIOS = [
  # --- node connection
@@ -283,6 +336,27 @@ SCENARIOS = [
  Sc("X01", TIP, "Range fetch to sync switch after 38 min down, no fault", inj_at_batch_done(lambda c: None), None, 0, 1500),
  Sc("X02", TIP, "Node reset right at the range to sync switch", inj_at_batch_done(lambda c: c.n("rst")), None, 0, 1500),
  Sc("X03", TIP, "kill -9 right at the range to sync switch", inj_at_batch_done(lambda c: (c.signal(signal.SIGKILL), time.sleep(3), c.inst_cmd("start"))), None, 0, 1500),
+ # --- ledger-state (needs the ledger-state profile): faults inside the epoch-boundary AdaPot job and the account step
+ Sc("L01", RANGE, "kill -9 during the reward calculation, restart after 10 s", in_step("adapot-pause-calc", _kill_restart())),
+ Sc("L02", RANGE, "kill -9 in the middle of the reward write (after the AdaPot update)", in_step("adapot-pause-update", _blocked_on_reward(_kill_restart()))),
+ Sc("L03", RANGE, "Postgres down 210 s during the reward calculation", in_step("adapot-pause-calc", _pg_cmd("stop", "-t", "1")), _pg_cmd("start"), H),
+ Sc("L04", RANGE, "Postgres restarted during the stake snapshot", in_step("adapot-pause-snapshot", _pg_cmd("restart", "-t", "1"))),
+ Sc("L05", RANGE, "All DB connections reset in the middle of the reward write", in_step("adapot-pause-update", _blocked_on_reward(lambda c: c.db("rst")))),
+ Sc("L06", RANGE, "SIGTERM during the stake snapshot, restart after 10 s", in_step("adapot-pause-snapshot", lambda c: (c.inst_cmd("stop"), time.sleep(10), c.inst_cmd("start")))),
+ Sc("L07", RANGE, "The reward calculation throws once", in_step("adapot-fail-calc", lambda c: None)),
+ Sc("L08", RANGE, "The stake snapshot throws once", in_step("adapot-fail-snapshot", lambda c: None)),
+ Sc("L09", RANGE, "Postgres frozen 210 s (docker pause) in the middle of the reward write", in_step("adapot-pause-update", _blocked_on_reward(_pg_cmd("pause"))), _pg_cmd("unpause"), H),
+ Sc("L10", RANGE, "JVM frozen 210 s (SIGSTOP) during the reward calculation", in_step("adapot-pause-calc", lambda c: c.signal(signal.SIGSTOP)), lambda c: c.signal(signal.SIGCONT), H),
+ Sc("L11", RANGE, "App and Postgres killed together in the middle of the reward write", in_step("adapot-pause-update", _blocked_on_reward(_machine_crash))),
+ Sc("L12", RANGE, "kill -9 during the account balance step of a commit", in_step("account-pause-commit", _kill_restart())),
+ Sc("L13", RANGE, "Postgres down 210 s during the account balance step of a commit", in_step("account-pause-commit", _pg_cmd("stop", "-t", "1")), _pg_cmd("start"), H),
+ Sc("L14", RANGE, "Conway: kill -9 during the proposal status update", in_step("gov-pause-proposal", _kill_restart(), conway=True)),
+ Sc("L15", RANGE, "Conway: the proposal status update throws once", in_step("gov-fail-proposal", lambda c: None, conway=True)),
+ Sc("L16", RANGE, "Conway: all DB connections reset during the proposal status update", in_step("gov-pause-proposal", lambda c: c.db("rst"), conway=True)),
+ Sc("L17", RANGE, "Conway: kill -9 during the reward calculation", in_step("adapot-pause-calc", _kill_restart(), conway=True)),
+ Sc("L18", RANGE, "Conway: Postgres down 210 s during the reward calculation", in_step("adapot-pause-calc", _pg_cmd("stop", "-t", "1"), conway=True), _pg_cmd("start"), H),
+ Sc("L19", RANGE, "Conway: kill -9 in the middle of the reward write", in_step("adapot-pause-update", _blocked_on_reward(_kill_restart()), conway=True)),
+ Sc("L20", TIP, "At the tip: kill -9 during the reward calculation at the next epoch boundary", in_step("adapot-pause-calc", _kill_restart(), timeout=5 * 86400)),
 ]
 
 def checks(c, frm, to):
@@ -380,6 +454,18 @@ def run_scenario(c, sc, mode, resdir):
             cc = c.cursor()
             if cc and base and cc[0] > base[0]: break
             time.sleep(5)
+    if c.job_epoch is not None:
+        t = time.time(); st = err = None
+        while time.time() - t < 1800:
+            st, err = c.job(c.job_epoch)
+            if st == "COMPLETED": break
+            time.sleep(10)
+        res["job"] = {"epoch": c.job_epoch, "status": st, "error": err, "completed": st == "COMPLETED",
+                      "wait_s": int(time.time() - t)}
+        c.job_epoch = None
+    if c.has_table("adapot_jobs"):
+        res["adapot_jobs"] = c.sql("select status || ':' || count(*) || ':' || max(epoch) from adapot_jobs group by status order by 1")
+        res["adapot_jobs_not_done"] = c.sql("select epoch || ' ' || status || ' ' || coalesce(left(error_message, 80), '') from adapot_jobs where status <> 'COMPLETED' order by epoch limit 10")
     # let it settle so batches in flight are committed, then check the blocks touched
     time.sleep(35)
     after = c.cursor()
@@ -404,7 +490,8 @@ def main():
     a = ap.parse_args()
     if a.catalog:
         groups = {"N": "Node connection", "B": "Block delivery", "RB": "Rollback", "D": "Database", "J": "JVM and listeners",
-                  "C": "Restart path", "X": "Range fetch to chain-sync switch"}
+                  "C": "Restart path", "X": "Range fetch to chain-sync switch",
+                  "L": "Ledger-state (AdaPot job, account balances, governance)"}
         print("| ID | Fault | Initial sync | At the tip | Fault held for |\n|---|---|---|---|---|")
         last = None
         for sc in SCENARIOS:

@@ -85,12 +85,15 @@ At the tip the scenarios run back to back on one database, so a gap found by one
 | `RT_RELAY` | `preprod-node.play.dev.cardano.org:3001` | Upstream preprod node |
 | `RT_BYTEMAN_JAR` | `$RT_HOME/byteman.jar` | Byteman agent |
 | `RT_BASE_PROPERTIES` | `config/application.properties` of this repo | Base config copied into each instance |
+| `RT_LEDGER_PROPERTIES` | `application-ledger-state.properties` next to the base config | Copied into instances with the `ledger-state` profile |
 
 The test config (`inst.sh init`) uses:
 - `store.continue-on-parse-error=true`;
 - auto-recovery on, with `store.admin.health-check-interval=30` and `store.block-receive-delay-seconds=120`;
 - parallel processing on;
 - adapot and governance-aggr off, unless the instance has the `ledger-state` profile.
+
+For a ledger-state run, give the instance the profiles `ledger-state,rt`, in that order. The later profile wins, and `rt` sets the log file the runner reads.
 
 Per-instance properties go in the last column of `instances.conf`. For example, `store.utxo.unspent-table-enabled=true`.
 
@@ -223,6 +226,19 @@ The block, forward and rollback commands are mux mode only.
 | X03 | kill -9 right at the range to sync switch | - | yes | one shot |
 
 "Fault held for" is how long the fault stays on before the runner removes it. "One shot" faults happen once (a reset, a dropped block, a kill).
+
+### Ledger-state scenarios (L01–L20)
+These need the `ledger-state` profile. They aim at work that runs outside the block-by-block sync:
+- the AdaPot job at each epoch boundary: reward calculation, reward write, stake snapshot;
+- the account balance step of each commit;
+- the governance proposal status update (Conway only).
+
+How they work:
+- **Placing the fault:** a Byteman rule holds the step for 45 s, or makes it throw once. The runner waits for the rule's marker in `console.out` and injects the fault while the step is held. For the reward write, it also locks `reward`, so the job is stopped after the AdaPot row is updated.
+- **Passing:** besides the normal checks, the AdaPot job for that epoch must reach `COMPLETED` within 30 min. Every scenario also records the `adapot_jobs` state.
+- **Timing:** L01–L13 run on the next epoch boundary, so start them early in the initial sync. L14–L19 first wait for the first Conway slot. L20 waits at the tip for the next real epoch boundary, up to 5 days, so run it on its own (`--only L20`) after the tip matrix.
+
+`compare.py` also compares epoch-keyed tables (`epoch_stake`, `drep_dist`, …), up to the last epoch whose job completed in both stores.
 
 ## Keeping it working
 

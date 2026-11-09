@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Compares every slot-keyed table of an instance with the unfaulted control, up to the lower of the two cursors.
 Row counts and a content hash that ignores surrogate ids and timestamps. Differences are drilled down to blocks.
+Tables keyed by epoch only (ledger-state: epoch_stake, drep_dist, ...) are compared up to the last epoch whose AdaPot
+job completed in both, and drilled down to epochs.
 
 usage: compare.py <inst> [control=ctrl]
 """
@@ -44,4 +46,25 @@ for t, use in bad:
     print(f"-- {t}: {len(diff)} slots differ")
     for s in diff[:40]:
         print(f"   slot {s}: {inst}={A.get(str(s),['0'])[0]} rows, {ctl}={B.get(str(s),['0'])[0]} rows")
+# epoch-keyed tables (no slot column), up to the last epoch whose reward job completed in both
+def done_epoch(n):
+    r = sql(n, "select coalesce(max(epoch), -1) from adapot_jobs where status = 'COMPLETED'") if "adapot_jobs" in cols else ["-1"]
+    return int(r[0])
+E = min(done_epoch(inst), done_epoch(ctl)) if "adapot_jobs" in cols and "adapot_jobs" in ctlcols else -1
+if E >= 0:
+    print(f"comparing epoch-keyed tables at epoch <= {E}")
+    for t in sorted(cols):
+        if t in SKIP or "slot" in cols[t] or "epoch" not in cols[t] or t not in ctlcols: continue
+        if t.rsplit("_", 1)[-1].isdigit() or "_default" in t: continue
+        use = [c for c in cols[t] if c not in IGNORE and c in ctlcols[t]]
+        expr = ",".join(f'"{c}"::text' for c in use)
+        q = (f"select epoch, count(*), sum(('x'||substr(md5(concat_ws('|',{expr})),1,15))::bit(60)::bigint::numeric) "
+             f'from "{t}" where epoch <= {E} group by 1')
+        A = dict((l.split("\t")[0], l.split("\t")[1:]) for l in sql(inst, q)); B = dict((l.split("\t")[0], l.split("\t")[1:]) for l in sql(ctl, q))
+        na = sum(int(v[0]) for v in A.values()); nb = sum(int(v[0]) for v in B.values())
+        diff = sorted({int(k) for k in A.keys() | B.keys() if A.get(k) != B.get(k)})
+        print(f"{'ok  ' if not diff else 'DIFF'} {t:42} {na:>12} {nb:>12}", flush=True)
+        if diff:
+            bad.append((t, use))
+            print(f"-- {t}: {len(diff)} epochs differ: " + ", ".join(f"{e} ({A.get(str(e),['0'])[0]} vs {B.get(str(e),['0'])[0]} rows)" for e in diff[:20]))
 print(f"RESULT {inst}: {len(bad)} tables differ: {[t for t, _ in bad]}")

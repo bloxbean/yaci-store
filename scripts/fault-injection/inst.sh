@@ -9,6 +9,7 @@ JAVA_BIN=${RT_JAVA_HOME:-${JAVA_HOME:-}}; JAVA=${JAVA_BIN:+$JAVA_BIN/bin/}java
 BYTEMAN=${RT_BYTEMAN_JAR:-$R/byteman.jar}
 RELAY=${RT_RELAY:-preprod-node.play.dev.cardano.org:3001}
 BASE_PROPS=${RT_BASE_PROPERTIES:-$KIT/../../config/application.properties}
+LEDGER_PROPS=${RT_LEDGER_PROPERTIES:-$(dirname "$BASE_PROPS")/application-ledger-state.properties}
 CONF=$KIT/instances.conf; [ -f "$R/instances.conf" ] && CONF=$R/instances.conf
 N=$1; CMD=$2; shift 2
 read -r I KIND PROXIED PROFILES EXTRA < <(awk -v n="$N" '$1 == n && $1 !~ /^#/ {print $2, $3, $4, $5, $6}' "$CONF")
@@ -46,7 +47,11 @@ logging.file.name=$D/logs/yaci-store.log
 logging.logback.rollingpolicy.max-file-size=500MB
 logging.logback.rollingpolicy.max-history=20
 PROPS
-    case ",$PROFILES," in *,ledger-state,*) ;; *) printf 'store.adapot.enabled=false\nstore.governance-aggr.enabled=false\n' >> "$D/config/application-rt.properties" ;; esac
+    # With ledger-state, list it before rt (e.g. ledger-state,rt): the later profile wins, and rt sets the log file the runner reads.
+    case ",$PROFILES," in
+      *,ledger-state,*) cp "$LEDGER_PROPS" "$D/config/application-ledger-state.properties" || exit 1 ;;
+      *) printf 'store.adapot.enabled=false\nstore.governance-aggr.enabled=false\n' >> "$D/config/application-rt.properties" ;;
+    esac
     if [ -n "$EXTRA" ]; then echo "$EXTRA" | tr ',' '\n' >> "$D/config/application-rt.properties"; fi
     ;;
   pg)
