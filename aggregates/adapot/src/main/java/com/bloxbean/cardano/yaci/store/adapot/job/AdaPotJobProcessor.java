@@ -165,13 +165,17 @@ public class AdaPotJobProcessor {
             log.error("Adapot job processing failed", e);
             try {
                 ensureCurrentJob(job, cancelled);
+                job.setErrorMessage("Reward calculation failed due to unknown exception : " + e.getMessage());
+                adaPotJobStorage.save(job);
             } catch (StaleAdaPotJobException staleJobException) {
                 log.info("Not saving failure state for stale or cancelled AdaPot job for epoch {} at slot {}",
                         job.getEpoch(), job.getSlot());
                 return true;
+            } catch (Exception saveException) {
+                //E.g. the database is down. The caller retries the job.
+                log.warn("Could not save failure state for AdaPot job for epoch {}: {}",
+                        job.getEpoch(), saveException.getMessage());
             }
-            job.setErrorMessage("Reward calculation failed due to unknown exception : " + e.getMessage());
-            adaPotJobStorage.save(job);
             return false;
         }
     }
