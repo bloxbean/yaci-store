@@ -139,14 +139,21 @@ class AdaPotJobManagerTest {
     void shouldEndTheBackoffEarlyWhenRollbackCancelsTheJob() throws Exception {
         AdaPotJobProcessor processor = mock(AdaPotJobProcessor.class);
         AdaPotJob job = job(644);
-        when(processor.processJob(eq(job), any(BooleanSupplier.class))).thenReturn(false);
+        CountDownLatch attempted = new CountDownLatch(1);
+        when(processor.processJob(eq(job), any(BooleanSupplier.class))).thenAnswer(invocation -> {
+            attempted.countDown();
+            return false;
+        });
         var manager = managerWithoutDelays(processor);
         manager.retryBaseDelayMillis = 600_000;
         manager.retryMaxDelayMillis = 600_000;
 
+        //Roll back once the first attempt has failed and the 10 min backoff has started
         var rollback = Thread.startVirtualThread(() -> {
             try {
-                Thread.sleep(300);
+                if (!attempted.await(10, TimeUnit.SECONDS))
+                    return;
+                Thread.sleep(200);
             } catch (InterruptedException e) {
                 return;
             }
@@ -155,9 +162,29 @@ class AdaPotJobManagerTest {
                     .build());
         });
 
-        assertTimeoutPreemptively(Duration.ofSeconds(10), () -> assertThat(manager.runUntilDone(job)).isTrue());
-        rollback.join();
-        verify(processor, times(1)).processJob(eq(job), any(BooleanSupplier.class));
+        try {
+            assertTimeoutPreemptively(Duration.ofSeconds(10), () -> assertThat(manager.runUntilDone(job)).isTrue());
+            verify(processor, times(1)).processJob(eq(job), any(BooleanSupplier.class));
+        } finally {
+            rollback.interrupt();
+            rollback.join();
+        }
+    }
+
+    @Test
+    void shouldEndTheJobThreadOnStop() throws Exception {
+        AdaPotJobStorage storage = mock(AdaPotJobStorage.class);
+        when(storage.getJobsByTypeAndStatus(any(), any())).thenReturn(List.of());
+        AdaPotJobProcessor processor = mock(AdaPotJobProcessor.class);
+        var manager = new AdaPotJobManager(storage, processor, true);
+        Thread thread = (Thread) ReflectionTestUtils.getField(manager, "processorThread");
+
+        manager.stop();
+        thread.join(5000);
+
+        assertThat(thread.isAlive()).isFalse();
+        manager.triggerRewardCalcJob(42, 1L, 1L, "hash");
+        verify(processor, org.mockito.Mockito.after(300).never()).processJob(any(AdaPotJob.class), any(BooleanSupplier.class));
     }
 
     @Test
