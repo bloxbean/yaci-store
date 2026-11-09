@@ -96,6 +96,22 @@ class AdaPotJobProcessorTest {
         verify(publisher, never()).publishEvent(org.mockito.ArgumentMatchers.any());
     }
 
+    @Test
+    void shouldReturnFailureWhenFailureStateCannotBeSaved() throws InterruptedException {
+        //Database goes down during the job: the failure is returned to the caller instead of escaping
+        AdaPotJob job = job(36, 13910414L, 331235L);
+        when(storage.getJobByTypeAndEpoch(AdaPotJobType.REWARD_CALC, 36))
+                .thenReturn(Optional.of(job))
+                .thenReturn(Optional.of(job))
+                .thenThrow(new RuntimeException("Unable to acquire JDBC Connection"));
+        org.mockito.Mockito.doThrow(new RuntimeException("Unable to acquire JDBC Connection"))
+                .when(publisher).publishEvent(org.mockito.ArgumentMatchers.any(Object.class));
+
+        boolean result = processor.processJob(job);
+
+        assertThat(result).isFalse();
+    }
+
     private AdaPotJob job(int epoch, long slot, long block) {
         return job(epoch, slot, block, null);
     }

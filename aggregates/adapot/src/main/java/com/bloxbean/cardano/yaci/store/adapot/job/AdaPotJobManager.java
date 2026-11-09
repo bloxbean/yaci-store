@@ -32,6 +32,11 @@ public class AdaPotJobManager {
     private final BlockingQueue<AdaPotJob> jobQueue = new LinkedBlockingQueue<>();
     private final AtomicReference<ActiveJob> activeJob = new AtomicReference<>();
 
+    //Package-private so that tests can run without the delays
+    long initialDelayMillis = 5000;
+    long retryBaseDelayMillis = 10_000;
+    long retryMaxDelayMillis = 300_000;
+
     private final AdaPotJobStorage adaPotJobStorage;
     private final AdaPotJobProcessor adaPotJobProcessor;
 
@@ -128,33 +133,79 @@ public class AdaPotJobManager {
 
     private void processJobs() {
         while (true) {
+            AdaPotJob job;
             try {
-                AdaPotJob job = jobQueue.take();
-                log.info("Found reward calc job in queue : {}", job);
-
-                if (job == null)
-                    continue;
-
-                ActiveJob runningJob = activateJob(job);
-                try {
-                    try {
-                        Thread.sleep(5000);
-                    } catch (InterruptedException e) {
-                        log.error("Error in thread.sleep", e);
-                    }
-
-                    boolean status;
-                    status = adaPotJobProcessor.processJob(job, runningJob::isCancelled);
-                    if (!status) {
-                        log.error("Reward calculation failed for epoch : " + job.getEpoch());
-                        return;
-                    }
-                } finally {
-                    activeJob.compareAndSet(runningJob, null);
-                }
-            } catch (Exception e) {
-                log.error("Error processing reward calc job", e);
+                job = jobQueue.take();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                log.warn("AdaPot job processor interrupted. Stopping.");
+                return;
             }
+
+            log.info("Found reward calc job in queue : {}", job);
+            if (!runUntilDone(job))
+                return;
+        }
+    }
+
+    /**
+     * Runs a job until it completes, becomes stale or is cancelled by a rollback.
+     * <p>
+     * A failed job is retried with backoff and never skipped. The next epoch's job starts from the AdaPot
+     * this job writes. Moving on after a failure would calculate the next epoch from an incomplete AdaPot,
+     * and leaving the loop would stop all later jobs until a restart.
+     *
+     * @return false only if the thread was interrupted
+     */
+    boolean runUntilDone(AdaPotJob job) {
+        ActiveJob runningJob = activateJob(job);
+        try {
+            for (int attempt = 1; ; attempt++) {
+                if (!sleep(initialDelayMillis))
+                    return false;
+
+                try {
+                    if (adaPotJobProcessor.processJob(job, runningJob::isCancelled))
+                        return true;
+                    log.error("Reward calculation failed for epoch : {} (attempt {}). Retrying",
+                            job.getEpoch(), attempt);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return false;
+                } catch (Exception e) {
+                    log.error("Error processing reward calc job for epoch : {} (attempt {}). Retrying",
+                            job.getEpoch(), attempt, e);
+                }
+
+                //The job stays active while it waits, so that a rollback can still cancel it
+                if (!sleep(retryDelayMillis(attempt)))
+                    return false;
+
+                if (runningJob.isCancelled()) {
+                    log.info("AdaPot job for epoch {} at slot {} was cancelled by a rollback. Not retrying",
+                            job.getEpoch(), job.getSlot());
+                    return true;
+                }
+            }
+        } finally {
+            activeJob.compareAndSet(runningJob, null);
+        }
+    }
+
+    long retryDelayMillis(int attempt) {
+        long delay = retryBaseDelayMillis << Math.min(attempt - 1, 10);
+        return Math.min(delay, retryMaxDelayMillis);
+    }
+
+    private boolean sleep(long millis) {
+        if (millis <= 0)
+            return true;
+        try {
+            Thread.sleep(millis);
+            return true;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
         }
     }
 
