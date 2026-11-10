@@ -21,19 +21,24 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class AdaPotJobProcessorTest {
     private final AdaPotJobStorage storage = mock(AdaPotJobStorage.class);
     private final ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+    private final EraService eraService = mock(EraService.class);
     private final AdaPotJobProcessor processor = new AdaPotJobProcessor(
             mock(StoreProperties.class),
             mock(AdaPotProperties.class),
             storage,
-            mock(EraService.class),
+            eraService,
             mock(EpochRewardCalculationService.class),
             mock(StakeSnapshotService.class),
             mock(DepositSnapshotService.class),
@@ -94,6 +99,54 @@ class AdaPotJobProcessorTest {
         assertThat(result).isTrue();
         verify(storage).save(job);
         verify(publisher, never()).publishEvent(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void shouldReturnFailureWhenTheJobLookupFailsWhileSavingTheFailure() throws InterruptedException {
+        //Database goes down during the job: the failure is returned to the caller instead of escaping
+        AdaPotJob job = job(36, 13910414L, 331235L);
+        when(storage.getJobByTypeAndEpoch(AdaPotJobType.REWARD_CALC, 36))
+                .thenReturn(Optional.of(job))
+                .thenReturn(Optional.of(job))
+                .thenThrow(new RuntimeException("Unable to acquire JDBC Connection"));
+        doThrow(new RuntimeException("Unable to acquire JDBC Connection"))
+                .when(publisher).publishEvent(any(Object.class));
+
+        boolean result = processor.processJob(job);
+
+        assertThat(result).isFalse();
+    }
+
+    @Test
+    void shouldReturnFailureWhenTheFailureStateCannotBeSaved() throws InterruptedException {
+        AdaPotJob job = job(36, 13910414L, 331235L);
+        when(storage.getJobByTypeAndEpoch(AdaPotJobType.REWARD_CALC, 36)).thenReturn(Optional.of(job));
+        doThrow(new RuntimeException("Unable to acquire JDBC Connection"))
+                .when(publisher).publishEvent(any(Object.class));
+        //The first save (status STARTED) works, the save of the failure state does not
+        doNothing()
+                .doThrow(new RuntimeException("Unable to acquire JDBC Connection"))
+                .when(storage).save(job);
+
+        boolean result = processor.processJob(job);
+
+        assertThat(result).isFalse();
+        verify(storage, times(2)).save(job);
+    }
+
+    @Test
+    void shouldMakeOneAttemptWhenTheRewardCalculationFails() throws InterruptedException {
+        //The retries are AdaPotJobManager's: the processor must not run the job again by itself
+        AdaPotJob job = job(37, 14342434L, 352288L);
+        when(storage.getJobByTypeAndEpoch(AdaPotJobType.REWARD_CALC, 37)).thenReturn(Optional.of(job));
+        when(eraService.getFirstNonByronEpoch()).thenThrow(new RuntimeException("Reserves value mismatch"));
+
+        boolean result = processor.processJob(job);
+
+        assertThat(result).isFalse();
+        verify(publisher, times(1)).publishEvent(any(Object.class));
+        assertThat(job.getErrorMessage()).contains("Reserves value mismatch");
+        assertThat(job.getStatus()).isEqualTo(AdaPotJobStatus.STARTED);
     }
 
     private AdaPotJob job(int epoch, long slot, long block) {
