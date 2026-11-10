@@ -324,119 +324,69 @@ least as new as"), state that operators' own DuckDB clients must use **the same 
 as the application. A newer client writing to a file catalog makes it unreadable to the
 application (R3); an older one cannot read a migrated catalog.
 
-### D3 — DuckLake becomes the default, without silently abandoning legacy data
+### D3 — DuckLake is the default
 
-- **The resolved mode is authoritative everywhere, decided in two phases (r2).** A bean cannot
-  gate `@ConditionalOnProperty`: conditions are evaluated before any bean exists.
-  - **Phase 1, before the context.** An `EnvironmentPostProcessor` (`StorageModeEnvironmentPostProcessor`)
-    resolves the mode from configuration plus **file-system evidence only**, and writes
-    `yaci.store.analytics.storage.resolved-type` into the environment. The evidence is any
-    `<export-path>/*/(date|epoch)=*/data.parquet`, any table directory, so it needs no exporter
-    registry, and the catalog file. All six storage-gated beans switch to that property:
-    - `ParquetWriterService:35`
-    - `DuckLakeWriterService:40`
-    - `DuckLakeCatalogInitializer:31`
-    - `DuckLakeCatalogSnapshotReader:50`
-    - `DuckDbCatalogPreInitializer:42`
-    - `DuckLakeWriterLock:11`
+r3: the maintainer reports that **no production deployment is known to run `parquet` mode**.
+DuckLake is already what the shipped profiles and the v3 docs use. r2's two-phase mode resolver
+and evidence tables are therefore withdrawn; D3 becomes a plain default change with one cheap
+guard.
 
-    So do `ParquetTableRegistry.isDuckLake()` (`:167`) and `CutoffSlotResolver` in analytics-query.
-  - **Phase 2, after Flyway and before any export or view refresh.** A validator checks the
-    evidence that needs the database: state-row provenance (D5) and a PostgreSQL catalog's
-    `ducklake_metadata`. If that contradicts phase 1 (for example, the type is unset, phase 1
-    chose DuckLake, but `PARQUET` state rows exist), the analytics store stops with a message
-    telling the operator to set `storage.type`. The scheduler and the query layer's first refresh
-    wait for the validator.
+- **Flip the default.** `Storage.type` defaults to `ducklake`. `matchIfMissing = true` moves from
+  `ParquetWriterService:35` to every DuckLake-gated bean:
+  - `DuckLakeWriterService:40`
+  - `DuckLakeCatalogInitializer:31`
+  - `DuckLakeCatalogSnapshotReader:50`
+  - `DuckDbCatalogPreInitializer:42`
+  - `DuckLakeWriterLock:11`
 
-  Application-context tests cover every row of the table below, including an unset type.
-- **Resolution:**
-
-  | `storage.type` | Legacy Parquet evidence¹ | DuckLake catalog present² | Effective mode |
-  |---|---|---|---|
-  | `ducklake` | any | any | DuckLake. D5 applies to any legacy evidence. |
-  | `parquet` | any | any | Parquet, with a deprecation WARN (D4) |
-  | unset | none | any | **DuckLake** (the new default) |
-  | unset | some | no | **Parquet**, with a WARN telling the operator to set the type |
-  | unset | some | yes | Refuse to start: the state is ambiguous |
-
-  ¹ Phase 1: a legacy `data.parquet` under the export path. Phase 2 adds any state row whose
-  provenance (D5) is `PARQUET`; state rows survive a changed `export-path` or an unmounted
-  volume, which files do not.
-  ² Phase 1: the catalog file exists. Phase 2: `ducklake_metadata` exists in a PostgreSQL catalog.
-- **Catalog type default (r2).** `ducklake.catalog-type` keeps its code default, `postgresql`
-  (`AnalyticsStoreProperties:323`). Changing it would move existing explicit-DuckLake deployments
-  that rely on that default to an empty file catalog. A deployment that reaches DuckLake through
-  the new default therefore gets `ducklake_*` tables in the `public` schema of its yaci-store
-  database, unlike the shipped profile, which uses a file catalog. This is logged at startup.
-  On PostgreSQL 15 and later, missing `CREATE` permission on `public` is detected up front and
-  reported with the fix. See Q8.
+  `ParquetTableRegistry.isDuckLake()` (`:167`) treats an unset value as DuckLake. With that,
+  `@ConditionalOnProperty` stays the mechanism (CC F2), and no resolver bean is needed.
+  Application-context tests cover the unset, `ducklake` and `parquet` cases.
+- **Guard against the unlikely legacy case.** If the type is unset (DuckLake by default) and
+  `<export-path>/*/(date|epoch)=*/data.parquet` exists, `DuckLakeCatalogInitializer` logs a WARN.
+  The WARN names the legacy layout and points to the D5 steps. The analytics store does **not**
+  refuse to start: an explicit `storage.type=parquet` keeps the old behaviour, and the risk is
+  only to a deployment nobody knows of.
+- **Catalog type default.** `ducklake.catalog-type` keeps its code default, `postgresql`
+  (`AnalyticsStoreProperties:323`). A deployment that reaches DuckLake through the default
+  therefore gets `ducklake_*` tables in the `public` schema of its yaci-store database, unlike the
+  shipped profile, which uses a file catalog. This is logged at startup. On PostgreSQL 15 and
+  later, a missing `CREATE` permission on `public` is detected up front and reported with the fix
+  (Q8).
 - The README is aligned with the v3 docs and the shipped profiles.
 
 ### D4 — The `parquet` mode is deprecated, then removed
 
-- **This release.** The mode keeps working. A startup WARN, a `@Deprecated` on
-  `ParquetWriterService` and on its properties (`yaci.store.analytics.parquet-export.*`), and a
-  "Deprecated" callout in the docs. It gets bug fixes only.
-- **The next minor release.** No change, apart from more prominent wording.
-- **The first release allowed to break configuration (4.0 by default; Q2).** Remove
-  `ParquetWriterService` and the glob path of `ParquetTableRegistry`. `storage.type=parquet` then
-  fails at startup with a pointer to D5.
+- **This release.** The mode still works when set explicitly. It gets a startup WARN, a
+  `@Deprecated` on `ParquetWriterService` and its properties (`yaci.store.analytics.parquet-export.*`),
+  and a "Deprecated" callout in the docs. It gets no new features. D6–D12 are built for DuckLake
+  only. In Parquet mode, the D7 `force` and `DELETE /data` keep today's file-replace behaviour,
+  and nothing more is guaranteed.
+- **Removal (Q2).** Remove `ParquetWriterService`, the glob path of `ParquetTableRegistry`, the
+  `isDuckLake()` branches and the checksum code in `AbstractTableExporter`. After removal,
+  `storage.type=parquet` fails at startup with a pointer to D5. r3 lean: remove in the next
+  minor release, since there are no known users.
 
-### D5 — Migrating from Parquet: provenance-based state, re-export guarded against pruning
+### D5 — Moving from Parquet: a documented re-export, not an automated migration
 
-- **Provenance column.** Add `storage_format VARCHAR(16)` to `analytics_export_state`, in Flyway
-  migration `V0_1500_3`, shipped in all three dialects (`db/store/{postgresql,mysql,h2}`).
-  `V0_1500_2` is taken by `create_address_utxo_flattened_view`.
-- **Backfill from evidence, not from configuration (r2).** The r1 rule ("the effective mode of
-  the first start") stamped Parquet-written rows as `DUCKLAKE` when an operator set
-  `storage.type=ducklake` during the upgrade, which is C5 again. Each existing row is now
-  classified by checking first for evidence in the **effective** mode:
-  - **Effective mode is DuckLake:**
-    - `DUCKLAKE` if the catalog lists committed files for that partition;
-    - otherwise `PARQUET` if a legacy `data.parquet` exists or `checksum_sha256 IS NOT NULL`
-      (only the Parquet path writes a checksum, `AbstractTableExporter:134-137`);
-    - otherwise unknown.
-  - **Effective mode is Parquet:** the same checks, in the opposite order.
-  - **Unknown:** the row loses `COMPLETED` (it is set to `FAILED` with the reason "provenance
-    unknown at upgrade"), so the partition becomes a gap.
+r3 withdraws r2's `storage_format` column, provenance backfill and pruning refusal. Their only
+purpose was a safe automatic migration of Parquet deployments, and none are known. The upgrade
+guide documents the manual path instead:
 
-  The backfill runs once, before any exporter or query-layer refresh, and logs a count per class.
-- These all count only rows whose `storage_format` equals the effective mode:
-  - gap detection and `getCompletedPartitions`;
-  - `CutoffSlotResolver` (in analytics-query; it reads the resolved mode, D3);
-  - the skip check in `AbstractTableExporter.exportForPartition` (`:90-98`), which calls `getState`
-    directly.
+1. Set `storage.type=ducklake`.
+2. Clear the analytics export state, with `DELETE /admin/state/{t}/range` for each table (fixed by
+   D7), or by truncating `analytics_export_state`.
+   - This step is **required**. Without it, the `COMPLETED` rows would point the federation
+     boundary at an empty catalog (C5).
+3. Let the scheduler re-export from PostgreSQL.
+   - Tables whose source is pruned (`store.adapot.epoch-stake-pruning-enabled`,
+     `reward-pruning-enabled`, `store.utxo.pruning-enabled`, `store.account.pruning-enabled`)
+     can only be re-exported for the history that is still in PostgreSQL. The guide says so.
+4. Delete the legacy `<export-path>/<table>/(date|epoch)=*/` directories when done.
 
-  After a switch, every legacy partition is a gap. A deployment that **already** switched from
-  Parquet to DuckLake in an earlier release has Parquet-era rows with no DuckLake files, and the
-  evidence rule classifies those as `PARQUET`, so they too become gaps instead of phantom
-  `COMPLETED` rows.
-- **Pruned sources (r2).** Re-exporting needs the rows to still be in PostgreSQL. Pruning
-  removes exactly the history of some exported tables:
-  - `store.adapot.epoch-stake-pruning-enabled` (keeps 8 epochs by default,
-    `AdaPotProperties.epochStakePruningSafeEpochs`);
-  - `store.adapot.reward-pruning-enabled`;
-  - `store.utxo.pruning-enabled`;
-  - `store.account.pruning-enabled`.
-
-  When the effective mode is DuckLake, there is legacy Parquet evidence for a table, and pruning
-  is enabled for that table's source, the switch **refuses to start**. The message names the
-  tables and the options: keep `parquet` for now; set
-  `migration.accept-pruned-history-loss=true`; or use the Q3 fast path once it exists. Q3 is
-  raised from "defer" to "needed for pruned deployments".
-- **During the migration (r2).** Partitions that are not yet re-exported are not `COMPLETED`
-  under the new mode. So:
-  - **With `query.live-data-enabled=true`**, the boundary keeps them on the PostgreSQL side.
-  - **Without it** (the default, `AnalyticsStoreProperties:194`), the historical views have no
-    such fallback and return only what has been migrated so far. `GET /admin/status` reports the
-    progress (partitions done out of total, per table), and the docs say so.
-  - **Views exist before any export lands.** D8 creates every enabled table in the catalog at
-    startup, from the exporter's query with `LIMIT 0`, so the query layer can build empty views
-    from catalog columns from the first refresh. Today a table appears only after its first
-    export.
-- The legacy files stay where they are. The admin status reports them, and the upgrade guide
-  gives the cleanup step. DuckLake writes under `<export-path>/main/…`, so the two layouts do not
-  collide.
+Two facts make this safe:
+- DuckLake writes under `<export-path>/main/…`, so the two layouts do not collide.
+- The D6 shrink guard does not apply here, because the catalog starts empty.
 
 ### D6 — A DuckLake partition is replaced atomically, with verified preconditions
 
@@ -492,7 +442,7 @@ COMMIT;
   enforced property rather than a consequence of the predicate.
 - **Shrink guard (r2).** If the partition currently holds `n > 0` rows and the new insert holds
   fewer than `n`, the replace rolls back, unless the call carries an explicit `allow-shrink`
-  (admin only, D7). A pruned PostgreSQL (D5) would otherwise turn every "re-export" (a `force`,
+  (admin only, D7). A pruned PostgreSQL (see the pruning settings in D5) would otherwise turn every "re-export" (a `force`,
   lost state, a failed verify, a range reset) into a silent loss of history. Before D6 those paths
   duplicated rows; with D6 alone they would quietly destroy them. Automatic paths never pass
   `allow-shrink`. A shrink stays `FAILED` and keeps the old data and the old state (D10).
@@ -538,8 +488,10 @@ Rules for every export or delete endpoint:
 
   P3 confirms that `ADD COLUMN` followed by `INSERT … BY NAME` works on 1.5.5. M0 confirms it on
   2.x.
-- **Tables exist from startup (r2, D5).** Every enabled exporter's table is created and
-  partitioned at startup, from its query with `LIMIT 0`, in one transaction.
+- **Tables exist from startup (r2).** Every enabled exporter's table is created and partitioned
+  at startup, from its query with `LIMIT 0`, in one transaction. The query layer can then build
+  (empty) views from catalog columns from the first refresh. Today a table appears only after
+  its first export (CX F8).
 - **Read side.**
   - DuckLake views use `read_parquet([...], union_by_name = true)` (P4). They then project the
     catalog columns in catalog order, using `CAST(NULL AS <type>) AS <col>` for a catalog column
@@ -584,7 +536,8 @@ r1 left the gap between them undefined. The reviews found three failures in that
   it collapsed.
 - `markCompleted` re-inserted a row that a concurrent `DELETE /state` had removed.
 
-New columns, in the same migration as D5:
+New columns, in Flyway migration `V0_1500_3`, shipped in all three dialects
+(`db/store/{postgresql,mysql,h2}`); `V0_1500_2` is taken by `create_address_utxo_flattened_view`:
 - `attempt_id UUID`;
 - `pending_op VARCHAR(16)` (`NULL`, `EXPORT`, `REPLACE` or `DELETE`);
 - `catalog_snapshot_id BIGINT`;
@@ -693,17 +646,17 @@ Each invariant is tested in the milestone named in the plan.
   *D6, D9.*
 - **I3 (atomic replace).** Any committed snapshot holds either the complete previous contents of
   a partition or the complete new contents. *D6.*
-- **I4 (COMPLETED means present).** A `COMPLETED` row with `storage_format = M` and
-  `pending_op IS NULL` implies that the partition's committed data in mode `M` has exactly
-  `row_count` rows. *D5, D6, D10.* It is tested by fault injection at every step boundary of
+- **I4 (COMPLETED means present).** In DuckLake mode, a `COMPLETED` row with
+  `pending_op IS NULL` implies that the partition's committed data has exactly `row_count` rows.
+  *D6, D10.* It is tested by fault injection at every step boundary of
   every D10 operation.
 - **I5 (readiness).** No partition outside the readiness check is ever `COMPLETED`, through any
   path, including the scheduler. *D11.*
 - **I6 (one operation).** At most one operation per `(table, partition)` is in flight. It is
   enforced through `attempt_id`, not through in-JVM state alone. *D7, D10.*
-- **I7 (no silent mode switch).** An upgrade with unchanged configuration never changes the
-  effective storage mode of a deployment that has legacy evidence, and no Parquet-written state
-  row is ever counted as DuckLake. *D3, D5.*
+- **I7 (withdrawn in r3).** "No silent mode switch" relied on the automatic migration machinery,
+  which r3 withdraws because no Parquet deployments are known. D3's WARN and D5's documented
+  steps replace it.
 - **I8 (no unannounced one-way change).**
   - The catalog never migrates beyond what `catalog-migration` allows.
   - Every one-way step is preceded by a complete recovery point: catalog, state, and the file
@@ -751,8 +704,12 @@ Each invariant is tested in the milestone named in the plan.
 - **Use a status flip (`IN_PROGRESS`) as the concurrency guard (r1).** It strands crashed
   partitions behind the 60-minute stale timeout, it does not stop a re-insert after a concurrent
   delete, and a `force` collapses the federation boundary. Rejected in favour of D10.
-- **Flip the default with no detection, or drop `parquet` in the same release.** These violate
-  I7 or remove the migration window. Rejected.
+- **An automatic Parquet-to-DuckLake migration (r2: a two-phase resolver, a provenance column,
+  an evidence backfill and a pruning refusal).** Withdrawn in r3: it costs a schema column, a
+  pre-context environment post-processor and a backfill, all to protect deployments nobody
+  knows of. Replaced by D3's WARN and D5's documented steps.
+- **Remove `parquet` in this release.** It would be simplest, but deprecating first costs almost
+  nothing and leaves a window for an unknown user. Kept as Q2.
 
 ## Consequences
 
@@ -771,9 +728,9 @@ Each invariant is tested in the milestone named in the plan.
 
 - `analytics_export_state` gains six columns and a reconciler. The state handling becomes a
   small protocol (D10) instead of a status flip.
-- A Parquet deployment that migrates re-exports its history from PostgreSQL. That is hours on
-  mainnet; M4 measures it. Without live federation, historical queries are incomplete until it
-  finishes. A deployment with pruning enabled cannot migrate this way at all (D5, Q3).
+- Moving from Parquet is a manual, documented re-export (D5), not an automated migration. An
+  unknown Parquet deployment that only flips the type without clearing state would hit C5; the
+  D3 WARN and the upgrade guide are its only protection.
 - A replace that would shrink a partition fails until an operator decides. Exports on a pruned
   PostgreSQL therefore stop being "fire and forget".
 - Each export adds a `DELETE`, the precondition and post-condition checks, and a schema
@@ -833,14 +790,12 @@ invariants it names.
     - a platform-detection test;
     - timeout SQL-state classification;
     - the docs fix for operators' CLI versions ships with M1 at the latest.
-- **M4 — Default, deprecation and migration (D3, D4, D5).**
+- **M4 — Default and deprecation (D3, D4, D5).** Small.
   - Exit:
-    - application-context tests for each row of the D3 table, in both phases;
-    - backfill classification tests for each evidence case, including a deployment that
-      switched in an earlier release;
-    - the pruned-source refusal;
-    - migration progress reporting;
-    - a mainnet-sized re-export timing on the benchmark VM;
+    - application-context tests for an unset type, `ducklake` and `parquet`;
+    - the legacy-layout WARN;
+    - the deprecation WARN;
+    - an integration test of the D5 steps (switch, clear state, re-export, query);
     - the docs, the README and the upgrade guide.
 - **M5 — Maintenance (D9).**
   - Exit:
@@ -850,22 +805,17 @@ invariants it names.
     - `cleanup_old_files` is always bounded by `older_than`.
 
 **Order:** M0, then M2, then M3 (these fix live correctness bugs and need only 1.5.5), then M1,
-then M4 and M5. M4 depends on M2, because the migration re-export must already be idempotent and
-shrink-guarded.
+then M4 and M5. r3: M4 no longer depends on M2 and can ship at any point, even first.
 
 ## Open questions
 
 - **Q1 — Extension delivery.** Should the Docker image bake in the extensions (per architecture),
   or only document `extension-directories`? Lean: bake them in.
-- **Q2 — When to remove `parquet`.** 4.0, or "two minor releases later"? Lean: 4.0, because
-  removal breaks configuration.
-- **Q3 — A fast migration with `ducklake_add_data_files`.** Raised in r2 from "defer" to "needed
-  for pruned deployments" (D5). Its constraints:
-  - the legacy files lack the partition column (P2);
-  - the query layer needs a uniform layout;
-  - the files may predate schema fixes such as `01955711c`.
-
-  Lean: a follow-up ADR once M4 lands.
+- **Q2 — When to remove `parquet`.** Options: (a) the next minor release; (b) 4.0. Lean (r3):
+  (a), since no production deployment is known to use it.
+- **Q3 — Withdrawn in r3.** It proposed a fast Parquet-to-DuckLake migration with
+  `ducklake_add_data_files`. There are no known deployments to migrate. (P2 records that it
+  works, for anyone who needs it.)
 - **Q4 — An asynchronous admin job API for long ranges.** Lean: defer; the D7 range cap bounds
   request time.
 - **Q5 — Compaction.** Lean: a separate ADR. Any compaction must preserve one partition value
@@ -1041,3 +991,18 @@ in the session scratch directory. Each is cited where it changes a decision.
   - **History.** The removed delete-before-insert of PR #858 is recorded as Q9 (CC F7).
   - **Invariants.** I11 (no shrink) and I12 (published consistency) are added. The invariants and
     questions are reordered.
+- **r3** (2026-11-10; maintainer input on PR #1357: "there is no known production deployment with
+  parquet mode … consider most using ducklake as default").
+  - **D3** is simplified to a plain default flip:
+    - `matchIfMissing` moves to the DuckLake beans;
+    - the two-phase resolver is withdrawn;
+    - a legacy layout found under a default type gets a WARN, not a refusal.
+  - **D4.** Parquet mode is excluded from the D6–D12 guarantees. Q2's lean changes to "the next
+    minor release".
+  - **D5** becomes documented manual steps. The `storage_format` column, the provenance backfill
+    and the pruning refusal are withdrawn.
+  - **Invariants.** I7 is withdrawn. I4 is scoped to DuckLake.
+  - **Other sections.** The D10 columns now go in their own `V0_1500_3`. Eager table creation
+    moves to D8. Q3 is withdrawn. M4 is reduced and decoupled from M2.
+  - **Unchanged on purpose:** D1, D2 and D6–D12. They concern DuckLake deployments and the 2.x
+    upgrade, which still matter.
