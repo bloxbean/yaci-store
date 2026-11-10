@@ -69,22 +69,21 @@ public class DRepStatusProcessor {
                         dRepBuilder.registrationSlot(drepRegistrationEvent.getMetadata().getSlot());
                         dRepBuilder.status(DRepStatus.REGISTERED);
                     } else {
-                        var recentDRepRegistrationOpt = dRepStorage.findRecentDRepRegistration(drepRegistration.getDrepId(), metadata.getEpochNumber());
+                        // Rows built earlier in this commit are not stored yet. They come before this certificate and
+                        // after any stored row that is before it, so look at them first. The stored lookup only sees rows
+                        // before this certificate, so a block processed again after a restart gets the same answer.
+                        var recentDRepOpt = dReps.stream()
+                                .filter(dRep -> dRep.getDrepId().equals(drepRegistration.getDrepId()))
+                                .reduce((first, second) -> second)
+                                .or(() -> dRepStorage.findRecentDRepRegistrationBefore(drepRegistration.getDrepId(),
+                                        metadata.getEpochNumber(), metadata.getSlot(), drepRegistration.getTxIndex(),
+                                        (int) drepRegistration.getCertIndex()));
 
-                        if (recentDRepRegistrationOpt.isEmpty()) {
-                            var regisDRep = dReps.stream()
-                                    .filter(dRep -> dRep.getDrepId().equals(drepRegistration.getDrepId()))
-                                    .reduce((first, second) -> second);
-
-                            if (regisDRep.isEmpty()) {
-                                log.error("Cannot find recent dRep registration");
-                            } else {
-                                dRepBuilder.registrationSlot(regisDRep.get().getRegistrationSlot());
-                                dRepBuilder.deposit(regisDRep.get().getDeposit());
-                            }
+                        if (recentDRepOpt.isEmpty()) {
+                            log.error("Cannot find recent dRep registration");
                         } else {
-                            dRepBuilder.registrationSlot(recentDRepRegistrationOpt.get().getRegistrationSlot());
-                            dRepBuilder.deposit(recentDRepRegistrationOpt.get().getDeposit());
+                            dRepBuilder.registrationSlot(recentDRepOpt.get().getRegistrationSlot());
+                            dRepBuilder.deposit(recentDRepOpt.get().getDeposit());
                         }
 
                         if (drepRegistration.getType() == CertificateType.UPDATE_DREP_CERT) {
