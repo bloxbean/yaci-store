@@ -1,7 +1,9 @@
 package com.bloxbean.cardano.yaci.store.governance.processor;
 
 import com.bloxbean.cardano.yaci.core.model.certs.CertificateType;
+import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
+import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
 import com.bloxbean.cardano.yaci.store.governance.domain.DRepRegistration;
 import com.bloxbean.cardano.yaci.store.governance.domain.DRepStatus;
@@ -80,6 +82,23 @@ class DRepStatusProcessorIT {
         assertThat(row(121168720L).getRegistrationSlot()).isEqualTo(121168694L);
         assertThat(rows()).usingRecursiveFieldByFieldElementComparatorIgnoringFields("updateDateTime")
                 .isEqualTo(first);
+    }
+
+    @Test
+    void aBlockCachedBeforeARollbackIsNotSavedOrUsed() {
+        commit(block(121168694L, "tx1", CertificateType.REG_DREP_CERT));
+
+        // A block is processed but its batch is not committed, then the store rolls back before it
+        processor.processDRepRegistrationEvent(block(121180520L, "tx3", CertificateType.REG_DREP_CERT));
+        processor.handleRollbackEvent(RollbackEvent.builder()
+                .rollbackTo(new Point(121170000L, "block121170000"))
+                .currentPoint(new Point(121180520L, "block121180520"))
+                .build());
+
+        commit(block(121180555L, "tx4", CertificateType.UNREG_DREP_CERT));
+
+        assertThat(rows()).extracting(DRepEntity::getSlot).containsExactly(121168694L, 121180555L);
+        assertThat(row(121180555L).getRegistrationSlot()).isEqualTo(121168694L);
     }
 
     private void commit(DRepRegistrationEvent... blocks) {

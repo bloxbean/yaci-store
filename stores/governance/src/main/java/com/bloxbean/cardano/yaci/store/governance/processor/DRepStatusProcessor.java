@@ -107,6 +107,9 @@ public class DRepStatusProcessor {
     @EventListener
     @Transactional
     public void handleRollbackEvent(RollbackEvent rollbackEvent) {
+        // Events cached for blocks that were not committed must not be saved or used at the next pre-commit.
+        dRepRegistrationsCache.clear();
+
         int count = dRepStorage.deleteBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
         log.info("Rollback -- {} drep records", count);
     }
