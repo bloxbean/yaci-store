@@ -261,68 +261,48 @@ application will stop opening the catalog once the application migrates it.
   query timeout check `"57014".equals(e.getSQLState())` (`AnalyticsQueryExecutor.java:256`);
   2.0 now fills in SQL states (R6), so M1 adds a test for timeout classification.
 
-### D2 — Catalog upgrade: no implicit migration, a full recovery point, and reporting
+### D2 — Catalog upgrade: keep compatible catalogs, refuse the rest, and resync
 
-This D2 has two separate parts: the DuckLake **spec version** (0.x, 1.0, 1.1), which changes only
-when the catalog is migrated, and, for a file catalog, the **DuckDB storage version**, which
-changes on the first write by a newer engine (R3).
+r4: the maintainer states that migrating existing analytics data from older versions is **not a
+requirement**, because yaci-store 3.0.0 is still in beta. Operators may be asked to resync. r2's
+recovery point (backups of the catalog, WAL and state, plus a rollback window) and its
+three-mode migration property are therefore withdrawn. What is left makes sure the 2.x engine
+never silently changes a catalog, and always says clearly when a resync is needed.
 
 1. **No implicit migration.** `duckLakeAttachOptions` no longer adds `AUTOMATIC_MIGRATION true`.
-   The new property `yaci.store.analytics.ducklake.catalog-migration` takes one of:
-   - `required-only` (the default): migrate only a catalog that 2.x cannot read without migrating
-     (pre-1.0 and `1.1-dev1`, R3). In practice that is a deployment coming from beta1–beta3. M0
-     establishes which spec version this produces, and whether 2.x can migrate a 1.4.x (0.3)
-     catalog at all. If it cannot, such deployments must step through 1.5.5 first, and the
-     upgrade guide says so.
-   - `latest`: also migrate 1.0 to 1.1. `RESET ducklake_default_version` runs first (R3).
-   - `never`: refuse to start rather than migrate.
+   Today it adds it unconditionally, so on 2.x it would migrate every catalog to 1.1 (C7).
+2. **Detect at startup**, before the read-write attach, with a plain metadata query:
+   - PostgreSQL catalog: `SELECT value FROM ducklake_metadata WHERE key = 'version'` through
+     postgres_scanner;
+   - file catalog: a read-only attach as a plain DuckDB database.
 
-   New catalogs are created at the spec chosen in Q7. `DUCKLAKE_VERSION` is passed at both
-   creation points: the `ATTACH` in `DuckDbCatalogPreInitializer` (`:99-103`, which has no options
-   today), and the first read-write attach of an empty PostgreSQL catalog.
-2. **Detect without touching.** Read the spec version with a plain metadata query: for a
-   PostgreSQL catalog, `SELECT value FROM ducklake_metadata WHERE key = 'version'` through
-   postgres_scanner; for a file catalog, a read-only attach as a plain DuckDB database, not
-   through `ducklake:`. This also works for pre-1.0 catalogs, which cannot be attached read-only
-   through DuckLake (R3). A file catalog's storage version is read from its header. Log
-   `found spec X / storage S; engine DuckDB V, DuckLake Y; action: …`, and expose the same values
-   in `GET /admin/status`.
-3. **A recovery point covers the catalog, the data files and the state (r2).** Restoring only the
-   catalog would leave `analytics_export_state` claiming partitions that the restored catalog
-   does not have (C5 again), and D9 could already have deleted the files that the old catalog
-   references. R3 itself says to back up "catalog and data files". So, before any one-way step (a
-   spec migration, or the first 2.x write to an older file catalog):
-   - **Catalog.**
-     - File catalog: copy the `.db` **and** any `.wal` left by an unclean shutdown to
-       `<catalog-path>.pre-<engine>.bak[.wal]`. Checkpointing first is not an option: it would
-       need the new engine, which upgrades the file.
-     - PostgreSQL catalog: copy every `ducklake_*` table into a backup schema
-       `ducklake_backup_<spec>_<yyyyMMdd>` with `CREATE TABLE … AS`. These tables are metadata
-       only, so the copy is small, and it gives a PostgreSQL deployment the same automatic
-       protection as a file deployment.
-   - **State.** Copy `analytics_export_state` into the same backup location, and record the
-     recovery point: the time, the catalog snapshot id, and the engine and spec versions.
-   - **Data files.** Open a **rollback window** (`ducklake.rollback-window`, default 14 days)
-     during which D9 deletes no files. Data files are immutable and are only ever added or
-     retired, so the files the backup references stay on disk for as long as the window is open.
+   Log the spec version found together with the engine's DuckDB and DuckLake versions, and expose
+   them in `GET /admin/status`.
+3. **Act on what was found:**
 
-   If any step fails, the analytics store does not start. The upgrade guide gives the restore
-   procedure:
+   | Catalog found | Action |
+   |---|---|
+   | none (new deployment) | Create it at the 2.x default spec (1.1) |
+   | spec 1.0 (made by 1.5.2+, i.e. `v3.0.0-beta4` and later) | Use it as is. DuckLake 1.1 "keeps reading and writing DuckLake 1.0 catalogs" (R3), so no migration is needed. A file catalog's storage version is upgraded by the first 2.x write (R3); that is accepted, because rolling back means resyncing. |
+   | pre-1.0 or `1.1-dev1` (made by 1.4.x, i.e. `v3.0.0-beta1`–`beta3`), which 2.x cannot read without migrating (R3) | **Refuse to start**, with the resync steps below in the message. Setting `yaci.store.analytics.ducklake.auto-migrate=true` lets an operator try DuckLake's `AUTOMATIC_MIGRATION` instead. That path is best effort and unsupported: there is no backup, and if it fails the answer is still a resync. |
+   | newer than the engine | Refuse to start. Do not attach. |
+
+4. **Resync is the supported upgrade and rollback path.** The upgrade guide gives the steps, and
+   so does the refusal message:
    1. stop;
-   2. restore the catalog and the state from the backup;
-   3. start the previous release.
+   2. delete the catalog (the file, or the `ducklake_*` tables), the DuckLake data directory
+      `<export-path>/main`, and the rows of `analytics_export_state`;
+   3. start;
+   4. the scheduler re-exports from PostgreSQL.
 
-   Files written after the recovery point are orphans, which `ducklake_delete_orphaned_files`
-   removes later.
-4. **Refuse a catalog newer than the engine**, for example after a binary rollback without a
-   restore, with a clear message. Do not attach.
-5. **PostgreSQL ownership.** A migration must run as the owner of the metadata tables (R3). A
-   permission failure is reported as such, not as a generic attach error.
+   A full yaci-store resync is needed only where PostgreSQL pruning has removed history that
+   should be in the analytics store (see the pruning settings in D5).
 
-The upgrade guide, and the docs right away (r2: `querying-data/page.mdx:46` currently says "at
-least as new as"), state that operators' own DuckDB clients must use **the same minor version**
-as the application. A newer client writing to a file catalog makes it unreadable to the
-application (R3); an older one cannot read a migrated catalog.
+`DUCKLAKE_VERSION` is not set explicitly. New catalogs take the 2.x default.
+
+The docs fix from r2 stays: operators' own DuckDB clients must use **the same minor version** as
+the application (`querying-data/page.mdx:46` currently says "at least as new as"). A newer
+client writing to a file catalog makes it unreadable to the application (R3).
 
 ### D3 — DuckLake is the default
 
@@ -501,12 +481,17 @@ Rules for every export or delete endpoint:
   - On 1.5.5, `union_by_name` together with `hive_partitioning` and `hive_types` works (review
     probe p10). M0 repeats this on 2.x.
 - This fixes the `tx_index` breakage (C6) without a manual step.
+- **Why D8 stays under r4's resync policy.** A resync is acceptable for an engine upgrade, which
+  happens rarely. Exporter columns change in ordinary releases (C6: `tx_index` in a beta6
+  pre-release), and re-exporting large daily tables such as `transaction_outputs` for each one
+  takes hours. D8 is small: it adds missing columns and reads with `union_by_name`. A type change
+  still fails, and the remedy for it is a resync of that table.
 
-### D9 — Catalog maintenance that respects readers and the rollback window
+### D9 — Catalog maintenance that respects readers
 
 Replaced and deleted files stay on disk until snapshots expire and old files are cleaned up
 (C4). A maintenance task runs under `DuckLakeWriterLock`, on a configurable interval (default
-daily). It does nothing while D2's rollback window is open.
+daily). (r4: the r2 rollback window is withdrawn along with D2's recovery point.)
 
 - **Reader leases (r2).** The r1 rationale ("retention much longer than the 5-minute refresh")
   was wrong on two counts:
@@ -657,13 +642,9 @@ Each invariant is tested in the milestone named in the plan.
 - **I7 (withdrawn in r3).** "No silent mode switch" relied on the automatic migration machinery,
   which r3 withdraws because no Parquet deployments are known. D3's WARN and D5's documented
   steps replace it.
-- **I8 (no unannounced one-way change).**
-  - The catalog never migrates beyond what `catalog-migration` allows.
-  - Every one-way step is preceded by a complete recovery point: catalog, state, and the file
-    retention of the rollback window.
-  - A catalog newer than the engine is never attached read-write.
-
-  *D1, D2, D9.*
+- **I8 (no silent catalog change; r4).** The application never migrates a catalog's spec
+  version unless `auto-migrate=true` is set. A catalog it cannot use (pre-1.0, or newer than the
+  engine) makes it stop with the resync steps; it never fails halfway. *D2.*
 - **I9 (schema).** An exporter that adds a column never fails on an existing table, and readers
   see NULL for it in older files. *D8.*
 - **I10 (ICU-independent dates).** The partition value, and the federation's date mapping, do not
@@ -680,10 +661,12 @@ Each invariant is tested in the milestone named in the plan.
   while 2.0 is LTS until at least October 2027 (R1), and DuckLake 1.1 features land only on 2.x.
   Rejected as the end state. D3 to D12 do not depend on 2.x and ship first, on 1.5.5.
 - **Let 2.x migrate every catalog to DuckLake 1.1 (the code's behaviour today).** This silently
-  breaks operators' 1.5 CLIs and makes a binary rollback impossible (C7). Rejected in favour of
-  D2 `required-only`.
-- **Back up only the catalog (r1).** A restored catalog contradicts the state table, and D9 can
-  delete the files the catalog references. Rejected in favour of D2's full recovery point.
+  breaks operators' 1.5 CLIs, and nobody sees it happen (C7). Rejected; D2 uses 1.0 catalogs
+  as they are.
+- **A supported in-place migration with backups and a rollback window (r2).** Withdrawn in r4.
+  3.0.0 is in beta and a resync is acceptable, so the backup, rollback-window and
+  three-mode-migration machinery is not worth its cost. D2 keeps only what a resync policy
+  needs: no silent migration, clear detection, and a refusal that carries the resync steps.
 - **Two statements, DELETE then INSERT, outside a transaction.** This is the 2026-03 design
   (`1e2ca77a5`, removed by `8d57af85e`, both in PR #858) and the local ADR-014 draft. A crash
   between the statements empties the partition while the state may still say `COMPLETED`.
@@ -719,8 +702,8 @@ Each invariant is tested in the milestone named in the plan.
   them, and the admin API gets a one-step, atomic "re-create this partition".
 - The default matches the docs and profiles, and an upgrade cannot empty the history of a
   Parquet deployment, either silently or through a mislabelled backfill.
-- The DuckDB upgrade becomes explicit and logged, and can be rolled back from a complete
-  recovery point.
+- The DuckDB upgrade never silently changes a catalog. Beta4+ catalogs keep working, and older
+  ones get a clear refusal with resync steps.
 - Epoch partitions are no longer exported before they are final.
 - New exporter columns stop breaking existing deployments.
 
@@ -735,8 +718,9 @@ Each invariant is tested in the milestone named in the plan.
   PostgreSQL therefore stop being "fire and forget".
 - Each export adds a `DELETE`, the precondition and post-condition checks, and a schema
   comparison: a small, constant overhead per partition.
-- Replaced files use disk until maintenance runs, and for the whole rollback window after an
-  upgrade (D9, D2).
+- Replaced files use disk until maintenance runs (D9).
+- Deployments from `v3.0.0-beta1`–`beta3` must resync their analytics data (re-export from
+  PostgreSQL), and rolling back the engine also means a resync (D2, r4).
 - Operators must keep their own DuckDB clients on the application's minor version.
 - Intel macOS users need an extra jar for analytics on 2.x (D1).
 
@@ -780,12 +764,11 @@ invariants it names.
   - Exit:
     - the full analytics test suite, including unified views with live federation, green on
       2.0.0.1;
-    - the upgrade matrix: file and PostgreSQL catalogs (Testcontainers) created by 1.4.4.0 and by
-      1.5.5.0, started under each `catalog-migration` value, checking the spec version, the
-      recovery point, the row counts and the view results;
-    - **a rollback rehearsal**: upgrade, export, force-replace, restore the recovery point, run
-      1.5.5, and check that the state and catalog agree (I4);
+    - the upgrade matrix: file and PostgreSQL catalogs (Testcontainers) created by 1.5.5.0 keep
+      working on 2.x with no migration, and the row counts and view results are unchanged;
+    - catalogs created by 1.4.4.0 are refused, with the resync message;
     - a catalog newer than the engine is refused;
+    - the documented resync steps, run end to end, produce a working analytics store;
     - all exporters run with external access disabled and only pre-seeded extensions;
     - a platform-detection test;
     - timeout SQL-state classification;
@@ -801,7 +784,6 @@ invariants it names.
   - Exit:
     - tests with aged snapshots (probe p9) showing that nothing a published view uses is
       deleted;
-    - no cleanup at all while a rollback window is open;
     - `cleanup_old_files` is always bounded by `older_than`.
 
 **Order:** M0, then M2, then M3 (these fix live correctness bugs and need only 1.5.5), then M1,
@@ -820,12 +802,9 @@ then M4 and M5. r3: M4 no longer depends on M2 and can ship at any point, even f
   request time.
 - **Q5 — Compaction.** Lean: a separate ADR. Any compaction must preserve one partition value
   per file (I2).
-- **Q6 — Removed in r2.** It asked about an automatic PostgreSQL catalog backup, which D2 step 3
-  now does (it copies the metadata tables into a backup schema).
-- **Q7 — The spec version of new catalogs.** 1.1 (the 2.x default), or 1.0 for one release? Lean:
-  1.0 for one release. This helps only PostgreSQL catalogs, which stay readable by operators'
-  1.5.2+ CLIs. A file catalog becomes unreadable to 1.5 after the first 2.x write whatever its
-  spec (R3).
+- **Q6 — Removed in r2.** It asked about an automatic PostgreSQL catalog backup.
+- **Q7 — Withdrawn in r4.** New catalogs take the 2.x default spec (1.1). There is no
+  compatibility window to protect during the beta.
 - **Q8 — The catalog-type default for new deployments that reach DuckLake by default.** Keep
   `postgresql`, which reuses the yaci-store database and its `public` schema, or default those
   deployments to `duckdb`, as the shipped profile does? Lean: keep `postgresql`, because changing
@@ -1006,3 +985,22 @@ in the session scratch directory. Each is cited where it changes a decision.
     moves to D8. Q3 is withdrawn. M4 is reduced and decoupled from M2.
   - **Unchanged on purpose:** D1, D2 and D6–D12. They concern DuckLake deployments and the 2.x
     upgrade, which still matter.
+- **r4** (2026-11-10; maintainer input: "migration from old version or existing sync is not must.
+  We can ask users to resync … as yaci store 3.0.0 is still in beta").
+  - **D2.** The rewrite keeps four parts:
+    - no implicit `AUTOMATIC_MIGRATION`;
+    - detection at startup;
+    - 1.0 catalogs used as they are;
+    - pre-1.0 and newer catalogs refused, with the resync steps.
+
+    An opt-in `auto-migrate` is best effort.
+  - **Withdrawn:**
+    - the recovery point: the catalog, WAL and state backups, and the backup schema for
+      PostgreSQL metadata;
+    - the rollback window, including D9's dependency on it;
+    - the `catalog-migration` modes;
+    - Q7.
+
+    I8 is restated.
+  - **M1.** The rollback rehearsal and the 1.4.4 migration cases are replaced by refusal and
+    resync tests.
