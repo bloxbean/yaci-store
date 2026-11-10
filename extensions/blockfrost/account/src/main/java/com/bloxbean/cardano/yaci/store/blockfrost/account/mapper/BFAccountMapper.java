@@ -70,6 +70,8 @@ public interface BFAccountMapper {
     @Mapping(target = "amount", expression = "java(mapToUtxoAmounts(source.amounts()))")
     @Mapping(target = "block", source = "blockHash")
     @Mapping(target = "txIndex", source = "outputIndex")
+    @Mapping(target = "dataHash",
+            expression = "java(com.bloxbean.cardano.yaci.store.blockfrost.common.util.DatumHashUtil.resolveDataHash(source.dataHash(), source.inlineDatum()))")
     BFAccountUtxoDto toUtxoDto(AccountUtxo source);
 
     BFAccountTransactionDto toTransactionDto(AccountTransaction source);
