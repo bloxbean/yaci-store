@@ -9,6 +9,7 @@ import com.bloxbean.cardano.yaci.store.staking.domain.PoolStatusType;
 import com.bloxbean.cardano.yaci.store.staking.domain.event.PoolRegistrationEvent;
 import com.bloxbean.cardano.yaci.store.staking.service.DepositParamService;
 import com.bloxbean.cardano.yaci.store.staking.storage.PoolStorage;
+import com.bloxbean.cardano.yaci.store.staking.storage.impl.model.PoolEntity;
 import com.bloxbean.cardano.yaci.store.staking.storage.impl.repository.PoolStatusRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,6 +22,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.when;
 
@@ -65,6 +67,12 @@ class PoolStatusProcessorIT {
                 PoolRegistration.builder().poolId(POOL_ID).txHash("tx3").txIndex(0).certIndex(0).build()))));
         processor.handleCommitEventToProcessPoolStatus(new PreCommitEvent(firstBlock));
 
+        assertThat(repository.findAll())
+                .filteredOn(p -> p.getSlot() == FIRST_SLOT_OF_RETIRE_EPOCH)
+                .extracting(PoolEntity::getStatus, PoolEntity::getTxIndex)
+                .containsExactlyInAnyOrder(
+                        tuple(PoolStatusType.RETIRED, -1),
+                        tuple(PoolStatusType.REGISTRATION, 0));
         assertThat(poolStorage.findActivePools(RETIRE_EPOCH))
                 .extracting(Pool::getPoolId)
                 .containsExactly(POOL_ID);
