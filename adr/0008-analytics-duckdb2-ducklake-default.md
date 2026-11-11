@@ -449,8 +449,8 @@ COMMIT;
 | Endpoint | Behaviour |
 |---|---|
 | `POST /export/table/{t}/date/{d}?force=true`, `…/epoch/{e}?force=true`, `…/range?…&force=true`, `…/epoch-range?…&force=true`, plus `&allow-shrink=true` | Without `force`, unchanged (skip if `COMPLETED`). With `force`, replace the partition through D6, following the D10 protocol. |
-| `DELETE /data/{t}/{partition}` (new) | Delete the partition's data and state through the D10 protocol (state first). Allowed for disabled tables that are still registered (r2): disabled means "not exported", not "unknown". If any later partition of the table is `COMPLETED` (r8), the delete opens a gap: the federation cutoff moves back before it, and every later partition is served from PostgreSQL, which may be pruned. Such a delete requires `allow-gap=true` (r6), and the response reports the new cutoff and the later partitions it displaces. The row is not removed: it ends as a `DELETED` tombstone carrying `gap_consent_at` (r7). |
-| `DELETE /state/{t}/{partition}` | Normalizes `2024-01-15`, `date=2024-01-15`, `450` and `epoch=450` through `PartitionValue`. Returns 404 for an unknown table or partition. Takes the partition lock and returns 409 for a partition whose operation is in flight (r2). The response says the data is untouched. The row is not removed: it becomes a `RESET` tombstone (r7). A partition with any later `COMPLETED` partition needs `allow-gap=true` (r8), as for `DELETE /data`, and the tombstone records `gap_consent_at`. |
+| `DELETE /data/{t}/{partition}` (new) | Delete the partition's data and state through the D10 protocol (state first). Allowed for disabled tables that are still registered (r2): disabled means "not exported", not "unknown". If the partition is itself `COMPLETED`, or any later partition of the table is `COMPLETED` (r8, r9), the delete can move the federation cutoff back: the partition, and every later one, would be served from PostgreSQL, which may be pruned. Such a delete requires `allow-gap=true` (r6), and the response reports the new cutoff and the partitions it displaces. This is the same condition under which D12 3c needs a consented tombstone, so every retreat D7 admits can be published. The row is not removed: it ends as a `DELETED` tombstone carrying `gap_consent_at` (r7). |
+| `DELETE /state/{t}/{partition}` | Normalizes `2024-01-15`, `date=2024-01-15`, `450` and `epoch=450` through `PartitionValue`. Returns 404 for an unknown table or partition. Takes the partition lock and returns 409 for a partition whose operation is in flight (r2). The response says the data is untouched. The row is not removed: it becomes a `RESET` tombstone (r7). A partition that is itself `COMPLETED`, or has any later `COMPLETED` partition, needs `allow-gap=true` (r8, r9), as for `DELETE /data`, and the tombstone records `gap_consent_at`. |
 | `DELETE /state/{t}/range` | Normalizes keys. Uses a bounded repository query instead of `findAll()`. Adds an `epoch-range` variant. Same locking, tombstones and `allow-gap` rule as the single reset. |
 
 Rules for every export or delete endpoint:
@@ -698,7 +698,9 @@ cutoff move on. The new order:
      `COMPLETED` state. Any other retreat defers the table, as in 3b. This includes a first gap
      with no row or an unconsented tombstone, such as a reset made before step 1, whose
      partition never reaches 3a because it is not in the completed set.
-     D7's trigger (any later `COMPLETED` partition) makes sure that no second gap can open
+     D7's condition matches this rule (r9, F5). Removing a `COMPLETED` partition, the tail
+     included, needs consent, and so does removing any partition that has a later `COMPLETED`
+     one. So the first gap of any retreat was admitted with consent, and no second gap can open
      behind a consented one without its own consent. So when the first gap is filled again,
      the cutoff either regains the old range or stops at another consented gap. The first
      publication after a start has no previous cutoff. It is computed from the state, where
@@ -886,7 +888,12 @@ invariants it names.
       January 3 stays `COMPLETED` and unmodified;
     - (r8) while January 2's consented gap is open, a reset of January 4 (January 5 completed)
       is refused without `allow-gap`. After January 2 is re-exported, the cutoff regains
-      January 5.
+      January 5;
+    - (r9, F5) tail operations. A delete, and a state reset, of the last partition, and of the
+      only partition, is refused without `allow-gap`. With it, the operation publishes the
+      reported cutoff, before and after a restart. A range reset ending at the tail behaves the
+      same. A delete or reset of a partition that is not `COMPLETED` and has no later
+      `COMPLETED` partition needs no consent, and does not move the cutoff.
 - **M1 — DuckDB 2.0.0.1 (D1, D2).**
   - Exit:
     - the full analytics test suite, including unified views with live federation, green on
@@ -1201,3 +1208,10 @@ reviewer1 (same versions) also showed:
     `COMPLETED`, not only inside the contiguous range. Otherwise a reset behind an open,
     consented gap would need no consent, and would silently cap the cutoff once the first gap
     is filled.
+- **r9** (2026-11-11; responds to reviewer1's round-5 review of `88082ec8f`).
+  - **F5 (P2) → D7, D12 3c, M3.** r8's trigger left out the tail: a delete or reset of the last
+    `COMPLETED` partition needed no consent under D7, but D12 refused to publish it. D7 now
+    requires `allow-gap` when the partition is itself `COMPLETED`, or any later partition is.
+    That is exactly the set of operations whose retreat 3c needs consent for, so D7's admission
+    and D12's publication agree. M3 gains the tail, only-partition and tail-range cases, with
+    restart consistency.
