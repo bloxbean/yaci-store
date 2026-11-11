@@ -22,7 +22,8 @@ selected by `yaci.store.analytics.storage.type`:
   DuckDB file.
 
 This ADR covers four things the maintainers asked for: move to DuckDB 2.x, make DuckLake the
-default, deprecate the `parquet` mode, and fix the edge cases around deleting and re-creating
+default, deprecate the `parquet` mode (r10: the maintainer decided to remove it outright, D4),
+and fix the edge cases around deleting and re-creating
 partitions through the admin API. The facts below were checked at `origin/main` `b965a19ad`,
 with probes run on the DuckDB CLI `v1.5.5 (Variegata) d8cdaa33fd`, DuckLake extension
 `d8a1881e`. The probe SQL is in [Appendix A](#appendix-a-probes).
@@ -311,22 +312,20 @@ DuckLake is already what the shipped profiles and the v3 docs use. r2's two-phas
 and evidence tables are therefore withdrawn; D3 becomes a plain default change with one cheap
 guard.
 
-- **Flip the default.** `Storage.type` defaults to `ducklake`. `matchIfMissing = true` moves from
-  `ParquetWriterService:35` to every DuckLake-gated bean:
-  - `DuckLakeWriterService:40`
-  - `DuckLakeCatalogInitializer:31`
-  - `DuckLakeCatalogSnapshotReader:50`
-  - `DuckDbCatalogPreInitializer:42`
-  - `DuckLakeWriterLock:11`
-
-  `ParquetTableRegistry.isDuckLake()` (`:167`) treats an unset value as DuckLake. With that,
-  `@ConditionalOnProperty` stays the mechanism (CC F2), and no resolver bean is needed.
-  Application-context tests cover the unset, `ducklake` and `parquet` cases.
+- **DuckLake is the only storage type (r10).** With `parquet` removed (D4), the
+  `storage.type` gate disappears from the DuckLake beans: `DuckLakeWriterService:40`,
+  `DuckLakeCatalogInitializer:31`, `DuckLakeCatalogSnapshotReader:50`,
+  `DuckDbCatalogPreInitializer:42` and `DuckLakeWriterLock:11`. They load whenever the analytics
+  store is enabled. The `isDuckLake()` branches in `ParquetTableRegistry` (`:167`) and the query
+  layer go too. `Storage.type` is kept only to fail fast. It defaults to `ducklake`, and any
+  other value, `parquet` included, stops startup with a message that points to D5.
+  Application-context tests cover the unset, `ducklake` and `parquet` cases. (r3–r9 moved
+  `matchIfMissing` and kept both modes; that is superseded.)
 - **Guard against the unlikely legacy case.** If the type is unset (DuckLake by default) and
   `<export-path>/*/(date|epoch)=*/data.parquet` exists, `DuckLakeCatalogInitializer` logs a WARN.
   The WARN names the legacy layout and points to the D5 steps. The analytics store does **not**
-  refuse to start: an explicit `storage.type=parquet` keeps the old behaviour, and the risk is
-  only to a deployment nobody knows of.
+  refuse to start for the layout alone. Those files were never served in DuckLake mode, and
+  D5 says when they can be deleted.
 - **Catalog type default.** `ducklake.catalog-type` keeps its code default, `postgresql`
   (`AnalyticsStoreProperties:323`). A deployment that reaches DuckLake through the default
   therefore gets `ducklake_*` tables in the `public` schema of its yaci-store database, unlike the
@@ -335,17 +334,28 @@ guard.
   (Q8).
 - The README is aligned with the v3 docs and the shipped profiles.
 
-### D4 — The `parquet` mode is deprecated, then removed
+### D4 — The `parquet` mode is removed in this release (r10)
 
-- **This release.** The mode still works when set explicitly. It gets a startup WARN, a
-  `@Deprecated` on `ParquetWriterService` and its properties (`yaci.store.analytics.parquet-export.*`),
-  and a "Deprecated" callout in the docs. It gets no new features. D6–D12 are built for DuckLake
-  only. In Parquet mode, the D7 `force` and `DELETE /data` keep today's file-replace behaviour,
-  and nothing more is guaranteed.
-- **Removal (Q2).** Remove `ParquetWriterService`, the glob path of `ParquetTableRegistry`, the
-  `isDuckLake()` branches and the checksum code in `AbstractTableExporter`. After removal,
-  `storage.type=parquet` fails at startup with a pointer to D5. r3 lean: remove in the next
-  minor release, since there are no known users.
+The maintainer resolved Q2: there are no known `parquet` deployments, and 3.0.0 is in beta, so
+there is no deprecation release. r1–r9's "deprecate now, remove later" is withdrawn.
+
+- **Removed:**
+  - `ParquetWriterService`, and its properties `yaci.store.analytics.parquet-export.*`;
+  - the glob, non-DuckLake path of `ParquetTableRegistry`;
+  - every `isDuckLake()` branch in the store and the query layer;
+  - the checksum code in `AbstractTableExporter` (used only by the non-DuckLake path);
+  - the Parquet-mode tests.
+- **Kept:**
+  - reading Parquet files: DuckLake data files are Parquet, and the query layer reads them with
+    `read_parquet`;
+  - the class names `ParquetReadConnectionProvider` and `ParquetTableRegistry`. Renaming them is
+    optional cleanup, not part of this ADR.
+- **Configuration.** `storage.type=parquet` stops startup, with a message that names D5. Any
+  leftover `parquet-export.*` property is ignored with a WARN.
+- **Docs.** The `parquet` mode is removed from the docs, the README and the shipped profiles. The
+  upgrade guide carries the D5 steps.
+
+D6–D12 therefore apply to the only storage type there is.
 
 ### D5 — Moving from Parquet: a documented re-export, not an automated migration
 
@@ -793,8 +803,10 @@ Each invariant is tested in the milestone named in the plan.
   an evidence backfill and a pruning refusal).** Withdrawn in r3: it costs a schema column, a
   pre-context environment post-processor and a backfill, all to protect deployments nobody
   knows of. Replaced by D3's WARN and D5's documented steps.
-- **Remove `parquet` in this release.** It would be simplest, but deprecating first costs almost
-  nothing and leaves a window for an unknown user. Kept as Q2.
+- **Deprecate `parquet` first, remove it later (r1–r9).** It would leave a window for an
+  unknown user, but it keeps two code paths, and their tests, alive through a release in which
+  D6–D12 only cover one of them. Withdrawn in r10: the maintainer chose removal now, because
+  there are no known deployments and 3.0.0 is in beta.
 
 ## Consequences
 
@@ -802,8 +814,8 @@ Each invariant is tested in the milestone named in the plan.
 
 - Re-exports, retries, crashes and state loss can no longer duplicate rows or silently shrink
   them, and the admin API gets a one-step, atomic "re-create this partition".
-- The default matches the docs and profiles, and an upgrade cannot empty the history of a
-  Parquet deployment, either silently or through a mislabelled backfill.
+- The analytics store has one storage type. That means less code and fewer tests, the docs and
+  profiles match, and D6–D12 cover everything that ships (r10).
 - The DuckDB upgrade never silently changes a catalog. Beta4+ catalogs keep working, and older
   ones get a clear refusal with resync steps.
 - Epoch partitions are no longer exported before they are final.
@@ -813,9 +825,8 @@ Each invariant is tested in the milestone named in the plan.
 
 - `analytics_export_state` gains seven columns, tombstone statuses and a reconciler. The state handling becomes a
   small protocol (D10) instead of a status flip.
-- Moving from Parquet is a manual, documented re-export (D5), not an automated migration. An
-  unknown Parquet deployment that only flips the type without clearing state would hit C5; the
-  D3 WARN and the upgrade guide are its only protection.
+- An unknown `parquet` deployment cannot upgrade in place. It fails at startup, with a pointer
+  to D5's manual re-export (r10). Its legacy files stay on disk, untouched.
 - A replace that would shrink a partition fails until an operator decides. Exports on a pruned
   PostgreSQL therefore stop being "fire and forget".
 - Each export adds a `DELETE`, the precondition and post-condition checks, and a schema
@@ -907,11 +918,12 @@ invariants it names.
     - a platform-detection test;
     - timeout SQL-state classification;
     - the docs fix for operators' CLI versions ships with M1 at the latest.
-- **M4 — Default and deprecation (D3, D4, D5).** Small.
+- **M4 — DuckLake only: remove `parquet` (D3, D4, D5).** Small.
   - Exit:
-    - application-context tests for an unset type, `ducklake` and `parquet`;
+    - application-context tests: an unset type and `ducklake` start; `parquet` (or any other
+      value) fails with the D5 pointer;
     - the legacy-layout WARN;
-    - the deprecation WARN;
+    - no `ParquetWriterService`, glob registry path or `isDuckLake()` branch is left;
     - an integration test of the D5 steps (switch, clear state, re-export, query);
     - the docs, the README and the upgrade guide.
 - **M5 — Maintenance (D9).**
@@ -927,8 +939,8 @@ then M4 and M5. r3: M4 no longer depends on M2 and can ship at any point, even f
 
 - **Q1 — Extension delivery.** Should the Docker image bake in the extensions (per architecture),
   or only document `extension-directories`? Lean: bake them in.
-- **Q2 — When to remove `parquet`.** Options: (a) the next minor release; (b) 4.0. Lean (r3):
-  (a), since no production deployment is known to use it.
+- **Q2 — Resolved in r10.** The maintainer decided to remove `parquet` in this release, with
+  no deprecation release (D4).
 - **Q3 — Withdrawn in r3.** It proposed a fast Parquet-to-DuckLake migration with
   `ducklake_add_data_files`. There are no known deployments to migrate. (P2 records that it
   works, for anyone who needs it.)
@@ -944,13 +956,22 @@ then M4 and M5. r3: M4 no longer depends on M2 and can ship at any point, even f
   deployments to `duckdb`, as the shipped profile does? Lean: keep `postgresql`, because changing
   it would move existing explicit-DuckLake deployments to an empty file catalog. Document it and
   check the PostgreSQL 15+ permissions.
-- **Q9 — Why was delete-before-insert removed in PR #858 (`8d57af85e`)?** Neither the commit nor
-  the PR records a reason. Plausible causes:
-  - inlined or partial deletes that the query layer could not apply, which D6's preconditions and
-    post-checks now cover;
-  - cost on large partitions.
+- **Q9 — Why was delete-before-insert removed in PR #858 (`8d57af85e`)?** r10 traced the
+  history; no reason is recorded anywhere:
+  - `1e2ca77a5` (2026-03-21) added `deletePartitionData`. It was a separate auto-commit
+    `DELETE` that ran before every `INSERT`, including first exports.
+  - A review flagged the `String.format` SQL, and `9f454c7bb` (2026-03-23) switched it to a
+    `PreparedStatement` with validated values.
+  - `8d57af85e` (2026-03-26) then removed it, with the message "remove deletePartitionData in
+    DuckLake writer" and no body. The PR was approved and merged the same day without
+    discussing it.
 
-  A maintainer who remembers the reason should confirm it.
+  The code was functionally sound. On 1.5.5, a `DELETE … WHERE date = ?` with a VARCHAR
+  parameter removes the DATE partition correctly (r10 probe). So the removal was not forced by
+  a defect we can reproduce. Duplicated rows (2× in early partitions after a state reset) were
+  observed afterwards, as C2 predicts. D6 does not depend on the answer: it is atomic where
+  the removed code was not, and it rules out inlined and partial deletes. Q9 is therefore not
+  blocking. Only the PR author can say more.
 
 ## Related findings (out of scope)
 
@@ -1215,3 +1236,12 @@ reviewer1 (same versions) also showed:
     That is exactly the set of operations whose retreat 3c needs consent for, so D7's admission
     and D12's publication agree. M3 gains the tail, only-partition and tail-range cases, with
     restart consistency.
+- **r10** (2026-11-11; maintainer decisions after reviewer1's approval of r9 at `d3b01bad9`).
+  - **Q2 resolved → D4 rewritten.** `parquet` is removed in this release, with no deprecation
+    release.
+  - **D3 simplified.** The DuckLake beans lose their `storage.type` gate, and any value other
+    than `ducklake` fails at startup.
+  - **Updated to match:** the Alternatives, Consequences and M4 exit criteria.
+  - **Q9.** Its history trace is recorded. No reason was found, and Q9 is marked non-blocking.
+  - **Unchanged:** D1, D2 and D5–D12, and every invariant.
+  - **Re-review.** These changes post-date the approval of r9, so they need re-review.
