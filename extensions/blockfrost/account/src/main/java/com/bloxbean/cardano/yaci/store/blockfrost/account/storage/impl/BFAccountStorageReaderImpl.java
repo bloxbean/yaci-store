@@ -828,11 +828,12 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
     /**
      * On-chain position of an address_utxo output (block, tx index, output index) packed into one
      * number. Plays the role of db-sync's {@code tx_out.id}, which Blockfrost uses to pick and order
-     * the rows of a transaction.
+     * the rows of a transaction. Rows stored without a tx index take it from {@code transaction}.
      */
     private Field<Long> outputPosition() {
         return ADDRESS_UTXO.BLOCK.mul(1L << 32)
-                .plus(DSL.coalesce(ADDRESS_UTXO.TX_INDEX, 0).cast(Long.class).mul(1L << 16))
+                .plus(DSL.coalesce(resolveTxIndex(ADDRESS_UTXO.TX_HASH, ADDRESS_UTXO.TX_INDEX), 0)
+                        .cast(Long.class).mul(1L << 16))
                 .plus(ADDRESS_UTXO.OUTPUT_INDEX.cast(Long.class));
     }
 
