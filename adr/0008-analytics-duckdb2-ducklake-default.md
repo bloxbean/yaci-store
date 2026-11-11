@@ -448,7 +448,7 @@ COMMIT;
 | Endpoint | Behaviour |
 |---|---|
 | `POST /export/table/{t}/date/{d}?force=true`, `…/epoch/{e}?force=true`, `…/range?…&force=true`, `…/epoch-range?…&force=true`, plus `&allow-shrink=true` | Without `force`, unchanged (skip if `COMPLETED`). With `force`, replace the partition through D6, following the D10 protocol. |
-| `DELETE /data/{t}/{partition}` (new) | Delete the partition's data and state through the D10 protocol (state first). Allowed for disabled tables that are still registered (r2): disabled means "not exported", not "unknown". |
+| `DELETE /data/{t}/{partition}` (new) | Delete the partition's data and state through the D10 protocol (state first). Allowed for disabled tables that are still registered (r2): disabled means "not exported", not "unknown". If a later partition of the table is `COMPLETED`, the delete opens a gap. The federation cutoff then moves back before it, and the later partitions are served from PostgreSQL, which may be pruned. Such a delete requires `allow-gap=true` (r6), and the response reports the new cutoff. |
 | `DELETE /state/{t}/{partition}` | Normalizes `2024-01-15`, `date=2024-01-15`, `450` and `epoch=450` through `PartitionValue`. Returns 404 for an unknown table or partition. Takes the partition lock and returns 409 for a partition whose operation is in flight (r2). The response says the data is untouched. |
 | `DELETE /state/{t}/range` | Normalizes keys. Uses a bounded repository query instead of `findAll()`. Adds an `epoch-range` variant. Same locking as the single reset. |
 
@@ -464,7 +464,7 @@ Rules for every export or delete endpoint:
   is running (an `AtomicBoolean` shared with the scheduled run).
 - **Long ranges** stay synchronous and bounded by the range cap (Q4).
 - **Responses** report the outcome per partition: `exported`, `skipped-completed`,
-  `rejected-unfinalized`, `rejected-dependency`, `rejected-shrink`, `failed: …`.
+  `rejected-unfinalized`, `rejected-dependency`, `rejected-shrink`, `rejected-gap` (r6), `failed: …`.
 
 ### D8 — Schema evolution is additive and explicit
 
@@ -656,11 +656,25 @@ cutoff move on. The new order:
      may have no snapshot of its own (p15), so file presence alone would open a gap there and
      route every later partition back to PostgreSQL.
 
-   A completed partition with `row_count > 0` but no files is not covered: the cutoff stops
-   before it and a WARN is logged. This guards against a cutoff over data the snapshot does not
-   have. One case is transient: a `REPLACE` to zero rows (`allow-shrink`) that commits between
-   steps 1 and 2. The next refresh then sees the new `row_count` of 0 and covers it again.
-   Concurrent `DELETE`s cannot cause this, because a `DELETE` leaves the completed set first.
+   **A completed partition with `row_count > 0` but no files** is inconsistent with the
+   snapshot. It is never published as a gap (r6, F2), because a gap moves the cutoff back and
+   routes every later partition to PostgreSQL, whose history may be pruned. Instead:
+   - **3a. Re-read the evidence.** Re-read the state rows of the inconsistent partitions, after
+     step 2:
+     - `pending_op = REPLACE`, or `COMPLETED` with `row_count = 0` and
+       `catalog_snapshot_id` no later than the snapshot: a replacement to zero rows committed
+       between steps 1 and 2. D6 is atomic, and the old contents had files, so no files means
+       that the new, empty contents are in the snapshot. The partition is **covered**.
+     - `DELETING`, or no row: a delete is under way (D7). The partition is not covered, which is
+       the gap the operator consented to with `allow-gap`.
+   - **3b. Otherwise, defer the table.** For example: still `COMPLETED` with `row_count > 0`
+     (missing data), or another operation that finished after the snapshot. The table's
+     publication is deferred: it keeps its previous historical and unified views, cutoff and
+     lease, all together. The previous pair stays readable, because D9 does not delete files a
+     lease still uses. The refresh retries the table next time. After three consecutive
+     deferrals, a WARN and the `analytics.view.deferred` metric flag the table, and
+     `GET /admin/status` shows it. The table is never published with a gap that it did not
+     have before.
 4. Publish a table's historical view and its unified view **together**. If either fails, keep
    the table's previous pair, previous cutoff and previous lease.
 
@@ -703,7 +717,9 @@ Each invariant is tested in the milestone named in the plan.
   fewer rows. *D6, D7.*
 - **I12 (published consistency).** For every published table, every partition inside its cutoff
   either has its files in the view's file list or is a verified empty export (D12, r5), and no
-  file in any published view has been deleted.
+  file in any published view has been deleted. A refresh never publishes a cutoff that leaves
+  out a partition the previous cutoff covered, except after a `DELETE /data` with `allow-gap`
+  (r6).
   *D9, D12.*
 
 ## Alternatives considered
@@ -819,7 +835,13 @@ invariants it names.
     - a failed view refresh leaving the cutoff unchanged;
     - (r5) empty partitions first, in the middle and last, an entirely empty table, a delete or
       replace racing the refresh, and a pruned PostgreSQL source: no gap opens at an empty
-      partition and no row disappears from the unified view.
+      partition and no row disappears from the unified view;
+    - (r6) reviewer1's timeline. January 1–3 are `COMPLETED` with 10 rows each, and January 3's
+      source is pruned. An `allow-shrink` replace of January 2 to zero rows commits between
+      steps 1 and 2. January 3 stays visible at every refresh. The same test, with the state
+      re-read forced to show `COMPLETED` with 10 rows, defers the table and keeps the previous
+      pair;
+    - (r6) `DELETE /data` of a middle partition is refused without `allow-gap`.
 - **M1 — DuckDB 2.0.0.1 (D1, D2).**
   - Exit:
     - the full analytics test suite, including unified views with live federation, green on
@@ -1101,3 +1123,14 @@ reviewer1 (same versions) also showed:
       (D9).
     - The recovery-point backup point no longer applies (withdrawn in r4).
     - The other two points are F1 and F2.
+- **r6** (2026-11-11; responds to reviewer1's round-2 review of `26b37e4f7`).
+  - **F2 (P1), completion → D12 step 3.** r5's "transient gap" is withdrawn. A completed
+    non-empty partition without files is resolved before anything is published:
+    - **(3a)** a state re-read covers a committed replacement to zero rows;
+    - a `DELETING` or missing row counts as a consented delete;
+    - **(3b)** anything else defers the whole table, which keeps its previous views, cutoff and
+      lease together. After three deferrals it is flagged.
+  - **D7.** `DELETE /data` needs `allow-gap` when later partitions are completed.
+  - **I12.** Extended to say that a refresh never moves a cutoff back without consent.
+  - **M3.** Gains reviewer1's January 1–3 timeline, the deferral case and the `allow-gap`
+    refusal.
