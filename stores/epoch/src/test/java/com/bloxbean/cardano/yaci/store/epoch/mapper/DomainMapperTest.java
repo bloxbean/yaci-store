@@ -131,6 +131,35 @@ class DomainMapperTest {
     }
 
     @Test
+    void toProtocolParamsDto_defaultsLegacyParamsLikeBlockfrost() {
+        ProtocolParams protocolParams = ProtocolParams.builder()
+                .minFeeA(44)
+                .adaPerUtxoByte(BigInteger.valueOf(4310))
+                .build();
+
+        ProtocolParamsDto dto = domainMapper.toProtocolParamsDto(protocolParams);
+
+        assertThat(dto.getDecentralisationParam()).isEqualByComparingTo("0");
+        assertThat(dto.getMinUtxo()).isEqualTo("4310");
+        assertThat(dto.getCoinsPerUtxoWord()).isEqualTo("4310");
+        assertThat(dto.getExtraEntropy()).isNull();
+    }
+
+    @Test
+    void toProtocolParamsDto_keepsLegacyParamsWhenSet() {
+        ProtocolParams protocolParams = ProtocolParams.builder()
+                .minUtxo(BigInteger.valueOf(1000000))
+                .decentralisationParam(UnitInterval.fromString("1/2"))
+                .adaPerUtxoByte(BigInteger.valueOf(4310))
+                .build();
+
+        ProtocolParamsDto dto = domainMapper.toProtocolParamsDto(protocolParams);
+
+        assertThat(dto.getMinUtxo()).isEqualTo("1000000");
+        assertThat(dto.getDecentralisationParam()).isEqualByComparingTo("0.5");
+    }
+
+    @Test
     void toProtocolParamsDto() {
         ProtocolParams protocolParams = ProtocolParams.builder()
                 .minFeeA(100)
