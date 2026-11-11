@@ -354,8 +354,9 @@ purpose was a safe automatic migration of Parquet deployments, and none are know
 guide documents the manual path instead:
 
 1. Set `storage.type=ducklake`.
-2. Clear the analytics export state, with `DELETE /admin/state/{t}/range` for each table (fixed by
-   D7), or by truncating `analytics_export_state`.
+2. Clear the analytics export state, with `DELETE /admin/state/{t}/range?allow-gap=true` for
+   each table (fixed by D7), or by truncating `analytics_export_state` while the application is
+   stopped. Truncation is the documented, consented reset to an empty cutoff (D12 step 3c).
    - This step is **required**. Without it, the `COMPLETED` rows would point the federation
      boundary at an empty catalog (C5).
 3. Let the scheduler re-export from PostgreSQL.
@@ -448,9 +449,9 @@ COMMIT;
 | Endpoint | Behaviour |
 |---|---|
 | `POST /export/table/{t}/date/{d}?force=true`, `…/epoch/{e}?force=true`, `…/range?…&force=true`, `…/epoch-range?…&force=true`, plus `&allow-shrink=true` | Without `force`, unchanged (skip if `COMPLETED`). With `force`, replace the partition through D6, following the D10 protocol. |
-| `DELETE /data/{t}/{partition}` (new) | Delete the partition's data and state through the D10 protocol (state first). Allowed for disabled tables that are still registered (r2): disabled means "not exported", not "unknown". If a later partition of the table is `COMPLETED`, the delete opens a gap. The federation cutoff then moves back before it, and the later partitions are served from PostgreSQL, which may be pruned. Such a delete requires `allow-gap=true` (r6), and the response reports the new cutoff. |
-| `DELETE /state/{t}/{partition}` | Normalizes `2024-01-15`, `date=2024-01-15`, `450` and `epoch=450` through `PartitionValue`. Returns 404 for an unknown table or partition. Takes the partition lock and returns 409 for a partition whose operation is in flight (r2). The response says the data is untouched. |
-| `DELETE /state/{t}/range` | Normalizes keys. Uses a bounded repository query instead of `findAll()`. Adds an `epoch-range` variant. Same locking as the single reset. |
+| `DELETE /data/{t}/{partition}` (new) | Delete the partition's data and state through the D10 protocol (state first). Allowed for disabled tables that are still registered (r2): disabled means "not exported", not "unknown". If the partition is inside the table's contiguous completed range (as `CutoffSlotResolver` computes it), the delete moves the federation cutoff back, and the later partitions are served from PostgreSQL, which may be pruned. Such a delete requires `allow-gap=true` (r6), and the response reports the new cutoff. The row is not removed: it ends as a `DELETED` tombstone carrying `gap_consent_at` (r7). |
+| `DELETE /state/{t}/{partition}` | Normalizes `2024-01-15`, `date=2024-01-15`, `450` and `epoch=450` through `PartitionValue`. Returns 404 for an unknown table or partition. Takes the partition lock and returns 409 for a partition whose operation is in flight (r2). The response says the data is untouched. The row is not removed: it becomes a `RESET` tombstone (r7). A partition inside the contiguous completed range needs `allow-gap=true`, as for `DELETE /data`, and the tombstone records `gap_consent_at`. |
+| `DELETE /state/{t}/range` | Normalizes keys. Uses a bounded repository query instead of `findAll()`. Adds an `epoch-range` variant. Same locking, tombstones and `allow-gap` rule as the single reset. |
 
 Rules for every export or delete endpoint:
 
@@ -543,13 +544,22 @@ New columns, in Flyway migration `V0_1500_3`, shipped in all three dialects
 - `pending_op VARCHAR(16)` (`NULL`, `EXPORT`, `REPLACE` or `DELETE`);
 - `catalog_snapshot_id BIGINT`;
 - `claim_snapshot_id BIGINT` (r5): the catalog's latest snapshot id at claim time;
+- `gap_consent_at TIMESTAMP` (r7): set when an operator passed `allow-gap` for this partition.
+  It is cleared when the partition is `COMPLETED` again.
+
+**Tombstones (r7).** The admin endpoints never remove a state row. `DELETE /data` finishes as
+`DELETED` and `DELETE /state` as `RESET`. Both statuses mean "not exported": the scheduler's gap
+detection already looks only at `COMPLETED` rows (`GapDetectionService:94`), so it re-exports
+them as before. A tombstone is the durable evidence that D12 uses to tell a consented gap from
+missing state, and it survives restarts.
 - `prev_status VARCHAR(20)` and `prev_row_count BIGINT`.
 
 Every operation follows the same steps:
 
 1. **Claim.** One atomic conditional update:
    `UPDATE … SET attempt_id = :new, pending_op = :op, claim_snapshot_id = :latest, prev_status = export_status, prev_row_count = row_count WHERE pk AND pending_op IS NULL`,
-   or the matching insert for a new partition (including one whose row a `DELETE /state` removed).
+   or the matching insert for a partition that has no row yet. A tombstone is claimed like any
+   other row.
    `:latest` is read under `DuckLakeWriterLock`, which the attempt holds until it finishes, so
    every snapshot after it that touches the table belongs to this attempt. Zero rows updated means another operation owns
    the partition: the admin gets 409, the scheduler skips it. The **status is not changed** by a
@@ -581,7 +591,8 @@ Every operation follows the same steps:
 `pending_op IS NOT NULL` is orphaned. This replaces the 60-minute stale timeout for this purpose;
 the timeout also wrongly reaps exports that take longer than an hour. For each orphan:
 
-- **`DELETE`:** run the data delete again (it is idempotent), then remove the row.
+- **`DELETE`:** run the data delete again (it is idempotent), then finish the row as a `DELETED`
+  tombstone (r7).
 - **`EXPORT` / `REPLACE`:** look for a snapshot after `claim_snapshot_id` whose
   `commit_extra_info` carries the `attempt_id` (r5).
   - **Marker found** (the commit happened, the finish did not): finish as success, with the row
@@ -665,8 +676,11 @@ cutoff move on. The new order:
        `catalog_snapshot_id` no later than the snapshot: a replacement to zero rows committed
        between steps 1 and 2. D6 is atomic, and the old contents had files, so no files means
        that the new, empty contents are in the snapshot. The partition is **covered**.
-     - `DELETING`, or no row: a delete is under way (D7). The partition is not covered, which is
-       the gap the operator consented to with `allow-gap`.
+     - `DELETING`, `DELETED` or `RESET` **with `gap_consent_at` set**: a consented delete or
+       reset (D7). The partition is not covered, and the gap is published.
+     - **No row, or a tombstone without `gap_consent_at`:** insufficient evidence (r7). D7 cannot
+       produce either one for a partition inside the cutoff, so absence is never read as
+       consent. This falls to 3b.
    - **3b. Otherwise, defer the table.** For example: still `COMPLETED` with `row_count > 0`
      (missing data), or another operation that finished after the snapshot. The table's
      publication is deferred: it keeps its previous historical and unified views, cutoff and
@@ -675,6 +689,15 @@ cutoff move on. The new order:
      deferrals, a WARN and the `analytics.view.deferred` metric flag the table, and
      `GET /admin/status` shows it. The table is never published with a gap that it did not
      have before.
+   - **3c. Check the final cutoff (r7).** After 3a and 3b, compare the proposed cutoff with the
+     table's previously published cutoff. Every partition it would give up, in
+     `(proposed, previous]`, must carry a consented tombstone (`gap_consent_at` set). This also
+     covers a reset that happened before step 1, whose partition never reaches 3a because it is
+     not in the completed set. Otherwise the table is deferred, as in 3b. The first publication
+     after a start has no previous cutoff. It is computed from the state, where consented gaps
+     persist as tombstones. A gap with no tombstone there can only come from editing
+     `analytics_export_state` outside the API while the application was stopped. D5's
+     documented truncation is the one supported case; any other is outside this guarantee.
 4. Publish a table's historical view and its unified view **together**. If either fails, keep
    the table's previous pair, previous cutoff and previous lease.
 
@@ -718,8 +741,9 @@ Each invariant is tested in the milestone named in the plan.
 - **I12 (published consistency).** For every published table, every partition inside its cutoff
   either has its files in the view's file list or is a verified empty export (D12, r5), and no
   file in any published view has been deleted. A refresh never publishes a cutoff that leaves
-  out a partition the previous cutoff covered, except after a `DELETE /data` with `allow-gap`
-  (r6).
+  out a partition the previous cutoff covered, unless that partition carries a consented
+  tombstone (`gap_consent_at`) from a `DELETE /data` or state reset with `allow-gap` (r6, r7).
+  The check applies to the final proposed cutoff (D12 step 3c).
   *D9, D12.*
 
 ## Alternatives considered
@@ -776,7 +800,7 @@ Each invariant is tested in the milestone named in the plan.
 
 **Negative**
 
-- `analytics_export_state` gains six columns and a reconciler. The state handling becomes a
+- `analytics_export_state` gains seven columns, tombstone statuses and a reconciler. The state handling becomes a
   small protocol (D10) instead of a status flip.
 - Moving from Parquet is a manual, documented re-export (D5), not an automated migration. An
   unknown Parquet deployment that only flips the type without clearing state would hit C5; the
@@ -841,7 +865,13 @@ invariants it names.
       steps 1 and 2. January 3 stays visible at every refresh. The same test, with the state
       re-read forced to show `COMPLETED` with 10 rows, defers the table and keeps the previous
       pair;
-    - (r6) `DELETE /data` of a middle partition is refused without `allow-gap`.
+    - (r6) `DELETE /data` of a middle partition is refused without `allow-gap`;
+    - (r7) reviewer1's continuation: January 2 is replaced to zero rows and finishes, then its
+      state is reset (with and without `allow-gap`), before and after step 1. Without consent,
+      the reset is refused or the table is deferred. With consent, the tombstone allows the
+      gap. January 3 is never hidden without consent;
+    - (r7) a missing state row inside the cutoff defers the table, and a restart keeps a
+      consented gap.
 - **M1 — DuckDB 2.0.0.1 (D1, D2).**
   - Exit:
     - the full analytics test suite, including unified views with live federation, green on
@@ -1134,3 +1164,16 @@ reviewer1 (same versions) also showed:
   - **I12.** Extended to say that a refresh never moves a cutoff back without consent.
   - **M3.** Gains reviewer1's January 1–3 timeline, the deferral case and the `allow-gap`
     refusal.
+- **r7** (2026-11-11; responds to reviewer1's round-3 review of `5e4e03595`).
+  - **F2 (P1), completion → D7, D10, D12 3a/3c, I12, M3.** A missing state row is no longer read
+    as consent:
+    - **Tombstones.** The admin endpoints keep the row as a `DELETED` or `RESET` tombstone,
+      with a new `gap_consent_at` column.
+    - **`allow-gap`.** A state reset inside the contiguous completed range now needs
+      `allow-gap`, as `DELETE /data` already did.
+    - **3a.** Only a consented tombstone admits a gap. No row, or an unconsented tombstone,
+      defers the table.
+    - **3c (new).** It applies the no-unconsented-retreat rule to the final proposed cutoff,
+      which covers resets made before step 1.
+    - **D5.** Its reset step passes `allow-gap`, and an offline truncation is the documented,
+      consented exception.
