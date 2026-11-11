@@ -10,6 +10,8 @@ dependencies {
     api project(":aggregates:adapot")
 
 	implementation 'org.springframework.boot:spring-boot-starter-web'
+
+    testImplementation 'com.h2database:h2'
 }
 
 publishing {
