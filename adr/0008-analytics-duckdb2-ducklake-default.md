@@ -362,7 +362,10 @@ guide documents the manual path instead:
    - Tables whose source is pruned (`store.adapot.epoch-stake-pruning-enabled`,
      `reward-pruning-enabled`, `store.utxo.pruning-enabled`, `store.account.pruning-enabled`)
      can only be re-exported for the history that is still in PostgreSQL. The guide says so.
-4. Delete the legacy `<export-path>/<table>/(date|epoch)=*/` directories when done.
+4. Delete a legacy `<export-path>/<table>/(date|epoch)=*/` directory only after that partition
+   is `COMPLETED` in DuckLake (r5). Directories for partitions that could not be re-exported,
+   because the source was pruned, are the only copy of that history: the guide says to keep or
+   archive them, never to delete the export root wholesale.
 
 Two facts make this safe:
 - DuckLake writes under `<export-path>/main/…`, so the two layouts do not collide.
@@ -394,7 +397,14 @@ COMMIT;
   - The query is already bounded by the partition's slot range, so the literal is the true
     partition.
 
-  For epoch tables, a check inside the transaction asserts `count(*) WHERE epoch <> <literal>` = 0.
+  For epoch tables, the source query supplies `epoch`, so the `INSERT` itself guards the key
+  (r5, F3): `… FROM (<query>) q WHERE CASE WHEN q.epoch IS DISTINCT FROM <literal> THEN
+  error('epoch key mismatch: …') ELSE true END`. The guard is NULL-safe and sees only the incoming
+  rows. A NULL or foreign epoch raises an error, which aborts the whole transaction, so the old
+  partition stays as it was (probe p16). r4's `count(*) WHERE epoch <> <literal>` check is
+  withdrawn: it passes NULL keys, which no later `DELETE … WHERE epoch = <literal>` removes, so
+  every retry duplicated them (reviewer1's probe). The key is deliberately not overwritten with
+  the literal, because a mismatched epoch is an exporter bug that should fail loudly.
   Rows already sitting in `date=1970-01-01` from earlier releases are reported by
   `GET /admin/status`; cleaning them up is an operator step in the upgrade guide.
 - **Preconditions, checked inside the transaction before the `DELETE` (r2).** If any fails, the
@@ -507,6 +517,12 @@ daily). (r4: the r2 rollback window is withdrawn along with D2's recovery point.
     any published view set still uses;
   - then runs `ducklake_cleanup_old_files(older_than => now() - retention)`, never with
     `cleanup_all`. Probe p13 shows that `older_than` keeps recently retired files.
+- **No orphaned-file cleanup (r5).** Maintenance never calls `ducklake_delete_orphaned_files`.
+  Legacy Parquet directories (D5) share the export root, and DuckLake would treat every file it
+  never tracked as an orphan.
+- **Ordering (r5).** Maintenance does not run before the D10 reconciler has finished, nor while
+  any row has `pending_op IS NOT NULL`. Expiring a snapshot would otherwise remove the commit
+  marker that the reconciler looks for.
 - **Compaction** (`ducklake_merge_adjacent_files`) is not enabled (Q5). It can merge files across
   partition values, which would break D6's whole-file premise (I2, probe p12).
 
@@ -526,23 +542,34 @@ New columns, in Flyway migration `V0_1500_3`, shipped in all three dialects
 - `attempt_id UUID`;
 - `pending_op VARCHAR(16)` (`NULL`, `EXPORT`, `REPLACE` or `DELETE`);
 - `catalog_snapshot_id BIGINT`;
+- `claim_snapshot_id BIGINT` (r5): the catalog's latest snapshot id at claim time;
 - `prev_status VARCHAR(20)` and `prev_row_count BIGINT`.
 
 Every operation follows the same steps:
 
 1. **Claim.** One atomic conditional update:
-   `UPDATE … SET attempt_id = :new, pending_op = :op, prev_status = export_status, prev_row_count = row_count WHERE pk AND pending_op IS NULL`,
-   or the matching insert for a new partition. Zero rows updated means another operation owns
+   `UPDATE … SET attempt_id = :new, pending_op = :op, claim_snapshot_id = :latest, prev_status = export_status, prev_row_count = row_count WHERE pk AND pending_op IS NULL`,
+   or the matching insert for a new partition (including one whose row a `DELETE /state` removed).
+   `:latest` is read under `DuckLakeWriterLock`, which the attempt holds until it finishes, so
+   every snapshot after it that touches the table belongs to this attempt. Zero rows updated means another operation owns
    the partition: the admin gets 409, the scheduler skips it. The **status is not changed** by a
    `REPLACE`: a `COMPLETED` partition stays `COMPLETED` (and inside the boundary) while it is
    being replaced, because D6 keeps the old data visible until the new data commits. For a
    `DELETE` the status becomes `DELETING`, so the partition leaves the boundary **before** the
    data goes.
-2. **Catalog work.** The D6 transaction, or the delete. DuckLake `commit_extra_info`, if M0
-   confirms it is available, records the `attempt_id`; otherwise the snapshot id read straight
-   after the commit is used.
+2. **Catalog work.** The D6 transaction, or the delete. Before `COMMIT`, the transaction
+   **must** call `set_commit_message('yaci-store', '<op> <table>/<partition>', extra_info =>
+   '{"attempt_id": …, "table": …, "partition": …, "op": …, "rows": …}')` (r5, F1). Probe p14 shows
+   that the marker is stored in the same snapshot as the data, so the marker and the data commit
+   or roll back together. r4's optional marker with a snapshot-id fallback is withdrawn: it could
+   not tell this attempt's commit from an earlier export after a state reset (reviewer1's trace).
+   If M0 finds `set_commit_message` unavailable on 2.x, the marker becomes a row in a
+   `yaci_export_attempts` DuckLake table written in the same transaction, before M2 merges.
 3. **Finish.** A conditional update `WHERE pk AND attempt_id = :mine`:
-   - success: write the status, counts and `catalog_snapshot_id`, and clear `pending_op`;
+   - success: write the status, counts and `catalog_snapshot_id`, and clear `pending_op`. The
+     snapshot id is that of the marked commit. A transaction that changed nothing (a zero-row
+     export of an empty partition) records no snapshot (probe p15); then `catalog_snapshot_id`
+     is the latest snapshot id at finish, as a watermark;
    - rollback: restore `prev_status` and `prev_row_count`, store the error in `error_message`,
      and clear `pending_op`. A failed force therefore leaves the partition `COMPLETED` with its
      old data and its old boundary.
@@ -555,10 +582,21 @@ Every operation follows the same steps:
 the timeout also wrongly reaps exports that take longer than an hour. For each orphan:
 
 - **`DELETE`:** run the data delete again (it is idempotent), then remove the row.
-- **`EXPORT` / `REPLACE`:** look in the catalog for a commit carrying the `attempt_id`, or a
-  snapshot later than `catalog_snapshot_id` that touches the partition.
-  - If there is one, finish as success, with counts taken from the catalog.
-  - If not, finish as rollback.
+- **`EXPORT` / `REPLACE`:** look for a snapshot after `claim_snapshot_id` whose
+  `commit_extra_info` carries the `attempt_id` (r5).
+  - **Marker found** (the commit happened, the finish did not): finish as success, with the row
+    count from the marker and `catalog_snapshot_id` set to that snapshot.
+  - **No marker:** finish as rollback. This is exact, not a guess. The marker commits with the
+    data, so its absence means either that the transaction never committed, or that it
+    committed no change (DuckLake records no snapshot then, p15). Either way the partition's
+    data is what it was at claim time, which `prev_status` and `prev_row_count` describe (I4).
+    After a state reset there is no previous row, so the partition simply becomes un-exported
+    and the scheduler exports it again. D6 is idempotent, so this re-export is harmless.
+  - **A snapshot after `claim_snapshot_id` that touches the table but carries no marker, or a
+    different attempt's marker:** the single-writer assumption is broken. The reconciler stops
+    the analytics store with an error instead of guessing.
+
+The reconciler runs before the scheduler, the admin endpoints and D9 maintenance.
 
 `StaleExportRecoveryService` keeps its periodic sweep only for observability: it logs operations
 that have been pending for unusually long.
@@ -609,9 +647,20 @@ cutoff move on. The new order:
    - A `DELETE` leaves the set (`DELETING`) before its data goes, so a partition whose data is
      missing from the snapshot is never inside the cutoff.
 2. Read the catalog snapshot, and record its snapshot id (D9).
-3. For each table, compute the cutoff, then intersect it with the partitions present in the
-   snapshot. This guards against a cutoff that would cover a partition the snapshot does not
-   have.
+3. For each table, compute the **covered** partitions, and the cutoff as the contiguous range of
+   covered partitions (`CutoffSlotResolver` already stops at the first gap). A partition is
+   covered when it is in the completed set and either:
+   - it has files in the snapshot; or
+   - (r5, F2) its `row_count` is 0 and its `catalog_snapshot_id` is no later than the snapshot
+     read in step 2. A successful empty export has no file to discover (reviewer1's probe) and
+     may have no snapshot of its own (p15), so file presence alone would open a gap there and
+     route every later partition back to PostgreSQL.
+
+   A completed partition with `row_count > 0` but no files is not covered: the cutoff stops
+   before it and a WARN is logged. This guards against a cutoff over data the snapshot does not
+   have. One case is transient: a `REPLACE` to zero rows (`allow-shrink`) that commits between
+   steps 1 and 2. The next refresh then sees the new `row_count` of 0 and covers it again.
+   Concurrent `DELETE`s cannot cause this, because a `DELETE` leaves the completed set first.
 4. Publish a table's historical view and its unified view **together**. If either fails, keep
    the table's previous pair, previous cutoff and previous lease.
 
@@ -634,7 +683,8 @@ Each invariant is tested in the milestone named in the plan.
 - **I4 (COMPLETED means present).** In DuckLake mode, a `COMPLETED` row with
   `pending_op IS NULL` implies that the partition's committed data has exactly `row_count` rows.
   *D6, D10.* It is tested by fault injection at every step boundary of
-  every D10 operation.
+  every D10 operation, including (r5) reset → claim → crash before catalog work, and commit →
+  crash before finish, each with zero and non-zero rows.
 - **I5 (readiness).** No partition outside the readiness check is ever `COMPLETED`, through any
   path, including the scheduler. *D11.*
 - **I6 (one operation).** At most one operation per `(table, partition)` is in flight. It is
@@ -652,7 +702,8 @@ Each invariant is tested in the milestone named in the plan.
 - **I11 (no shrink without consent).** No automatic path replaces a non-empty partition with
   fewer rows. *D6, D7.*
 - **I12 (published consistency).** For every published table, every partition inside its cutoff
-  has its files in the view's file list, and no file in any published view has been deleted.
+  either has its files in the view's file list or is a verified empty export (D12, r5), and no
+  file in any published view has been deleted.
   *D9, D12.*
 
 ## Alternatives considered
@@ -734,7 +785,9 @@ invariants it names.
   - Run P1–P4 and review probes p8–p13 on DuckDB 2.0.0.1, against both a 1.0 and a 1.1 catalog,
     including whether DuckLake 1.1 deletion vectors appear.
   - List the extensions built into 2.0.
-  - Check `commit_extra_info` availability for D10.
+  - Confirm that `set_commit_message(…, extra_info => …)` lands in the data's snapshot on 2.x,
+    and that a no-change transaction still records no snapshot (p14, p15 on 1.5.5). If it does
+    not, switch D10 to the marker table before M2 merges.
   - Find the migration target and the feasibility of 0.3 (1.4.x) → 2.x.
   - Determine the native-image status.
   - Write the ICU-free date expression for `UnifiedViewBuilder`.
@@ -745,6 +798,10 @@ invariants it names.
     - fault injection at every D10 step boundary;
     - the inlining-on case (probe p8) and the unpartitioned-table case, both refused;
     - the `1970-01-01` NULL-time case;
+    - (r5) epoch keys that are NULL, or another epoch, refused with the old partition intact,
+      and repeated retries that never duplicate rows (p16);
+    - (r5) the reconciler traces of I4, a zero-row export, and a foreign snapshot that stops
+      the store;
     - the shrink guard on a pruned source;
     - the current-epoch case for a custom exporter without a dependency, on the scheduler path;
     - a dependency check that throws;
@@ -759,7 +816,10 @@ invariants it names.
     - concurrent admin, scheduler and reset calls on one partition;
     - the range-reset key normalization (the C3 regression);
     - a refresh racing an export and a delete (I12);
-    - a failed view refresh leaving the cutoff unchanged.
+    - a failed view refresh leaving the cutoff unchanged;
+    - (r5) empty partitions first, in the middle and last, an entirely empty table, a delete or
+      replace racing the refresh, and a pruned PostgreSQL source: no gap opens at an empty
+      partition and no row disappears from the unified view.
 - **M1 — DuckDB 2.0.0.1 (D1, D2).**
   - Exit:
     - the full analytics test suite, including unified views with live federation, green on
@@ -922,6 +982,24 @@ in the session scratch directory. Each is cited where it changes a decision.
 - **p13 — `older_than`.** `ducklake_cleanup_old_files(older_than => now() - INTERVAL 1 HOUR)` keeps
   a file retired seconds ago. → D9.
 
+r5 probes (author, DuckDB 1.5.5 `d8cdaa33fd`, DuckLake `d8a1881e`, inlining off, a table
+partitioned by `epoch`):
+
+- **p14 — Commit marker.** `BEGIN; DELETE …; INSERT …; CALL lake.set_commit_message('yaci-store',
+  'replace epochs/450', extra_info => '{"attempt_id":"A1",…}'); COMMIT;` produces one snapshot
+  whose `commit_extra_info` is the JSON and whose `changes` is `{tables_inserted_into=[1]}`.
+  → D10.
+- **p15 — No-change transaction.** The same transaction for an empty partition, inserting zero
+  rows, leaves `max(snapshot_id)` unchanged: no snapshot, and so no marker. → D10, D12.
+- **p16 — Epoch key guard.** An `INSERT … WHERE CASE WHEN q.epoch IS DISTINCT FROM 450 THEN
+  error(…) ELSE true END` with a NULL epoch fails with `Invalid Input Error: epoch key mismatch:
+  NULL`. The transaction aborts and the partition keeps its two previous rows. → D6.
+
+reviewer1 (same versions) also showed:
+- an empty partition between two non-empty ones has no file in `ducklake_list_files` → D12;
+- a NULL epoch passes `count(*) WHERE epoch <> 450 = 0` and survives
+  `DELETE WHERE epoch = 450` → D6.
+
 ## Revision history
 
 - **r1** (2026-11-10): initial proposal.
@@ -1004,3 +1082,22 @@ in the session scratch directory. Each is cited where it changes a decision.
     I8 is restated.
   - **M1.** The rollback rehearsal and the 1.4.4 migration cases are replaced by refusal and
     resync tests.
+- **r5** (2026-11-11; responds to reviewer1's review of `e1de0a36c`, and to the automated Aster
+  review of `00cb8614e`).
+  - **F1 (P1) → D10.** The commit marker (`set_commit_message` … `extra_info`) is mandatory and
+    atomic with the data (p14). A new `claim_snapshot_id` column bounds the search. The
+    reconciler's rules are exact: a marker means success, and no marker means rollback, which is
+    safe because a no-change transaction records no snapshot (p15). A foreign snapshot stops the
+    store. The marker-table fallback, if 2.x lacks the call, is gated by M0. I4 and the M2 tests
+    gain the reset and crash traces.
+  - **F2 (P1) → D12.** A completed partition with `row_count` 0 and a watermark no later than
+    the published snapshot counts as covered without a file. I12 and the M3 tests are updated.
+  - **F3 (P1) → D6.** The epoch key is guarded by a NULL-safe `error()` inside the `INSERT`
+    (p16); the `count(*) <> literal` check is withdrawn. New M2 tests.
+  - **Aster.**
+    - Legacy directories are deleted only per completed partition, and pruned history is kept
+      (D5).
+    - `ducklake_delete_orphaned_files` is forbidden, and maintenance runs after the reconciler
+      (D9).
+    - The recovery-point backup point no longer applies (withdrawn in r4).
+    - The other two points are F1 and F2.
