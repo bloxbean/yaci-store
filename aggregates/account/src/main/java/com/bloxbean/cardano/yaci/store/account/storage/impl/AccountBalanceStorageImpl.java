@@ -485,7 +485,9 @@ public class AccountBalanceStorageImpl implements AccountBalanceStorage {
     @Transactional
     @Override
     public void refreshCurrentStakeAddressBalance(List<String> stakeAddresses, Long slot) {
-        List<List<String>> addressChunks = partition(stakeAddresses, 20);
+        // Remove duplicates before chunking: a repeated address in one chunk would insert its current row twice
+        // (duplicate key), and one repeated across chunks would be looked up and restored twice.
+        List<List<String>> addressChunks = partition(stakeAddresses.stream().distinct().toList(), 20);
 
         for (List<String> chunk : addressChunks) {
             rollbackForStakeAddresses(chunk, slot);

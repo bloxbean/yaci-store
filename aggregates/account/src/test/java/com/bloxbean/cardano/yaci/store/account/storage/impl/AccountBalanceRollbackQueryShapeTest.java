@@ -157,6 +157,38 @@ class AccountBalanceRollbackQueryShapeTest {
     }
 
     @Test
+    void stakeRefresh_addressRepeatedAcrossTheChunkBoundary_isLookedUpOnce() {
+        Random rnd = new Random(1245L);
+        List<StakeRow> history = new ArrayList<>();
+        List<String> unique = new ArrayList<>();
+        for (int i = 0; i < 23; i++) {
+            String stake = PREFIX + "boundary_" + i;
+            unique.add(stake);
+            history.addAll(stakeHistory(rnd, stake, distinctSlots(rnd, 6, SLOT - 1_000, SLOT + 1_000)));
+        }
+        insertStakeHistory(dsl, history);
+        Map<String, StakeRow> before = latestStake(history);
+        upsertStakeCurrent(dsl, before.values());
+
+        // 25 entries: boundary_2 sits in both the first chunk of 20 and the second, boundary_5 twice in the first.
+        List<String> addresses = new ArrayList<>(unique.subList(0, 20));
+        addresses.add(5, unique.get(5));
+        addresses.addAll(unique.subList(20, 23));
+        addresses.add(unique.get(2));
+        assertEquals(25, addresses.size());
+
+        executed.clear();
+        storage.refreshCurrentStakeAddressBalance(addresses, SLOT);
+        List<String> sql = lower(executed);
+
+        List<String> historyReads = matching(sql, READS_STAKE_HISTORY);
+        assertEquals(unique.size(), historyReads.size(),
+                "one stake_address_balance lookup per unique address, got:\n" + String.join("\n", historyReads));
+        Map<String, StakeRow> expected = canonicalStakeCurrent(history, before, new HashSet<>(unique), SLOT);
+        assertSameState("stake_address_balance_current", expected, readStakeCurrent(dsl, PREFIX));
+    }
+
+    @Test
     void refresh_withNothingAtOrBeforeTheSlot_deletesAndIssuesNoInsert() {
         Random rnd = new Random(9L);
         String address = PREFIX + "late_addr";

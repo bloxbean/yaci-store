@@ -253,6 +253,33 @@ class AccountBalanceRollbackRegressionTest {
                 .count() >= 20, "addresses moved back");
     }
 
+    @Test
+    void stakeRefresh_sameAddressTwiceInOneList_restoresOneCurrentRow() {
+        Random rnd = new Random(1244L);
+        String p = PREFIX + "dup_";
+        long slot = BASE + 5_000;
+        String stake = p + "stake";
+        String other = p + "other";
+
+        List<StakeRow> history = new ArrayList<>();
+        history.addAll(stakeHistory(rnd, stake, distinctSlots(rnd, 40, BASE + 1, BASE + 10_000)));
+        history.addAll(stakeHistory(rnd, other, distinctSlots(rnd, 40, BASE + 1, BASE + 10_000)));
+        insertStakeHistory(dsl, history);
+        Map<String, StakeRow> before = latestStake(history);
+        upsertStakeCurrent(dsl, before.values());
+
+        // The rollback processor passes distinct addresses; any other caller may not.
+        List<String> refreshed = List.of(stake, other, stake);
+        assertDoesNotThrow(() -> storage.refreshCurrentStakeAddressBalance(refreshed, slot));
+
+        Map<String, StakeRow> expected = canonicalStakeCurrent(history, before, new HashSet<>(refreshed), slot);
+        Map<String, StakeRow> actual = readStakeCurrent(dsl, p);
+        assertSameState("stake_address_balance_current", expected, actual);
+        assertEquals(2, actual.size(), "one current row per address");
+        assertTrue(actual.get(stake).slot() <= slot, "the restored row is at or before the rollback slot");
+        assertEquals(sortedStake(history), readStakeHistory(dsl, p), "a refresh must not touch stake_address_balance");
+    }
+
     // ------------------------------------------------------------------ (d) nothing at or before the slot
 
     @Test
