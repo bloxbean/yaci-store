@@ -449,8 +449,8 @@ COMMIT;
 | Endpoint | Behaviour |
 |---|---|
 | `POST /export/table/{t}/date/{d}?force=true`, `…/epoch/{e}?force=true`, `…/range?…&force=true`, `…/epoch-range?…&force=true`, plus `&allow-shrink=true` | Without `force`, unchanged (skip if `COMPLETED`). With `force`, replace the partition through D6, following the D10 protocol. |
-| `DELETE /data/{t}/{partition}` (new) | Delete the partition's data and state through the D10 protocol (state first). Allowed for disabled tables that are still registered (r2): disabled means "not exported", not "unknown". If the partition is inside the table's contiguous completed range (as `CutoffSlotResolver` computes it), the delete moves the federation cutoff back, and the later partitions are served from PostgreSQL, which may be pruned. Such a delete requires `allow-gap=true` (r6), and the response reports the new cutoff. The row is not removed: it ends as a `DELETED` tombstone carrying `gap_consent_at` (r7). |
-| `DELETE /state/{t}/{partition}` | Normalizes `2024-01-15`, `date=2024-01-15`, `450` and `epoch=450` through `PartitionValue`. Returns 404 for an unknown table or partition. Takes the partition lock and returns 409 for a partition whose operation is in flight (r2). The response says the data is untouched. The row is not removed: it becomes a `RESET` tombstone (r7). A partition inside the contiguous completed range needs `allow-gap=true`, as for `DELETE /data`, and the tombstone records `gap_consent_at`. |
+| `DELETE /data/{t}/{partition}` (new) | Delete the partition's data and state through the D10 protocol (state first). Allowed for disabled tables that are still registered (r2): disabled means "not exported", not "unknown". If any later partition of the table is `COMPLETED` (r8), the delete opens a gap: the federation cutoff moves back before it, and every later partition is served from PostgreSQL, which may be pruned. Such a delete requires `allow-gap=true` (r6), and the response reports the new cutoff and the later partitions it displaces. The row is not removed: it ends as a `DELETED` tombstone carrying `gap_consent_at` (r7). |
+| `DELETE /state/{t}/{partition}` | Normalizes `2024-01-15`, `date=2024-01-15`, `450` and `epoch=450` through `PartitionValue`. Returns 404 for an unknown table or partition. Takes the partition lock and returns 409 for a partition whose operation is in flight (r2). The response says the data is untouched. The row is not removed: it becomes a `RESET` tombstone (r7). A partition with any later `COMPLETED` partition needs `allow-gap=true` (r8), as for `DELETE /data`, and the tombstone records `gap_consent_at`. |
 | `DELETE /state/{t}/range` | Normalizes keys. Uses a bounded repository query instead of `findAll()`. Adds an `epoch-range` variant. Same locking, tombstones and `allow-gap` rule as the single reset. |
 
 Rules for every export or delete endpoint:
@@ -689,13 +689,21 @@ cutoff move on. The new order:
      deferrals, a WARN and the `analytics.view.deferred` metric flag the table, and
      `GET /admin/status` shows it. The table is never published with a gap that it did not
      have before.
-   - **3c. Check the final cutoff (r7).** After 3a and 3b, compare the proposed cutoff with the
-     table's previously published cutoff. Every partition it would give up, in
-     `(proposed, previous]`, must carry a consented tombstone (`gap_consent_at` set). This also
-     covers a reset that happened before step 1, whose partition never reaches 3a because it is
-     not in the completed set. Otherwise the table is deferred, as in 3b. The first publication
-     after a start has no previous cutoff. It is computed from the state, where consented gaps
-     persist as tombstones. A gap with no tombstone there can only come from editing
+   - **3c. Check the final cutoff (r7; corrected in r8, F4).** After 3a and 3b, compare the
+     proposed cutoff `P` with the table's previously published cutoff `V`. If `P < V`, the
+     retreat is allowed only when the **first** uncovered partition after `P`, the one that
+     breaks contiguity, carries a consented tombstone (`gap_consent_at` set). The later
+     partitions in `(P+1, V]` are not checked for tombstones. Their move to PostgreSQL is the
+     effect that D7 reported to the operator when consent was given, and they keep their
+     `COMPLETED` state. Any other retreat defers the table, as in 3b. This includes a first gap
+     with no row or an unconsented tombstone, such as a reset made before step 1, whose
+     partition never reaches 3a because it is not in the completed set.
+     D7's trigger (any later `COMPLETED` partition) makes sure that no second gap can open
+     behind a consented one without its own consent. So when the first gap is filled again,
+     the cutoff either regains the old range or stops at another consented gap. The first
+     publication after a start has no previous cutoff. It is computed from the state, where
+     consented gaps persist as tombstones, so a consented gap publishes the same cutoff before
+     and after a restart. A gap with no tombstone there can only come from editing
      `analytics_export_state` outside the API while the application was stopped. D5's
      documented truncation is the one supported case; any other is outside this guarantee.
 4. Publish a table's historical view and its unified view **together**. If either fails, keep
@@ -741,9 +749,10 @@ Each invariant is tested in the milestone named in the plan.
 - **I12 (published consistency).** For every published table, every partition inside its cutoff
   either has its files in the view's file list or is a verified empty export (D12, r5), and no
   file in any published view has been deleted. A refresh never publishes a cutoff that leaves
-  out a partition the previous cutoff covered, unless that partition carries a consented
-  tombstone (`gap_consent_at`) from a `DELETE /data` or state reset with `allow-gap` (r6, r7).
-  The check applies to the final proposed cutoff (D12 step 3c).
+  out a partition the previous cutoff covered, unless the first uncovered partition after the
+  new cutoff carries a consented tombstone (`gap_consent_at`) from a `DELETE /data` or state
+  reset with `allow-gap` (r6, r7, r8). The later partitions it displaces are the effect that was
+  consented to. The check applies to the final proposed cutoff (D12 step 3c).
   *D9, D12.*
 
 ## Alternatives considered
@@ -871,7 +880,13 @@ invariants it names.
       the reset is refused or the table is deferred. With consent, the tombstone allows the
       gap. January 3 is never hidden without consent;
     - (r7) a missing state row inside the cutoff defers the table, and a restart keeps a
-      consented gap.
+      consented gap;
+    - (r8, F4) the positive case. January 1–3 are published, and January 2 is deleted with
+      `allow-gap`. The cutoff January 1 is published, both before and after a restart, and
+      January 3 stays `COMPLETED` and unmodified;
+    - (r8) while January 2's consented gap is open, a reset of January 4 (January 5 completed)
+      is refused without `allow-gap`. After January 2 is re-exported, the cutoff regains
+      January 5.
 - **M1 — DuckDB 2.0.0.1 (D1, D2).**
   - Exit:
     - the full analytics test suite, including unified views with live federation, green on
@@ -1177,3 +1192,12 @@ reviewer1 (same versions) also showed:
       which covers resets made before step 1.
     - **D5.** Its reset step passes `allow-gap`, and an offline truncation is the documented,
       consented exception.
+- **r8** (2026-11-11; responds to reviewer1's round-4 review of `69a9c8fdb`).
+  - **F4 (P2) → D12 3c, I12, M3.** The final-cutoff check now binds consent to the first gap,
+    not to every partition the cutoff gives up. A consented middle-partition delete therefore
+    publishes the cutoff D7 reported, before and after a restart, and leaves the later
+    partitions' state untouched.
+  - **D7 (found while fixing F4).** `allow-gap` is required whenever any later partition is
+    `COMPLETED`, not only inside the contiguous range. Otherwise a reset behind an open,
+    consented gap would need no consent, and would silently cap the cutoff once the first gap
+    is filled.
