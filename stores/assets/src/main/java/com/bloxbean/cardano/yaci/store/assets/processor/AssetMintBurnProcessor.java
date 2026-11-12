@@ -7,6 +7,7 @@ import com.bloxbean.cardano.yaci.store.assets.domain.TxAsset;
 import com.bloxbean.cardano.yaci.store.assets.domain.TxAssetEvent;
 import com.bloxbean.cardano.yaci.store.assets.storage.AssetStorage;
 import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
+import com.bloxbean.cardano.yaci.store.common.util.AmountUtil;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.MintBurnEvent;
 import lombok.RequiredArgsConstructor;
@@ -38,7 +39,8 @@ public class AssetMintBurnProcessor {
         List<TxAsset> txAssetList = mintBurnEvent.getTxMintBurns().stream()
                 .filter(txMintBurn -> txMintBurn.getAmounts() != null)
                 .flatMap(txMintBurn ->
-                    txMintBurn.getAmounts()
+                    // Also covers events from a remote producer that does not filter them
+                    AmountUtil.withoutZeroQuantityAssets(txMintBurn.getAmounts())
                             .stream().map(amount -> TxAsset.builder()
                                     .slot(eventMetadata.getSlot())
                                     .txHash(txMintBurn.getTxHash())

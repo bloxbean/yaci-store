@@ -44,6 +44,54 @@ class RedeemerMatcherTest {
         assertThat(contexts.get(1).getPlutusScript()).isSameAs(scripts.get(policy460e));
     }
 
+    //Pre-Conway, the ledger drops zero-quantity mint entries, so a policy with only zeros has no redeemer index
+    @Test
+    void findScriptsForRedeemers_zeroOnlyMintPolicyIsNotCounted() {
+        String zeroOnly = "00" + "a".repeat(54);
+        String nonZero = "ff" + "b".repeat(54);
+        Map<String, PlutusScript> scripts = scripts(zeroOnly, nonZero);
+
+        TransactionBody body = body()
+                .mint(List.of(mint(zeroOnly, "x", 0), mint(nonZero, "y", 1)))
+                .build();
+
+        List<ScriptContext> contexts = matcher.findScriptsForRedeemers(tx(body, RedeemerTag.Mint, 1), scripts);
+
+        assertThat(contexts.get(0).getPlutusScript()).isSameAs(scripts.get(nonZero));
+    }
+
+    @Test
+    void findScriptsForRedeemers_mintPolicyWithZeroAndNonZeroAssetsIsKept() {
+        String mixed = "00" + "a".repeat(54);
+        String other = "ff" + "b".repeat(54);
+        Map<String, PlutusScript> scripts = scripts(mixed, other);
+
+        TransactionBody body = body()
+                .mint(List.of(mint(mixed, "x", 0), mint(mixed, "y", 5), mint(other, "z", 1)))
+                .build();
+
+        List<ScriptContext> contexts = matcher.findScriptsForRedeemers(tx(body, RedeemerTag.Mint, 2), scripts);
+
+        assertThat(contexts.get(0).getPlutusScript()).isSameAs(scripts.get(mixed));
+        assertThat(contexts.get(1).getPlutusScript()).isSameAs(scripts.get(other));
+    }
+
+    @Test
+    void findScriptsForRedeemers_negativeBurnPolicyIsKept() {
+        String burn = "00" + "a".repeat(54);
+        String other = "ff" + "b".repeat(54);
+        Map<String, PlutusScript> scripts = scripts(burn, other);
+
+        TransactionBody body = body()
+                .mint(List.of(mint(burn, "x", -3), mint(other, "z", 1)))
+                .build();
+
+        List<ScriptContext> contexts = matcher.findScriptsForRedeemers(tx(body, RedeemerTag.Mint, 2), scripts);
+
+        assertThat(contexts.get(0).getPlutusScript()).isSameAs(scripts.get(burn));
+        assertThat(contexts.get(1).getPlutusScript()).isSameAs(scripts.get(other));
+    }
+
     //Mainnet tx 0072d81f31868f5bf4833f06dfc094017e429f50e5df721b92b19bb5358e77c1: the withdrawal map is not in credential order
     @Test
     void findScriptsForRedeemers_rewardRedeemersFollowCredentialHashOrder() {
@@ -180,6 +228,15 @@ class RedeemerMatcherTest {
 
     private static Amount mint(String policyId) {
         return Amount.builder().policyId(policyId).assetName("token").quantity(BigInteger.ONE).build();
+    }
+
+    private static Amount mint(String policyId, String assetName, long quantity) {
+        return Amount.builder()
+                .unit(policyId + "." + assetName)
+                .policyId(policyId)
+                .assetName(assetName)
+                .quantity(BigInteger.valueOf(quantity))
+                .build();
     }
 
     private static Map<String, PlutusScript> scripts(String... hashes) {

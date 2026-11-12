@@ -6,6 +6,7 @@ import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.Cursor;
 import com.bloxbean.cardano.yaci.store.common.service.CursorService;
+import com.bloxbean.cardano.yaci.store.common.util.AmountUtil;
 import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import com.bloxbean.cardano.yaci.store.events.*;
 import com.bloxbean.cardano.yaci.store.events.domain.*;
@@ -186,7 +187,8 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
                             .txIndex(i)
                             .amounts(sanitizeAmounts(transactions.get(i).getBody().getMint()))
                             .build()
-                    ).collect(Collectors.toList());
+                    ).filter(txMintBurn -> !txMintBurn.getAmounts().isEmpty())
+                    .collect(Collectors.toList());
             publisher.publishEvent(new MintBurnEvent(eventMetadata, txMintBurnEvents));
             return true;
         }, eventExecutor);
@@ -292,7 +294,8 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
                         .txIndex(i)
                         .amounts(sanitizeAmounts(transactions.get(i).getBody().getMint()))
                         .build()
-                ).collect(Collectors.toList());
+                ).filter(txMintBurn -> !txMintBurn.getAmounts().isEmpty())
+                .collect(Collectors.toList());
         publisher.publishEvent(new MintBurnEvent(eventMetadata, txMintBurnEvents));
 
         //Updates
@@ -338,7 +341,7 @@ public class ShelleyBlockEventPublisher implements BlockEventPublisher<Block> {
     private List<Amount> sanitizeAmounts(List<Amount> amounts) {
         if (amounts == null) return Collections.EMPTY_LIST;
         //Fix -- some asset name contains \u0000 -- postgres can't convert this to text. so replace
-        return amounts.stream().map(amount ->
+        return AmountUtil.withoutZeroQuantityAssets(amounts).stream().map(amount ->
                 Amount.builder()
                         .unit(amount.getUnit() != null ? amount.getUnit().replace(".", "") : null)
                         .policyId(amount.getPolicyId())
