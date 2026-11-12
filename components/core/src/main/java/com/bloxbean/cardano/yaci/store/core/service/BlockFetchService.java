@@ -75,6 +75,10 @@ public class BlockFetchService implements BlockChainDataListener {
     private volatile long lastAcceptedBlockNumber = -1;
     //True when the last accepted block was handed to a parallel batch. Chain sync never writes such a batch.
     private volatile boolean lastAcceptedInBatch;
+    //A range fetch from a block that is not processed yet (a fresh start) delivers that block first. Until a block is
+    //accepted (or skipped as a recorded parse error), the first block must be this one, so a lost first block is not
+    //missed. Null when there is no such requirement.
+    private volatile String requiredFirstBlockHash;
     //Hashes accepted in this session, so a re-delivered block can be recognised before its batch is written
     private final Map<String, Boolean> recentAcceptedHashes = Collections.synchronizedMap(new LinkedHashMap<>(256, 0.75f, false) {
         @Override
@@ -502,7 +506,9 @@ public class BlockFetchService implements BlockChainDataListener {
                 throw new RuntimeException(e);
             }
 
-            //The skipped block's hash is not known, so accept the next block without the link check
+            //The skipped block's hash is not known, so accept the next block without the link check. If it was the
+            //first block of a fresh range fetch, the recorded skip stands in for it.
+            requiredFirstBlockHash = null;
             expectedPrevBlockHash = null;
             //The next block must be the one after the skipped block, or a Byron epoch boundary block with the same
             //number. If the skipped block's number is not known, take it as the block after the last accepted one:
@@ -536,6 +542,19 @@ public class BlockFetchService implements BlockChainDataListener {
      * @return true if the block must be processed
      */
     private boolean acceptBlock(long blockNumber, String blockHash, String prevBlockHash) {
+        String requiredFirst = requiredFirstBlockHash;
+        if (requiredFirst != null) {
+            if (requiredFirst.equals(blockHash))
+                return true;
+
+            log.error("The first block of the range fetch must be the start block {}, but block {} ({}) came first. " +
+                    "Stopping sync to fetch again from the last stored block.", requiredFirst, blockNumber, blockHash);
+            stopSyncAndRefetch("FirstBlockNotStartBlock", "BLOCK_NOT_LINKED",
+                    String.format("First block %d (%s) of the range fetch is not the start block %s",
+                            blockNumber, blockHash, requiredFirst));
+            return false;
+        }
+
         String expected = expectedPrevBlockHash;
         long lastNumber = lastAcceptedBlockNumber;
 
@@ -556,8 +575,9 @@ public class BlockFetchService implements BlockChainDataListener {
             if (expected == null && !previousBlockLost && blockNumber == lastNumber)
                 return true;
         } else if (expected == null && !previousBlockLost) {
-            //Nothing to check the hash against: the first block of a fresh start, or the block after a skipped parse
-            //error. In the second case it must be the next block.
+            //Nothing to check the hash against: the block after a skipped parse error, which must be the next block,
+            //or a first block with no known start (the start point has no hash). A fresh range fetch checks its first
+            //block against the start block above.
             if (lastNumber < 0 || blockNumber == lastNumber + 1)
                 return true;
         }
@@ -598,6 +618,7 @@ public class BlockFetchService implements BlockChainDataListener {
     }
 
     private void blockAccepted(long blockNumber, String blockHash, boolean inBatch) {
+        requiredFirstBlockHash = null;
         expectedPrevBlockHash = blockHash;
         lastAcceptedBlockNumber = blockNumber;
         lastAcceptedInBatch = inBatch;
@@ -613,6 +634,7 @@ public class BlockFetchService implements BlockChainDataListener {
     private void resetAcceptedBlock(String blockHash, Long blockNumber) {
         recentAcceptedHashes.clear();
         lastAcceptedInBatch = false;
+        requiredFirstBlockHash = null;
         if (blockNumber != null && blockHash != null) {
             expectedPrevBlockHash = blockHash;
             lastAcceptedBlockNumber = blockNumber;
@@ -636,6 +658,9 @@ public class BlockFetchService implements BlockChainDataListener {
         isError.set(false);
         scheduledToStop.set(false);
         resetAcceptedBlock(from.getHash(), fromBlockNumber);
+        //The range fetch delivers the start block first. When it is not processed yet, it must not be lost.
+        if (fromBlockNumber == null)
+            requiredFirstBlockHash = from.getHash();
         restoreEpochStateForStart(from, fromBlockNumber);
 
         stopKeepAliveThread();

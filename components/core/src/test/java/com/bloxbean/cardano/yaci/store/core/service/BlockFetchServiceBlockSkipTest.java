@@ -352,6 +352,63 @@ class BlockFetchServiceBlockSkipTest {
     }
 
     @Test
+    void freshRangeFetchStopsWhenItsFirstBlockIsMissing() {
+        //The start block 100 is not processed yet, so the range fetch must deliver it first. Here it never arrives.
+        blockFetchService.startFetch(new Point(100, START_HASH), TO, null);
+
+        Block next = block(101, "h101", START_HASH);
+        deliver(next);
+
+        verify(shelleyPublisher, never()).publishBlockEventsInParallel(any(), eq(next), any());
+        verify(shelleyPublisher, never()).publishBlockEvents(any(), eq(next), any());
+        assertThat(blockFetchService.isError()).isTrue();
+        verify(publisher).publishEvent(any(RequiredSyncRestartEvent.class));
+    }
+
+    @Test
+    void freshRangeFetchLinksTheBlocksAfterItsFirstBlock() {
+        blockFetchService.startFetch(new Point(100, START_HASH), TO, null);
+
+        Block first = block(100, START_HASH, "h99");
+        Block second = block(101, "h101", START_HASH);
+        deliver(first);
+        deliver(second);
+        Block afterHole = block(103, "h103", "h102"); //102 never arrives
+        deliver(afterHole);
+
+        verify(shelleyPublisher).publishBlockEventsInParallel(any(), eq(first), any());
+        verify(shelleyPublisher).publishBlockEventsInParallel(any(), eq(second), any());
+        verify(shelleyPublisher, never()).publishBlockEventsInParallel(any(), eq(afterHole), any());
+        assertThat(blockFetchService.isError()).isTrue();
+    }
+
+    @Test
+    void freshRangeFetchAcceptsARecordedParseErrorSkipOfItsFirstBlock() {
+        //continue-on-parse-error: the first block cannot be decoded, the skip is recorded, and the next block follows
+        blockFetchService.startFetch(new Point(100, START_HASH), TO, null);
+
+        blockFetchService.onParsingError(new BlockParseRuntimeException(100L, null, new RuntimeException("bad cbor")));
+        Block next = block(101, "h101", START_HASH);
+        deliver(next);
+
+        verify(errorStorage).save(any());
+        verify(shelleyPublisher).publishBlockEventsInParallel(any(), eq(next), any());
+        assertThat(blockFetchService.isError()).isFalse();
+    }
+
+    @Test
+    void rangeFetchFromAStoredBlockDoesNotRequireItAgain() {
+        //Resuming from the cursor: the cursor block may be delivered again or not, and the next block links to it
+        blockFetchService.startFetch(new Point(100, START_HASH), TO, 100L);
+
+        Block next = block(101, "h101", START_HASH);
+        deliver(next);
+
+        verify(shelleyPublisher).publishBlockEventsInParallel(any(), eq(next), any());
+        assertThat(blockFetchService.isError()).isFalse();
+    }
+
+    @Test
     void rangeBatchWithAMissingBlockStopsTheSync() {
         blockFetchService.startFetch(new Point(100, START_HASH), TO, 100L);
 
