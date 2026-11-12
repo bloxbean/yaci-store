@@ -465,6 +465,58 @@ class BlockFetchServiceBlockSkipTest {
     }
 
     @Test
+    void twoParseErrorsAfterALostStartBlockStillStopTheSync() {
+        blockFetchService.startFetch(new Point(100, START_HASH), TO, null);
+
+        blockFetchService.onParsingError(new BlockParseRuntimeException(101L, null, new RuntimeException("bad cbor")));
+        blockFetchService.onParsingError(new BlockParseRuntimeException(102L, null, new RuntimeException("bad cbor")));
+        Block b103 = block(103, "h103", "h102");
+        deliver(b103);
+
+        verify(shelleyPublisher, never()).publishBlockEventsInParallel(any(), eq(b103), any());
+        assertThat(blockFetchService.isError()).isTrue();
+    }
+
+    @Test
+    void rangeEndingAfterAParseErrorWithoutTheStartBlockFetchesAgain() {
+        when(storeProperties.isPrimaryInstance()).thenReturn(true);
+        when(cursorService.getCursor()).thenReturn(Optional.of(cursor(100, START_HASH)));
+        blockFetchService.startFetch(new Point(100, START_HASH), TO, null);
+        blockFetchService.onParsingError(new BlockParseRuntimeException(101L, null, new RuntimeException("bad cbor")));
+
+        blockFetchService.batchDone();
+
+        verify(blockSync, never()).startSync(any(), any());
+        assertThat(blockFetchService.isError()).isTrue();
+    }
+
+    @Test
+    void upperCaseStartHashWithARecordedSkipOfTheStartBlock() {
+        blockFetchService.startFetch(new Point(100, START_HASH.toUpperCase()), TO, null);
+
+        blockFetchService.onParsingError(new BlockParseRuntimeException(100L, null, new RuntimeException("bad cbor")));
+        Block next = block(101, "h101", START_HASH);
+        deliver(next);
+
+        verify(shelleyPublisher).publishBlockEventsInParallel(any(), eq(next), any());
+        assertThat(blockFetchService.isError()).isFalse();
+    }
+
+    @Test
+    void boundedRangeWritesItsLastPartialBatch() {
+        //Not a primary instance (sync-stop-slot): the range fetch ends the sync, so its last batch must be written
+        when(storeProperties.isPrimaryInstance()).thenReturn(false);
+        blockFetchService.startFetch(new Point(100, START_HASH), TO, 100L);
+        deliver(block(101, "h101", START_HASH));
+
+        blockFetchService.batchDone();
+
+        verify(shelleyPublisher).processBlocksInParallel();
+        verify(blockSync, never()).startSync(any(), any());
+        assertThat(blockFetchService.isError()).isFalse();
+    }
+
+    @Test
     void rangeFetchFromAStoredBlockDoesNotRequireItAgain() {
         //Resuming from the cursor: the cursor block may be delivered again or not, and the next block links to it
         blockFetchService.startFetch(new Point(100, START_HASH), TO, 100L);
