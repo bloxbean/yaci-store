@@ -481,9 +481,77 @@ def run_scenario(c, sc, mode, resdir):
         f.write(json.dumps(res) + "\n")
     print(f"[{time.strftime('%T')}] {c.inst} {sc.id} -> recovered={recovered} ttr={ttr} anomalies={res.get('anomalies')} markers={res['markers']}", flush=True)
 
+# --- fresh start: an empty database that starts syncing from a recent block (store.cardano.sync-start-slot).
+# The start block is taken from a reference instance (--ref). Each scenario wipes the instance's database, so run
+# these last, after the range/tip scenarios and the comparison with the reference.
+class Fresh:
+    def __init__(s, id, title, back, arm, expect, deadline=1200):
+        # back: blocks behind the reference's tip (more than ~40 on preprod means a range fetch, fewer chain sync)
+        # expect: "start" the start block is stored; "next" chain sync stores the block after it; "skip" the start
+        # block is skipped as a recorded parse error and the next block is stored
+        s.id, s.title, s.back, s.arm, s.expect, s.deadline = id, title, back, arm, expect, deadline
+        s.modes = ("fresh",)
+
+FRESH = [
+ Fresh("F01", "Fresh start (range fetch): the start block is dropped by the peer", 600, lambda c: c.n("drop-block", 1), "start"),
+ Fresh("F02", "Fresh start (range fetch), no fault: the start block is stored", 600, lambda c: None, "start"),
+ Fresh("F03", "Fresh start (chain sync): the first RollForward is hidden", 10, lambda c: c.n("skip-forward", 1), "next"),
+ Fresh("F04", "Fresh start (range fetch): the start block is undecodable, continue-on-parse-error=true", 600, lambda c: c.n("corrupt-block", 1), "skip"),
+]
+
+def run_fresh(c, sc, ref, resdir):
+    c.notes = []
+    res = {"id": sc.id, "inst": c.inst, "mode": "fresh", "title": sc.title, "start": time.strftime("%FT%TZ", time.gmtime())}
+    r = ref.sql(f"select number, slot, hash from block where number = (select max(number) from block) - {sc.back}")
+    if not r: raise RuntimeError(f"no start block from the reference {ref.inst}")
+    num, slot, h = r.split(); num, slot = int(num), int(slot)
+    res["start_block"] = {"number": num, "slot": slot, "hash": h}
+    if c.alive(): c.signal(signal.SIGKILL); time.sleep(3)
+    c.heal_all()
+    if c.sql("drop database if exists yaci_store with (force)", db="postgres") is None or \
+       c.sql("create database yaci_store owner yaci", db="postgres") is None:
+        raise RuntimeError("could not recreate the database")
+    sc.arm(c)
+    print(f"[{time.strftime('%T')}] {c.inst} {sc.id} fresh: {sc.title} (start block {num})", flush=True)
+    off = c.log_size() or 0
+    c.inst_cmd("start", f"--store.cardano.sync-start-slot={slot}", f"--store.cardano.sync-start-blockhash={h}")
+    t0 = time.time(); recovered = False; ttr = None
+    while time.time() - t0 < sc.deadline:
+        cc = c.cursor()
+        if cc and cc[0] > num + 1 and c.lag(cc[1]) < 240:
+            recovered, ttr = True, int(time.time() - t0); break
+        if not c.alive(): res["app_exited"] = True; break
+        time.sleep(5)
+    c.heal_all()
+    time.sleep(35)
+    after = c.cursor()
+    res.update(recovered=recovered, ttr_s=ttr)
+    text = c.log_since(off)
+    res["markers"] = {k: n for k, p in MARKERS.items() if (n := len(re.findall(p, text)))}
+    res["first_block_check"] = len(re.findall(r"must be the start block", text))
+    stored_start = c.sql(f"select count(*) from block where hash = '{h}'")
+    # an undecodable block may not even give its number, so any recorded parse error counts
+    errs = c.sql("select count(*) from error where error_code = 'BLOCK_PARSE_ERROR'")
+    an = {}
+    if sc.expect == "start" and stored_start != "1": an["start_block_missing"] = stored_start
+    if sc.expect == "skip" and (stored_start != "0" or errs in (None, "0")): an["start_block_skip_not_recorded"] = f"stored={stored_start} error_rows={errs}"
+    first = num if sc.expect == "start" else num + 1
+    if c.sql(f"select count(*) from block where number = {num + 1}") != "1": an["block_after_start_missing"] = str(num + 1)
+    if after:
+        res["cursor_after"] = after[0]; res["checked"] = [first, after[0]]
+        an.update(checks(c, first, after[0]))
+    res["anomalies"] = an
+    res["error_rows"] = c.sql("select id,block,error_code,left(reason,100) from error order by id limit 10")
+    res["notes"] = c.notes
+    res["end"] = time.strftime("%FT%TZ", time.gmtime())
+    with open(f"{resdir}/{c.inst}.jsonl", "a") as f:
+        f.write(json.dumps(res) + "\n")
+    print(f"[{time.strftime('%T')}] {c.inst} {sc.id} -> recovered={recovered} ttr={ttr} anomalies={an} markers={res['markers']}", flush=True)
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("inst"); ap.add_argument("mode", choices=BOTH)
+    ap.add_argument("inst"); ap.add_argument("mode", choices=BOTH + ("fresh",))
+    ap.add_argument("--ref", default="ctrl", help="fresh mode: reference instance that gives the start block")
     ap.add_argument("--only", default=""); ap.add_argument("--skip", default=""); ap.add_argument("--list", action="store_true")
     ap.add_argument("--gap", type=int, default=60)
     ap.add_argument("--catalog", action="store_true", help="print every scenario as a markdown table and exit")
@@ -491,18 +559,19 @@ def main():
     if a.catalog:
         groups = {"N": "Node connection", "B": "Block delivery", "RB": "Rollback", "D": "Database", "J": "JVM and listeners",
                   "C": "Restart path", "X": "Range fetch to chain-sync switch",
-                  "L": "Ledger-state (AdaPot job, account balances, governance)"}
+                  "L": "Ledger-state (AdaPot job, account balances, governance)",
+                  "F": "Fresh start from a recent block (mode fresh, wipes the database; run last)"}
         print("| ID | Fault | Initial sync | At the tip | Fault held for |\n|---|---|---|---|---|")
         last = None
-        for sc in SCENARIOS:
+        for sc in SCENARIOS + FRESH:
             g = "RB" if sc.id.startswith("RB") else sc.id[0]
             if g != last:
                 print(f"| | **{groups[g]}** | | | |"); last = g
-            held = f"{sc.hold} s" if sc.hold else "one shot"
+            held = f"{sc.hold} s" if getattr(sc, "hold", 0) else "one shot"
             print(f"| {sc.id} | {sc.title} | {'yes' if 'range' in sc.modes else '-'} | {'yes' if 'tip' in sc.modes else '-'} | {held} |")
         return
     only = set(filter(None, a.only.split(","))); skip = set(filter(None, a.skip.split(",")))
-    todo = [s for s in SCENARIOS if a.mode in s.modes and (not only or s.id in only) and s.id not in skip]
+    todo = [s for s in SCENARIOS + FRESH if a.mode in s.modes and (not only or s.id in only) and s.id not in skip]
     if a.list:
         for s in todo: print(s.id, s.title)
         return
@@ -516,7 +585,8 @@ def main():
         if os.path.exists(f"{resdir}/STOP"): print("STOP file, ending"); break
         if (sc.id, a.mode) in done: continue
         try:
-            run_scenario(c, sc, a.mode, resdir)
+            if a.mode == "fresh": run_fresh(c, sc, Ctx(a.ref), resdir)
+            else: run_scenario(c, sc, a.mode, resdir)
         except ReachedTip:
             with open(f"{resdir}/{a.inst}.jsonl", "a") as f:
                 f.write(json.dumps({"id": sc.id, "inst": a.inst, "mode": a.mode, "title": sc.title, "not_run": "reached the tip first"}) + "\n")

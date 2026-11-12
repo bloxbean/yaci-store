@@ -240,6 +240,21 @@ How they work:
 
 `compare.py` also compares epoch-keyed tables (`epoch_stake`, `drep_dist`, …), up to the last epoch whose job completed in both stores.
 
+### Fresh-start scenarios (F01–F04)
+These check the first block of a sync that starts on an empty database. They run in their own mode, `fresh`. **Each one drops and recreates the instance's database**, so run them last, after the range and tip matrices and `compare.py`:
+
+```bash
+python3 $K/runner.py cand fresh --ref ctrl
+```
+
+How they work:
+- **Starting:** the start block is the reference instance's (`--ref`) tip minus 600 blocks, so the store does a range fetch. For F03 it is 10 blocks back, so the store uses chain sync. The runner kills the app, recreates the `yaci_store` database, arms the fault, and starts the app with `store.cardano.sync-start-slot` and `store.cardano.sync-start-blockhash`.
+- **Passing:**
+  - the store reaches the tip;
+  - the normal block checks find nothing, from the start block (or, for chain sync, the block after it) to the cursor;
+  - the start block is stored (F01, F02). For F04 it is skipped and a `BLOCK_PARSE_ERROR` row records the skip.
+- **What they catch:** F01 drops the start block itself. A store that accepts any first block on a fresh start would sync on without it and never notice.
+
 ## Keeping it working
 
 - **Byteman rules name internal classes and methods** (`TransactionProcessor.handleTransactionEvent`, `EraService.checkIfNewEra`, `CursorServiceImpl.setCursor`, `InitService.init`, …). If one is renamed, its rule stops firing without an error. Check that the `[byteman] <rule>` line appears in `console.out` when the scenario runs.
