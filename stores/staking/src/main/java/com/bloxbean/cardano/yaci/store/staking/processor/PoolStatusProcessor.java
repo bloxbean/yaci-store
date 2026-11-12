@@ -225,7 +225,8 @@ public class PoolStatusProcessor {
                     .poolId(retirement.getPoolId())
                     .txHash(retirement.getTxHash())
                     .certIndex(retirement.getCertIndex())
-                    .txIndex(retirement.getTxIndex())
+                    //Sort before every certificate in this block, e.g. a re-registration in tx 0
+                    .txIndex(-1)
                     .status(PoolStatusType.RETIRED)
                     .amount(poolDeposit)
                     .epoch(newEpoch)
