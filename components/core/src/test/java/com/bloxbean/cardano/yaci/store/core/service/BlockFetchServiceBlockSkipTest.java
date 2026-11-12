@@ -397,6 +397,74 @@ class BlockFetchServiceBlockSkipTest {
     }
 
     @Test
+    void parseErrorOfALaterBlockDoesNotStandInForTheLostStartBlock() {
+        //Start block 100 is lost, then block 101 cannot be parsed: skipping 101 must not hide the loss of 100
+        blockFetchService.startFetch(new Point(100, START_HASH), TO, null);
+
+        blockFetchService.onParsingError(new BlockParseRuntimeException(101L, null, new RuntimeException("bad cbor")));
+        Block b102 = block(102, "h102", "h101");
+        deliver(b102);
+
+        verify(shelleyPublisher, never()).publishBlockEventsInParallel(any(), eq(b102), any());
+        assertThat(blockFetchService.isError()).isTrue();
+    }
+
+    @Test
+    void startBlockHashIsComparedIgnoringCase() {
+        //store.cardano.sync-start-blockhash written in upper case
+        blockFetchService.startFetch(new Point(100, START_HASH.toUpperCase()), TO, null);
+
+        Block first = block(100, START_HASH, "h99");
+        deliver(first);
+
+        verify(shelleyPublisher).publishBlockEventsInParallel(any(), eq(first), any());
+        assertThat(blockFetchService.isError()).isFalse();
+    }
+
+    @Test
+    void batchDoneWritesThePartialBatchBeforeSwitchingToChainSync() {
+        //A short fresh range: its blocks are still in a batch when the range ends
+        when(storeProperties.isPrimaryInstance()).thenReturn(true);
+        blockFetchService.startFetch(new Point(100, START_HASH), TO, null);
+        deliver(block(100, START_HASH, "h99"));
+        deliver(block(101, "h101", START_HASH));
+        when(cursorService.getCursor()).thenReturn(Optional.of(cursor(101, "h101")));
+
+        blockFetchService.batchDone();
+
+        var order = inOrder(shelleyPublisher, blockSync);
+        order.verify(shelleyPublisher).processBlocksInParallel();
+        order.verify(blockSync).startSync(argThat(p -> p != null && "h101".equals(p.getHash())), any());
+        assertThat(blockFetchService.isError()).isFalse();
+    }
+
+    @Test
+    void batchDoneWithoutTheStartBlockFetchesAgain() {
+        //The range ended and the start block never came: chain sync from the placeholder would start after it
+        when(storeProperties.isPrimaryInstance()).thenReturn(true);
+        blockFetchService.startFetch(new Point(100, START_HASH), TO, null);
+
+        blockFetchService.batchDone();
+
+        verify(blockSync, never()).startSync(any(), any());
+        assertThat(blockFetchService.isError()).isTrue();
+        verify(publisher).publishEvent(any(RequiredSyncRestartEvent.class));
+    }
+
+    @Test
+    void batchDoneAfterAnErrorDoesNotSwitchToChainSync() {
+        when(storeProperties.isPrimaryInstance()).thenReturn(true);
+        blockFetchService.startFetch(new Point(100, START_HASH), TO, null);
+        deliver(block(101, "h101", START_HASH)); //the start block is missing: the sync stops
+        when(cursorService.getCursor()).thenReturn(Optional.of(cursor(100, START_HASH)));
+
+        blockFetchService.batchDone();
+
+        verify(blockSync, never()).startSync(any(), any());
+        verify(shelleyPublisher, never()).processBlocksInParallel();
+    }
+
+    @Test
     void rangeFetchFromAStoredBlockDoesNotRequireItAgain() {
         //Resuming from the cursor: the cursor block may be delivered again or not, and the next block links to it
         blockFetchService.startFetch(new Point(100, START_HASH), TO, 100L);

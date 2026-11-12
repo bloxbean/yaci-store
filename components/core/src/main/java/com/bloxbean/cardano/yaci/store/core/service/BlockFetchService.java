@@ -435,8 +435,36 @@ public class BlockFetchService implements BlockChainDataListener {
             log.info("Batch Done >>>");
 
             if (storeProperties.isPrimaryInstance()) {
+                //The sync already stopped on an error and asked for a restart from the cursor
+                if (isError.get()) {
+                    log.info("Range fetch ended after the sync stopped on an error. Not switching to chain sync.");
+                    return;
+                }
+
                 //Stop BlockRange Sync before starting BlockSync
                 shutdownRangeSync();
+
+                //Write the blocks still waiting in a partly filled batch, so chain sync starts after the last block
+                //received. Otherwise they are dropped and fetched again by chain sync, which starts after the cursor:
+                //on a fresh start the cursor is the start block's placeholder, so the start block would be lost.
+                try {
+                    byronBlockEventPublisher.processBlocksInParallel();
+                    postShelleyBlockEventPublisher.processBlocksInParallel();
+                } catch (Throwable e) {
+                    log.error("Could not write the last batch of the range fetch. Stopping sync to fetch again " +
+                            "from the last stored block.", e);
+                    stopSyncAndRefetch("BatchWriteFailed", "BATCH_WRITE_FAILED", String.valueOf(e.getMessage()));
+                    return;
+                }
+
+                //A fresh range fetch that ended without its start block: chain sync would start after it
+                if (requiredFirstBlockHash != null) {
+                    log.error("The range fetch ended without its start block {}. Stopping sync to fetch again.",
+                            requiredFirstBlockHash);
+                    stopSyncAndRefetch("StartBlockNotDelivered", "BLOCK_NOT_LINKED",
+                            "The range fetch ended without its start block " + requiredFirstBlockHash);
+                    return;
+                }
 
                 //If primary instance, start sync
                 //start sync
@@ -506,10 +534,13 @@ public class BlockFetchService implements BlockChainDataListener {
                 throw new RuntimeException(e);
             }
 
-            //The skipped block's hash is not known, so accept the next block without the link check. If it was the
-            //first block of a fresh range fetch, the recorded skip stands in for it.
+            //The skipped block's hash is not known, so accept the next block without the link check. Except when the
+            //start block of a fresh range fetch has not come yet: then the skipped block stands in for it only if it
+            //is the start block, so the next block must build on the start block. Otherwise the start block was lost
+            //before the failed block.
+            String startBlockHash = requiredFirstBlockHash;
             requiredFirstBlockHash = null;
-            expectedPrevBlockHash = null;
+            expectedPrevBlockHash = startBlockHash;
             //The next block must be the one after the skipped block, or a Byron epoch boundary block with the same
             //number. If the skipped block's number is not known, take it as the block after the last accepted one:
             //then the next block may be the one after it (or, for a skipped Byron epoch boundary block, the one after
@@ -544,7 +575,7 @@ public class BlockFetchService implements BlockChainDataListener {
     private boolean acceptBlock(long blockNumber, String blockHash, String prevBlockHash) {
         String requiredFirst = requiredFirstBlockHash;
         if (requiredFirst != null) {
-            if (requiredFirst.equals(blockHash))
+            if (requiredFirst.equalsIgnoreCase(blockHash))
                 return true;
 
             log.error("The first block of the range fetch must be the start block {}, but block {} ({}) came first. " +
