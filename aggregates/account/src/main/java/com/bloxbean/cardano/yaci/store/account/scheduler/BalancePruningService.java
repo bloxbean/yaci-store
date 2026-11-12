@@ -117,7 +117,7 @@ public class BalancePruningService {
         }
     }
 
-    private long performAddressBalanceDelete(long fromSlot) {
+    long performAddressBalanceDelete(long fromSlot) {
         int count = 0;
         long totalCount = 0;
         int limit = accountStoreProperties.getPruningBatchSize();
@@ -133,7 +133,8 @@ public class BalancePruningService {
                                                                       FROM address_balance a2
                                                                       WHERE a1.address = a2.address
                                                                         AND a1.unit = a2.unit
-                                                                        AND a1.slot < a2.slot)                                                          
+                                                                        AND a1.slot < a2.slot
+                                                                        AND a2.slot <= ?)
                                                         LIMIT ?
                                                         )
                                 delete
@@ -141,7 +142,7 @@ public class BalancePruningService {
                                 WHERE (address, unit, slot) IN (SELECT address, unit, slot FROM rows_to_delete)
                             """;
 
-                return dslContext.execute(query, fromSlot, limit);
+                return dslContext.execute(query, fromSlot, fromSlot, limit);
             });
 
             totalCount += count;
@@ -158,7 +159,7 @@ public class BalancePruningService {
         return totalCount;
     }
 
-    private long performStakeAddressBalanceDelete(long fromSlot) {
+    long performStakeAddressBalanceDelete(long fromSlot) {
         int count = 0;
         long totalCount = 0;
         int limit = accountStoreProperties.getPruningBatchSize();
@@ -173,7 +174,8 @@ public class BalancePruningService {
                                                           AND EXISTS (SELECT 1
                                                                       FROM stake_address_balance a2
                                                                       WHERE a1.address = a2.address                                                                    
-                                                                        AND a1.slot < a2.slot)                                                          
+                                                                        AND a1.slot < a2.slot
+                                                                        AND a2.slot <= ?)
                                                         LIMIT ?
                                                         )
                                 delete
@@ -181,7 +183,7 @@ public class BalancePruningService {
                                 WHERE (address, slot) IN (SELECT address, slot FROM rows_to_delete)
                             """;
 
-                return dslContext.execute(query, fromSlot, limit);
+                return dslContext.execute(query, fromSlot, fromSlot, limit);
             });
 
             totalCount += count;
