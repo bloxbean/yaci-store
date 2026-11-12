@@ -82,6 +82,17 @@ class BalancePruningServiceTest {
     }
 
     @Test
+    void addressBalance_keepsRowAtCutoff_andDeletesOlderRows() {
+        insertAddressBalance("addr_x", 500);
+        insertAddressBalance("addr_x", CUTOFF);
+        insertAddressBalance("addr_x", 1500);
+
+        pruningService.performAddressBalanceDelete(CUTOFF);
+
+        assertThat(addressBalanceSlots("addr_x")).containsExactly(CUTOFF, 1500L);
+    }
+
+    @Test
     void stakeAddressBalance_keepsLatestSettledRow_whenOnlyNewerRowIsInRollbackWindow() {
         insertStakeAddressBalance("stake_x", 500);
         insertStakeAddressBalance("stake_x", 1500);
@@ -101,6 +112,17 @@ class BalancePruningServiceTest {
         pruningService.performStakeAddressBalanceDelete(CUTOFF);
 
         assertThat(stakeAddressBalanceSlots("stake_x")).containsExactly(900L, 1500L);
+    }
+
+    @Test
+    void stakeAddressBalance_keepsRowAtCutoff_andDeletesOlderRows() {
+        insertStakeAddressBalance("stake_x", 500);
+        insertStakeAddressBalance("stake_x", CUTOFF);
+        insertStakeAddressBalance("stake_x", 1500);
+
+        pruningService.performStakeAddressBalanceDelete(CUTOFF);
+
+        assertThat(stakeAddressBalanceSlots("stake_x")).containsExactly(CUTOFF, 1500L);
     }
 
     private void insertAddressBalance(String address, long slot) {
