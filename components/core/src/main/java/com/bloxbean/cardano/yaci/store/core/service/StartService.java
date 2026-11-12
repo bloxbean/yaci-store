@@ -158,7 +158,9 @@ public class StartService {
         log.debug("Block diff configuration to start sync >>> " + storeProperties.getBlockDiffToStartSyncProtocol());
         long diff = tip.getPoint().getSlot() - from.getSlot();
         if (storeProperties.isPrimaryInstance()) {
-            if (diff > storeProperties.getBlockDiffToStartSyncProtocol()) {
+            //Chain sync starts after its start point, so a start point that is not processed yet (a fresh start) is
+            //always fetched with a range fetch first, however close to the tip it is
+            if (diff > storeProperties.getBlockDiffToStartSyncProtocol() || processedBlockNumber == null) {
                 log.info("Start BlockRangeSync");
                 blockFetchService.startFetch(from, to, processedBlockNumber);
             } else {
