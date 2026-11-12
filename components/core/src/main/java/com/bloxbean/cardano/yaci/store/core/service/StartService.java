@@ -162,7 +162,10 @@ public class StartService {
         long diff = tip.getPoint().getSlot() - from.getSlot();
         //BlockFetch requests the range from the from block inclusive, so the from block is processed again.
         //ChainSync starts after the intersection, so it is not.
-        boolean fetchRange = !storeProperties.isPrimaryInstance() || diff > storeProperties.getBlockDiffToStartSyncProtocol();
+        //Chain sync starts after its start point, so a start point that is not processed yet (a fresh start) is always
+        //fetched with a range fetch first, however close to the tip it is
+        boolean fetchRange = !storeProperties.isPrimaryInstance() || diff > storeProperties.getBlockDiffToStartSyncProtocol()
+                || processedBlockNumber == null;
 
         //Send a rollback event to rollback data after this slot, and at this slot for stores
         //that cannot overwrite the from block's rows when it is processed again (For BlockFetch).
