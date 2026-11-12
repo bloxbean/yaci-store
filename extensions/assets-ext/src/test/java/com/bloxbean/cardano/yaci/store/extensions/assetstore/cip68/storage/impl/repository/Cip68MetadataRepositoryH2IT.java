@@ -11,7 +11,9 @@ import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
@@ -19,7 +21,7 @@ import static org.assertj.core.api.Assertions.tuple;
 /**
  * {@link Cip68MetadataRepository#findLatestByConcatenatedKeys} against a real H2 {@code cip68_metadata}
  * table created by the module's own migrations: exactly the requested {@code (policy_id, asset_name)}
- * pairs, latest row per pair.
+ * pairs, latest row per pair, also when the request is split into several queries.
  */
 @DataJpaTest(properties = {
         "spring.flyway.enabled=false",
@@ -72,6 +74,40 @@ class Cip68MetadataRepositoryH2IT {
                 List.of(POLICY_1 + REF_A, POLICY_2 + REF_B));
 
         assertThat(rows).extracting(Cip68Metadata::getName).containsExactlyInAnyOrder("p1-a", "p2-b");
+    }
+
+    @Test
+    @DisplayName("the query itself drops an unrequested cross-product pair, before ranking")
+    void queryExcludesUnrequestedCrossProductPair() {
+        save(POLICY_1, REF_A, 100, "11", 0, "p1-a");
+        save(POLICY_2, REF_B, 100, "22", 0, "p2-b");
+        save(POLICY_1, REF_B, 100, "33", 0, "p1-b");   // matches both IN lists, but is not a requested key
+
+        List<Cip68Metadata> rows = repository.findLatestByPolicyIdsAndAssetNames(
+                Set.of(POLICY_1, POLICY_2), Set.of(REF_A, REF_B), List.of(POLICY_1 + REF_A, POLICY_2 + REF_B));
+
+        assertThat(rows).extracting(Cip68Metadata::getName).containsExactlyInAnyOrder("p1-a", "p2-b");
+    }
+
+    @Test
+    @DisplayName("splits a request larger than MAX_KEYS_PER_QUERY into several queries and returns every match once")
+    void splitsLargeRequests() {
+        int keyCount = 2 * Cip68MetadataRepository.MAX_KEYS_PER_QUERY + 1;
+        List<String> keys = new ArrayList<>();
+        for (int i = 0; i < keyCount; i++) {
+            keys.add(POLICY_1 + "000643b0" + String.format("%06x", i));
+        }
+        // one stored pair in each of the three queries: first key, first key of the second query, last key
+        int[] stored = {0, Cip68MetadataRepository.MAX_KEYS_PER_QUERY, keyCount - 1};
+        for (int i : stored) {
+            save(POLICY_1, keys.get(i).substring(Cip68MetadataRepository.POLICY_ID_HEX_LENGTH), 100,
+                    String.format("%02x", i % 256), 0, "key-" + i);
+        }
+        keys.add(keys.get(0));   // a duplicate key is looked up once
+
+        assertThat(repository.findLatestByConcatenatedKeys(keys)).extracting(Cip68Metadata::getName)
+                .containsExactlyInAnyOrder("key-0", "key-" + Cip68MetadataRepository.MAX_KEYS_PER_QUERY,
+                        "key-" + (keyCount - 1));
     }
 
     @Test
