@@ -1,0 +1,147 @@
+# Test-only faults, armed by creating a file named after the rule in the directory -Drt.trig points to.
+# One-shot rules delete the file when they fire, persistent ones keep firing until it is removed.
+RULE tx-listener-fail
+CLASS com.bloxbean.cardano.yaci.store.transaction.processor.TransactionProcessor
+METHOD handleTransactionEvent
+AT ENTRY
+BIND f:java.io.File = new java.io.File(System.getProperty("rt.trig"), "tx-listener-fail")
+IF f.exists() AND f.delete()
+DO traceln("[byteman] tx-listener-fail"); throw new java.lang.RuntimeException("[byteman] injected failure in TransactionProcessor")
+ENDRULE
+
+RULE oom-first-lookup
+CLASS com.bloxbean.cardano.yaci.store.core.service.EraService
+METHOD checkIfNewEra
+AT ENTRY
+BIND f:java.io.File = new java.io.File(System.getProperty("rt.trig"), "oom-first-lookup")
+IF f.exists() AND f.delete()
+DO traceln("[byteman] oom-first-lookup"); throw new java.lang.OutOfMemoryError("[byteman] injected")
+ENDRULE
+
+RULE db-fail-first-lookup
+CLASS com.bloxbean.cardano.yaci.store.core.service.EraService
+METHOD checkIfNewEra
+AT ENTRY
+BIND f:java.io.File = new java.io.File(System.getProperty("rt.trig"), "db-fail-first-lookup")
+IF f.exists() AND f.delete()
+DO traceln("[byteman] db-fail-first-lookup"); throw new java.lang.RuntimeException("[byteman] injected db failure")
+ENDRULE
+
+RULE listener-hang
+CLASS com.bloxbean.cardano.yaci.store.blocks.processor.BlockProcessor
+METHOD handleBlockHeaderEvent
+AT ENTRY
+BIND f:java.io.File = new java.io.File(System.getProperty("rt.trig"), "listener-hang")
+IF f.exists() AND f.delete()
+DO traceln("[byteman] listener-hang start"); Thread.sleep(300000L); traceln("[byteman] listener-hang end")
+ENDRULE
+
+RULE cursor-fail
+CLASS com.bloxbean.cardano.yaci.store.core.service.CursorServiceImpl
+METHOD setCursor
+AT ENTRY
+BIND f:java.io.File = new java.io.File(System.getProperty("rt.trig"), "cursor-fail")
+IF f.exists() AND f.delete()
+DO traceln("[byteman] cursor-fail"); throw new java.lang.RuntimeException("[byteman] injected failure in setCursor")
+ENDRULE
+
+RULE error-save-fail
+CLASS com.bloxbean.cardano.yaci.store.core.storage.ErrorStorageImpl
+METHOD save
+AT ENTRY
+BIND f:java.io.File = new java.io.File(System.getProperty("rt.trig"), "error-save-fail")
+IF f.exists()
+DO traceln("[byteman] error-save-fail"); throw new java.lang.RuntimeException("[byteman] injected failure saving the error row")
+ENDRULE
+
+RULE init-fail
+CLASS com.bloxbean.cardano.yaci.store.core.service.InitService
+METHOD init
+AT ENTRY
+BIND f:java.io.File = new java.io.File(System.getProperty("rt.trig"), "init-fail")
+IF f.exists()
+DO traceln("[byteman] init-fail"); throw new java.lang.RuntimeException("[byteman] injected failure in StartService init")
+ENDRULE
+
+RULE rollback-listener-fail
+CLASS com.bloxbean.cardano.yaci.store.utxo.processor.UtxoRollbackProcessor
+METHOD handleRollbackEvent
+AT ENTRY
+BIND f:java.io.File = new java.io.File(System.getProperty("rt.trig"), "rollback-listener-fail")
+IF f.exists() AND f.delete()
+DO traceln("[byteman] rollback-listener-fail"); throw new java.lang.RuntimeException("[byteman] injected failure in a rollback listener")
+ENDRULE
+
+# --- ledger-state (adapot, account, governance-aggr). Pause rules hold the step for 45 s, so the runner can
+# inject a fault while it is in progress; the marker line tells the runner the step has started.
+RULE adapot-pause-calc
+CLASS com.bloxbean.cardano.yaci.store.adapot.service.EpochRewardCalculationService
+METHOD calculateEpochRewards
+AT ENTRY
+BIND f:java.io.File = new java.io.File(System.getProperty("rt.trig"), "adapot-pause-calc")
+IF f.exists() AND f.delete()
+DO traceln("[byteman] adapot-pause-calc start"); Thread.sleep(45000L); traceln("[byteman] adapot-pause-calc end")
+ENDRULE
+
+RULE adapot-pause-update
+CLASS com.bloxbean.cardano.yaci.store.adapot.service.EpochRewardCalculationService
+METHOD updateEpochRewards
+AT ENTRY
+BIND f:java.io.File = new java.io.File(System.getProperty("rt.trig"), "adapot-pause-update")
+IF f.exists() AND f.delete()
+DO traceln("[byteman] adapot-pause-update start"); Thread.sleep(45000L); traceln("[byteman] adapot-pause-update end")
+ENDRULE
+
+RULE adapot-pause-snapshot
+CLASS com.bloxbean.cardano.yaci.store.adapot.snapshot.StakeSnapshotService
+METHOD takeStakeSnapshot
+AT ENTRY
+BIND f:java.io.File = new java.io.File(System.getProperty("rt.trig"), "adapot-pause-snapshot")
+IF f.exists() AND f.delete()
+DO traceln("[byteman] adapot-pause-snapshot start"); Thread.sleep(45000L); traceln("[byteman] adapot-pause-snapshot end")
+ENDRULE
+
+RULE account-pause-commit
+CLASS com.bloxbean.cardano.yaci.store.account.processor.AccountBalanceProcessor
+METHOD handlePostProcessingEvent
+AT ENTRY
+BIND f:java.io.File = new java.io.File(System.getProperty("rt.trig"), "account-pause-commit")
+IF f.exists() AND f.delete()
+DO traceln("[byteman] account-pause-commit start"); Thread.sleep(45000L); traceln("[byteman] account-pause-commit end")
+ENDRULE
+
+RULE gov-pause-proposal
+CLASS com.bloxbean.cardano.yaci.store.governanceaggr.processor.ProposalStateProcessor
+METHOD handleProposalState
+AT ENTRY
+BIND f:java.io.File = new java.io.File(System.getProperty("rt.trig"), "gov-pause-proposal")
+IF f.exists() AND f.delete()
+DO traceln("[byteman] gov-pause-proposal start"); Thread.sleep(45000L); traceln("[byteman] gov-pause-proposal end")
+ENDRULE
+
+RULE adapot-fail-calc
+CLASS com.bloxbean.cardano.yaci.store.adapot.service.EpochRewardCalculationService
+METHOD calculateEpochRewards
+AT ENTRY
+BIND f:java.io.File = new java.io.File(System.getProperty("rt.trig"), "adapot-fail-calc")
+IF f.exists() AND f.delete()
+DO traceln("[byteman] adapot-fail-calc"); throw new java.lang.RuntimeException("[byteman] injected failure in the reward calculation")
+ENDRULE
+
+RULE adapot-fail-snapshot
+CLASS com.bloxbean.cardano.yaci.store.adapot.snapshot.StakeSnapshotService
+METHOD takeStakeSnapshot
+AT ENTRY
+BIND f:java.io.File = new java.io.File(System.getProperty("rt.trig"), "adapot-fail-snapshot")
+IF f.exists() AND f.delete()
+DO traceln("[byteman] adapot-fail-snapshot"); throw new java.lang.RuntimeException("[byteman] injected failure in the stake snapshot")
+ENDRULE
+
+RULE gov-fail-proposal
+CLASS com.bloxbean.cardano.yaci.store.governanceaggr.processor.ProposalStateProcessor
+METHOD handleProposalState
+AT ENTRY
+BIND f:java.io.File = new java.io.File(System.getProperty("rt.trig"), "gov-fail-proposal")
+IF f.exists() AND f.delete()
+DO traceln("[byteman] gov-fail-proposal"); throw new java.lang.RuntimeException("[byteman] injected failure in the proposal status update")
+ENDRULE
