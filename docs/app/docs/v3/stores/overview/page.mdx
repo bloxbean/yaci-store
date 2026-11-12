@@ -40,40 +40,6 @@ These stores handle fundamental blockchain data and are enabled by default:
 - **Transaction Store**: Stores transaction data
 - **UTxO Store**: Manages unspent transaction outputs and spending relationships
 
-#### Native assets with quantity 0
-
-Before Conway, a transaction output or mint field could list a native asset with quantity `0`. The ledger drops such entries when it decodes the value (Conway rejects them), so they are not part of the on-chain value, and db-sync and Blockfrost do not have them. Yaci Store drops them too when it indexes outputs (`address_utxo.amounts`), collateral returns (`transaction.collateral_return_json`) and mints (`assets`).
-
-<Callout type="info">
-A database synced with an earlier version still holds these entries for pre-Conway transactions. They show up as `quantity: 0` in UTxO and transaction responses, and they add those transactions to asset transaction lists. Resync to remove them, or on PostgreSQL run:
-
-```sql
--- outputs
-update address_utxo
-set amounts = (select jsonb_agg(e order by i)
-               from jsonb_array_elements(amounts) with ordinality as a(e, i)
-               where e->>'unit' = 'lovelace' or (e->>'quantity')::numeric <> 0)
-where amounts @> '[{"quantity": 0}]'
-  and exists (select 1 from jsonb_array_elements(amounts) e
-              where e->>'unit' <> 'lovelace' and (e->>'quantity')::numeric = 0);
-
--- collateral returns
-update transaction
-set collateral_return_json = jsonb_set(collateral_return_json, '{amounts}',
-      (select jsonb_agg(e order by i)
-       from jsonb_array_elements(collateral_return_json->'amounts') with ordinality as a(e, i)
-       where e->>'unit' = 'lovelace' or (e->>'quantity')::numeric <> 0))
-where collateral_return_json->'amounts' @> '[{"quantity": 0}]'
-  and exists (select 1 from jsonb_array_elements(collateral_return_json->'amounts') e
-              where e->>'unit' <> 'lovelace' and (e->>'quantity')::numeric = 0);
-
--- mints
-delete from assets where quantity = 0;
-```
-
-The first statement scans `address_utxo` unless the optional `amounts` GIN index exists. Balances already computed by the Account module (`address_balance`, `address_balance_current`) are not corrected by these statements; resync to rebuild them.
-</Callout>
-
 ### Aggregation Modules
 
 These modules perform complex calculations and are disabled by default:
