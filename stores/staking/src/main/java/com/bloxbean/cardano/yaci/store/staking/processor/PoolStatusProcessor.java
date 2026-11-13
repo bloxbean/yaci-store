@@ -21,10 +21,11 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 
 import static com.bloxbean.cardano.yaci.store.staking.StakingStoreConfiguration.STORE_STAKING_ENABLED;
 
-//TODO -- Add tests
+// Replay of pool registrations: see PoolStatusProcessorReplayIT
 @Component
 @RequiredArgsConstructor
 @EnableIf(STORE_STAKING_ENABLED)
@@ -58,7 +59,21 @@ public class PoolStatusProcessor {
     @EventListener
     @Transactional
     public void processPoolRegistrationEvent(PoolRegistrationEvent poolRegistrationEvent) {
-        poolRegistrationsCache.add(poolRegistrationEvent);
+        // One event per transaction. A transaction processed again before pre-commit (e.g. after a failed batch)
+        // replaces its earlier copy, so its registrations are counted once in StakingDepositEvent.
+        var metadata = poolRegistrationEvent.getMetadata();
+        var txHash = txHashOf(poolRegistrationEvent);
+        synchronized (poolRegistrationsCache) {
+            poolRegistrationsCache.removeIf(cached -> cached.getMetadata().getSlot() == metadata.getSlot()
+                    && Objects.equals(cached.getMetadata().getBlockHash(), metadata.getBlockHash())
+                    && Objects.equals(txHashOf(cached), txHash));
+            poolRegistrationsCache.add(poolRegistrationEvent);
+        }
+    }
+
+    private static String txHashOf(PoolRegistrationEvent event) {
+        var registrations = event.getPoolRegistrations();
+        return registrations == null || registrations.isEmpty() ? null : registrations.get(0).getTxHash();
     }
 
     @EventListener
@@ -111,7 +126,10 @@ public class PoolStatusProcessor {
         List<Pool> poolRegsUpdates = new ArrayList<>();
         for (var poolRegistration : poolRegistrationEvent.getPoolRegistrations()) {
             var poolId = poolRegistration.getPoolId();
-            var poolRegistrationOpt = poolStorage.findRecentPoolRegistration(poolId, metadata.getEpochNumber());
+            // Only look at registrations before this certificate. When a block is processed again after a restart,
+            // its own row is already stored and must not turn this registration into an update.
+            var poolRegistrationOpt = poolStorage.findRecentPoolRegistrationBefore(poolId, metadata.getEpochNumber(),
+                    metadata.getSlot(), poolRegistration.getTxIndex(), poolRegistration.getCertIndex());
             var poolRetiredOpt = poolStorage.findRecentPoolRetired(poolId, metadata.getEpochNumber());
 
             var poolRegistrationSlot = poolRegistrationOpt.map(Pool::getSlot).orElse(-1L);
@@ -249,6 +267,13 @@ public class PoolStatusProcessor {
     @EventListener
     @Transactional
     public void handleRollback(RollbackEvent rollbackEvent) {
+        // Events cached for blocks that were not committed must not be counted or saved at the next pre-commit.
+        // A restart also publishes a rollback event before it processes blocks again.
+        poolRegistrationsCache.clear();
+        poolRetirementsCache.clear();
+        stakeKeyRegCache.clear();
+        stakeKeyDeRegCache.clear();
+
         long rollBackToSlot = rollbackEvent.getRollbackTo().getSlot();
         int deleted = poolStorage.deleteBySlotGreaterThan(rollBackToSlot);
         log.info("Rollback -- {} pool records", deleted);
