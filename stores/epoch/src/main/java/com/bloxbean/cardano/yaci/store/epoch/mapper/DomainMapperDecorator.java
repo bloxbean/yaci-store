@@ -106,11 +106,10 @@ public class DomainMapperDecorator implements DomainMapper {
 
                 Map<String, Long> langCost = new TreeMap<>();
                 var costArr = costModelMap.get(key);
-                if (costArr.length == ops.size()) {
-                    int index = 0;
-
-                    for (String op : ops) {
-                        langCost.put(op, costArr[index++]);
+                //New params are appended to the end, so an older, shorter model uses the leading names
+                if (costArr.length <= ops.size()) {
+                    for (int index = 0; index < costArr.length; index++) {
+                        langCost.put(ops.get(index), costArr[index]);
                     }
                 } else {
                     int index = 0;

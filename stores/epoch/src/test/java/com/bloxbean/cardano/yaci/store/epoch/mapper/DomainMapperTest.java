@@ -7,10 +7,15 @@ import com.bloxbean.cardano.yaci.core.types.NonNegativeInterval;
 import com.bloxbean.cardano.yaci.core.types.UnitInterval;
 import com.bloxbean.cardano.yaci.core.util.Tuple;
 import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
+import com.bloxbean.cardano.yaci.store.common.genesis.util.PlutusKeys;
 import com.bloxbean.cardano.yaci.store.epoch.dto.ProtocolParamsDto;
+import com.bloxbean.cardano.yaci.store.epoch.util.PlutusOps;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigInteger;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.LongStream;
 
 import static com.bloxbean.cardano.yaci.store.common.util.UnitIntervalUtil.safeRatio;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -240,6 +245,46 @@ class DomainMapperTest {
         assertThat(cclProtocolParams.getGovActionDeposit()).isEqualTo(protocolParams.getGovActionDeposit().toString());
         assertThat(cclProtocolParams.getDrepDeposit()).isEqualTo(protocolParams.getDrepDeposit().toString());
         assertThat(cclProtocolParams.getDrepActivity()).isEqualTo(protocolParams.getDrepActivity());
+    }
+
+    @Test
+    void toProtocolParamsDto_shorterCostModelUsesLeadingOpNames() {
+        List<String> v1Ops = PlutusOps.getOperations(1);
+        long[] v1Costs = LongStream.range(0, 166).toArray();
+
+        ProtocolParams protocolParams = ProtocolParams.builder()
+                .costModels(Map.of(PlutusKeys.PLUTUS_V1, v1Costs))
+                .build();
+
+        ProtocolParamsDto dto = DomainMapper.INSTANCE.toProtocolParamsDto(protocolParams);
+
+        Map<String, Long> v1 = dto.getCostModels().get(PlutusKeys.PLUTUS_V1);
+        assertThat(v1).hasSize(166);
+        assertThat(v1.keySet()).containsExactlyInAnyOrderElementsOf(v1Ops.subList(0, 166));
+        assertThat(v1).containsEntry(v1Ops.get(0), 0L);
+        assertThat(v1).containsEntry(v1Ops.get(165), 165L);
+    }
+
+    @Test
+    void toProtocolParamsDto_v3CostModelFollowsLedgerParamOrder() {
+        long[] v3Costs = LongStream.range(0, 251).toArray();
+
+        ProtocolParams protocolParams = ProtocolParams.builder()
+                .costModels(Map.of(PlutusKeys.PLUTUS_V3, v3Costs))
+                .build();
+
+        ProtocolParamsDto dto = DomainMapper.INSTANCE.toProtocolParamsDto(protocolParams);
+
+        //Order from plutus-ledger-api V3 ParamName
+        Map<String, Long> v3 = dto.getCostModels().get(PlutusKeys.PLUTUS_V3);
+        assertThat(v3).containsEntry("quotientInteger-memory-arguments-intercept", 138L);
+        assertThat(v3).containsEntry("quotientInteger-memory-arguments-minimum", 139L);
+        assertThat(v3).containsEntry("quotientInteger-memory-arguments-slope", 140L);
+        assertThat(v3).containsEntry("remainderInteger-cpu-arguments-constant", 141L);
+        assertThat(v3).containsEntry("remainderInteger-cpu-arguments-model-arguments-minimum", 148L);
+        assertThat(v3).containsEntry("remainderInteger-memory-arguments-intercept", 149L);
+        assertThat(v3).containsEntry("remainderInteger-memory-arguments-slope", 150L);
+        assertThat(v3).doesNotContainKey("remainderInteger-memory-arguments-minimum");
     }
 
 }
