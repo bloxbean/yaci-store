@@ -5,6 +5,7 @@ import co.nstant.in.cbor.model.Array;
 import co.nstant.in.cbor.model.ByteString;
 import co.nstant.in.cbor.model.DataItem;
 import co.nstant.in.cbor.model.UnsignedInteger;
+import com.bloxbean.cardano.client.crypto.Blake2bUtil;
 import com.bloxbean.cardano.client.exception.CborRuntimeException;
 import com.bloxbean.cardano.client.plutus.spec.*;
 import com.bloxbean.cardano.client.util.JsonUtil;
@@ -171,8 +172,8 @@ public class ScriptUtil {
             return null;
 
         try {
-            PlutusData plutusData = PlutusData.deserialize(HexUtil.decodeHexString(datumCbor));
-            return plutusData.getDatumHash();
+            // The datum hash is blake2b-256 of the original bytes; a decode + re-encode can change them (e.g. map key order)
+            return HexUtil.encodeHexString(Blake2bUtil.blake2bHash256(HexUtil.decodeHexString(datumCbor)));
         } catch (Exception e) {
             log.error("Unable to deserialize and calculate datumhash for : " + datumCbor, e);
             return null;
