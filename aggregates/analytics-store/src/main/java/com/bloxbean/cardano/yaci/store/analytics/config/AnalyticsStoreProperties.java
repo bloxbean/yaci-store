@@ -160,6 +160,14 @@ public class AnalyticsStoreProperties {
          */
         private List<String> extensionDirectories = new ArrayList<>();
 
+        /**
+         * Refuse to start the analytics store on an x86-64 Linux CPU below x86-64-v3 (no AVX2,
+         * BMI2, FMA, ...). DuckDB 2.0's downloaded {@code ducklake} and {@code postgres}
+         * extensions need that level and crash the JVM with SIGILL without it. Turn off only when
+         * the extensions in use are known to run on this CPU.
+         */
+        private boolean cpuCheck = true;
+
         private ReaderConfig reader = new ReaderConfig();
 
         @Data
