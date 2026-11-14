@@ -32,8 +32,10 @@ import java.util.stream.Collectors;
  *       DuckDB 2.0.0 downloads for {@code linux_amd64} are compiled for x86-64-v3 (AVX2, BMI2,
  *       FMA, ...; duckdb/duckdb#27691). On an older CPU, or a VM whose virtual CPU model hides
  *       those instructions, {@code LOAD ducklake} raises SIGILL and kills the whole JVM, indexer
- *       included. The core library in the JDBC jar still runs there, so this check reads the CPU
- *       flags instead of relying on a failed load.</li>
+ *       included. The core library in the JDBC jar still runs there, so the CPU flags are read
+ *       instead of relying on a failed load. Bean order cannot put this check before every DuckDB
+ *       bean, so {@link #requireExtensionCapableCpu} also runs at each place that loads those
+ *       extensions ({@code DuckDbConnectionHelper}, {@code DuckDbCatalogPreInitializer}).</li>
  * </ul>
  */
 @Component
@@ -49,13 +51,14 @@ public class DuckDbPlatformCheck implements InitializingBean {
 
     private static final Path CPUINFO = Path.of("/proc/cpuinfo");
 
+    /** The refusal message for this host's CPU, or "" when it can load the extensions; computed once. */
+    private static volatile String cpuRefusal;
+
     private final AnalyticsStoreProperties properties;
 
     @Override
     public void afterPropertiesSet() {
-        if (properties.getDuckdb().isCpuCheck()) {
-            checkCpu();
-        }
+        requireExtensionCapableCpu(properties);
         try (Connection ignored = DriverManager.getConnection("jdbc:duckdb:")) {
             log.debug("DuckDB native library loaded for {} {}", osName(), osArch());
         } catch (Throwable t) {
@@ -63,15 +66,41 @@ public class DuckDbPlatformCheck implements InitializingBean {
         }
     }
 
-    private void checkCpu() {
-        if (!isX86_64(osArch())) {
+    /**
+     * Throw before DuckDB loads {@code ducklake} or {@code postgres} on a CPU that would crash on
+     * them (see the class comment). Call it right before every such {@code LOAD}; a no-op when
+     * {@code yaci.store.analytics.duckdb.cpu-check=false}.
+     *
+     * @throws IllegalStateException naming the missing CPU flags and the ways out
+     */
+    public static void requireExtensionCapableCpu(AnalyticsStoreProperties properties) {
+        if (properties != null && properties.getDuckdb() != null && !properties.getDuckdb().isCpuCheck()) {
             return;
+        }
+        String refusal = cpuRefusal;
+        if (refusal == null) {
+            refusal = checkCpu();
+            cpuRefusal = refusal;
+        }
+        if (!refusal.isEmpty()) {
+            throw new IllegalStateException(refusal);
+        }
+    }
+
+    /** Tests only: pretend this host's CPU gives {@code refusal} ("" = capable, null = re-check). */
+    static void setCpuRefusalForTesting(String refusal) {
+        cpuRefusal = refusal;
+    }
+
+    private static String checkCpu() {
+        if (!isX86_64(osArch())) {
+            return "";
         }
         String os = osName() == null ? "" : osName().toLowerCase(Locale.ROOT);
         if (!os.contains("linux")) {
             log.info("The analytics store needs an x86-64-v3 CPU (AVX2, BMI2, FMA) for DuckDB's ducklake and "
                     + "postgres extensions; this cannot be verified on {}.", osName());
-            return;
+            return "";
         }
         String cpuinfo;
         try {
@@ -79,12 +108,10 @@ public class DuckDbPlatformCheck implements InitializingBean {
         } catch (IOException | RuntimeException e) {
             log.warn("Could not read {} to check the CPU level DuckDB's extensions need (x86-64-v3): {}",
                     CPUINFO, e.toString());
-            return;
+            return "";
         }
         List<String> missing = missingCpuFlags(cpuinfo);
-        if (!missing.isEmpty()) {
-            throw new IllegalStateException(unsupportedCpuMessage(missing));
-        }
+        return missing.isEmpty() ? "" : unsupportedCpuMessage(missing);
     }
 
     /**

@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.analytics.helper;
 
 import com.bloxbean.cardano.yaci.store.analytics.config.AnalyticsStoreProperties;
+import com.bloxbean.cardano.yaci.store.analytics.config.DuckDbPlatformCheck;
 import lombok.Builder;
 import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
@@ -88,6 +89,7 @@ public class DuckDbConnectionHelper {
      * Install postgres_scanner extension (idempotent).
      */
     public void installPostgresScanner(Connection conn) throws SQLException {
+        DuckDbPlatformCheck.requireExtensionCapableCpu(properties);
         applyExtensionDirectories(conn);
         executeSql(conn, "INSTALL postgres_scanner;");
         executeSql(conn, "LOAD postgres_scanner;");
@@ -98,6 +100,7 @@ public class DuckDbConnectionHelper {
      * Install ducklake extension (idempotent).
      */
     public void installDuckLake(Connection conn) throws SQLException {
+        DuckDbPlatformCheck.requireExtensionCapableCpu(properties);
         applyExtensionDirectories(conn);
         executeSql(conn, "INSTALL ducklake;");
         executeSql(conn, "LOAD ducklake;");

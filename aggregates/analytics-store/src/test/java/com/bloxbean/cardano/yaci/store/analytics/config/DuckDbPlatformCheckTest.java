@@ -6,6 +6,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class DuckDbPlatformCheckTest {
 
@@ -62,6 +63,25 @@ class DuckDbPlatformCheckTest {
                 .contains("duckdb/duckdb#27691")
                 .contains("yaci.store.analytics.enabled=false")
                 .contains("yaci.store.analytics.duckdb.cpu-check=false");
+    }
+
+    @Test
+    void extensionLoadIsRefusedOnAnIncapableCpuUnlessTheCheckIsOff() {
+        AnalyticsStoreProperties properties = new AnalyticsStoreProperties();
+        try {
+            DuckDbPlatformCheck.setCpuRefusalForTesting(DuckDbPlatformCheck.unsupportedCpuMessage(List.of("avx2")));
+            assertThatThrownBy(() -> DuckDbPlatformCheck.requireExtensionCapableCpu(properties))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("lacks avx2");
+            assertThatThrownBy(() -> new DuckDbPlatformCheck(properties).afterPropertiesSet())
+                    .isInstanceOf(IllegalStateException.class);
+
+            properties.getDuckdb().setCpuCheck(false);
+            assertThatCode(() -> DuckDbPlatformCheck.requireExtensionCapableCpu(properties))
+                    .doesNotThrowAnyException();
+        } finally {
+            DuckDbPlatformCheck.setCpuRefusalForTesting(null);
+        }
     }
 
     @Test
