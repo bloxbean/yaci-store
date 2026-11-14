@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.analytics.ducklake;
 
 import com.bloxbean.cardano.yaci.store.analytics.config.AnalyticsStoreProperties;
+import com.bloxbean.cardano.yaci.store.analytics.helper.CatalogVersionRefusal;
 import com.bloxbean.cardano.yaci.store.analytics.helper.DuckDbConnectionHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -34,14 +35,17 @@ public class DuckLakeCatalogInitializer {
     private final DataSource duckDbDataSource;
     private final DuckDbConnectionHelper connectionHelper;
     private final AnalyticsStoreProperties properties;
+    private final DuckLakeEngineInfo engineInfo;
 
     public DuckLakeCatalogInitializer(
             @Qualifier("duckDbWriterDataSource") DataSource duckDbDataSource,
             DuckDbConnectionHelper connectionHelper,
-            AnalyticsStoreProperties properties) {
+            AnalyticsStoreProperties properties,
+            DuckLakeEngineInfo engineInfo) {
         this.duckDbDataSource = duckDbDataSource;
         this.connectionHelper = connectionHelper;
         this.properties = properties;
+        this.engineInfo = engineInfo;
     }
 
     @EventListener(ApplicationReadyEvent.class)
@@ -62,6 +66,13 @@ public class DuckLakeCatalogInitializer {
             // Verify catalog is accessible
             verifyCatalog(conn);
 
+            // Record and log the engine and catalog versions (ADR 0008 D2)
+            DuckDbConnectionHelper.CatalogVersions versions = connectionHelper.readCatalogVersions(conn);
+            engineInfo.record(properties.getDucklake().getCatalogType(), versions);
+            log.info("DuckDB {} with DuckLake extension {}; {} catalog at DuckLake spec {}",
+                    versions.duckdbVersion(), versions.ducklakeExtensionVersion(),
+                    properties.getDucklake().getCatalogType(), versions.catalogSpecVersion());
+
             // Configure catalog compression settings
             connectionHelper.configureDuckLakeCatalogSettings(conn);
 
@@ -71,6 +82,9 @@ public class DuckLakeCatalogInitializer {
             log.info("✅ DuckLake catalog initialized successfully");
             log.debug("DuckDB connection will close now, releasing any attached PostgreSQL connections");
 
+        } catch (CatalogVersionRefusal e) {
+            log.error("❌ {}", e.getMessage());
+            throw new IllegalStateException(e.getMessage(), e);
         } catch (SQLException e) {
             log.error("❌ Failed to initialize DuckLake catalog: {}", e.getMessage(), e);
             throw new RuntimeException("DuckLake catalog initialization failed", e);

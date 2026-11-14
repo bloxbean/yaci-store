@@ -26,7 +26,9 @@ import { Callout } from 'nextra/components'
 | `yaci.store.analytics.ducklake.catalog-username` | _(main datasource)_ | PostgreSQL catalog username |
 | `yaci.store.analytics.ducklake.catalog-password` | _(main datasource)_ | PostgreSQL catalog password |
 | `yaci.store.analytics.ducklake.catalog-path` | `./data/analytics/ducklake.catalog.db` | DuckDB catalog file path |
+| `yaci.store.analytics.ducklake.auto-migrate` | `false` | Let DuckLake migrate a catalog that this engine cannot open (one made by `v3.0.0-beta3` or earlier). Off: such a catalog is refused at startup with resync steps. On: one-way and unsupported; back up the catalog first. See [Upgrading the DuckDB engine](#upgrading-the-duckdb-engine) |
 | `yaci.store.analytics.duckdb.memory-limit` | _(empty = DuckDB default)_ | DuckDB buffer manager memory limit (e.g., `1GB`, `512MB`) |
+| `yaci.store.analytics.duckdb.extension-directories` | _(empty = `~/.duckdb/extensions`)_ | Comma-separated directories DuckDB searches for extensions. Pre-seed `ducklake` and `postgres` there (`<dir>/v2.0.0/<platform>/`) for offline or air-gapped deployments |
 | `yaci.store.analytics.ducklake.export.codec` | `ZSTD` | Compression codec for DuckLake Parquet files |
 | `yaci.store.analytics.ducklake.export.compression-level` | `3` | ZSTD compression level (1-22) for DuckLake exports |
 | `yaci.store.analytics.ducklake.export.row-group-size` | `-1` | Row group size for DuckLake Parquet files (-1 = DuckDB default) |
@@ -67,6 +69,37 @@ Note: The limit applies per DuckDB instance. The export writer is one instance; 
 ### DuckLake requires `public` schema in PostgreSQL
 
 DuckLake stores its metadata tables in the `public` schema. The application automatically creates this schema if it doesn't exist. If your PostgreSQL instance restricts schema creation, ensure `public` exists before enabling DuckLake.
+
+### Upgrading the DuckDB engine
+
+yaci-store bundles DuckDB 2.0 (DuckLake 1.1). On startup the analytics store logs the DuckDB,
+DuckLake extension and catalog spec versions, and `GET /api/v1/analytics/admin/status` reports
+them under `engine`. It never migrates a catalog implicitly:
+
+| Catalog found | What happens |
+|---|---|
+| None (new deployment) | Created at DuckLake spec 1.1 |
+| Spec 1.0 (made by `v3.0.0-beta4` or later) | Used as is, no migration. A DuckDB-file catalog can no longer be opened by a DuckDB 1.5 CLI after the first 2.0 write; a PostgreSQL catalog can |
+| Spec 0.x (made by `v3.0.0-beta1`–`beta3`) | Refused at startup with the steps below, and left untouched. `yaci.store.analytics.ducklake.auto-migrate=true` lets DuckLake migrate it instead: one-way, best effort, back it up first |
+| Newer than the engine | Refused at startup |
+
+To resync the analytics store:
+
+1. Stop yaci-store.
+2. Delete the catalog (the `ducklake.catalog.db` file, or the `ducklake_*` tables in the catalog database), the DuckLake data directory `<export-path>/main`, and the rows of `analytics_export_state`.
+3. Start yaci-store. The scheduler re-exports from PostgreSQL.
+
+A full yaci-store resync is needed only where PostgreSQL pruning has removed history that the
+analytics store should contain.
+
+**Platforms.** DuckDB 2.0's default JDBC jar bundles native libraries for `linux_amd64`,
+`linux_arm64`, `macos_arm64` and `windows_amd64`. On Intel macOS add
+`org.duckdb:duckdb_jdbc:2.0.0.1:macos_amd64` to the classpath, or the analytics store fails at
+startup with that hint.
+
+**Offline deployments.** DuckDB 2.0 builds `parquet`, `json` and `icu` in, and downloads
+`ducklake` and `postgres` on first use. Without network access, pre-seed them and set
+`yaci.store.analytics.duckdb.extension-directories`.
 
 ## Admin API
 

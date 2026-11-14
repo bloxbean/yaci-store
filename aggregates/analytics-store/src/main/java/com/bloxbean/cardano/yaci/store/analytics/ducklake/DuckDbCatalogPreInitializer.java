@@ -90,7 +90,12 @@ public class DuckDbCatalogPreInitializer implements InitializingBean {
 
         // Create catalog file using temporary in-memory connection
         try (Connection conn = DriverManager.getConnection("jdbc:duckdb:")) {
-            // Install ducklake extension
+            // Install ducklake extension, from pre-seeded directories if configured
+            String extensionDirectories = com.bloxbean.cardano.yaci.store.analytics.helper.DuckDbConnectionHelper
+                    .extensionDirectoriesSql(properties.getDuckdb().getExtensionDirectories());
+            if (extensionDirectories != null) {
+                executeSql(conn, extensionDirectories);
+            }
             executeSql(conn, "INSTALL ducklake;");
             log.debug("Installed ducklake extension");
 

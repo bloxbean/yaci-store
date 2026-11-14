@@ -387,7 +387,7 @@ public class ParquetReadConnectionProvider extends DuckDbReadConnectionProvider 
             source = "read_parquet([" + fileList + "], hive_partitioning=" + hivePartitioning + hiveTypes + ")";
             // Newer DuckLake versions may store internal bookkeeping columns in some data
             // files (e.g. _ducklake_internal_row_id); they are not part of the table.
-            projection = "COLUMNS(c -> NOT starts_with(c, '_ducklake_internal_'))";
+            projection = "COLUMNS(lambda c: NOT starts_with(c, '_ducklake_internal_'))";
         } else {
             String parquetPath = tableRegistry.getParquetGlobPath(tableName);
             source = "read_parquet('" + escapePath(parquetPath) + "', hive_partitioning=true)";
@@ -461,13 +461,33 @@ public class ParquetReadConnectionProvider extends DuckDbReadConnectionProvider 
         }
         String types = keys.stream()
                 .filter(fileTypes::containsKey)
-                .map(key -> "'" + key.replace("'", "''") + "': " + fileTypes.get(key))
+                .map(key -> "'" + key.replace("'", "''") + "': '" + fileTypes.get(key) + "'")
                 .collect(Collectors.joining(", "));
         return types.isEmpty() ? "" : ", hive_types={" + types + "}";
     }
 
     private void lockDownAnalyticsDirectory() {
+        preloadExtensions();
         lockDown(Path.of(properties.getExportPath()));
+    }
+
+    /**
+     * Load the extensions user SQL may rely on before {@link #lockDown(Path)} turns extension
+     * autoloading off (ADR 0008 D1). {@code icu} supplies {@code TIMESTAMPTZ} and {@code TimeZone}
+     * support; it is built into the official DuckDB builds, so this is normally a no-op, but it
+     * keeps ad-hoc and MCP queries behaving the same if a build ever ships it separately.
+     */
+    private void preloadExtensions() {
+        try {
+            DuckDbConnectionHelper helper = connectionHelperProvider.getIfAvailable();
+            if (helper != null) {
+                helper.applyExtensionDirectories(getParentConnection());
+            }
+            executeOnParent("LOAD icu");
+        } catch (SQLException e) {
+            log.warn("Could not load the icu extension before lockdown; time-zone functions may be unavailable: {}",
+                    DuckDbConnectionHelper.redactSecrets(e.getMessage()));
+        }
     }
 
     /**
