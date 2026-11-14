@@ -825,8 +825,12 @@ Each invariant is tested in the milestone named in the plan.
 
 - `analytics_export_state` gains seven columns, tombstone statuses and a reconciler. The state handling becomes a
   small protocol (D10) instead of a status flip.
-- An unknown `parquet` deployment cannot upgrade in place. It fails at startup, with a pointer
-  to D5's manual re-export (r10). Its legacy files stay on disk, untouched.
+- An unknown `parquet` deployment cannot upgrade in place (r10). If it sets
+  `storage.type=parquet` explicitly, it fails at startup, with a pointer to D5's manual
+  re-export. If it relied on the old default and leaves the type unset (C1), it starts in
+  DuckLake mode with an empty catalog and logs D3's legacy-layout WARN. Its operator must
+  still follow D5 (reset the state, re-export) to get its history back (r11, F6). Either way,
+  its legacy files stay on disk, untouched.
 - A replace that would shrink a partition fails until an operator decides. Exports on a pruned
   PostgreSQL therefore stop being "fire and forget".
 - Each export adds a `DELETE`, the precondition and post-condition checks, and a schema
@@ -963,13 +967,15 @@ then M4 and M5. r3: M4 no longer depends on M2 and can ship at any point, even f
   - A review flagged the `String.format` SQL, and `9f454c7bb` (2026-03-23) switched it to a
     `PreparedStatement` with validated values.
   - `8d57af85e` (2026-03-26) then removed it, with the message "remove deletePartitionData in
-    DuckLake writer" and no body. The PR was approved and merged the same day without
-    discussing it.
+    DuckLake writer" and no body. The PR was approved later that day (2026-03-26) and merged
+    on 2026-03-27, with no discussion of the removal (r11, F7).
 
-  The code was functionally sound. On 1.5.5, a `DELETE … WHERE date = ?` with a VARCHAR
-  parameter removes the DATE partition correctly (r10 probe). So the removal was not forced by
-  a defect we can reproduce. Duplicated rows (2× in early partitions after a state reset) were
-  observed afterwards, as C2 predicts. D6 does not depend on the answer: it is atomic where
+  The probe covers only the delete predicate. On 1.5.5 (DuckLake `d8a1881e`), a
+  `DELETE … WHERE date = ?` bound with `setString` removes every row of that DATE partition and
+  keeps the other partitions (r10 probe; reproduced by reviewer1 in round 7). It does not
+  exercise the former auto-commit delete-then-insert sequence, so it shows only that this
+  predicate was not the reason for the removal. The reason itself remains unknown. Duplicated
+  rows (2× in early partitions after a state reset) were observed afterwards, as C2 predicts. D6 does not depend on the answer: it is atomic where
   the removed code was not, and it rules out inlined and partial deletes. Q9 is therefore not
   blocking. Only the PR author can say more.
 
@@ -1245,3 +1251,11 @@ reviewer1 (same versions) also showed:
   - **Q9.** Its history trace is recorded. No reason was found, and Q9 is marked non-blocking.
   - **Unchanged:** D1, D2 and D5–D12, and every invariant.
   - **Re-review.** These changes post-date the approval of r9, so they need re-review.
+- **r11** (2026-11-14; responds to reviewer1's approval of r10 at `b55380df2`, which raised two P3
+  wording items).
+  - **F6 → Consequences.** Startup failure applies only to an explicit `storage.type=parquet`. A
+    deployment with the type unset starts with D3's legacy-layout WARN and still needs D5.
+  - **F7 → Q9.** Corrected the #858 dates (approved 2026-03-26, merged 2026-03-27). Narrowed the
+    probe's conclusion to the delete predicate; the removal reason stays unknown, and Q9 stays
+    non-blocking.
+  - **Unchanged:** every decision, invariant and milestone.
