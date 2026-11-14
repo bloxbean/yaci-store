@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.analytics.helper;
 
 import com.bloxbean.cardano.yaci.store.analytics.config.AnalyticsStoreProperties;
+import com.bloxbean.cardano.yaci.store.analytics.config.DuckDbPlatformCheck;
 import lombok.Builder;
 import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
@@ -88,6 +89,8 @@ public class DuckDbConnectionHelper {
      * Install postgres_scanner extension (idempotent).
      */
     public void installPostgresScanner(Connection conn) throws SQLException {
+        DuckDbPlatformCheck.requireExtensionCapableCpu(properties);
+        applyExtensionDirectories(conn);
         executeSql(conn, "INSTALL postgres_scanner;");
         executeSql(conn, "LOAD postgres_scanner;");
         log.debug("Installed postgres_scanner extension");
@@ -97,6 +100,8 @@ public class DuckDbConnectionHelper {
      * Install ducklake extension (idempotent).
      */
     public void installDuckLake(Connection conn) throws SQLException {
+        DuckDbPlatformCheck.requireExtensionCapableCpu(properties);
+        applyExtensionDirectories(conn);
         executeSql(conn, "INSTALL ducklake;");
         executeSql(conn, "LOAD ducklake;");
         log.debug("Installed ducklake extension");
@@ -394,26 +399,93 @@ public class DuckDbConnectionHelper {
         }
 
         // Attach the appropriate catalog type
-        if ("postgresql".equalsIgnoreCase(catalogType)) {
-            attachPostgresCatalog(conn, dataPath, readOnly);
-        } else {
-            attachDuckDbCatalog(conn, dataPath, readOnly);
+        try {
+            if ("postgresql".equalsIgnoreCase(catalogType)) {
+                attachPostgresCatalog(conn, dataPath, readOnly);
+            } else {
+                attachDuckDbCatalog(conn, dataPath, readOnly);
+            }
+        } catch (SQLException e) {
+            CatalogVersionRefusal refusal = CatalogVersionRefusal.from(e, catalogType, properties);
+            if (refusal != null) {
+                throw refusal;
+            }
+            throw e;
         }
+    }
+
+    /**
+     * Apply {@code yaci.store.analytics.duckdb.extension-directories}, if set, so that
+     * {@code INSTALL}/{@code LOAD} find pre-seeded extensions (ADR 0008 D1). The setting is
+     * per DuckDB instance and idempotent.
+     */
+    public void applyExtensionDirectories(Connection conn) throws SQLException {
+        String sql = extensionDirectoriesSql(properties.getDuckdb().getExtensionDirectories());
+        if (sql != null) {
+            executeSql(conn, sql);
+        }
+    }
+
+    /**
+     * {@code SET extension_directories = [...]} for the given directories, or {@code null} when
+     * none are configured.
+     */
+    public static String extensionDirectoriesSql(java.util.List<String> directories) {
+        if (directories == null) {
+            return null;
+        }
+        String list = directories.stream()
+                .filter(d -> d != null && !d.isBlank())
+                .map(d -> "'" + escapeSqlLiteral(d.trim()) + "'")
+                .collect(java.util.stream.Collectors.joining(", "));
+        return list.isEmpty() ? null : "SET extension_directories = [" + list + "];";
+    }
+
+    /**
+     * Versions of the running engine and of the attached DuckLake catalog, for the startup log
+     * and {@code GET /admin/status} (ADR 0008 D2). Values that cannot be read are {@code null}.
+     */
+    public CatalogVersions readCatalogVersions(Connection conn) {
+        return new CatalogVersions(
+                querySingle(conn, "SELECT library_version FROM pragma_version()"),
+                querySingle(conn, "SELECT extension_version FROM duckdb_extensions() WHERE extension_name = 'ducklake'"),
+                querySingle(conn, "SELECT value FROM __ducklake_metadata_ducklake_catalog.ducklake_metadata"
+                        + " WHERE key = 'version'"));
+    }
+
+    private String querySingle(Connection conn, String sql) {
+        try (Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(sql)) {
+            return rs.next() ? rs.getString(1) : null;
+        } catch (SQLException e) {
+            log.debug("Could not read version ({}): {}", sql, redactSecrets(e.getMessage()));
+            return null;
+        }
+    }
+
+    /** Engine version, DuckLake extension version and catalog spec version. */
+    public record CatalogVersions(String duckdbVersion, String ducklakeExtensionVersion, String catalogSpecVersion) {
     }
 
     /**
      * ATTACH options shared by both catalog types.
      *
-     * <p>Read-write attaches (the export writer) pass {@code AUTOMATIC_MIGRATION true}: a
-     * newer DuckLake extension refuses to open a catalog written in an older format
-     * ("DuckLake catalog version mismatch ... set AUTOMATIC_MIGRATION to TRUE") unless it may
-     * migrate the metadata in place. Migration is one-way — an older DuckDB/DuckLake can no
-     * longer open the migrated catalog — so back up the catalog before upgrading DuckDB.
-     * Read-only attaches cannot migrate and therefore do not request it.</p>
+     * <p>No implicit migration (ADR 0008 D2). DuckLake on DuckDB 2.x reads and writes 1.0
+     * catalogs as they are, refuses older ones ("DuckLake catalog version mismatch") and leaves
+     * them untouched, and refuses catalogs newer than the engine. {@code AUTOMATIC_MIGRATION} is
+     * passed only on read-write attaches, and only when the operator opts in with
+     * {@code yaci.store.analytics.ducklake.auto-migrate=true}: migration is one-way, and an older
+     * engine can no longer open the catalog afterwards.</p>
      */
-    private static String duckLakeAttachOptions(String dataPath, boolean readOnly) {
+    String duckLakeAttachOptions(String dataPath, boolean readOnly) {
+        return duckLakeAttachOptions(dataPath, readOnly, properties.getDucklake().isAutoMigrate());
+    }
+
+    static String duckLakeAttachOptions(String dataPath, boolean readOnly, boolean autoMigrate) {
         String data = "DATA_PATH '" + escapeSqlLiteral(dataPath) + "'";
-        return readOnly ? "READ_ONLY, " + data : data + ", AUTOMATIC_MIGRATION true";
+        if (readOnly) {
+            return "READ_ONLY, " + data;
+        }
+        return autoMigrate ? data + ", AUTOMATIC_MIGRATION true" : data;
     }
 
     // ========== URL Parsing Utilities ==========
@@ -593,8 +665,7 @@ public class DuckDbConnectionHelper {
         log.debug("Ensuring catalog schema 'public' exists in PostgreSQL (required by DuckLake)");
 
         // Install postgres_scanner if not already installed
-        executeSql(conn, "INSTALL postgres_scanner;");
-        executeSql(conn, "LOAD postgres_scanner;");
+        installPostgresScanner(conn);
 
         // Check if already attached (in case of connection pooling)
         boolean wasAlreadyAttached = isDatabaseAttached(conn, "catalog_temp");

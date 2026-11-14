@@ -88,9 +88,17 @@ public class DuckDbCatalogPreInitializer implements InitializingBean {
             }
         }
 
+        // Before DuckDB loads ducklake: on a CPU below x86-64-v3 the LOAD would kill the JVM
+        com.bloxbean.cardano.yaci.store.analytics.config.DuckDbPlatformCheck.requireExtensionCapableCpu(properties);
+
         // Create catalog file using temporary in-memory connection
         try (Connection conn = DriverManager.getConnection("jdbc:duckdb:")) {
-            // Install ducklake extension
+            // Install ducklake extension, from pre-seeded directories if configured
+            String extensionDirectories = com.bloxbean.cardano.yaci.store.analytics.helper.DuckDbConnectionHelper
+                    .extensionDirectoriesSql(properties.getDuckdb().getExtensionDirectories());
+            if (extensionDirectories != null) {
+                executeSql(conn, extensionDirectories);
+            }
             executeSql(conn, "INSTALL ducklake;");
             log.debug("Installed ducklake extension");
 
