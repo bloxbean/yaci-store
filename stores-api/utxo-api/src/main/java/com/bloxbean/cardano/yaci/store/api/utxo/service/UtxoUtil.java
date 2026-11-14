@@ -1,6 +1,6 @@
 package com.bloxbean.cardano.yaci.store.api.utxo.service;
 
-import com.bloxbean.cardano.client.plutus.spec.PlutusData;
+import com.bloxbean.cardano.client.crypto.Blake2bUtil;
 import com.bloxbean.cardano.client.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Utxo;
@@ -18,7 +18,7 @@ public class UtxoUtil {
         try {
             if (StringUtil.isEmpty(dataHash) && !StringUtil.isEmpty(addressUtxo.getInlineDatum())) {
                 byte[] inlineDatumBytes = HexUtil.decodeHexString(addressUtxo.getInlineDatum());
-                dataHash = PlutusData.deserialize(inlineDatumBytes).getDatumHash();
+                dataHash = HexUtil.encodeHexString(Blake2bUtil.blake2bHash256(inlineDatumBytes));
             }
         } catch (Exception e) {
             log.error("Invalid inline datum found in utxo tx : {}, index: {}, inline_datum: {}", addressUtxo.getTxHash(), addressUtxo.getOutputIndex(), addressUtxo.getInlineDatum());
