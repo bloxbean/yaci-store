@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.analytics.exporter;
 
+import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 
 import java.time.LocalDate;
@@ -58,10 +59,12 @@ public sealed interface PartitionValue permits
             long startEpochSeconds = date.atStartOfDay(ZoneOffset.UTC).toEpochSecond();
             long endEpochSeconds = nextDay.atStartOfDay(ZoneOffset.UTC).toEpochSecond();
 
-            // Convert epoch seconds to slots using EraService
-            // This handles both Byron and Shelley/post-Shelley eras correctly
-            long startSlot = eraService.slotFromTime(startEpochSeconds);
-            long endSlot = eraService.slotFromTime(endEpochSeconds);
+            // The day holds the slots that start at or after its midnight, up to the first slot at
+            // or after the next midnight. Byron slots (20s) are not aligned to midnight: rounding to
+            // the nearest slot would hand the 23:59:51 slot to the next day's query, although its
+            // block_time is on this day.
+            long startSlot = eraService.slotAtOrAfterTime(startEpochSeconds);
+            long endSlot = eraService.slotAtOrAfterTime(endEpochSeconds);
 
             // On genesis day, start-of-day (midnight UTC) can be before the actual genesis time
             // (e.g., mainnet genesis is 2017-09-23T21:44:51Z), producing a negative slot.
@@ -92,6 +95,15 @@ public sealed interface PartitionValue permits
 
         @Override
         public SlotRange toSlotRange(EraService eraService) {
+            // Byron epochs count Byron slots from 0, and the last one ends where the first
+            // non-Byron era starts; Shelley slot arithmetic would go negative for them.
+            var firstNonByronEpoch = eraService.getFirstNonByronEpoch();
+            if (firstNonByronEpoch.isPresent() && epoch < firstNonByronEpoch.get()) {
+                long byronSlots = eraService.slotsPerEpoch(Era.Byron);
+                return new SlotRange(epoch * byronSlots,
+                        Math.min((epoch + 1) * byronSlots, eraService.getFirstNonByronSlot()));
+            }
+
             // Get the absolute slots for this epoch
             // Note: Cardano epochs are 432,000 slots (5 days)
             long startSlot = eraService.getShelleyAbsoluteSlot(epoch, 0);

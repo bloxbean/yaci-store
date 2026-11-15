@@ -1,0 +1,33 @@
+snapshot-table:
+  id: block-cbor
+  spec-version: 2
+  module: blocks
+  kind: CHAIN_DATA
+  restore: IMPORT
+  # Written only when the store saves CBOR; exported and imported only then, in parts of its own (ADR 0006).
+  enabled-by: [store.blocks.save-cbor]
+
+  source:
+    exporter-id: block_cbor
+    ducklake-relation: block_cbor
+    partition:
+      strategy: DAILY
+      column: block_time
+
+  consistency:
+    cutoff:
+      type: SLOT_LTE
+      column: slot
+
+  import:
+    target-table: block_cbor
+    mode: MAPPED
+    ignore-source-columns: [block_time, date, epoch, number]
+    use-target-defaults: [create_datetime, update_datetime]
+    batch-boundary: FILE_SET
+    batch-size: 16
+
+  validation:
+    key: [block_hash]
+    bounds: [slot]
+    required-columns: [block_hash, cbor_data, slot]

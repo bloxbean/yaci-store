@@ -64,8 +64,10 @@ public class AdaPotJobProcessor {
         try {
             ensureCurrentJob(job, cancelled);
 
-            // Set job status to STARTED and update in the database
+            // Set job status to STARTED and update in the database.
+            // A job retried after a failure (reset on restart) must not keep the failed attempt's error.
             job.setStatus(AdaPotJobStatus.STARTED);
+            job.setErrorMessage(null);
             adaPotJobStorage.save(job);
         } catch (StaleAdaPotJobException e) {
             log.info("Skipping stale AdaPot job for epoch {} at slot {}: {}",

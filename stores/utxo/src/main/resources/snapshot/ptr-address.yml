@@ -1,0 +1,11 @@
+snapshot-table:
+  id: ptr-address
+  spec-version: 1
+  module: utxo
+  kind: CHAIN_DATA
+  restore: NOT_RESTORED
+  reason: >-
+    pointer addresses have no analytics export
+
+  import:
+    target-table: ptr_address

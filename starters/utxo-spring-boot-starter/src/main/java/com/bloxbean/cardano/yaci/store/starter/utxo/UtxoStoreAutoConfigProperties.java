@@ -12,7 +12,7 @@ public class UtxoStoreAutoConfigProperties {
     @Getter
     @Setter
     public static final class Utxo {
-       private boolean enabled = true;
+       private boolean enabled = com.bloxbean.cardano.yaci.store.common.config.StoreModuleConfig.defaultEnabled("utxo");
        private boolean apiEnabled = true;
        private Endpoints endpoints = new Endpoints();
 

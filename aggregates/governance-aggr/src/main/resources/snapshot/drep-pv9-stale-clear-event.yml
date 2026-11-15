@@ -1,0 +1,11 @@
+snapshot-table:
+  id: drep-pv9-stale-clear-event
+  spec-version: 1
+  module: governance-aggr
+  kind: CONTROL_STATE
+  restore: EMPTY_EXPECTED
+  reason: >-
+    one-off protocol-version-9 migration event log, replayed by the aggregate when needed
+
+  import:
+    target-table: drep_pv9_stale_clear_event

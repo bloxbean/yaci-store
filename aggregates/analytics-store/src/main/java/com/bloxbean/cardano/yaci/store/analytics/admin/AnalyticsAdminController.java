@@ -28,6 +28,10 @@ import java.util.List;
  * - Export specific epochs
  * - Monitor sync status
  * - Reset export state for re-exports
+ * - Repair daily partitions filed under the wrong day by earlier exports
+ *
+ * Exports replace the partition they write (DuckLake: DELETE + INSERT in one transaction), so
+ * exporting a partition again is idempotent.
  */
 @RestController
 @RequestMapping("/api/v1/analytics/admin")
@@ -42,6 +46,7 @@ public class AnalyticsAdminController {
     private final ContinuousSyncScheduler continuousSyncScheduler;
     private final TableExporterRegistry registry;
     private final ExportStateAdminService adminService;
+    private final PartitionRepairService repairService;
 
     /**
      * List all registered table exporters.
@@ -76,8 +81,8 @@ public class AnalyticsAdminController {
      */
     @Operation(summary = "Export all daily tables for one day",
             description = "Runs the export of every enabled DAILY-partitioned table for the given date (yyyy-MM-dd). "
-                    + "Partitions that are already exported are skipped. Note: the DuckLake writer is append-only — "
-                    + "reset the partition state first if you intend to re-export.")
+                    + "Partitions that are already exported are skipped; reset the partition state first to re-export. "
+                    + "A re-export replaces the partition's rows instead of appending to them.")
     @PostMapping("/export/date/{date}")
     public ResponseEntity<ExportResult> exportDate(@PathVariable String date) {
         LocalDate exportDate = LocalDate.parse(date);
@@ -212,6 +217,43 @@ public class AnalyticsAdminController {
     }
 
     /**
+     * Repair a daily table over a date range.
+     *
+     * @param tableName Table name
+     * @param startDate Start date (inclusive, yyyy-MM-dd format)
+     * @param endDate End date (inclusive, yyyy-MM-dd format)
+     * @return Repair result
+     */
+    @Operation(summary = "Repair one daily table over a date range",
+            description = "Re-exports every day between startDate and endDate (inclusive, yyyy-MM-dd) of a DAILY-partitioned "
+                    + "table, including days already exported, replacing each day's rows (DuckLake: DELETE + INSERT in "
+                    + "one transaction) and refreshing the export journal's row count. Use it for catalogs exported "
+                    + "before day slot ranges started at the first slot at or after midnight UTC, where the journal's "
+                    + "per-day row counts differ from the catalog although the table totals match:\n"
+                    + "- Byron days: the block in the slot starting at 23:59:51 was selected by the next day's export "
+                    + "but filed under its own day. The fix moves rows between adjacent days, so start the range one "
+                    + "day before and end it one day after the affected days (on mainnet, the Byron era is "
+                    + "2017-09-23 to 2020-07-29).\n"
+                    + "- Rows without a block time were filed under date=1970-01-01. Include the days holding their "
+                    + "slots: once every day exported successfully, the 1970-01-01 partition is deleted if all its rows "
+                    + "have slots inside the repaired days; otherwise it is kept and its slot range is returned in "
+                    + "epochZero so the range can be widened.\n"
+                    + "Re-running a repair is safe. Each day is one export, so a long range takes as long as the "
+                    + "original backfill. Days that fail are listed in failedDates and left for the scheduler to retry.")
+    @PostMapping("/repair/table/{tableName}/range")
+    public ResponseEntity<PartitionRepairService.RepairResult> repairTableRange(
+            @PathVariable String tableName,
+            @RequestParam String startDate,
+            @RequestParam String endDate) {
+
+        LocalDate start = LocalDate.parse(startDate);
+        LocalDate end = LocalDate.parse(endDate);
+
+        log.warn("Manual repair triggered for table {}: {} to {}", tableName, start, end);
+        return ResponseEntity.ok(repairService.repairDateRange(tableName, start, end));
+    }
+
+    /**
      * Get current sync status.
      *
      * @return SyncStatus with current sync information
@@ -250,8 +292,9 @@ public class AnalyticsAdminController {
      */
     @Operation(summary = "Reset the export state of one partition",
             description = "Deletes the export-state record of one partition (e.g. 'date=2024-01-15' or 'epoch=450') so "
-                    + "that the scheduler or a manual export runs it again. Does not delete already exported data — "
-                    + "with the append-only DuckLake writer a re-export appends rows.")
+                    + "that the scheduler or a manual export runs it again. Exported data stays until that re-export, "
+                    + "which replaces the partition's rows (DuckLake: DELETE + INSERT in one transaction) rather than "
+                    + "appending to them.")
     @DeleteMapping("/state/{tableName}/{partitionValue}")
     public ResponseEntity<String> resetState(
             @PathVariable String tableName,

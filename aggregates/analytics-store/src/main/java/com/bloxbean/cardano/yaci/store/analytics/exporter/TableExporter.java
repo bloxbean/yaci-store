@@ -122,6 +122,15 @@ public interface TableExporter {
         return true;
     }
 
+    /**
+     * Whether this EPOCH table holds rows for Byron epochs, so its partitions start at epoch 0
+     * rather than at the first non-Byron epoch. Only tables with per-epoch rows from genesis
+     * (such as {@code epoch} and {@code epoch_param}) need this; other epoch tables have no Byron data.
+     */
+    default boolean includesByronEpochs() {
+        return false;
+    }
+
     // ========== Metadata for the analytics query layer's unified (live-federated) views ==========
     //
     // The two methods below are NOT used by the export/write path. They only describe the
