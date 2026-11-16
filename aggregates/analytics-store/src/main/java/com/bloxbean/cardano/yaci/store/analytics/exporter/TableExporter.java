@@ -145,6 +145,18 @@ public interface TableExporter {
         return java.util.Optional.empty();
     }
 
+    /**
+     * EPOCH tables only: whether epoch N is ready only once it has ended and its last slot is older
+     * than the finalized tip (the latest block time minus the finality window that daily exports
+     * use too). Tables whose rows for epoch N come from the blocks of epoch N return {@code true}, so
+     * that a rollback across the epoch boundary cannot change an exported epoch. Tables whose
+     * readiness is a dependency in {@link #preExportValidation} (such as the AdaPot job) keep the
+     * default {@code false}.
+     */
+    default boolean requiresFinalizedEpoch() {
+        return false;
+    }
+
     // ========== Metadata for the analytics query layer's unified (live-federated) views ==========
     //
     // The two methods below are NOT used by the export/write path. They only describe the

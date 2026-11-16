@@ -67,6 +67,11 @@ public class EpochExporter extends AbstractTableExporter {
      * without blocks has no row, and its empty partition is final.
      */
     @Override
+    public boolean requiresFinalizedEpoch() {
+        return true;
+    }
+
+    @Override
     public boolean preExportValidation(PartitionValue partition) {
         int epoch = ((PartitionValue.EpochPartition) partition).epoch();
         int currentEpoch = blockStorageReader.findRecentBlock()
