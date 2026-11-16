@@ -50,8 +50,12 @@ public class DuckDbCatalogPreInitializer implements InitializingBean {
 
     @Override
     public void afterPropertiesSet() throws Exception {
+        // Validates catalog-type: anything but duckdb/postgresql stops startup with a clear message
+        DuckDbConnectionHelper.CatalogType catalogType =
+                DuckDbConnectionHelper.CatalogType.of(properties.getDucklake().getCatalogType());
+
         // Only for DuckDB catalog type (PostgreSQL uses ATTACH, doesn't need pre-init)
-        if (!"duckdb".equalsIgnoreCase(properties.getDucklake().getCatalogType())) {
+        if (catalogType != DuckDbConnectionHelper.CatalogType.DUCKDB) {
             log.debug("PostgreSQL catalog type - skipping pre-initialization");
             return;
         }
@@ -98,11 +102,8 @@ public class DuckDbCatalogPreInitializer implements InitializingBean {
                     properties.getDuckdb().getExtensionDirectories());
 
             // ATTACH ducklake to create catalog file
-            String attachSql = String.format(
-                    "ATTACH 'ducklake:%s' AS ducklake_catalog (DATA_PATH '%s');",
-                    catalogPath,
-                    dataPath
-            );
+            String attachSql = "ATTACH 'ducklake:" + catalogPath.replace("'", "''")
+                    + "' AS ducklake_catalog (DATA_PATH '" + dataPath.replace("'", "''") + "');";
             executeSql(conn, attachSql);
 
             log.info("✅ DuckDB catalog pre-initialized successfully: {}", catalogPath);

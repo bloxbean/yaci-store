@@ -165,8 +165,11 @@ cd /path/to/yaci-store
 duckdb -c "
   INSTALL ducklake; LOAD ducklake;
   
-  ATTACH 'ducklake:postgres:dbname=yaci_store host=localhost port=5432 user=postgres password=pass options=-csearch_path=public'
-    AS ducklake_catalog (DATA_PATH './data/analytics');
+  -- METADATA_SCHEMA: the catalog schema yaci-store logs at startup (\"DuckLake catalog schema: ...\"),
+  -- 'public' for installations created before yaci.store.analytics.ducklake.catalog-schema existed.
+  -- DATA_PATH is not needed: DuckLake uses the export directory recorded in the catalog.
+  ATTACH 'ducklake:postgres:dbname=yaci_store host=localhost port=5432 user=postgres password=pass'
+    AS ducklake_catalog (METADATA_SCHEMA 'mainnet', READ_ONLY);
   
   -- Query DuckLake tables directly
   SELECT COUNT(*) FROM ducklake_catalog.block;
@@ -199,6 +202,9 @@ duckdb -c "
 | `yaci.store.analytics.ducklake.catalog-username` | _(main datasource)_ | PostgreSQL catalog username (used when `catalog-type=postgresql`) |
 | `yaci.store.analytics.ducklake.catalog-password` | _(main datasource)_ | PostgreSQL catalog password (used when `catalog-type=postgresql`) |
 | `yaci.store.analytics.ducklake.catalog-path` | `./data/analytics/ducklake.catalog.db` | DuckDB catalog file path |
+| `yaci.store.analytics.ducklake.catalog-schema` | _(see below)_ | PostgreSQL schema for the DuckLake catalog tables (`ducklake_*`, DuckLake `METADATA_SCHEMA`). Not set: the catalog connection's `currentSchema` if it already holds a catalog, else an existing catalog in `public` (installations from before this property), else a new catalog in the connection's `currentSchema` |
+| `yaci.store.analytics.ducklake.catalog-lock-wait-seconds` | `30` | DuckDB catalog only: how long to wait for another process (e.g. a `duckdb` CLI, even `-readonly`) to release the catalog file lock before failing |
+| `yaci.store.analytics.source-statement-timeout-seconds` | `0` (off) | PostgreSQL `statement_timeout` for the export pipeline's source queries (libpq `options=-c statement_timeout`). Off by default because a single export query can run long on large tables |
 | `yaci.store.analytics.duckdb.memory-limit` | _(empty = 50% of RAM minus JVM heap, split between writer and query layer)_ | DuckDB buffer manager memory limit for **each** DuckDB instance (e.g., `1GB`, `512MB`). When empty: 50% of the RAM not reserved for the JVM heap (`-Xmx`), divided by the number of DuckDB instances in the JVM (export writer, query layer), at least `256MB` |
 | `yaci.store.analytics.duckdb.temp-directory` | _(empty = `<export-path>/.tmp`)_ | Base directory for DuckDB spill files. Each DuckDB instance uses its own subdirectory (`writer-<id>`, `reader-<id>`, ...), removed when the instance closes; leftovers of a crashed process are removed at the next start |
 | `yaci.store.analytics.duckdb.max-temp-directory-size` | _(empty = DuckDB default, 90% of free disk)_ | DuckDB `max_temp_directory_size` per instance (e.g., `50GB`) |
@@ -239,9 +245,9 @@ uses a second instance whose duplicated read connections share that instance's m
 Plan capacity for up to roughly `memory_limit * 2`, plus JVM heap and allocations DuckDB makes
 outside its buffer manager.
 
-### DuckLake requires `public` schema in PostgreSQL
+### PostgreSQL catalog schema
 
-DuckLake stores its metadata tables in the `public` schema. The application automatically creates this schema if it doesn't exist. If your PostgreSQL instance restricts schema creation, ensure `public` exists before enabling DuckLake.
+The DuckLake catalog tables (`ducklake_*`) are created in `yaci.store.analytics.ducklake.catalog-schema`, by default the catalog connection's `currentSchema`; an existing catalog in `public` (from versions before this property) keeps being used. Each catalog records the source it belongs to, and a second instance is refused instead of silently sharing it. See the [configuration docs](../../docs/app/docs/v3/analytics/configuration/page.mdx) for the full rules, the `DATA_PATH` check, the DuckDB catalog file lock and the PostgreSQL connection settings that are passed on to libpq.
 
 ## Admin API
 
