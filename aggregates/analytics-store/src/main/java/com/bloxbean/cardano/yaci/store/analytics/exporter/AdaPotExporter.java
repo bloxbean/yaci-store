@@ -55,6 +55,12 @@ public class AdaPotExporter extends AbstractTableExporter {
         return true;
     }
 
+    /** The AdaPot job creates the epoch's row before it completes. */
+    @Override
+    protected boolean allowsEmptyPartition(PartitionValue partition) {
+        return false;
+    }
+
     @Override
     public boolean preExportValidation(PartitionValue partition) {
         // AdaPot table depends on AdaPot job completion

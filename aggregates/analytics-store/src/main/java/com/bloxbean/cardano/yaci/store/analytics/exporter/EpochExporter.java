@@ -101,6 +101,12 @@ public class EpochExporter extends AbstractTableExporter {
         }
     }
 
+    /** Only an epoch without blocks has no row. */
+    @Override
+    protected boolean allowsEmptyPartition(PartitionValue partition) {
+        return blockStorageReader.totalBlocksInEpoch(((PartitionValue.EpochPartition) partition).epoch()) == 0;
+    }
+
     @Override
     public String getTableName() {
         return "epoch";

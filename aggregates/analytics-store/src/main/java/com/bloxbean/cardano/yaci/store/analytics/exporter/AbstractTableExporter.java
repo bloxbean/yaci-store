@@ -149,6 +149,15 @@ public abstract class AbstractTableExporter implements TableExporter {
                         getTableName(), partitionKey, result.getRowCount()));
             }
 
+            // An empty result for a table that always has rows in a final partition means the
+            // source data is not there yet; COMPLETED would keep the partition empty for good
+            if (result.getRowCount() == 0 && !allowsEmptyPartition(partition)) {
+                throw new IllegalStateException(String.format(
+                        "Export of %s partition %s returned no rows, but a final partition of this table "
+                                + "always has rows; not marking it COMPLETED (retried on the next run)",
+                        getTableName(), partitionKey));
+            }
+
             // Calculate checksum (skip for DuckLake - files are managed internally)
             String checksum = null;
             if (!"DUCKLAKE".equalsIgnoreCase(storageWriter.getStorageFormat())) {
@@ -269,6 +278,16 @@ public abstract class AbstractTableExporter implements TableExporter {
             log.warn("Failed to calculate checksum for {}: {}", filePath, e.getMessage());
             return null;
         }
+    }
+
+    /**
+     * Whether an export of this partition may legitimately return no rows. Most tables can be
+     * empty for a final partition (a day without withdrawals, an epoch without rewards). Tables
+     * that always have a row for a final partition return {@code false}: an empty result is then
+     * marked FAILED, and retried, instead of COMPLETED.
+     */
+    protected boolean allowsEmptyPartition(PartitionValue partition) {
+        return true;
     }
 
     /**

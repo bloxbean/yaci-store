@@ -52,6 +52,13 @@ public class EpochParamExporter extends AbstractTableExporter {
      * epoch transition, which the job always follows. Byron epochs have no job and pass. Without the
      * AdaPot module Conway parameters are never written, so only earlier epochs are exported.
      */
+    /** Every non-Byron epoch has its protocol parameters once it is ready. */
+    @Override
+    protected boolean allowsEmptyPartition(PartitionValue partition) {
+        int epoch = ((PartitionValue.EpochPartition) partition).epoch();
+        return eraService.getFirstNonByronEpoch().map(first -> epoch < first).orElse(true);
+    }
+
     @Override
     public boolean preExportValidation(PartitionValue partition) {
         int epoch = ((PartitionValue.EpochPartition) partition).epoch();
