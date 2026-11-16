@@ -276,4 +276,29 @@ public class ExportStateServiceTest {
         assertThat(completed.getDurationSeconds()).isNotNull();
         assertThat(completed.getDurationSeconds()).isGreaterThanOrEqualTo(0);
     }
+
+    @Test
+    public void resetCompletedPartitionsOnlyResetsCompletedOnes() {
+        ExportState done = stateService.markInProgress("block", "date=2024-03-01");
+        stateService.markCompleted(done, new ExportResult("p", 5, 0, 1), null);
+        ExportState empty = stateService.markInProgress("block", "date=2024-03-02");
+        stateService.markCompleted(empty, new ExportResult("p", 0, 0, 1), null);
+        ExportState failed = stateService.markInProgress("block", "date=2024-03-03");
+        stateService.markFailed(failed, "boom");
+        entityManager.flush();
+
+        assertThat(stateService.getCompletedPartitionsWithRows())
+                .containsExactly(java.util.Map.entry("block", java.util.Map.of("date=2024-03-01", 5L)));
+
+        int reset = stateService.resetCompletedPartitions("block",
+                java.util.List.of("date=2024-03-01", "date=2024-03-03", "date=2024-03-09"), "missing");
+        entityManager.flush();
+
+        assertThat(reset).isEqualTo(1);
+        ExportState after = stateService.getState("block", "date=2024-03-01");
+        assertThat(after.getStatus()).isEqualTo(ExportStatus.FAILED);
+        assertThat(after.getErrorMessage()).isEqualTo("missing");
+        assertThat(stateService.getState("block", "date=2024-03-03").getErrorMessage()).isEqualTo("boom");
+        assertThat(stateService.getCompletedPartitions("block")).containsExactly("date=2024-03-02");
+    }
 }

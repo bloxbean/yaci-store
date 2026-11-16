@@ -9,15 +9,17 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 import javax.sql.DataSource;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
@@ -44,6 +46,10 @@ import java.util.TreeSet;
 @Slf4j
 @ConditionalOnProperty(prefix = "yaci.store.analytics.storage", name = "type", havingValue = "ducklake")
 public class DuckLakeWriterService implements StorageWriter {
+
+    static final String CATALOG = "ducklake_catalog";
+    /** Database DuckLake attaches the catalog's metadata tables as. */
+    static final String META = "__ducklake_metadata_" + CATALOG;
 
     private final DataSource duckDbDataSource;
     private final AnalyticsStoreProperties properties;
@@ -91,15 +97,18 @@ public class DuckLakeWriterService implements StorageWriter {
                 finalQuery = String.format("SELECT *, %s AS date FROM (%s)", partition.literal(), query);
             }
 
-            // Create table if it doesn't exist (using schema from query)
-            boolean isNewTable = createTableIfNotExists(conn, tableName, finalQuery);
+            Map<String, String> queryColumns = describe(conn, finalQuery);
+            requirePartitionColumn(tableName, partition, queryColumns);
 
-            // Configure partitioning for newly created tables
-            // DuckLake requires ALTER TABLE SET PARTITIONED BY after table creation
-            if (isNewTable) {
-                configurePartitioning(conn, tableName, outputPath, partitionColumn);
+            if (!tableExists(conn, tableName)) {
+                // Created and partitioned in one transaction, so a crash cannot leave the table
+                // unpartitioned
+                createPartitionedTable(conn, tableName, finalQuery, partition);
             } else {
-                addMissingColumns(conn, tableName, finalQuery);
+                addMissingColumns(conn, tableName, queryColumns);
+                // Repairs a table that an earlier release created without partitioning
+                // (CREATE and ALTER ... SET PARTITIONED BY used to commit separately)
+                ensurePartitioning(conn, tableName, partition);
             }
 
             // Replace the partition's rows (DELETE + INSERT in one DuckLake transaction)
@@ -140,36 +149,172 @@ public class DuckLakeWriterService implements StorageWriter {
         return connectionHelper.quoteIdentifier(schema);
     }
 
-    /**
-     * Create DuckLake table if it doesn't exist.
-     * Uses CREATE TABLE AS SELECT with LIMIT 0 to create empty table with correct schema.
-     *
-     * @return true if table was created, false if it already existed
-     */
-    private boolean createTableIfNotExists(Connection conn, String tableName, String query) throws SQLException {
-        // Check if table exists using DuckDB's duckdb_tables()
-        String checkSql = String.format(
-                "SELECT COUNT(*) FROM duckdb_tables() WHERE database_name = 'ducklake_catalog' AND table_name = '%s';",
-                tableName
-        );
-
-        try (Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(checkSql)) {
-            if (rs.next() && rs.getInt(1) > 0) {
-                log.debug("DuckLake table '{}' already exists", tableName);
-                return false;  // Table already exists
+    private static boolean tableExists(Connection conn, String tableName) throws SQLException {
+        try (PreparedStatement stmt = conn.prepareStatement(
+                "SELECT COUNT(*) FROM duckdb_tables() WHERE database_name = ? AND schema_name = 'main' "
+                        + "AND table_name = ?")) {
+            stmt.setString(1, CATALOG);
+            stmt.setString(2, tableName);
+            try (ResultSet rs = stmt.executeQuery()) {
+                return rs.next() && rs.getInt(1) > 0;
             }
         }
+    }
 
-        // Create table using CTAS (Create Table As Select) with LIMIT 0 to get schema
-        String createTableSql = String.format(
-                "CREATE TABLE %s AS %s LIMIT 0;",
-                tableName,
-                query
-        );
-        connectionHelper.executeSql(conn, createTableSql);
-        log.info("Created DuckLake table: {}", tableName);
-    return true;  // Table was newly created
+    /** Columns of a query, in order, with their DuckDB types. */
+    private static Map<String, String> describe(Connection conn, String query) throws SQLException {
+        Map<String, String> columns = new LinkedHashMap<>();
+        try (Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("DESCRIBE " + query)) {
+            while (rs.next()) {
+                columns.put(rs.getString("column_name"), rs.getString("column_type"));
+            }
+        }
+        return columns;
+    }
+
+    /**
+     * An epoch table is partitioned by its {@code epoch} column, and every replace deletes the
+     * partition by it, so the export query must return that column. Without it the table could
+     * not be partitioned, and every export would fail.
+     */
+    static void requirePartitionColumn(String tableName, Partition partition, Map<String, String> queryColumns) {
+        if (partition == null) {
+            return;
+        }
+        boolean present = queryColumns.keySet().stream().anyMatch(c -> c.equalsIgnoreCase(partition.column()));
+        if (!present) {
+            throw new IllegalArgumentException(String.format(
+                    "The export query of table '%s' returns no '%s' column, so the table cannot be partitioned by it. "
+                            + "Select it in the query (for a custom exporter alias the source column, "
+                            + "e.g. r.earned_epoch AS %s). Query columns: %s",
+                    tableName, partition.column(), partition.column(), queryColumns.keySet()));
+        }
+    }
+
+    /**
+     * Creates the table from the query's schema (CREATE TABLE AS ... LIMIT 0) and sets its
+     * partitioning, in one transaction. DuckLake commits both as one snapshot, so the table
+     * never exists without its partitioning.
+     */
+    private void createPartitionedTable(Connection conn, String tableName, String query, Partition partition)
+            throws SQLException {
+        boolean autoCommit = conn.getAutoCommit();
+        conn.setAutoCommit(false);
+        try (Statement stmt = conn.createStatement()) {
+            stmt.execute(String.format("CREATE TABLE %s AS %s LIMIT 0;", tableName, query));
+            if (partition != null) {
+                stmt.execute(String.format("ALTER TABLE %s SET PARTITIONED BY (%s);", tableName, partition.column()));
+            }
+            conn.commit();
+        } catch (SQLException | RuntimeException e) {
+            try {
+                conn.rollback();
+            } catch (SQLException rollbackError) {
+                e.addSuppressed(rollbackError);
+            }
+            throw e;
+        } finally {
+            conn.setAutoCommit(autoCommit);
+        }
+        if (partition != null) {
+            log.info("Created DuckLake table '{}' partitioned by {}", tableName, partition.column());
+        } else {
+            log.info("Created DuckLake table '{}' (no partition in the output path)", tableName);
+        }
+    }
+
+    /**
+     * Makes sure the table is partitioned by the exporter's partition key.
+     *
+     * <p>A table without partitioning (left by an interrupted create of an earlier release) is
+     * partitioned now. Files written before that hold one partition value each (every export
+     * writes a single partition), so a later replace still drops them whole. A file that holds
+     * several values, or none, could only be replaced with a delete file, which the analytics
+     * query layer cannot apply, so the export is refused for such a table and the operator
+     * has to rebuild it.</p>
+     *
+     * <p>A table partitioned by something else is refused as well.</p>
+     */
+    private void ensurePartitioning(Connection conn, String tableName, Partition partition) throws SQLException {
+        if (partition == null) {
+            return;
+        }
+        List<String> keys = partitionKeys(conn, tableName);
+        if (keys.equals(List.of(partition.column()))) {
+            return;
+        }
+        if (!keys.isEmpty()) {
+            throw new IllegalStateException(String.format(
+                    "DuckLake table '%s' is partitioned by %s, but its exporter writes '%s' partitions. "
+                            + "Rebuild the table: drop it and reset its export state, then let it be exported again",
+                    tableName, keys, partition.column()));
+        }
+
+        long mixedFiles = filesWithoutSingleValue(conn, tableName, partition.column());
+        if (mixedFiles > 0) {
+            throw new IllegalStateException(String.format(
+                    "DuckLake table '%s' is not partitioned, and %d of its data files do not hold exactly one '%s' "
+                            + "value, so a partition cannot be replaced without delete files. Rebuild the table: "
+                            + "drop it and reset its export state, then let it be exported again",
+                    tableName, mixedFiles, partition.column()));
+        }
+
+        connectionHelper.executeSql(conn,
+                String.format("ALTER TABLE %s SET PARTITIONED BY (%s);", tableName, partition.column()));
+        log.warn("DuckLake table '{}' had no partitioning (an earlier table creation was interrupted); "
+                + "it is now partitioned by {}", tableName, partition.column());
+    }
+
+    /**
+     * Current partition keys of a table, from the catalog metadata ({@code col} for an identity
+     * transform, {@code transform(col)} otherwise). Empty when the table is not partitioned.
+     */
+    List<String> partitionKeys(Connection conn, String tableName) throws SQLException {
+        List<String> keys = new ArrayList<>();
+        try (PreparedStatement stmt = conn.prepareStatement(
+                "SELECT c.column_name, pc.transform FROM " + META + ".ducklake_table t "
+                        + "JOIN " + META + ".ducklake_schema s ON s.schema_id = t.schema_id AND s.end_snapshot IS NULL "
+                        + "JOIN " + META + ".ducklake_partition_info pi ON pi.table_id = t.table_id AND pi.end_snapshot IS NULL "
+                        + "JOIN " + META + ".ducklake_partition_column pc ON pc.partition_id = pi.partition_id "
+                        + "AND pc.table_id = t.table_id "
+                        + "JOIN " + META + ".ducklake_column c ON c.table_id = t.table_id AND c.column_id = pc.column_id "
+                        + "AND c.end_snapshot IS NULL "
+                        + "WHERE t.end_snapshot IS NULL AND s.schema_name = 'main' AND t.table_name = ? "
+                        + "ORDER BY pc.partition_key_index")) {
+            stmt.setString(1, tableName);
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    String column = rs.getString(1);
+                    String transform = rs.getString(2);
+                    keys.add(transform == null || "identity".equalsIgnoreCase(transform)
+                            ? column : transform + "(" + column + ")");
+                }
+            }
+        }
+        return keys;
+    }
+
+    /** Live data files of the table whose column statistics do not show exactly one non-NULL value of the column. */
+    private static long filesWithoutSingleValue(Connection conn, String tableName, String column) throws SQLException {
+        try (PreparedStatement stmt = conn.prepareStatement(
+                "SELECT COUNT(*) FROM " + META + ".ducklake_data_file df "
+                        + "JOIN " + META + ".ducklake_table t ON t.table_id = df.table_id AND t.end_snapshot IS NULL "
+                        + "JOIN " + META + ".ducklake_schema s ON s.schema_id = t.schema_id AND s.end_snapshot IS NULL "
+                        + "LEFT JOIN " + META + ".ducklake_column c ON c.table_id = t.table_id AND c.column_name = ? "
+                        + "AND c.end_snapshot IS NULL "
+                        + "LEFT JOIN " + META + ".ducklake_file_column_stats st ON st.data_file_id = df.data_file_id "
+                        + "AND st.column_id = c.column_id "
+                        + "WHERE df.end_snapshot IS NULL AND s.schema_name = 'main' AND t.table_name = ? "
+                        + "AND (st.min_value IS NULL OR st.max_value IS NULL OR st.min_value <> st.max_value "
+                        + "OR COALESCE(st.null_count, 0) > 0)")) {
+            stmt.setString(1, column);
+            stmt.setString(2, tableName);
+            try (ResultSet rs = stmt.executeQuery()) {
+                rs.next();
+                return rs.getLong(1);
+            }
+        }
     }
 
     /**
@@ -177,84 +322,28 @@ public class DuckLakeWriterService implements StorageWriter {
      * exports one more column keeps exporting into the existing table. Earlier data files read the
      * new column as NULL. A column the query no longer returns stays in the table, NULL from now on.
      */
-    private void addMissingColumns(Connection conn, String tableName, String query) throws SQLException {
+    private void addMissingColumns(Connection conn, String tableName, Map<String, String> queryColumns)
+            throws SQLException {
         Set<String> existing = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
-        try (Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(String.format(
-                     "SELECT column_name FROM duckdb_columns() WHERE database_name = 'ducklake_catalog'"
-                             + " AND table_name = '%s';", tableName))) {
-            while (rs.next()) {
-                existing.add(rs.getString(1));
-            }
-        }
-
-        Map<String, String> missing = new LinkedHashMap<>();
-        try (Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery("DESCRIBE " + query)) {
-            while (rs.next()) {
-                String column = rs.getString("column_name");
-                if (!existing.contains(column)) {
-                    missing.put(column, rs.getString("column_type"));
+        try (PreparedStatement stmt = conn.prepareStatement(
+                "SELECT column_name FROM duckdb_columns() WHERE database_name = ? AND schema_name = 'main' "
+                        + "AND table_name = ?")) {
+            stmt.setString(1, CATALOG);
+            stmt.setString(2, tableName);
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    existing.add(rs.getString(1));
                 }
             }
         }
 
-        for (Map.Entry<String, String> column : missing.entrySet()) {
+        for (Map.Entry<String, String> column : queryColumns.entrySet()) {
+            if (existing.contains(column.getKey())) {
+                continue;
+            }
             connectionHelper.executeSql(conn, String.format("ALTER TABLE %s ADD COLUMN %s %s;",
                     tableName, connectionHelper.quoteIdentifier(column.getKey()), column.getValue()));
             log.info("Added column '{}' ({}) to DuckLake table '{}'", column.getKey(), column.getValue(), tableName);
-        }
-    }
-
-    /**
-     * Configure partitioning for a DuckLake table based on the output path format and partition column.
-     *
-     * DuckLake requires ALTER TABLE SET PARTITIONED BY after table creation.
-     * Partition configuration is derived from:
-     * - Path format: "date=" → year/month/day transforms, "epoch=" → identity transform
-     * - Partition column: Provided by the exporter (e.g., "block_time", "spent_block_time")
-     *
-     * Note: Timestamp columns are cast to TIMESTAMP type in the exporters (via to_timestamp()).
-     *
-     * DuckLake will create Hive-style partitions like:
-     * - main/transactions/year=2024/month=1/day=15/ducklake-{uuid}.parquet
-     * - main/spent_outputs/spentyear=2024/month=1/day=15/ducklake-{uuid}.parquet
-     * - main/rewards/epoch=450/ducklake-{uuid}.parquet
-     *
-     * @param conn DuckDB connection
-     * @param tableName Table name to configure
-     * @param outputPath Output path containing partition format (date= or epoch=)
-     * @param partitionColumn Column name for time-based partitioning (e.g., "block_time", "spent_block_time")
-     */
-    private void configurePartitioning(Connection conn, String tableName, String outputPath, String partitionColumn) throws SQLException {
-        String alterSql = null;
-        String partitionDesc = null;
-
-        // Extract partition type from path format
-        if (outputPath.contains("date=")) {
-            // Single-level date partitioning: date=yyyy-mm-dd
-            // Uses the injected "date" column
-            alterSql = String.format(
-                    "ALTER TABLE %s SET PARTITIONED BY (date);",
-                    tableName
-            );
-            partitionDesc = "date";
-        } else if (outputPath.contains("epoch=")) {
-            // Epoch-based partitioning: Use epoch column directly (identity transform)
-            // Result: epoch=450 partitions
-            alterSql = String.format(
-                    "ALTER TABLE %s SET PARTITIONED BY (epoch);",
-                    tableName
-            );
-            partitionDesc = "epoch";
-        }
-
-        // Execute partition configuration if applicable
-        if (alterSql != null) {
-            connectionHelper.executeSql(conn, alterSql);
-            log.info("Configured DuckLake table '{}' with {} partitioning", tableName, partitionDesc);
-        } else {
-            log.warn("Could not determine partition type from path: {}", outputPath);
         }
     }
 
@@ -404,7 +493,7 @@ public class DuckLakeWriterService implements StorageWriter {
     private static final Partition EPOCH_ZERO_DATE = new Partition("date", "DATE '1970-01-01'");
 
     /** Partition column and its value as a SQL literal. */
-    private record Partition(String column, String literal) {
+    record Partition(String column, String literal) {
         String filter() {
             return column + " = " + literal;
         }
@@ -414,7 +503,7 @@ public class DuckLakeWriterService implements StorageWriter {
      * Partition of an output path, from its Hive-style directory segment
      * (date=2024-01-15 or epoch=450), or null if the path has none.
      */
-    private static Partition partitionOf(String outputPath) {
+    static Partition partitionOf(String outputPath) {
         String segment = Paths.get(outputPath).getParent().getFileName().toString();
         if (segment.startsWith("date=")) {
             return new Partition("date", "DATE '" + LocalDate.parse(segment.substring("date=".length())) + "'");
@@ -425,34 +514,47 @@ public class DuckLakeWriterService implements StorageWriter {
         return null;
     }
 
+    /**
+     * Checks the export against the catalog: the partition must hold exactly the exported number
+     * of rows in the latest committed snapshot. Data files on disk prove nothing — a replaced
+     * partition keeps its retired files until maintenance deletes them, and a recreated or
+     * restored catalog may not reference files that are still on disk.
+     */
     @Override
     public boolean verifyExport(String outputPath, long expectedRowCount) {
         if (expectedRowCount == 0) {
             return true;
         }
 
-        try {
-            String tableName = extractTableNameFromPath(outputPath);
-            Path outputFilePath = Paths.get(outputPath);
-            String partitionSegment = outputFilePath.getParent().getFileName().toString();
-
-            // DuckLake stores files under: {DATA_PATH}/main/{tableName}/{partition}/
-            Path duckLakeDir = Paths.get(properties.getExportPath(), "main", tableName, partitionSegment);
-
-            if (!Files.exists(duckLakeDir)) {
-                log.warn("DuckLake partition directory does not exist after export: {}", duckLakeDir);
+        String tableName = extractTableNameFromPath(outputPath);
+        Partition partition = partitionOf(outputPath);
+        try (DuckLakeWriterLock.Guard ignored = writerLock.acquire();
+             Connection conn = duckDbDataSource.getConnection()) {
+            connectionHelper.prepareConnectionForDuckLake(conn, false, false);
+            if (!tableExists(conn, tableName)) {
+                log.warn("DuckLake table '{}' does not exist in the catalog; partition {} is not exported",
+                        tableName, partition != null ? partition.filter() : outputPath);
                 return false;
             }
-
-            try (var files = Files.list(duckLakeDir)) {
-                boolean hasParquet = files.anyMatch(f ->
-                        f.getFileName().toString().endsWith(".parquet"));
-                if (!hasParquet) {
-                    log.warn("No parquet files found in DuckLake directory after export: {}", duckLakeDir);
-                }
-                return hasParquet;
+            String sql = partition != null
+                    ? String.format("SELECT COUNT(*) FROM %s WHERE %s;", tableName, partition.filter())
+                    : String.format("SELECT COUNT(*) FROM %s;", tableName);
+            long actual;
+            try (Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(sql)) {
+                rs.next();
+                actual = rs.getLong(1);
             }
-        } catch (Exception e) {
+            boolean matches = partition != null ? actual == expectedRowCount : actual >= expectedRowCount;
+            if (!matches) {
+                log.warn("DuckLake table '{}' holds {} rows for {}, expected {}", tableName, actual,
+                        partition != null ? partition.filter() : "the table", expectedRowCount);
+            }
+            return matches;
+        } catch (SQLException rawError) {
+            SQLException e = DuckDbConnectionHelper.sanitize(rawError);
+            log.error("Failed to verify DuckLake export for {}: {}", outputPath, e.getMessage());
+            return false;
+        } catch (RuntimeException e) {
             log.error("Failed to verify DuckLake export for {}: {}", outputPath, e.getMessage());
             return false;
         }
@@ -462,7 +564,7 @@ public class DuckLakeWriterService implements StorageWriter {
      * Extract table name from output path.
      * Format: ./data/analytics/transactions/date=2024-01-15/data.parquet → "transactions"
      */
-    private String extractTableNameFromPath(String outputPath) {
+    static String extractTableNameFromPath(String outputPath) {
         Path path = Paths.get(outputPath);
         // Go up two levels: data.parquet → date=2024-01-15 → transactions
         Path tableDir = path.getParent().getParent();

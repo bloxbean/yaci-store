@@ -374,6 +374,50 @@ public class AnalyticsStoreProperties {
         // Note: DuckLake always uses 'public' schema for metadata tables
         // catalogSchema is not configurable - removed in favor of hardcoded 'public'
 
+        /**
+         * Longest time an export, a verification or a maintenance run waits for the single
+         * DuckLake writer connection while another one holds it (seconds). When it expires the
+         * waiting operation fails with an error (the export is marked FAILED and retried later)
+         * instead of blocking its thread indefinitely. Default: 900 (15 minutes).
+         */
+        private int writerLockTimeoutSeconds = 900;
+
+        /**
+         * At startup, compare the COMPLETED partitions of the export state with the DuckLake
+         * catalog, and reset (to FAILED, so they are exported again) the partitions that hold
+         * rows according to the state but none in the catalog — for example after the catalog
+         * was deleted, recreated or restored from an older backup. Nothing is reset when the
+         * catalog cannot be read. Default: true.
+         */
+        private boolean reconcileStateOnStartup = true;
+
+        private Maintenance maintenance = new Maintenance();
+
+        @Data
+        public static class Maintenance {
+            /**
+             * Periodically expire old DuckLake snapshots and delete the data files only they
+             * referenced (replaced partitions). Without it these files stay on disk forever.
+             * Default: true.
+             */
+            private boolean enabled = true;
+
+            /** Interval between maintenance runs (minutes). Default: 1440 (daily). */
+            private int intervalMinutes = 1440;
+
+            /** Delay before the first maintenance run after startup (minutes). Default: 60. */
+            private int initialDelayMinutes = 60;
+
+            /**
+             * How long a replaced data file stays on disk (hours). Snapshots older than this are
+             * expired, and a file is deleted only once it has been unreferenced for this long, so
+             * readers that still use a file list from before the replace (the analytics query
+             * layer refreshes its views every 5 minutes) keep working. Also bounds DuckLake time
+             * travel. Minimum 1. Default: 168 (7 days).
+             */
+            private int retentionHours = 168;
+        }
+
         private DuckLakeExport export = new DuckLakeExport();
 
         @Data
