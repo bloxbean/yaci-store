@@ -332,22 +332,36 @@ public class AnalyticsAdminController {
      * Allows re-export of a single partition.
      *
      * @param tableName Table name
-     * @param partitionValue Partition value (e.g., "2024-01-15" or "450")
+     * @param partitionValue Partition value (e.g., "2024-01-15", "date=2024-01-15", "450" or "epoch=450")
      * @return Success message
      */
     @Operation(summary = "Reset the export state of one partition",
-            description = "Deletes the export-state record of one partition (e.g. 'date=2024-01-15' or 'epoch=450') so "
-                    + "that the scheduler or a manual export runs it again. Exported data stays until that re-export, "
-                    + "which replaces the partition's rows (DuckLake: DELETE + INSERT in one transaction) rather than "
-                    + "appending to them.")
+            description = "Deletes the export-state record of one partition so that the scheduler or a manual export "
+                    + "runs it again. The partition may be written '2024-01-15', 'date=2024-01-15', '450' or "
+                    + "'epoch=450'. Exported data stays until that re-export, which replaces the partition's rows "
+                    + "(DuckLake: DELETE + INSERT in one transaction) rather than appending to them. "
+                    + "404 for an unknown table or when the partition has no export state, 400 for a partition "
+                    + "that does not match the table's partitioning.")
     @DeleteMapping("/state/{tableName}/{partitionValue}")
     public ResponseEntity<String> resetState(
             @PathVariable String tableName,
             @PathVariable String partitionValue) {
 
-        log.warn("Resetting export state for table {} partition: {}", tableName, partitionValue);
-        adminService.resetExportState(tableName, partitionValue);
-        return ResponseEntity.ok("State reset successfully");
+        TableExporter exporter = requireExporter(tableName);
+        PartitionValue partition = PartitionValue.parse(partitionValue);
+        PartitionStrategy partitionStrategy = partition instanceof PartitionValue.DatePartition
+                ? PartitionStrategy.DAILY : PartitionStrategy.EPOCH;
+        if (exporter.getPartitionStrategy() != partitionStrategy) {
+            throw AdminApiException.badRequest("Table " + tableName + " is partitioned "
+                    + exporter.getPartitionStrategy() + "; " + partition.toPathSegment() + " is not one of its partitions");
+        }
+
+        log.warn("Resetting export state for table {} partition: {}", tableName, partition.toPathSegment());
+        if (!adminService.resetExportState(tableName, partition.toPathSegment())) {
+            throw AdminApiException.notFound("No export state for " + tableName + " " + partition.toPathSegment());
+        }
+        return ResponseEntity.ok("State reset for " + tableName + " " + partition.toPathSegment()
+                + ". The exported data is untouched until the partition is exported again");
     }
 
     /**
@@ -362,15 +376,27 @@ public class AnalyticsAdminController {
      */
     @Operation(summary = "Reset the export state of a date range",
             description = "Deletes the export-state records of every day between startDate and endDate (inclusive, "
-                    + "yyyy-MM-dd) for the given table. Same caveats as the single-partition reset.")
+                    + "yyyy-MM-dd) for the given DAILY table. Same caveats as the single-partition reset. "
+                    + "404 for an unknown table or when no day in the range has export state, 400 for an invalid "
+                    + "or reversed range or a non-DAILY table.")
     @DeleteMapping("/state/{tableName}/range")
     public ResponseEntity<String> resetStateRange(
             @PathVariable String tableName,
             @RequestParam String startDate,
             @RequestParam String endDate) {
 
-        log.warn("Resetting export state range for table {}: {} to {}", tableName, startDate, endDate);
-        int count = adminService.resetDateRange(tableName, startDate, endDate);
+        requireExporter(tableName, PartitionStrategy.DAILY);
+        LocalDate start = parseDate("startDate", startDate);
+        LocalDate end = parseDate("endDate", endDate);
+        if (end.isBefore(start)) {
+            throw AdminApiException.badRequest("endDate " + end + " is before startDate " + start);
+        }
+
+        log.warn("Resetting export state range for table {}: {} to {}", tableName, start, end);
+        int count = adminService.resetDateRange(tableName, start, end);
+        if (count == 0) {
+            throw AdminApiException.notFound("No export state for " + tableName + " between " + start + " and " + end);
+        }
         return ResponseEntity.ok(String.format("Reset %d partition states", count));
     }
 
