@@ -10,16 +10,28 @@ KIT = os.path.dirname(os.path.abspath(__file__))
 R = os.environ.get("RT_HOME", os.path.expanduser("~/fault-injection-test"))
 _jh = os.environ.get("RT_JAVA_HOME") or os.environ.get("JAVA_HOME")
 JCMD = os.path.join(_jh, "bin", "jcmd") if _jh else "jcmd"
-SLOT_T0 = 1655683200   # preprod only: unix time = slot + this
+# Per network: unix time = slot + T0 (Shelley-era slots are 1 s), and the first slot of the first Conway epoch
+NETWORKS = {"preprod": {"t0": 1655683200, "conway_slot": 68774400},   # epoch 163
+            "preview": {"t0": 1666656000, "conway_slot": 55814400}}   # epoch 646
 
-def instance_index(name):
-    """Index of an instance in instances.conf ($RT_HOME/instances.conf wins), which fixes its ports."""
+def _conf_row(name):
     conf = f"{R}/instances.conf" if os.path.exists(f"{R}/instances.conf") else f"{KIT}/instances.conf"
     for line in open(conf):
         f = line.split()
         if f and not f[0].startswith("#") and f[0] == name:
-            return int(f[1])
+            return f
     raise SystemExit(f"unknown instance {name} (see {conf})")
+
+def instance_index(name):
+    """Index of an instance in instances.conf ($RT_HOME/instances.conf wins), which fixes its ports."""
+    return int(_conf_row(name)[1])
+
+def instance_network(name):
+    """Network of an instance: the optional 7th column of instances.conf, preprod by default."""
+    f = _conf_row(name)
+    net = f[6] if len(f) > 6 else "preprod"
+    if net not in NETWORKS: raise SystemExit(f"unknown network {net} for {name}")
+    return NETWORKS[net]
 THRESH_HOLD = 210      # > block-receive-delay (120 s) + health-check interval (30 s) + backoff margin
 MARKERS = {
  "health_restart_events": r"Published restart event",
@@ -57,6 +69,7 @@ class Ctx:
     def __init__(s, inst):
         s.inst = inst
         s.i = instance_index(inst)
+        s.net = instance_network(inst)
         s.nc, s.dc = 14100 + s.i, 14110 + s.i
         s.pg = f"yaci-store-postgres-rt-{inst}"
         s.d = f"{R}/inst/{inst}"
@@ -105,7 +118,7 @@ class Ctx:
         if not r: return None
         a = r.split()
         return int(a[0]), int(a[1])
-    def lag(s, slot): return time.time() - (slot + SLOT_T0)
+    def lag(s, slot): return time.time() - (slot + s.net["t0"])
     def log_size(s):
         try: return os.path.getsize(s.logf)
         except OSError: return 0
@@ -237,7 +250,6 @@ def _kill_backend(c):
 def _machine_crash(c):
     c.signal(signal.SIGKILL); c.docker("kill", c.pg); time.sleep(15); c.docker("start", c.pg); time.sleep(10); c.inst_cmd("start")
 
-CONWAY_SLOT = 68774400   # preprod: first slot of epoch 163, the first Conway epoch
 
 def in_step(rule, action, conway=False, timeout=5400):
     """Arms a ledger-state Byteman rule, waits until the step runs (the next epoch boundary for the AdaPot job), then acts."""
@@ -246,7 +258,7 @@ def in_step(rule, action, conway=False, timeout=5400):
             t = time.time()
             while time.time() - t < 36000:
                 cur = c.cursor()
-                if cur and cur[1] >= CONWAY_SLOT: break
+                if cur and cur[1] >= c.net["conway_slot"]: break
                 time.sleep(30)
         c.job_epoch = None
         off = c.console_size(); c.trig(rule)

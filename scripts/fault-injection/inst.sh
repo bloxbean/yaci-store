@@ -7,14 +7,20 @@ KIT=$(cd "$(dirname "$0")" && pwd)
 R=${RT_HOME:-$HOME/fault-injection-test}
 JAVA_BIN=${RT_JAVA_HOME:-${JAVA_HOME:-}}; JAVA=${JAVA_BIN:+$JAVA_BIN/bin/}java
 BYTEMAN=${RT_BYTEMAN_JAR:-$R/byteman.jar}
-RELAY=${RT_RELAY:-preprod-node.play.dev.cardano.org:3001}
 BASE_PROPS=${RT_BASE_PROPERTIES:-$KIT/../../config/application.properties}
 LEDGER_PROPS=${RT_LEDGER_PROPERTIES:-$(dirname "$BASE_PROPS")/application-ledger-state.properties}
 CONF=$KIT/instances.conf; [ -f "$R/instances.conf" ] && CONF=$R/instances.conf
 N=$1; CMD=$2; shift 2
-read -r I KIND PROXIED PROFILES EXTRA < <(awk -v n="$N" '$1 == n && $1 !~ /^#/ {print $2, $3, $4, $5, $6}' "$CONF")
+read -r I KIND PROXIED PROFILES EXTRA NET < <(awk -v n="$N" '$1 == n && $1 !~ /^#/ {print $2, $3, $4, $5, $6, $7}' "$CONF")
 [ -n "${I:-}" ] || { echo "unknown instance $N (see $CONF)"; exit 2; }
 [ "$EXTRA" = "-" ] && EXTRA=""
+# Network (7th column, default preprod): relay, protocol magic, and unix time of slot 0 (Shelley-era slots are 1 s)
+case ${NET:-preprod} in
+  preprod) RELAY=${RT_RELAY:-preprod-node.play.dev.cardano.org:3001}; MAGIC=1; T0=1655683200 ;;
+  preview) RELAY=${RT_RELAY_PREVIEW:-preview-node.play.dev.cardano.org:3001}; MAGIC=2; T0=1666656000 ;;
+  *) echo "unknown network $NET for $N (preprod or preview)"; exit 2 ;;
+esac
+HEAP=${RT_HEAP:-6g}
 APP=$((18100+I)); PG=$((54370+I)); DBP=$((54380+I)); NP=$((13100+I)); NC=$((14100+I)); DC=$((14110+I))
 C=yaci-store-postgres-rt-$N; V=rt-$N-pg; D=$R/inst/$N
 JAR=$(ls -t "$R"/jars/"$KIND"-*.jar 2>/dev/null | head -1)
@@ -27,11 +33,11 @@ case $CMD in
     NODEH=${RELAY%:*}; NODEP=${RELAY#*:}; DBPORT=$PG
     if [ "$PROXIED" = 1 ]; then NODEH=127.0.0.1; NODEP=$NP; DBPORT=$DBP; fi
     cat > "$D/config/application-rt.properties" <<PROPS
-# Auto-recovery resilience test, instance $N ($KIND). Rosetta-style settings.
+# Auto-recovery resilience test, instance $N ($KIND, ${NET:-preprod}). Rosetta-style settings.
 server.port=$APP
 store.cardano.host=$NODEH
 store.cardano.port=$NODEP
-store.cardano.protocol-magic=1
+store.cardano.protocol-magic=$MAGIC
 spring.datasource.url=jdbc:postgresql://127.0.0.1:$DBPORT/yaci_store
 spring.datasource.username=yaci
 spring.datasource.password=rt
@@ -51,6 +57,10 @@ PROPS
     case ",$PROFILES," in
       *,ledger-state,*) cp "$LEDGER_PROPS" "$D/config/application-ledger-state.properties" || exit 1 ;;
       *) printf 'store.adapot.enabled=false\nstore.governance-aggr.enabled=false\n' >> "$D/config/application-rt.properties" ;;
+    esac
+    # With analytics, list it before rt too (e.g. ledger-state,analytics,rt)
+    case ",$PROFILES," in
+      *,analytics,*) cp "$(dirname "$BASE_PROPS")/application-analytics.properties" "$D/config/application-analytics.properties" || exit 1 ;;
     esac
     if [ -n "$EXTRA" ]; then echo "$EXTRA" | tr ',' '\n' >> "$D/config/application-rt.properties"; fi
     ;;
@@ -77,12 +87,12 @@ PROPS
     [ -n "$JAR" ] || { echo "no $R/jars/$KIND-*.jar: run build.sh first"; exit 2; }
     [ -f "$BYTEMAN" ] || { echo "no Byteman agent at $BYTEMAN (see README.md)"; exit 2; }
     cd "$D"
-    setsid nohup "$JAVA" -Xmx6g -XX:+ExitOnOutOfMemoryError -Drt.trig="$D/trig" \
+    setsid nohup "$JAVA" -Xmx$HEAP -XX:+ExitOnOutOfMemoryError -Drt.trig="$D/trig" \
       -javaagent:"$BYTEMAN=script:$KIT/rules.btm" \
       -jar "$JAR" --spring.profiles.active=$PROFILES "$@" >> "$D/logs/console.out" 2>&1 < /dev/null &
     echo $! > "$D/app.pid"; echo "started $N pid $! jar $(basename "$JAR")"
     ;;
   stop) alive && kill "$(pid)"; for i in $(seq 1 60); do alive || break; sleep 1; done; alive && echo "still running" || echo stopped ;;
   kill) alive && kill -9 "$(pid)"; echo killed ;;
-  status) alive && echo "$N up pid $(pid)" || echo "$N down"; docker exec "$C" psql -U yaci -d yaci_store -Atc "select block_number, slot, to_timestamp(slot+1655683200) from cursor_ order by slot desc limit 1" ;;
+  status) alive && echo "$N up pid $(pid)" || echo "$N down"; docker exec "$C" psql -U yaci -d yaci_store -Atc "select block_number, slot, to_timestamp(slot+$T0) from cursor_ order by slot desc limit 1" ;;
 esac
