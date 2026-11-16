@@ -45,6 +45,28 @@ public class AnalyticsStoreProperties {
         private boolean enabled = true;
     }
 
+    private PruningCheck pruningCheck = new PruningCheck();
+
+    /**
+     * Startup check that PostgreSQL pruning does not delete rows before they are exported.
+     */
+    @Data
+    public static class PruningCheck {
+        /**
+         * Start even when a pruning setting deletes rows of an enabled exporter's source table
+         * before they are exported. The affected tables then miss data; a warning is logged
+         * instead of refusing to start. Default: false.
+         */
+        private boolean acceptDataLoss = false;
+
+        /**
+         * Extra hours the pruning window must keep beyond the analytics export delay
+         * (finality window + buffer days), to cover scheduler intervals, retries and short
+         * outages. Default: 12.
+         */
+        private int marginHours = 12;
+    }
+
     private StateManagement stateManagement = new StateManagement();
     private ContinuousSync continuousSync = new ContinuousSync();
     private Admin admin = new Admin();
@@ -102,6 +124,15 @@ public class AnalyticsStoreProperties {
          * Set to false to allow exports during sync
          */
         private boolean exportAfterSync = true;
+
+        /**
+         * Wait before the first retry of a partition whose export failed (minutes). Each further
+         * failure doubles the wait, up to {@link #retryBackoffMaxMinutes}. Default: 1.
+         */
+        private int retryBackoffInitialMinutes = 1;
+
+        /** Longest wait between retries of a partition that keeps failing (minutes). Default: 360. */
+        private int retryBackoffMaxMinutes = 360;
     }
 
     @Data

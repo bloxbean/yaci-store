@@ -225,8 +225,10 @@ public class StaleExportRecoveryTest {
 
     @Test
     public void testStaleResetAllowsRetry() {
-        // Given - A stale export is reset, then retried successfully
-        ExportState stale = stateService.markInProgress("block", "2024-10-30");
+        // Given - A stale export of a previous run (crashed, so no export of this JVM owns it)
+        // is reset, then retried successfully
+        ExportState stale = new ExportState("block", "2024-10-30");
+        stale.setStatus(ExportStatus.IN_PROGRESS);
         stale.setStartedAt(LocalDateTime.now().minusHours(2));
         repository.save(stale);
         entityManager.flush();
