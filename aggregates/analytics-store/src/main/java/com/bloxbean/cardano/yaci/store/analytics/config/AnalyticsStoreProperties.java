@@ -175,16 +175,46 @@ public class AnalyticsStoreProperties {
     @Data
     public static class DuckDb {
         /**
-         * DuckDB memory_limit setting.
-         * Controls the maximum memory DuckDB's buffer manager can use.
-         * DuckDB defaults to 80% of system RAM if not set, which can cause OOM
-         * when running inside a JVM process.
+         * DuckDB memory_limit setting, applied to <em>each</em> DuckDB instance (the export
+         * writer and the query layer are separate instances).
          *
          * Format: DuckDB size string (e.g., "1GB", "512MB", "2GB")
-         * Empty = use DuckDB default (80% of system RAM).
-         * Recommended: Set explicitly in production/container environments.
+         *
+         * Empty = 50% of the RAM not reserved for the JVM heap, split evenly between the
+         * export writer and the query layer (whichever are enabled), at least 256MB. DuckDB's
+         * own default (80% of the RAM for each instance) over-commits as soon as both run in
+         * one JVM. Recommended: set explicitly in production/container environments.
          */
         private String memoryLimit;
+
+        /**
+         * Base directory for DuckDB spill files ({@code temp_directory}). Every DuckDB
+         * instance gets its own subdirectory ({@code writer-<id>}, {@code reader-<id>}, ...)
+         * that is removed when the instance closes. Instances must never share a temp
+         * directory: they use the same spill file names and delete each other's files.
+         *
+         * Empty = {@code <export-path>/.tmp}.
+         */
+        private String tempDirectory;
+
+        /**
+         * DuckDB {@code max_temp_directory_size} per instance (e.g. "50GB").
+         * Empty = DuckDB default (90% of the free disk space of the temp directory).
+         */
+        private String maxTempDirectorySize;
+
+        /**
+         * Directories DuckDB searches for extensions ({@code extension_directories}); the first
+         * one is also where missing extensions are installed. Applied to every DuckDB instance
+         * (export writer, catalog pre-initializer, query layer).
+         *
+         * <p>The {@code ducklake} and {@code postgres_scanner} extensions are downloaded on first
+         * use. Point this at a persistent directory (for Docker: inside a mounted volume), or at
+         * a directory pre-seeded with the extensions ({@code <dir>/v<duckdb-version>/<platform>/})
+         * for offline or air-gapped hosts. An extension that is already present is loaded
+         * without network access. Empty = DuckDB's default ({@code ~/.duckdb/extensions}).</p>
+         */
+        private List<String> extensionDirectories = new ArrayList<>();
 
         /**
          * Number of DuckDB threads for query execution.
