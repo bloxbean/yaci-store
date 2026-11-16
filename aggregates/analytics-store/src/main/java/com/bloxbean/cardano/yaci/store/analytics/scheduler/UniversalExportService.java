@@ -11,7 +11,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
-import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -20,8 +20,8 @@ import java.util.List;
  * Provides a unified export API for all enabled tables:
  * - Automatically discovers and exports all enabled tables
  * - Supports multiple partition strategies (DAILY, EPOCH)
- * - Immutability of the exported data is ensured by the caller's date/epoch choice
- *   (the scheduler stays {@code continuous-sync.buffer-days} behind the tip)
+ * - Exports a partition only when {@link ExportReadinessService} says it is ready, whoever the
+ *   caller is, so that no partition is stored as COMPLETED before its data is final
  *
  * Called by:
  * - {@link ContinuousSyncScheduler} for automated gap-based exports
@@ -42,6 +42,32 @@ public class UniversalExportService {
 
     private final TableExporterRegistry registry;
     private final EraService eraService;
+    private final ExportReadinessService readinessService;
+
+    /** Outcome of the export of one partition. */
+    public enum Outcome {
+        /** Exported, or already exported (COMPLETED with its data present). */
+        EXPORTED,
+        /** Not ready (see {@link PartitionReadiness}); nothing was exported or marked. */
+        NOT_READY,
+        /** The export ran and failed; the partition is FAILED and retried by the scheduler. */
+        FAILED
+    }
+
+    /**
+     * @param readiness the readiness check result; for {@link Outcome#NOT_READY} it says why
+     */
+    public record PartitionExportResult(String tableName, String partition, Outcome outcome,
+                                        PartitionReadiness readiness) {
+    }
+
+    /**
+     * @param notReady partitions skipped because they were not ready
+     * @param failed   partitions whose export failed
+     */
+    public record RangeExportResult(String tableName, int total, int successCount, List<String> notReady,
+                                    List<String> failed) {
+    }
 
     /**
      * Manual export for specific table and partition.
@@ -50,24 +76,27 @@ public class UniversalExportService {
      *
      * @param tableName Table to export
      * @param partition Partition to export (date or epoch)
-     * @return true if export succeeded
+     * @return the outcome
+     * @throws IllegalArgumentException for an unknown table or a partition type that does not
+     *                                  match the table
      */
-    public boolean exportTable(String tableName, PartitionValue partition) {
+    public PartitionExportResult exportTable(String tableName, PartitionValue partition) {
         log.info("Manual export triggered: {} for partition {}", tableName, partition.toPathSegment());
 
         TableExporter exporter = registry.getExporter(tableName);
-        return exporter.exportForPartition(partition);
+        return export(exporter, partition, readinessService.check(exporter, partition));
     }
 
     /**
-     * Export date range for a daily table (backfill).
+     * Export date range for a daily table (backfill). Days that are not ready are skipped and
+     * reported.
      *
      * @param tableName Table to export
      * @param startDate Start date (inclusive)
      * @param endDate End date (inclusive)
-     * @return Number of successful exports
+     * @return per-range counts
      */
-    public int exportDateRange(String tableName, LocalDate startDate, LocalDate endDate) {
+    public RangeExportResult exportDateRange(String tableName, LocalDate startDate, LocalDate endDate) {
         log.info("Exporting date range for {}: {} to {}", tableName, startDate, endDate);
 
         TableExporter exporter = registry.getExporter(tableName);
@@ -77,34 +106,32 @@ public class UniversalExportService {
                     "Date range export only supported for DAILY tables. " +
                     "Table " + tableName + " uses " + exporter.getPartitionStrategy());
         }
-
-        int successCount = 0;
-        LocalDate current = startDate;
-
-        while (!current.isAfter(endDate)) {
-            boolean success = exporter.exportForPartition(PartitionValue.ofDate(current));
-            if (success) {
-                successCount++;
-            }
-            current = current.plusDays(1);
+        if (endDate.isBefore(startDate)) {
+            throw new IllegalArgumentException("endDate " + endDate + " is before startDate " + startDate);
         }
 
-        long totalDays = ChronoUnit.DAYS.between(startDate, endDate) + 1;
-        log.info("Completed date range export for {}: {} of {} days successful",
-                tableName, successCount, totalDays);
+        RangeCollector collector = new RangeCollector(tableName);
+        for (LocalDate day = startDate; !day.isAfter(endDate); day = day.plusDays(1)) {
+            PartitionValue partition = PartitionValue.ofDate(day);
+            collector.add(export(exporter, partition, readinessService.check(exporter, partition)));
+        }
 
-        return successCount;
+        RangeExportResult result = collector.result();
+        log.info("Completed date range export for {}: {} of {} days successful, {} not ready, {} failed",
+                tableName, result.successCount(), result.total(), result.notReady().size(), result.failed().size());
+        return result;
     }
 
     /**
-     * Export epoch range for an epoch table (backfill).
+     * Export epoch range for an epoch table (backfill). Epochs that are not ready are skipped and
+     * reported.
      *
      * @param tableName Table to export
      * @param startEpoch Start epoch (inclusive)
      * @param endEpoch End epoch (inclusive)
-     * @return Number of successful exports
+     * @return per-range counts
      */
-    public int exportEpochRange(String tableName, int startEpoch, int endEpoch) {
+    public RangeExportResult exportEpochRange(String tableName, int startEpoch, int endEpoch) {
         log.info("Exporting epoch range for {}: {} to {}", tableName, startEpoch, endEpoch);
 
         TableExporter exporter = registry.getExporter(tableName);
@@ -114,25 +141,27 @@ public class UniversalExportService {
                     "Epoch range export only supported for EPOCH tables. " +
                     "Table " + tableName + " uses " + exporter.getPartitionStrategy());
         }
-
-        int successCount = 0;
-
-        for (int epoch = startEpoch; epoch <= endEpoch; epoch++) {
-            boolean success = exporter.exportForPartition(PartitionValue.ofEpoch(epoch));
-            if (success) {
-                successCount++;
-            }
+        if (startEpoch < 0 || endEpoch < startEpoch) {
+            throw new IllegalArgumentException("Invalid epoch range " + startEpoch + " to " + endEpoch
+                    + ": epochs must not be negative and endEpoch must not be before startEpoch");
         }
 
-        int totalEpochs = endEpoch - startEpoch + 1;
-        log.info("Completed epoch range export for {}: {} of {} epochs successful",
-                tableName, successCount, totalEpochs);
+        RangeCollector collector = new RangeCollector(tableName);
+        // A long counter: "epoch <= endEpoch" never ends for endEpoch = Integer.MAX_VALUE
+        for (long epoch = startEpoch; epoch <= endEpoch; epoch++) {
+            PartitionValue partition = PartitionValue.ofEpoch((int) epoch);
+            collector.add(export(exporter, partition, readinessService.check(exporter, partition)));
+        }
 
-        return successCount;
+        RangeExportResult result = collector.result();
+        log.info("Completed epoch range export for {}: {} of {} epochs successful, {} not ready, {} failed",
+                tableName, result.successCount(), result.total(), result.notReady().size(), result.failed().size());
+        return result;
     }
 
     /**
-     * Export all enabled daily tables for a specific date.
+     * Export all enabled daily tables for a specific date. Nothing is exported when the day is not
+     * final yet; tables whose own prerequisites are not met are skipped.
      *
      * @param date Date to export
      * @return Number of successful exports
@@ -140,14 +169,22 @@ public class UniversalExportService {
     public int exportAllDailyTables(LocalDate date) {
         log.info("Exporting all daily tables for date: {}", date);
 
-        List<String> enabledDailyTables = registry.getEnabledTablesByStrategy(PartitionStrategy.DAILY);
+        PartitionValue partition = PartitionValue.ofDate(date);
+        PartitionReadiness dayReadiness = readinessService.checkFinal(partition);
+        if (!dayReadiness.isReady()) {
+            log.info("Not exporting daily tables for {}: {}", date, dayReadiness.reason());
+            return 0;
+        }
+
+        List<String> enabledDailyTables = registry.getExportableTablesByStrategy(PartitionStrategy.DAILY);
         int successCount = 0;
 
         for (String tableName : enabledDailyTables) {
             try {
                 TableExporter exporter = registry.getExporter(tableName);
-                boolean success = exporter.exportForPartition(PartitionValue.ofDate(date));
-                if (success) {
+                PartitionExportResult result = export(exporter, partition,
+                        readinessService.checkExporter(exporter, partition));
+                if (result.outcome() == Outcome.EXPORTED) {
                     successCount++;
                 }
             } catch (Exception e) {
@@ -160,7 +197,8 @@ public class UniversalExportService {
     }
 
     /**
-     * Export all enabled epoch tables for a specific epoch.
+     * Export all enabled epoch tables for a specific epoch. Tables that are not ready for the epoch
+     * are skipped.
      *
      * @param epoch Epoch to export
      * @return Number of successful exports
@@ -168,7 +206,14 @@ public class UniversalExportService {
     public int exportAllEpochTables(int epoch) {
         log.info("Exporting all epoch tables for epoch: {}", epoch);
 
-        List<String> enabledEpochTables = registry.getEnabledTablesByStrategy(PartitionStrategy.EPOCH);
+        PartitionValue partition = PartitionValue.ofEpoch(epoch);
+        PartitionReadiness epochReadiness = readinessService.checkFinal(partition);
+        if (!epochReadiness.isReady()) {
+            log.info("Not exporting epoch tables for epoch {}: {}", epoch, epochReadiness.reason());
+            return 0;
+        }
+
+        List<String> enabledEpochTables = registry.getExportableTablesByStrategy(PartitionStrategy.EPOCH);
         int successCount = 0;
 
         boolean byronEpoch = eraService.getFirstNonByronEpoch().map(first -> epoch < first).orElse(true);
@@ -178,8 +223,9 @@ public class UniversalExportService {
                 if (byronEpoch && !exporter.includesByronEpochs()) {
                     continue;
                 }
-                boolean success = exporter.exportForPartition(PartitionValue.ofEpoch(epoch));
-                if (success) {
+                PartitionExportResult result = export(exporter, partition,
+                        readinessService.checkExporter(exporter, partition));
+                if (result.outcome() == Outcome.EXPORTED) {
                     successCount++;
                 }
             } catch (Exception e) {
@@ -189,5 +235,48 @@ public class UniversalExportService {
 
         log.info("Exported {} of {} epoch tables for epoch {}", successCount, enabledEpochTables.size(), epoch);
         return successCount;
+    }
+
+    private PartitionExportResult export(TableExporter exporter, PartitionValue partition,
+                                         PartitionReadiness readiness) {
+        String tableName = exporter.getTableName();
+        String key = partition.toPathSegment();
+        if (!readiness.isReady()) {
+            log.debug("Not exporting {} {}: {}", tableName, key, readiness.reason());
+            return new PartitionExportResult(tableName, key, Outcome.NOT_READY, readiness);
+        }
+        boolean success;
+        try {
+            success = exporter.exportForPartition(partition);
+        } catch (Exception e) {
+            log.error("Failed to export {} {}: {}", tableName, key, e.getMessage(), e);
+            success = false;
+        }
+        return new PartitionExportResult(tableName, key, success ? Outcome.EXPORTED : Outcome.FAILED, readiness);
+    }
+
+    private static final class RangeCollector {
+        private final String tableName;
+        private int total;
+        private int success;
+        private final List<String> notReady = new ArrayList<>();
+        private final List<String> failed = new ArrayList<>();
+
+        RangeCollector(String tableName) {
+            this.tableName = tableName;
+        }
+
+        void add(PartitionExportResult result) {
+            total++;
+            switch (result.outcome()) {
+                case EXPORTED -> success++;
+                case NOT_READY -> notReady.add(result.partition());
+                case FAILED -> failed.add(result.partition());
+            }
+        }
+
+        RangeExportResult result() {
+            return new RangeExportResult(tableName, total, success, List.copyOf(notReady), List.copyOf(failed));
+        }
     }
 }

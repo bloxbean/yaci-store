@@ -154,6 +154,24 @@ public class ParquetTableRegistry {
                 .toString();
     }
 
+    /**
+     * The Parquet files currently matched by {@link #getParquetGlobPath(String)} (direct Parquet
+     * storage), or an empty list if they cannot be listed.
+     */
+    public List<Path> listParquetFiles(String tableName) {
+        if (isDuckLake()) {
+            throw new IllegalStateException("DuckLake tables must be read through the catalog snapshot");
+        }
+        Path tableDir = Paths.get(properties.getExportPath(), tableName).toAbsolutePath().normalize();
+        try (var files = Files.find(tableDir, Integer.MAX_VALUE,
+                (path, attrs) -> attrs.isRegularFile()
+                        && path.getFileName().toString().endsWith(".parquet"))) {
+            return files.sorted().toList();
+        } catch (IOException e) {
+            return List.of();
+        }
+    }
+
     private boolean hasParquetData(Path tableDir) {
         try (var files = Files.find(tableDir, Integer.MAX_VALUE,
                 (path, attrs) -> attrs.isRegularFile()
