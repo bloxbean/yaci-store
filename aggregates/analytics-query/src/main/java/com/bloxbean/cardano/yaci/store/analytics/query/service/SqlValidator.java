@@ -1,11 +1,17 @@
 package com.bloxbean.cardano.yaci.store.analytics.query.service;
 
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 
 /**
@@ -17,7 +23,10 @@ import java.util.regex.Pattern;
  *
  * <p><b>Defense layers (in order of application):</b></p>
  * <ol>
- *   <li><b>Control characters</b> — rejected (except tab, LF, CR); DuckDB stops reading at NUL</li>
+ *   <li><b>Control characters</b> — rejected (except tab, LF, CR); DuckDB stops reading at NUL.
+ *       Non-ASCII spaces and invisible format characters (NBSP, U+200B, U+FEFF, ...) are rejected
+ *       too: DuckDB's lexer treats several of them as whitespace, so {@code name<NBSP>(} is a call
+ *       DuckDB runs but a name-based check would not see.</li>
  *   <li><b>Comment stripping</b> — removes {@code /* ... * /} and {@code --} comments
  *       before tokens are inspected; a line comment ends at LF or CR, exactly as in DuckDB</li>
  *   <li><b>Statement type check</b> — only {@code SELECT} and {@code WITH} allowed as top-level statements</li>
@@ -26,12 +35,16 @@ import java.util.regex.Pattern;
  *       ({@code SHOW}/{@code DESCRIBE}/{@code SUMMARIZE}, {@code duckdb_*}/{@code pragma_*}
  *       table functions, {@code information_schema}, {@code pg_*}) and resource-exhaustion
  *       patterns using SQL tokens rather than substring matching</li>
- *   <li><b>Allocation bounds</b> — {@code lpad}/{@code rpad} widths and {@code printf}/{@code format}
- *       widths must be small literals; {@code repeat}/{@code list_resize}/{@code array_resize} are
- *       blocked. Their output is allocated outside DuckDB's {@code memory_limit}.</li>
+ *   <li><b>Allocation bounds</b> — {@code lpad}/{@code rpad} widths, {@code bitstring} lengths and
+ *       {@code printf}/{@code format} widths must be small literals;
+ *       {@code repeat}/{@code list_resize}/{@code array_resize}/{@code bitstring_agg} are blocked.
+ *       Their output is allocated outside DuckDB's {@code memory_limit}.</li>
  *   <li><b>Table functions</b> — default deny: only {@link #ALLOWED_TABLE_FUNCTIONS} may be called
  *       in table position; every other table function (file readers, metadata listings,
- *       {@code enable_logging}, {@code force_checkpoint}, ...) is rejected</li>
+ *       {@code enable_logging}, {@code force_checkpoint}, ...) is rejected. As a fail-closed
+ *       second layer, every table-only function of the running engine (see
+ *       {@link #registerTableFunctions(Connection)}) is also rejected by name wherever it is
+ *       called.</li>
  *   <li><b>File reference check</b> — rejects file-shaped names and path/URL-like quoted
  *       values that could trigger DuckDB replacement scans</li>
  * </ol>
@@ -88,7 +101,9 @@ public final class SqlValidator {
             "JSON_SERIALIZE_PLAN",
             // Unbounded single-call allocations: the output size comes straight from an
             // argument and is allocated outside DuckDB's memory_limit accounting.
-            "REPEAT", "LIST_RESIZE", "ARRAY_RESIZE",
+            // bitstring_agg(x, min, max) holds a (max - min)-bit string per group (up to ~1e9 bits
+            // each), which DuckDB does not fully count against memory_limit.
+            "REPEAT", "LIST_RESIZE", "ARRAY_RESIZE", "BITSTRING_AGG",
             // Instance-wide state changes, file writes and log access. Read connections are
             // duplicate() handles of ONE DuckDB instance, so e.g. enable_logging(storage='file')
             // would record every other caller's SQL into a file inside the sandbox, and
@@ -115,6 +130,27 @@ public final class SqlValidator {
      */
     static final Set<String> ALLOWED_TABLE_FUNCTIONS = Set.of("UNNEST", "JSON_EACH", "JSON_TREE");
 
+    /**
+     * Table-only functions and table macros of the running DuckDB, registered by the query
+     * engine at start-up ({@link #registerTableFunctions(Connection)}) and rejected by name like
+     * {@link #BLOCKED_FUNCTIONS}. This catches a table function whatever position the structural
+     * check below believes it is in, including ones added by extensions or future versions.
+     */
+    private static final Set<String> REGISTERED_TABLE_FUNCTIONS = ConcurrentHashMap.newKeySet();
+
+    /**
+     * Functions that DuckDB only offers as table functions/macros (or pragmas). A name that also
+     * has a scalar, aggregate or macro overload ({@code histogram}, {@code range}, ...) is left to
+     * the table-position check, so its ordinary use stays allowed.
+     */
+    private static final String TABLE_ONLY_FUNCTIONS_SQL = """
+            SELECT function_name
+            FROM duckdb_functions()
+            GROUP BY function_name
+            HAVING bool_or(function_type IN ('table', 'table_macro'))
+               AND bool_and(function_type IN ('table', 'table_macro', 'pragma'))
+            """;
+
     /** Words that introduce a table reference, so a call right after them is a table function. */
     private static final Set<String> TABLE_REF_INTRODUCERS = Set.of("FROM", "JOIN", "LATERAL", "PIVOT", "UNPIVOT");
 
@@ -127,6 +163,30 @@ public final class SqlValidator {
             "LATERAL", "SELECT", "FROM", "JOIN", "ON", "USING", "AS", "IN", "VALUES", "WHERE", "AND", "OR",
             "NOT", "EXISTS", "ANY", "ALL", "SOME", "OVER", "FILTER", "WITHIN", "WITH", "RECURSIVE",
             "MATERIALIZED", "PIVOT", "UNPIVOT", "UNION", "EXCEPT", "INTERSECT", "BY", "HAVING", "QUALIFY");
+
+    /**
+     * Bare keywords after which "(" opens a subquery or an expression group rather than a
+     * function's argument list ({@code AS (VALUES ...)}, {@code EXISTS (...)}, {@code IN (...)},
+     * {@code ARRAY(...)}, ...). Such a parenthesis is a query level from its first lexeme.
+     */
+    private static final Set<String> SUBQUERY_PAREN_KEYWORDS = union(NON_FUNCTION_KEYWORDS,
+            Set.of("ARRAY", "CASE", "WHEN", "THEN", "ELSE", "BETWEEN", "LIKE", "ILIKE", "IS", "DISTINCT"));
+
+    /**
+     * Words that only occur in a query body: a level that has seen one of them holds a query, so a
+     * later FROM at that level is a query FROM ({@code (VALUES (1) UNION ALL SELECT 1 FROM f())}).
+     */
+    private static final Set<String> QUERY_BODY_WORDS = Set.of("SELECT", "VALUES", "UNION", "INTERSECT", "EXCEPT");
+
+    /**
+     * Qualifiers that DuckDB resolves as a schema or catalog before a function name, even when a
+     * column of the same name exists: {@code main.format(...)} and {@code system.main.format(...)}
+     * call the function, they are not member calls on a column {@code main}. ({@code temp.} and
+     * {@code memory.} do not find the built-in functions, and {@code t.main.f(...)},
+     * {@code temp.main.f(...)} or {@code memory.main.f(...)} are member calls when such a
+     * table/column exists, so those stay member calls here.)
+     */
+    private static final Set<String> FUNCTION_SCHEMA_QUALIFIERS = Set.of("MAIN", "SYSTEM");
 
     /**
      * Keywords that end a {@code FROM} list at the same nesting level, so a following comma no
@@ -150,6 +210,12 @@ public final class SqlValidator {
      * precisions up to 999, far beyond any column formatting.
      */
     private static final int MAX_FORMAT_SPEC_DIGITS = 3;
+
+    /**
+     * Largest length (in bits) accepted by {@code bitstring(s, n)}: it allocates the n-bit value
+     * outside memory_limit like {@code lpad} ({@code bitstring('1', 2000000000)} is ~250 MB per row).
+     */
+    static final int MAX_BITSTRING_LENGTH = 10_000;
 
     /**
      * File suffixes for which DuckDB performs an implicit replacement scan on an unresolved
@@ -219,7 +285,8 @@ public final class SqlValidator {
         // CAN still name a dangerous function ("read_csv"('x'), "getenv"('HOME')) or catalog
         // object ("pg_live"."public"."x"), so the function, prefix and catalog checks apply to
         // quoted and bare tokens alike.
-        for (Token token : tokens) {
+        for (int t = 0; t < tokens.size(); t++) {
+            Token token = tokens.get(t);
             String word = token.text();
             boolean invoked = isFunctionInvocation(stripped, token.end());
             boolean blockedKeyword = !token.quoted() && BLOCKED_WORDS.contains(word);
@@ -229,7 +296,8 @@ public final class SqlValidator {
                     || word.startsWith("PG_") || word.startsWith("POSTGRES_");
             boolean blockedCatalog = word.equals("SQLITE_MASTER") || word.equals("INFORMATION_SCHEMA");
             boolean blockedFunction = invoked
-                    && (BLOCKED_FUNCTIONS.contains(word) || (token.quoted() && BLOCKED_WORDS.contains(word)));
+                    && (BLOCKED_FUNCTIONS.contains(word) || REGISTERED_TABLE_FUNCTIONS.contains(word)
+                        || (token.quoted() && BLOCKED_WORDS.contains(word)));
             // "DESC" is the DESCRIBE alias when it starts a (sub)statement, e.g.
             // SELECT * FROM (DESC block); as an ORDER BY modifier it never follows "(".
             boolean blockedDescribeAlias = !token.quoted() && word.equals("DESC")
@@ -240,7 +308,7 @@ public final class SqlValidator {
                         "Blocked SQL token '" + word + "' is not allowed in ad-hoc queries");
             }
             if (invoked) {
-                checkAllocationBounds(stripped, token);
+                checkAllocationBounds(stripped, tokens, t);
             }
         }
 
@@ -355,6 +423,10 @@ public final class SqlValidator {
                 tokens.add(new Token(sql.substring(start, i).toUpperCase(Locale.ROOT), start, i, false));
                 continue;
             }
+            if (startsNumber(sql, i)) {
+                i = skipNumber(sql, i);
+                continue;
+            }
             i++;
         }
 
@@ -423,11 +495,22 @@ public final class SqlValidator {
     }
 
     private static void rejectControlCharacters(String sql) {
-        for (int i = 0; i < sql.length(); i++) {
-            char c = sql.charAt(i);
+        for (int i = 0; i < sql.length(); ) {
+            int c = sql.codePointAt(i);
             if ((c < 0x20 && c != '\t' && c != '\n' && c != '\r') || c == 0x7f) {
                 throw new IllegalArgumentException("Control characters are not allowed in queries");
             }
+            // DuckDB's lexer treats U+00A0, U+2000-U+200B, U+202F, U+205F, U+2060, U+3000 and
+            // U+FEFF as whitespace, while Character.isWhitespace (used by every check below) does
+            // not know several of them: "enable_logging\u00a0()" would be a call DuckDB runs and
+            // the name checks never see. Reject every non-ASCII space, invisible format character
+            // and C1 control instead of mirroring DuckDB's exact list.
+            if (c >= 0x80 && (Character.isSpaceChar(c) || Character.getType(c) == Character.FORMAT
+                    || Character.isISOControl(c))) {
+                throw new IllegalArgumentException(String.format(Locale.ROOT,
+                        "Unicode space or invisible formatting character U+%04X is not allowed in queries", c));
+            }
+            i += Character.charCount(c);
         }
     }
 
@@ -435,17 +518,29 @@ public final class SqlValidator {
      * Bound the functions whose output size is taken from an argument and allocated outside
      * DuckDB's memory_limit accounting (see {@link #MAX_PAD_WIDTH}).
      */
-    private static void checkAllocationBounds(String sql, Token token) {
+    private static void checkAllocationBounds(String sql, List<Token> tokens, int index) {
+        Token token = tokens.get(index);
         String name = token.text();
         boolean pad = name.equals("LPAD") || name.equals("RPAD");
+        boolean bitstring = name.equals("BITSTRING");
         boolean printf = name.equals("PRINTF");
         boolean format = name.equals("FORMAT");
-        if (!pad && !printf && !format) {
+        if (!pad && !bitstring && !printf && !format) {
             return;
         }
         int open = sql.indexOf('(', token.end());
         List<String> args = splitArguments(sql, open);
-        boolean memberCall = precededByDot(sql, token.start());
+        boolean memberCall = isMemberCall(sql, tokens, index);
+
+        if (bitstring) {
+            // bitstring(s, n); the member form s.bitstring(n) passes the string as the receiver.
+            String length = args.size() == 2 ? args.get(1) : args.size() == 1 && memberCall ? args.get(0) : null;
+            if (length == null || !isIntegerLiteralAtMost(length.strip(), MAX_BITSTRING_LENGTH)) {
+                throw new IllegalArgumentException(
+                        "bitstring() needs an integer literal length of at most " + MAX_BITSTRING_LENGTH);
+            }
+            return;
+        }
 
         if (pad) {
             // lpad(s, n, c); the member form s.lpad(n, c) passes the string as the receiver.
@@ -565,6 +660,37 @@ public final class SqlValidator {
     }
 
     /**
+     * Whether the call named by {@code tokens.get(index)} is a member call {@code x.f(...)}, whose
+     * first argument is the receiver {@code x}. A schema-qualified call such as
+     * {@code main.f(...)} or {@code system.main.f(...)} (see {@link #FUNCTION_SCHEMA_QUALIFIERS})
+     * is an ordinary call.
+     */
+    private static boolean isMemberCall(String sql, List<Token> tokens, int index) {
+        Token name = tokens.get(index);
+        if (!precededByDot(sql, name.start())) {
+            return false;
+        }
+        if (index < 1 || !onlyDotBetween(sql, tokens.get(index - 1), name)) {
+            return true;    // the receiver is a literal, a parenthesis, a subscript, ...
+        }
+        Token qualifier = tokens.get(index - 1);
+        if (!precededByDot(sql, qualifier.start())) {
+            return !FUNCTION_SCHEMA_QUALIFIERS.contains(qualifier.text());
+        }
+        // system.main.f(...): catalog.schema qualifier
+        if (qualifier.text().equals("MAIN") && index >= 2 && onlyDotBetween(sql, tokens.get(index - 2), qualifier)) {
+            Token catalog = tokens.get(index - 2);
+            return !(catalog.text().equals("SYSTEM") && !precededByDot(sql, catalog.start()));
+        }
+        return true;
+    }
+
+    /** True when only a dot (and whitespace) separates the two tokens. */
+    private static boolean onlyDotBetween(String sql, Token left, Token right) {
+        return left.end() <= right.start() && sql.substring(left.end(), right.start()).strip().equals(".");
+    }
+
+    /**
      * Top-level arguments of the call whose "(" is at {@code open}, as raw text. Nested
      * parentheses/brackets/braces and quoted text are kept intact.
      */
@@ -651,6 +777,7 @@ public final class SqlValidator {
                 if (level.tableGroup) {
                     if (lx.kind() == LexKind.WORD && SUBQUERY_STARTERS.contains(lx.text())) {
                         level.tableGroup = false;   // FROM (SELECT ...): a subquery, not a join group
+                        level.query = true;
                     } else {
                         level.query = true;
                         level.inFrom = true;
@@ -666,18 +793,21 @@ public final class SqlValidator {
             switch (lx.kind()) {
                 case OPEN -> {
                     Lexeme prev = i > 0 ? lexemes.get(i - 1) : null;
-                    boolean call = lx.text().equals("(") && prev != null
+                    // AS (, EXISTS (, IN (, ARRAY(, UNION (, ...: a subquery or expression group
+                    boolean afterKeyword = prev != null && isBareKeyword(lexemes, i - 1)
+                            && SUBQUERY_PAREN_KEYWORDS.contains(prev.text());
+                    boolean call = lx.text().equals("(") && prev != null && !afterKeyword
                             && (prev.kind() == LexKind.WORD || prev.kind() == LexKind.QUOTED);
                     // '(' that is not a call: subquery or grouping. '[' / '{': list or struct literal.
                     Level opened = new Level(!call && lx.text().equals("("), call);
-                    // FROM (, JOIN (, a FROM-list comma followed by (, or ( inside such a group:
-                    // the parenthesis groups table references (or holds a subquery)
-                    // (not PIVOT ( / UNPIVOT (, whose parenthesis holds the pivot specification)
+                    // FROM (, JOIN (, a FROM-list comma followed by (, ( inside such a group, or
+                    // alias: ( after one of those: the parenthesis groups table references (or
+                    // holds a subquery) (not PIVOT ( / UNPIVOT (, whose parenthesis holds the
+                    // pivot specification)
                     opened.tableGroup = lx.text().equals("(") && prev != null
-                            && ((inTablePosition(lexemes, i - 1, level)
-                                    && !(prev.kind() == LexKind.WORD
-                                         && (prev.text().equals("PIVOT") || prev.text().equals("UNPIVOT"))))
-                                || (prev.kind() == LexKind.OPEN && prev.text().equals("(") && level.tableGroup));
+                            && startsTableReference(lexemes, i - 1, level)
+                            && !(prev.kind() == LexKind.WORD
+                                 && (prev.text().equals("PIVOT") || prev.text().equals("UNPIVOT")));
                     levels.push(opened);
                 }
                 case CLOSE -> {
@@ -687,10 +817,16 @@ public final class SqlValidator {
                 }
                 case WORD -> {
                     String word = lx.text();
-                    if (level.query && word.equals("FROM") && !isDistinctFrom(lexemes, i)) {
-                        level.inFrom = true;
-                    } else if (FROM_LIST_TERMINATORS.contains(word)) {
-                        level.inFrom = false;
+                    // A word after a dot is a field/column name (t.s.limit), never a keyword.
+                    if (isBareKeyword(lexemes, i)) {
+                        if (QUERY_BODY_WORDS.contains(word)) {
+                            level.query = true;
+                        }
+                        if (level.query && word.equals("FROM") && !isDistinctFrom(lexemes, i)) {
+                            level.inFrom = true;
+                        } else if (FROM_LIST_TERMINATORS.contains(word)) {
+                            level.inFrom = false;
+                        }
                     }
                     checkTableFunctionCall(lexemes, i, level);
                 }
@@ -714,10 +850,7 @@ public final class SqlValidator {
                 && (lexemes.get(j - 2).kind() == LexKind.WORD || lexemes.get(j - 2).kind() == LexKind.QUOTED)) {
             j -= 2;
         }
-        Lexeme prev = j > 0 ? lexemes.get(j - 1) : null;
-        boolean tablePosition = prev != null
-                && (inTablePosition(lexemes, j - 1, level)
-                    || (prev.kind() == LexKind.OPEN && prev.text().equals("(") && level.tableGroup));
+        boolean tablePosition = startsTableReference(lexemes, j - 1, level);
         if (tablePosition && !ALLOWED_TABLE_FUNCTIONS.contains(name.text())) {
             throw new IllegalArgumentException("Table function '" + name.text().toLowerCase(Locale.ROOT)
                     + "' is not allowed in ad-hoc queries");
@@ -735,13 +868,44 @@ public final class SqlValidator {
                 || (prev.kind() == LexKind.COMMA && level.inFrom);
     }
 
-    /** True for the FROM of {@code IS [NOT] DISTINCT FROM}. */
+    /**
+     * Whether a table reference starts right after the lexeme at {@code prevIndex}: it is in table
+     * position ({@link #inTablePosition}), it is the "(" of a group of table references, or it is
+     * DuckDB's prefix alias {@code alias:} written in one of those positions
+     * ({@code FROM x: f()}).
+     */
+    private static boolean startsTableReference(List<Lexeme> lexemes, int prevIndex, Level level) {
+        if (prevIndex < 0) {
+            return false;
+        }
+        Lexeme prev = lexemes.get(prevIndex);
+        if (inTablePosition(lexemes, prevIndex, level)
+                || (prev.kind() == LexKind.OPEN && prev.text().equals("(") && level.tableGroup)) {
+            return true;
+        }
+        if (prev.kind() == LexKind.OTHER && prev.text().equals(":") && prevIndex >= 2) {
+            Lexeme alias = lexemes.get(prevIndex - 1);
+            return (alias.kind() == LexKind.WORD || alias.kind() == LexKind.QUOTED)
+                    && startsTableReference(lexemes, prevIndex - 2, level);
+        }
+        return false;
+    }
+
+    /** True for the FROM of {@code IS [NOT] DISTINCT FROM}; all three must be bare keywords. */
     private static boolean isDistinctFrom(List<Lexeme> lexemes, int fromIndex) {
-        if (fromIndex < 2 || !lexemes.get(fromIndex - 1).text().equals("DISTINCT")) {
+        if (fromIndex < 2 || !isBareKeyword(lexemes, fromIndex - 1)
+                || !lexemes.get(fromIndex - 1).text().equals("DISTINCT")
+                || !isBareKeyword(lexemes, fromIndex - 2)) {
             return false;
         }
         String before = lexemes.get(fromIndex - 2).text();
         return before.equals("IS") || before.equals("NOT");
+    }
+
+    /** A bare (unquoted) word that does not follow a dot, so it can act as a keyword. */
+    private static boolean isBareKeyword(List<Lexeme> lexemes, int index) {
+        return lexemes.get(index).kind() == LexKind.WORD
+                && (index == 0 || lexemes.get(index - 1).kind() != LexKind.DOT);
     }
 
     private static List<Lexeme> lex(String sql) {
@@ -765,12 +929,9 @@ public final class SqlValidator {
                     i++;
                 }
                 lexemes.add(new Lexeme(LexKind.WORD, sql.substring(start, i).toUpperCase(Locale.ROOT)));
-            } else if (Character.isDigit(c)) {
-                // Numbers, including 1e5 and 1.5, must not produce WORD or DOT lexemes.
-                while (i < sql.length() && (Character.isLetterOrDigit(sql.charAt(i))
-                        || sql.charAt(i) == '.' || sql.charAt(i) == '_')) {
-                    i++;
-                }
+            } else if (startsNumber(sql, i)) {
+                // Numbers, including 1e5, 1.5 and .5, must not produce WORD or DOT lexemes.
+                i = skipNumber(sql, i);
                 lexemes.add(new Lexeme(LexKind.OTHER, "0"));
             } else {
                 LexKind kind = switch (c) {
@@ -785,6 +946,71 @@ public final class SqlValidator {
             }
         }
         return lexemes;
+    }
+
+    private static boolean isAsciiDigit(char c) {
+        return c >= '0' && c <= '9';
+    }
+
+    /** A numeric literal starts at {@code i}: an ASCII digit, or a dot followed by one ({@code .5}). */
+    private static boolean startsNumber(String sql, int i) {
+        char c = sql.charAt(i);
+        return isAsciiDigit(c) || (c == '.' && i + 1 < sql.length() && isAsciiDigit(sql.charAt(i + 1)));
+    }
+
+    /**
+     * Index just past the numeric literal starting at {@code i}: digits, '_' and '.', then an
+     * optional exponent ({@code e}, an optional sign and a digit). Like DuckDB's lexer it stops at
+     * any other letter, so {@code 1FROM} is the number 1 followed by the keyword FROM.
+     */
+    private static int skipNumber(String sql, int i) {
+        int len = sql.length();
+        while (i < len && (isAsciiDigit(sql.charAt(i)) || sql.charAt(i) == '_' || sql.charAt(i) == '.')) {
+            i++;
+        }
+        if (i < len && (sql.charAt(i) == 'e' || sql.charAt(i) == 'E')) {
+            int j = i + 1;
+            if (j < len && (sql.charAt(j) == '+' || sql.charAt(j) == '-')) {
+                j++;
+            }
+            if (j < len && isAsciiDigit(sql.charAt(j))) {
+                i = j;
+                while (i < len && (isAsciiDigit(sql.charAt(i)) || sql.charAt(i) == '_')) {
+                    i++;
+                }
+            }
+        }
+        return i;
+    }
+
+    /**
+     * Register the table-only functions and table macros of a DuckDB instance (including those
+     * of its loaded extensions), so that {@link #validate(String)} rejects them by name wherever
+     * they are called, not only where the table-position check recognises a table reference.
+     * Called once by the query engine after its extensions are loaded; registrations accumulate.
+     * {@link #ALLOWED_TABLE_FUNCTIONS} stay allowed.
+     *
+     * @param connection a trusted connection to the DuckDB instance that runs ad-hoc queries
+     * @throws SQLException if {@code duckdb_functions()} cannot be read
+     */
+    public static void registerTableFunctions(Connection connection) throws SQLException {
+        Set<String> names = new HashSet<>();
+        try (Statement statement = connection.createStatement();
+             ResultSet rs = statement.executeQuery(TABLE_ONLY_FUNCTIONS_SQL)) {
+            while (rs.next()) {
+                String name = rs.getString(1).toUpperCase(Locale.ROOT);
+                if (!ALLOWED_TABLE_FUNCTIONS.contains(name)) {
+                    names.add(name);
+                }
+            }
+        }
+        REGISTERED_TABLE_FUNCTIONS.addAll(names);
+    }
+
+    private static Set<String> union(Set<String> a, Set<String> b) {
+        Set<String> all = new HashSet<>(a);
+        all.addAll(b);
+        return Set.copyOf(all);
     }
 
     /**

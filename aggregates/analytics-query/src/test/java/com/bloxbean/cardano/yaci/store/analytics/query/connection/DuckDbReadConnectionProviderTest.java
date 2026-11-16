@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.analytics.query.connection;
 
+import com.bloxbean.cardano.yaci.store.analytics.query.service.SqlValidator;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -10,6 +11,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -41,6 +43,19 @@ class DuckDbReadConnectionProviderTest {
         provider.refreshView();
 
         assertEquals(84, provider.querySingleValue());
+    }
+
+    @Test
+    void lockDownRegistersTheEngineTableFunctionsWithTheValidator() throws Exception {
+        Path analyticsDirectory = Files.createDirectory(tempDirectory.resolve("analytics"));
+        TestProvider provider = new TestProvider();
+        provider.executeOnParent("CREATE MACRO zz_provider_table_probe(x) AS TABLE SELECT x AS v");
+        assertDoesNotThrow(() -> SqlValidator.validate("SELECT zz_provider_table_probe(1)"));
+
+        provider.initialize(analyticsDirectory);
+
+        assertThrows(IllegalArgumentException.class,
+                () -> SqlValidator.validate("SELECT zz_provider_table_probe(1)"));
     }
 
     private static String sqlPath(Path path) {

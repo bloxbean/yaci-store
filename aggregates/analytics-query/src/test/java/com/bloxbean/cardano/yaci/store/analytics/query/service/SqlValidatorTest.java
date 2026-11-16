@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
@@ -403,6 +404,221 @@ class SqlValidatorTest {
                 "SELECT * FROM block PIVOT (count(*) FOR era IN ('babbage', 'conway'))"));
         assertDoesNotThrow(() -> SqlValidator.validate(
                 "SELECT * FROM block, (SELECT max(number) AS m FROM block) x WHERE number = x.m"));
+    }
+
+    // --- Unicode whitespace must not hide a call ---
+
+    /** Characters DuckDB 1.5.5's lexer treats as whitespace, plus other Unicode spaces/format characters. */
+    private static final int[] UNICODE_SPACES = {
+            0x00A0, 0x1680, 0x2000, 0x2001, 0x2002, 0x2003, 0x2004, 0x2005, 0x2006, 0x2007, 0x2008, 0x2009,
+            0x200A, 0x200B, 0x200C, 0x200D, 0x2028, 0x2029, 0x202F, 0x205F, 0x2060, 0x3000, 0xFEFF, 0x00AD,
+            0x0085, 0xE0001};
+
+    @Test
+    void rejectsUnicodeSpacesBetweenAFunctionNameAndItsParenthesis() {
+        for (int cp : UNICODE_SPACES) {
+            String sp = Character.toString(cp);
+            assertRejected("SELECT * FROM enable_logging" + sp + "()");
+            assertRejected("SELECT * FROM query" + sp + "('SELECT * FROM duckdb_settings()')");
+            assertRejected("SELECT * FROM block b, some_future_function" + sp + "()");
+            assertRejected("SELECT getenv" + sp + "('HOME')");
+            assertRejected("SELECT lpad" + sp + "('a', 1000000000, 'b')");
+            assertRejected("SELECT printf" + sp + "('%1000000000d', 1)");
+            assertRejected("SELECT 1" + sp + "FROM block");
+        }
+    }
+
+    @Test
+    void everyCharacterDuckDbTreatsAsWhitespaceIsRejected() throws Exception {
+        // Guard for DuckDB upgrades: scan the ranges that hold Unicode's spaces and format characters.
+        List<Integer> duckDbSpaces = new ArrayList<>();
+        try (Connection c = DriverManager.getConnection("jdbc:duckdb:")) {
+            for (int cp = 0x80; cp <= 0xFFFF; cp++) {
+                if ((cp > 0x3100 && cp < 0xFE00) || Character.isSurrogate((char) cp)) {
+                    continue;
+                }
+                String sql = "SELECT abs" + Character.toString(cp) + "(-42)";
+                // a failed query closes its statement, so use one per probe
+                try (Statement st = c.createStatement();
+                     ResultSet rs = st.executeQuery(sql)) {
+                    if (rs.next() && rs.getInt(1) == 42) {
+                        duckDbSpaces.add(cp);
+                    }
+                } catch (SQLException notAWhitespace) {
+                    // part of an identifier: "abs<cp>" is an unknown function
+                }
+            }
+        }
+        assertTrue(duckDbSpaces.contains(0xA0) && duckDbSpaces.contains(0xFEFF), "probe broken: " + duckDbSpaces);
+        for (int cp : duckDbSpaces) {
+            assertRejected("SELECT abs" + Character.toString(cp) + "(-42)");
+        }
+    }
+
+    @Test
+    void stillAcceptsNonAsciiTextThatIsNotWhitespace() {
+        assertDoesNotThrow(() -> SqlValidator.validate("SELECT 'Café – 日本語 ✓' AS label, \"größe\" FROM block"));
+    }
+
+    // --- more table positions the default deny must recognise ---
+
+    /**
+     * Each shape puts a table function (%s) where DuckDB treats it as a table reference. Checked
+     * against DuckDB with repeat_row and against the validator with a function on no name list.
+     */
+    private static final String[] TABLE_FUNCTION_SHAPES = {
+            // set operation in a call-shaped or keyword-introduced parenthesis
+            "WITH x(a) AS (VALUES (1) UNION ALL SELECT 1 FROM %s) SELECT * FROM x",
+            "SELECT EXISTS (VALUES (1) UNION ALL SELECT 1 FROM %s)",
+            "SELECT 1 WHERE EXISTS (VALUES (1) UNION ALL SELECT 1 FROM %s)",
+            "SELECT * FROM (VALUES (1) UNION ALL SELECT 1 FROM %s)",
+            "SELECT 1 WHERE 1 IN ((SELECT 1) UNION ALL SELECT 1 FROM %s)",
+            "SELECT 1 WHERE 1 IN (VALUES (1) INTERSECT SELECT 1 FROM %s)",
+            "SELECT ARRAY(VALUES (1) EXCEPT SELECT 1 FROM %s)",
+            // a keyword used as a field name after a dot does not end the FROM list
+            "SELECT * FROM (SELECT {'limit': 1} AS s) t JOIN block u ON t.s.limit = 1, %s",
+            "SELECT * FROM (SELECT {'where': 1} AS s) t JOIN block u ON t.s.where = 1, %s",
+            "SELECT * FROM (SELECT {'select': 1} AS s) t JOIN block u ON t.s. select = 1, %s",
+            // quoted identifiers are not IS [NOT] DISTINCT FROM
+            "SELECT \"not\" \"distinct\" FROM (SELECT 1 AS \"not\") s, %s",
+            "SELECT \"is\" \"distinct\" FROM (SELECT 1 AS \"is\") s, %s",
+            // DuckDB's prefix alias
+            "SELECT * FROM x: %s",
+            "SELECT * FROM \"x\" : %s",
+            "SELECT * FROM block, x: %s",
+            "SELECT * FROM block JOIN x: %s ON true",
+            "SELECT * FROM (x: %s CROSS JOIN block)",
+            "SELECT * FROM x: (%s CROSS JOIN block)",
+            // a number directly followed by FROM
+            "SELECT 1FROM %s",
+            "SELECT 1e5FROM %s",
+            "SELECT 1.5e-3FROM %s",
+            "SELECT 1_000FROM %s",
+            "SELECT .5FROM %s",
+            "SELECT 1.FROM %s",
+    };
+
+    @Test
+    void rejectsTableFunctionsInEveryShapeDuckDbAccepts() throws Exception {
+        try (Connection c = DriverManager.getConnection("jdbc:duckdb:");
+             Statement st = c.createStatement()) {
+            st.execute("CREATE TABLE block AS SELECT 1 AS number");
+            for (String shape : TABLE_FUNCTION_SHAPES) {
+                String sql = String.format(Locale.ROOT, shape, "repeat_row(1, num_rows = 2)");
+                try (ResultSet rs = st.executeQuery(sql)) {
+                    assertTrue(rs.next(), sql);
+                }
+            }
+        }
+        for (String shape : TABLE_FUNCTION_SHAPES) {
+            assertRejected(String.format(Locale.ROOT, shape, "some_future_function(1)"));
+            assertRejected(String.format(Locale.ROOT, shape, "\"some_future_function\"(1)"));
+        }
+    }
+
+    @Test
+    void allowsTheSameSyntaxWithTablesAndScalarCalls() {
+        assertDoesNotThrow(() -> SqlValidator.validate(
+                "WITH x(a) AS (VALUES (1) UNION ALL SELECT number FROM block) SELECT * FROM x"));
+        assertDoesNotThrow(() -> SqlValidator.validate(
+                "SELECT 1 WHERE EXISTS (VALUES (1) UNION ALL SELECT abs(number) FROM block WHERE trim('x' FROM hash) = '')"));
+        assertDoesNotThrow(() -> SqlValidator.validate(
+                "SELECT t.s.limit, t.s.offset FROM (SELECT {'limit': 1, 'offset': 2} AS s) t, block b WHERE b.number = abs(1)"));
+        assertDoesNotThrow(() -> SqlValidator.validate(
+                "SELECT * FROM b: block JOIN t: transaction ON b.number = t.block_number, u: unnest([1])"));
+        assertDoesNotThrow(() -> SqlValidator.validate(
+                "SELECT 1e5, 1.5e-3, .5, 1_000, 1.5 FROM block WHERE slot > 1e3 ORDER BY abs(slot)"));
+        assertDoesNotThrow(() -> SqlValidator.validate(
+                "SELECT CAST(fee AS DECIMAL(10, 2)), CASE WHEN (slot > 1) THEN (1) ELSE (2) END FROM block"));
+        assertDoesNotThrow(() -> SqlValidator.validate(
+                "SELECT slot::DECIMAL(20, 0) FROM block WHERE slot BETWEEN (1) AND abs(2)"));
+    }
+
+    // --- fail-closed layer: the engine's table functions are rejected by name ---
+
+    @Test
+    void registeredTableFunctionsAreRejectedByNameAnywhere() throws Exception {
+        try (Connection c = DriverManager.getConnection("jdbc:duckdb:");
+             Statement st = c.createStatement()) {
+            st.execute("CREATE MACRO zz_registry_probe(x) AS TABLE SELECT x AS v");
+            assertDoesNotThrow(() -> SqlValidator.validate("SELECT zz_registry_probe(1)"));
+            SqlValidator.registerTableFunctions(c);
+        }
+        assertRejected("SELECT zz_registry_probe(1)");
+        assertRejected("SELECT 1 FROM block WHERE zz_registry_probe (1) IS NULL");
+        assertRejected("SELECT \"zz_registry_probe\"(1)");
+        // the allow-list and names that are also scalar/aggregate functions are unaffected
+        assertDoesNotThrow(() -> SqlValidator.validate("SELECT * FROM unnest([1, 2]) AS u(x)"));
+        assertDoesNotThrow(() -> SqlValidator.validate(
+                "SELECT j.key FROM transaction_metadata t, json_each(t.body) j"));
+        assertDoesNotThrow(() -> SqlValidator.validate("SELECT histogram(epoch) FROM block"));
+    }
+
+    // --- bitstring ---
+
+    @Test
+    void rejectsUnboundedBitstrings() {
+        assertRejected("SELECT bitstring('1', 1000000000)");
+        assertRejected("SELECT length(bitstring('1', 10001))");
+        assertRejected("SELECT bitstring('1', slot) FROM block");
+        assertRejected("SELECT bitstring(bitstring('1', 8), 2000000000)");
+        assertRejected("SELECT hash.bitstring(1000000000) FROM block");
+        assertRejected("SELECT main.bitstring('1', 1000000000)");
+        assertRejected("SELECT bitstring_agg(slot, 0, 100000000) FROM block GROUP BY epoch");
+        assertRejected("SELECT bitstring_agg(slot) FROM block");
+    }
+
+    @Test
+    void allowsSmallLiteralBitstrings() {
+        assertDoesNotThrow(() -> SqlValidator.validate("SELECT bitstring('101', 8), bitstring('1', 10000)"));
+        assertDoesNotThrow(() -> SqlValidator.validate("SELECT main.bitstring('1', 16), hash.bitstring(64) FROM block"));
+    }
+
+    // --- schema-qualified calls are not member calls ---
+
+    @Test
+    void acceptsSchemaQualifiedFormatPrintfAndPad() {
+        assertDoesNotThrow(() -> SqlValidator.validate("SELECT main.format('{}', 42)"));
+        assertDoesNotThrow(() -> SqlValidator.validate("SELECT main.printf('%d', 1)"));
+        assertDoesNotThrow(() -> SqlValidator.validate("SELECT \"main\" . format('{} {}', 1, 2)"));
+        assertDoesNotThrow(() -> SqlValidator.validate("SELECT \"system\".printf('%d', 1)"));
+        assertDoesNotThrow(() -> SqlValidator.validate("SELECT \"system\".main.format('{}', 1)"));
+        assertDoesNotThrow(() -> SqlValidator.validate("SELECT \"system\".\"main\".lpad('a', 3, 'b')"));
+    }
+
+    @Test
+    void stillChecksQualifiedCallsAndRealMemberCalls() {
+        assertRejected("SELECT main.format('{:>1000000000}', 'a')");
+        assertRejected("SELECT main.printf('%1000000000d', 1)");
+        assertRejected("SELECT \"system\".main.printf('%*d', 100000000, 1)");
+        assertRejected("SELECT main.lpad('a', 1000000000, 'b')");
+        // t.main is a column: member calls whose format string is the column value
+        assertRejected("SELECT t.main.format('{}', 1) FROM (SELECT '{:>100000000}' AS main) t");
+        assertRejected("SELECT main.main.format('{}', 1) FROM (SELECT '{:>100000000}' AS main) main");
+        assertRejected("SELECT \"memory\".main.format('{}', 1) FROM (SELECT '{:>100000000}' AS main) \"memory\"");
+        assertRejected("SELECT \"temp\".main.printf('%d', 1) FROM (SELECT '%100000000d' AS main) \"temp\"");
+        assertRejected("SELECT x.\"system\".main.format('{}', 1) FROM block x");
+    }
+
+    @Test
+    void duckDbResolvesSchemaQualifiersBeforeColumns() throws Exception {
+        try (Connection c = DriverManager.getConnection("jdbc:duckdb:");
+             Statement st = c.createStatement()) {
+            String[][] cases = {
+                    // qualified: the literal is the format string even though a column "main" exists
+                    {"SELECT main.format('{}|', 'a') FROM (SELECT '{}-{}' AS main)", "a|"},
+                    {"SELECT \"system\".main.format('{}|', 'a') FROM (SELECT '{}-{}' AS main) \"system\"", "a|"},
+                    // member calls: the column is the format string
+                    {"SELECT t.main.format('{}|', 'a') FROM (SELECT '{}-{}' AS main) t", "{}|-a"},
+                    {"SELECT \"memory\".main.format('{}|', 'a') FROM (SELECT '{}-{}' AS main) \"memory\"", "{}|-a"},
+            };
+            for (String[] tc : cases) {
+                try (ResultSet rs = st.executeQuery(tc[0])) {
+                    assertTrue(rs.next(), tc[0]);
+                    assertEquals(tc[1], rs.getString(1), tc[0]);
+                }
+            }
+        }
     }
 
     private static void assertRejected(String sql) {
