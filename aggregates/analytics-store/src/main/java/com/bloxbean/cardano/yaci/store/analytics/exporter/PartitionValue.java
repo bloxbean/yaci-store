@@ -132,7 +132,7 @@ public sealed interface PartitionValue permits
      * @return the partition value
      * @throws IllegalArgumentException if the value is neither a date nor an epoch
      */
-    static PartitionValue parse(String value) {
+    public static PartitionValue parse(String value) {
         String v = value == null ? "" : value.trim();
         try {
             if (v.startsWith("date=")) {

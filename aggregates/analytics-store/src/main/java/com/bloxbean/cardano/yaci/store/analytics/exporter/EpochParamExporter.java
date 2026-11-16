@@ -48,7 +48,7 @@ public class EpochParamExporter extends AbstractTableExporter {
 
     /** Every non-Byron epoch has its protocol parameters once it is ready. */
     @Override
-    protected boolean allowsEmptyPartition(PartitionValue partition) {
+    public boolean allowsEmptyPartition(PartitionValue partition) {
         int epoch = ((PartitionValue.EpochPartition) partition).epoch();
         return eraService.getFirstNonByronEpoch().map(first -> epoch < first).orElse(true);
     }
