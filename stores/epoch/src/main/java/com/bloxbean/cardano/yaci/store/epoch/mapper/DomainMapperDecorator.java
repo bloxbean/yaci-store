@@ -104,7 +104,7 @@ public class DomainMapperDecorator implements DomainMapper {
                     default -> Collections.emptyList();
                 };
 
-                Map<String, Long> langCost = new TreeMap<>();
+                Map<String, Long> langCost = new LinkedHashMap<>();
                 var costArr = costModelMap.get(key);
                 //New params are appended to the end, so an older, shorter model uses the leading names
                 if (costArr.length <= ops.size()) {

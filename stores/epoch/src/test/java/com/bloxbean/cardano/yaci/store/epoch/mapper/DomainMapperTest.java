@@ -287,4 +287,19 @@ class DomainMapperTest {
         assertThat(v3).doesNotContainKey("remainderInteger-memory-arguments-minimum");
     }
 
+    @Test
+    void toProtocolParamsDto_costModelKeysKeepLedgerParamOrder() {
+        long[] v3Costs = LongStream.range(0, 297).toArray();
+
+        ProtocolParams protocolParams = ProtocolParams.builder()
+                .costModels(Map.of(PlutusKeys.PLUTUS_V3, v3Costs))
+                .build();
+
+        ProtocolParamsDto dto = DomainMapper.INSTANCE.toProtocolParamsDto(protocolParams);
+
+        Map<String, Long> v3 = dto.getCostModels().get(PlutusKeys.PLUTUS_V3);
+        assertThat(v3.keySet()).containsExactlyElementsOf(PlutusOps.getOperations(3).subList(0, 297));
+        assertThat(v3.values()).containsExactlyElementsOf(dto.getCostModelsRaw().get(PlutusKeys.PLUTUS_V3));
+    }
+
 }
