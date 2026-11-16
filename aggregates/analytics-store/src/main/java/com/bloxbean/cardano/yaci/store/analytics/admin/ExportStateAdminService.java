@@ -28,6 +28,7 @@ import java.util.List;
 public class ExportStateAdminService {
 
     private static final String DATE_PREFIX = "date=";
+    private static final String EPOCH_PREFIX = "epoch=";
 
     private final ExportStateRepository repository;
 
@@ -81,6 +82,37 @@ public class ExportStateAdminService {
             states.size(), tableName, startDate, endDate);
 
         return states.size();
+    }
+
+    /**
+     * Reset the export state of every epoch from {@code startEpoch} to {@code endEpoch} (inclusive)
+     * of an EPOCH table, so they are exported again.
+     *
+     * @return Number of states reset
+     */
+    @Transactional
+    public int resetEpochRange(String tableName, int startEpoch, int endEpoch) {
+        if (endEpoch < startEpoch) {
+            throw new IllegalArgumentException("endEpoch " + endEpoch + " is before startEpoch " + startEpoch);
+        }
+        List<ExportState> states = repository.findByTableNameAndPartitionPrefix(tableName, EPOCH_PREFIX).stream()
+            .filter(s -> {
+                Integer epoch = parseEpoch(s.getId().getPartitionValue());
+                return epoch != null && epoch >= startEpoch && epoch <= endEpoch;
+            })
+            .toList();
+
+        repository.deleteAll(states);
+        log.warn("Reset {} export states for {} from epoch {} to {}", states.size(), tableName, startEpoch, endEpoch);
+        return states.size();
+    }
+
+    private static Integer parseEpoch(String key) {
+        try {
+            return ((PartitionValue.EpochPartition) PartitionValue.parse(key)).epoch();
+        } catch (RuntimeException e) {
+            return null;
+        }
     }
 
     private static LocalDate parseDay(String key) {

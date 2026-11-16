@@ -69,6 +69,19 @@ class ExportStateAdminServiceTest {
     }
 
     @Test
+    void resetsTheEpochsOfAnEpochRange() {
+        save("reward", "epoch=449");
+        save("reward", "epoch=451");
+        save("reward", "epoch=452");
+
+        assertThat(service.resetEpochRange("reward", 450, 451)).isEqualTo(2);
+        assertThat(keys("reward")).containsExactlyInAnyOrder("epoch=449", "epoch=452", "epoch=-2147483648");
+        assertThat(service.resetEpochRange("reward", 600, 700)).isZero();
+        assertThatThrownBy(() -> service.resetEpochRange("reward", 452, 451))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void resetsOnePartitionWrittenEitherWay() {
         assertThat(service.resetExportState("transaction", "2024-01-15")).isTrue();
         assertThat(service.resetExportState("transaction", "date=2024-01-31")).isTrue();
