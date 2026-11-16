@@ -8,12 +8,21 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 @Repository
 public interface Cip68MetadataRepository extends JpaRepository<Cip68Metadata, Cip68MetadataId> {
+
+    /** A policy ID is a 28-byte hash, 56 hex characters. */
+    int POLICY_ID_HEX_LENGTH = 56;
+
+    /** Most keys {@link #findLatestByConcatenatedKeys} sends in one query; larger requests are split. */
+    int MAX_KEYS_PER_QUERY = 1000;
 
     /**
      * Returns the latest row for a given {@code (policy_id, asset_name)} reference NFT,
@@ -33,25 +42,73 @@ public interface Cip68MetadataRepository extends JpaRepository<Cip68Metadata, Ci
 
     /**
      * Returns the latest reference NFT row per {@code (policy_id, asset_name)} pair, regardless of label.
-     * Replaces the N+1 per-subject query pattern with a single round-trip.
+     * Replaces the N+1 per-subject query pattern with one query per {@value #MAX_KEYS_PER_QUERY} keys.
      * <p>
-     * Callers pass a list of {@code policy_id || asset_name} concatenated keys. Since policy IDs are
-     * always exactly 56 hex characters, the concatenation is unambiguous — the DB can split the key
-     * back if needed, though this method matches directly against the concatenated form.
-     * <p>
-     * Uses {@code ROW_NUMBER() OVER} window function for per-pair dedup. Portable across
-     * PostgreSQL, H2, and MySQL 8+.
+     * Callers pass {@code policy_id || asset_name} concatenated keys. Since policy IDs are always exactly 56 hex
+     * characters, each key is split back into its {@code policy_id} and {@code asset_name}, and the query filters on
+     * both:
+     * <ul>
+     *   <li>{@code policy_id IN (...) AND asset_name IN (...)} lets the database use the primary key
+     *       {@code (policy_id, asset_name, slot, tx_hash)}. A filter on {@code CONCAT(policy_id, asset_name)} alone
+     *       cannot use any index and scans the whole table.</li>
+     *   <li>The two lists also match pairs that were not asked for (a requested policy combined with an asset name
+     *       requested for another policy). {@code CONCAT(policy_id, asset_name) IN (...)} drops those rows in the
+     *       database, before they are ranked and returned, so only the requested pairs are ranked and loaded.</li>
+     * </ul>
+     * Large requests are split into queries of at most {@value #MAX_KEYS_PER_QUERY} keys, so callers can pass any
+     * number of keys without batching on their side:
+     * <ul>
+     *   <li>each query binds at most three parameters per key, far below the 65,535 bind parameters a PostgreSQL
+     *       statement accepts;</li>
+     *   <li>the pairs the two {@code IN} lists can match grow with the number of policies times the number of asset
+     *       names, so a bounded batch also bounds the index lookups of one query.</li>
+     * </ul>
+     * The result stays exact: every key is in exactly one query, and the latest row is chosen per pair.
      * <p>
      * No label filter — see {@link #findFirstByPolicyIdAndAssetNameOrderBySlotDescTxIndexDesc} for why.
      *
-     * @param concatenatedKeys list of {@code policy_id || asset_name} keys (reference-NFT asset names)
-     * @return one entity per matching concatenated key; pairs with no data are omitted
+     * @param concatenatedKeys {@code policy_id || asset_name} keys (reference-NFT asset names); keys shorter than a
+     *                         policy ID are skipped
+     * @return one entity per requested key that has data; keys with no data are omitted
+     */
+    default List<Cip68Metadata> findLatestByConcatenatedKeys(Collection<String> concatenatedKeys) {
+        List<String> keys = concatenatedKeys.stream()
+                .filter(key -> key.length() >= POLICY_ID_HEX_LENGTH)
+                .distinct()
+                .toList();
+
+        List<Cip68Metadata> rows = new ArrayList<>();
+        for (int from = 0; from < keys.size(); from += MAX_KEYS_PER_QUERY) {
+            List<String> chunk = keys.subList(from, Math.min(from + MAX_KEYS_PER_QUERY, keys.size()));
+            Set<String> policyIds = new HashSet<>();
+            Set<String> assetNames = new HashSet<>();
+            for (String key : chunk) {
+                policyIds.add(key.substring(0, POLICY_ID_HEX_LENGTH));
+                assetNames.add(key.substring(POLICY_ID_HEX_LENGTH));
+            }
+            rows.addAll(findLatestByPolicyIdsAndAssetNames(policyIds, assetNames, chunk));
+        }
+        return rows;
+    }
+
+    /**
+     * Latest row per requested {@code (policy_id, asset_name)} pair. Use {@link #findLatestByConcatenatedKeys}, which
+     * derives the three arguments from the keys and splits large requests; see there for why the query filters on
+     * both the {@code IN} lists and the concatenated keys. {@code policyIds} and {@code assetNames} must be the
+     * policy IDs and asset names of {@code concatenatedKeys}: the {@code IN} lists select the rows through the primary
+     * key, and the concatenated keys keep only the requested pairs.
+     * <p>
+     * Uses {@code ROW_NUMBER() OVER} window function for per-pair dedup. Portable across
+     * PostgreSQL, H2, and MySQL 8+.
      */
     @Query(value = "SELECT * FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY policy_id, asset_name " +
             "ORDER BY slot DESC, tx_index DESC) AS rn FROM cip68_metadata " +
-            "WHERE CONCAT(policy_id, asset_name) IN (:concatenatedKeys)) ranked WHERE rn = 1",
+            "WHERE policy_id IN (:policyIds) AND asset_name IN (:assetNames) " +
+            "AND CONCAT(policy_id, asset_name) IN (:concatenatedKeys)) ranked WHERE rn = 1",
             nativeQuery = true)
-    List<Cip68Metadata> findLatestByConcatenatedKeys(
+    List<Cip68Metadata> findLatestByPolicyIdsAndAssetNames(
+            @Param("policyIds") Collection<String> policyIds,
+            @Param("assetNames") Collection<String> assetNames,
             @Param("concatenatedKeys") Collection<String> concatenatedKeys);
 
     /**
