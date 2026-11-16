@@ -89,7 +89,7 @@ class ContinuousSyncSchedulerTest {
         when(gapDetection.findGaps(block)).thenReturn(new TableGaps("block", List.of(), List.of(), List.of()));
         when(gapDetection.findGaps(transaction)).thenReturn(new TableGaps("transaction", List.of(DAY), List.of(),
                 List.of()));
-        when(exportService.exportTable("transaction", DAY)).thenReturn(true);
+        when(exportService.exportTable("transaction", DAY)).thenReturn(exported("transaction"));
 
         scheduler.syncGaps();
 
@@ -108,7 +108,7 @@ class ContinuousSyncSchedulerTest {
         when(exportService.exportTable("block", DAY)).thenAnswer(inv -> {
             exporting.countDown();
             release.await(10, TimeUnit.SECONDS);
-            return true;
+            return exported("block");
         });
 
         CompletableFuture<Boolean> first = CompletableFuture.supplyAsync(scheduler::syncGaps);
@@ -126,8 +126,8 @@ class ContinuousSyncSchedulerTest {
     private void tables(List<TableExporter> daily, List<TableExporter> epoch) {
         List<String> dailyNames = daily.stream().map(TableExporter::getTableName).toList();
         List<String> epochNames = epoch.stream().map(TableExporter::getTableName).toList();
-        when(registry.getEnabledTablesByStrategy(PartitionStrategy.DAILY)).thenReturn(dailyNames);
-        when(registry.getEnabledTablesByStrategy(PartitionStrategy.EPOCH)).thenReturn(epochNames);
+        when(registry.getExportableTablesByStrategy(PartitionStrategy.DAILY)).thenReturn(dailyNames);
+        when(registry.getExportableTablesByStrategy(PartitionStrategy.EPOCH)).thenReturn(epochNames);
         for (TableExporter exporter : daily) {
             String name = exporter.getTableName();
             when(registry.getExporter(name)).thenReturn(exporter);
@@ -143,5 +143,10 @@ class ContinuousSyncSchedulerTest {
         when(exporter.getTableName()).thenReturn(table);
         when(exporter.getPartitionStrategy()).thenReturn(strategy);
         return exporter;
+    }
+
+    private static UniversalExportService.PartitionExportResult exported(String table) {
+        return new UniversalExportService.PartitionExportResult(table, DAY.toPathSegment(),
+                UniversalExportService.Outcome.EXPORTED, PartitionReadiness.READY);
     }
 }

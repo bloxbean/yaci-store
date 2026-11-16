@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.analytics.gap;
 import com.bloxbean.cardano.yaci.store.analytics.config.AnalyticsStoreProperties;
 import com.bloxbean.cardano.yaci.store.analytics.exporter.PartitionValue;
 import com.bloxbean.cardano.yaci.store.analytics.exporter.TableExporter;
+import com.bloxbean.cardano.yaci.store.analytics.scheduler.ExportReadinessService;
 import com.bloxbean.cardano.yaci.store.analytics.state.ExportState;
 import com.bloxbean.cardano.yaci.store.analytics.state.ExportStateService;
 import com.bloxbean.cardano.yaci.store.blocks.domain.Block;
@@ -13,6 +14,8 @@ import com.bloxbean.cardano.yaci.core.model.Era;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
@@ -48,6 +51,17 @@ public class GapDetectionService {
     private final EraService eraService;
 
     private Clock clock = Clock.systemDefaultZone();
+
+    /**
+     * The readiness check shared with the admin API. It depends on this service, so it is looked up
+     * lazily; without it (unit tests) the exporter's own check is used.
+     */
+    private ObjectProvider<ExportReadinessService> readinessService;
+
+    @Autowired(required = false)
+    void setReadinessService(ObjectProvider<ExportReadinessService> readinessService) {
+        this.readinessService = readinessService;
+    }
 
     @PostConstruct
     void validateAndLogFinalitySettings() {
@@ -331,11 +345,17 @@ public class GapDetectionService {
     }
 
     /**
-     * Whether the partition can be exported now. This is the one readiness check of gap
-     * detection: an exporter's own check ({@link TableExporter#preExportValidation}), which also
-     * runs again inside the export. An exception means "not ready".
+     * Whether the partition can be exported now: {@link ExportReadinessService#checkExporter}, the
+     * check the admin API and the export itself use (an unavailable table, an epoch that is not
+     * finalized, the exporter's own {@link TableExporter#preExportValidation}). An exception means
+     * "not ready".
      */
     boolean isReady(TableExporter exporter, PartitionValue partition) {
+        ExportReadinessService readiness = readinessService == null ? null : readinessService.getIfAvailable();
+        if (readiness != null) {
+            // Same rules as the admin API: unavailable tables, finalized epochs, the exporter's own check
+            return readiness.checkExporter(exporter, partition).isReady();
+        }
         try {
             return exporter.preExportValidation(partition);
         } catch (RuntimeException e) {

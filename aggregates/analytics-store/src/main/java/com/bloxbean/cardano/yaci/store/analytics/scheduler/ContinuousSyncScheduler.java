@@ -181,7 +181,8 @@ public class ContinuousSyncScheduler {
         int epochTables = 0;
 
         for (PartitionStrategy strategy : List.of(PartitionStrategy.DAILY, PartitionStrategy.EPOCH)) {
-            for (String tableName : registry.getEnabledTablesByStrategy(strategy)) {
+            // Tables that cannot be exported with this configuration (e.g. AdaPot tables with adapot off) are not gaps
+            for (String tableName : registry.getExportableTablesByStrategy(strategy)) {
                 if (strategy == PartitionStrategy.DAILY) {
                     dailyTables++;
                 } else {
@@ -221,13 +222,15 @@ public class ContinuousSyncScheduler {
 
         int successCount = 0;
         int failureCount = 0;
+        int notReadyCount = 0;
         for (Map.Entry<PartitionValue, List<String>> entry : due.entrySet()) {
             for (String tableName : entry.getValue()) {
                 try {
-                    if (universalExportService.exportTable(tableName, entry.getKey())) {
-                        successCount++;
-                    } else {
-                        failureCount++;
+                    switch (universalExportService.exportTable(tableName, entry.getKey()).outcome()) {
+                        case EXPORTED -> successCount++;
+                        // Became not ready between gap detection and the export (e.g. a rollback); nothing was marked
+                        case NOT_READY -> notReadyCount++;
+                        case FAILED -> failureCount++;
                     }
                 } catch (Exception e) {
                     log.error("Failed to export {} for {}: {}", tableName, entry.getKey().toPathSegment(),
@@ -237,7 +240,8 @@ public class ContinuousSyncScheduler {
             }
         }
 
-        log.info("Sync batch complete: {} exports successful, {} failed or deferred", successCount, failureCount);
+        log.info("Sync batch complete: {} exports successful, {} failed, {} not ready", successCount, failureCount,
+                notReadyCount);
     }
 
     /** Logs at INFO when the state differs from the last one logged at INFO, otherwise at DEBUG. */
