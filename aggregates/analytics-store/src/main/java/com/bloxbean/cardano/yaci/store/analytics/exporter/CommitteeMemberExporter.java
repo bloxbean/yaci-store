@@ -41,6 +41,11 @@ public class CommitteeMemberExporter extends AbstractTableExporter {
     }
 
     @Override
+    protected boolean dependsOnAdaPotJob() {
+        return true;
+    }
+
+    @Override
     public boolean preExportValidation(PartitionValue partition) {
         int epoch = ((PartitionValue.EpochPartition) partition).epoch();
         return isRewardCalcAdaPotJobCompleted(epoch);

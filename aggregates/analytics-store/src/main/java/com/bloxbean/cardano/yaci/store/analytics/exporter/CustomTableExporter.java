@@ -66,6 +66,11 @@ public class CustomTableExporter extends AbstractTableExporter {
     }
 
     @Override
+    protected boolean dependsOnAdaPotJob() {
+        return dependsOnAdapotJob && partitionStrategy == PartitionStrategy.EPOCH;
+    }
+
+    @Override
     public boolean preExportValidation(PartitionValue partition) {
         if (!dependsOnAdapotJob) return true;
         if (!(partition instanceof PartitionValue.EpochPartition ep)) return true;
