@@ -33,7 +33,7 @@ The `application-custom-exporters.yml` file shipped in the distribution is a **s
 | `name` | Yes | Target table name in the analytics catalog |
 | `query` | Yes | SQL template with placeholders (see below) |
 | `partition-strategy` | No | `DAILY` (default) or `EPOCH` |
-| `depends-on-adapot-job` | No | If `true`, waits for AdaPot reward calculation to complete before exporting. Only meaningful with `EPOCH` strategy. Default: `false` |
+| `depends-on-adapot-job` | No | If `true`, epoch N waits for its AdaPot reward calculation job to complete before it is exported, and the table is not exported at all when the adapot module is disabled. If `false`, epoch N is exported once the epoch has ended and its last slot is older than the finality window. Only meaningful with `EPOCH` strategy (a `DAILY` table waits until the day is final either way). Default: `false` |
 
 ### Query Placeholders
 
@@ -85,5 +85,5 @@ yaci:
 ```
 
 <Callout type="warning">
-When using `EPOCH` partition strategy, the query **must** output a column named `epoch`. If the source column has a different name, use an alias (e.g., `r.earned_epoch AS epoch`). Without this, the DuckLake table will not be partitioned and all Parquet files will be written flat without `epoch=N/` subdirectories.
+When using `EPOCH` partition strategy, the query **must** output a column named `epoch`. If the source column has a different name, use an alias (e.g., `r.earned_epoch AS epoch`). Without it, every DuckLake export of the table fails with an error saying the query returns no `epoch` column, and no table is created.
 </Callout>

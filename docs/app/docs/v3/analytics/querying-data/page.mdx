@@ -64,8 +64,11 @@ cd /path/to/yaci-store
 duckdb -c "
   INSTALL ducklake; LOAD ducklake;
 
-  ATTACH 'ducklake:postgres:dbname=yaci_store host=localhost port=5432 user=postgres password=pass options=-csearch_path=public'
-    AS ducklake_catalog (DATA_PATH './data/analytics');
+  -- METADATA_SCHEMA: the catalog schema yaci-store logs at startup (\"DuckLake catalog schema: ...\"),
+  -- 'public' for installations created before yaci.store.analytics.ducklake.catalog-schema existed.
+  -- DATA_PATH is not needed: DuckLake uses the export directory recorded in the catalog.
+  ATTACH 'ducklake:postgres:dbname=yaci_store host=localhost port=5432 user=postgres password=pass'
+    AS ducklake_catalog (METADATA_SCHEMA 'mainnet', READ_ONLY);
 
   -- Query DuckLake tables directly
   SELECT COUNT(*) FROM ducklake_catalog.block;

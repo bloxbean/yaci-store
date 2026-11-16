@@ -114,7 +114,10 @@ endpoints and the MCP tools use the hard limit.
 - DuckDB SQL is PostgreSQL-compatible: CTEs (including `WITH RECURSIVE`), window functions,
   `QUALIFY`, list/struct functions and `PERCENTILE_CONT` all work.
 - `DATE`, `TIME` and `TIMESTAMP` values are returned as ISO-8601 strings (`2026-08-19`,
-  `2026-08-19T00:10:25Z` — timestamps with time zone normalized to UTC); binary values as Base64.
+  `2026-08-19T00:10:25Z` — timestamps with time zone normalized to UTC, plain `TIMESTAMP` values
+  exactly as stored and without a zone, `TIME WITH TIME ZONE` with its offset); binary values as
+  Base64. Floating-point `NaN` and infinities are returned as the strings `"NaN"`, `"Infinity"`
+  and `"-Infinity"`.
 - `address_utxo` is exported **flattened**: one row per (output, asset unit). Every output has
   exactly one `asset_unit = 'lovelace'` row; other assets are extra rows with `policy_id`,
   `asset_name`, `quantity`.
@@ -240,7 +243,19 @@ Defense in depth, in this order:
    `COPY`/`EXPORT`, extension management, file/URL literals, catalog/metadata functions
    (`duckdb_*`, `pragma_*`, `SHOW`, `DESCRIBE`, `SUMMARIZE`, `information_schema`) and the attached
    PostgreSQL alias are rejected with `400`. Double-quoted identifiers that merely spell a keyword
-   (`"set"`, `"show"`) are allowed.
+   (`"set"`, `"show"`) are allowed. Further rules:
+   - **Table functions are denied by default.** Only `unnest`, `json_each` and `json_tree` may be
+     used as a table (`FROM`, `JOIN`, `LATERAL`, a `FROM` list); every other table function —
+     file readers, `range`/`generate_series`, `histogram(<table>, ...)` and functions that change
+     engine-wide state such as `enable_logging`, `enable_profiling` or `force_checkpoint` — is
+     rejected. Aggregate `histogram(col)` is unaffected.
+   - **Allocation-amplifying functions are bounded.** DuckDB's `memory_limit` does not cover a
+     single large value, so `lpad`/`rpad` need an integer-literal width of at most 10000,
+     `printf`/`format` need a literal format string whose widths and precisions have at most three
+     digits (no `*` or `{}` width taken from an argument), and `repeat`, `list_resize`,
+     `array_resize`, `sleep_ms` and `write_log` are rejected.
+   - Control characters other than tab, line feed and carriage return are rejected, and a `--`
+     comment ends at either a line feed or a carriage return, as in DuckDB.
 3. **Limits** — per-query timeout (enforced for the whole execution — the engine deliberately
    uses non-streaming JDBC result sets, whose cancel timer would otherwise stop at the execute
    phase), the row limits above, concurrent readers bounded by
@@ -269,6 +284,11 @@ PostgreSQL ──(exporters, writer connection)──▶ DuckLake catalog + Parq
   visible.
 - Views are refreshed every 5 minutes (new partitions, advanced cutoffs). If an export is holding
   the writer connection at that moment the refresh is skipped and retried next time.
+- When a table gains a column over time (older data files lack it), its view reads the files by
+  column name: the new column is present and `NULL` for rows from older files. Tables whose files
+  all share one schema are read without this, because matching by name makes DuckDB open every
+  file of the table for each query. In direct Parquet storage a file with a new column that appears
+  between two refreshes is picked up by name only after the next refresh.
 - The catalog file is also locked at the OS level while yaci-store runs (DuckDB-file catalog type):
   external tools cannot `ATTACH` it concurrently, but can read the Parquet files directly with
   `read_parquet('<export-path>/main/<table>/**/*.parquet', hive_partitioning=true)` — see
@@ -290,5 +310,5 @@ PostgreSQL ──(exporters, writer connection)──▶ DuckLake catalog + Parq
 | `yaci.store.analytics.duckdb.reader.maximum-pool-size` | CPU cores | Max concurrent queries on the engine |
 | `yaci.store.analytics.duckdb.reader.query-timeout-seconds` | `30` | Per-query timeout (REST endpoints always use it) |
 | `yaci.store.analytics.query.max-timeout-seconds` | `300` | Longest per-call timeout a trusted caller (the MCP `analytics-execute-sql` tool's `timeoutSeconds`) may request; never below the default |
-| `yaci.store.analytics.duckdb.memory-limit` | _(DuckDB default)_ | Memory limit per DuckDB instance (writer and query engine each) |
+| `yaci.store.analytics.duckdb.memory-limit` | _(50% of RAM minus JVM heap, split between instances)_ | Memory limit per DuckDB instance (writer and query engine each); see [Configuration](/docs/v3/analytics/configuration#duckdb-memory-usage-in-jvm) |
 | `yaci.store.analytics.duckdb.threads` | CPU cores | DuckDB threads per instance |

@@ -44,6 +44,11 @@ public class GovEpochActivityExporter extends AbstractTableExporter {
     }
 
     @Override
+    protected boolean dependsOnAdaPotJob() {
+        return true;
+    }
+
+    @Override
     public boolean preExportValidation(PartitionValue partition) {
         // gov_epoch_activity depends on AdaPot job completion
         int epoch = ((PartitionValue.EpochPartition) partition).epoch();

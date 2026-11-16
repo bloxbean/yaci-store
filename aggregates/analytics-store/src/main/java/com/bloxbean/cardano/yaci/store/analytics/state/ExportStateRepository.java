@@ -41,4 +41,18 @@ public interface ExportStateRepository extends JpaRepository<ExportState, Export
            "WHERE e.status = 'IN_PROGRESS'")
     List<ExportState> findAllInProgressExports();
 
+    @Query("SELECT e FROM ExportState e WHERE e.id.tableName = :tableName")
+    List<ExportState> findByTableName(@Param("tableName") String tableName);
+
+    /** State rows of a table whose partition key starts with the given prefix (e.g. {@code date=}). */
+    @Query("SELECT e FROM ExportState e " +
+           "WHERE e.id.tableName = :tableName AND e.id.partitionValue LIKE CONCAT(:prefix, '%')")
+    List<ExportState> findByTableNameAndPartitionPrefix(@Param("tableName") String tableName,
+                                                        @Param("prefix") String prefix);
+
+    /** Table name, partition value and row count of every COMPLETED partition that holds rows. */
+    @Query("SELECT e.id.tableName, e.id.partitionValue, e.rowCount FROM ExportState e " +
+           "WHERE e.status = 'COMPLETED' AND e.rowCount > 0")
+    List<Object[]> findCompletedPartitionsWithRows();
+
 }

@@ -9,7 +9,9 @@ import { Callout } from 'nextra/components'
 | `yaci.store.analytics.enabled` | `false` | Enable analytics store |
 | `yaci.store.analytics.export-path` | `./data/analytics` | Output directory for exported files |
 | `yaci.store.analytics.enabled-tables` | _(empty = all)_ | Comma-separated list of tables to export |
-| `yaci.store.analytics.admin.enabled` | `false` | Enable admin REST API |
+| `yaci.store.analytics.admin.enabled` | `false` | Enable the admin REST API. It has no authentication; see [Admin API](#admin-api) |
+| `yaci.store.analytics.admin.max-range-days` | `366` | Largest date range one admin range export or repair may cover |
+| `yaci.store.analytics.admin.max-range-epochs` | `73` | Largest epoch range one admin epoch-range export may cover |
 | `yaci.store.analytics.storage.type` | `ducklake` | Storage format: `ducklake` or `parquet` |
 | `yaci.store.analytics.state-management.stale-timeout-minutes` | `60` | Timeout before stuck exports are recovered |
 | `yaci.store.analytics.continuous-sync.buffer-days` | `1` | UTC days the daily exports stay behind the *finalized* tip (latest block time minus the finality window). A day is exported once the finalized tip is `buffer-days` past it — with the defaults ~13 h after the day ends on mainnet. Values below 1 are raised to 1 |
@@ -18,6 +20,10 @@ import { Callout } from 'nextra/components'
 | `yaci.store.analytics.continuous-sync.sync-check-interval-minutes` | `15` | Gap detection interval when fully synced |
 | `yaci.store.analytics.continuous-sync.catch-up-interval-minutes` | `1` | Gap detection interval when catching up |
 | `yaci.store.analytics.continuous-sync.export-after-sync` | `true` | Defer exports until the sync reaches chain tip. Set `false` to export during the sync |
+| `yaci.store.analytics.continuous-sync.retry-backoff-initial-minutes` | `1` | Wait before retrying a partition whose export failed. Each further failure doubles the wait |
+| `yaci.store.analytics.continuous-sync.retry-backoff-max-minutes` | `360` | Longest wait between retries of a partition that keeps failing |
+| `yaci.store.analytics.pruning-check.accept-data-loss` | `false` | Start even when a pruning setting deletes source rows before they are exported (see [Pruning](#pruning-and-the-analytics-store)); a warning is logged instead |
+| `yaci.store.analytics.pruning-check.margin-hours` | `12` | Hours a pruning window must keep beyond the export delay (finality window + `buffer-days`) |
 | `yaci.store.analytics.parquet-export.codec` | `ZSTD` | Compression codec |
 | `yaci.store.analytics.parquet-export.compression-level` | `3` | ZSTD compression level (1-22) |
 | `yaci.store.analytics.parquet-export.row-group-size` | `-1` | Parquet row group size (-1 = DuckDB default ~122,880 rows) |
@@ -26,10 +32,22 @@ import { Callout } from 'nextra/components'
 | `yaci.store.analytics.ducklake.catalog-username` | _(main datasource)_ | PostgreSQL catalog username |
 | `yaci.store.analytics.ducklake.catalog-password` | _(main datasource)_ | PostgreSQL catalog password |
 | `yaci.store.analytics.ducklake.catalog-path` | `./data/analytics/ducklake.catalog.db` | DuckDB catalog file path |
-| `yaci.store.analytics.duckdb.memory-limit` | _(empty = DuckDB default)_ | DuckDB buffer manager memory limit (e.g., `1GB`, `512MB`) |
+| `yaci.store.analytics.ducklake.catalog-schema` | _(see below)_ | PostgreSQL schema for the DuckLake catalog tables (`ducklake_*`, DuckLake `METADATA_SCHEMA`). Not set: the catalog connection's `currentSchema` if it already holds a catalog, else an existing catalog in `public` (installations from before this property), else a new catalog in the connection's `currentSchema` |
+| `yaci.store.analytics.ducklake.catalog-lock-wait-seconds` | `30` | DuckDB catalog only: how long to wait for another process (e.g. a `duckdb` CLI, even `-readonly`) to release the catalog file lock before failing |
+| `yaci.store.analytics.source-statement-timeout-seconds` | `0` (off) | PostgreSQL `statement_timeout` for the export pipeline's source queries (libpq `options=-c statement_timeout`). Off by default because a single export query can run long on large tables |
+| `yaci.store.analytics.duckdb.memory-limit` | _(empty = 50% of RAM minus JVM heap, split between writer and query layer)_ | DuckDB buffer manager memory limit for **each** DuckDB instance (e.g., `1GB`, `512MB`). When empty: 50% of the RAM not reserved for the JVM heap (`-Xmx`), divided by the number of DuckDB instances in the JVM (export writer, query layer), at least `256MB` |
+| `yaci.store.analytics.duckdb.temp-directory` | _(empty = `<export-path>/.tmp`)_ | Base directory for DuckDB spill files. Each DuckDB instance uses its own subdirectory (`writer-<id>`, `reader-<id>`, ...), removed when the instance closes; leftovers of a crashed process are removed at the next start |
+| `yaci.store.analytics.duckdb.max-temp-directory-size` | _(empty = DuckDB default, 90% of free disk)_ | DuckDB `max_temp_directory_size` per instance (e.g., `50GB`) |
+| `yaci.store.analytics.duckdb.extension-directories` | _(empty = `~/.duckdb/extensions`)_ | Comma-separated directories DuckDB loads extensions (`ducklake`, `postgres_scanner`) from; missing extensions are installed into the first one. Use a persistent directory in containers, or a pre-seeded one on offline hosts |
 | `yaci.store.analytics.ducklake.export.codec` | `ZSTD` | Compression codec for DuckLake Parquet files |
 | `yaci.store.analytics.ducklake.export.compression-level` | `3` | ZSTD compression level (1-22) for DuckLake exports |
 | `yaci.store.analytics.ducklake.export.row-group-size` | `-1` | Row group size for DuckLake Parquet files (-1 = DuckDB default) |
+| `yaci.store.analytics.ducklake.writer-lock-timeout-seconds` | `900` | Longest wait for the single DuckLake writer connection while another export, verification or maintenance run holds it. When it expires the waiting export fails (and is retried later) instead of blocking its thread |
+| `yaci.store.analytics.ducklake.reconcile-state-on-startup` | `true` | At startup, reset COMPLETED partitions that have rows in the export state but none in the DuckLake catalog, so they are exported again (see [Storage Modes](/docs/v3/analytics/storage-modes#catalog-and-export-state)) |
+| `yaci.store.analytics.ducklake.maintenance.enabled` | `true` | Periodically expire old DuckLake snapshots and delete the data files they alone referenced |
+| `yaci.store.analytics.ducklake.maintenance.interval-minutes` | `1440` | Interval between maintenance runs |
+| `yaci.store.analytics.ducklake.maintenance.initial-delay-minutes` | `60` | Delay before the first maintenance run after startup |
+| `yaci.store.analytics.ducklake.maintenance.retention-hours` | `168` | How long a replaced data file is kept after it left the latest snapshot (also the time-travel window). Minimum 1 |
 | `yaci.store.analytics.exporter.{name}.enabled` | `true` | Per-exporter enable/disable (e.g., `exporter.reward.enabled=false`) |
 
 The properties of the analytics query layer (`yaci.store.analytics.query.*`, `yaci.store.analytics.duckdb.reader.*`) are documented in [Query API & Unified Views](/docs/v3/analytics/query-api#configuration).
@@ -50,41 +68,153 @@ yaci.store.analytics.export-path=/var/lib/yaci-store/analytics
 ### DuckDB memory usage in JVM
 
 <Callout type="warning">
-If not configured, DuckDB uses its default (80% of system RAM). It is recommended to set this explicitly in production and container environments to prevent OOM kills.
+It is recommended to set `yaci.store.analytics.duckdb.memory-limit` explicitly in production and container environments to prevent OOM kills.
 </Callout>
 
-DuckDB defaults to using 80% of system physical RAM for its buffer manager. Since DuckDB runs inside the JVM process, this can cause memory contention — JVM heap + DuckDB buffer may together exceed available system RAM, leading to OOM kills (especially in containers/Kubernetes).
+DuckDB runs inside the JVM process. The export writer is one DuckDB instance; the analytics query layer (if enabled) is a second one shared by all concurrent readers. DuckDB's own default gives **each** instance 80% of the physical RAM, so with both instances and a JVM heap the process could try to use far more memory than the host has.
 
-To limit DuckDB memory usage:
+When `memory-limit` is not set, yaci-store therefore sets one itself: 50% of the RAM not reserved for the JVM heap (`-Xmx`), divided by the number of DuckDB instances in the JVM, at least 256 MB. For example, 16 GB RAM, `-Xmx4g`, writer and query layer: `(16 - 4) × 0.5 / 2 = 3 GB` per instance. The chosen value is logged at startup. The RAM size is read container-aware (cgroup limit).
+
+To set the limit yourself:
 
 ```properties
 # Limit each DuckDB instance's buffer manager to 1GB
 yaci.store.analytics.duckdb.memory-limit=1GB
 ```
 
-Note: The limit applies per DuckDB instance. The export writer is one instance; the analytics query layer (if enabled) is a second one shared by all concurrent readers, so plan for up to `memory_limit * 2`. Some DuckDB aggregate functions may also allocate memory outside the buffer manager, so actual usage can slightly exceed the configured limit.
+Note: The limit applies per DuckDB instance, so plan for up to `memory_limit * 2` when the query layer is enabled. Operations that exceed the limit spill to the temp directory (`yaci.store.analytics.duckdb.temp-directory`, default `<export-path>/.tmp`). Some DuckDB aggregate functions may also allocate memory outside the buffer manager, so actual usage can slightly exceed the configured limit.
 
-### DuckLake requires `public` schema in PostgreSQL
+### DuckDB spill files
 
-DuckLake stores its metadata tables in the `public` schema. The application automatically creates this schema if it doesn't exist. If your PostgreSQL instance restricts schema creation, ensure `public` exists before enabling DuckLake.
+Each DuckDB instance spills into its own directory under `yaci.store.analytics.duckdb.temp-directory` (default `<export-path>/.tmp`). Instances must never share a spill directory: DuckDB uses the same spill file names in every instance, and one instance overwriting or deleting another's spill files crashes the JVM. Earlier versions used DuckDB's default `.tmp` in the working directory for all instances; that directory is no longer used and can be deleted.
+
+### DuckDB extensions on offline hosts and in containers
+
+The `ducklake` and `postgres_scanner` extensions are not built into the DuckDB JDBC driver. yaci-store first tries to `LOAD` them, and only downloads them (`INSTALL`, from `extensions.duckdb.org`) when they are not installed yet. They are stored in `~/.duckdb/extensions` unless `yaci.store.analytics.duckdb.extension-directories` is set.
+
+- **Docker:** the container's home directory is not a volume, so every new container downloads the extensions again. The shipped `docker/config/application-analytics.properties` sets `yaci.store.analytics.duckdb.extension-directories=./data/duckdb/extensions`, inside the mounted `data` volume.
+- **Offline / air-gapped hosts:** install the extensions on a machine with access, using the same DuckDB version as the bundled JDBC driver (shown in the startup error), and copy the directory over:
+
+```bash
+duckdb -c "SET extension_directory='/opt/duckdb-ext'; INSTALL ducklake; INSTALL postgres_scanner;"
+# copies /opt/duckdb-ext/v<duckdb-version>/<platform>/*.duckdb_extension
+```
+
+```properties
+yaci.store.analytics.duckdb.extension-directories=/opt/duckdb-ext
+```
+
+If an extension can be neither loaded nor installed, startup fails with a message that names the extension, the DuckDB version and platform, and the directories searched.
+
+### Pruning and the analytics store
+
+A day is exported once its oldest rows are `buffer-days × 24 h` + the finality window old: about 37 h on mainnet with the defaults. Several stores can prune PostgreSQL rows much sooner (about 12 h with their defaults), which would delete most of each day before it is exported. The analytics store therefore refuses to start when one of these deletes rows an enabled exporter reads too early:
+
+| Pruning | Window property | Exported tables affected |
+|---|---|---|
+| `store.utxo.pruning-enabled` | `store.utxo.pruning-safe-blocks` (blocks) | `address_utxo`, `tx_input` |
+| `store.transaction.pruning-enabled` | `store.transaction.pruning-safe-slots` | `transaction`, `transaction_witness`, `transaction_cbor` |
+| `store.transaction.cbor-pruning-enabled` | `store.transaction.cbor-pruning-safe-slots` | `transaction_cbor` |
+| `store.blocks.cbor-pruning-enabled` | `store.blocks.cbor-pruning-safe-slots` | `block_cbor` |
+| `store.account.history-cleanup-enabled` or `store.account.pruning-enabled` | `store.account.balance-cleanup-slot-count` | `address_balance`, `stake_address_balance`, `stake_address_balance_snapshot` |
+
+The error names the table, the pruning property, its value and the minimum safe value: the export delay plus `pruning-check.margin-hours` (default 12), i.e. 49 h on mainnet with the defaults (176,400 slots, or 8,820 blocks for UTxO pruning). Raise the window, disable the exporter (`yaci.store.analytics.exporter.<table>.enabled=false`), or set `yaci.store.analytics.pruning-check.accept-data-loss=true` to start anyway and accept the missing rows. Reward and epoch-stake pruning are not checked: both follow the AdaPot jobs that the same tables wait for. Custom exporters are not checked.
+
+<Callout type="warning">
+Pruning counts from the sync tip. During an initial sync with `continuous-sync.export-after-sync=true`, nothing is exported until the tip is reached, so pruning removes history before the analytics store can read it, whatever the window. Sync first and enable pruning afterwards, or export during the sync.
+</Callout>
+
+### PostgreSQL catalog schema
+
+The DuckLake catalog tables (`ducklake_*`) live in one PostgreSQL schema, chosen with `yaci.store.analytics.ducklake.catalog-schema`:
+
+- **Not set** (default): the schema of the catalog connection (`currentSchema` of `catalog-url`, else of `spring.datasource.url`) if it already holds a catalog; otherwise an existing catalog in `public` — installations created before this property always used `public` and keep using it; otherwise a new catalog is created in the connection's schema.
+- **Set**: that schema is used. If it holds no catalog yet while `public` holds this instance's catalog, startup is refused, because an empty catalog would skip every partition already marked as exported. Move the tables first (`ALTER TABLE public.ducklake_... SET SCHEMA ...`) or keep `catalog-schema=public`.
+
+The schema is created if it does not exist. A user without `CREATE` on the database can be given an existing schema it may create tables in.
+
+Each catalog records which source it belongs to (`<database>/<schema>` of `spring.datasource.url`, key `yaci_store_source` in `ducklake_metadata`). Two instances must never share one catalog — they overwrite each other's partitions — so an instance whose source differs from the recorded one is refused at startup with a message naming the catalog. Catalogs from older versions record no source; the first instance that writes to one claims it. If the database or schema of an instance is renamed, update the record as the startup error explains.
+
+### Catalog `DATA_PATH`
+
+DuckLake records the export directory (`DATA_PATH`) in the catalog. An existing catalog is opened with the recorded path; `export-path` written differently but naming the same directory (`./data/analytics` vs `/app/data/analytics`, a symbolic link) is accepted. A catalog recorded for a different directory is refused with a message that names both paths.
+
+### DuckDB catalog file locked
+
+Only one process can open a DuckDB catalog file, even read-only: a `duckdb` CLI session on the file blocks yaci-store from attaching it. yaci-store waits up to `yaci.store.analytics.ducklake.catalog-lock-wait-seconds` (default 30) for the lock and then fails with a message that names the file. To look at the data while yaci-store runs, read the Parquet files or use the analytics query layer.
+
+### PostgreSQL connection settings
+
+DuckDB connects to PostgreSQL through libpq (`postgres_scanner`, PostgreSQL catalog), using the JDBC URLs (`spring.datasource.url`, `catalog-url`). Hosts (also IPv6 `[::1]` and several hosts `h1:5432,h2:5432`), the database, `currentSchema` and these URL parameters are passed on:
+
+| JDBC URL parameter | libpq parameter |
+|---|---|
+| `sslmode`, `sslrootcert`, `sslcert`, `sslkey`, `sslpassword` | same name (`ssl=true` without `sslmode` = `verify-full`, as in PgJDBC) |
+| `targetServerType` | `target_session_attrs` (`primary`, `standby`, `prefer-standby`, `any`) |
+| `connectTimeout`, `ApplicationName`, `gssEncMode`, `channelBinding`, `options` | `connect_timeout`, `application_name`, `gssencmode`, `channel_binding`, `options` |
+
+Java-only parameters (`sslfactory`, ...) are ignored with a warning. Note that libpq expects `sslkey` as a PEM file, while PgJDBC also accepts PKCS-8 DER (`.pk8`). User names and passwords may contain any characters; they are quoted for libpq and never logged.
 
 ## Admin API
 
 The admin API provides manual control over exports when enabled (`yaci.store.analytics.admin.enabled=true`).
 
+<Callout type="warning">
+The admin API has no authentication, and its endpoints export, re-export and reset data. Do not expose it outside a trusted network: keep the port private, or put an authenticating reverse proxy in front of `/api/v1/analytics/admin/**`. The shipped `analytics` profiles enable it.
+</Callout>
+
 | Method | Endpoint | Description |
 |---|---|---|
 | GET | `/api/v1/analytics/admin/tables` | List all registered exporters |
-| GET | `/api/v1/analytics/admin/status` | Current sync status |
+| GET | `/api/v1/analytics/admin/status` | Current sync status (see below) |
 | GET | `/api/v1/analytics/admin/statistics/{table}` | Export statistics for a table |
 | POST | `/api/v1/analytics/admin/export/date/{date}` | Export all daily tables for a date |
 | POST | `/api/v1/analytics/admin/export/table/{table}/date/{date}` | Export specific table for a date |
 | POST | `/api/v1/analytics/admin/export/table/{table}/epoch/{epoch}` | Export specific table for an epoch |
 | POST | `/api/v1/analytics/admin/export/table/{table}/range` | Backfill date range |
 | POST | `/api/v1/analytics/admin/export/table/{table}/epoch-range` | Backfill epoch range |
-| POST | `/api/v1/analytics/admin/sync/trigger` | Trigger immediate gap sync |
-| DELETE | `/api/v1/analytics/admin/state/{table}/{partition}` | Reset export state |
-| DELETE | `/api/v1/analytics/admin/state/{table}/range` | Reset date range state |
+| POST | `/api/v1/analytics/admin/repair/table/{table}/range` | Re-export a date range of a daily table |
+| POST | `/api/v1/analytics/admin/sync/trigger` | Trigger immediate gap sync (409 if a sync is already running) |
+| DELETE | `/api/v1/analytics/admin/state/{table}/{partition}` | Reset the export state of one partition: `2024-01-15`, `date=2024-01-15`, `450` or `epoch=450` |
+| DELETE | `/api/v1/analytics/admin/state/{table}/range?startDate=&endDate=` | Reset the export state of a daily table's days from `startDate` to `endDate` (inclusive, `yyyy-MM-dd`) |
+
+### Readiness
+
+Manual exports and repairs use the same readiness check as the scheduler, so a partition is never stored as `COMPLETED` before its data is final:
+
+- A **day** can be exported once it is on or before the export end date: the finalized tip (latest block time minus the finality window) minus `continuous-sync.buffer-days`. `GET /status` reports it as `exportEndDate`. Today, a future day, or any range or repair that ends after the export end date is refused.
+- An **epoch** that has not started is refused. Beyond that, each epoch table has its own condition, for example the AdaPot job of the epoch (see [Built-in Table Exporters](/docs/v3/analytics/overview#built-in-table-exporters)). `epoch`, `mir`, `instant_reward` and custom epoch exporters without `depends-on-adapot-job` wait until the epoch has ended and its last slot is older than the finality window.
+- A table that cannot be exported with the current configuration (for example an AdaPot table with adapot disabled) is refused.
+
+Nothing is exported or marked for a refused partition.
+
+### Resetting export state
+
+A reset deletes export-state records only; the exported data stays until the partition is exported again, and that export replaces it. Both reset endpoints return `404` when there was no state to reset (for example a day that was never exported), and `400` for a partition or date that cannot be parsed or does not match the table's partitioning.
+
+### Status codes
+
+| Status | When |
+|---|---|
+| `200` | Exported, or already exported. Range responses list the partitions that were not ready (`notReady`) or failed (`failed`) |
+| `400` | Invalid input: a date that is not `yyyy-MM-dd`, a day before genesis, a negative epoch, `start` after `end`, a range larger than `admin.max-range-days` / `admin.max-range-epochs`, or a table whose partitioning does not match the endpoint |
+| `404` | Unknown table, or no export state to reset |
+| `409` | The partition or the end of the range is not ready (see above), another manual export or repair is running (one runs at a time), or `POST /sync/trigger` while a sync is running |
+| `500` | A single-partition export failed; the partition is `FAILED` and the scheduler retries it |
+
+Refused requests return a JSON body such as:
+
+```json
+{"status": 409, "error": "Conflict", "message": "date=2026-11-16 is not final yet: the latest day that can be exported is 2026-11-14 (the finalized tip minus buffer-days=1)"}
+```
+
+### Sync status and retries
+
+Only partitions that can be exported now count as missing. An epoch whose AdaPot job has not run yet (for example the current and previous epoch of `reward`), or any AdaPot-gated epoch when AdaPot is disabled, is reported in `notReadyCount` and is not a gap. `isFullySynced` is true when no exportable partition is missing, and the scheduler then checks every `sync-check-interval-minutes` instead of every `catch-up-interval-minutes`.
+
+A partition whose export failed is retried after `retry-backoff-initial-minutes`, doubling after each further failure up to `retry-backoff-max-minutes`; while it waits it is counted in `retryPendingCount` (and still as missing). The scheduler logs at INFO only when the set of missing partitions changes or when it exports something.
+
+Only one sync runs at a time; `POST /sync/trigger` returns 409 while the scheduled sync (or another trigger) is running. Two exports of the same table and partition never run at once: the second one fails with "already being exported".
 
 ### Example: Export and query a specific date
 
