@@ -28,7 +28,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -186,6 +188,46 @@ class AnalyticsAdminControllerTest {
 
         controller.exportTableEpoch("reward", 500);
         verify(exportService, never()).exportTable("reward", PartitionValue.ofEpoch(501));
+    }
+
+    @Test
+    void resetNormalizesThePartitionAndReports404WhenThereIsNoState() throws Exception {
+        when(adminService.resetExportState("transaction", "date=2024-01-15")).thenReturn(true);
+
+        mvc.perform(delete(BASE + "/state/transaction/2024-01-15"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("date=2024-01-15")));
+        mvc.perform(delete(BASE + "/state/transaction/date=2024-01-15")).andExpect(status().isOk());
+
+        mvc.perform(delete(BASE + "/state/transaction/2024-10-31"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value(containsString("date=2024-10-31")));
+        mvc.perform(delete(BASE + "/state/nope/2024-01-15")).andExpect(status().isNotFound());
+        mvc.perform(delete(BASE + "/state/transaction/450")).andExpect(status().isBadRequest());
+        mvc.perform(delete(BASE + "/state/transaction/yesterday")).andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void rangeResetParsesDatesAndReports404WhenNothingMatched() throws Exception {
+        when(adminService.resetDateRange("transaction", LocalDate.of(2024, 1, 1), LocalDate.of(2024, 1, 31)))
+                .thenReturn(3);
+
+        mvc.perform(delete(BASE + "/state/transaction/range")
+                        .param("startDate", "2024-01-01").param("endDate", "2024-01-31"))
+                .andExpect(status().isOk())
+                .andExpect(content().string("Reset 3 partition states"));
+        mvc.perform(delete(BASE + "/state/transaction/range")
+                        .param("startDate", "2025-01-01").param("endDate", "2025-01-31"))
+                .andExpect(status().isNotFound());
+        mvc.perform(delete(BASE + "/state/transaction/range")
+                        .param("startDate", "2024-01-01").param("endDate", "~"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(delete(BASE + "/state/transaction/range")
+                        .param("startDate", "2024-02-01").param("endDate", "2024-01-01"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(delete(BASE + "/state/reward/range")
+                        .param("startDate", "2024-01-01").param("endDate", "2024-01-31"))
+                .andExpect(status().isBadRequest());
     }
 
     private void register(String table, PartitionStrategy strategy) {

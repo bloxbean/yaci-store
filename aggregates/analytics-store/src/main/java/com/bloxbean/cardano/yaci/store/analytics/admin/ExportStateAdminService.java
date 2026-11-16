@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.analytics.admin;
 
+import com.bloxbean.cardano.yaci.store.analytics.exporter.PartitionValue;
 import com.bloxbean.cardano.yaci.store.analytics.state.ExportState;
 import com.bloxbean.cardano.yaci.store.analytics.state.ExportStateId;
 import com.bloxbean.cardano.yaci.store.analytics.state.ExportStateRepository;
@@ -12,6 +13,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.List;
 
 /**
@@ -25,43 +27,52 @@ import java.util.List;
 @ConditionalOnProperty(prefix = "yaci.store.analytics", name = "enabled", havingValue = "true")
 public class ExportStateAdminService {
 
+    private static final String DATE_PREFIX = "date=";
+
     private final ExportStateRepository repository;
 
     /**
      * Reset export state to allow re-export.
      *
      * Deletes the state record for the specified partition, allowing it to be exported again.
+     * The exported data is not touched; the next export of the partition replaces it.
      *
      * @param tableName The table name
-     * @param partitionValue The partition value (e.g., "2024-10-31")
+     * @param partitionValue The partition: {@code 2024-10-31}, {@code date=2024-10-31}, {@code 450}
+     *                       or {@code epoch=450}
+     * @return true if a state record was deleted, false if there was none
+     * @throws IllegalArgumentException if the partition is neither a date nor an epoch
      */
     @Transactional
-    public void resetExportState(String tableName, String partitionValue) {
-        ExportStateId id = new ExportStateId(tableName, partitionValue);
-        repository.findById(id).ifPresent(state -> {
-            log.warn("Resetting export state for {}/{}", tableName, partitionValue);
+    public boolean resetExportState(String tableName, String partitionValue) {
+        String key = PartitionValue.parse(partitionValue).toPathSegment();
+        ExportStateId id = new ExportStateId(tableName, key);
+        return repository.findById(id).map(state -> {
+            log.warn("Resetting export state for {}/{} (was {})", tableName, key, state.getStatus());
             repository.delete(state);
-        });
+            return true;
+        }).orElse(false);
     }
 
     /**
-     * Reset all exports in a date range.
+     * Reset all daily exports of a table between two days (inclusive).
      *
-     * Useful for bulk re-export scenarios.
+     * Useful for bulk re-export scenarios. Reads only the table's daily state rows.
      *
      * @param tableName The table name
-     * @param startDate Start date (inclusive, yyyy-MM-dd format)
-     * @param endDate End date (inclusive, yyyy-MM-dd format)
+     * @param startDate Start date (inclusive)
+     * @param endDate End date (inclusive)
      * @return Number of states reset
      */
     @Transactional
-    public int resetDateRange(String tableName, String startDate, String endDate) {
-        // Find all states in range
-        List<ExportState> states = repository.findAll().stream()
-            .filter(s -> s.getId().getTableName().equals(tableName))
+    public int resetDateRange(String tableName, LocalDate startDate, LocalDate endDate) {
+        if (endDate.isBefore(startDate)) {
+            throw new IllegalArgumentException("endDate " + endDate + " is before startDate " + startDate);
+        }
+        List<ExportState> states = repository.findByTableNameAndPartitionPrefix(tableName, DATE_PREFIX).stream()
             .filter(s -> {
-                String partition = s.getId().getPartitionValue();
-                return partition.compareTo(startDate) >= 0 && partition.compareTo(endDate) <= 0;
+                LocalDate day = parseDay(s.getId().getPartitionValue());
+                return day != null && !day.isBefore(startDate) && !day.isAfter(endDate);
             })
             .toList();
 
@@ -70,6 +81,14 @@ public class ExportStateAdminService {
             states.size(), tableName, startDate, endDate);
 
         return states.size();
+    }
+
+    private static LocalDate parseDay(String key) {
+        try {
+            return ((PartitionValue.DatePartition) PartitionValue.parse(key)).date();
+        } catch (RuntimeException e) {
+            return null;
+        }
     }
 
     /**
@@ -81,9 +100,7 @@ public class ExportStateAdminService {
      * @return ExportStatistics with aggregate information
      */
     public ExportStatistics getStatistics(String tableName) {
-        List<ExportState> allStates = repository.findAll().stream()
-            .filter(s -> s.getId().getTableName().equals(tableName))
-            .toList();
+        List<ExportState> allStates = repository.findByTableName(tableName);
 
         long completed = allStates.stream().filter(s -> s.getStatus() == ExportStatus.COMPLETED).count();
         long failed = allStates.stream().filter(s -> s.getStatus() == ExportStatus.FAILED).count();

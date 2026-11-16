@@ -90,8 +90,8 @@ The admin API has no authentication, and its endpoints export, re-export and res
 | POST | `/api/v1/analytics/admin/export/table/{table}/epoch-range` | Backfill epoch range |
 | POST | `/api/v1/analytics/admin/repair/table/{table}/range` | Re-export a date range of a daily table |
 | POST | `/api/v1/analytics/admin/sync/trigger` | Trigger immediate gap sync |
-| DELETE | `/api/v1/analytics/admin/state/{table}/{partition}` | Reset export state |
-| DELETE | `/api/v1/analytics/admin/state/{table}/range` | Reset date range state |
+| DELETE | `/api/v1/analytics/admin/state/{table}/{partition}` | Reset the export state of one partition: `2024-01-15`, `date=2024-01-15`, `450` or `epoch=450` |
+| DELETE | `/api/v1/analytics/admin/state/{table}/range?startDate=&endDate=` | Reset the export state of a daily table's days from `startDate` to `endDate` (inclusive, `yyyy-MM-dd`) |
 
 ### Readiness
 
@@ -103,13 +103,17 @@ Manual exports and repairs use the same readiness check as the scheduler, so a p
 
 Nothing is exported or marked for a refused partition.
 
+### Resetting export state
+
+A reset deletes export-state records only; the exported data stays until the partition is exported again, and that export replaces it. Both reset endpoints return `404` when there was no state to reset (for example a day that was never exported), and `400` for a partition or date that cannot be parsed or does not match the table's partitioning.
+
 ### Status codes
 
 | Status | When |
 |---|---|
 | `200` | Exported, or already exported. Range responses list the partitions that were not ready (`notReady`) or failed (`failed`) |
 | `400` | Invalid input: a date that is not `yyyy-MM-dd`, a day before genesis, a negative epoch, `start` after `end`, a range larger than `admin.max-range-days` / `admin.max-range-epochs`, or a table whose partitioning does not match the endpoint |
-| `404` | Unknown table |
+| `404` | Unknown table, or no export state to reset |
 | `409` | The partition or the end of the range is not ready (see above), or another manual export or repair is running. One manual export or repair runs at a time |
 | `500` | A single-partition export failed; the partition is `FAILED` and the scheduler retries it |
 
