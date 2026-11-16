@@ -1,6 +1,8 @@
 package com.bloxbean.cardano.yaci.store.analytics.helper;
 
 import com.bloxbean.cardano.yaci.store.analytics.config.AnalyticsStoreProperties;
+import com.bloxbean.cardano.yaci.store.analytics.writer.DuckLakeWriterService;
+import com.bloxbean.cardano.yaci.store.analytics.ducklake.DuckLakeWriterLock;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -88,6 +90,36 @@ class PostgresCatalogSchemaIT {
     }
 
     @Test
+    void theWriterExportsAndReplacesPartitionsInACatalogOutsidePublic() throws Exception {
+        // The writer reads DuckLake's metadata tables (partitioning, file statistics) on every
+        // export after the first; they live in the catalog schema, not in public
+        String preprod = schema("preprod");
+        AnalyticsStoreProperties properties = properties(preprod, null, "w");
+        DuckDbConnectionHelper helper = new DuckDbConnectionHelper(environment(preprod, USER, PASSWORD), properties);
+        try (com.zaxxer.hikari.HikariDataSource pool = new com.zaxxer.hikari.HikariDataSource()) {
+            pool.setJdbcUrl("jdbc:duckdb:");
+            pool.setDriverClassName("org.duckdb.DuckDBDriver");
+            pool.setMaximumPoolSize(1);
+            DuckLakeWriterService writer = new DuckLakeWriterService(pool, properties, helper,
+                    new DuckLakeWriterLock(java.time.Duration.ofSeconds(30)));
+            String march1 = Path.of(properties.getExportPath(), "block", "date=2024-03-01", "data.parquet").toString();
+            String march2 = Path.of(properties.getExportPath(), "block", "date=2024-03-02", "data.parquet").toString();
+            writer.export(blocks(1709251200L, 5), march1, "block_time");
+            writer.export(blocks(1709337600L, 3), march2, "block_time");
+            writer.export(blocks(1709251200L, 4), march1, "block_time");   // replace
+            try (Connection c = pool.getConnection()) {
+                // The second and third export read the partitioning from the metadata tables
+                assertEquals(7, single(c, "SELECT count(*) FROM ducklake_catalog.block"));
+            }
+        }
+        assertTrue(hasCatalog(preprod));
+    }
+
+    private static String blocks(long firstTime, int count) {
+        return "SELECT range AS slot, to_timestamp(" + firstTime + " + range) AS block_time FROM range(" + count + ")";
+    }
+
+    @Test
     void existingPublicCatalogIsKeptAndNotSharedWithASecondInstance() throws Exception {
         // A catalog created the old way: always in public, without METADATA_SCHEMA
         String legacy = "public";
@@ -151,17 +183,26 @@ class PostgresCatalogSchemaIT {
 
     private DuckDbConnectionHelper helper(String sourceSchema, String catalogSchema, String dataDir,
                                           String user, String password) {
+        return new DuckDbConnectionHelper(environment(sourceSchema, user, password),
+                properties(sourceSchema, catalogSchema, dataDir));
+    }
+
+    private static Environment environment(String sourceSchema, String user, String password) {
         Environment env = mock(Environment.class);
         when(env.getProperty("spring.datasource.url"))
                 .thenReturn("jdbc:postgresql://" + HOST + ":" + PORT + "/" + DB + "?currentSchema=" + sourceSchema);
         when(env.getProperty("spring.datasource.username")).thenReturn(user);
         when(env.getProperty("spring.datasource.password")).thenReturn(password);
+        return env;
+    }
+
+    private AnalyticsStoreProperties properties(String sourceSchema, String catalogSchema, String dataDir) {
         AnalyticsStoreProperties properties = new AnalyticsStoreProperties();
         properties.setExportPath(tempDir.resolve(dataDir).toString());
         properties.getStorage().setType("ducklake");
         properties.getDucklake().setCatalogType("postgresql");
         properties.getDucklake().setCatalogSchema(catalogSchema);
-        return new DuckDbConnectionHelper(env, properties);
+        return properties;
     }
 
     private String schema(String name) throws Exception {

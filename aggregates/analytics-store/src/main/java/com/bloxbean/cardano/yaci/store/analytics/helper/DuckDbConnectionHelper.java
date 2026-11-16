@@ -830,6 +830,20 @@ public class DuckDbConnectionHelper {
     }
 
     /**
+     * Prefix for querying the attached catalog's metadata tables ({@code <prefix>.ducklake_table}).
+     * A PostgreSQL catalog keeps them in its {@linkplain #catalogSchema metadata schema}, which is
+     * not the default schema of the attached database when it is not {@code public}, so the
+     * schema must be named; a DuckDB-file catalog keeps them in the file's default schema.
+     */
+    public String metadataTablePrefix(Connection conn) throws SQLException {
+        String metadataDatabase = "__ducklake_metadata_ducklake_catalog";
+        if (CatalogType.of(properties.getDucklake().getCatalogType()) != CatalogType.POSTGRESQL) {
+            return metadataDatabase;
+        }
+        return metadataDatabase + "." + quoteIdentifier(catalogSchema(conn));
+    }
+
+    /**
      * The schema of the PostgreSQL DuckLake catalog, deciding it on first use (see
      * {@link CatalogSchemas}). Uses a temporary {@code catalog_temp} attach on {@code conn}.
      */
