@@ -20,7 +20,7 @@ import java.sql.Statement;
  *
  * Initializes the DuckLake catalog on application startup:
  * - Creates catalog directory (for DuckDB catalog)
- * - Creates catalog schema (for PostgreSQL catalog)
+ * - Decides and creates the catalog schema (for PostgreSQL catalog, see CatalogSchemas)
  * - Validates catalog connectivity
  * - Installs required DuckDB extensions (ducklake, postgres_scanner)
  *
@@ -50,8 +50,9 @@ public class DuckLakeCatalogInitializer {
 
         try (Connection conn = duckDbDataSource.getConnection()) {
             // For PostgreSQL catalogs, ensure schema exists BEFORE attaching
-            if ("postgresql".equalsIgnoreCase(properties.getDucklake().getCatalogType())) {
-                log.info("Creating catalog schema 'public' if not exists (required by DuckLake)...");
+            if (DuckDbConnectionHelper.CatalogType.of(properties.getDucklake().getCatalogType())
+                    == DuckDbConnectionHelper.CatalogType.POSTGRESQL) {
+                // Decides the catalog schema (catalog-schema / existing catalog) and creates it if needed
                 connectionHelper.ensureCatalogSchemaExists(conn);
             }
 

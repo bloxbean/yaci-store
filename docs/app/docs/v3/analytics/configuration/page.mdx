@@ -32,6 +32,9 @@ import { Callout } from 'nextra/components'
 | `yaci.store.analytics.ducklake.catalog-username` | _(main datasource)_ | PostgreSQL catalog username |
 | `yaci.store.analytics.ducklake.catalog-password` | _(main datasource)_ | PostgreSQL catalog password |
 | `yaci.store.analytics.ducklake.catalog-path` | `./data/analytics/ducklake.catalog.db` | DuckDB catalog file path |
+| `yaci.store.analytics.ducklake.catalog-schema` | _(see below)_ | PostgreSQL schema for the DuckLake catalog tables (`ducklake_*`, DuckLake `METADATA_SCHEMA`). Not set: the catalog connection's `currentSchema` if it already holds a catalog, else an existing catalog in `public` (installations from before this property), else a new catalog in the connection's `currentSchema` |
+| `yaci.store.analytics.ducklake.catalog-lock-wait-seconds` | `30` | DuckDB catalog only: how long to wait for another process (e.g. a `duckdb` CLI, even `-readonly`) to release the catalog file lock before failing |
+| `yaci.store.analytics.source-statement-timeout-seconds` | `0` (off) | PostgreSQL `statement_timeout` for the export pipeline's source queries (libpq `options=-c statement_timeout`). Off by default because a single export query can run long on large tables |
 | `yaci.store.analytics.duckdb.memory-limit` | _(empty = 50% of RAM minus JVM heap, split between writer and query layer)_ | DuckDB buffer manager memory limit for **each** DuckDB instance (e.g., `1GB`, `512MB`). When empty: 50% of the RAM not reserved for the JVM heap (`-Xmx`), divided by the number of DuckDB instances in the JVM (export writer, query layer), at least `256MB` |
 | `yaci.store.analytics.duckdb.temp-directory` | _(empty = `<export-path>/.tmp`)_ | Base directory for DuckDB spill files. Each DuckDB instance uses its own subdirectory (`writer-<id>`, `reader-<id>`, ...), removed when the instance closes; leftovers of a crashed process are removed at the next start |
 | `yaci.store.analytics.duckdb.max-temp-directory-size` | _(empty = DuckDB default, 90% of free disk)_ | DuckDB `max_temp_directory_size` per instance (e.g., `50GB`) |
@@ -121,9 +124,36 @@ The error names the table, the pruning property, its value and the minimum safe 
 Pruning counts from the sync tip. During an initial sync with `continuous-sync.export-after-sync=true`, nothing is exported until the tip is reached, so pruning removes history before the analytics store can read it, whatever the window. Sync first and enable pruning afterwards, or export during the sync.
 </Callout>
 
-### DuckLake requires `public` schema in PostgreSQL
+### PostgreSQL catalog schema
 
-DuckLake stores its metadata tables in the `public` schema. The application automatically creates this schema if it doesn't exist. If your PostgreSQL instance restricts schema creation, ensure `public` exists before enabling DuckLake.
+The DuckLake catalog tables (`ducklake_*`) live in one PostgreSQL schema, chosen with `yaci.store.analytics.ducklake.catalog-schema`:
+
+- **Not set** (default): the schema of the catalog connection (`currentSchema` of `catalog-url`, else of `spring.datasource.url`) if it already holds a catalog; otherwise an existing catalog in `public` — installations created before this property always used `public` and keep using it; otherwise a new catalog is created in the connection's schema.
+- **Set**: that schema is used. If it holds no catalog yet while `public` holds this instance's catalog, startup is refused, because an empty catalog would skip every partition already marked as exported. Move the tables first (`ALTER TABLE public.ducklake_... SET SCHEMA ...`) or keep `catalog-schema=public`.
+
+The schema is created if it does not exist. A user without `CREATE` on the database can be given an existing schema it may create tables in.
+
+Each catalog records which source it belongs to (`<database>/<schema>` of `spring.datasource.url`, key `yaci_store_source` in `ducklake_metadata`). Two instances must never share one catalog — they overwrite each other's partitions — so an instance whose source differs from the recorded one is refused at startup with a message naming the catalog. Catalogs from older versions record no source; the first instance that writes to one claims it. If the database or schema of an instance is renamed, update the record as the startup error explains.
+
+### Catalog `DATA_PATH`
+
+DuckLake records the export directory (`DATA_PATH`) in the catalog. An existing catalog is opened with the recorded path; `export-path` written differently but naming the same directory (`./data/analytics` vs `/app/data/analytics`, a symbolic link) is accepted. A catalog recorded for a different directory is refused with a message that names both paths.
+
+### DuckDB catalog file locked
+
+Only one process can open a DuckDB catalog file, even read-only: a `duckdb` CLI session on the file blocks yaci-store from attaching it. yaci-store waits up to `yaci.store.analytics.ducklake.catalog-lock-wait-seconds` (default 30) for the lock and then fails with a message that names the file. To look at the data while yaci-store runs, read the Parquet files or use the analytics query layer.
+
+### PostgreSQL connection settings
+
+DuckDB connects to PostgreSQL through libpq (`postgres_scanner`, PostgreSQL catalog), using the JDBC URLs (`spring.datasource.url`, `catalog-url`). Hosts (also IPv6 `[::1]` and several hosts `h1:5432,h2:5432`), the database, `currentSchema` and these URL parameters are passed on:
+
+| JDBC URL parameter | libpq parameter |
+|---|---|
+| `sslmode`, `sslrootcert`, `sslcert`, `sslkey`, `sslpassword` | same name (`ssl=true` without `sslmode` = `verify-full`, as in PgJDBC) |
+| `targetServerType` | `target_session_attrs` (`primary`, `standby`, `prefer-standby`, `any`) |
+| `connectTimeout`, `ApplicationName`, `gssEncMode`, `channelBinding`, `options` | `connect_timeout`, `application_name`, `gssencmode`, `channel_binding`, `options` |
+
+Java-only parameters (`sslfactory`, ...) are ignored with a warning. Note that libpq expects `sslkey` as a PEM file, while PgJDBC also accepts PKCS-8 DER (`.pk8`). User names and passwords may contain any characters; they are quoted for libpq and never logged.
 
 ## Admin API
 
