@@ -158,7 +158,11 @@ public record PostgresJdbcUrl(List<String> hosts, List<String> ports, String dat
      * <ul>
      *   <li>{@code sslmode}, {@code sslrootcert}, {@code sslcert}, {@code sslkey},
      *       {@code sslpassword}: same names; {@code ssl=true} without {@code sslmode} means
-     *       {@code verify-full}, as in PgJDBC.</li>
+     *       {@code verify-full}, as in PgJDBC. With a Java {@code sslfactory} or
+     *       {@code sslhostnameverifier} (for example {@code NonValidatingFactory} for a self-signed
+     *       managed database), PgJDBC's certificate check is replaced by Java code libpq cannot run,
+     *       so {@code ssl=true} means {@code require}: encrypted, certificate not verified. Set
+     *       {@code sslmode} (and {@code sslrootcert}) explicitly to have libpq verify it.</li>
      *   <li>{@code targetServerType} &rarr; {@code target_session_attrs}
      *       ({@code primary}/{@code master} &rarr; {@code primary}, {@code secondary}/{@code slave}
      *       &rarr; {@code standby}, {@code preferSecondary} &rarr; {@code prefer-standby},
@@ -178,7 +182,8 @@ public record PostgresJdbcUrl(List<String> hosts, List<String> ports, String dat
         if (sslmode != null && !sslmode.isBlank()) {
             out.put("sslmode", sslmode);
         } else if (ssl != null && (ssl.isEmpty() || "true".equalsIgnoreCase(ssl))) {
-            out.put("sslmode", "verify-full");
+            boolean javaTrust = notBlank(parameter("sslfactory")) || notBlank(parameter("sslhostnameverifier"));
+            out.put("sslmode", javaTrust ? "require" : "verify-full");
         }
         for (String name : List.of("sslrootcert", "sslcert", "sslkey", "sslpassword")) {
             String value = parameter(name);
@@ -216,6 +221,10 @@ public record PostgresJdbcUrl(List<String> hosts, List<String> ports, String dat
             }
         }
         return out;
+    }
+
+    private static boolean notBlank(String value) {
+        return value != null && !value.isBlank();
     }
 
     private static void putIfPresent(Map<String, String> out, String key, String value) {

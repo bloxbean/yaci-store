@@ -40,7 +40,11 @@ public class PgSchema {
         return schema;
     }
 
-    /** Base and partitioned tables only; views, indexes and partition children are excluded. */
+    /**
+     * Base and partitioned tables only; views, indexes and partition children are excluded. So are
+     * the {@code ducklake_*} tables of an analytics DuckLake catalog kept in this schema (the
+     * default for a new PostgreSQL catalog): they are DuckLake's metadata, not store tables.
+     */
     public List<String> baseTables() throws SQLException {
         List<String> out = new ArrayList<>();
         String sql = """
@@ -49,6 +53,7 @@ public class PgSchema {
                 JOIN pg_namespace n ON n.oid = c.relnamespace
                 WHERE n.nspname = ?
                   AND c.relkind IN ('r','p')
+                  AND c.relname NOT LIKE 'ducklake\\_%'
                   AND NOT EXISTS (SELECT 1 FROM pg_inherits i WHERE i.inhrelid = c.oid)
                 ORDER BY c.relname
                 """;
@@ -133,6 +138,7 @@ public class PgSchema {
      * <p>The importer's own journal tables are excluded: they appear as soon as a first import
      * starts, and including them would make every resumed import fail its own compatibility check.
      * Known reward working tables are also excluded; they are runtime artifacts, not migrations.
+     * So are the {@code ducklake_*} tables of an analytics DuckLake catalog kept in this schema.
      */
     public String fingerprint() throws SQLException {
         StringBuilder sb = new StringBuilder();
@@ -146,6 +152,7 @@ public class PgSchema {
                   AND c.relname <> 'flyway_schema_history'
                   AND c.relname <> '_yaci_store_schema_profile'
                   AND c.relname NOT LIKE '\\_yaci\\_snapshot\\_import%'
+                  AND c.relname NOT LIKE 'ducklake\\_%'
                   AND NOT EXISTS (SELECT 1 FROM pg_inherits i WHERE i.inhrelid = c.oid)
                 ORDER BY c.relname, a.attname
                 """;

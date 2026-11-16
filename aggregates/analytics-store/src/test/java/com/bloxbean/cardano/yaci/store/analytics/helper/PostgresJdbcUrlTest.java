@@ -101,6 +101,23 @@ class PostgresJdbcUrlTest {
     }
 
     @Test
+    void sslTrueWithAJavaSslFactoryMeansRequire() {
+        // A managed database with a self-signed CA: PgJDBC trusts any certificate through the factory.
+        // libpq cannot run it, and verify-full would break a connection that works today.
+        List<String> ignored = new java.util.ArrayList<>();
+        assertEquals("require", PostgresJdbcUrl.parse("jdbc:postgresql://db:25060/yaci?ssl=true"
+                        + "&sslfactory=org.postgresql.ssl.NonValidatingFactory&currentSchema=mainnet")
+                .libpqParameters(ignored).get("sslmode"));
+        assertEquals(List.of("sslfactory"), ignored);
+        assertEquals("require", PostgresJdbcUrl.parse("jdbc:postgresql://h/db?ssl=true&sslhostnameverifier=x.Y")
+                .libpqParameters(null).get("sslmode"));
+        // An explicit sslmode still wins
+        assertEquals("verify-full", PostgresJdbcUrl.parse("jdbc:postgresql://h/db?ssl=true&sslmode=verify-full"
+                        + "&sslfactory=org.postgresql.ssl.NonValidatingFactory")
+                .libpqParameters(null).get("sslmode"));
+    }
+
+    @Test
     void sslTrueMeansVerifyFullAsInPgJdbc() {
         assertEquals("verify-full", PostgresJdbcUrl.parse("jdbc:postgresql://h/db?ssl=true")
                 .libpqParameters(null).get("sslmode"));
