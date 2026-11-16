@@ -44,6 +44,11 @@ public class DRepDistExporter extends AbstractTableExporter {
     }
 
     @Override
+    protected boolean dependsOnAdaPotJob() {
+        return true;
+    }
+
+    @Override
     public boolean preExportValidation(PartitionValue partition) {
         // DRep distribution depends on AdaPot job completion
         int epoch = ((PartitionValue.EpochPartition) partition).epoch();

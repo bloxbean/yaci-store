@@ -57,6 +57,11 @@ public class RewardRestExporter extends AbstractTableExporter {
     }
 
     @Override
+    protected boolean dependsOnAdaPotJob() {
+        return true;
+    }
+
+    @Override
     public boolean preExportValidation(PartitionValue partition) {
         // reward_rest[earned_epoch=N] is populated at the start of AdaPot job N+1 via
         // PreAdaPotJobProcessingEvent(N+1), which triggers TreasuryWithdrawalProcessor and

@@ -51,6 +51,11 @@ public class AdaPotExporter extends AbstractTableExporter {
     }
 
     @Override
+    protected boolean dependsOnAdaPotJob() {
+        return true;
+    }
+
+    @Override
     public boolean preExportValidation(PartitionValue partition) {
         // AdaPot table depends on AdaPot job completion
         int epoch = ((PartitionValue.EpochPartition) partition).epoch();

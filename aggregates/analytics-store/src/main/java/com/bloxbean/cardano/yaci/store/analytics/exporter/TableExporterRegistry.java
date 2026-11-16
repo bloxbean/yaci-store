@@ -78,6 +78,15 @@ public class TableExporterRegistry {
         log.info("Successfully registered {} table exporters: {}",
                 exporters.size(),
                 exporters.keySet().stream().sorted().collect(Collectors.joining(", ")));
+        exporterList.forEach(this::warnIfUnavailable);
+    }
+
+    private void warnIfUnavailable(TableExporter exporter) {
+        if (!isEnabled(exporter.getTableName())) {
+            return;
+        }
+        exporter.unavailableReason().ifPresent(reason -> log.warn(
+                "Analytics table {} is enabled but will not be exported: {}", exporter.getTableName(), reason));
     }
 
     /**
@@ -96,6 +105,7 @@ public class TableExporterRegistry {
         }
         exporters.put(tableName, exporter);
         log.info("Registered exporter: {} ({})", tableName, exporter.getPartitionStrategy());
+        warnIfUnavailable(exporter);
     }
 
     /**
@@ -183,6 +193,21 @@ public class TableExporterRegistry {
     public List<String> getEnabledTablesByStrategy(PartitionStrategy strategy) {
         return getTablesByStrategy(strategy).stream()
                 .filter(this::isEnabled)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Enabled tables of a strategy whose exporter can export with the current configuration
+     * ({@link TableExporter#unavailableReason()} is empty). This is the list to walk when looking
+     * for missing partitions: an unavailable exporter never marks a partition COMPLETED, so
+     * walking it would find every partition missing on every run.
+     *
+     * @param strategy Partition strategy
+     * @return enabled and available table names using this strategy, sorted
+     */
+    public List<String> getExportableTablesByStrategy(PartitionStrategy strategy) {
+        return getEnabledTablesByStrategy(strategy).stream()
+                .filter(tableName -> exporters.get(tableName).unavailableReason().isEmpty())
                 .collect(Collectors.toList());
     }
 

@@ -131,6 +131,20 @@ public interface TableExporter {
         return false;
     }
 
+    /**
+     * Why this exporter can never produce a final partition with the current configuration, or
+     * empty when it can. Example: a table filled by the AdaPot reward calculation while the adapot
+     * module is disabled. An unavailable exporter exports nothing and marks nothing
+     * {@code COMPLETED}. Callers that walk partitions (the scheduler, gap detection) should leave
+     * it out instead of retrying every partition on every run; see
+     * {@link TableExporterRegistry#getExportableTablesByStrategy}.
+     *
+     * @return the reason, or empty when the exporter can export
+     */
+    default java.util.Optional<String> unavailableReason() {
+        return java.util.Optional.empty();
+    }
+
     // ========== Metadata for the analytics query layer's unified (live-federated) views ==========
     //
     // The two methods below are NOT used by the export/write path. They only describe the
