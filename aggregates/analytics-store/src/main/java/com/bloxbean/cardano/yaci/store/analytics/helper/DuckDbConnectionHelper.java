@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.analytics.helper;
 
 import com.bloxbean.cardano.yaci.store.analytics.config.AnalyticsStoreProperties;
+import com.bloxbean.cardano.yaci.store.analytics.config.DuckDbInstances;
 import lombok.Builder;
 import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
@@ -15,6 +16,7 @@ import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.List;
 import java.util.regex.Pattern;
 
 /**
@@ -85,21 +87,111 @@ public class DuckDbConnectionHelper {
     }
 
     /**
-     * Install postgres_scanner extension (idempotent).
+     * Load the postgres_scanner extension, installing it only when it is not present yet.
      */
     public void installPostgresScanner(Connection conn) throws SQLException {
-        executeSql(conn, "INSTALL postgres_scanner;");
-        executeSql(conn, "LOAD postgres_scanner;");
-        log.debug("Installed postgres_scanner extension");
+        loadExtension(conn, POSTGRES_EXTENSION, properties.getDuckdb().getExtensionDirectories());
     }
 
     /**
-     * Install ducklake extension (idempotent).
+     * Load the ducklake extension, installing it only when it is not present yet.
      */
     public void installDuckLake(Connection conn) throws SQLException {
-        executeSql(conn, "INSTALL ducklake;");
-        executeSql(conn, "LOAD ducklake;");
-        log.debug("Installed ducklake extension");
+        loadExtension(conn, DUCKLAKE_EXTENSION, properties.getDuckdb().getExtensionDirectories());
+    }
+
+    public static final String DUCKLAKE_EXTENSION = "ducklake";
+    public static final String POSTGRES_EXTENSION = "postgres_scanner";
+
+    /**
+     * Apply {@code yaci.store.analytics.duckdb.extension-directories}, if set, so that
+     * {@code INSTALL}/{@code LOAD} use those directories. The setting is per DuckDB instance
+     * and idempotent.
+     */
+    public void applyExtensionDirectories(Connection conn) throws SQLException {
+        applyExtensionDirectories(conn, properties.getDuckdb().getExtensionDirectories());
+    }
+
+    private static void applyExtensionDirectories(Connection conn, List<String> directories) throws SQLException {
+        String sql = extensionDirectoriesSql(directories);
+        if (sql != null) {
+            try (Statement stmt = conn.createStatement()) {
+                stmt.execute(sql);
+            } catch (SQLException e) {
+                // A locked-down instance (lock_configuration) was given the setting when it
+                // was opened (DuckDbInstances.open); it cannot be changed any more.
+                if (e.getMessage() == null || !e.getMessage().toLowerCase().contains("lock")) {
+                    throw e;
+                }
+                log.debug("extension_directories not re-applied: configuration is locked");
+            }
+        }
+    }
+
+    /**
+     * {@code SET extension_directories = [...]} for the given directories, or {@code null} when
+     * none are configured.
+     */
+    public static String extensionDirectoriesSql(List<String> directories) {
+        return DuckDbInstances.extensionDirectoriesSql(directories);
+    }
+
+    /**
+     * Load a DuckDB extension without touching the network when it is already installed:
+     * {@code LOAD} first, and only if that fails {@code INSTALL} + {@code LOAD}. When both fail
+     * (offline host, extension repository outage), throw an error that names the extension, the
+     * directories searched and how to pre-install it.
+     */
+    public static void loadExtension(Connection conn, String extension, List<String> extensionDirectories)
+            throws SQLException {
+        applyExtensionDirectories(conn, extensionDirectories);
+        try (Statement stmt = conn.createStatement()) {
+            stmt.execute("LOAD " + extension + ";");
+            log.debug("Loaded DuckDB extension {}", extension);
+            return;
+        } catch (SQLException loadFailure) {
+            log.debug("LOAD {} failed ({}); installing it", extension, loadFailure.getMessage());
+        }
+        try (Statement stmt = conn.createStatement()) {
+            stmt.execute("INSTALL " + extension + ";");
+            stmt.execute("LOAD " + extension + ";");
+            log.info("Installed and loaded DuckDB extension {}", extension);
+        } catch (SQLException e) {
+            throw extensionUnavailable(conn, extension, e);
+        }
+    }
+
+    private static SQLException extensionUnavailable(Connection conn, String extension, SQLException cause) {
+        String version = querySetting(conn, "SELECT library_version FROM pragma_version()", "<duckdb-version>");
+        String platform = querySetting(conn, "SELECT platform FROM pragma_platform()", "<platform>");
+        String directories = querySetting(conn, "SELECT current_setting('extension_directories')::VARCHAR", "");
+        if (directories.isBlank() || "[]".equals(directories)) {
+            String single = querySetting(conn, "SELECT current_setting('extension_directory')", "");
+            directories = single.isBlank() ? Paths.get(System.getProperty("user.home"), ".duckdb", "extensions").toString()
+                    : single;
+        }
+        String message = "DuckDB extension '" + extension + "' (DuckDB " + version + ", platform " + platform
+                + ") is not installed in " + directories + " and could not be installed: " + cause.getMessage()
+                + ". If this host has no access to the DuckDB extension repository (extensions.duckdb.org), "
+                + "install the extension on a machine with access, using the same DuckDB version, e.g. "
+                + "duckdb -c \"SET extension_directory='/path/to/extensions'; INSTALL " + extension + ";\", "
+                + "copy /path/to/extensions/" + version + "/" + platform + "/" + extension + ".duckdb_extension "
+                + "to the same relative path on this host, and point yaci.store.analytics.duckdb.extension-directories "
+                + "at that directory.";
+        SQLException e = new SQLException(redactSecrets(message), cause.getSQLState(), cause.getErrorCode());
+        e.setStackTrace(cause.getStackTrace());
+        return e;
+    }
+
+    private static String querySetting(Connection conn, String sql, String fallback) {
+        try (Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(sql)) {
+            if (rs.next() && rs.getString(1) != null) {
+                return rs.getString(1);
+            }
+        } catch (SQLException ignored) {
+            // diagnostics only
+        }
+        return fallback;
     }
 
     /**
@@ -592,9 +684,7 @@ public class DuckDbConnectionHelper {
         DatabaseCredentials creds = catalogCredentials;
         log.debug("Ensuring catalog schema 'public' exists in PostgreSQL (required by DuckLake)");
 
-        // Install postgres_scanner if not already installed
-        executeSql(conn, "INSTALL postgres_scanner;");
-        executeSql(conn, "LOAD postgres_scanner;");
+        installPostgresScanner(conn);
 
         // Check if already attached (in case of connection pooling)
         boolean wasAlreadyAttached = isDatabaseAttached(conn, "catalog_temp");

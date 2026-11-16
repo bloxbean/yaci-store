@@ -1,6 +1,8 @@
 package com.bloxbean.cardano.yaci.store.analytics.ducklake;
 
 import com.bloxbean.cardano.yaci.store.analytics.config.AnalyticsStoreProperties;
+import com.bloxbean.cardano.yaci.store.analytics.config.DuckDbInstances;
+import com.bloxbean.cardano.yaci.store.analytics.helper.DuckDbConnectionHelper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.InitializingBean;
@@ -15,7 +17,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Statement;
 
@@ -88,14 +89,13 @@ public class DuckDbCatalogPreInitializer implements InitializingBean {
             }
         }
 
-        // Create catalog file using temporary in-memory connection
-        try (Connection conn = DriverManager.getConnection("jdbc:duckdb:")) {
-            // Install ducklake extension
-            executeSql(conn, "INSTALL ducklake;");
-            log.debug("Installed ducklake extension");
-
-            executeSql(conn, "LOAD ducklake;");
-            log.debug("Loaded ducklake extension");
+        // Create catalog file using a temporary in-memory DuckDB instance. It gets its own
+        // temp directory so it can never share spill files with the writer or the query layer.
+        try (DuckDbInstances.Instance instance = DuckDbInstances.open(properties, DuckDbInstances.Role.CATALOG_INIT)) {
+            Connection conn = instance.connection();
+            // LOAD first: an already installed extension needs no network access
+            DuckDbConnectionHelper.loadExtension(conn, DuckDbConnectionHelper.DUCKLAKE_EXTENSION,
+                    properties.getDuckdb().getExtensionDirectories());
 
             // ATTACH ducklake to create catalog file
             String attachSql = String.format(
@@ -110,7 +110,7 @@ public class DuckDbCatalogPreInitializer implements InitializingBean {
 
         } catch (SQLException e) {
             log.error("Failed to pre-initialize DuckDB catalog: {}", e.getMessage(), e);
-            throw new RuntimeException("DuckDB catalog pre-initialization failed", e);
+            throw new RuntimeException("DuckDB catalog pre-initialization failed: " + e.getMessage(), e);
         }
     }
 

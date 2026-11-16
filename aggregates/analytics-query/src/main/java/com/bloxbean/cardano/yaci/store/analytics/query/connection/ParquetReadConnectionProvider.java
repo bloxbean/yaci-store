@@ -91,12 +91,7 @@ public class ParquetReadConnectionProvider extends DuckDbReadConnectionProvider 
             ObjectProvider<CutoffSlotResolver> cutoffResolverProvider,
             ObjectProvider<TableExporterRegistry> exporterRegistryProvider,
             ObjectProvider<DuckLakeCatalogSnapshotReader> snapshotReaderProvider) {
-        super(
-                properties.getDuckdb().getReader().getMaximumPoolSize(),
-                properties.getDuckdb().getMemoryLimit(),
-                properties.getDuckdb().getThreads(),
-                properties.getDuckdb().getReader().getQueryTimeoutSeconds()
-        );
+        super(properties);
         this.properties = properties;
         this.tableRegistry = tableRegistry;
         this.connectionHelperProvider = connectionHelperProvider;
