@@ -8,9 +8,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 
 @Service
 @RequiredArgsConstructor
@@ -115,6 +118,42 @@ public class ExportStateService {
      */
     public Set<String> getCompletedPartitions(String tableName) {
         return new HashSet<>(repository.findCompletedPartitions(tableName));
+    }
+
+    /**
+     * Row counts of the COMPLETED partitions that hold rows, by table and partition value.
+     */
+    public Map<String, Map<String, Long>> getCompletedPartitionsWithRows() {
+        Map<String, Map<String, Long>> result = new TreeMap<>();
+        for (Object[] row : repository.findCompletedPartitionsWithRows()) {
+            result.computeIfAbsent((String) row[0], t -> new TreeMap<>())
+                    .put((String) row[1], ((Number) row[2]).longValue());
+        }
+        return result;
+    }
+
+    /**
+     * Mark COMPLETED partitions of a table as FAILED, so that gap detection exports them again.
+     * Partitions that are no longer COMPLETED are left alone.
+     *
+     * @return number of partitions reset
+     */
+    @Transactional
+    public int resetCompletedPartitions(String tableName, Collection<String> partitionValues, String reason) {
+        int reset = 0;
+        for (String partitionValue : partitionValues) {
+            ExportState state = repository.findById(new ExportStateId(tableName, partitionValue)).orElse(null);
+            if (state == null || state.getStatus() != ExportStatus.COMPLETED) {
+                continue;
+            }
+            state.setStatus(ExportStatus.FAILED);
+            state.setErrorMessage(reason);
+            state.setRetryCount(0);
+            state.setCompletedAt(LocalDateTime.now());
+            repository.save(state);
+            reset++;
+        }
+        return reset;
     }
 
     /**
