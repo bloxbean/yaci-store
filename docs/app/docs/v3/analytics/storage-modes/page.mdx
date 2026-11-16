@@ -42,6 +42,37 @@ yaci.store.analytics.ducklake.catalog-path=./data/analytics/ducklake.catalog.db
 - DuckDB catalog is lightweight for development
 - Query tables directly by name (e.g., `SELECT * FROM analytics.block`)
 
+### Partitioning
+
+Every DuckLake table is created and partitioned in one transaction: daily tables by `date`, epoch tables by `epoch`. An epoch table's export query must return an `epoch` column; an export whose query has none fails with an error naming the table, and no table is created.
+
+A table that an earlier release left without partitioning (its creation was interrupted between `CREATE TABLE` and `ALTER TABLE ... SET PARTITIONED BY`) is partitioned at its next export. If one of its data files holds more than one partition value, or a table is partitioned by a different column, the export fails with a message asking you to rebuild the table (drop it and reset its export state).
+
+### Export verification
+
+After each export, and before a COMPLETED partition is skipped, the writer counts the partition's rows in the latest committed catalog snapshot and compares them with the exported row count. Files on disk are not used for this check: a replaced partition keeps its old files until maintenance deletes them.
+
+### Catalog maintenance
+
+A replaced partition (re-export, repair) retires its old data files, but DuckLake keeps them, and all snapshots, until snapshots are expired and old files are cleaned up. A maintenance task does this once a day (`ducklake.maintenance.*`):
+
+1. `ducklake_expire_snapshots` expires the snapshots older than `retention-hours` (default 7 days). The latest snapshot is never expired.
+2. `ducklake_cleanup_old_files` deletes the files that were scheduled for deletion more than `retention-hours` ago.
+
+A data file is therefore deleted no earlier than `retention-hours` after it stopped being part of the latest snapshot. The analytics query layer reads the latest snapshot's file list and rebuilds its views every 5 minutes, so with the default retention its views keep working unless their refresh fails for a week. Time travel to snapshots older than the retention is no longer possible.
+
+Files that DuckLake never committed (from an export that crashed mid-write) are not deleted: the export path may also hold files DuckLake does not track, such as Parquet-mode exports.
+
+### Catalog and export state
+
+The export state (`analytics_export_state`) and the DuckLake catalog are stored separately. If the catalog is deleted (a missing DuckDB catalog file is recreated empty at startup), recreated, pointed at another schema, or restored from an older backup, the state still lists partitions as COMPLETED that the catalog does not have.
+
+At startup the store compares the two (`ducklake.reconcile-state-on-startup`, default on). COMPLETED partitions with rows in the state but none in the catalog are reset to FAILED and exported again by the scheduler; this is logged at ERROR level per table. All catalog reads happen before any state is changed, so a catalog that cannot be reached changes nothing. Partitions with fewer rows in the catalog than in the state are only reported.
+
+<Callout type="warning">
+Re-exporting reads the rows from PostgreSQL again. If pruning has removed them there, the re-exported partitions are incomplete. Restore the catalog instead if you can.
+</Callout>
+
 ## Parquet
 
 Direct Parquet file export without a catalog. Files are organized by table name and partition (date or epoch).

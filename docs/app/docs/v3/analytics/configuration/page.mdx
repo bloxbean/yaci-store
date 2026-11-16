@@ -32,6 +32,12 @@ import { Callout } from 'nextra/components'
 | `yaci.store.analytics.ducklake.export.codec` | `ZSTD` | Compression codec for DuckLake Parquet files |
 | `yaci.store.analytics.ducklake.export.compression-level` | `3` | ZSTD compression level (1-22) for DuckLake exports |
 | `yaci.store.analytics.ducklake.export.row-group-size` | `-1` | Row group size for DuckLake Parquet files (-1 = DuckDB default) |
+| `yaci.store.analytics.ducklake.writer-lock-timeout-seconds` | `900` | Longest wait for the single DuckLake writer connection while another export, verification or maintenance run holds it. When it expires the waiting export fails (and is retried later) instead of blocking its thread |
+| `yaci.store.analytics.ducklake.reconcile-state-on-startup` | `true` | At startup, reset COMPLETED partitions that have rows in the export state but none in the DuckLake catalog, so they are exported again (see [Storage Modes](/docs/v3/analytics/storage-modes#catalog-and-export-state)) |
+| `yaci.store.analytics.ducklake.maintenance.enabled` | `true` | Periodically expire old DuckLake snapshots and delete the data files they alone referenced |
+| `yaci.store.analytics.ducklake.maintenance.interval-minutes` | `1440` | Interval between maintenance runs |
+| `yaci.store.analytics.ducklake.maintenance.initial-delay-minutes` | `60` | Delay before the first maintenance run after startup |
+| `yaci.store.analytics.ducklake.maintenance.retention-hours` | `168` | How long a replaced data file is kept after it left the latest snapshot (also the time-travel window). Minimum 1 |
 | `yaci.store.analytics.exporter.{name}.enabled` | `true` | Per-exporter enable/disable (e.g., `exporter.reward.enabled=false`) |
 
 The properties of the analytics query layer (`yaci.store.analytics.query.*`, `yaci.store.analytics.duckdb.reader.*`) are documented in [Query API & Unified Views](/docs/v3/analytics/query-api#configuration).
