@@ -1,9 +1,14 @@
 package com.bloxbean.cardano.yaci.store.analytics.admin;
 
+import com.bloxbean.cardano.yaci.store.analytics.config.AnalyticsStoreProperties;
 import com.bloxbean.cardano.yaci.store.analytics.exporter.PartitionStrategy;
 import com.bloxbean.cardano.yaci.store.analytics.exporter.PartitionValue;
+import com.bloxbean.cardano.yaci.store.analytics.exporter.TableExporter;
 import com.bloxbean.cardano.yaci.store.analytics.exporter.TableExporterRegistry;
 import com.bloxbean.cardano.yaci.store.analytics.scheduler.ContinuousSyncScheduler;
+import com.bloxbean.cardano.yaci.store.analytics.scheduler.ExportReadinessService;
+import com.bloxbean.cardano.yaci.store.analytics.scheduler.PartitionNotReadyException;
+import com.bloxbean.cardano.yaci.store.analytics.scheduler.PartitionReadiness;
 import com.bloxbean.cardano.yaci.store.analytics.scheduler.UniversalExportService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -14,8 +19,14 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import org.springframework.http.HttpStatus;
+
 import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
 
 /**
  * Admin endpoints for analytics export management.
@@ -32,6 +43,15 @@ import java.util.List;
  *
  * Exports replace the partition they write (DuckLake: DELETE + INSERT in one transaction), so
  * exporting a partition again is idempotent.
+ *
+ * Every export and repair goes through the same readiness check as the scheduler
+ * ({@link ExportReadinessService}): a day after the latest exportable day, an epoch that has not
+ * started, or a partition whose table is not ready is refused with 409 and nothing is marked.
+ * Invalid input gives 400 and an unknown table 404 ({@link AnalyticsAdminExceptionHandler}).
+ * Range sizes are capped by {@code admin.max-range-days} / {@code admin.max-range-epochs}, and one
+ * manual export or repair runs at a time.
+ *
+ * The API has no authentication. Do not expose it outside a trusted network.
  */
 @RestController
 @RequestMapping("/api/v1/analytics/admin")
@@ -47,6 +67,11 @@ public class AnalyticsAdminController {
     private final TableExporterRegistry registry;
     private final ExportStateAdminService adminService;
     private final PartitionRepairService repairService;
+    private final ExportReadinessService readinessService;
+    private final AnalyticsStoreProperties properties;
+
+    /** One manual export or repair at a time: each runs synchronously on the request thread. */
+    private final AtomicBoolean manualExportRunning = new AtomicBoolean();
 
     /**
      * List all registered table exporters.
@@ -82,14 +107,18 @@ public class AnalyticsAdminController {
     @Operation(summary = "Export all daily tables for one day",
             description = "Runs the export of every enabled DAILY-partitioned table for the given date (yyyy-MM-dd). "
                     + "Partitions that are already exported are skipped; reset the partition state first to re-export. "
-                    + "A re-export replaces the partition's rows instead of appending to them.")
+                    + "A re-export replaces the partition's rows instead of appending to them. "
+                    + "409 if the day is after the latest exportable day (status.exportEndDate), 400 for an invalid "
+                    + "date or a day before genesis.")
     @PostMapping("/export/date/{date}")
     public ResponseEntity<ExportResult> exportDate(@PathVariable String date) {
-        LocalDate exportDate = LocalDate.parse(date);
+        LocalDate exportDate = parseDate("date", date);
+        requireNotBeforeGenesis(exportDate);
+        requireFinal(PartitionValue.ofDate(exportDate));
         log.info("Manual export triggered for all daily tables for date: {}", exportDate);
 
-        int successCount = universalExportService.exportAllDailyTables(exportDate);
-        List<String> enabledTables = registry.getEnabledTablesByStrategy(PartitionStrategy.DAILY);
+        int successCount = exclusive(() -> universalExportService.exportAllDailyTables(exportDate));
+        List<String> enabledTables = registry.getExportableTablesByStrategy(PartitionStrategy.DAILY);
 
         return ResponseEntity.ok(new ExportResult(
                 "all_daily_tables",
@@ -107,22 +136,21 @@ public class AnalyticsAdminController {
      */
     @Operation(summary = "Export one table for one day",
             description = "Runs the export of a single DAILY-partitioned table for the given date (yyyy-MM-dd). "
-                    + "Skipped if that partition is already exported.")
+                    + "Skipped if that partition is already exported. 404 for an unknown table, 400 for an invalid date "
+                    + "or a non-DAILY table, 409 if the day is not final or the table is not ready for it, 500 if "
+                    + "the export failed.")
     @PostMapping("/export/table/{tableName}/date/{date}")
     public ResponseEntity<ExportResult> exportTableDate(
             @PathVariable String tableName,
             @PathVariable String date) {
 
-        LocalDate exportDate = LocalDate.parse(date);
+        requireExporter(tableName, PartitionStrategy.DAILY);
+        LocalDate exportDate = parseDate("date", date);
+        requireNotBeforeGenesis(exportDate);
         log.info("Manual export triggered for table {} for date: {}", tableName, exportDate);
 
-        boolean success = universalExportService.exportTable(tableName, PartitionValue.ofDate(exportDate));
-
-        return ResponseEntity.ok(new ExportResult(
-                tableName,
-                date,
-                success ? "Export completed successfully" : "Export failed"
-        ));
+        return toResponse(exclusive(() ->
+                universalExportService.exportTable(tableName, PartitionValue.ofDate(exportDate))));
     }
 
     /**
@@ -134,21 +162,20 @@ public class AnalyticsAdminController {
      */
     @Operation(summary = "Export one table for one epoch",
             description = "Runs the export of a single EPOCH-partitioned table for the given epoch. "
-                    + "Skipped if that partition is already exported.")
+                    + "Skipped if that partition is already exported. 404 for an unknown table, 400 for a negative epoch "
+                    + "or a non-EPOCH table, 409 if the epoch has not started or the table is not ready for it (for "
+                    + "example its AdaPot job has not finished), 500 if the export failed.")
     @PostMapping("/export/table/{tableName}/epoch/{epoch}")
     public ResponseEntity<ExportResult> exportTableEpoch(
             @PathVariable String tableName,
             @PathVariable int epoch) {
 
+        requireExporter(tableName, PartitionStrategy.EPOCH);
+        requireNonNegativeEpoch("epoch", epoch);
         log.info("Manual export triggered for table {} for epoch: {}", tableName, epoch);
 
-        boolean success = universalExportService.exportTable(tableName, PartitionValue.ofEpoch(epoch));
-
-        return ResponseEntity.ok(new ExportResult(
-                tableName,
-                "epoch=" + epoch,
-                success ? "Export completed successfully" : "Export failed"
-        ));
+        return toResponse(exclusive(() ->
+                universalExportService.exportTable(tableName, PartitionValue.ofEpoch(epoch))));
     }
 
     /**
@@ -161,27 +188,33 @@ public class AnalyticsAdminController {
      */
     @Operation(summary = "Backfill one table over a date range",
             description = "Exports every day between startDate and endDate (inclusive, yyyy-MM-dd) for a DAILY-partitioned "
-                    + "table, skipping partitions that are already exported. Returns the number of successful days.")
+                    + "table, skipping partitions that are already exported. Returns the number of successful days and "
+                    + "the days that were not ready or failed. 400 for a reversed range or one longer than "
+                    + "admin.max-range-days, 409 if endDate is after the latest exportable day.")
     @PostMapping("/export/table/{tableName}/range")
     public ResponseEntity<BackfillResult> exportTableRange(
             @PathVariable String tableName,
             @RequestParam String startDate,
             @RequestParam String endDate) {
 
-        LocalDate start = LocalDate.parse(startDate);
-        LocalDate end = LocalDate.parse(endDate);
+        requireExporter(tableName, PartitionStrategy.DAILY);
+        LocalDate start = parseDate("startDate", startDate);
+        LocalDate end = parseDate("endDate", endDate);
+        requireDateRange(start, end);
+        requireFinal(PartitionValue.ofDate(end));
 
         log.info("Manual range export triggered for table {}: {} to {}", tableName, start, end);
-        int successCount = universalExportService.exportDateRange(tableName, start, end);
-
-        long totalDays = java.time.temporal.ChronoUnit.DAYS.between(start, end) + 1;
+        UniversalExportService.RangeExportResult result =
+                exclusive(() -> universalExportService.exportDateRange(tableName, start, end));
 
         return ResponseEntity.ok(new BackfillResult(
                 tableName,
                 start,
                 end,
-                successCount,
-                (int) totalDays
+                result.successCount(),
+                result.total(),
+                result.notReady(),
+                result.failed()
         ));
     }
 
@@ -195,24 +228,31 @@ public class AnalyticsAdminController {
      */
     @Operation(summary = "Backfill one table over an epoch range",
             description = "Exports every epoch between startEpoch and endEpoch (inclusive) for an EPOCH-partitioned "
-                    + "table, skipping partitions that are already exported.")
+                    + "table, skipping partitions that are already exported. Returns the epochs that were not ready or "
+                    + "failed. 400 for a negative or reversed range or one longer than admin.max-range-epochs, 409 if "
+                    + "endEpoch has not started.")
     @PostMapping("/export/table/{tableName}/epoch-range")
     public ResponseEntity<EpochBackfillResult> exportTableEpochRange(
             @PathVariable String tableName,
             @RequestParam int startEpoch,
             @RequestParam int endEpoch) {
 
-        log.info("Manual epoch range export triggered for table {}: {} to {}", tableName, startEpoch, endEpoch);
-        int successCount = universalExportService.exportEpochRange(tableName, startEpoch, endEpoch);
+        requireExporter(tableName, PartitionStrategy.EPOCH);
+        requireEpochRange(startEpoch, endEpoch);
+        requireFinal(PartitionValue.ofEpoch(endEpoch));
 
-        int totalEpochs = endEpoch - startEpoch + 1;
+        log.info("Manual epoch range export triggered for table {}: {} to {}", tableName, startEpoch, endEpoch);
+        UniversalExportService.RangeExportResult result =
+                exclusive(() -> universalExportService.exportEpochRange(tableName, startEpoch, endEpoch));
 
         return ResponseEntity.ok(new EpochBackfillResult(
                 tableName,
                 startEpoch,
                 endEpoch,
-                successCount,
-                totalEpochs
+                result.successCount(),
+                result.total(),
+                result.notReady(),
+                result.failed()
         ));
     }
 
@@ -239,18 +279,23 @@ public class AnalyticsAdminController {
                     + "have slots inside the repaired days; otherwise it is kept and its slot range is returned in "
                     + "epochZero so the range can be widened.\n"
                     + "Re-running a repair is safe. Each day is one export, so a long range takes as long as the "
-                    + "original backfill. Days that fail are listed in failedDates and left for the scheduler to retry.")
+                    + "original backfill. Days that fail are listed in failedDates and left for the scheduler to retry; "
+                    + "days whose table is not ready are listed there too and keep their export state.\n"
+                    + "409 if endDate is after the latest exportable day (repairing a day that is not final would "
+                    + "store partial data), 400 for a reversed range or one longer than admin.max-range-days.")
     @PostMapping("/repair/table/{tableName}/range")
     public ResponseEntity<PartitionRepairService.RepairResult> repairTableRange(
             @PathVariable String tableName,
             @RequestParam String startDate,
             @RequestParam String endDate) {
 
-        LocalDate start = LocalDate.parse(startDate);
-        LocalDate end = LocalDate.parse(endDate);
+        requireExporter(tableName, PartitionStrategy.DAILY);
+        LocalDate start = parseDate("startDate", startDate);
+        LocalDate end = parseDate("endDate", endDate);
+        requireDateRange(start, end);
 
         log.warn("Manual repair triggered for table {}: {} to {}", tableName, start, end);
-        return ResponseEntity.ok(repairService.repairDateRange(tableName, start, end));
+        return ResponseEntity.ok(exclusive(() -> repairService.repairDateRange(tableName, start, end)));
     }
 
     /**
@@ -346,6 +391,103 @@ public class AnalyticsAdminController {
         return ResponseEntity.ok("Sync triggered");
     }
 
+    // Validation
+
+    private TableExporter requireExporter(String tableName) {
+        if (!registry.hasExporter(tableName)) {
+            throw AdminApiException.notFound("Unknown table: " + tableName
+                    + ". GET /api/v1/analytics/admin/tables lists the tables");
+        }
+        return registry.getExporter(tableName);
+    }
+
+    private TableExporter requireExporter(String tableName, PartitionStrategy strategy) {
+        TableExporter exporter = requireExporter(tableName);
+        if (exporter.getPartitionStrategy() != strategy) {
+            throw AdminApiException.badRequest("Table " + tableName + " is partitioned "
+                    + exporter.getPartitionStrategy() + "; this endpoint needs a " + strategy + " table");
+        }
+        return exporter;
+    }
+
+    private static LocalDate parseDate(String name, String value) {
+        try {
+            return LocalDate.parse(value);
+        } catch (DateTimeParseException e) {
+            throw AdminApiException.badRequest("Invalid " + name + " '" + value + "': expected yyyy-MM-dd");
+        }
+    }
+
+    private void requireNotBeforeGenesis(LocalDate date) {
+        LocalDate genesis = readinessService.getGenesisDate();
+        if (date.isBefore(genesis)) {
+            throw AdminApiException.badRequest(date + " is before the network's genesis day " + genesis);
+        }
+    }
+
+    private void requireDateRange(LocalDate start, LocalDate end) {
+        if (end.isBefore(start)) {
+            throw AdminApiException.badRequest("endDate " + end + " is before startDate " + start);
+        }
+        requireNotBeforeGenesis(start);
+        long days = ChronoUnit.DAYS.between(start, end) + 1;
+        int max = properties.getAdmin().getMaxRangeDays();
+        if (days > max) {
+            throw AdminApiException.badRequest("The range covers " + days + " days; at most " + max
+                    + " are allowed per request (yaci.store.analytics.admin.max-range-days)");
+        }
+    }
+
+    private static void requireNonNegativeEpoch(String name, int epoch) {
+        if (epoch < 0) {
+            throw AdminApiException.badRequest(name + " must not be negative: " + epoch);
+        }
+    }
+
+    private void requireEpochRange(int startEpoch, int endEpoch) {
+        requireNonNegativeEpoch("startEpoch", startEpoch);
+        requireNonNegativeEpoch("endEpoch", endEpoch);
+        if (endEpoch < startEpoch) {
+            throw AdminApiException.badRequest("endEpoch " + endEpoch + " is before startEpoch " + startEpoch);
+        }
+        long epochs = (long) endEpoch - startEpoch + 1;
+        int max = properties.getAdmin().getMaxRangeEpochs();
+        if (epochs > max) {
+            throw AdminApiException.badRequest("The range covers " + epochs + " epochs; at most " + max
+                    + " are allowed per request (yaci.store.analytics.admin.max-range-epochs)");
+        }
+    }
+
+    private void requireFinal(PartitionValue partition) {
+        PartitionReadiness readiness = readinessService.checkFinal(partition);
+        if (!readiness.isReady()) {
+            throw new PartitionNotReadyException(readiness);
+        }
+    }
+
+    private <T> T exclusive(Supplier<T> action) {
+        if (!manualExportRunning.compareAndSet(false, true)) {
+            throw AdminApiException.conflict("Another manual export or repair is running; try again when it has finished");
+        }
+        try {
+            return action.get();
+        } finally {
+            manualExportRunning.set(false);
+        }
+    }
+
+    private static ResponseEntity<ExportResult> toResponse(UniversalExportService.PartitionExportResult result) {
+        return switch (result.outcome()) {
+            case EXPORTED -> ResponseEntity.ok(new ExportResult(result.tableName(), result.partition(),
+                    "Export completed successfully"));
+            case NOT_READY -> throw new PartitionNotReadyException(result.readiness());
+            case FAILED -> ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ExportResult(
+                    result.tableName(), result.partition(),
+                    "Export failed, or another export of this partition was starting. See the application log; a "
+                            + "failed partition is marked FAILED and retried by the scheduler"));
+        };
+    }
+
     // DTOs
 
     @Data
@@ -369,6 +511,10 @@ public class AnalyticsAdminController {
         private final LocalDate endDate;
         private final int successCount;
         private final int totalDays;
+        /** Days skipped because the table was not ready for them. */
+        private final List<String> notReady;
+        /** Days whose export failed. */
+        private final List<String> failed;
     }
 
     @Data
@@ -378,5 +524,9 @@ public class AnalyticsAdminController {
         private final int endEpoch;
         private final int successCount;
         private final int totalEpochs;
+        /** Epochs skipped because the table was not ready for them. */
+        private final List<String> notReady;
+        /** Epochs whose export failed. */
+        private final List<String> failed;
     }
 }
