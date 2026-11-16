@@ -89,6 +89,15 @@ class EpochExporterTest {
     }
 
     @Test
+    void onlyAnEpochWithoutBlocksMayBeEmpty() {
+        when(blocks.totalBlocksInEpoch(10)).thenReturn(0);
+        when(blocks.totalBlocksInEpoch(500)).thenReturn(21600);
+
+        assertThat(exporter.allowsEmptyPartition(PartitionValue.ofEpoch(10))).isTrue();
+        assertThat(exporter.allowsEmptyPartition(PartitionValue.ofEpoch(500))).isFalse();
+    }
+
+    @Test
     void epochCalculationNeedsBothEpochAggrProperties() {
         DataSource dataSource = mock(DataSource.class);
         assertThat(new EpochAggregateReader(dataSource, new MockEnvironment()).isEpochCalculationEnabled()).isFalse();

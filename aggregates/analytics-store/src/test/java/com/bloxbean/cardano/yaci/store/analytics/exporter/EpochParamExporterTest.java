@@ -55,6 +55,12 @@ class EpochParamExporterTest {
         assertThat(noAdaPot.preExportValidation(PartitionValue.ofEpoch(600))).isFalse();
     }
 
+    @Test
+    void onlyByronEpochsMayBeEmpty() {
+        assertThat(exporter.allowsEmptyPartition(PartitionValue.ofEpoch(10))).isTrue();
+        assertThat(exporter.allowsEmptyPartition(PartitionValue.ofEpoch(400))).isFalse();
+    }
+
     private EpochParamExporter exporter(AdaPotJobStorage storage) {
         return new EpochParamExporter(mock(StorageWriter.class), mock(ExportStateService.class), eraService,
                 new AnalyticsStoreProperties(), storage);
