@@ -118,6 +118,10 @@ public final class SqlValidator {
     /** Words that introduce a table reference, so a call right after them is a table function. */
     private static final Set<String> TABLE_REF_INTRODUCERS = Set.of("FROM", "JOIN", "LATERAL", "PIVOT", "UNPIVOT");
 
+    /** First words of a parenthesised subquery (as opposed to a group of table references). */
+    private static final Set<String> SUBQUERY_STARTERS = Set.of("SELECT", "WITH", "FROM", "VALUES", "TABLE", "SUMMARIZE",
+            "DESCRIBE", "SHOW", "PIVOT", "UNPIVOT");
+
     /** Keywords that can be followed by "(" without being a function call. */
     private static final Set<String> NON_FUNCTION_KEYWORDS = Set.of(
             "LATERAL", "SELECT", "FROM", "JOIN", "ON", "USING", "AS", "IN", "VALUES", "WHERE", "AND", "OR",
@@ -614,6 +618,12 @@ public final class SqlValidator {
         final boolean call;
         /** Inside the FROM clause of this level, so a comma separates table references. */
         boolean inFrom;
+        /**
+         * A parenthesis in table position that groups table references, as in
+         * {@code FROM (a CROSS JOIN b)}: its first item is a table reference too, unless it turns
+         * out to be a subquery.
+         */
+        boolean tableGroup;
         boolean empty = true;
 
         Level(boolean query, boolean call) {
@@ -638,6 +648,14 @@ public final class SqlValidator {
             Level level = levels.peek();
             if (level.empty && lx.kind() != LexKind.CLOSE) {
                 level.empty = false;
+                if (level.tableGroup) {
+                    if (lx.kind() == LexKind.WORD && SUBQUERY_STARTERS.contains(lx.text())) {
+                        level.tableGroup = false;   // FROM (SELECT ...): a subquery, not a join group
+                    } else {
+                        level.query = true;
+                        level.inFrom = true;
+                    }
+                }
                 // EXISTS (SELECT ...), IN (FROM ...), ARRAY(SELECT ...): a call-shaped
                 // parenthesis that starts a query is a query level.
                 if (level.call && lx.kind() == LexKind.WORD
@@ -651,7 +669,16 @@ public final class SqlValidator {
                     boolean call = lx.text().equals("(") && prev != null
                             && (prev.kind() == LexKind.WORD || prev.kind() == LexKind.QUOTED);
                     // '(' that is not a call: subquery or grouping. '[' / '{': list or struct literal.
-                    levels.push(new Level(!call && lx.text().equals("("), call));
+                    Level opened = new Level(!call && lx.text().equals("("), call);
+                    // FROM (, JOIN (, a FROM-list comma followed by (, or ( inside such a group:
+                    // the parenthesis groups table references (or holds a subquery)
+                    // (not PIVOT ( / UNPIVOT (, whose parenthesis holds the pivot specification)
+                    opened.tableGroup = lx.text().equals("(") && prev != null
+                            && ((inTablePosition(lexemes, i - 1, level)
+                                    && !(prev.kind() == LexKind.WORD
+                                         && (prev.text().equals("PIVOT") || prev.text().equals("UNPIVOT"))))
+                                || (prev.kind() == LexKind.OPEN && prev.text().equals("(") && level.tableGroup));
+                    levels.push(opened);
                 }
                 case CLOSE -> {
                     if (levels.size() > 1) {
@@ -689,13 +716,23 @@ public final class SqlValidator {
         }
         Lexeme prev = j > 0 ? lexemes.get(j - 1) : null;
         boolean tablePosition = prev != null
-                && ((prev.kind() == LexKind.WORD && TABLE_REF_INTRODUCERS.contains(prev.text())
-                        && (!prev.text().equals("FROM") || (level.query && !isDistinctFrom(lexemes, j - 1))))
-                || (prev.kind() == LexKind.COMMA && level.inFrom));
+                && (inTablePosition(lexemes, j - 1, level)
+                    || (prev.kind() == LexKind.OPEN && prev.text().equals("(") && level.tableGroup));
         if (tablePosition && !ALLOWED_TABLE_FUNCTIONS.contains(name.text())) {
             throw new IllegalArgumentException("Table function '" + name.text().toLowerCase(Locale.ROOT)
                     + "' is not allowed in ad-hoc queries");
         }
+    }
+
+    /**
+     * Whether what follows the lexeme at {@code prevIndex} is a table reference: it is FROM (of a
+     * query, not {@code IS DISTINCT FROM}), JOIN, LATERAL, PIVOT or UNPIVOT, or a comma of a FROM list.
+     */
+    private static boolean inTablePosition(List<Lexeme> lexemes, int prevIndex, Level level) {
+        Lexeme prev = lexemes.get(prevIndex);
+        return (prev.kind() == LexKind.WORD && TABLE_REF_INTRODUCERS.contains(prev.text())
+                        && (!prev.text().equals("FROM") || (level.query && !isDistinctFrom(lexemes, prevIndex))))
+                || (prev.kind() == LexKind.COMMA && level.inFrom);
     }
 
     /** True for the FROM of {@code IS [NOT] DISTINCT FROM}. */

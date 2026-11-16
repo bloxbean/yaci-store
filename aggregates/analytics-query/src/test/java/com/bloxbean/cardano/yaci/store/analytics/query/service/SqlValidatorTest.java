@@ -381,6 +381,30 @@ class SqlValidatorTest {
         assertDoesNotThrow(() -> SqlValidator.validate("SELECT format('it''s {}', 1)"));
     }
 
+    @Test
+    void rejectsTableFunctionsInsideParenthesisedJoins() {
+        // DuckDB runs FROM (f(...) CROSS JOIN t): the first item of the group is a table reference too
+        assertRejected("SELECT * FROM (ducklake_snapshots('lake') CROSS JOIN block)");
+        assertRejected("SELECT count(*) FROM (range(2) AS a CROSS JOIN range(3) AS b)");
+        assertRejected("SELECT * FROM ((summary(block)) CROSS JOIN block)");
+        assertRejected("SELECT * FROM block, (read_text('x') CROSS JOIN block)");
+        assertRejected("SELECT * FROM block JOIN (ducklake_list_files('lake', 'block') CROSS JOIN block) ON true");
+    }
+
+    @Test
+    void allowsParenthesisedJoinsOfTablesAndSubqueries() {
+        assertDoesNotThrow(() -> SqlValidator.validate(
+                "SELECT * FROM (block b JOIN transaction t ON b.number = t.block_number)"));
+        assertDoesNotThrow(() -> SqlValidator.validate(
+                "SELECT * FROM (SELECT number, count(*) AS n FROM block GROUP BY number) q"));
+        assertDoesNotThrow(() -> SqlValidator.validate(
+                "SELECT * FROM (unnest([1, 2]) AS u(x) CROSS JOIN block)"));
+        assertDoesNotThrow(() -> SqlValidator.validate(
+                "SELECT * FROM block PIVOT (count(*) FOR era IN ('babbage', 'conway'))"));
+        assertDoesNotThrow(() -> SqlValidator.validate(
+                "SELECT * FROM block, (SELECT max(number) AS m FROM block) x WHERE number = x.m"));
+    }
+
     private static void assertRejected(String sql) {
         assertThrows(IllegalArgumentException.class, () -> SqlValidator.validate(sql), sql);
     }
