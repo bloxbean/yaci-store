@@ -5,8 +5,6 @@ import com.bloxbean.cardano.yaci.store.common.model.Order;
 import com.bloxbean.cardano.yaci.store.utxo.UtxoStoreProperties;
 import org.jooq.DSLContext;
 import org.jooq.SQLDialect;
-import org.jooq.conf.Settings;
-import org.jooq.conf.StatementType;
 import org.jooq.impl.DSL;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,8 +35,7 @@ class BFAccountTransactionsLegacyTxIndexTest {
     @BeforeEach
     void setUp() throws Exception {
         conn = DriverManager.getConnection("jdbc:h2:mem:bf_account_legacy;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE");
-        // H2 returns no rows for this query with bind values; inlined values run it as written.
-        dsl = DSL.using(conn, SQLDialect.H2, new Settings().withStatementType(StatementType.STATIC_STATEMENT));
+        dsl = DSL.using(conn, SQLDialect.H2);
         dsl.execute("create table address_utxo (tx_hash varchar(64), output_index int, owner_addr varchar(255), "
                 + "owner_stake_addr varchar(255), block bigint, tx_index int, block_time bigint)");
         dsl.execute("create table tx_input (tx_hash varchar(64), output_index int, spent_tx_hash varchar(64), "
@@ -64,6 +61,17 @@ class BFAccountTransactionsLegacyTxIndexTest {
     void findTransactions_legacyNullTxIndex_ordersSpentOutputsByOriginalTxIndex() {
         assertThat(spendAddresses(Order.asc)).containsExactly(ADDR_A, ADDR_B);
         assertThat(spendAddresses(Order.desc)).containsExactly(ADDR_B, ADDR_A);
+    }
+
+    @Test
+    void findTransactions_storedTxIndex_returnsReceivingTransaction() {
+        String stake = "stake_test1current";
+        dsl.execute("insert into address_utxo values ('tx3', 0, 'addr_test1c', ?, 12, 4, 1200)", stake);
+        dsl.execute("insert into transaction values ('tx3', 4)");
+
+        var reader = new BFAccountStorageReaderImpl(dsl, UtxoStoreProperties.builder().build());
+        assertThat(reader.findTransactions(stake, 0, 10, Order.asc, null, null))
+                .containsExactly(new AccountTransaction("addr_test1c", "tx3", 4L, 12L, 1200L));
     }
 
     private List<String> spendAddresses(Order order) {

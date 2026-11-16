@@ -16,8 +16,10 @@ import org.jooq.Cursor;
 import org.jooq.DSLContext;
 import org.jooq.Field;
 import org.jooq.Record;
+import org.jooq.SQLDialect;
 import org.jooq.SortField;
 import org.jooq.Table;
+import org.jooq.conf.StatementType;
 import org.jooq.impl.DSL;
 import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Component;
@@ -777,7 +779,14 @@ public class BFAccountStorageReaderImpl implements BFAccountStorageReader {
                 ? block.ge(DSL.coalesce(lastPageBlock, -1L))
                 : block.le(DSL.coalesce(lastPageBlock, Long.MAX_VALUE));
 
-        return dsl.with(utxos)
+        // H2 2.2 reads a bind value inside a CTE as NULL when the CTE is used in a subquery,
+        // so this query inlines its values on H2.
+        DSLContext queryDsl = dsl.dialect().family() == SQLDialect.H2
+                ? dsl.configuration().deriveSettings(settings -> settings
+                        .withStatementType(StatementType.STATIC_STATEMENT)).dsl()
+                : dsl;
+
+        return queryDsl.with(utxos)
                 .with(accountTxs)
                 .select(address, txHash, block, txIndex, blockTime)
                 .from(accountTxs)
