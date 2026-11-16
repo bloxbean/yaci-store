@@ -281,6 +281,11 @@ PostgreSQL ──(exporters, writer connection)──▶ DuckLake catalog + Parq
   visible.
 - Views are refreshed every 5 minutes (new partitions, advanced cutoffs). If an export is holding
   the writer connection at that moment the refresh is skipped and retried next time.
+- When a table gains a column over time (older data files lack it), its view reads the files by
+  column name: the new column is present and `NULL` for rows from older files. Tables whose files
+  all share one schema are read without this, because matching by name makes DuckDB open every
+  file of the table for each query. In direct Parquet storage a file with a new column that appears
+  between two refreshes is picked up by name only after the next refresh.
 - The catalog file is also locked at the OS level while yaci-store runs (DuckDB-file catalog type):
   external tools cannot `ATTACH` it concurrently, but can read the Parquet files directly with
   `read_parquet('<export-path>/main/<table>/**/*.parquet', hive_partitioning=true)` — see
