@@ -16,6 +16,7 @@ import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -409,11 +410,13 @@ public class AnalyticsAdminController {
      */
     @Operation(summary = "Trigger a sync check now",
             description = "Runs the continuous-sync check immediately instead of waiting for the next scheduled run: "
-                    + "finds missing daily/epoch partitions and exports them.")
+                    + "finds missing daily/epoch partitions and exports them. Returns 409 if a sync is already running.")
     @PostMapping("/sync/trigger")
     public ResponseEntity<String> triggerSync() {
         log.info("Manual sync triggered via API");
-        continuousSyncScheduler.syncGaps();
+        if (!continuousSyncScheduler.syncGaps()) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body("A sync is already running");
+        }
         return ResponseEntity.ok("Sync triggered");
     }
 
