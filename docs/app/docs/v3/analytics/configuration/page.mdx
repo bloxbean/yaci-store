@@ -32,7 +32,10 @@ import { Callout } from 'nextra/components'
 | `yaci.store.analytics.ducklake.catalog-username` | _(main datasource)_ | PostgreSQL catalog username |
 | `yaci.store.analytics.ducklake.catalog-password` | _(main datasource)_ | PostgreSQL catalog password |
 | `yaci.store.analytics.ducklake.catalog-path` | `./data/analytics/ducklake.catalog.db` | DuckDB catalog file path |
-| `yaci.store.analytics.duckdb.memory-limit` | _(empty = DuckDB default)_ | DuckDB buffer manager memory limit (e.g., `1GB`, `512MB`) |
+| `yaci.store.analytics.duckdb.memory-limit` | _(empty = 50% of RAM minus JVM heap, split between writer and query layer)_ | DuckDB buffer manager memory limit for **each** DuckDB instance (e.g., `1GB`, `512MB`). When empty: 50% of the RAM not reserved for the JVM heap (`-Xmx`), divided by the number of DuckDB instances in the JVM (export writer, query layer), at least `256MB` |
+| `yaci.store.analytics.duckdb.temp-directory` | _(empty = `<export-path>/.tmp`)_ | Base directory for DuckDB spill files. Each DuckDB instance uses its own subdirectory (`writer-<id>`, `reader-<id>`, ...), removed when the instance closes; leftovers of a crashed process are removed at the next start |
+| `yaci.store.analytics.duckdb.max-temp-directory-size` | _(empty = DuckDB default, 90% of free disk)_ | DuckDB `max_temp_directory_size` per instance (e.g., `50GB`) |
+| `yaci.store.analytics.duckdb.extension-directories` | _(empty = `~/.duckdb/extensions`)_ | Comma-separated directories DuckDB loads extensions (`ducklake`, `postgres_scanner`) from; missing extensions are installed into the first one. Use a persistent directory in containers, or a pre-seeded one on offline hosts |
 | `yaci.store.analytics.ducklake.export.codec` | `ZSTD` | Compression codec for DuckLake Parquet files |
 | `yaci.store.analytics.ducklake.export.compression-level` | `3` | ZSTD compression level (1-22) for DuckLake exports |
 | `yaci.store.analytics.ducklake.export.row-group-size` | `-1` | Row group size for DuckLake Parquet files (-1 = DuckDB default) |
@@ -62,19 +65,43 @@ yaci.store.analytics.export-path=/var/lib/yaci-store/analytics
 ### DuckDB memory usage in JVM
 
 <Callout type="warning">
-If not configured, DuckDB uses its default (80% of system RAM). It is recommended to set this explicitly in production and container environments to prevent OOM kills.
+It is recommended to set `yaci.store.analytics.duckdb.memory-limit` explicitly in production and container environments to prevent OOM kills.
 </Callout>
 
-DuckDB defaults to using 80% of system physical RAM for its buffer manager. Since DuckDB runs inside the JVM process, this can cause memory contention — JVM heap + DuckDB buffer may together exceed available system RAM, leading to OOM kills (especially in containers/Kubernetes).
+DuckDB runs inside the JVM process. The export writer is one DuckDB instance; the analytics query layer (if enabled) is a second one shared by all concurrent readers. DuckDB's own default gives **each** instance 80% of the physical RAM, so with both instances and a JVM heap the process could try to use far more memory than the host has.
 
-To limit DuckDB memory usage:
+When `memory-limit` is not set, yaci-store therefore sets one itself: 50% of the RAM not reserved for the JVM heap (`-Xmx`), divided by the number of DuckDB instances in the JVM, at least 256 MB. For example, 16 GB RAM, `-Xmx4g`, writer and query layer: `(16 - 4) × 0.5 / 2 = 3 GB` per instance. The chosen value is logged at startup. The RAM size is read container-aware (cgroup limit).
+
+To set the limit yourself:
 
 ```properties
 # Limit each DuckDB instance's buffer manager to 1GB
 yaci.store.analytics.duckdb.memory-limit=1GB
 ```
 
-Note: The limit applies per DuckDB instance. The export writer is one instance; the analytics query layer (if enabled) is a second one shared by all concurrent readers, so plan for up to `memory_limit * 2`. Some DuckDB aggregate functions may also allocate memory outside the buffer manager, so actual usage can slightly exceed the configured limit.
+Note: The limit applies per DuckDB instance, so plan for up to `memory_limit * 2` when the query layer is enabled. Operations that exceed the limit spill to the temp directory (`yaci.store.analytics.duckdb.temp-directory`, default `<export-path>/.tmp`). Some DuckDB aggregate functions may also allocate memory outside the buffer manager, so actual usage can slightly exceed the configured limit.
+
+### DuckDB spill files
+
+Each DuckDB instance spills into its own directory under `yaci.store.analytics.duckdb.temp-directory` (default `<export-path>/.tmp`). Instances must never share a spill directory: DuckDB uses the same spill file names in every instance, and one instance overwriting or deleting another's spill files crashes the JVM. Earlier versions used DuckDB's default `.tmp` in the working directory for all instances; that directory is no longer used and can be deleted.
+
+### DuckDB extensions on offline hosts and in containers
+
+The `ducklake` and `postgres_scanner` extensions are not built into the DuckDB JDBC driver. yaci-store first tries to `LOAD` them, and only downloads them (`INSTALL`, from `extensions.duckdb.org`) when they are not installed yet. They are stored in `~/.duckdb/extensions` unless `yaci.store.analytics.duckdb.extension-directories` is set.
+
+- **Docker:** the container's home directory is not a volume, so every new container downloads the extensions again. The shipped `docker/config/application-analytics.properties` sets `yaci.store.analytics.duckdb.extension-directories=./data/duckdb/extensions`, inside the mounted `data` volume.
+- **Offline / air-gapped hosts:** install the extensions on a machine with access, using the same DuckDB version as the bundled JDBC driver (shown in the startup error), and copy the directory over:
+
+```bash
+duckdb -c "SET extension_directory='/opt/duckdb-ext'; INSTALL ducklake; INSTALL postgres_scanner;"
+# copies /opt/duckdb-ext/v<duckdb-version>/<platform>/*.duckdb_extension
+```
+
+```properties
+yaci.store.analytics.duckdb.extension-directories=/opt/duckdb-ext
+```
+
+If an extension can be neither loaded nor installed, startup fails with a message that names the extension, the DuckDB version and platform, and the directories searched.
 
 ### Pruning and the analytics store
 
