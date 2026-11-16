@@ -107,6 +107,32 @@ class AbstractTableExporterTest {
         verify(stateService, never()).markFailed(any(), anyString());
     }
 
+    @Test
+    void anEmptyResultIsFailedForATableThatAlwaysHasRows() {
+        ExportState inProgress = new ExportState("t", "epoch=500");
+        when(stateService.markInProgress("t", "epoch=500")).thenReturn(inProgress);
+        when(writer.export(anyString(), anyString(), anyString())).thenReturn(new ExportResult("p", 0, 0, 1));
+        TestExporter exporter = exporter(false, jobs);
+        exporter.allowsEmpty = false;
+
+        assertThat(exporter.exportForPartition(EPOCH_500)).isFalse();
+
+        verify(stateService).markFailed(eq(inProgress), org.mockito.ArgumentMatchers.contains("no rows"));
+        verify(stateService, never()).markCompleted(any(), any(), any());
+    }
+
+    @Test
+    void anEmptyResultIsCompletedForOtherTables() {
+        ExportState inProgress = new ExportState("t", "epoch=500");
+        when(stateService.markInProgress("t", "epoch=500")).thenReturn(inProgress);
+        ExportResult empty = new ExportResult("p", 0, 0, 1);
+        when(writer.export(anyString(), anyString(), anyString())).thenReturn(empty);
+
+        assertThat(exporter(false, jobs).exportForPartition(EPOCH_500)).isTrue();
+
+        verify(stateService).markCompleted(inProgress, empty, null);
+    }
+
     // ---- AdaPot dependency ----
 
     @Test
@@ -194,6 +220,7 @@ class AbstractTableExporterTest {
         private final String name;
         private final boolean dependsOnAdaPot;
         boolean valid = true;
+        boolean allowsEmpty = true;
 
         TestExporter(String name, boolean dependsOnAdaPot, StorageWriter writer, ExportStateService stateService,
                      EraService eraService, AnalyticsStoreProperties properties, AdaPotJobStorage storage) {
@@ -220,6 +247,11 @@ class AbstractTableExporterTest {
         @Override
         public boolean preExportValidation(PartitionValue partition) {
             return valid;
+        }
+
+        @Override
+        protected boolean allowsEmptyPartition(PartitionValue partition) {
+            return allowsEmpty;
         }
 
         @Override
