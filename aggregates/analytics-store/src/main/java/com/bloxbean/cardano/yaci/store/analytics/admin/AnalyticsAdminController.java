@@ -401,6 +401,37 @@ public class AnalyticsAdminController {
     }
 
     /**
+     * Reset the export state of an epoch range of an EPOCH table, so those epochs are exported again.
+     */
+    @Operation(summary = "Reset the export state of an epoch range",
+            description = "Deletes the export-state records of every epoch from startEpoch to endEpoch (inclusive) "
+                    + "for the given EPOCH table. Same caveats as the single-partition reset. The range is not capped: "
+                    + "a reset is cheap, and the scheduler re-exports the epochs at its own pace. "
+                    + "404 for an unknown table or when no epoch in the range has export state, 400 for a negative "
+                    + "or reversed range or a non-EPOCH table.")
+    @DeleteMapping("/state/{tableName}/epoch-range")
+    public ResponseEntity<String> resetStateEpochRange(
+            @PathVariable String tableName,
+            @RequestParam int startEpoch,
+            @RequestParam int endEpoch) {
+
+        requireExporter(tableName, PartitionStrategy.EPOCH);
+        requireNonNegativeEpoch("startEpoch", startEpoch);
+        requireNonNegativeEpoch("endEpoch", endEpoch);
+        if (endEpoch < startEpoch) {
+            throw AdminApiException.badRequest("endEpoch " + endEpoch + " is before startEpoch " + startEpoch);
+        }
+
+        log.warn("Resetting export state epoch range for table {}: {} to {}", tableName, startEpoch, endEpoch);
+        int count = adminService.resetEpochRange(tableName, startEpoch, endEpoch);
+        if (count == 0) {
+            throw AdminApiException.notFound("No export state for " + tableName + " between epoch " + startEpoch
+                    + " and " + endEpoch);
+        }
+        return ResponseEntity.ok(String.format("Reset %d partition states", count));
+    }
+
+    /**
      * Trigger immediate gap sync check.
      *
      * Bypasses the scheduled interval and runs gap detection immediately.

@@ -74,6 +74,26 @@ class EpochExporterTest {
     }
 
     @Test
+    void aRowThatEpochAggrNoLongerFixesIsExportedOnceTheNextEpochIsOver() {
+        // current epoch 501: epoch 499 is settled (500 was its only chance to be recomputed), 500 is not
+        when(blocks.totalBlocksInEpoch(499)).thenReturn(21600);
+        when(epochRows.findBlockCount(499)).thenReturn(OptionalInt.of(21601));
+        assertThat(exporter.preExportValidation(PartitionValue.ofEpoch(499))).isTrue();
+
+        when(blocks.totalBlocksInEpoch(500)).thenReturn(21600);
+        when(epochRows.findBlockCount(500)).thenReturn(OptionalInt.of(21601));
+        assertThat(exporter.preExportValidation(PartitionValue.ofEpoch(500))).isFalse();
+    }
+
+    @Test
+    void aSettledEpochWithoutARowIsStillNotExported() {
+        when(blocks.totalBlocksInEpoch(400)).thenReturn(21600);
+        when(epochRows.findBlockCount(400)).thenReturn(OptionalInt.empty());
+        assertThat(exporter.preExportValidation(PartitionValue.ofEpoch(400))).isFalse();
+        assertThat(exporter.preExportValidation(PartitionValue.ofEpoch(400))).isFalse();
+    }
+
+    @Test
     void aPastEpochWithoutBlocksIsReady() {
         when(blocks.totalBlocksInEpoch(10)).thenReturn(0);
 

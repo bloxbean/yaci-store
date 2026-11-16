@@ -46,12 +46,6 @@ public class EpochParamExporter extends AbstractTableExporter {
         return PartitionStrategy.EPOCH;
     }
 
-    /**
-     * Like the other epoch tables, an epoch is exported once its AdaPot job has run. From Conway on the
-     * job's pre-processing is what writes the epoch's parameters; before Conway they are written at the
-     * epoch transition, which the job always follows. Byron epochs have no job and pass. Without the
-     * AdaPot module Conway parameters are never written, so only earlier epochs are exported.
-     */
     /** Every non-Byron epoch has its protocol parameters once it is ready. */
     @Override
     protected boolean allowsEmptyPartition(PartitionValue partition) {
@@ -59,6 +53,12 @@ public class EpochParamExporter extends AbstractTableExporter {
         return eraService.getFirstNonByronEpoch().map(first -> epoch < first).orElse(true);
     }
 
+    /**
+     * Like the other epoch tables, an epoch is exported once its AdaPot job has run. From Conway on the
+     * job's pre-processing is what writes the epoch's parameters; before Conway they are written at the
+     * epoch transition, which the job always follows. Byron epochs have no job and pass. Without the
+     * AdaPot module Conway parameters are never written, so only earlier epochs are exported.
+     */
     @Override
     public boolean preExportValidation(PartitionValue partition) {
         int epoch = ((PartitionValue.EpochPartition) partition).epoch();

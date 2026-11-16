@@ -3,6 +3,8 @@ package com.bloxbean.cardano.yaci.store.analytics.exporter;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import com.bloxbean.cardano.yaci.store.adapot.job.storage.AdaPotJobStorage;
 import com.bloxbean.cardano.yaci.store.analytics.config.AnalyticsStoreProperties;
 import com.bloxbean.cardano.yaci.store.analytics.state.ExportStateService;
@@ -36,6 +38,8 @@ public class EpochExporter extends AbstractTableExporter {
 
     private final BlockStorageReader blockStorageReader;
     private final EpochAggregateReader epochAggregateReader;
+    /** Epochs whose row was already reported as stale or missing, so each is logged at WARN once. */
+    private final Set<Integer> reported = ConcurrentHashMap.newKeySet();
 
     public EpochExporter(
             StorageWriter storageWriter,
@@ -87,13 +91,28 @@ public class EpochExporter extends AbstractTableExporter {
                 return true;
             }
             OptionalInt rowBlocks = epochAggregateReader.findBlockCount(epoch);
-            if (rowBlocks.isEmpty() || rowBlocks.getAsInt() != blocks) {
-                log.info("Epoch {} row is not final yet ({} of {} blocks aggregated), not exporting it until "
-                        + "the epoch-aggr module has recomputed it", epoch,
-                        rowBlocks.isPresent() ? rowBlocks.getAsInt() : "none", blocks);
-                return false;
+            if (rowBlocks.isPresent() && rowBlocks.getAsInt() == blocks) {
+                return true;
             }
-            return true;
+            // epoch-aggr recomputes epoch N only during epoch N+1. Once N+1 is over, a row that still
+            // disagrees with the blocks will not be fixed (for example after a rollback across the
+            // boundary): export it as it is rather than wait for ever.
+            boolean settled = epoch < currentEpoch - 1;
+            if (settled && rowBlocks.isPresent()) {
+                if (reported.add(epoch)) {
+                    log.warn("Epoch {} row counts {} blocks but {} are stored, and epoch-aggr no longer recomputes "
+                            + "it; exporting the row as it is", epoch, rowBlocks.getAsInt(), blocks);
+                }
+                return true;
+            }
+            if (settled && reported.add(epoch)) {
+                log.warn("Epoch {} has no row in the epoch table (epoch-aggr was off, or the database was restored "
+                        + "without it), so it is not exported", epoch);
+            } else {
+                log.debug("Epoch {} row is not final yet ({} of {} blocks aggregated)", epoch,
+                        rowBlocks.isPresent() ? rowBlocks.getAsInt() : "none", blocks);
+            }
+            return false;
         } catch (Exception e) {
             log.warn("Could not check the epoch row of epoch {}, not exporting it now (retried on the next run): {}",
                     epoch, e.getMessage());

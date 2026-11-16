@@ -92,6 +92,7 @@ The admin API has no authentication, and its endpoints export, re-export and res
 | POST | `/api/v1/analytics/admin/sync/trigger` | Trigger immediate gap sync |
 | DELETE | `/api/v1/analytics/admin/state/{table}/{partition}` | Reset the export state of one partition: `2024-01-15`, `date=2024-01-15`, `450` or `epoch=450` |
 | DELETE | `/api/v1/analytics/admin/state/{table}/range?startDate=&endDate=` | Reset the export state of a daily table's days from `startDate` to `endDate` (inclusive, `yyyy-MM-dd`) |
+| DELETE | `/api/v1/analytics/admin/state/{table}/epoch-range?startEpoch=&endEpoch=` | Reset the export state of an epoch table's epochs from `startEpoch` to `endEpoch` (inclusive) |
 
 ### Readiness
 
