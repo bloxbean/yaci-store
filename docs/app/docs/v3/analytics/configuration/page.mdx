@@ -149,7 +149,7 @@ DuckDB connects to PostgreSQL through libpq (`postgres_scanner`, PostgreSQL cata
 
 | JDBC URL parameter | libpq parameter |
 |---|---|
-| `sslmode`, `sslrootcert`, `sslcert`, `sslkey`, `sslpassword` | same name (`ssl=true` without `sslmode` = `verify-full`, as in PgJDBC) |
+| `sslmode`, `sslrootcert`, `sslcert`, `sslkey`, `sslpassword` | same name (`ssl=true` without `sslmode` = `verify-full`, as in PgJDBC; with a Java `sslfactory` or `sslhostnameverifier`, such as `NonValidatingFactory`, it is `require`: encrypted, certificate not verified. Set `sslmode` and `sslrootcert` to have it verified) |
 | `targetServerType` | `target_session_attrs` (`primary`, `standby`, `prefer-standby`, `any`) |
 | `connectTimeout`, `ApplicationName`, `gssEncMode`, `channelBinding`, `options` | `connect_timeout`, `application_name`, `gssencmode`, `channel_binding`, `options` |
 
