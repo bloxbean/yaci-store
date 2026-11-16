@@ -70,6 +70,12 @@ public class CustomTableExporter extends AbstractTableExporter {
         return dependsOnAdapotJob && partitionStrategy == PartitionStrategy.EPOCH;
     }
 
+    /** An epoch partition without an AdaPot dependency is ready once the epoch is over and final. */
+    @Override
+    public boolean requiresFinalizedEpoch() {
+        return partitionStrategy == PartitionStrategy.EPOCH && !dependsOnAdapotJob;
+    }
+
     @Override
     public boolean preExportValidation(PartitionValue partition) {
         if (!dependsOnAdapotJob) return true;

@@ -36,11 +36,16 @@ public class MoveInstantaneousRewardExporter extends AbstractTableExporter {
     }
 
     @Override
+    public boolean requiresFinalizedEpoch() {
+        return true;
+    }
+
+    @Override
     public boolean preExportValidation(PartitionValue partition) {
         int epoch = ((PartitionValue.EpochPartition) partition).epoch();
         int currentEpoch = blockStorageReader.findRecentBlock()
                 .map(com.bloxbean.cardano.yaci.store.blocks.domain.Block::getEpochNumber)
-                .orElse(Integer.MAX_VALUE);
+                .orElse(-1);
         return epoch < currentEpoch;
     }
 

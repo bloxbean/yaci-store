@@ -106,7 +106,22 @@ public class AnalyticsStoreProperties {
 
     @Data
     public static class Admin {
+        /**
+         * Enables the admin REST API (manual exports, repairs and export-state resets). The API has
+         * no authentication; do not expose it outside a trusted network.
+         */
         private boolean enabled = false;
+
+        /**
+         * Largest date range (days) that one admin range export or repair may cover. Each day is
+         * exported synchronously on the request thread.
+         */
+        private int maxRangeDays = 366;
+
+        /**
+         * Largest epoch range (epochs) that one admin epoch-range export may cover.
+         */
+        private int maxRangeEpochs = 73;
     }
 
     @Data
