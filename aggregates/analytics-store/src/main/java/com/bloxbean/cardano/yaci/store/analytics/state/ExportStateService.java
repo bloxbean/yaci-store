@@ -11,6 +11,7 @@ import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
+import java.util.ArrayList;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -128,6 +129,15 @@ public class ExportStateService {
         for (Object[] row : repository.findCompletedPartitionsWithRows()) {
             result.computeIfAbsent((String) row[0], t -> new TreeMap<>())
                     .put((String) row[1], ((Number) row[2]).longValue());
+        }
+        return result;
+    }
+
+    /** COMPLETED partitions stored with no rows, by table. */
+    public Map<String, List<String>> getCompletedEmptyPartitions() {
+        Map<String, List<String>> result = new TreeMap<>();
+        for (Object[] row : repository.findCompletedEmptyPartitions()) {
+            result.computeIfAbsent((String) row[0], t -> new ArrayList<>()).add((String) row[1]);
         }
         return result;
     }

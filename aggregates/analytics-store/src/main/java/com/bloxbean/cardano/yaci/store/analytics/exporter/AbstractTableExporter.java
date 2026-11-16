@@ -286,7 +286,8 @@ public abstract class AbstractTableExporter implements TableExporter {
      * that always have a row for a final partition return {@code false}: an empty result is then
      * marked FAILED, and retried, instead of COMPLETED.
      */
-    protected boolean allowsEmptyPartition(PartitionValue partition) {
+    @Override
+    public boolean allowsEmptyPartition(PartitionValue partition) {
         return true;
     }
 

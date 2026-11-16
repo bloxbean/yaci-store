@@ -250,7 +250,7 @@ class AbstractTableExporterTest {
         }
 
         @Override
-        protected boolean allowsEmptyPartition(PartitionValue partition) {
+        public boolean allowsEmptyPartition(PartitionValue partition) {
             return allowsEmpty;
         }
 

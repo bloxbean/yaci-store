@@ -3,6 +3,9 @@ package com.bloxbean.cardano.yaci.store.analytics.ducklake;
 import com.bloxbean.cardano.yaci.store.analytics.helper.DuckDbConnectionHelper;
 import com.bloxbean.cardano.yaci.store.analytics.state.ExportStateService;
 import com.bloxbean.cardano.yaci.store.analytics.writer.DuckLakeWriterService;
+import com.bloxbean.cardano.yaci.store.analytics.exporter.PartitionValue;
+import com.bloxbean.cardano.yaci.store.analytics.exporter.TableExporter;
+import com.bloxbean.cardano.yaci.store.analytics.exporter.TableExporterRegistry;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -125,6 +128,35 @@ class DuckLakeStateReconcilerTest {
         reconciler(catalog.helper).reconcileOnStartup();
 
         verify(stateService, never()).getCompletedPartitionsWithRows();
+    }
+
+    @Test
+    void resetsEmptyCompletedPartitionsOnlyWhereTheTableAlwaysHasRows() {
+        TableExporter epochTable = mock(TableExporter.class);
+        when(epochTable.allowsEmptyPartition(PartitionValue.ofEpoch(400))).thenReturn(false);
+        when(epochTable.allowsEmptyPartition(PartitionValue.ofEpoch(10))).thenReturn(true);
+        TableExporter withdrawals = mock(TableExporter.class);
+        when(withdrawals.allowsEmptyPartition(any())).thenReturn(true);
+        TableExporterRegistry registry = mock(TableExporterRegistry.class);
+        when(registry.getExporter("epoch")).thenReturn(epochTable);
+        when(registry.getExporter("withdrawal")).thenReturn(withdrawals);
+        when(registry.getExporter("dropped_table")).thenThrow(new IllegalArgumentException("unknown"));
+        when(stateService.getCompletedEmptyPartitions()).thenReturn(Map.of(
+                "epoch", java.util.List.of("epoch=400", "epoch=10"),
+                "withdrawal", java.util.List.of("date=2024-03-01"),
+                "dropped_table", java.util.List.of("date=2024-03-01")));
+
+        DuckLakeStateReconciler reconciler = reconciler(catalog.helper);
+        @SuppressWarnings("unchecked")
+        org.springframework.beans.factory.ObjectProvider<TableExporterRegistry> provider =
+                mock(org.springframework.beans.factory.ObjectProvider.class);
+        when(provider.getIfAvailable()).thenReturn(registry);
+        reconciler.setExporterRegistry(provider);
+
+        assertThat(reconciler.resetImpossibleEmptyPartitions())
+                .containsExactly(Map.entry("epoch", java.util.List.of("epoch=400")));
+        verify(stateService).resetCompletedPartitions(eq("epoch"), eq(java.util.List.of("epoch=400")), anyString());
+        verify(stateService, never()).resetCompletedPartitions(eq("withdrawal"), anyCollection(), anyString());
     }
 
     private DuckLakeStateReconciler reconciler(DuckDbConnectionHelper helper) {

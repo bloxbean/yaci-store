@@ -1,9 +1,14 @@
 package com.bloxbean.cardano.yaci.store.analytics.ducklake;
 
 import com.bloxbean.cardano.yaci.store.analytics.config.AnalyticsStoreProperties;
+import com.bloxbean.cardano.yaci.store.analytics.exporter.PartitionValue;
+import com.bloxbean.cardano.yaci.store.analytics.exporter.TableExporter;
+import com.bloxbean.cardano.yaci.store.analytics.exporter.TableExporterRegistry;
 import com.bloxbean.cardano.yaci.store.analytics.helper.DuckDbConnectionHelper;
 import com.bloxbean.cardano.yaci.store.analytics.state.ExportStateService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -13,6 +18,7 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import javax.sql.DataSource;
+
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -52,12 +58,21 @@ import java.util.TreeSet;
 public class DuckLakeStateReconciler {
 
     static final String RESET_REASON = "Reset at startup: the DuckLake catalog has no rows for this partition";
+    static final String EMPTY_RESET_REASON = "Reset at startup: stored with no rows, but a final partition of this "
+            + "table always has rows (exported too early by an older version)";
 
     private final DataSource writerDataSource;
     private final DuckDbConnectionHelper connectionHelper;
     private final DuckLakeWriterLock writerLock;
     private final ExportStateService stateService;
     private final AnalyticsStoreProperties properties;
+    /** Looked up lazily: the exporters depend on the writer, which this reconciler shares. */
+    private ObjectProvider<TableExporterRegistry> exporterRegistry;
+
+    @Autowired(required = false)
+    void setExporterRegistry(ObjectProvider<TableExporterRegistry> exporterRegistry) {
+        this.exporterRegistry = exporterRegistry;
+    }
 
     public DuckLakeStateReconciler(@Qualifier("duckDbWriterDataSource") DataSource writerDataSource,
                                    DuckDbConnectionHelper connectionHelper,
@@ -90,6 +105,12 @@ public class DuckLakeStateReconciler {
         if (!properties.getDucklake().isReconcileStateOnStartup()) {
             log.info("DuckLake state reconciliation is disabled (yaci.store.analytics.ducklake.reconcile-state-on-startup=false)");
             return;
+        }
+        try {
+            resetImpossibleEmptyPartitions();
+        } catch (RuntimeException e) {
+            log.warn("Could not check the empty COMPLETED partitions ({}); no export state was changed",
+                    DuckDbConnectionHelper.redactSecrets(String.valueOf(e.getMessage())));
         }
         try {
             reconcile();
@@ -163,6 +184,50 @@ public class DuckLakeStateReconciler {
             }
             return new Result(completed.size(), missing, shortPartitions);
         }
+    }
+
+    /**
+     * Resets COMPLETED partitions stored with no rows whose table always has rows for a final
+     * partition (for example the {@code epoch} table while epoch-aggr was off, or an AdaPot table
+     * exported before its job). Older versions stored such partitions as COMPLETED, and gap
+     * detection never exports a COMPLETED partition again. Uses only the export state, so it does
+     * not depend on the catalog.
+     *
+     * @return the partitions reset, by table
+     */
+    public Map<String, List<String>> resetImpossibleEmptyPartitions() {
+        TableExporterRegistry registry = exporterRegistry == null ? null : exporterRegistry.getIfAvailable();
+        if (registry == null) {
+            return Map.of();
+        }
+        Map<String, List<String>> reset = new TreeMap<>();
+        for (Map.Entry<String, List<String>> table : stateService.getCompletedEmptyPartitions().entrySet()) {
+            TableExporter exporter;
+            try {
+                exporter = registry.getExporter(table.getKey());
+            } catch (IllegalArgumentException e) {
+                continue;   // no exporter for this table any more
+            }
+            List<String> impossible = new ArrayList<>();
+            for (String key : table.getValue()) {
+                try {
+                    if (!exporter.allowsEmptyPartition(PartitionValue.parse(key))) {
+                        impossible.add(key);
+                    }
+                } catch (RuntimeException e) {
+                    log.debug("Could not check empty partition {} of {}: {}", key, table.getKey(), e.getMessage());
+                }
+            }
+            if (!impossible.isEmpty()) {
+                int n = stateService.resetCompletedPartitions(table.getKey(), impossible, EMPTY_RESET_REASON);
+                log.warn("Table '{}' had {} COMPLETED partitions stored with no rows although a final partition always "
+                        + "has rows ({}{}); reset {} of them so they are exported again", table.getKey(),
+                        impossible.size(), String.join(", ", impossible.subList(0, Math.min(5, impossible.size()))),
+                        impossible.size() > 5 ? ", ..." : "", n);
+                reset.put(table.getKey(), impossible);
+            }
+        }
+        return reset;
     }
 
     private static Set<String> listTables(Connection conn) throws SQLException {
