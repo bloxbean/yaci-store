@@ -48,6 +48,11 @@ public class RewardExporter extends AbstractTableExporter {
     }
 
     @Override
+    protected boolean dependsOnAdaPotJob() {
+        return true;
+    }
+
+    @Override
     public boolean preExportValidation(PartitionValue partition) {
         // reward[earned_epoch=N] is populated by AdaPot job N+2, which calls updateEpochRewards()
         // with earnedEpoch = epoch - 2. Wait for job N+2 to complete before exporting epoch N.
