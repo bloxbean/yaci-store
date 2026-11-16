@@ -2,7 +2,7 @@
 
 This kit checks one question: **when something breaks, does yaci-store recover on its own, without losing or duplicating data?**
 
-It syncs yaci-store on **preprod** while it breaks things on purpose: the node connection, single blocks, rollbacks, the database, the JVM, and restarts at bad moments. After each fault it checks:
+It syncs yaci-store on **preprod** (or preview) while it breaks things on purpose: the node connection, single blocks, rollbacks, the database, the JVM, and restarts at bad moments. After each fault it checks:
 
 - that sync starts moving again with no help, and how long that takes;
 - that no block is missing, no number has two blocks, and every block points to the one before it.
@@ -83,6 +83,8 @@ At the tip the scenarios run back to back on one database, so a gap found by one
 | `RT_HOME` | `~/fault-injection-test` | Jars, instance data and logs, results |
 | `RT_JAVA_HOME` | `$JAVA_HOME` | JDK 21 used to build and run |
 | `RT_RELAY` | `preprod-node.play.dev.cardano.org:3001` | Upstream preprod node |
+| `RT_RELAY_PREVIEW` | `preview-node.play.dev.cardano.org:3001` | Upstream preview node, for instances on preview |
+| `RT_HEAP` | `6g` | JVM heap of each instance |
 | `RT_BYTEMAN_JAR` | `$RT_HOME/byteman.jar` | Byteman agent |
 | `RT_BASE_PROPERTIES` | `config/application.properties` of this repo | Base config copied into each instance |
 | `RT_LEDGER_PROPERTIES` | `application-ledger-state.properties` next to the base config | Copied into instances with the `ledger-state` profile |
@@ -95,7 +97,11 @@ The test config (`inst.sh init`) uses:
 
 For a ledger-state run, give the instance the profiles `ledger-state,rt`, in that order. The later profile wins, and `rt` sets the log file the runner reads.
 
-Per-instance properties go in the last column of `instances.conf`. For example, `store.utxo.unspent-table-enabled=true`.
+Per-instance properties go in the props column of `instances.conf`. For example, `store.utxo.unspent-table-enabled=true`.
+
+An optional last column picks the network, `preprod` (the default) or `preview`. It sets the relay, the protocol magic and the slot times the scripts use.
+
+For an analytics run, add the `analytics` profile before `rt` (for example `ledger-state,analytics,rt`). `inst.sh init` then copies `application-analytics.properties` next to the base config into the instance.
 
 ## Running it
 
