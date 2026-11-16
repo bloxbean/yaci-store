@@ -1,6 +1,8 @@
 package com.bloxbean.cardano.yaci.store.analytics.query.service;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -15,14 +17,21 @@ import java.util.regex.Pattern;
  *
  * <p><b>Defense layers (in order of application):</b></p>
  * <ol>
+ *   <li><b>Control characters</b> — rejected (except tab, LF, CR); DuckDB stops reading at NUL</li>
  *   <li><b>Comment stripping</b> — removes {@code /* ... * /} and {@code --} comments
- *       before tokens are inspected</li>
+ *       before tokens are inspected; a line comment ends at LF or CR, exactly as in DuckDB</li>
  *   <li><b>Statement type check</b> — only {@code SELECT} and {@code WITH} allowed as top-level statements</li>
  *   <li><b>Semicolon ban</b> — prevents multi-statement injection</li>
  *   <li><b>Keyword blocklist</b> — blocks dangerous functions, DDL, DML, metadata access
  *       ({@code SHOW}/{@code DESCRIBE}/{@code SUMMARIZE}, {@code duckdb_*}/{@code pragma_*}
  *       table functions, {@code information_schema}, {@code pg_*}) and resource-exhaustion
  *       patterns using SQL tokens rather than substring matching</li>
+ *   <li><b>Allocation bounds</b> — {@code lpad}/{@code rpad} widths and {@code printf}/{@code format}
+ *       widths must be small literals; {@code repeat}/{@code list_resize}/{@code array_resize} are
+ *       blocked. Their output is allocated outside DuckDB's {@code memory_limit}.</li>
+ *   <li><b>Table functions</b> — default deny: only {@link #ALLOWED_TABLE_FUNCTIONS} may be called
+ *       in table position; every other table function (file readers, metadata listings,
+ *       {@code enable_logging}, {@code force_checkpoint}, ...) is rejected</li>
  *   <li><b>File reference check</b> — rejects file-shaped names and path/URL-like quoted
  *       values that could trigger DuckDB replacement scans</li>
  * </ol>
@@ -76,8 +85,67 @@ public final class SqlValidator {
             "HTTP_GET", "HTTP_POST", "POSTGRES_QUERY", "CURRENT_SETTING",
             "QUERY", "QUERY_TABLE", "GENERATE_SERIES", "RANGE",
             "JSON_SERIALIZE_SQL", "JSON_DESERIALIZE_SQL", "JSON_EXECUTE_SERIALIZED_SQL",
-            "REPEAT"
+            "JSON_SERIALIZE_PLAN",
+            // Unbounded single-call allocations: the output size comes straight from an
+            // argument and is allocated outside DuckDB's memory_limit accounting.
+            "REPEAT", "LIST_RESIZE", "ARRAY_RESIZE",
+            // Instance-wide state changes, file writes and log access. Read connections are
+            // duplicate() handles of ONE DuckDB instance, so e.g. enable_logging(storage='file')
+            // would record every other caller's SQL into a file inside the sandbox, and
+            // lock_configuration does not stop these table functions.
+            "ENABLE_LOGGING", "DISABLE_LOGGING", "TRUNCATE_DUCKDB_LOGS", "WRITE_LOG",
+            "ENABLE_PROFILING", "DISABLE_PROFILING",
+            "ENABLE_PEG_PARSER", "DISABLE_PEG_PARSER", "CHECK_PEG_PARSER", "SQL_AUTO_COMPLETE",
+            "FORCE_CHECKPOINT", "SLEEP_MS",
+            // The remaining DuckDB 1.5.5 table functions and table macros. Table functions are
+            // already default-denied in FROM position (see ALLOWED_TABLE_FUNCTIONS); listing them
+            // here as well rejects them by name wherever they appear.
+            "ARROW_SCAN", "ARROW_SCAN_DUMB", "ICU_CALENDAR_NAMES", "PARQUET_BLOOM_PROBE",
+            "PARQUET_FULL_METADATA", "READ_DUCKDB", "READ_POSTGRES_BINARY", "REPEAT_ROW", "SEQ_SCAN",
+            "SUMMARY", "TEST_ALL_TYPES", "TEST_VECTOR_TYPES", "WHICH_SECRET", "HISTOGRAM_VALUES"
     );
+
+    /**
+     * The only table functions ad-hoc SQL may call in table position ({@code FROM}, {@code JOIN},
+     * {@code LATERAL}, a {@code FROM} list, {@code PIVOT}/{@code UNPIVOT}). Every other function
+     * invoked there is rejected, including table functions added by future DuckDB versions or
+     * extensions: table functions are where DuckDB keeps its file readers, catalog/metadata
+     * listings and instance-wide switches ({@code enable_logging}, {@code force_checkpoint}, ...),
+     * while the analytics views never need one. These three only expand their own argument.
+     */
+    static final Set<String> ALLOWED_TABLE_FUNCTIONS = Set.of("UNNEST", "JSON_EACH", "JSON_TREE");
+
+    /** Words that introduce a table reference, so a call right after them is a table function. */
+    private static final Set<String> TABLE_REF_INTRODUCERS = Set.of("FROM", "JOIN", "LATERAL", "PIVOT", "UNPIVOT");
+
+    /** Keywords that can be followed by "(" without being a function call. */
+    private static final Set<String> NON_FUNCTION_KEYWORDS = Set.of(
+            "LATERAL", "SELECT", "FROM", "JOIN", "ON", "USING", "AS", "IN", "VALUES", "WHERE", "AND", "OR",
+            "NOT", "EXISTS", "ANY", "ALL", "SOME", "OVER", "FILTER", "WITHIN", "WITH", "RECURSIVE",
+            "MATERIALIZED", "PIVOT", "UNPIVOT", "UNION", "EXCEPT", "INTERSECT", "BY", "HAVING", "QUALIFY");
+
+    /**
+     * Keywords that end a {@code FROM} list at the same nesting level, so a following comma no
+     * longer separates table references.
+     */
+    private static final Set<String> FROM_LIST_TERMINATORS = Set.of(
+            "SELECT", "WHERE", "GROUP", "HAVING", "QUALIFY", "WINDOW", "ORDER", "LIMIT", "OFFSET",
+            "UNION", "EXCEPT", "INTERSECT", "RETURNING");
+
+    /**
+     * Largest pad width accepted by {@code lpad}/{@code rpad}. Both allocate the padded value in
+     * one step outside DuckDB's memory_limit accounting ({@code lpad('a', 1000000000, 'b')} grows
+     * the process by ~3 GB even with {@code memory_limit=256MB}); their result is exactly that
+     * wide, so a literal bound also bounds nested calls.
+     */
+    static final int MAX_PAD_WIDTH = 10_000;
+
+    /**
+     * Longest width/precision (in digits) accepted inside a {@code printf}/{@code format} spec:
+     * {@code printf('%1000000000d', 1)} allocates like {@code lpad}. Three digits allow widths and
+     * precisions up to 999, far beyond any column formatting.
+     */
+    private static final int MAX_FORMAT_SPEC_DIGITS = 3;
 
     /**
      * File suffixes for which DuckDB performs an implicit replacement scan on an unresolved
@@ -123,6 +191,12 @@ public final class SqlValidator {
             throw new IllegalArgumentException("Multiple statements (semicolons) are not allowed");
         }
 
+        // DuckDB stops reading the statement at a NUL character, so "SELECT * FROM t) AS q\0"
+        // would drop the LIMIT wrapper the executor appends. No other control character
+        // (except tab, line feed and carriage return) has a place in a query, and rejecting
+        // them keeps the validator from ever seeing more or less text than DuckDB executes.
+        rejectControlCharacters(sql);
+
         // Step 1: Strip comments before tokenizing.
         String stripped = stripComments(sql);
         List<Token> tokens = tokenize(stripped);
@@ -161,7 +235,13 @@ public final class SqlValidator {
                 throw new IllegalArgumentException(
                         "Blocked SQL token '" + word + "' is not allowed in ad-hoc queries");
             }
+            if (invoked) {
+                checkAllocationBounds(stripped, token);
+            }
         }
+
+        // Step 3b: Default-deny table functions in table position.
+        rejectTableFunctions(stripped);
 
         // Step 4: Block DuckDB replacement scans. Keep this deliberately conservative and easy
         // to audit: file-shaped names and quoted paths are forbidden anywhere in ad-hoc SQL.
@@ -338,6 +418,338 @@ public final class SqlValidator {
         return i < sql.length() && sql.charAt(i) == '(';
     }
 
+    private static void rejectControlCharacters(String sql) {
+        for (int i = 0; i < sql.length(); i++) {
+            char c = sql.charAt(i);
+            if ((c < 0x20 && c != '\t' && c != '\n' && c != '\r') || c == 0x7f) {
+                throw new IllegalArgumentException("Control characters are not allowed in queries");
+            }
+        }
+    }
+
+    /**
+     * Bound the functions whose output size is taken from an argument and allocated outside
+     * DuckDB's memory_limit accounting (see {@link #MAX_PAD_WIDTH}).
+     */
+    private static void checkAllocationBounds(String sql, Token token) {
+        String name = token.text();
+        boolean pad = name.equals("LPAD") || name.equals("RPAD");
+        boolean printf = name.equals("PRINTF");
+        boolean format = name.equals("FORMAT");
+        if (!pad && !printf && !format) {
+            return;
+        }
+        int open = sql.indexOf('(', token.end());
+        List<String> args = splitArguments(sql, open);
+        boolean memberCall = precededByDot(sql, token.start());
+
+        if (pad) {
+            // lpad(s, n, c); the member form s.lpad(n, c) passes the string as the receiver.
+            String width = args.size() == 3 ? args.get(1) : args.size() == 2 && memberCall ? args.get(0) : null;
+            if (width == null || !isIntegerLiteralAtMost(width.strip(), MAX_PAD_WIDTH)) {
+                throw new IllegalArgumentException(name.toLowerCase(Locale.ROOT)
+                        + "() needs an integer literal width of at most " + MAX_PAD_WIDTH);
+            }
+            return;
+        }
+
+        // printf/format: the format string must be visible, i.e. a plain literal first argument
+        // (the member form 'fmt'.format(...) hides it in the receiver).
+        String fmt = args.isEmpty() || memberCall ? null : args.get(0).strip();
+        String literal = fmt == null ? null : plainStringLiteral(fmt);
+        if (literal == null) {
+            throw new IllegalArgumentException(name.toLowerCase(Locale.ROOT)
+                    + "() needs a string literal as its first argument");
+        }
+        boolean bounded = printf ? printfSpecsBounded(literal) : formatSpecsBounded(literal);
+        if (!bounded) {
+            throw new IllegalArgumentException(name.toLowerCase(Locale.ROOT)
+                    + "() widths and precisions must be literal and at most "
+                    + MAX_FORMAT_SPEC_DIGITS + " digits");
+        }
+    }
+
+    /** printf specs: no '*' (width/precision from an argument) and no long digit runs. */
+    private static boolean printfSpecsBounded(String fmt) {
+        int i = 0;
+        while (i < fmt.length()) {
+            if (fmt.charAt(i) != '%') {
+                i++;
+                continue;
+            }
+            if (i + 1 < fmt.length() && fmt.charAt(i + 1) == '%') {
+                i += 2;
+                continue;
+            }
+            int end = i + 1;
+            while (end < fmt.length() && !Character.isLetter(fmt.charAt(end))) {
+                end++;
+            }
+            if (!specBounded(fmt.substring(i + 1, end), '*')) {
+                return false;
+            }
+            i = end + 1;
+        }
+        return true;
+    }
+
+    /** fmt-style specs: no nested '{' (width/precision from an argument) and no long digit runs. */
+    private static boolean formatSpecsBounded(String fmt) {
+        int i = 0;
+        while (i < fmt.length()) {
+            if (fmt.charAt(i) != '{') {
+                i++;
+                continue;
+            }
+            if (i + 1 < fmt.length() && fmt.charAt(i + 1) == '{') {
+                i += 2;
+                continue;
+            }
+            int end = fmt.indexOf('}', i + 1);
+            if (end < 0) {
+                end = fmt.length();
+            }
+            if (!specBounded(fmt.substring(i + 1, end), '{')) {
+                return false;
+            }
+            i = end + 1;
+        }
+        return true;
+    }
+
+    private static boolean specBounded(String spec, char dynamicMarker) {
+        if (spec.indexOf(dynamicMarker) >= 0) {
+            return false;
+        }
+        int run = 0;
+        for (int i = 0; i < spec.length(); i++) {
+            run = Character.isDigit(spec.charAt(i)) ? run + 1 : 0;
+            if (run > MAX_FORMAT_SPEC_DIGITS) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean isIntegerLiteralAtMost(String text, int max) {
+        if (text.isEmpty() || text.length() > 9) {
+            return false;
+        }
+        for (int i = 0; i < text.length(); i++) {
+            if (text.charAt(i) < '0' || text.charAt(i) > '9') {
+                return false;
+            }
+        }
+        return Integer.parseInt(text) <= max;
+    }
+
+    /** The value of a plain {@code '...'} literal ({@code ''} unescaped), or null if {@code text} is anything else. */
+    private static String plainStringLiteral(String text) {
+        if (text.length() < 2 || text.charAt(0) != '\'' || skipSingleQuotedString(text, 0) != text.length()
+                || text.charAt(text.length() - 1) != '\'') {
+            return null;
+        }
+        return text.substring(1, text.length() - 1).replace("''", "'");
+    }
+
+    private static boolean precededByDot(String sql, int tokenStart) {
+        int i = tokenStart - 1;
+        while (i >= 0 && Character.isWhitespace(sql.charAt(i))) {
+            i--;
+        }
+        return i >= 0 && sql.charAt(i) == '.';
+    }
+
+    /**
+     * Top-level arguments of the call whose "(" is at {@code open}, as raw text. Nested
+     * parentheses/brackets/braces and quoted text are kept intact.
+     */
+    private static List<String> splitArguments(String sql, int open) {
+        List<String> args = new ArrayList<>();
+        int depth = 0;
+        int argStart = open + 1;
+        int i = open + 1;
+        while (i < sql.length()) {
+            char c = sql.charAt(i);
+            if (c == '\'') {
+                i = skipSingleQuotedString(sql, i);
+                continue;
+            }
+            if (c == '"') {
+                i = skipDoubleQuotedIdentifier(sql, i);
+                continue;
+            }
+            if (c == '(' || c == '[' || c == '{') {
+                depth++;
+            } else if (c == ')' || c == ']' || c == '}') {
+                if (depth == 0) {
+                    String last = sql.substring(argStart, i);
+                    if (!args.isEmpty() || !last.isBlank()) {
+                        args.add(last);
+                    }
+                    return args;
+                }
+                depth--;
+            } else if (c == ',' && depth == 0) {
+                args.add(sql.substring(argStart, i));
+                argStart = i + 1;
+            }
+            i++;
+        }
+        args.add(sql.substring(argStart));
+        return args;
+    }
+
+    private enum LexKind { WORD, QUOTED, OPEN, CLOSE, COMMA, DOT, OTHER }
+
+    /** A significant lexeme of the comment-stripped SQL; {@code text} is upper-cased for words. */
+    private record Lexeme(LexKind kind, String text) {
+    }
+
+    /** Per-nesting-level state for {@link #rejectTableFunctions(String)}. */
+    private static final class Level {
+        /** A level that holds a query (top level, a subquery, or any non-call parenthesis). */
+        boolean query;
+        /** The level was opened by the "(" of a function call (or a keyword like IN/EXISTS). */
+        final boolean call;
+        /** Inside the FROM clause of this level, so a comma separates table references. */
+        boolean inFrom;
+        boolean empty = true;
+
+        Level(boolean query, boolean call) {
+            this.query = query;
+            this.call = call;
+        }
+    }
+
+    /**
+     * Reject every function called in table position unless it is in
+     * {@link #ALLOWED_TABLE_FUNCTIONS}. DuckDB only accepts table functions as table references
+     * (calling one as a scalar is a binder error), so this covers every table function and table
+     * macro, including ones this class does not know about by name.
+     */
+    private static void rejectTableFunctions(String sql) {
+        List<Lexeme> lexemes = lex(sql);
+        Deque<Level> levels = new ArrayDeque<>();
+        levels.push(new Level(true, false));
+
+        for (int i = 0; i < lexemes.size(); i++) {
+            Lexeme lx = lexemes.get(i);
+            Level level = levels.peek();
+            if (level.empty && lx.kind() != LexKind.CLOSE) {
+                level.empty = false;
+                // EXISTS (SELECT ...), IN (FROM ...), ARRAY(SELECT ...): a call-shaped
+                // parenthesis that starts a query is a query level.
+                if (level.call && lx.kind() == LexKind.WORD
+                        && (lx.text().equals("SELECT") || lx.text().equals("FROM") || lx.text().equals("WITH"))) {
+                    level.query = true;
+                }
+            }
+            switch (lx.kind()) {
+                case OPEN -> {
+                    Lexeme prev = i > 0 ? lexemes.get(i - 1) : null;
+                    boolean call = lx.text().equals("(") && prev != null
+                            && (prev.kind() == LexKind.WORD || prev.kind() == LexKind.QUOTED);
+                    // '(' that is not a call: subquery or grouping. '[' / '{': list or struct literal.
+                    levels.push(new Level(!call && lx.text().equals("("), call));
+                }
+                case CLOSE -> {
+                    if (levels.size() > 1) {
+                        levels.pop();
+                    }
+                }
+                case WORD -> {
+                    String word = lx.text();
+                    if (level.query && word.equals("FROM") && !isDistinctFrom(lexemes, i)) {
+                        level.inFrom = true;
+                    } else if (FROM_LIST_TERMINATORS.contains(word)) {
+                        level.inFrom = false;
+                    }
+                    checkTableFunctionCall(lexemes, i, level);
+                }
+                case QUOTED -> checkTableFunctionCall(lexemes, i, level);
+                default -> {
+                    // commas, dots, literals and operators carry no state
+                }
+            }
+        }
+    }
+
+    private static void checkTableFunctionCall(List<Lexeme> lexemes, int i, Level level) {
+        Lexeme name = lexemes.get(i);
+        boolean call = i + 1 < lexemes.size() && lexemes.get(i + 1).text().equals("(");
+        if (!call || (name.kind() == LexKind.WORD && NON_FUNCTION_KEYWORDS.contains(name.text()))) {
+            return;
+        }
+        // Skip a qualifier chain: catalog.schema.function(
+        int j = i;
+        while (j >= 2 && lexemes.get(j - 1).kind() == LexKind.DOT
+                && (lexemes.get(j - 2).kind() == LexKind.WORD || lexemes.get(j - 2).kind() == LexKind.QUOTED)) {
+            j -= 2;
+        }
+        Lexeme prev = j > 0 ? lexemes.get(j - 1) : null;
+        boolean tablePosition = prev != null
+                && ((prev.kind() == LexKind.WORD && TABLE_REF_INTRODUCERS.contains(prev.text())
+                        && (!prev.text().equals("FROM") || (level.query && !isDistinctFrom(lexemes, j - 1))))
+                || (prev.kind() == LexKind.COMMA && level.inFrom));
+        if (tablePosition && !ALLOWED_TABLE_FUNCTIONS.contains(name.text())) {
+            throw new IllegalArgumentException("Table function '" + name.text().toLowerCase(Locale.ROOT)
+                    + "' is not allowed in ad-hoc queries");
+        }
+    }
+
+    /** True for the FROM of {@code IS [NOT] DISTINCT FROM}. */
+    private static boolean isDistinctFrom(List<Lexeme> lexemes, int fromIndex) {
+        if (fromIndex < 2 || !lexemes.get(fromIndex - 1).text().equals("DISTINCT")) {
+            return false;
+        }
+        String before = lexemes.get(fromIndex - 2).text();
+        return before.equals("IS") || before.equals("NOT");
+    }
+
+    private static List<Lexeme> lex(String sql) {
+        List<Lexeme> lexemes = new ArrayList<>();
+        int i = 0;
+        while (i < sql.length()) {
+            char c = sql.charAt(i);
+            if (Character.isWhitespace(c)) {
+                i++;
+            } else if (c == '\'') {
+                i = skipSingleQuotedString(sql, i);
+                lexemes.add(new Lexeme(LexKind.OTHER, "'"));
+            } else if (c == '"') {
+                int start = i;
+                i = skipDoubleQuotedIdentifier(sql, i);
+                String identifier = sql.substring(start + 1, Math.max(start + 1, i - 1)).replace("\"\"", "\"");
+                lexemes.add(new Lexeme(LexKind.QUOTED, identifier.toUpperCase(Locale.ROOT)));
+            } else if (Character.isLetter(c) || c == '_') {
+                int start = i++;
+                while (i < sql.length() && (Character.isLetterOrDigit(sql.charAt(i)) || sql.charAt(i) == '_')) {
+                    i++;
+                }
+                lexemes.add(new Lexeme(LexKind.WORD, sql.substring(start, i).toUpperCase(Locale.ROOT)));
+            } else if (Character.isDigit(c)) {
+                // Numbers, including 1e5 and 1.5, must not produce WORD or DOT lexemes.
+                while (i < sql.length() && (Character.isLetterOrDigit(sql.charAt(i))
+                        || sql.charAt(i) == '.' || sql.charAt(i) == '_')) {
+                    i++;
+                }
+                lexemes.add(new Lexeme(LexKind.OTHER, "0"));
+            } else {
+                LexKind kind = switch (c) {
+                    case '(', '[', '{' -> LexKind.OPEN;
+                    case ')', ']', '}' -> LexKind.CLOSE;
+                    case ',' -> LexKind.COMMA;
+                    case '.' -> LexKind.DOT;
+                    default -> LexKind.OTHER;
+                };
+                lexemes.add(new Lexeme(kind, String.valueOf(c)));
+                i++;
+            }
+        }
+        return lexemes;
+    }
+
     /**
      * A bare word or double-quoted identifier from the comment-stripped SQL.
      *
@@ -355,7 +767,7 @@ public final class SqlValidator {
      * <p>Handles two comment styles:</p>
      * <ul>
      *   <li>Block comments: {@code /* ... * /} (including nested)</li>
-     *   <li>Line comments: {@code -- ...} (to end of line)</li>
+     *   <li>Line comments: {@code -- ...} (to the next {@code \n} or {@code \r}, as in DuckDB's lexer)</li>
      * </ul>
      *
      * <p>String literals ({@code '...'}) are preserved — comments inside strings
@@ -440,7 +852,9 @@ public final class SqlValidator {
             // Line comment -- ... — skip to end of line
             if (c == '-' && i + 1 < len && sql.charAt(i + 1) == '-') {
                 i += 2;
-                while (i < len && sql.charAt(i) != '\n') {
+                // DuckDB's lexer ends a line comment at '\n' OR '\r'. Stopping only at '\n'
+                // would hide everything after a bare '\r' from the checks while DuckDB runs it.
+                while (i < len && sql.charAt(i) != '\n' && sql.charAt(i) != '\r') {
                     i++;
                 }
                 result.append(' ');

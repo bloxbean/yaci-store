@@ -240,7 +240,19 @@ Defense in depth, in this order:
    `COPY`/`EXPORT`, extension management, file/URL literals, catalog/metadata functions
    (`duckdb_*`, `pragma_*`, `SHOW`, `DESCRIBE`, `SUMMARIZE`, `information_schema`) and the attached
    PostgreSQL alias are rejected with `400`. Double-quoted identifiers that merely spell a keyword
-   (`"set"`, `"show"`) are allowed.
+   (`"set"`, `"show"`) are allowed. Further rules:
+   - **Table functions are denied by default.** Only `unnest`, `json_each` and `json_tree` may be
+     used as a table (`FROM`, `JOIN`, `LATERAL`, a `FROM` list); every other table function —
+     file readers, `range`/`generate_series`, `histogram(<table>, ...)` and functions that change
+     engine-wide state such as `enable_logging`, `enable_profiling` or `force_checkpoint` — is
+     rejected. Aggregate `histogram(col)` is unaffected.
+   - **Allocation-amplifying functions are bounded.** DuckDB's `memory_limit` does not cover a
+     single large value, so `lpad`/`rpad` need an integer-literal width of at most 10000,
+     `printf`/`format` need a literal format string whose widths and precisions have at most three
+     digits (no `*` or `{}` width taken from an argument), and `repeat`, `list_resize`,
+     `array_resize`, `sleep_ms` and `write_log` are rejected.
+   - Control characters other than tab, line feed and carriage return are rejected, and a `--`
+     comment ends at either a line feed or a carriage return, as in DuckDB.
 3. **Limits** — per-query timeout (enforced for the whole execution — the engine deliberately
    uses non-streaming JDBC result sets, whose cancel timer would otherwise stop at the execute
    phase), the row limits above, concurrent readers bounded by

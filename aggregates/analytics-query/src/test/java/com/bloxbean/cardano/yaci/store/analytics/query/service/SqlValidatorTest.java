@@ -2,8 +2,18 @@ package com.bloxbean.cardano.yaci.store.analytics.query.service;
 
 import org.junit.jupiter.api.Test;
 
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SqlValidatorTest {
 
@@ -172,7 +182,206 @@ class SqlValidatorTest {
         assertRejected("SELECT * FROM \"query\"('SELECT 1')");
     }
 
+    // --- line comments end at '\r' as well as '\n' (DuckDB's lexer) ---
+
+    @Test
+    void lineCommentEndsAtBareCarriageReturnLikeDuckDb() {
+        // DuckDB runs ", * FROM postgres_query(...)" after the bare CR; the validator must see it too.
+        assertRejected("SELECT 1 AS x -- c\r, * FROM postgres_query('pg_live', 'SELECT 1')");
+        assertRejected("SELECT 1 AS x -- c\r, getenv('HOME') AS h");
+        assertRejected("SELECT 1 AS x -- c\r FROM read_parquet('x')");
+        assertEquals("SELECT 1  \r, 2", SqlValidator.stripComments("SELECT 1 -- c\r, 2"));
+    }
+
+    @Test
+    void duckDbLexerBehaviourTheValidatorReliesOn() throws Exception {
+        try (Connection c = DriverManager.getConnection("jdbc:duckdb:");
+             Statement st = c.createStatement()) {
+            // A bare CR ends a line comment: the second column is executed.
+            try (ResultSet rs = st.executeQuery("SELECT 1 AS x -- c\r, 42 AS smuggled")) {
+                assertEquals(2, rs.getMetaData().getColumnCount());
+            }
+            // Other "newline" characters do not end it.
+            for (String sep : new String[]{"\u0085", "\u2028", "\u2029"}) {
+                try (ResultSet rs = st.executeQuery("SELECT 1 AS x -- c" + sep + ", 42 AS smuggled\n")) {
+                    assertEquals(1, rs.getMetaData().getColumnCount());
+                }
+            }
+            // NUL ends the statement: the text after it is never seen.
+            try (ResultSet rs = st.executeQuery("SELECT 1 AS x\0, 42 AS dropped")) {
+                assertEquals(1, rs.getMetaData().getColumnCount());
+            }
+        }
+    }
+
+    @Test
+    void stillAcceptsCommentsWithWindowsAndUnixLineEndings() {
+        assertDoesNotThrow(() -> SqlValidator.validate("SELECT slot -- the slot\r\nFROM block"));
+        assertDoesNotThrow(() -> SqlValidator.validate("SELECT slot -- the slot\nFROM block"));
+        assertDoesNotThrow(() -> SqlValidator.validate("SELECT slot\r\nFROM block\r\nWHERE epoch = 1\t-- tab"));
+    }
+
+    @Test
+    void rejectsNulAndOtherControlCharacters() {
+        // DuckDB stops at NUL, which would cut off the executor's LIMIT wrapper.
+        assertRejected("SELECT * FROM block) AS q\0");
+        assertRejected("SELECT 1 \u0000, 2");
+        assertRejected("SELECT 1 \u000b, 2");
+        assertRejected("SELECT 1 \f, 2");
+        assertRejected("SELECT 1 \u007f, 2");
+    }
+
+    // --- table functions: default deny in table position ---
+
+    @Test
+    void rejectsStateChangingTableFunctions() {
+        assertRejected("SELECT * FROM enable_logging(storage = 'file', storage_path = 'logs')");
+        assertRejected("SELECT * FROM enable_logging()");
+        assertRejected("SELECT * FROM disable_logging()");
+        assertRejected("SELECT * FROM truncate_duckdb_logs()");
+        assertRejected("SELECT * FROM enable_profiling()");
+        assertRejected("SELECT * FROM disable_profiling()");
+        assertRejected("SELECT * FROM enable_peg_parser()");
+        assertRejected("SELECT * FROM disable_peg_parser()");
+        assertRejected("SELECT * FROM force_checkpoint()");
+        assertRejected("SELECT * FROM checkpoint()");
+        assertRejected("SELECT write_log('x')");
+        assertRejected("SELECT sleep_ms(100000)");
+        assertRejected("SELECT * FROM repeat_row(1, num_rows = 1000000000)");
+        assertRejected("SELECT * FROM histogram('pg_live.public.block', slot)");
+    }
+
+    @Test
+    void rejectsUnknownTableFunctionsInEveryTablePosition() {
+        // Not in any name list: rejected only because it is called in table position.
+        assertRejected("SELECT * FROM some_future_function()");
+        assertRejected("SELECT * FROM block b JOIN some_future_function() f ON true");
+        assertRejected("SELECT * FROM block b LEFT OUTER JOIN some_future_function() f ON true");
+        assertRejected("SELECT * FROM block b, some_future_function() f");
+        assertRejected("SELECT * FROM block b JOIN epoch e ON b.epoch = e.number, some_future_function()");
+        assertRejected("SELECT * FROM block b, LATERAL some_future_function(b.slot)");
+        assertRejected("SELECT * FROM block b POSITIONAL JOIN some_future_function()");
+        assertRejected("SELECT * FROM (FROM some_future_function())");
+        assertRejected("SELECT 1 WHERE EXISTS (FROM some_future_function())");
+        assertRejected("SELECT 1 WHERE 1 IN (SELECT * FROM some_future_function())");
+        assertRejected("SELECT * FROM main.some_future_function()");
+        assertRejected("SELECT * FROM \"main\".\"some_future_function\"()");
+        assertRejected("SELECT * FROM (PIVOT some_future_function() ON x USING count(*))");
+        assertRejected("WITH t AS (SELECT * FROM some_future_function()) SELECT * FROM t");
+    }
+
+    @Test
+    void allowsUnnestAndJsonTableFunctionsAndScalarCallsNearFrom() {
+        assertDoesNotThrow(() -> SqlValidator.validate("SELECT * FROM unnest([1, 2, 3]) AS u(x)"));
+        assertDoesNotThrow(() -> SqlValidator.validate(
+                "SELECT t.tx_hash, j.key FROM transaction_metadata t, json_each(t.body) j"));
+        assertDoesNotThrow(() -> SqlValidator.validate(
+                "SELECT * FROM transaction_metadata t CROSS JOIN LATERAL json_tree(t.body)"));
+        assertDoesNotThrow(() -> SqlValidator.validate(
+                "SELECT extract(year FROM to_timestamp(block_time)) FROM block"));
+        assertDoesNotThrow(() -> SqlValidator.validate(
+                "SELECT trim(both 'x' FROM lower(owner_addr)), substring(hash FROM 1 FOR 8) FROM block"));
+        assertDoesNotThrow(() -> SqlValidator.validate(
+                "SELECT * FROM block WHERE hash IS DISTINCT FROM lower('ab') AND slot IS NOT DISTINCT FROM abs(1)"));
+        assertDoesNotThrow(() -> SqlValidator.validate(
+                "SELECT * FROM block b JOIN epoch e ON e.number = abs(b.epoch), (SELECT 1 AS one) o"));
+        assertDoesNotThrow(() -> SqlValidator.validate(
+                "SELECT * FROM block b, LATERAL (SELECT count(*) FROM transaction t WHERE t.slot = b.slot) c"));
+        assertDoesNotThrow(() -> SqlValidator.validate(
+                "SELECT epoch, sum(fee) FROM block GROUP BY epoch ORDER BY lower(epoch::VARCHAR), abs(epoch)"));
+        assertDoesNotThrow(() -> SqlValidator.validate(
+                "SELECT histogram(epoch), count(*) FROM block"));
+        assertDoesNotThrow(() -> SqlValidator.validate(
+                "SELECT * FROM block AS b(x, y), unnest([1]) WHERE x > coalesce(y, 0)"));
+        assertDoesNotThrow(() -> SqlValidator.validate(
+                "SELECT * FROM block USING SAMPLE reservoir(10 ROWS)"));
+        assertDoesNotThrow(() -> SqlValidator.validate(
+                "SELECT 1.5e3, list_transform([1, 2], x -> x + 1) FROM block"));
+    }
+
+    @Test
+    void rejectsEveryDuckDbTableFunctionExceptTheAllowList() throws Exception {
+        // Guard for DuckDB upgrades: every table function / table macro the engine ships is
+        // rejected in table position, and the table-only ones are also rejected by name.
+        List<String[]> functions = new ArrayList<>();
+        try (Connection c = DriverManager.getConnection("jdbc:duckdb:");
+             Statement st = c.createStatement();
+             ResultSet rs = st.executeQuery("""
+                     SELECT function_name,
+                            bool_and(function_type IN ('table', 'table_macro', 'pragma')) AS table_only
+                     FROM duckdb_functions()
+                     GROUP BY function_name
+                     HAVING bool_or(function_type IN ('table', 'table_macro'))
+                     """)) {
+            while (rs.next()) {
+                functions.add(new String[]{rs.getString(1), String.valueOf(rs.getBoolean(2))});
+            }
+        }
+        assertTrue(functions.size() > 50, "expected DuckDB's table functions, got " + functions.size());
+        for (String[] f : functions) {
+            String name = f[0];
+            if (SqlValidator.ALLOWED_TABLE_FUNCTIONS.contains(name.toUpperCase(Locale.ROOT))) {
+                continue;
+            }
+            assertRejected("SELECT * FROM " + name + "()");
+            assertRejected("SELECT * FROM block b JOIN \"" + name + "\"(1) x ON true");
+            if (Boolean.parseBoolean(f[1])) {
+                assertRejected("SELECT " + name + "(1)");
+            }
+        }
+    }
+
+    // --- allocations that memory_limit does not cover ---
+
+    @Test
+    void rejectsUnboundedPadAndResize() {
+        assertRejected("SELECT length(lpad('a', 1000000000, 'b'))");
+        assertRejected("SELECT rpad('a', 10001, 'b')");
+        assertRejected("SELECT lpad('a', slot, 'b') FROM block");
+        assertRejected("SELECT lpad('a', 100 * 100000, 'b')");
+        assertRejected("SELECT lpad('a', 1e9::INT, 'b')");
+        assertRejected("SELECT owner_addr.lpad(1000000000, 'b') FROM block");
+        assertRejected("SELECT \"lpad\"('a', 1000000000, 'b')");
+        assertRejected("SELECT len(list_resize([1::BIGINT], 300000000))");
+        assertRejected("SELECT len(array_resize([1::BIGINT], 3))");
+        assertRejected("SELECT [1].list_resize(3)");
+    }
+
+    @Test
+    void allowsSmallLiteralPadWidths() {
+        assertDoesNotThrow(() -> SqlValidator.validate("SELECT lpad(epoch::VARCHAR, 4, '0') FROM block"));
+        assertDoesNotThrow(() -> SqlValidator.validate("SELECT rpad(hash, 10000, ' ') FROM block"));
+        assertDoesNotThrow(() -> SqlValidator.validate("SELECT main.lpad(hash, 8, '0') FROM block"));
+        assertDoesNotThrow(() -> SqlValidator.validate("SELECT hash.lpad(70, '0') FROM block"));
+        assertDoesNotThrow(() -> SqlValidator.validate("SELECT lpad(rpad(hash, 70, 'x'), 80, '0') FROM block"));
+    }
+
+    @Test
+    void rejectsWideOrDynamicFormatSpecs() {
+        assertRejected("SELECT printf('%1000000000d', 1)");
+        assertRejected("SELECT printf('%.100000000f', 1.0)");
+        assertRejected("SELECT printf('%*d', 100000000, 1)");
+        assertRejected("SELECT printf('%.*f', 100000000, 1.0)");
+        assertRejected("SELECT format('{:>1000000000}', 'a')");
+        assertRejected("SELECT format('{:>{}}', 'a', 100000000)");
+        assertRejected("SELECT format('{0:.{1}f}', 1.0, 100000000)");
+        assertRejected("SELECT format(hash, 1) FROM block");
+        assertRejected("SELECT ('{:>100000000}').format('a')");
+        assertRejected("SELECT format(E'{:>100000000}', 'a')");
+    }
+
+    @Test
+    void allowsOrdinaryFormatting() {
+        assertDoesNotThrow(() -> SqlValidator.validate(
+                "SELECT printf('%5.2f ADA (%d%%) %-10s', fee / 1e6, 5, hash) FROM block"));
+        assertDoesNotThrow(() -> SqlValidator.validate(
+                "SELECT format('{:,} lovelace in epoch {} of 100000 {{literal}}', fee, epoch) FROM block"));
+        assertDoesNotThrow(() -> SqlValidator.validate(
+                "SELECT format('{:*>12}|{:.3f}|{0}', hash, 1.5) FROM block"));
+        assertDoesNotThrow(() -> SqlValidator.validate("SELECT format('it''s {}', 1)"));
+    }
+
     private static void assertRejected(String sql) {
-        assertThrows(IllegalArgumentException.class, () -> SqlValidator.validate(sql));
+        assertThrows(IllegalArgumentException.class, () -> SqlValidator.validate(sql), sql);
     }
 }
