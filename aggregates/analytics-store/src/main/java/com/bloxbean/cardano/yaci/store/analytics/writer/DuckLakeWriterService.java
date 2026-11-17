@@ -3,7 +3,9 @@ package com.bloxbean.cardano.yaci.store.analytics.writer;
 import com.bloxbean.cardano.yaci.store.analytics.config.AnalyticsStoreProperties;
 import com.bloxbean.cardano.yaci.store.analytics.ducklake.DuckLakeWriterLock;
 import com.bloxbean.cardano.yaci.store.analytics.helper.DuckDbConnectionHelper;
+import com.zaxxer.hikari.HikariDataSource;
 import lombok.extern.slf4j.Slf4j;
+import org.duckdb.DuckDBConnection;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
@@ -77,55 +79,12 @@ public class DuckLakeWriterService implements StorageWriter {
 
         try (DuckLakeWriterLock.Guard ignored = writerLock.acquire();
              Connection conn = duckDbDataSource.getConnection()) {
-            // Prepare DuckDB connection for DuckLake (installs extensions, attaches catalog + source, sets search path)
-            // readOnly=false for write operations
-            connectionHelper.prepareConnectionForDuckLake(conn, true, false);
-
-            // Extract table name from output path
-            // Format: ./data/analytics/transactions/date=2024-01-15/data.parquet
-            String tableName = extractTableNameFromPath(outputPath);
-            Partition partition = partitionOf(outputPath);
-
-            // Handle date partitioning query transformation
-            String finalQuery = query;
-
-            if (partition != null && partition.column().equals("date")) {
-                // To get "date=yyyy-mm-dd" folder structure, we need an explicit "date" column.
-                // It is the exported partition's date, not one derived from each row's timestamp:
-                // the export selects rows by slot range, and a row without a block time
-                // (COALESCE(block_time, 0)) would otherwise be filed under 1970-01-01.
-                finalQuery = String.format("SELECT *, %s AS date FROM (%s)", partition.literal(), query);
+            try {
+                return export(conn, query, outputPath, startTime);
+            } catch (SQLException e) {
+                discardConnection(conn);
+                throw e;
             }
-
-            Map<String, String> queryColumns = describe(conn, finalQuery);
-            requirePartitionColumn(tableName, partition, queryColumns);
-
-            if (!tableExists(conn, tableName)) {
-                // Created and partitioned in one transaction, so a crash cannot leave the table
-                // unpartitioned
-                createPartitionedTable(conn, tableName, finalQuery, partition);
-            } else {
-                addMissingColumns(conn, tableName, queryColumns);
-                // Repairs a table that an earlier release created without partitioning
-                // (CREATE and ALTER ... SET PARTITIONED BY used to commit separately)
-                ensurePartitioning(conn, tableName, partition);
-            }
-
-            // Replace the partition's rows (DELETE + INSERT in one DuckLake transaction)
-            long rowCount = replacePartition(conn, tableName, partition, finalQuery);
-
-            // Note: DuckLake manages its own files with UUID names in partition directories
-            // The outputPath is used only for partition detection, not actual file placement
-            // File size is not easily calculable as DuckLake may create multiple files
-            long fileSize = 0;
-
-            long duration = System.currentTimeMillis() - startTime;
-
-            log.info("DuckLake export completed for table '{}': {} rows, {}ms",
-                    tableName, rowCount, duration);
-
-            return new ExportResult(outputPath, rowCount, fileSize, duration);
-
         } catch (SQLException rawError) {
             // postgres_scanner / PostgreSQL-catalog errors echo the connection string
             // (including the password); log and propagate a redacted copy only.
@@ -133,6 +92,130 @@ public class DuckLakeWriterService implements StorageWriter {
             log.error("Failed to export to DuckLake: {}", e.getMessage(), e);
             throw new RuntimeException("DuckLake export failed: " + e.getMessage(), e);
         }
+    }
+
+    private ExportResult export(Connection conn, String query, String outputPath, long startTime) throws SQLException {
+        // Prepare DuckDB connection for DuckLake (installs extensions, attaches catalog + source, sets search path)
+        // readOnly=false for write operations
+        connectionHelper.prepareConnectionForDuckLake(conn, true, false);
+
+        // Extract table name from output path
+        // Format: ./data/analytics/transactions/date=2024-01-15/data.parquet
+        String tableName = extractTableNameFromPath(outputPath);
+        Partition partition = partitionOf(outputPath);
+
+        // Handle date partitioning query transformation
+        String finalQuery = query;
+
+        if (partition != null && partition.column().equals("date")) {
+            // To get "date=yyyy-mm-dd" folder structure, we need an explicit "date" column.
+            // It is the exported partition's date, not one derived from each row's timestamp:
+            // the export selects rows by slot range, and a row without a block time
+            // (COALESCE(block_time, 0)) would otherwise be filed under 1970-01-01.
+            finalQuery = String.format("SELECT *, %s AS date FROM (%s)", partition.literal(), query);
+        }
+
+        Map<String, String> queryColumns = describe(conn, finalQuery);
+        requirePartitionColumn(tableName, partition, queryColumns);
+
+        if (!tableExists(conn, tableName)) {
+            // Created and partitioned in one transaction, so a crash cannot leave the table
+            // unpartitioned
+            createPartitionedTable(conn, tableName, finalQuery, partition);
+        } else {
+            addMissingColumns(conn, tableName, queryColumns);
+            // Repairs a table that an earlier release created without partitioning
+            // (CREATE and ALTER ... SET PARTITIONED BY used to commit separately)
+            ensurePartitioning(conn, tableName, partition);
+        }
+
+        // Replace the partition's rows (DELETE + INSERT in one DuckLake transaction)
+        long rowCount = replacePartition(conn, tableName, partition, finalQuery);
+
+        // Note: DuckLake manages its own files with UUID names in partition directories
+        // The outputPath is used only for partition detection, not actual file placement
+        // File size is not easily calculable as DuckLake may create multiple files
+        long fileSize = 0;
+
+        long duration = System.currentTimeMillis() - startTime;
+
+        log.info("DuckLake export completed for table '{}': {} rows, {}ms",
+                tableName, rowCount, duration);
+
+        return new ExportResult(outputPath, rowCount, fileSize, duration);
+    }
+
+    /** Work done inside a transaction of {@link #inTransaction}. */
+    @FunctionalInterface
+    private interface TransactionWork<T> {
+        T run(Statement stmt) throws SQLException;
+    }
+
+    /**
+     * Runs {@code work} in one DuckDB transaction, opened and ended with explicit
+     * {@code BEGIN TRANSACTION} / {@code COMMIT} / {@code ROLLBACK} statements while the JDBC
+     * connection stays in auto-commit mode.
+     *
+     * <p>Deliberately not {@code setAutoCommit(false)} / {@code commit()} / {@code rollback()}:
+     * the DuckDB JDBC driver keeps a flag of its own for "a transaction is open", sends
+     * {@code BEGIN} only while that flag is clear, and clears it only when a COMMIT or ROLLBACK
+     * succeeds. When the source PostgreSQL dies in the middle of an export, DuckDB ends the
+     * transaction but its ROLLBACK reports an error (the postgres extension cannot roll back its
+     * dead connection), so the flag stays set for the life of the connection. From then on the
+     * driver never begins a transaction again: every statement commits on its own (a replace
+     * deleted the partition and inserted the rows as two snapshots, and a failed insert left the
+     * partition empty), and every commit fails with "cannot commit - no transaction is active".</p>
+     *
+     * <p>The first error is the one rethrown; a failed ROLLBACK is attached to it as suppressed.</p>
+     */
+    private static <T> T inTransaction(Connection conn, TransactionWork<T> work) throws SQLException {
+        try (Statement stmt = conn.createStatement()) {
+            stmt.execute("BEGIN TRANSACTION");
+            try {
+                T result = work.run(stmt);
+                stmt.execute("COMMIT");
+                return result;
+            } catch (SQLException | RuntimeException e) {
+                try {
+                    stmt.execute("ROLLBACK");
+                } catch (SQLException rollbackError) {
+                    e.addSuppressed(rollbackError);
+                }
+                throw e;
+            }
+        }
+    }
+
+    /**
+     * Closes the physical DuckDB connection behind a pooled connection whose export failed, and
+     * evicts it from the pool, so the next export starts on a new DuckDB instance that attaches
+     * the catalog and the source again. A failure in the middle of a transaction can leave
+     * state behind on the connection (an unfinished transaction, a broken source attachment)
+     * that would otherwise fail, or silently change, every later export of this JVM.
+     *
+     * <p>The physical connection is closed here, before the pool replaces it: the pool closes
+     * evicted connections asynchronously, and DuckDB lets only one instance per process have the
+     * catalog file open, so a replacement could otherwise fail to attach it.</p>
+     */
+    private void discardConnection(Connection conn) {
+        try {
+            if (conn.isWrapperFor(DuckDBConnection.class)) {
+                conn.unwrap(DuckDBConnection.class).close();
+            }
+        } catch (SQLException e) {
+            log.warn("Failed to close the DuckDB writer connection after a failed export: {}",
+                    DuckDbConnectionHelper.redactSecrets(e.getMessage()));
+        }
+        try {
+            if (duckDbDataSource.isWrapperFor(HikariDataSource.class)) {
+                duckDbDataSource.unwrap(HikariDataSource.class).evictConnection(conn);
+            }
+        } catch (SQLException e) {
+            log.warn("Failed to evict the DuckDB writer connection after a failed export: {}",
+                    DuckDbConnectionHelper.redactSecrets(e.getMessage()));
+        }
+        log.warn("Discarded the DuckDB writer connection after a failed export; "
+                + "the next export opens a new one and attaches the catalog and source again");
     }
 
     @Override
@@ -199,24 +282,13 @@ public class DuckLakeWriterService implements StorageWriter {
      */
     private void createPartitionedTable(Connection conn, String tableName, String query, Partition partition)
             throws SQLException {
-        boolean autoCommit = conn.getAutoCommit();
-        conn.setAutoCommit(false);
-        try (Statement stmt = conn.createStatement()) {
+        inTransaction(conn, stmt -> {
             stmt.execute(String.format("CREATE TABLE %s AS %s LIMIT 0;", tableName, query));
             if (partition != null) {
                 stmt.execute(String.format("ALTER TABLE %s SET PARTITIONED BY (%s);", tableName, partition.column()));
             }
-            conn.commit();
-        } catch (SQLException | RuntimeException e) {
-            try {
-                conn.rollback();
-            } catch (SQLException rollbackError) {
-                e.addSuppressed(rollbackError);
-            }
-            throw e;
-        } finally {
-            conn.setAutoCommit(autoCommit);
-        }
+            return null;
+        });
         if (partition != null) {
             log.info("Created DuckLake table '{}' partitioned by {}", tableName, partition.column());
         } else {
@@ -382,28 +454,16 @@ public class DuckLakeWriterService implements StorageWriter {
             return exportWithDuckLake(conn, tableName, query);
         }
 
-        boolean autoCommit = conn.getAutoCommit();
-        conn.setAutoCommit(false);
-        try (Statement stmt = conn.createStatement()) {
-            int deleted = stmt.executeUpdate(
-                    String.format("DELETE FROM %s WHERE %s;", tableName, partition.filter()));
-            long inserted = exportWithDuckLake(conn, tableName, query);
-            conn.commit();
-            if (deleted > 0) {
-                log.info("Replaced {} existing rows of DuckLake table '{}' partition {} with {} rows",
-                        deleted, tableName, partition.filter(), inserted);
-            }
-            return inserted;
-        } catch (SQLException | RuntimeException e) {
-            try {
-                conn.rollback();
-            } catch (SQLException rollbackError) {
-                e.addSuppressed(rollbackError);
-            }
-            throw e;
-        } finally {
-            conn.setAutoCommit(autoCommit);
+        long[] deletedAndInserted = inTransaction(conn, stmt -> new long[]{
+                stmt.executeUpdate(String.format("DELETE FROM %s WHERE %s;", tableName, partition.filter())),
+                exportWithDuckLake(conn, tableName, query)});
+        long deleted = deletedAndInserted[0];
+        long inserted = deletedAndInserted[1];
+        if (deleted > 0) {
+            log.info("Replaced {} existing rows of DuckLake table '{}' partition {} with {} rows",
+                    deleted, tableName, partition.filter(), inserted);
         }
+        return inserted;
     }
 
     /**
@@ -421,62 +481,60 @@ public class DuckLakeWriterService implements StorageWriter {
     public EpochZeroPartition purgeEpochZeroPartition(String tableName, long startSlot, long endSlot) {
         try (DuckLakeWriterLock.Guard ignored = writerLock.acquire();
              Connection conn = duckDbDataSource.getConnection()) {
-            connectionHelper.prepareConnectionForDuckLake(conn, false, false);
-
-            String columnsSql = String.format(
-                    "SELECT COUNT(*) FROM duckdb_columns() WHERE database_name = 'ducklake_catalog' "
-                            + "AND table_name = '%s' AND column_name IN ('date', 'slot');", tableName);
-            try (Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(columnsSql)) {
-                if (!rs.next() || rs.getInt(1) < 2) {
-                    return new EpochZeroPartition(0, null, null, false);
-                }
-            }
-
-            boolean autoCommit = conn.getAutoCommit();
-            conn.setAutoCommit(false);
-            try (Statement stmt = conn.createStatement()) {
-                long rows;
-                long rowsWithSlot;
-                Long minSlot;
-                Long maxSlot;
-                try (ResultSet rs = stmt.executeQuery(String.format(
-                        "SELECT COUNT(*), COUNT(slot), MIN(slot), MAX(slot) FROM %s WHERE %s;",
-                        tableName, EPOCH_ZERO_DATE.filter()))) {
-                    rs.next();
-                    rows = rs.getLong(1);
-                    rowsWithSlot = rs.getLong(2);
-                    minSlot = rs.getObject(3) != null ? rs.getLong(3) : null;
-                    maxSlot = rs.getObject(4) != null ? rs.getLong(4) : null;
-                }
-
-                boolean covered = rows > 0 && rowsWithSlot == rows
-                        && minSlot >= startSlot && maxSlot < endSlot;
-                if (covered) {
-                    stmt.executeUpdate(String.format("DELETE FROM %s WHERE %s;", tableName, EPOCH_ZERO_DATE.filter()));
-                    log.info("Deleted {} mis-filed rows (slots {}..{}) from DuckLake table '{}' partition date=1970-01-01",
-                            rows, minSlot, maxSlot, tableName);
-                } else if (rows > 0) {
-                    log.warn("DuckLake table '{}' has {} rows under date=1970-01-01 (slots {}..{}) outside the "
-                            + "re-exported slots [{}, {}); keeping them", tableName, rows, minSlot, maxSlot,
-                            startSlot, endSlot);
-                }
-                conn.commit();
-                return new EpochZeroPartition(rows, minSlot, maxSlot, covered);
-            } catch (SQLException | RuntimeException e) {
-                try {
-                    conn.rollback();
-                } catch (SQLException rollbackError) {
-                    e.addSuppressed(rollbackError);
-                }
+            try {
+                return purgeEpochZeroPartition(conn, tableName, startSlot, endSlot);
+            } catch (SQLException e) {
+                discardConnection(conn);
                 throw e;
-            } finally {
-                conn.setAutoCommit(autoCommit);
             }
         } catch (SQLException rawError) {
             SQLException e = DuckDbConnectionHelper.sanitize(rawError);
             log.error("Failed to purge date=1970-01-01 of DuckLake table '{}': {}", tableName, e.getMessage(), e);
             throw new RuntimeException("DuckLake purge failed: " + e.getMessage(), e);
         }
+    }
+
+    private EpochZeroPartition purgeEpochZeroPartition(Connection conn, String tableName, long startSlot,
+                                                       long endSlot) throws SQLException {
+        connectionHelper.prepareConnectionForDuckLake(conn, false, false);
+
+        String columnsSql = String.format(
+                "SELECT COUNT(*) FROM duckdb_columns() WHERE database_name = 'ducklake_catalog' "
+                        + "AND table_name = '%s' AND column_name IN ('date', 'slot');", tableName);
+        try (Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(columnsSql)) {
+            if (!rs.next() || rs.getInt(1) < 2) {
+                return new EpochZeroPartition(0, null, null, false);
+            }
+        }
+
+        return inTransaction(conn, stmt -> {
+            long rows;
+            long rowsWithSlot;
+            Long minSlot;
+            Long maxSlot;
+            try (ResultSet rs = stmt.executeQuery(String.format(
+                    "SELECT COUNT(*), COUNT(slot), MIN(slot), MAX(slot) FROM %s WHERE %s;",
+                    tableName, EPOCH_ZERO_DATE.filter()))) {
+                rs.next();
+                rows = rs.getLong(1);
+                rowsWithSlot = rs.getLong(2);
+                minSlot = rs.getObject(3) != null ? rs.getLong(3) : null;
+                maxSlot = rs.getObject(4) != null ? rs.getLong(4) : null;
+            }
+
+            boolean covered = rows > 0 && rowsWithSlot == rows
+                    && minSlot >= startSlot && maxSlot < endSlot;
+            if (covered) {
+                stmt.executeUpdate(String.format("DELETE FROM %s WHERE %s;", tableName, EPOCH_ZERO_DATE.filter()));
+                log.info("Deleted {} mis-filed rows (slots {}..{}) from DuckLake table '{}' partition date=1970-01-01",
+                        rows, minSlot, maxSlot, tableName);
+            } else if (rows > 0) {
+                log.warn("DuckLake table '{}' has {} rows under date=1970-01-01 (slots {}..{}) outside the "
+                        + "re-exported slots [{}, {}); keeping them", tableName, rows, minSlot, maxSlot,
+                        startSlot, endSlot);
+            }
+            return new EpochZeroPartition(rows, minSlot, maxSlot, covered);
+        });
     }
 
     /**

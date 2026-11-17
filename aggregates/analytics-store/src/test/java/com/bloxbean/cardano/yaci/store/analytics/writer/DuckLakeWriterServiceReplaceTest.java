@@ -4,6 +4,7 @@ import com.bloxbean.cardano.yaci.store.analytics.config.AnalyticsStoreProperties
 import com.bloxbean.cardano.yaci.store.analytics.ducklake.DuckLakeWriterLock;
 import com.bloxbean.cardano.yaci.store.analytics.helper.DuckDbConnectionHelper;
 import com.zaxxer.hikari.HikariDataSource;
+import org.duckdb.DuckDBConnection;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -40,6 +41,7 @@ class DuckLakeWriterServiceReplaceTest {
 
     private HikariDataSource dataSource;
     private DuckLakeWriterService writer;
+    private DuckDbConnectionHelper helper;
     private String exportPath;
 
     @BeforeEach
@@ -59,7 +61,7 @@ class DuckLakeWriterServiceReplaceTest {
         dataSource.setMaximumPoolSize(1);
         dataSource.setMinimumIdle(1);
 
-        DuckDbConnectionHelper helper = new DuckDbConnectionHelper(environment(), properties) {
+        helper = new DuckDbConnectionHelper(environment(), properties) {
             @Override
             public void prepareConnectionForDuckLake(Connection conn, boolean needsSource, boolean readOnly)
                     throws SQLException {
@@ -156,6 +158,52 @@ class DuckLakeWriterServiceReplaceTest {
         assertThat(rowsPerDate("block")).containsExactly(Map.entry("2024-03-01", 5L));
     }
 
+    /**
+     * When the source PostgreSQL dies in the middle of an export, DuckDB ends the transaction but
+     * its ROLLBACK reports an error, and the DuckDB JDBC driver keeps believing a transaction is
+     * open. It then never begins one again, so a writer relying on setAutoCommit(false) committed
+     * the DELETE and the INSERT of every later replace separately and failed each commit with
+     * "cannot commit - no transaction is active".
+     */
+    @Test
+    void replaceStaysAtomicOnAConnectionWhoseDriverLostTrackOfTheTransaction() throws Exception {
+        writer.export(blocks(0, 5, MARCH_1), path("block", "date=2024-03-01"), "block_time");
+        leaveDriverBelievingATransactionIsOpen();
+
+        assertThat(writer.export(blocks(0, 6, MARCH_1), path("block", "date=2024-03-01"), "block_time")
+                .getRowCount()).isEqualTo(6);
+        assertThat(rowsPerDate("block")).containsExactly(Map.entry("2024-03-01", 6L));
+        // One snapshot deleted the old rows and inserted the new ones
+        assertThat(latestSnapshotChanges()).contains("tables_deleted_from", "tables_inserted_into");
+
+        // Same connection, the driver still believes a transaction is open
+        String failing = "SELECT range AS slot, to_timestamp(" + MARCH_1 + " + range) AS block_time "
+                + "FROM range(5) WHERE error('source failed') IS NULL";
+        assertThatThrownBy(() -> writer.export(failing, path("block", "date=2024-03-01"), "block_time"))
+                .hasMessageContaining("source failed")
+                .hasMessageNotContaining("no transaction is active");
+        // The DELETE was rolled back with the failed INSERT
+        assertThat(rowsPerDate("block")).containsExactly(Map.entry("2024-03-01", 6L));
+    }
+
+    @Test
+    void aFailedExportDiscardsItsConnection() throws Exception {
+        writer.export(blocks(0, 5, MARCH_1), path("block", "date=2024-03-01"), "block_time");
+        DuckDBConnection before = physicalConnection();
+
+        String failing = "SELECT range AS slot, to_timestamp(" + MARCH_1 + " + range) AS block_time "
+                + "FROM range(5) WHERE error('source failed') IS NULL";
+        assertThatThrownBy(() -> writer.export(failing, path("block", "date=2024-03-01"), "block_time"))
+                .hasMessageContaining("source failed");
+
+        assertThat(before.isClosed()).isTrue();
+        assertThat(physicalConnection()).isNotSameAs(before);
+        // The new connection attaches the catalog the closed one held
+        assertThat(writer.export(blocks(100, 3, MARCH_1 + 86400), path("block", "date=2024-03-02"), "block_time")
+                .getRowCount()).isEqualTo(3);
+        assertThat(rowsPerDate("block")).containsExactly(Map.entry("2024-03-01", 5L), Map.entry("2024-03-02", 3L));
+    }
+
     @Test
     void purgesTheEpochZeroPartitionOnlyWhenTheRepairedDaysCoverAllOfIt() throws Exception {
         writer.export(blocks(0, 5, MARCH_1), path("stake_address_balance", "date=2024-03-01"), "block_time");
@@ -175,6 +223,38 @@ class DuckLakeWriterServiceReplaceTest {
                 .isEqualTo(new DuckLakeWriterService.EpochZeroPartition(0, null, null, false));
         // Tables without a slot column, or not exported at all, are left alone
         assertThat(writer.purgeEpochZeroPartition("no_such_table", 0, 5).deleted()).isFalse();
+    }
+
+    /**
+     * Puts the pool's connection in the state a ROLLBACK that fails after DuckDB ended the
+     * transaction leaves it in: DuckDB has no transaction, the driver's flag says one is open.
+     */
+    private void leaveDriverBelievingATransactionIsOpen() throws SQLException {
+        try (Connection pooled = dataSource.getConnection()) {
+            DuckDBConnection raw = pooled.unwrap(DuckDBConnection.class);
+            raw.setAutoCommit(false);
+            try (Statement stmt = raw.createStatement()) {
+                stmt.execute("SELECT 1");   // the driver sends BEGIN TRANSACTION
+                stmt.execute("ROLLBACK");   // DuckDB ends it; the driver does not see that
+            }
+            assertThatThrownBy(() -> raw.setAutoCommit(true)).hasMessageContaining("no transaction is active");
+            assertThat(raw.getAutoCommit()).isTrue();
+        }
+    }
+
+    private DuckDBConnection physicalConnection() throws SQLException {
+        try (Connection pooled = dataSource.getConnection()) {
+            return pooled.unwrap(DuckDBConnection.class);
+        }
+    }
+
+    private String latestSnapshotChanges() throws SQLException {
+        try (Connection conn = writerConnection(); Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("SELECT CAST(changes AS VARCHAR) FROM ducklake_snapshots('ducklake_catalog') "
+                     + "ORDER BY snapshot_id DESC LIMIT 1")) {
+            rs.next();
+            return rs.getString(1);
+        }
     }
 
     private static String blocks(long firstSlot, int count, long firstTime) {
@@ -222,12 +302,10 @@ class DuckLakeWriterServiceReplaceTest {
         }
     }
 
-    /** The pool's single connection, which the writer left attached and on ducklake_catalog. */
+    /** The pool's single connection, attached (again, after a discarded connection) and on ducklake_catalog. */
     private Connection writerConnection() throws SQLException {
         Connection conn = dataSource.getConnection();
-        try (Statement stmt = conn.createStatement()) {
-            stmt.execute("USE ducklake_catalog");
-        }
+        helper.prepareConnectionForDuckLake(conn, false, false);
         return conn;
     }
 
