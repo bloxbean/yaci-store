@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """Fault scenarios for the analytics store. Appends one JSON line per scenario to results/<instance>-analytics.jsonl.
 
-usage: analytics_runner.py <instance> --ref <reference instance> [--only ID,ID] [--skip ID,ID] [--list]
+usage: analytics_runner.py <instance> [--ref <reference instance>] [--only ID,ID] [--skip ID,ID] [--list]
        analytics_runner.py <instance> --ref <ref> --verify-all      # every exported partition of every table vs the reference
 
 Run it once the instance follows the tip and its analytics export has caught up (GET /api/v1/analytics/admin/status:
 missingExportCount 0). Most scenarios start a real export (a repair of a range of days already exported), break
 something while it runs, heal it, wait until those days are exported again, and then compare them with the same days
 of a fault-free reference instance (same build, no proxies): row count and a content hash per partition, read through
-each instance's query API. The export state of each day must be COMPLETED with the same row count as the data.
+each instance's query API. Without --ref, the days' own fingerprint taken just before the fault is the reference. The export state of each day must be COMPLETED with the same row count as the data.
 """
 import argparse, json, os, re, signal, subprocess, sys, threading, time, urllib.error, urllib.parse, urllib.request
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -63,6 +63,12 @@ def completed_days(c, table, n, skip):
     days = sorted(p.split("=", 1)[1] for p in r.splitlines())
     return days
 
+def pick_days(c, ref, table, n, skip):
+    """completed_days, plus a pre-fault fingerprint when there is no reference instance."""
+    days = completed_days(c, table, n, skip)
+    take_baseline(c, ref, table, "date", days)
+    return days
+
 def wait_completed(c, table, days, timeout):
     parts = [f"date={d}" for d in days]
     t = time.time(); st = {}
@@ -93,16 +99,32 @@ def fingerprint(c, table, key, values, cols):
     if rows is None: return None, err
     return {str(r["p"]): (int(r["n"]), r["h"]) for r in rows}, None
 
+BASELINES = {}   # (inst, table, key, values) -> fingerprint taken before the fault, when there is no reference
+
+def take_baseline(c, ref, table, key, values):
+    """Without a reference instance, the partitions' own fingerprint before the fault is the reference."""
+    if ref is not None or not values: return
+    cols = columns(c, table)
+    fp, _ = fingerprint(c, table, key, values, cols) if cols else (None, None)
+    if fp is not None: BASELINES[(c.inst, table, key, tuple(map(str, values)))] = (cols, fp)
+
 def compare(c, ref, table, key, values):
-    """Differences between c and ref for these partitions, plus state rows of c that disagree with the data."""
-    cols = columns(ref, table)
-    if not cols: return {"check_failed": f"no schema for {table} on {ref.inst}"}
+    """Differences between c and ref (or c's own pre-fault baseline) for these partitions, plus state rows of
+    c that disagree with the data."""
+    if ref is None:
+        base = BASELINES.get((c.inst, table, key, tuple(map(str, values))))
+        if not base: return {"check_failed": f"no reference and no baseline for {table}"}
+        cols, b = base; eb = None
+    else:
+        cols = columns(ref, table)
+        if not cols: return {"check_failed": f"no schema for {table} on {ref.inst}"}
+        b, eb = fingerprint(ref, table, key, values, cols)
     a, ea = fingerprint(c, table, key, values, cols)
-    b, eb = fingerprint(ref, table, key, values, cols)
     if a is None or b is None: return {"check_failed": ea or eb}
     out = {}
     diff = [v for v in map(str, values) if a.get(v) != b.get(v)]
-    if diff: out["data_differs_from_ref"] = {v: {"inst": a.get(v), "ref": b.get(v)} for v in diff[:10]}
+    if diff: out["data_differs_from_ref" if ref is not None else "data_differs_from_before"] = \
+        {v: {"inst": a.get(v), "ref": b.get(v)} for v in diff[:10]}
     pre = "date=" if key == "date" else "epoch="
     st = states(c, table, [pre + str(v) for v in values])
     bad = {p: s for p, s in st.items() if s[0] != "COMPLETED" or s[1] != (a.get(p.split("=", 1)[1]) or (0, None))[0]}
@@ -139,7 +161,7 @@ def wait_export_running(c, table, days, timeout=300):
 def fault_during_export(fault, heal=None, hold=0, ndays=6, offset=30, after_start=3):
     """Repair ndays of the busy table, inject the fault while a day exports, heal, let the app re-export them."""
     def f(c, ref, res):
-        days = completed_days(c, BUSY_TABLE, ndays, offset)
+        days = pick_days(c, ref, BUSY_TABLE, ndays, offset)
         res["days"] = days
         if len(days) < ndays: res["notes"].append("not enough completed days"); return days
         bg = {}; th = repair_bg(c, BUSY_TABLE, days, bg)
@@ -181,7 +203,7 @@ def admin_edges(c, ref, res):
         t = time.time(); code, text = api(c, m, p, params, timeout=60)
         out[k] = {"code": code, "s": round(time.time() - t, 1), "body": text[:160]}
     # a range reset with plain dates must reset exactly the days in the range, then the scheduler re-exports them
-    days = completed_days(c, "block", 2, 40)
+    days = pick_days(c, ref, "block", 2, 40)
     code, text = api(c, "DELETE", "/api/v1/analytics/admin/state/block/range", {"startDate": days[0], "endDate": days[-1]})
     out["range_reset_plain_dates"] = {"code": code, "body": text[:160],
                                       "left": len(states(c, "block", [f"date={d}" for d in days]))}
@@ -217,7 +239,7 @@ def query_probes(c, ref, res):
 
 def heavy_query_during_export(c, ref, res):
     """Spilling queries in the query layer while the writer exports: separate temp dirs must keep the JVM alive."""
-    days = completed_days(c, BUSY_TABLE, 6, 50); res["days"] = days
+    days = pick_days(c, ref, BUSY_TABLE, 6, 50); res["days"] = days
     bg = {}; th = repair_bg(c, BUSY_TABLE, days, bg)
     wait_export_running(c, BUSY_TABLE, days)
     q = (f"SELECT owner_addr, count(*) n, sum(lovelace_amount) s FROM {BUSY_TABLE} GROUP BY 1 ORDER BY 3 DESC LIMIT 10")
@@ -238,6 +260,7 @@ def adapot_lookup_fail(c, ref, res):
         r = c.sql(f"select partition_value from analytics_export_state where table_name='{t}' and export_status='COMPLETED' "
                   f"order by length(partition_value) desc, partition_value desc limit 1")
         if r: picked[t] = int(r.split("=")[1])
+    for t, e in picked.items(): take_baseline(c, ref, t, "epoch", [e])
     c.trig("analytics-adapot-lookup-fail")
     for t, e in picked.items():
         api(c, "DELETE", f"/api/v1/analytics/admin/state/{t}/epoch={e}")
@@ -258,7 +281,7 @@ def catalog_locked(during_restart):
     def f(c, ref, res):
         cat = os.path.join(c.d, "data/analytics/ducklake.catalog.db")
         if not os.path.exists(cat): res["notes"].append("no duckdb-file catalog (postgresql catalog?)"); return None
-        days = completed_days(c, BUSY_TABLE, 3, 60); res["days"] = days
+        days = pick_days(c, ref, BUSY_TABLE, 3, 60); res["days"] = days
         # the CLI keeps the file open (and locked) until its stdin closes, 120 s later
         holder = subprocess.Popen(f"sleep 120 | {DUCKDB_CLI} -readonly '{cat}'", shell=True,
                                   stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
@@ -280,7 +303,7 @@ def catalog_locked(during_restart):
 
 def concurrent_triggers(c, ref, res):
     """Five /sync/trigger calls and two repairs of the same days at once: no partition may end up duplicated."""
-    days = completed_days(c, BUSY_TABLE, 3, 70); res["days"] = days
+    days = pick_days(c, ref, BUSY_TABLE, 3, 70); res["days"] = days
     bg1, bg2 = {}, {}
     ths = [repair_bg(c, BUSY_TABLE, days, bg1), repair_bg(c, BUSY_TABLE, days, bg2)]
     for _ in range(5):
@@ -291,7 +314,7 @@ def concurrent_triggers(c, ref, res):
     return None
 
 def restart_storm(c, ref, res):
-    days = completed_days(c, BUSY_TABLE, 10, 80); res["days"] = days
+    days = pick_days(c, ref, BUSY_TABLE, 10, 80); res["days"] = days
     bg = {}; repair_bg(c, BUSY_TABLE, days, bg)
     wait_export_running(c, BUSY_TABLE, days)
     for _ in range(5):
@@ -352,7 +375,7 @@ def run(c, ref, sc, resdir):
         if not ok: res["anomalies"]["not_reexported"] = {k: v for k, v in st.items() if v[0] != "COMPLETED"} or "state rows missing"
         res.setdefault("checked", [(BUSY_TABLE, "date", days)])
     for table, key, values in res.get("checked", []):
-        if sc.needs_ref:
+        if sc.needs_ref:   # compared with --ref, or with the pre-fault baseline when there is no reference
             if key == "epoch":
                 t = time.time()
                 while time.time() - t < sc.deadline:
@@ -423,7 +446,6 @@ def main():
     only = set(a.only.split(",")) if a.only else None; skip = set(a.skip.split(",")) if a.skip else set()
     for sc in SCENARIOS:
         if sc.id in done or (only and sc.id not in only) or sc.id in skip: continue
-        if sc.needs_ref and not ref: print(f"{sc.id} needs --ref, skipped"); continue
         if os.path.exists(f"{resdir}/STOP"): print("STOP file found"); break
         res = run(c, ref, sc, resdir)
         with open(out, "a") as f: f.write(json.dumps(res) + "\n")
