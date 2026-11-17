@@ -1,20 +1,13 @@
 package com.bloxbean.cardano.yaci.store.blockfrost.common;
 
-import com.bloxbean.cardano.yaci.store.blockfrost.common.timeout.BFQueryTimeoutExecuteListener;
+import com.bloxbean.cardano.yaci.store.blockfrost.common.timeout.BFQueryTimeoutDataSourcePostProcessor;
 import com.bloxbean.cardano.yaci.store.blockfrost.common.timeout.BFQueryTimeoutInterceptor;
 import com.bloxbean.cardano.yaci.store.blockfrost.common.timeout.BFQueryTimeoutProperties;
-import com.bloxbean.cardano.yaci.store.blockfrost.common.timeout.BFRepositoryTimeoutInterceptor;
-import com.bloxbean.cardano.yaci.store.blockfrost.common.timeout.BFRepositoryTimeoutPostProcessor;
-import jakarta.persistence.EntityManagerFactory;
 import lombok.extern.slf4j.Slf4j;
-import org.jooq.ExecuteListenerProvider;
-import org.jooq.impl.DefaultExecuteListenerProvider;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
@@ -28,16 +21,8 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 public class BFCommonConfiguration {
 
     @Bean
-    public ExecuteListenerProvider bfQueryTimeoutExecuteListenerProvider() {
-        return new DefaultExecuteListenerProvider(new BFQueryTimeoutExecuteListener());
-    }
-
-    @Bean
-    public static BFRepositoryTimeoutPostProcessor bfRepositoryTimeoutPostProcessor(
-            ObjectProvider<PlatformTransactionManager> transactionManager,
-            ObjectProvider<EntityManagerFactory> entityManagerFactory) {
-        return new BFRepositoryTimeoutPostProcessor(
-                new BFRepositoryTimeoutInterceptor(transactionManager, entityManagerFactory));
+    public static BFQueryTimeoutDataSourcePostProcessor bfQueryTimeoutDataSourcePostProcessor() {
+        return new BFQueryTimeoutDataSourcePostProcessor();
     }
 
     @Bean

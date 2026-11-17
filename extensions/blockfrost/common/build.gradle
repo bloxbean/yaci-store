@@ -3,10 +3,12 @@ import org.gradle.api.publish.maven.MavenPublication
 dependencies {
 	implementation 'org.jooq:jooq'
 	implementation 'org.springframework:spring-tx'
-	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+	implementation 'org.springframework:spring-jdbc'
+	implementation libs.datasource.proxy
 	implementation 'org.springframework.boot:spring-boot-starter-web'
 
 	testImplementation 'com.h2database:h2'
+	testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 }
 
 publishing {
