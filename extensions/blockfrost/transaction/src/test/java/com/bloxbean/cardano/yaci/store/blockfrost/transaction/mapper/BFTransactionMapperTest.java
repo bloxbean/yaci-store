@@ -1,7 +1,9 @@
 package com.bloxbean.cardano.yaci.store.blockfrost.transaction.mapper;
 
+import com.bloxbean.cardano.yaci.store.blockfrost.transaction.dto.BFTransactionDto;
 import com.bloxbean.cardano.yaci.store.blockfrost.transaction.dto.BFTxOutputDto;
 import com.bloxbean.cardano.yaci.store.blockfrost.transaction.dto.BFTxUtxosDto;
+import com.bloxbean.cardano.yaci.store.blockfrost.transaction.storage.impl.model.TxRaw;
 import com.bloxbean.cardano.yaci.store.blockfrost.transaction.storage.impl.model.TxUtxosRaw;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -49,5 +51,26 @@ class BFTransactionMapperTest {
         assertThat(collateralReturn.getAmount())
                 .extracting("unit", "quantity")
                 .containsExactly(tuple("lovelace", "2000000"));
+    }
+
+    @Test
+    void givenSize_shouldMapToTransactionDto() {
+        BFTransactionDto dto = mapper.toTransactionDto(txRaw(814), List.of(), "0", 0);
+
+        assertThat(dto.getSize()).isEqualTo(814);
+    }
+
+    @Test
+    void givenNoSize_shouldMapNull() {
+        BFTransactionDto dto = mapper.toTransactionDto(txRaw(null), List.of(), "0", 0);
+
+        assertThat(dto.getSize()).isNull();
+    }
+
+    private TxRaw txRaw(Integer size) {
+        return TxRaw.builder()
+                .txHash("df39d52ed5e803903f94646ca9c7b8afc94436277c29f8c1b050f1749d863ce3")
+                .size(size)
+                .build();
     }
 }

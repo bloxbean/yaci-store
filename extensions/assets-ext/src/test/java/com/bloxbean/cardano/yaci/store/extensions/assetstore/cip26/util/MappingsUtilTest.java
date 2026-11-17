@@ -67,6 +67,22 @@ class MappingsUtilTest {
     }
 
     @Nested
+    @DisplayName("subject case")
+    class SubjectCase {
+
+        @Test
+        void storesASubjectInLowerCaseWhateverTheCaseOfTheRegistryFile() {
+            // mainnet: 39 registry files have an upper-case subject; a subject is base16, its case carries no meaning
+            Mapping m = new Mapping("F106CF30E10297C20D96EC76770B4BAB585DDB8A92CBE0E9DC3931A34269746D616E6961",
+                    null, null, null, null, null, null, null);
+
+            assertThat(MappingsUtil.toCip26Metadata(m, UPDATED_BY, UPDATED_AT).getSubject())
+                    .isEqualTo("f106cf30e10297c20d96ec76770b4bab585ddb8a92cbe0e9dc3931a34269746d616e6961");
+            assertThat(MappingsUtil.normalizeSubject(null)).isNull();
+        }
+    }
+
+    @Nested
     @DisplayName("decimals fallback")
     class DecimalsFallback {
 

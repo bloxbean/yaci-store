@@ -9,6 +9,7 @@ import com.bloxbean.cardano.yaci.core.model.governance.Voter;
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClient;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
+import com.bloxbean.cardano.yaci.store.common.util.AmountUtil;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -35,8 +36,9 @@ public class RedeemerDatumMatcher {
      */
     public List<ScriptContext> findScriptsForRedeemers(Transaction transaction, Map<String, PlutusScript> scriptsMap) {
         //Map redeemers to scripts
-        //Find distinct policies if mint available. Mint redeemer index follows the ledger's policy id order, not the CBOR order.
-        List<String> distinctPolicies = transaction.getBody().getMint() != null ? transaction.getBody().getMint().stream()
+        //Find distinct policies if mint available. Mint redeemer index follows the ledger's policy id order, not the CBOR order,
+        //over the mint the ledger decoded, which has no zero-quantity entries.
+        List<String> distinctPolicies = transaction.getBody().getMint() != null ? AmountUtil.withoutZeroQuantityAssets(transaction.getBody().getMint()).stream()
                 .map(amount -> amount.getPolicyId())
                 .distinct()
                 .sorted()

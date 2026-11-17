@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.helper.model.Utxo;
 import com.bloxbean.cardano.yaci.store.client.staking.StakingClient;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
+import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.common.domain.TxInput;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
@@ -172,6 +173,83 @@ public class UtxoProcessorTest {
         assertThat(spentUtxos.get(1).getOutputIndex()).isEqualTo(0);
 
         assertThat(unspentUtxos).isEmpty();
+    }
+
+    @Test
+    public void givenOutputWithZeroQuantityAsset_whenSaved_zeroEntryIsDropped() {
+        String txHash = "dde3cbc9cf395a446583205164aa1e7eb8ec1c2c712e0b9a2ed950360d0623cd";
+        TransactionOutput output = TransactionOutput.builder()
+                .address("addr_test1vpfwv0ezc5g8a4mkku8hhy3y3vp92t7s3ul8g778g5yegsgalc6gc")
+                .amounts(List.of(lovelace(2000000), asset(ZERO_POLICY, "54554e41", 0), asset(OTHER_POLICY, "4142", 5)))
+                .build();
+        Transaction transaction = Transaction.builder()
+                .txHash(txHash)
+                .body(TransactionBody.builder()
+                        .inputs(Set.of(new TransactionInput("aaaae529be26c2326c447c39159e05bb904ff1f7900b6df3852dd539de0343e8", 0)))
+                        .outputs(List.of(output))
+                        .build())
+                .utxos(utxos(txHash, List.of(output)))
+                .build();
+
+        utxoProcessor.handleTransactionEvent(transactionEvent(List.of(transaction)));
+        verify(utxoStorage, times(1)).saveUnspent(argCaptor.capture());
+
+        List<AddressUtxo> unspentUtxos = argCaptor.getValue();
+        assertThat(unspentUtxos).hasSize(1);
+        assertThat(unspentUtxos.get(0).getAmounts())
+                .extracting(Amt::getUnit)
+                .containsExactly(LOVELACE, OTHER_POLICY + "4142");
+        assertThat(unspentUtxos.get(0).getLovelaceAmount()).isEqualTo(BigInteger.valueOf(2000000));
+    }
+
+    @Test
+    public void givenInvalidTxn_whenCollateralReturnHasZeroQuantityAsset_zeroEntryIsDropped() {
+        List<Transaction> transactions = transactions();
+        transactions.get(0).setInvalid(true);
+        transactions.get(0).setCollateralReturnUtxo(Utxo.builder()
+                .address("addr_test1vpfwv0ezc5g8a4mkku8hhy3y3vp92t7s3ul8g778g5yegsgalc6gc")
+                .txHash(transactions.get(0).getTxHash())
+                .index(2)
+                .amounts(List.of(lovelace(500), asset(ZERO_POLICY, "54554e41", 0)))
+                .build());
+
+        utxoProcessor.handleTransactionEvent(transactionEvent(transactions));
+        verify(utxoStorage, times(1)).saveUnspent(argCaptor.capture());
+
+        List<AddressUtxo> unspentUtxos = argCaptor.getValue();
+        assertThat(unspentUtxos).hasSize(1);
+        assertThat(unspentUtxos.get(0).getAmounts())
+                .extracting(Amt::getUnit)
+                .containsExactly(LOVELACE);
+    }
+
+    private static final String ZERO_POLICY = "10bebfc941207811e62882f02c0a69c0086f86186a4ef6ec1b5a2b0c";
+    private static final String OTHER_POLICY = "aaaabfc941207811e62882f02c0a69c0086f86186a4ef6ec1b5a2b0c";
+
+    private TransactionEvent transactionEvent(List<Transaction> transactions) {
+        return TransactionEvent.builder()
+                .metadata(EventMetadata.builder()
+                        .block(100)
+                        .blockHash("c2f69d97f3a11684f2a97f7c75bc50dcb18c4a01a17625d32561a7ebc219aa5e")
+                        .slot(200000)
+                        .era(Era.Babbage)
+                        .syncMode(true)
+                        .build())
+                .transactions(transactions)
+                .build();
+    }
+
+    private Amount lovelace(long quantity) {
+        return Amount.builder().unit(LOVELACE).assetName(LOVELACE).quantity(BigInteger.valueOf(quantity)).build();
+    }
+
+    private Amount asset(String policyId, String assetNameHex, long quantity) {
+        return Amount.builder()
+                .unit(policyId + "." + assetNameHex)
+                .policyId(policyId)
+                .assetName(assetNameHex)
+                .quantity(BigInteger.valueOf(quantity))
+                .build();
     }
 
     private List<Transaction> transactions() {

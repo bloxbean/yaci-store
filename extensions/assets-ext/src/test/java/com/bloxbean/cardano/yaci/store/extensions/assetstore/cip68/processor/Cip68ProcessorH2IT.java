@@ -4,13 +4,18 @@ import com.bloxbean.cardano.client.common.cbor.CborSerializationUtil;
 import com.bloxbean.cardano.client.plutus.spec.BigIntPlutusData;
 import com.bloxbean.cardano.client.plutus.spec.BytesPlutusData;
 import com.bloxbean.cardano.client.plutus.spec.ConstrPlutusData;
+import com.bloxbean.cardano.client.plutus.spec.ListPlutusData;
 import com.bloxbean.cardano.client.plutus.spec.MapPlutusData;
+import com.bloxbean.cardano.client.plutus.spec.PlutusData;
 import com.bloxbean.cardano.client.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
+import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.parser.Cip68DatumParser;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.service.Cip68TokenService;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.Cip68StorageReaderImpl;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.model.Cip68Metadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.impl.repository.Cip68MetadataRepository;
 import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxoEvent;
@@ -28,10 +33,12 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import java.math.BigInteger;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 
 /**
  * Runs {@link Cip68Processor} against a real H2 {@code cip68_metadata} table created by the module's
@@ -41,7 +48,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @DataJpaTest(properties = {
         "spring.flyway.enabled=false",
         "spring.jpa.hibernate.ddl-auto=none",
-        "spring.sql.init.schema-locations=classpath:db/store/h2/V0_1700_1__init.sql"
+        "spring.sql.init.schema-locations=classpath:db/store/h2/V0_1700_1__init.sql,classpath:db/store/h2/V0_1700_2__validation_errors.sql"
 })
 @DisplayName("Cip68Processor on H2")
 class Cip68ProcessorH2IT {
@@ -70,50 +77,201 @@ class Cip68ProcessorH2IT {
     }
 
     @Test
-    void storesNameAtColumnWidth() {
-        processAndFlush("N".repeat(Cip68Metadata.NAME_MAX_LENGTH));
+    void storesAnythingTheChainHoldsWithoutALengthCap() {
+        // the columns are TEXT: a long name, and one whose characters take two UTF-16 units each, are stored as written
+        String longName = "N".repeat(5_000) + "🚀".repeat(300);
+        processAndFlush(longName);
 
         assertThat(repository.findAll())
                 .singleElement()
-                .satisfies(m -> assertThat(m.getName()).hasSize(Cip68Metadata.NAME_MAX_LENGTH));
+                .satisfies(m -> assertThat(m.getName()).isEqualTo(longName));
     }
 
     @Test
-    void skipsDatumWithOversizedNameWithoutFailingTheInsert() {
-        assertThatCode(() -> processAndFlush("N".repeat(Cip68Metadata.NAME_MAX_LENGTH + 1)))
-                .doesNotThrowAnyException();
+    void storesTheValidationErrorsAsJsonAndReadsThemBack() {
+        // a version that is not an integer: indexed, with the error
+        processor.processTransaction(eventWithDatum(datum("A name", true, BytesPlutusData.of("one"))));
+        entityManager.flush();
+        entityManager.clear();
 
-        assertThat(repository.count()).isZero();
+        assertThat(repository.findAll()).singleElement().satisfies(m ->
+                assertThat(m.getValidationErrors()).singleElement().satisfies(e -> {
+                    assertThat(e.cip()).isEqualTo("CIP-68");
+                    assertThat(e.subStandard()).isNull();
+                    assertThat(e.fieldName()).isEqualTo("version");
+                    assertThat(e.fieldCategory().name()).isEqualTo("MANDATORY");
+                    assertThat(e.code()).isEqualTo("invalid_version");
+                }));
     }
 
     @Test
-    void skipsDatumWhoseNameOverflowsH2InUtf16Units() {
-        // 128 emoji = 128 code points but 256 UTF-16 units: fits a Postgres VARCHAR(255), not H2's
-        assertThatCode(() -> processAndFlush("🚀".repeat(128)))
-                .doesNotThrowAnyException();
+    void theBlocksOfABatchAreIndexedInChainOrderWhateverOrderTheyArrivedIn() {
+        // a parallel sync can deliver the later block first: the datum cleared in it (an empty map, no user token) is
+        // stored only if the earlier mint is, which the earlier block saves first within the same transaction
+        processor.collectForBatch(eventAt(2L, 500L, "d8799fa001ff"));
+        processor.collectForBatch(eventAt(1L, 100L, datum("A name", true)));
+        processor.indexBatchInChainOrder(new CommitEvent<>(EventMetadata.builder().block(2L).build(), List.of()));
+        entityManager.flush();
+        entityManager.clear();
 
-        assertThat(repository.count()).isZero();
+        assertThat(repository.findAll()).extracting(Cip68Metadata::getSlot).containsExactlyInAnyOrder(100L, 500L);
+        assertThat(repository.findFirstByPolicyIdAndAssetNameOrderBySlotDescTxIndexDesc(POLICY_ID, REF_NFT_ASSET_NAME))
+                .hasValueSatisfying(latest -> assertThat(latest.getName()).isNull());
+    }
+
+    // A transaction can spend an output created earlier in its block. The rows of a block are saved after its last
+    // transaction, so "is the reference NFT already indexed" must see the rows of the earlier transactions too.
+
+    @Test
+    void metadataClearedByALaterTransactionOfTheBlockThatMintedTheTokenIsStored() {
+        // tx 0 mints the reference NFT with its 333 token and a name; tx 1 spends it and clears the datum (an empty map,
+        // no user token), which is stored only if the reference NFT is known to be indexed
+        AddressUtxoEvent block = blockOf(1L, 100L,
+                transaction("a", output("a", 0, 0, POLICY_ID + REF_NFT_ASSET_NAME, datum("Initial name", true)),
+                        output("a", 0, 1, FT_UNIT, null)),
+                transaction("b", output("b", 1, 0, POLICY_ID + REF_NFT_ASSET_NAME, "d8799fa001ff")));
+
+        processor.collectForBatch(block);
+        processor.indexBatchInChainOrder(new CommitEvent<>(EventMetadata.builder().block(1L).build(), List.of()));
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(repository.findAll()).extracting(Cip68Metadata::getTxIndex).containsExactlyInAnyOrder(0, 1);
+        assertThat(repository.findFirstByPolicyIdAndAssetNameOrderBySlotDescTxIndexDesc(POLICY_ID, REF_NFT_ASSET_NAME))
+                .hasValueSatisfying(latest -> assertThat(latest.getName()).isNull());
     }
 
     @Test
-    void h2CountsVarcharWidthInUtf16Units() {
-        // Guards the premise of the parser's length check: if H2 ever counted code points, this
-        // would pass and the check could be relaxed.
-        repository.save(Cip68Metadata.builder()
-                .policyId(POLICY_ID).assetName(REF_NFT_ASSET_NAME).slot(1L).txHash(TX_HASH).txIndex(0)
-                .label(333).version(1L).datum("00").lastSyncedAt(LocalDateTime.now())
-                .name("🚀".repeat(128))
+    void aDatumWithOnlyThe222NftInALaterTransactionOfTheBlockThatMintedThe333TokenIsStored() {
+        // tx 0 mints the reference NFT with its 333 token; tx 1 updates the datum with the 222 NFT and no 333 or 444
+        // token, which is stored only if the reference NFT is known to be indexed
+        AddressUtxoEvent block = blockOf(1L, 100L,
+                transaction("a", output("a", 0, 0, POLICY_ID + REF_NFT_ASSET_NAME, datum("Initial name", true)),
+                        output("a", 0, 1, FT_UNIT, null)),
+                transaction("b", output("b", 1, 0, POLICY_ID + REF_NFT_ASSET_NAME, datum("Updated name", true)),
+                        output("b", 1, 1, POLICY_ID + "000de140" + REF_NFT_ASSET_NAME.substring(8), null)));
+
+        processor.collectForBatch(block);
+        processor.indexBatchInChainOrder(new CommitEvent<>(EventMetadata.builder().block(1L).build(), List.of()));
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(repository.findFirstByPolicyIdAndAssetNameOrderBySlotDescTxIndexDesc(POLICY_ID, REF_NFT_ASSET_NAME))
+                .hasValueSatisfying(latest -> assertThat(latest.getName()).isEqualTo("Updated name"));
+    }
+
+    private static final String FT_UNIT = POLICY_ID + "0014df10" + REF_NFT_ASSET_NAME.substring(8);
+
+    private static AddressUtxoEvent blockOf(long block, long slot, TxInputOutput... transactions) {
+        return AddressUtxoEvent.builder()
+                .metadata(EventMetadata.builder().block(block).slot(slot).build())
+                .txInputOutputs(List.of(transactions))
+                .build();
+    }
+
+    private static TxInputOutput transaction(String hashChar, AddressUtxo... outputs) {
+        return TxInputOutput.builder().txHash(hashChar.repeat(64)).outputs(List.of(outputs)).build();
+    }
+
+    private static AddressUtxo output(String hashChar, int txIndex, int outputIndex, String unit, String inlineDatum) {
+        return AddressUtxo.builder()
+                .txHash(hashChar.repeat(64))
+                .txIndex(txIndex)
+                .outputIndex(outputIndex)
+                .inlineDatum(inlineDatum)
+                .amounts(List.of(Amt.builder().unit(unit).quantity(BigInteger.ONE).build()))
+                .build();
+    }
+
+    @Test
+    void aTokenWithAnEmptyNameIsIndexedAndServedApartFromANamedTokenOfTheSamePolicy() {
+        // the name after the label prefix can be empty, as the ledger allows (PBG Token on mainnet): the reference NFT is
+        // 000643b0 alone and the fungible token 0014df10 alone. Minted with a named token of the same policy in one transaction.
+        AddressUtxo emptyNameRef = output(0, POLICY_ID + "000643b0", datum("Empty name", true));
+        AddressUtxo namedRef = output(1, POLICY_ID + REF_NFT_ASSET_NAME, datum("Named", true));
+        AddressUtxo userTokens = output(2, POLICY_ID + "0014df10", null);
+        userTokens.setAmounts(List.of(
+                Amt.builder().unit(POLICY_ID + "0014df10").quantity(BigInteger.valueOf(1_000)).build(),
+                Amt.builder().unit(POLICY_ID + "0014df10" + REF_NFT_ASSET_NAME.substring(8)).quantity(BigInteger.valueOf(1_000)).build()));
+        processor.processTransaction(AddressUtxoEvent.builder()
+                .metadata(EventMetadata.builder().slot(100L).build())
+                .txInputOutputs(List.of(TxInputOutput.builder().outputs(List.of(emptyNameRef, namedRef, userTokens)).build()))
                 .build());
+        entityManager.flush();
+        entityManager.clear();
 
-        assertThatThrownBy(entityManager::flush).hasMessageContaining("Value too long");
+        assertThat(repository.findAll())
+                .extracting(Cip68Metadata::getAssetName, Cip68Metadata::getLabel)
+                .containsExactlyInAnyOrder(tuple("000643b0", 333), tuple(REF_NFT_ASSET_NAME, 333));
+
+        Cip68StorageReaderImpl reader = new Cip68StorageReaderImpl(new Cip68TokenService(repository));
+        String emptyNameSubject = POLICY_ID + "0014df10";
+        String namedSubject = POLICY_ID + "0014df10" + REF_NFT_ASSET_NAME.substring(8);
+        assertThat(reader.findBySubject(emptyNameSubject)).hasValueSatisfying(t -> assertThat(t.name()).isEqualTo("Empty name"));
+        assertThat(reader.findBySubject(namedSubject)).hasValueSatisfying(t -> assertThat(t.name()).isEqualTo("Named"));
+        // the batch reads both with the native query, keyed by policy id and asset name together
+        Map<String, FungibleTokenMetadata> batch = reader.findBySubjects(List.of(emptyNameSubject, namedSubject), List.of());
+        assertThat(batch).containsOnlyKeys(emptyNameSubject, namedSubject);
+        assertThat(batch.get(emptyNameSubject).name()).isEqualTo("Empty name");
+        assertThat(batch.get(namedSubject).name()).isEqualTo("Named");
+    }
+
+    @Test
+    void aDescriptionGivenAsAListOfByteStringsIsStoredAndServedWithNoError() {
+        // a long text split into a list the way CIP-25 does (Awkward Seal on mainnet): accepted as the description
+        MapPlutusData properties = new MapPlutusData();
+        properties.put(BytesPlutusData.of("name"), BytesPlutusData.of("Awkward Seal"));
+        properties.put(BytesPlutusData.of("description"), ListPlutusData.of(
+                BytesPlutusData.of("That awkward moment when you called yourself Snekfun\u2026 but everyone"),
+                BytesPlutusData.of("\u2019s having fun on Solada.")));
+        String inlineDatum;
+        try {
+            inlineDatum = HexUtil.encodeHexString(CborSerializationUtil.serialize(
+                    ConstrPlutusData.of(0, properties, BigIntPlutusData.of(1)).serialize()));
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+        AddressUtxo ref = output(0, POLICY_ID + REF_NFT_ASSET_NAME, inlineDatum);
+        AddressUtxo userToken = output(1, POLICY_ID + "0014df10" + REF_NFT_ASSET_NAME.substring(8), null);
+        processor.processTransaction(AddressUtxoEvent.builder()
+                .metadata(EventMetadata.builder().slot(100L).build())
+                .txInputOutputs(List.of(TxInputOutput.builder().outputs(List.of(ref, userToken)).build()))
+                .build());
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(repository.findAll()).singleElement().satisfies(row -> assertThat(row.getValidationErrors()).isEmpty());
+        Cip68StorageReaderImpl reader = new Cip68StorageReaderImpl(new Cip68TokenService(repository));
+        assertThat(reader.findBySubject(POLICY_ID + "0014df10" + REF_NFT_ASSET_NAME.substring(8))).hasValueSatisfying(token -> {
+            assertThat(token.description()).isEqualTo("That awkward moment when you called yourself Snekfun\u2026 but everyone\u2019s having fun on Solada.");
+            assertThat(token.validationErrors()).isEmpty();
+        });
+    }
+
+    private static AddressUtxo output(int outputIndex, String unit, String inlineDatum) {
+        return AddressUtxo.builder()
+                .txHash(TX_HASH)
+                .outputIndex(outputIndex)
+                .txIndex(0)
+                .inlineDatum(inlineDatum)
+                .amounts(List.of(Amt.builder().unit(unit).quantity(BigInteger.ONE).build()))
+                .build();
+    }
+
+    private static AddressUtxoEvent eventAt(long block, long slot, String inlineDatum) {
+        AddressUtxoEvent event = eventWithDatum(inlineDatum);
+        return AddressUtxoEvent.builder()
+                .metadata(EventMetadata.builder().block(block).slot(slot).build())
+                .txInputOutputs(event.getTxInputOutputs())
+                .build();
     }
 
     private void processAndFlush(String name) {
-        processor.processTransaction(eventWithDatum(name));
+        processor.processTransaction(eventWithDatum(datum(name, true)));
         entityManager.flush();
     }
 
-    private static AddressUtxoEvent eventWithDatum(String name) {
+    private static AddressUtxoEvent eventWithDatum(String inlineDatum) {
         Amt refNft = Amt.builder()
                 .unit(POLICY_ID + REF_NFT_ASSET_NAME)
                 .quantity(BigInteger.ONE)
@@ -122,7 +280,7 @@ class Cip68ProcessorH2IT {
         AddressUtxo utxo = AddressUtxo.builder()
                 .txHash(TX_HASH)
                 .txIndex(0)
-                .inlineDatum(datum(name))
+                .inlineDatum(inlineDatum)
                 .amounts(List.of(refNft))
                 .build();
 
@@ -132,12 +290,18 @@ class Cip68ProcessorH2IT {
                 .build();
     }
 
-    private static String datum(String name) {
+    private static String datum(String name, boolean withDescription) {
+        return datum(name, withDescription, BigIntPlutusData.of(1));
+    }
+
+    private static String datum(String name, boolean withDescription, PlutusData version) {
         MapPlutusData properties = new MapPlutusData();
         properties.put(BytesPlutusData.of("name"), BytesPlutusData.of(name));
-        properties.put(BytesPlutusData.of("description"), BytesPlutusData.of("Desc"));
+        if (withDescription) {
+            properties.put(BytesPlutusData.of("description"), BytesPlutusData.of("Desc"));
+        }
 
-        ConstrPlutusData datum = ConstrPlutusData.of(0, properties, BigIntPlutusData.of(1));
+        ConstrPlutusData datum = ConstrPlutusData.of(0, properties, version);
         try {
             return HexUtil.encodeHexString(CborSerializationUtil.serialize(datum.serialize()));
         } catch (Exception e) {

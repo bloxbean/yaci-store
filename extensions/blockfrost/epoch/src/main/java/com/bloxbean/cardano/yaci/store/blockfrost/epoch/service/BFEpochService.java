@@ -25,7 +25,6 @@ import java.math.BigInteger;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -144,8 +143,9 @@ public class BFEpochService {
             return null;
         }
 
-        Optional<BigInteger> activeStake = stakeStorageReader.getTotalActiveStakeByEpoch((int) epochNumber);
-        return activeStake.map(BigInteger::toString).orElse(null);
+        BigInteger activeStake = epochStorageReader.getActiveStakesByEpochs(List.of((int) epochNumber))
+                .get((int) epochNumber);
+        return activeStake != null ? activeStake.toString() : null;
     }
 
     private Map<Integer, String> resolveActiveStakeMap(List<Epoch> epochs) {
