@@ -8,6 +8,7 @@ import com.bloxbean.cardano.yaci.store.common.domain.TxInput;
 import com.bloxbean.cardano.yaci.store.common.service.CursorService;
 import com.bloxbean.cardano.yaci.store.common.service.StoreStateService;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
+import com.bloxbean.cardano.yaci.store.events.GenesisBlockEvent;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import com.bloxbean.cardano.yaci.store.events.model.internal.BatchBlock;
@@ -827,6 +828,27 @@ class UnspentUtxoTableIT {
         restarted.storage().handleCommit(batch(120, 200));   //starts at block 12: block 11 is missing
 
         assertThat(state()).containsEntry("STATUS", "STALE");
+    }
+
+    /**
+     * Whether a fresh store keeps the table from the first block is decided while nothing is synced. StartService
+     * writes the first block's point as the cursor right after the genesis event, before that block is processed, so
+     * after it the store looks synced to slot 0. The decision must not depend on GenesisUtxoProcessor saving
+     * outputs (a genesis without balances saves none).
+     */
+    @Test
+    void aFreshStoreKeepsTheTableFromTheFirstBlockWithoutGenesisOutputs() {
+        CursorService cursorService = mock(CursorService.class);
+        when(cursorService.getCursor()).thenReturn(Optional.empty());
+        UnspentUtxoTable table = new UnspentUtxoTable(UtxoStoreProperties.builder().unspentTableEnabled(true)
+                .unspentTableBackfillAtTip(false).unspentTableReadEnabled(true).build(), dsl, transactionManager,
+                storeStateService, cursorService);
+
+        table.handleGenesisBlock(GenesisBlockEvent.builder().slot(-1).block(-1).blockHash("genesis").build());
+        when(cursorService.getCursor()).thenReturn(Optional.of(
+                Cursor.builder().slot(0L).block(0L).blockHash("first").build()));   //StartService: the first block's point
+
+        assertThat(table.isActive()).isTrue();
     }
 
     @Test

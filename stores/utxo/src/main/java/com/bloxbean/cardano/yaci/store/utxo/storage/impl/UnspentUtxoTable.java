@@ -6,6 +6,7 @@ import com.bloxbean.cardano.yaci.store.common.domain.StoreState;
 import com.bloxbean.cardano.yaci.store.common.service.CursorService;
 import com.bloxbean.cardano.yaci.store.common.service.StoreStateService;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
+import com.bloxbean.cardano.yaci.store.events.GenesisBlockEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.PreBlockSyncEvent;
 import com.bloxbean.cardano.yaci.store.utxo.UtxoStoreProperties;
 import lombok.extern.slf4j.Slf4j;
@@ -260,6 +261,18 @@ public class UnspentUtxoTable {
                 .from(table("cursor_"))
                 .where(field("id", Long.class).eq(eventPublisherId))
                 .fetchOne(0, Long.class);
+    }
+
+    /**
+     * Decides now whether a fresh store keeps the table from the first block. Right after this event StartService
+     * writes the first block's point as the cursor (slot 0 on mainnet, preprod and preview), before that block is
+     * processed, so from then on {@link #checkCurrent} sees a store synced to that slot with no table state and leaves
+     * the table off. GenesisUtxoProcessor's save of the genesis outputs used to make this decision in time, but only
+     * when the genesis has balances.
+     */
+    @EventListener
+    public void handleGenesisBlock(GenesisBlockEvent event) {
+        isActive();
     }
 
     @EventListener
