@@ -18,6 +18,7 @@ import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
+import java.util.Optional;
 
 /**
  * Abstract base class for table exporters implementing the template method pattern.
@@ -101,6 +102,14 @@ public abstract class AbstractTableExporter implements TableExporter {
                     partitionKey, getTableName());
         }
 
+        // An exporter that can never be ready must not mark anything COMPLETED
+        var unavailable = unavailableReason();
+        if (unavailable.isPresent()) {
+            log.debug("Table {} cannot be exported ({}), skipping partition {}",
+                    getTableName(), unavailable.get(), partitionKey);
+            return false;
+        }
+
         // Pre-export validation (e.g., check if dependent jobs have completed)
         if (!preExportValidation(partition)) {
             log.debug("Pre-export validation failed for table {} partition {}, skipping export",
@@ -108,8 +117,17 @@ public abstract class AbstractTableExporter implements TableExporter {
             return false;
         }
 
-        // Mark in progress
-        ExportState state = stateService.markInProgress(getTableName(), partitionKey);
+        // Mark in progress. Two first-time exports of the same partition (the scheduler and an
+        // admin call) both insert the state row; the second insert fails on the primary key.
+        // That caller leaves the partition to the export that is already running.
+        ExportState state;
+        try {
+            state = stateService.markInProgress(getTableName(), partitionKey);
+        } catch (Exception e) {
+            log.warn("Could not mark {} partition {} in progress, another export of it is probably starting; "
+                    + "skipping: {}", getTableName(), partitionKey, e.getMessage());
+            return false;
+        }
 
         try {
             SlotRange slotRange = partition.toSlotRange(eraService);
@@ -131,6 +149,15 @@ public abstract class AbstractTableExporter implements TableExporter {
                         getTableName(), partitionKey, result.getRowCount()));
             }
 
+            // An empty result for a table that always has rows in a final partition means the
+            // source data is not there yet; COMPLETED would keep the partition empty for good
+            if (result.getRowCount() == 0 && !allowsEmptyPartition(partition)) {
+                throw new IllegalStateException(String.format(
+                        "Export of %s partition %s returned no rows, but a final partition of this table "
+                                + "always has rows; not marking it COMPLETED (retried on the next run)",
+                        getTableName(), partitionKey));
+            }
+
             // Calculate checksum (skip for DuckLake - files are managed internally)
             String checksum = null;
             if (!"DUCKLAKE".equalsIgnoreCase(storageWriter.getStorageFormat())) {
@@ -149,6 +176,11 @@ public abstract class AbstractTableExporter implements TableExporter {
                     getTableName(), partitionKey, e.getMessage(), e);
             stateService.markFailed(state, e.getMessage());
             return false;
+        } catch (Error e) {
+            // Not caught above (OutOfMemoryError, a native library error): without this the claim
+            // would block every retry of the partition until the JVM restarts
+            stateService.releaseClaim(state);
+            throw e;
         }
     }
 
@@ -254,8 +286,46 @@ public abstract class AbstractTableExporter implements TableExporter {
     }
 
     /**
+     * Whether an export of this partition may legitimately return no rows. Most tables can be
+     * empty for a final partition (a day without withdrawals, an epoch without rewards). Tables
+     * that always have a row for a final partition return {@code false}: an empty result is then
+     * marked FAILED, and retried, instead of COMPLETED.
+     */
+    @Override
+    public boolean allowsEmptyPartition(PartitionValue partition) {
+        return true;
+    }
+
+    /**
+     * Whether this table is filled by the AdaPot reward calculation job, so that it can only be
+     * exported when the adapot module is enabled. Exporters whose {@link #preExportValidation}
+     * waits for {@link #isRewardCalcAdaPotJobCompleted} unconditionally return {@code true}.
+     */
+    protected boolean dependsOnAdaPotJob() {
+        return false;
+    }
+
+    /**
+     * Unavailable when the table depends on the AdaPot job and the adapot module is disabled: the
+     * job never runs, so no epoch of the table can ever be ready.
+     */
+    @Override
+    public Optional<String> unavailableReason() {
+        if (dependsOnAdaPotJob() && adaPotJobStorage instanceof NoOpAdaPotJobStorage) {
+            return Optional.of("its data is written by the AdaPot reward calculation and the adapot module "
+                    + "is disabled (store.adapot.enabled=false)");
+        }
+        return Optional.empty();
+    }
+
+    /**
      * Check if Reward Calc AdaPot job has completed for the given epoch.
      * Used by exporters that depend on Reward Calc AdaPot job completion.
+     *
+     * Fails closed: if the job status cannot be read (for example a transient database error),
+     * the epoch is not ready and the scheduler tries again on its next run. Exporting it anyway
+     * would store an empty or partial epoch as COMPLETED, and a COMPLETED partition is never
+     * exported again.
      *
      * @param epoch The epoch to check
      * @return true if AdaPot job is completed, false otherwise
@@ -268,7 +338,13 @@ public abstract class AbstractTableExporter implements TableExporter {
 
         try {
             Integer nonByronEpoch = eraService.getFirstNonByronEpoch().orElse(null);
-            if (nonByronEpoch == null || epoch < nonByronEpoch) {
+            if (nonByronEpoch == null) {
+                // Still syncing Byron: no epoch is known to be Byron-only and finished yet
+                log.debug("First non-Byron epoch not known yet, epoch {} of {} is not ready", epoch, getTableName());
+                return false;
+            }
+            if (epoch < nonByronEpoch) {
+                // A Byron epoch has no AdaPot job, and it is over once a later era has started
                 log.debug("Epoch {} is before first non-Byron epoch {}, skipping AdaPot job check",
                         epoch, nonByronEpoch);
                 return true;
@@ -289,10 +365,9 @@ public abstract class AbstractTableExporter implements TableExporter {
             return completed;
 
         } catch (Exception e) {
-            log.error("Error checking AdaPot job status for epoch {}: {}",
-                    epoch, e.getMessage(), e);
-            // if we can't check, allow export to prevent permanent blocking
-            return true;
+            log.warn("Could not read the AdaPot job status for epoch {}, not exporting {} for it now "
+                    + "(retried on the next run): {}", epoch, getTableName(), e.getMessage());
+            return false;
         }
     }
 }

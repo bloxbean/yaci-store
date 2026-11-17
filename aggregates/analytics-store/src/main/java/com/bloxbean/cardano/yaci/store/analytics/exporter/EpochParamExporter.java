@@ -46,6 +46,13 @@ public class EpochParamExporter extends AbstractTableExporter {
         return PartitionStrategy.EPOCH;
     }
 
+    /** Every non-Byron epoch has its protocol parameters once it is ready. */
+    @Override
+    public boolean allowsEmptyPartition(PartitionValue partition) {
+        int epoch = ((PartitionValue.EpochPartition) partition).epoch();
+        return eraService.getFirstNonByronEpoch().map(first -> epoch < first).orElse(true);
+    }
+
     /**
      * Like the other epoch tables, an epoch is exported once its AdaPot job has run. From Conway on the
      * job's pre-processing is what writes the epoch's parameters; before Conway they are written at the
