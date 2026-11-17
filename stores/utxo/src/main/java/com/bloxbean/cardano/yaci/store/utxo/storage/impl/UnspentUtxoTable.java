@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.utxo.storage.impl;
 
+import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.Cursor;
 import com.bloxbean.cardano.yaci.store.common.domain.StoreState;
 import com.bloxbean.cardano.yaci.store.common.service.CursorService;
@@ -25,12 +26,14 @@ import java.util.Optional;
 import java.util.concurrent.locks.ReentrantLock;
 
 import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.*;
+import static org.jooq.impl.DSL.field;
 import static org.jooq.impl.DSL.max;
 import static org.jooq.impl.DSL.noCondition;
 import static org.jooq.impl.DSL.notExists;
 import static org.jooq.impl.DSL.row;
 import static org.jooq.impl.DSL.select;
 import static org.jooq.impl.DSL.selectOne;
+import static org.jooq.impl.DSL.table;
 
 /**
  * Whether address_utxo_unspent is written and read, and its one-off build.
@@ -58,6 +61,10 @@ import static org.jooq.impl.DSL.selectOne;
  * both tables have the primary key (output_index, tx_hash), so each slice is an anti-join of two ordered
  * key ranges that reads no row data. Only the outputs found unspent are copied with their columns. The
  * admin CLI's backfill-unspent-utxos runs the same steps.
+ *
+ * <p>An API-only instance ({@code store.read-only-mode=true}) never writes the table. It reads it only while the
+ * store_state row is CURRENT and not behind the cursor in cursor_, and looks that up again every second, since the
+ * writing instance can switch the table off or mark it stale at any time.
  */
 @Slf4j
 public class UnspentUtxoTable {
@@ -116,8 +123,29 @@ public class UnspentUtxoTable {
     //Runs the background build. Tests replace it to run the build inline or at a chosen moment.
     java.util.concurrent.Executor buildExecutor = work -> Thread.ofVirtual().name("address-utxo-unspent-build").start(work);
 
+    //An API-only instance (store.read-only-mode): another instance writes the table, so whether it can be read is
+    //looked up in the database again at most this often
+    private final boolean readOnly;
+    private final long eventPublisherId;
+    long readOnlyRecheckMillis = 1000;
+    private volatile long readOnlyNextCheck;
+    private volatile boolean readOnlyReadable;
+
     public UnspentUtxoTable(UtxoStoreProperties properties, DSLContext dsl, PlatformTransactionManager transactionManager,
                             StoreStateService storeStateService, CursorService cursorService) {
+        this(properties, dsl, transactionManager, storeStateService, cursorService, null);
+    }
+
+    /**
+     * @param storeProperties with {@code store.read-only-mode}, this instance never writes the table and reads it only
+     *                        while its store_state row is current and not behind the cursor in cursor_
+     */
+    public UnspentUtxoTable(UtxoStoreProperties properties, DSLContext dsl, PlatformTransactionManager transactionManager,
+                            StoreStateService storeStateService, CursorService cursorService,
+                            StoreProperties storeProperties) {
+        this.readOnly = storeProperties != null && storeProperties.isReadOnlyMode();
+        this.eventPublisherId = storeProperties != null && storeProperties.getEventPublisherId() != null
+                ? storeProperties.getEventPublisherId() : 1L;
         this.properties = properties;
         this.dsl = dsl;
         this.buildTransactionTemplate = new TransactionTemplate(transactionManager);
@@ -132,7 +160,7 @@ public class UnspentUtxoTable {
 
     /** Whether the table is written: outputs inserted, spends deleted, rollbacks applied. */
     public boolean isActive() {
-        if (properties == null || !properties.isUnspentTableEnabled())
+        if (properties == null || !properties.isUnspentTableEnabled() || readOnly)
             return false;
 
         if (phase == Phase.UNKNOWN) {
@@ -186,7 +214,52 @@ public class UnspentUtxoTable {
 
     /** Whether the unspent-output queries can be served from the table. */
     public boolean isReadable() {
-        return properties != null && properties.isUnspentTableReadEnabled() && isActive() && !switchCommitPending;
+        if (properties == null || !properties.isUnspentTableReadEnabled())
+            return false;
+        if (readOnly)
+            return properties.isUnspentTableEnabled() && isCurrentForReadOnly();
+        return isActive() && !switchCommitPending;
+    }
+
+    /**
+     * In an API-only instance the phase is not known here: the writer is another process that can switch the table off,
+     * mark it stale or run on without it at any time. So the table is read only while its store_state row is CURRENT
+     * and not behind the store's cursor, read from cursor_ (there is no CursorService in read-only mode), and that is
+     * looked up again at most every {@link #readOnlyRecheckMillis}.
+     */
+    private boolean isCurrentForReadOnly() {
+        long now = System.currentTimeMillis();
+        if (now < readOnlyNextCheck)
+            return readOnlyReadable;
+
+        boolean readable;
+        Long stateSlot = null;
+        Long cursorSlot = null;
+        try {
+            StoreState state = currentState();
+            stateSlot = state != null ? state.getSlot() : null;
+            cursorSlot = cursorSlotInDatabase();
+            readable = stateSlot != null && (cursorSlot == null || stateSlot >= cursorSlot);
+        } catch (Exception e) {
+            log.warn("address_utxo_unspent: could not read its state or the cursor, queries use address_utxo and tx_input: {}",
+                    e.getMessage());
+            readable = false;
+        }
+
+        if (readable != readOnlyReadable)
+            log.info("address_utxo_unspent is {} for queries (kept to slot {}, cursor at slot {})",
+                    readable ? "used" : "not used", stateSlot, cursorSlot);
+        readOnlyReadable = readable;
+        readOnlyNextCheck = now + readOnlyRecheckMillis;
+        return readable;
+    }
+
+    /** The store's cursor slot as the syncing instance last wrote it, or null if it has not written one. */
+    private Long cursorSlotInDatabase() {
+        return dsl.select(max(field("slot", Long.class)))
+                .from(table("cursor_"))
+                .where(field("id", Long.class).eq(eventPublisherId))
+                .fetchOne(0, Long.class);
     }
 
     @EventListener

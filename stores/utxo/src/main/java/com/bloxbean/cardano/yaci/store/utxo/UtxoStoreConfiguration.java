@@ -48,9 +48,11 @@ public class UtxoStoreConfiguration {
     public UnspentUtxoTable unspentUtxoTable(UtxoStoreProperties utxoStoreProperties, DSLContext dslContext,
                                              PlatformTransactionManager transactionManager,
                                              ObjectProvider<StoreStateService> storeStateService,
-                                             ObjectProvider<CursorService> cursorService) {
+                                             ObjectProvider<CursorService> cursorService,
+                                             ObjectProvider<StoreProperties> storeProperties) {
+        //In read-only mode there is no CursorService: the table then checks the cursor in the database itself
         return new UnspentUtxoTable(utxoStoreProperties, dslContext, transactionManager,
-                storeStateService.getIfAvailable(), cursorService.getIfAvailable());
+                storeStateService.getIfAvailable(), cursorService.getIfAvailable(), storeProperties.getIfAvailable());
     }
 
     @Bean

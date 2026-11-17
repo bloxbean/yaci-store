@@ -1,7 +1,9 @@
 package com.bloxbean.cardano.yaci.store.utxo.storage.impl;
 
+import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
+import com.bloxbean.cardano.yaci.store.common.domain.StoreState;
 import com.bloxbean.cardano.yaci.store.common.domain.TxInput;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
@@ -142,6 +144,35 @@ class UnspentUtxoTablePostgresIT {
 
         assertThat(jdbc.queryForObject("select owner_stake_addr from address_utxo_unspent", String.class))
                 .isEqualTo("stake_test1resolved");
+    }
+
+    @Test
+    void aReadOnlyInstanceComparesTheStateWithTheCursorInTheDatabase() {
+        //cursor_ as the core module creates it; this test runs the utxo migrations only
+        jdbc.execute("create table if not exists cursor_ (id integer not null, block_hash varchar(64), slot bigint, "
+                + "block_number bigint, era int, prev_block_hash varchar(64), create_datetime timestamp, "
+                + "update_datetime timestamp, primary key (id, block_hash))");
+        DSLContext dsl = DSL.using(new TransactionAwareDataSourceProxy(
+                new DriverManagerDataSource(PG.getJdbcUrl(), PG.getUsername(), PG.getPassword())), SQLDialect.POSTGRES);
+        InMemoryStoreStateService states = new InMemoryStoreStateService();
+        StoreProperties readOnly = new StoreProperties();
+        readOnly.setReadOnlyMode(true);
+        readOnly.setEventPublisherId(1L);
+        UnspentUtxoTable api = new UnspentUtxoTable(UtxoStoreProperties.builder().unspentTableEnabled(true)
+                .unspentTableReadEnabled(true).build(), dsl, null, states, null, readOnly);
+        api.readOnlyRecheckMillis = 0;
+        try {
+            states.saveState(StoreState.builder().stateId(UnspentUtxoTable.STATE_ID)
+                    .status(UnspentUtxoTable.STATUS_CURRENT).slot(100L).build());
+            jdbc.update("insert into cursor_ (id, block_hash, slot, block_number) values (1, 'a', 100, 10)");
+            jdbc.update("insert into cursor_ (id, block_hash, slot, block_number) values (2, 'b', 900, 90)");   //another publisher
+            assertThat(api.isReadable()).isTrue();
+
+            jdbc.update("insert into cursor_ (id, block_hash, slot, block_number) values (1, 'c', 200, 20)");
+            assertThat(api.isReadable()).isFalse();
+        } finally {
+            jdbc.execute("drop table cursor_");
+        }
     }
 
     @Test
