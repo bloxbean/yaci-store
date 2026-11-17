@@ -359,7 +359,12 @@ def run(c, ref, sc, resdir):
                     st = states(c, table, [f"epoch={v}" for v in values])
                     if st and all(s[0] == "COMPLETED" for s in st.values()): break
                     trigger_sync(c); time.sleep(30)
+            # The query layer refreshes its views every 5 minutes, so a partition exported a moment
+            # ago can still read the old file list: retry a mismatch for 6 minutes before reporting it
             d = compare(c, ref, table, key, values)
+            for _ in range(6):
+                if not d or "check_failed" in d: break
+                time.sleep(60); d = compare(c, ref, table, key, values)
             if d: res["anomalies"][f"{table}"] = d
     crashes = sorted(set(jvm_crash_files(c)) - crash0)
     if crashes: res["anomalies"]["jvm_crash"] = crashes
