@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobStatus;
 import com.bloxbean.cardano.yaci.store.adapot.job.domain.AdaPotJobType;
 import com.bloxbean.cardano.yaci.store.adapot.job.storage.AdaPotJobStorage;
 import com.bloxbean.cardano.yaci.store.analytics.config.AnalyticsStoreProperties;
+import com.bloxbean.cardano.yaci.store.analytics.config.PruningSafetyCheck;
 import com.bloxbean.cardano.yaci.store.analytics.exporter.NoOpAdaPotJobStorage;
 import com.bloxbean.cardano.yaci.store.analytics.exporter.PartitionStrategy;
 import com.bloxbean.cardano.yaci.store.analytics.exporter.PartitionValue;
@@ -15,6 +16,8 @@ import jakarta.annotation.PostConstruct;
 import lombok.Builder;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Component;
@@ -63,6 +66,20 @@ public class ContinuousSyncScheduler {
     private final AtomicBoolean syncRunning = new AtomicBoolean();
     /** Last state logged at INFO, so an unchanged state is logged at DEBUG only. */
     private volatile String lastLoggedState;
+    /** Holds PostgreSQL pruning while the export is behind; absent in unit tests. */
+    private ObjectProvider<PruningSafetyCheck> pruningGuard;
+
+    @Autowired(required = false)
+    void setPruningGuard(ObjectProvider<PruningSafetyCheck> pruningGuard) {
+        this.pruningGuard = pruningGuard;
+    }
+
+    private void holdPruning(boolean behind) {
+        PruningSafetyCheck guard = pruningGuard == null ? null : pruningGuard.getIfAvailable();
+        if (guard != null) {
+            guard.setHeld(behind);
+        }
+    }
 
     public ContinuousSyncScheduler(GapDetectionService gapDetectionService,
                                    UniversalExportService universalExportService,
@@ -138,6 +155,7 @@ public class ContinuousSyncScheduler {
             logState("deferred-sync", "Skipping analytics export — yaci store is still syncing. "
                     + "Exports will begin once sync reaches chain tip.");
             lastRunHadGaps = true; // keep catch-up interval for quick start after tip
+            holdPruning(true);   // nothing is exported yet, so pruning would delete history for good
             return;
         }
 
@@ -156,6 +174,9 @@ public class ContinuousSyncScheduler {
         try {
             Gaps gaps = findGaps();
             logState("gaps:" + gaps.summary(), "Analytics export gaps: " + gaps.summary());
+            // A day that is ready but not exported yet (missing, or a failed export waiting for its
+            // retry) must keep its PostgreSQL rows until it is exported
+            holdPruning(gaps.readyMissingDates > 0);
             if (gaps.due.isEmpty()) {
                 lastRunHadGaps = false;
                 return;

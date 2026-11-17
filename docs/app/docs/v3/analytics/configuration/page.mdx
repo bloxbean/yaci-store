@@ -22,8 +22,8 @@ import { Callout } from 'nextra/components'
 | `yaci.store.analytics.continuous-sync.export-after-sync` | `true` | Defer exports until the sync reaches chain tip. Set `false` to export during the sync |
 | `yaci.store.analytics.continuous-sync.retry-backoff-initial-minutes` | `1` | Wait before retrying a partition whose export failed. Each further failure doubles the wait |
 | `yaci.store.analytics.continuous-sync.retry-backoff-max-minutes` | `360` | Longest wait between retries of a partition that keeps failing |
-| `yaci.store.analytics.pruning-check.accept-data-loss` | `false` | Start even when a pruning setting deletes source rows before they are exported (see [Pruning](#pruning-and-the-analytics-store)); a warning is logged instead |
-| `yaci.store.analytics.pruning-check.margin-hours` | `12` | Hours a pruning window must keep beyond the export delay (finality window + `buffer-days`) |
+| `yaci.store.analytics.pruning-check.accept-data-loss` | `false` | Keep the configured pruning windows: never raise them or hold pruning for the analytics export (see [Pruning](#pruning-and-the-analytics-store)); a warning is logged instead |
+| `yaci.store.analytics.pruning-check.margin-hours` | `12` | Hours a pruning window is kept beyond the export delay (finality window + `buffer-days`) when it is raised |
 | `yaci.store.analytics.parquet-export.codec` | `ZSTD` | Compression codec |
 | `yaci.store.analytics.parquet-export.compression-level` | `3` | ZSTD compression level (1-22) |
 | `yaci.store.analytics.parquet-export.row-group-size` | `-1` | Parquet row group size (-1 = DuckDB default ~122,880 rows) |
@@ -78,9 +78,9 @@ Note: The limit applies per DuckDB instance. The export writer is one instance; 
 
 ### Pruning and the analytics store
 
-A day is exported once its oldest rows are `buffer-days × 24 h` + the finality window old: about 37 h on mainnet with the defaults. Several stores can prune PostgreSQL rows much sooner (about 12 h with their defaults), which would delete most of each day before it is exported. The analytics store therefore refuses to start when one of these deletes rows an enabled exporter reads too early:
+A day is exported once its oldest rows are `buffer-days × 24 h` + the finality window old: about 37 h on mainnet with the defaults. Several stores can prune PostgreSQL rows much sooner (about 12 h with their defaults), which would delete most of each day before it is exported. When the analytics store is enabled, it keeps pruning from deleting rows it has not exported yet, with no configuration needed:
 
-| Pruning | Window property | Exported tables affected |
+| Pruning | Window property | Exported tables protected |
 |---|---|---|
 | `store.utxo.pruning-enabled` | `store.utxo.pruning-safe-blocks` (blocks) | `address_utxo`, `tx_input` |
 | `store.transaction.pruning-enabled` | `store.transaction.pruning-safe-slots` | `transaction`, `transaction_witness`, `transaction_cbor` |
@@ -88,11 +88,11 @@ A day is exported once its oldest rows are `buffer-days × 24 h` + the finality 
 | `store.blocks.cbor-pruning-enabled` | `store.blocks.cbor-pruning-safe-slots` | `block_cbor` |
 | `store.account.history-cleanup-enabled` or `store.account.pruning-enabled` | `store.account.balance-cleanup-slot-count` | `address_balance`, `stake_address_balance`, `stake_address_balance_snapshot` |
 
-The error names the table, the pruning property, its value and the minimum safe value: the export delay plus `pruning-check.margin-hours` (default 12), i.e. 49 h on mainnet with the defaults (176,400 slots, or 8,820 blocks for UTxO pruning). Raise the window, disable the exporter (`yaci.store.analytics.exporter.<table>.enabled=false`), or set `yaci.store.analytics.pruning-check.accept-data-loss=true` to start anyway and accept the missing rows. Reward and epoch-stake pruning are not checked: both follow the AdaPot jobs that the same tables wait for. Custom exporters are not checked.
+- **The window is raised.** At startup, a window shorter than the export delay plus `pruning-check.margin-hours` (default 12) is raised to that value: 49 h on mainnet, which is 176,400 slots, or 8,820 blocks for UTxO pruning. The change is logged at WARN with the value to configure to silence it.
+- **Pruning is held while the export is behind.** While the indexer is still syncing with `continuous-sync.export-after-sync=true` (nothing is exported yet), or while a day that is ready to export has not been exported (for example a failed export waiting for its retry), these pruning features delete nothing. They resume, with their window, once the export has caught up. So an initial sync with pruning on keeps all rows until they are exported, and PostgreSQL holds the whole history until then.
+- `yaci.store.analytics.pruning-check.accept-data-loss=true` leaves the configured windows alone (never raised, never held), and only warns about the rows the analytics store will miss.
 
-<Callout type="warning">
-Pruning counts from the sync tip. During an initial sync with `continuous-sync.export-after-sync=true`, nothing is exported until the tip is reached, so pruning removes history before the analytics store can read it, whatever the window. Sync first and enable pruning afterwards, or export during the sync.
-</Callout>
+Reward and epoch-stake pruning are not managed: both follow the AdaPot jobs that the same tables wait for. Custom exporters are not covered.
 
 ### DuckLake requires `public` schema in PostgreSQL
 

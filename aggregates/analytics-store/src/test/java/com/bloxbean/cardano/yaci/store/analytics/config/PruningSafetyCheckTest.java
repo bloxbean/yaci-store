@@ -17,7 +17,6 @@ import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -50,16 +49,56 @@ class PruningSafetyCheckTest {
     }
 
     @Test
-    void defaultUtxoPruningRefusesToStartAndNamesTheMinimumSafeValue() {
+    void aShortUtxoWindowIsRaisedToTheExportDelayPlusTheMargin() {
         utxo.setPruningEnabled(true); // pruning-safe-blocks=2160: ~12 h
 
-        assertThatThrownBy(check::afterSingletonsInstantiated)
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("'address_utxo'")
-                .hasMessageContaining("'tx_input'")
-                .hasMessageContaining("store.utxo.pruning-safe-blocks=2160")
-                // 37 h export delay + 12 h margin = 49 h = 8820 blocks of 20 s
-                .hasMessageContaining("store.utxo.pruning-safe-blocks to at least 8820");
+        check.afterSingletonsInstantiated();
+        check.setHeld(false);
+
+        // 37 h export delay + 12 h margin = 49 h = 8820 blocks of 20 s
+        assertThat(utxo.getPruningSafeBlocks()).isEqualTo(8820);
+    }
+
+    @Test
+    void pruningIsHeldFromStartupUntilTheExportHasCaughtUp() {
+        utxo.setPruningEnabled(true);
+        account.setHistoryCleanupEnabled(true);
+        environment.setProperty("store.account.enabled", "true");
+
+        check.afterSingletonsInstantiated();
+        assertThat(check.isHeld()).isTrue();
+        assertThat(utxo.getPruningSafeBlocks()).isEqualTo((int) PruningSafetyCheck.HOLD_WINDOW);
+        assertThat(account.getBalanceCleanupSlotCount()).isEqualTo(PruningSafetyCheck.HOLD_WINDOW);
+
+        check.setHeld(false);
+        assertThat(utxo.getPruningSafeBlocks()).isEqualTo(8820);
+        assertThat(account.getBalanceCleanupSlotCount()).isEqualTo(176_400);
+
+        check.setHeld(true);   // behind again, e.g. a day waiting for its retry
+        assertThat(utxo.getPruningSafeBlocks()).isEqualTo((int) PruningSafetyCheck.HOLD_WINDOW);
+    }
+
+    @Test
+    void aWindowThatIsAlreadyLongEnoughIsKeptButStillHeldWhileBehind() {
+        utxo.setPruningEnabled(true);
+        utxo.setPruningSafeBlocks(20_000);
+
+        check.afterSingletonsInstantiated();
+        check.setHeld(false);
+        assertThat(utxo.getPruningSafeBlocks()).isEqualTo(20_000);
+        check.setHeld(true);
+        assertThat(utxo.getPruningSafeBlocks()).isEqualTo((int) PruningSafetyCheck.HOLD_WINDOW);
+    }
+
+    @Test
+    void pruningOfTablesThatAreNotExportedIsLeftAlone() {
+        utxo.setPruningEnabled(true);
+        when(registry.isEnabled(anyString())).thenReturn(false);
+
+        check.afterSingletonsInstantiated();
+        check.setHeld(true);
+        assertThat(utxo.getPruningSafeBlocks()).isEqualTo(2160);
+        assertThat(check.isHeld()).isFalse();
     }
 
     @Test
@@ -96,11 +135,14 @@ class PruningSafetyCheckTest {
     }
 
     @Test
-    void operatorsCanAcceptTheLoss() {
+    void operatorsCanKeepTheirWindowAndAcceptTheLoss() {
         utxo.setPruningEnabled(true);
         properties.getPruningCheck().setAcceptDataLoss(true);
 
         assertThatCode(check::afterSingletonsInstantiated).doesNotThrowAnyException();
+        check.setHeld(true);
+        assertThat(utxo.getPruningSafeBlocks()).isEqualTo(2160);
+        assertThat(check.isHeld()).isFalse();
     }
 
     @Test

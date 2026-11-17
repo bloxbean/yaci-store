@@ -20,13 +20,24 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Refuses to start the analytics store when a PostgreSQL pruning setting deletes rows of an
- * enabled exporter's source table before the analytics export has read them.
+ * Keeps PostgreSQL pruning from deleting rows the analytics store has not exported yet.
  *
  * <p>A daily partition is exported once its oldest rows are {@code buffer-days × 24 h +}
  * the finality window old (37 h on mainnet with the defaults). The pruning features delete
- * rows that are older than their window relative to the sync tip (about 12 h by default), so
- * with the defaults most of each day would be deleted before it is exported, silently.</p>
+ * rows older than their window relative to the sync tip (about 12 h by default), so without
+ * this guard most of each day would be deleted before it is exported, silently.</p>
+ *
+ * <p>For each active pruning feature that deletes rows of an enabled exporter:</p>
+ * <ul>
+ *   <li>At startup its window is raised, when it is shorter, to the export delay plus
+ *       {@code pruning-check.margin-hours} (49 h on mainnet). The change is logged at WARN.</li>
+ *   <li>While the analytics export is behind (the indexer is still syncing with
+ *       {@code export-after-sync=true}, or a day that is ready to export has not been exported
+ *       yet, for example while a failed export waits for its retry), pruning is held: its window
+ *       is set so large that nothing qualifies, because rows of days not exported yet would
+ *       otherwise be deleted whatever the window. It is released when the export has caught up.
+ *       The pruning services read their window on every run, so this takes effect at once.</li>
+ * </ul>
  *
  * <p>Checked features (each only when its store is enabled and its pruning is switched on):</p>
  * <ul>
@@ -42,8 +53,8 @@ import java.util.List;
  * <p>Reward and epoch-stake pruning are not checked: both are anchored on completed AdaPot jobs,
  * and those tables are exported as soon as the same jobs complete.</p>
  *
- * <p>{@code yaci.store.analytics.pruning-check.accept-data-loss=true} turns the refusal into a
- * warning.</p>
+ * <p>{@code yaci.store.analytics.pruning-check.accept-data-loss=true} leaves the configured
+ * windows alone (never raised, never held) and only warns.</p>
  */
 @Component
 @Slf4j
@@ -64,19 +75,30 @@ public class PruningSafetyCheck implements SmartInitializingSingleton {
      * @param tables         analytics tables that read the rows it deletes
      */
     record Pruning(String feature, String enableProperty, String windowProperty, long window, Unit unit,
-                   List<String> tables) {
+                   List<String> tables, java.util.function.LongConsumer setWindow) {
     }
+
+    /**
+     * Window that makes a pruning feature delete nothing: the pruning services delete only when
+     * {@code tip - window > 0}. It fits the {@code int} window properties.
+     */
+    static final long HOLD_WINDOW = Integer.MAX_VALUE;
+
+    /** A pruning feature this guard manages, with the window it runs with when not held. */
+    record Guarded(Pruning pruning, long window) {
+    }
+
+    private final List<Guarded> guarded = new java.util.concurrent.CopyOnWriteArrayList<>();
+    /** Null until the first decision; then whether pruning is held. */
+    private volatile Boolean held;
 
     /** An enabled exporter whose source rows are pruned too early. */
     record Violation(String table, Pruning pruning, Duration pruneAfter, Duration required, long minimumWindow) {
         String message() {
             return String.format("Analytics table '%s' is exported from rows that %s (%s=true) deletes once they are "
-                            + "%s=%d %s (~%.1f h) old, but a day's oldest rows are exported only when ~%.1f h old. "
-                            + "Set %s to at least %d, disable the exporter (yaci.store.analytics.exporter.%s.enabled=false), "
-                            + "or set yaci.store.analytics.pruning-check.accept-data-loss=true to accept the missing rows",
+                            + "%s=%d %s (~%.1f h) old, but a day's oldest rows are exported only when ~%.1f h old",
                     table, pruning.feature(), pruning.enableProperty(), pruning.windowProperty(), pruning.window(),
-                    pruning.unit().name().toLowerCase(), hours(pruneAfter), hours(required),
-                    pruning.windowProperty(), minimumWindow, table);
+                    pruning.unit().name().toLowerCase(), hours(pruneAfter), hours(required));
         }
     }
 
@@ -110,21 +132,71 @@ public class PruningSafetyCheck implements SmartInitializingSingleton {
         this.accountProperties = accountProperties;
     }
 
-    /** Runs once all beans exist, so built-in and custom exporters are registered. */
+    /**
+     * Runs once all beans exist (built-in and custom exporters are registered), before the
+     * scheduled pruning jobs start: raises windows that are too short, then holds pruning until
+     * the first analytics sync run says the export is not behind.
+     */
     @Override
     public void afterSingletonsInstantiated() {
-        List<Violation> violations = check();
-        if (violations.isEmpty()) {
-            return;
-        }
         if (properties.getPruningCheck().isAcceptDataLoss()) {
-            violations.forEach(v -> log.warn("{} (accepted: pruning-check.accept-data-loss=true)", v.message()));
+            check().forEach(v -> log.warn("{}; the window is kept (pruning-check.accept-data-loss=true), so these "
+                    + "rows are lost to the analytics store", v.message()));
             return;
         }
-        StringBuilder message = new StringBuilder("Pruning deletes PostgreSQL rows before the analytics store "
-                + "exports them; refusing to start:");
-        violations.forEach(v -> message.append(System.lineSeparator()).append(" - ").append(v.message()));
-        throw new IllegalStateException(message.toString());
+        Duration required = requiredRetention();
+        for (Pruning pruning : activePrunings()) {
+            List<String> exported = pruning.tables().stream()
+                    .filter(t -> registry.hasExporter(t) && registry.isEnabled(t)).toList();
+            if (exported.isEmpty()) {
+                continue;
+            }
+            long minimum = minimumWindow(required, pruning.unit());
+            long window = Math.max(pruning.window(), minimum);
+            if (window > pruning.window()) {
+                pruning.setWindow().accept(window);
+                log.warn("{} deletes rows of analytics tables {} after {}={} {} (~{} h), before they are exported "
+                                + "(~{} h). Raised {} to {} while the analytics store is enabled. Set it to at least {} to "
+                                + "silence this, or pruning-check.accept-data-loss=true to keep the configured window",
+                        pruning.feature(), exported, pruning.windowProperty(), pruning.window(),
+                        pruning.unit().name().toLowerCase(), String.format("%.1f", hours(duration(pruning.window(), pruning.unit()))),
+                        String.format("%.1f", hours(required)), pruning.windowProperty(), window, minimum);
+            }
+            guarded.add(new Guarded(pruning, window));
+        }
+        if (!guarded.isEmpty()) {
+            setHeld(true);
+        }
+    }
+
+    /**
+     * Hold pruning (nothing is deleted) while the analytics export is behind, release it once it
+     * has caught up. Called by the continuous-sync scheduler after each check; a no-op when no
+     * pruning feature affects an exported table.
+     *
+     * @param behind true while the indexer is still syncing with exports deferred, or a day that is
+     *               ready to export has not been exported yet
+     */
+    public void setHeld(boolean behind) {
+        if (guarded.isEmpty() || Boolean.valueOf(behind).equals(held)) {
+            return;
+        }
+        for (Guarded g : guarded) {
+            g.pruning().setWindow().accept(behind ? HOLD_WINDOW : g.window());
+        }
+        held = behind;
+        List<String> features = guarded.stream().map(g -> g.pruning().feature()).toList();
+        if (behind) {
+            log.info("Holding {} until the analytics export has caught up, so no row is deleted before it is exported",
+                    features);
+        } else {
+            log.info("Analytics export has caught up; {} runs again with its window", features);
+        }
+    }
+
+    /** Whether pruning is held now (tests and status). */
+    public boolean isHeld() {
+        return Boolean.TRUE.equals(held);
     }
 
     /** The enabled exporters whose source rows are pruned before they are exported. */
@@ -163,7 +235,8 @@ public class PruningSafetyCheck implements SmartInitializingSingleton {
         UtxoStoreProperties utxo = utxoProperties.getIfAvailable();
         if (utxo != null && storeEnabled("utxo", true) && utxo.isPruningEnabled()) {
             prunings.add(new Pruning("UTxO pruning", "store.utxo.pruning-enabled", "store.utxo.pruning-safe-blocks",
-                    utxo.getPruningSafeBlocks(), Unit.BLOCKS, List.of("address_utxo", "tx_input")));
+                    utxo.getPruningSafeBlocks(), Unit.BLOCKS, List.of("address_utxo", "tx_input"),
+                    w -> utxo.setPruningSafeBlocks(toInt(w))));
         }
 
         TransactionStoreProperties transaction = transactionProperties.getIfAvailable();
@@ -171,12 +244,13 @@ public class PruningSafetyCheck implements SmartInitializingSingleton {
             if (transaction.isPruningEnabled()) {
                 prunings.add(new Pruning("transaction pruning", "store.transaction.pruning-enabled",
                         "store.transaction.pruning-safe-slots", transaction.getPruningSafeSlots(), Unit.SLOTS,
-                        List.of("transaction", "transaction_witness", "transaction_cbor")));
+                        List.of("transaction", "transaction_witness", "transaction_cbor"),
+                        w -> transaction.setPruningSafeSlots(toInt(w))));
             }
             if (transaction.isCborPruningEnabled()) {
                 prunings.add(new Pruning("transaction CBOR pruning", "store.transaction.cbor-pruning-enabled",
                         "store.transaction.cbor-pruning-safe-slots", transaction.getCborPruningSafeSlots(), Unit.SLOTS,
-                        List.of("transaction_cbor")));
+                        List.of("transaction_cbor"), w -> transaction.setCborPruningSafeSlots(toInt(w))));
             }
         }
 
@@ -184,7 +258,7 @@ public class PruningSafetyCheck implements SmartInitializingSingleton {
         if (blocks != null && storeEnabled("blocks", true) && blocks.isCborPruningEnabled()) {
             prunings.add(new Pruning("block CBOR pruning", "store.blocks.cbor-pruning-enabled",
                     "store.blocks.cbor-pruning-safe-slots", blocks.getCborPruningSafeSlots(), Unit.SLOTS,
-                    List.of("block_cbor")));
+                    List.of("block_cbor"), w -> blocks.setCborPruningSafeSlots(toInt(w))));
         }
 
         AccountStoreProperties account = accountProperties.getIfAvailable();
@@ -194,11 +268,11 @@ public class PruningSafetyCheck implements SmartInitializingSingleton {
             if (account.isHistoryCleanupEnabled()) {
                 prunings.add(new Pruning("account balance history cleanup", "store.account.history-cleanup-enabled",
                         "store.account.balance-cleanup-slot-count", account.getBalanceCleanupSlotCount(), Unit.SLOTS,
-                        balanceTables));
+                        balanceTables, account::setBalanceCleanupSlotCount));
             } else if (account.isPruningEnabled()) {
                 prunings.add(new Pruning("account balance pruning", "store.account.pruning-enabled",
                         "store.account.balance-cleanup-slot-count", account.getBalanceCleanupSlotCount(), Unit.SLOTS,
-                        balanceTables));
+                        balanceTables, account::setBalanceCleanupSlotCount));
             }
         }
         return prunings;
@@ -228,6 +302,10 @@ public class PruningSafetyCheck implements SmartInitializingSingleton {
         }
         double f = genesisConfig.getActiveSlotsCoeff();
         return slotLength / (f > 0 && f <= 1 ? f : 0.05);
+    }
+
+    private static int toInt(long window) {
+        return (int) Math.min(window, Integer.MAX_VALUE);
     }
 
     private static double hours(Duration duration) {

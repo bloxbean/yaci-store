@@ -51,6 +51,27 @@ class ContinuousSyncSchedulerTest {
     }
 
     @Test
+    void pruningIsHeldWhileADayIsReadyButNotExportedAndReleasedOnceCaughtUp() {
+        com.bloxbean.cardano.yaci.store.analytics.config.PruningSafetyCheck guard =
+                mock(com.bloxbean.cardano.yaci.store.analytics.config.PruningSafetyCheck.class);
+        @SuppressWarnings("unchecked")
+        org.springframework.beans.factory.ObjectProvider<com.bloxbean.cardano.yaci.store.analytics.config.PruningSafetyCheck>
+                provider = mock(org.springframework.beans.factory.ObjectProvider.class);
+        when(provider.getIfAvailable()).thenReturn(guard);
+        scheduler.setPruningGuard(provider);
+        TableExporter block = exporter("block", PartitionStrategy.DAILY);
+        tables(List.of(block), List.of());
+
+        when(gapDetection.findGaps(block)).thenReturn(new TableGaps("block", List.of(), List.of(DAY), List.of()));
+        scheduler.syncGaps();
+        verify(guard).setHeld(true);
+
+        when(gapDetection.findGaps(block)).thenReturn(new TableGaps("block", List.of(), List.of(), List.of()));
+        scheduler.syncGaps();
+        verify(guard).setHeld(false);
+    }
+
+    @Test
     void partitionsThatAreNotReadyAreNotGapsAndTheStoreIsFullySynced() {
         TableExporter reward = exporter("reward", PartitionStrategy.EPOCH);
         tables(List.of(), List.of(reward));

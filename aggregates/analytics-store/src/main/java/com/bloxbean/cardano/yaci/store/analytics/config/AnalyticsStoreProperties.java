@@ -53,14 +53,15 @@ public class AnalyticsStoreProperties {
     @Data
     public static class PruningCheck {
         /**
-         * Start even when a pruning setting deletes rows of an enabled exporter's source table
-         * before they are exported. The affected tables then miss data; a warning is logged
-         * instead of refusing to start. Default: false.
+         * Keep the configured pruning windows: do not raise a window that deletes rows of an
+         * enabled exporter's source table before they are exported, and do not hold pruning while
+         * the export is behind. The affected tables then miss data; a warning is logged.
+         * Default: false.
          */
         private boolean acceptDataLoss = false;
 
         /**
-         * Extra hours the pruning window must keep beyond the analytics export delay
+         * Extra hours a raised pruning window keeps beyond the analytics export delay
          * (finality window + buffer days), to cover scheduler intervals, retries and short
          * outages. Default: 12.
          */
