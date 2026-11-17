@@ -12,7 +12,8 @@ _jh = os.environ.get("RT_JAVA_HOME") or os.environ.get("JAVA_HOME")
 JCMD = os.path.join(_jh, "bin", "jcmd") if _jh else "jcmd"
 # Per network: unix time = slot + T0 (Shelley-era slots are 1 s), and the first slot of the first Conway epoch
 NETWORKS = {"preprod": {"t0": 1655683200, "conway_slot": 68774400},   # epoch 163
-            "preview": {"t0": 1666656000, "conway_slot": 55814400}}   # epoch 646
+            "preview": {"t0": 1666656000, "conway_slot": 55814400},   # epoch 646
+            "mainnet": {"t0": 1591566291, "conway_slot": 133660800}}  # epoch 507; Shelley-era slots only
 
 def _conf_row(name):
     conf = f"{R}/instances.conf" if os.path.exists(f"{R}/instances.conf") else f"{KIT}/instances.conf"

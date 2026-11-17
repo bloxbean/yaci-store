@@ -18,7 +18,9 @@ read -r I KIND PROXIED PROFILES EXTRA NET < <(awk -v n="$N" '$1 == n && $1 !~ /^
 case ${NET:-preprod} in
   preprod) RELAY=${RT_RELAY:-preprod-node.play.dev.cardano.org:3001}; MAGIC=1; T0=1655683200 ;;
   preview) RELAY=${RT_RELAY_PREVIEW:-preview-node.play.dev.cardano.org:3001}; MAGIC=2; T0=1666656000 ;;
-  *) echo "unknown network $NET for $N (preprod or preview)"; exit 2 ;;
+  # mainnet: Shelley-era slots only (Byron slots are 20 s); fault scenarios are not meant for it
+  mainnet) RELAY=${RT_RELAY_MAINNET:-backbone.cardano.iog.io:3001}; MAGIC=764824073; T0=1591566291 ;;
+  *) echo "unknown network $NET for $N (preprod, preview or mainnet)"; exit 2 ;;
 esac
 HEAP=${RT_HEAP:-6g}
 APP=$((18100+I)); PG=$((54370+I)); DBP=$((54380+I)); NP=$((13100+I)); NC=$((14100+I)); DC=$((14110+I))
