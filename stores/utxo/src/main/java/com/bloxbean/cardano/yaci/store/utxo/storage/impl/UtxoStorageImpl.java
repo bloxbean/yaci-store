@@ -282,12 +282,45 @@ public class UtxoStorageImpl implements UtxoStorage {
         dsl.batch(inserts).execute();
 
         if (isUnspentTableEnabled()) {
-            //A later save of the same output (pointer-address resolution at commit) replaces it
-            addressUtxoList.forEach(addressUtxo -> pendingOutputs.put(
-                    new UtxoKey(addressUtxo.getTxHash(), addressUtxo.getOutputIndex()), new PendingOutput(addressUtxo, localDateTime)));
+            List<PendingOutput> genesisOutputs = new ArrayList<>();
+            for (AddressUtxo addressUtxo : addressUtxoList) {
+                PendingOutput output = new PendingOutput(addressUtxo, localDateTime);
+                if (isGenesisOutput(addressUtxo))
+                    genesisOutputs.add(output);
+                else //A later save of the same output (pointer-address resolution at commit) replaces it
+                    pendingOutputs.put(new UtxoKey(addressUtxo.getTxHash(), addressUtxo.getOutputIndex()), output);
+            }
+            writeGenesisOutputs(genesisOutputs);
         }
 
         addressUtxoList.forEach(utxoCache::add);
+    }
+
+    /** Genesis outputs are saved with slot -1, from the GenesisBlockEvent, before the first block. */
+    private static boolean isGenesisOutput(AddressUtxo addressUtxo) {
+        return addressUtxo.getSlot() != null && addressUtxo.getSlot() < 0;
+    }
+
+    /**
+     * Writes the genesis outputs to address_utxo_unspent at once, in the transaction that saves them to address_utxo.
+     * They belong to no batch, so they must not wait in the pending outputs for the first commit: a rollback before
+     * that commit clears the pending outputs (the RollBackward that chain sync sends to its start point on a fresh
+     * store that starts near the tip, or the restart rollback of a fresh store whose first block is after slot 0), and
+     * a stop before it loses them, while the rollback has already recorded the table as current. A spend of one of them
+     * in the first batch deletes it at that commit, as for any output of an earlier batch.
+     */
+    private void writeGenesisOutputs(List<PendingOutput> genesisOutputs) {
+        if (genesisOutputs.isEmpty())
+            return;
+
+        //Saved again into a store that has already spent some of them: leave those out
+        List<PendingOutput> toWrite = withoutLaterSpends(genesisOutputs, -1L);
+        for (int from = 0; from < toWrite.size(); from += UNSPENT_WRITE_BATCH_SIZE) {
+            dsl.batch(toWrite.subList(from, Math.min(from + UNSPENT_WRITE_BATCH_SIZE, toWrite.size())).stream()
+                    .map(output -> upsert(ADDRESS_UTXO_UNSPENT, mapper.toAddressUtxoEntity(output.addressUtxo()), output.savedAt()))
+                    .toList()).execute();
+        }
+        log.info("address_utxo_unspent: {} genesis outputs written", toWrite.size());
     }
 
     /**

@@ -746,6 +746,43 @@ class UnspentUtxoTableIT {
         assertThat(state()).containsEntry("BLOCK", 11L);   //the late block does not move the state back
     }
 
+    // --- Genesis outputs (slot -1) are saved before the first block, outside any batch
+
+    /**
+     * A fresh store that starts with chain sync (a devnet near its tip) is sent a RollBackward to its start point before
+     * the first block arrives, and BlockFetchService turns it into a RollbackEvent (slot 0 on yaci-devkit). A fresh store
+     * whose first block is after slot 0 gets StartService's restart rollback at the same moment. Both come after
+     * GenesisUtxoProcessor has saved the genesis outputs and before any commit.
+     */
+    @Test
+    void genesisOutputsSurviveARollbackBeforeTheFirstCommit() {
+        Store store = fromGenesisAt(null);
+        store.storage().saveUnspent(List.of(output(hash(90), 0, -1), output(hash(90), 1, -1)));   //GenesisUtxoProcessor
+        store.rollbackTo(0);
+
+        store.storage().saveSpent(List.of(spend(hash(90), 1, 10)));   //the first block spends one of them
+        store.storage().saveUnspent(List.of(output(hash(91), 0, 10)));
+        store.storage().handleCommit(batch(10, 10));
+
+        assertThat(unspentKeys()).containsExactly(hash(90) + "#0", hash(91) + "#0").isEqualTo(expectedKeys());
+    }
+
+    /**
+     * The rollback before the first commit records the table as current at the rollback point. If the store then stops
+     * before the first batch commits, the next start trusts the table, so the genesis outputs must already be in it.
+     */
+    @Test
+    void genesisOutputsAreInTheTableWhenTheStoreStopsAfterTheStartupRollback() {
+        Store first = fromGenesisAt(null);
+        first.storage().saveUnspent(List.of(output(hash(92), 0, -1)));
+        first.rollbackTo(20);   //the first block is at slot 20; stopped before its batch commits
+
+        Store restarted = fromGenesisAt(20L);   //StartService wrote the first block's point as the cursor
+
+        assertThat(restarted.table().isActive()).isTrue();
+        assertThat(unspentKeys()).containsExactly(hash(92) + "#0").isEqualTo(expectedKeys());
+    }
+
     @Test
     void rowsWithoutAStateAreNotTrusted() {
         jdbc.update("insert into address_utxo_unspent (tx_hash, output_index, slot) values (?, 0, 100)", hash(40));
