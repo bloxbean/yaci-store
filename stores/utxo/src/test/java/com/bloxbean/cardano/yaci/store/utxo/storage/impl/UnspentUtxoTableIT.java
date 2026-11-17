@@ -783,6 +783,52 @@ class UnspentUtxoTableIT {
         assertThat(unspentKeys()).containsExactly(hash(92) + "#0").isEqualTo(expectedKeys());
     }
 
+    // --- The block a rollback leaves the table at, for the gap check of the next batch
+
+    /**
+     * Chain sync starts with a RollBackward to its start point, the cursor: at the switch from the range fetch to chain
+     * sync, at every reconnect and at a restart near the tip. That rollback changes nothing, and the block after it must
+     * still be checked for a gap (a block skipped at the switch to chain sync is one of the known skip paths).
+     */
+    @Test
+    void aGapRightAfterARollbackToTheKeptBlockIsDetected() {
+        Store store = fromGenesisAt(null);
+        store.table().buildExecutor = work -> { };   //the rebuild after the gap is not under test
+        store.storage().saveUnspent(List.of(output(hash(93), 0, 100)));
+        store.storage().handleCommit(batch(10, 100));   //kept to block 10, slot 100
+
+        store.rollbackTo(100);
+        assertThat(state()).containsEntry("STATUS", "CURRENT").containsEntry("SLOT", 100L).containsEntry("BLOCK", 10L);
+
+        store.storage().saveUnspent(List.of(output(hash(94), 0, 120)));
+        store.storage().handleCommit(batch(120, 120));   //block 12: block 11 never reached the table
+
+        assertThat(state()).containsEntry("STATUS", "STALE");
+        assertThat(store.table().isActive()).isFalse();
+    }
+
+    /**
+     * A restart after a crash between a batch's commit and the cursor update rolls back below the table's block, to the
+     * cursor. The state takes the cursor's block there, so the first batch after the restart is still checked.
+     */
+    @Test
+    void aRollbackBelowTheKeptBlockTakesTheCursorsBlock() {
+        Store before = fromGenesisAt(null);
+        before.storage().handleCommit(batch(10, 100));
+        before.storage().handleCommit(batch(110, 200));   //committed; the cursor stayed at block 10, slot 100
+
+        Store restarted = fromGenesisAt(100L);
+        restarted.table().buildExecutor = work -> { };
+        assertThat(restarted.table().isActive()).isTrue();
+        restarted.rollbackTo(100);   //StartService's restart rollback
+        assertThat(state()).containsEntry("STATUS", "CURRENT").containsEntry("SLOT", 100L).containsEntry("BLOCK", 10L)
+                .containsEntry("BLOCK_HASH", "bh100");
+
+        restarted.storage().handleCommit(batch(120, 200));   //starts at block 12: block 11 is missing
+
+        assertThat(state()).containsEntry("STATUS", "STALE");
+    }
+
     @Test
     void rowsWithoutAStateAreNotTrusted() {
         jdbc.update("insert into address_utxo_unspent (tx_hash, output_index, slot) values (?, 0, 100)", hash(40));

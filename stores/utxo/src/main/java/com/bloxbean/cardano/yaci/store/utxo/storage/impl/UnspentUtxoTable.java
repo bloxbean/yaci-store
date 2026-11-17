@@ -624,11 +624,7 @@ public class UnspentUtxoTable {
         }
 
         if (tableRolledBack) {
-            storeStateService.saveState(StoreState.builder()
-                    .stateId(STATE_ID)
-                    .status(STATUS_CURRENT)
-                    .slot(slot)
-                    .build());
+            storeStateService.saveState(stateAtRollbackPoint(slot));
             return;
         }
 
@@ -636,6 +632,30 @@ public class UnspentUtxoTable {
                 .filter(state -> STATUS_CURRENT.equals(state.getStatus()))
                 .filter(state -> state.getSlot() == null || state.getSlot() > slot)
                 .ifPresent(state -> storeStateService.saveState(state.toBuilder().status(STATUS_STALE).build()));
+    }
+
+    /**
+     * The table's state after it was rolled back to {@code slot}, with the block there when it is known: without a block
+     * the next commit cannot check its batch for a gap ({@link #stopIfGap}). Every chain-sync start begins with a
+     * rollback to the cursor (switch from the range fetch, reconnect, restart near the tip), and every restart with
+     * one, which is where blocks have been skipped before.
+     */
+    private StoreState stateAtRollbackPoint(long slot) {
+        //Already kept to that slot: the rollback removed nothing, keep its block
+        StoreState kept = currentState();
+        if (kept != null && kept.getSlot() != null && kept.getSlot() == slot && kept.getBlock() != null)
+            return kept;
+
+        //The cursor is moved to the point before the rollback event (BlockFetchService.onRollback, StartService)
+        Cursor cursor = cursorService != null ? cursorService.getCursor().orElse(null) : null;
+        boolean atPoint = cursor != null && cursor.getSlot() != null && cursor.getSlot() == slot;
+        return StoreState.builder()
+                .stateId(STATE_ID)
+                .status(STATUS_CURRENT)
+                .slot(slot)
+                .block(atPoint ? cursor.getBlock() : null)
+                .blockHash(atPoint ? cursor.getBlockHash() : null)
+                .build();
     }
 
     private List<String> unspentKeys(int outputIndex, int slice) {
