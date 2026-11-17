@@ -764,7 +764,9 @@ import is the oldest that can restore one.
 
 For an air-gapped target or a mirror, `snapshot download --snapshot latest --output /dir` writes the
 whole snapshot to a directory, resuming parts already downloaded. Then use
-`snapshot import --manifest /dir/<manifest>`.
+`snapshot import --manifest /dir/<manifest>`. With no target schema to read, `snapshot download` and
+`snapshot list --check` select tables by the configured store flags, so run them with the same
+configuration as the import.
 
 To test without a cloud account, run MinIO locally and point `store.snapshot.remote.endpoint` at it
 (`http://localhost:9000`, `path-style` on).
