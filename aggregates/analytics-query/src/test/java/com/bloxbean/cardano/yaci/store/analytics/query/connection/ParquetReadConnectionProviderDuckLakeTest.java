@@ -179,6 +179,35 @@ class ParquetReadConnectionProviderDuckLakeTest {
     }
 
     @Test
+    void servesColumnsAddedAfterTheFirstDataFile() throws Exception {
+        // DuckLakeWriterService.addMissingColumns: files written before the ALTER lack the column.
+        writeTable("block", "SELECT range AS slot FROM range(3)");
+        try (Connection conn = writerDataSource.getConnection()) {
+            helper.prepareConnectionForDuckLake(conn, false, false);
+            try (Statement stmt = conn.createStatement()) {
+                stmt.execute("ALTER TABLE ducklake_catalog.main.block ADD COLUMN fee BIGINT");
+            }
+        }
+        appendRows("block", "SELECT 10 AS slot, 500 AS fee");
+
+        ParquetTableRegistry registry = new ParquetTableRegistry(properties);
+        registry.init();
+        ParquetReadConnectionProvider provider = new ParquetReadConnectionProvider(
+                properties, registry,
+                objectProvider(DuckDbConnectionHelper.class, helper),
+                objectProvider(CutoffSlotResolver.class, null),
+                objectProvider(TableExporterRegistry.class, null),
+                objectProvider(DuckLakeCatalogSnapshotReader.class,
+                        new DuckLakeCatalogSnapshotReader(writerDataSource, helper, properties, writerLock)));
+        provider.createViews();
+
+        assertEquals(2, registry.getDuckLakeFiles("block").size());
+        assertEquals(4, count(provider, "SELECT count(*) FROM block"));
+        assertEquals(500, count(provider, "SELECT sum(fee) FROM block"));
+        assertEquals(3, count(provider, "SELECT count(*) FROM block WHERE fee IS NULL"));
+    }
+
+    @Test
     void epochPartitionedTablesKeepFileColumnTypeAndSupportAggregates() throws Exception {
         // Exporter pattern: empty CTAS, then partitioning, then INSERTs -> files under epoch=N/.
         writeTable("epoch_tbl", "SELECT 1::INTEGER AS epoch, 1::BIGINT AS slot LIMIT 0");

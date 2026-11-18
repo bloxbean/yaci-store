@@ -114,7 +114,10 @@ endpoints and the MCP tools use the hard limit.
 - DuckDB SQL is PostgreSQL-compatible: CTEs (including `WITH RECURSIVE`), window functions,
   `QUALIFY`, list/struct functions and `PERCENTILE_CONT` all work.
 - `DATE`, `TIME` and `TIMESTAMP` values are returned as ISO-8601 strings (`2026-08-19`,
-  `2026-08-19T00:10:25Z` — timestamps with time zone normalized to UTC); binary values as Base64.
+  `2026-08-19T00:10:25Z` — timestamps with time zone normalized to UTC, plain `TIMESTAMP` values
+  exactly as stored and without a zone, `TIME WITH TIME ZONE` with its offset); binary values as
+  Base64. Floating-point `NaN` and infinities are returned as the strings `"NaN"`, `"Infinity"`
+  and `"-Infinity"`.
 - `address_utxo` is exported **flattened**: one row per (output, asset unit). Every output has
   exactly one `asset_unit = 'lovelace'` row; other assets are extra rows with `policy_id`,
   `asset_name`, `quantity`.
@@ -291,6 +294,11 @@ PostgreSQL ──(exporters, writer connection)──▶ DuckLake catalog + Parq
   visible.
 - Views are refreshed every 5 minutes (new partitions, advanced cutoffs). If an export is holding
   the writer connection at that moment the refresh is skipped and retried next time.
+- When a table gains a column over time (older data files lack it), its view reads the files by
+  column name: the new column is present and `NULL` for rows from older files. Tables whose files
+  all share one schema are read without this, because matching by name makes DuckDB open every
+  file of the table for each query. In direct Parquet storage a file with a new column that appears
+  between two refreshes is picked up by name only after the next refresh.
 - The catalog file is also locked at the OS level while yaci-store runs (DuckDB-file catalog type):
   external tools cannot `ATTACH` it concurrently, but can read the Parquet files directly with
   `read_parquet('<export-path>/main/<table>/**/*.parquet', hive_partitioning=true)` — see
