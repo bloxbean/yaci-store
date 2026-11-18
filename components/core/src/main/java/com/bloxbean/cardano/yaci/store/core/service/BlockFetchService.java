@@ -369,6 +369,7 @@ public class BlockFetchService implements BlockChainDataListener {
         }
 
         cursorService.rollback(point.getSlot());
+        eraService.resetEraTracking();
         restoreEpochStateFromCursor(cursorService.getCursor());
         log.info("Restored epoch state after rollback. previousEpoch: {}, previousEra: {}",
                 previousEpoch, previousEra);
@@ -703,6 +704,7 @@ public class BlockFetchService implements BlockChainDataListener {
         restoreEpochStateForStart(from, fromBlockNumber);
 
         stopKeepAliveThread();
+        eraService.resetEraTracking();
         //Set the mode before fetching starts, because the first blocks can arrive before fetch() returns
         syncMode = false;
         cursorService.setSyncMode(syncMode);
@@ -725,6 +727,7 @@ public class BlockFetchService implements BlockChainDataListener {
         scheduledToStop.set(false);
 
         stopKeepAliveThread();
+        eraService.resetEraTracking();
         //Set the mode before connecting. BlockSync.startSync waits for the handshake, and blocks can arrive
         //during that wait. A block seen with syncMode still false would go to a batch that is never written.
         syncMode = true;
