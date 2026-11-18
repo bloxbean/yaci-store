@@ -8,6 +8,7 @@ import com.bloxbean.cardano.yaci.store.common.domain.TxInput;
 import com.bloxbean.cardano.yaci.store.common.service.CursorService;
 import com.bloxbean.cardano.yaci.store.common.service.StoreStateService;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
+import com.bloxbean.cardano.yaci.store.events.GenesisBlockEvent;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import com.bloxbean.cardano.yaci.store.events.model.internal.BatchBlock;
@@ -744,6 +745,110 @@ class UnspentUtxoTableIT {
         assertThat(unspentKeys()).isEmpty();
         assertThat(store.table().isActive()).isTrue();
         assertThat(state()).containsEntry("BLOCK", 11L);   //the late block does not move the state back
+    }
+
+    // --- Genesis outputs (slot -1) are saved before the first block, outside any batch
+
+    /**
+     * A fresh store that starts with chain sync (a devnet near its tip) is sent a RollBackward to its start point before
+     * the first block arrives, and BlockFetchService turns it into a RollbackEvent (slot 0 on yaci-devkit). A fresh store
+     * whose first block is after slot 0 gets StartService's restart rollback at the same moment. Both come after
+     * GenesisUtxoProcessor has saved the genesis outputs and before any commit.
+     */
+    @Test
+    void genesisOutputsSurviveARollbackBeforeTheFirstCommit() {
+        Store store = fromGenesisAt(null);
+        store.storage().saveUnspent(List.of(output(hash(90), 0, -1), output(hash(90), 1, -1)));   //GenesisUtxoProcessor
+        store.rollbackTo(0);
+
+        store.storage().saveSpent(List.of(spend(hash(90), 1, 10)));   //the first block spends one of them
+        store.storage().saveUnspent(List.of(output(hash(91), 0, 10)));
+        store.storage().handleCommit(batch(10, 10));
+
+        assertThat(unspentKeys()).containsExactly(hash(90) + "#0", hash(91) + "#0").isEqualTo(expectedKeys());
+    }
+
+    /**
+     * The rollback before the first commit records the table as current at the rollback point. If the store then stops
+     * before the first batch commits, the next start trusts the table, so the genesis outputs must already be in it.
+     */
+    @Test
+    void genesisOutputsAreInTheTableWhenTheStoreStopsAfterTheStartupRollback() {
+        Store first = fromGenesisAt(null);
+        first.storage().saveUnspent(List.of(output(hash(92), 0, -1)));
+        first.rollbackTo(20);   //the first block is at slot 20; stopped before its batch commits
+
+        Store restarted = fromGenesisAt(20L);   //StartService wrote the first block's point as the cursor
+
+        assertThat(restarted.table().isActive()).isTrue();
+        assertThat(unspentKeys()).containsExactly(hash(92) + "#0").isEqualTo(expectedKeys());
+    }
+
+    // --- The block a rollback leaves the table at, for the gap check of the next batch
+
+    /**
+     * Chain sync starts with a RollBackward to its start point, the cursor: at the switch from the range fetch to chain
+     * sync, at every reconnect and at a restart near the tip. That rollback changes nothing, and the block after it must
+     * still be checked for a gap (a block skipped at the switch to chain sync is one of the known skip paths).
+     */
+    @Test
+    void aGapRightAfterARollbackToTheKeptBlockIsDetected() {
+        Store store = fromGenesisAt(null);
+        store.table().buildExecutor = work -> { };   //the rebuild after the gap is not under test
+        store.storage().saveUnspent(List.of(output(hash(93), 0, 100)));
+        store.storage().handleCommit(batch(10, 100));   //kept to block 10, slot 100
+
+        store.rollbackTo(100);
+        assertThat(state()).containsEntry("STATUS", "CURRENT").containsEntry("SLOT", 100L).containsEntry("BLOCK", 10L);
+
+        store.storage().saveUnspent(List.of(output(hash(94), 0, 120)));
+        store.storage().handleCommit(batch(120, 120));   //block 12: block 11 never reached the table
+
+        assertThat(state()).containsEntry("STATUS", "STALE");
+        assertThat(store.table().isActive()).isFalse();
+    }
+
+    /**
+     * A restart after a crash between a batch's commit and the cursor update rolls back below the table's block, to the
+     * cursor. The state takes the cursor's block there, so the first batch after the restart is still checked.
+     */
+    @Test
+    void aRollbackBelowTheKeptBlockTakesTheCursorsBlock() {
+        Store before = fromGenesisAt(null);
+        before.storage().handleCommit(batch(10, 100));
+        before.storage().handleCommit(batch(110, 200));   //committed; the cursor stayed at block 10, slot 100
+
+        Store restarted = fromGenesisAt(100L);
+        restarted.table().buildExecutor = work -> { };
+        assertThat(restarted.table().isActive()).isTrue();
+        restarted.rollbackTo(100);   //StartService's restart rollback
+        assertThat(state()).containsEntry("STATUS", "CURRENT").containsEntry("SLOT", 100L).containsEntry("BLOCK", 10L)
+                .containsEntry("BLOCK_HASH", "bh100");
+
+        restarted.storage().handleCommit(batch(120, 200));   //starts at block 12: block 11 is missing
+
+        assertThat(state()).containsEntry("STATUS", "STALE");
+    }
+
+    /**
+     * Whether a fresh store keeps the table from the first block is decided while nothing is synced. StartService
+     * writes the first block's point as the cursor right after the genesis event, before that block is processed, so
+     * after it the store looks synced to slot 0. The decision must not depend on GenesisUtxoProcessor saving
+     * outputs (a genesis without balances saves none).
+     */
+    @Test
+    void aFreshStoreKeepsTheTableFromTheFirstBlockWithoutGenesisOutputs() {
+        CursorService cursorService = mock(CursorService.class);
+        when(cursorService.getCursor()).thenReturn(Optional.empty());
+        UnspentUtxoTable table = new UnspentUtxoTable(UtxoStoreProperties.builder().unspentTableEnabled(true)
+                .unspentTableBackfillAtTip(false).unspentTableReadEnabled(true).build(), dsl, transactionManager,
+                storeStateService, cursorService);
+
+        table.handleGenesisBlock(GenesisBlockEvent.builder().slot(-1).block(-1).blockHash("genesis").build());
+        when(cursorService.getCursor()).thenReturn(Optional.of(
+                Cursor.builder().slot(0L).block(0L).blockHash("first").build()));   //StartService: the first block's point
+
+        assertThat(table.isActive()).isTrue();
     }
 
     @Test
