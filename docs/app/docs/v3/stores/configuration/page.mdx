@@ -178,6 +178,25 @@ store.db.batch-size=1000
 store.db.parallel-insert=true
 ```
 
+### Stuck Database Calls
+
+Two settings keep a database call that never returns from stopping sync for good. Without them, the stuck call's
+transaction keeps its row locks, and every sync session that auto-recovery starts waits behind those locks until the
+connection pool is exhausted.
+
+```properties
+# Seconds to wait for a batch's address/stake address balance saves (account store). If they do not finish, their
+# connections are aborted, so PostgreSQL rolls the transactions back and releases their locks, and the batch fails
+# and auto-recovery can restart sync. Keep it below store.block-receive-delay-seconds. 0 waits without a limit.
+store.account.balance-save-timeout-seconds=90
+
+# PostgreSQL ends a session of the application's pool that is idle inside an open transaction for this many
+# seconds. Long queries are not affected. Set with HikariCP's connection-init-sql, and not applied when
+# spring.datasource.hikari.connection-init-sql is set (add SET idle_in_transaction_session_timeout there instead).
+# 0 turns it off.
+store.db.idle-in-transaction-session-timeout-seconds=1800
+```
+
 ## Sync Configuration
 
 ### Custom Start Point
