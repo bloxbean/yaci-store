@@ -60,4 +60,11 @@ public class AccountStoreProperties {
 
     @Builder.Default
     private boolean currentBalanceEnabled = false;
+
+    /**
+     * Seconds to wait for a batch's balance saves before their connections are aborted and the batch fails.
+     * 0 waits without a limit.
+     */
+    @Builder.Default
+    private int balanceSaveTimeoutSeconds = 90;
 }

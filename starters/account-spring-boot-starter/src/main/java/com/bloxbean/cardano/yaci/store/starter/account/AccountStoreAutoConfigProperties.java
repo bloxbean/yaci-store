@@ -60,6 +60,15 @@ public class AccountStoreAutoConfigProperties {
          * This should be enabled with contentAwareRollback option to calculate the current balance correctly during rollback.
          */
         private boolean currentBalanceEnabled = false;
+
+        /**
+         * Seconds to wait for a batch's address and stake address balances to be saved. When the save does not
+         * finish in time, its database connections are aborted (the open transactions roll back and release their
+         * locks) and the batch fails, so sync stops with an error and auto-recovery can restart it, instead of
+         * waiting forever. Keep it below store.block-receive-delay-seconds, so the batch fails before the health
+         * check restarts sync. 0 waits without a limit.
+         */
+        private int balanceSaveTimeoutSeconds = 90;
     }
 
 }
