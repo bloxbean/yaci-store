@@ -85,6 +85,27 @@ class DRepStatusProcessorIT {
     }
 
     @Test
+    void aStoredUpdateWithAStaleRegistrationIsNotCopied() {
+        commit(block(121168694L, "tx1", CertificateType.REG_DREP_CERT),
+                block(121168720L, "tx2", CertificateType.UNREG_DREP_CERT),
+                block(121180520L, "tx3", CertificateType.REG_DREP_CERT));
+        // An update stored by an older version still points to the first registration
+        var staleUpdate = row(121180520L);
+        staleUpdate.setTxHash("tx4");
+        staleUpdate.setSlot(121180530L);
+        staleUpdate.setCertType(CertificateType.UPDATE_DREP_CERT);
+        staleUpdate.setStatus(DRepStatus.UPDATED);
+        staleUpdate.setRegistrationSlot(121168694L);
+        staleUpdate.setDeposit(BigInteger.valueOf(400_000_000));
+        repository.save(staleUpdate);
+
+        commit(block(121190000L, "tx5", CertificateType.UNREG_DREP_CERT));
+
+        assertThat(row(121190000L).getRegistrationSlot()).isEqualTo(121180520L);
+        assertThat(row(121190000L).getDeposit()).isEqualTo(BigInteger.valueOf(500_000_000));
+    }
+
+    @Test
     void aBlockCachedBeforeARollbackIsNotSavedOrUsed() {
         commit(block(121168694L, "tx1", CertificateType.REG_DREP_CERT));
 
