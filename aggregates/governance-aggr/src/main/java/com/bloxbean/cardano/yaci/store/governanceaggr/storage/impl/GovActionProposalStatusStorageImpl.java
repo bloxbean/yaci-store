@@ -46,9 +46,9 @@ public class GovActionProposalStatusStorageImpl implements GovActionProposalStat
     }
 
     @Override
-    public Optional<GovActionProposalStatus> findLastEnactedProposal(GovActionType govActionType, int epoch) {
-        return govActionProposalStatusRepository.findLastEnactedProposal(govActionType, epoch)
-                .map(mapper::toGovActionProposalStatus);
+    public List<GovActionProposalStatus> findLastEnactedProposals(GovActionType govActionType, int epoch) {
+        return govActionProposalStatusRepository.findLastEnactedProposals(govActionType, epoch).stream()
+                .map(mapper::toGovActionProposalStatus).toList();
     }
 
     @Override
