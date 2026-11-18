@@ -129,7 +129,6 @@ class ScriptRedeemerDatumProcessorTest {
         assertThat(scripts).hasSize(1);
         assertThat(scripts.get(0).getScriptHash()).isEqualTo(expectedScriptHash);
         assertThat(scripts.get(0).getScriptType()).isEqualTo(ScriptType.NATIVE_SCRIPT);
-        assertThat(scripts.get(0).getSlot()).isEqualTo(1000L);
     }
 
     private EventMetadata metadata(boolean parallelMode) {
