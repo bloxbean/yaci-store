@@ -28,26 +28,26 @@ public class AssetStorageReaderImpl implements AssetStorageReader {
 
     @Override
     public List<TxAsset> findByFingerprint(String fingerprint, int page, int count) {
-        Pageable sortedBySlot =
-                PageRequest.of(page, count, Sort.by("slot").descending());
+        Pageable sortedHistory =
+                PageRequest.of(page, count, Sort.by("slot", "txIndex", "txHash", "unit", "id").descending());
 
-        return txAssetRepository.findByFingerprint(fingerprint, sortedBySlot).stream().map(assetMapper::toTxAsset).toList();
+        return txAssetRepository.findByFingerprint(fingerprint, sortedHistory).stream().map(assetMapper::toTxAsset).toList();
     }
 
     @Override
     public List<TxAsset> findByPolicy(String policyId, int page, int count) {
-        Pageable sortedBySlot =
-                PageRequest.of(page, count, Sort.by("slot").descending());
+        Pageable sortedHistory =
+                PageRequest.of(page, count, Sort.by("slot", "txIndex", "txHash", "unit", "id").descending());
 
-        return txAssetRepository.findByPolicy(policyId, sortedBySlot).stream().map(assetMapper::toTxAsset).toList();
+        return txAssetRepository.findByPolicy(policyId, sortedHistory).stream().map(assetMapper::toTxAsset).toList();
     }
 
     @Override
     public List<TxAsset> findByUnit(String unit, int page, int count) {
-        Pageable sortedBySlot =
-                PageRequest.of(page, count, Sort.by("slot").descending());
+        Pageable sortedHistory =
+                PageRequest.of(page, count, Sort.by("slot", "txIndex", "txHash", "unit", "id").descending());
 
-        return txAssetRepository.findByUnit(unit, sortedBySlot).stream().map(assetMapper::toTxAsset).toList();
+        return txAssetRepository.findByUnit(unit, sortedHistory).stream().map(assetMapper::toTxAsset).toList();
     }
 
     @Override
