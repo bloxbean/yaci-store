@@ -99,8 +99,11 @@ class DRepStatusProcessorIT {
         staleUpdate.setDeposit(BigInteger.valueOf(400_000_000));
         repository.save(staleUpdate);
 
-        commit(block(121190000L, "tx5", CertificateType.UNREG_DREP_CERT));
+        commit(block(121185000L, "tx5", CertificateType.UPDATE_DREP_CERT));
+        commit(block(121190000L, "tx6", CertificateType.UNREG_DREP_CERT));
 
+        assertThat(row(121185000L).getRegistrationSlot()).isEqualTo(121180520L);
+        assertThat(row(121185000L).getDeposit()).isEqualTo(BigInteger.valueOf(500_000_000));
         assertThat(row(121190000L).getRegistrationSlot()).isEqualTo(121180520L);
         assertThat(row(121190000L).getDeposit()).isEqualTo(BigInteger.valueOf(500_000_000));
     }

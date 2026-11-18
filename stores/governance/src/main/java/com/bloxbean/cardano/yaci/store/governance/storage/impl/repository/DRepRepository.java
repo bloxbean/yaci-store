@@ -16,7 +16,7 @@ public interface DRepRepository extends JpaRepository<DRepEntity, String> {
             "AND d.status = com.bloxbean.cardano.yaci.store.governance.domain.DRepStatus.REGISTERED " +
             "AND (d.slot < :slot OR (d.slot = :slot AND (d.txIndex < :txIndex OR (d.txIndex = :txIndex AND d.certIndex < :certIndex)))) " +
             "ORDER BY d.slot DESC, d.txIndex DESC, d.certIndex DESC limit 1")
-    Optional<DRepEntity> findRecentByDRepIdAndEpochBefore(String dRepId, Integer epoch, Long slot, Integer txIndex, Integer certIndex);
+    Optional<DRepEntity> findRecentRegistrationByDRepIdAndEpochBefore(String dRepId, Integer epoch, Long slot, Integer txIndex, Integer certIndex);
 
     int deleteBySlotGreaterThan(long slot);
 }
