@@ -28,6 +28,12 @@ yaci-store> apply-optional-indexes --indexes blockfrost-index
 
 The command reads `blockfrost-index.yml` from the classpath. You can also pass a custom YAML file with `--index-files`.
 
+The set includes `idx_block_slot_leader_number` on `block(slot_leader, number)` for
+`/pools/{pool_id}/blocks`. It serves the pool filter and ascending or descending block
+order together, so a page does not scan other pools' blocks or sort the pool's whole
+history. Stores upgraded from a release without this index need to apply the optional
+set again; upgrading alone does not create it.
+
 ## When to apply
 
 - Run it once after the initial sync and before exposing the Blockfrost API to clients.
