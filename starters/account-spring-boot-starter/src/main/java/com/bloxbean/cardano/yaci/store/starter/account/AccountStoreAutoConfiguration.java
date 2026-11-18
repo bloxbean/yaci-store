@@ -47,6 +47,7 @@ public class AccountStoreAutoConfiguration {
 
         accountStoreProperties.setContentAwareRollback(properties.getAccount().isContentAwareRollback());
         accountStoreProperties.setCurrentBalanceEnabled(properties.getAccount().isCurrentBalanceEnabled());
+        accountStoreProperties.setBalanceSaveTimeoutSeconds(properties.getAccount().getBalanceSaveTimeoutSeconds());
 
         return accountStoreProperties;
     }
