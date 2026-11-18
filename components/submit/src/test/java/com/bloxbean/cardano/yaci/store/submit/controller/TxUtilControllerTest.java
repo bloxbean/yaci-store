@@ -50,7 +50,7 @@ class TxUtilControllerTest {
 
         ArgumentCaptor<JsonNode> additionalUtxoCaptor = ArgumentCaptor.forClass(JsonNode.class);
         verify(txEvaluationService).evaluateTx(any(), additionalUtxoCaptor.capture());
-        assertThat(response.getStatusCode().value()).isEqualTo(202);
+        assertThat(response.getStatusCode().value()).isEqualTo(200);
         assertThat(additionalUtxoCaptor.getValue().asText()).isEqualTo("ignored by ogmios mode");
     }
 }
