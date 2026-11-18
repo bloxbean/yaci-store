@@ -69,6 +69,7 @@ class BlockFetchServiceRollbackTest {
         blockFetchService.onRollback(new Point(rollbackCursor.getSlot(), rollbackCursor.getBlockHash()));
 
         verify(cursorService).rollback(rollbackCursor.getSlot());
+        verify(eraService).resetEraTracking();
         assertThat(ReflectionTestUtils.getField(blockFetchService, "previousEpoch")).isEqualTo(643);
         assertThat(ReflectionTestUtils.getField(blockFetchService, "previousEra")).isEqualTo(Era.Conway);
         assertThat((Boolean) ReflectionTestUtils.invokeMethod(
@@ -125,6 +126,26 @@ class BlockFetchServiceRollbackTest {
         verify(eraService, never()).getEpochNo(Era.Byron, rollbackCursor.getSlot());
         assertThat(ReflectionTestUtils.getField(blockFetchService, "previousEpoch")).isNull();
         assertThat(ReflectionTestUtils.getField(blockFetchService, "previousEra")).isEqualTo(Era.Byron);
+    }
+
+    @Test
+    void shouldResetEraTrackingWhenStartingRangeFetch() {
+        try {
+            blockFetchService.startFetch(new Point(100, "from"), new Point(200, "to"));
+            verify(eraService).resetEraTracking();
+        } finally {
+            ReflectionTestUtils.invokeMethod(blockFetchService, "stopKeepAliveThread");
+        }
+    }
+
+    @Test
+    void shouldResetEraTrackingWhenStartingChainSync() {
+        try {
+            blockFetchService.startSync(new Point(100, "from"));
+            verify(eraService).resetEraTracking();
+        } finally {
+            ReflectionTestUtils.invokeMethod(blockFetchService, "stopKeepAliveThread");
+        }
     }
 
     private Cursor cursor(long slot, long block, String hash, Era era) {
