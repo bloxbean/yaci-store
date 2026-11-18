@@ -44,6 +44,11 @@ public class CommitteeExporter extends AbstractTableExporter {
     }
 
     @Override
+    protected boolean dependsOnAdaPotJob() {
+        return true;
+    }
+
+    @Override
     public boolean preExportValidation(PartitionValue partition) {
         // Committee is updated during AdaPot job processing (PreAdaPotJobProcessingEvent)
         int epoch = ((PartitionValue.EpochPartition) partition).epoch();
