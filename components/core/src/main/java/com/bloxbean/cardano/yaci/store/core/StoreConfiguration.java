@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.core;
 import com.bloxbean.cardano.yaci.helper.LocalClientProvider;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
+import com.bloxbean.cardano.yaci.store.core.configuration.PostgresIdleTransactionTimeoutPostProcessor;
 import com.bloxbean.cardano.yaci.store.core.service.CursorCleanupScheduler;
 import com.bloxbean.cardano.yaci.store.core.service.local.LocalClientProviderManager;
 import com.bloxbean.cardano.yaci.store.core.storage.ErrorStorageImpl;
@@ -40,6 +41,15 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 @EnableScheduling
 @Slf4j
 public class StoreConfiguration {
+    /**
+     * Static, so the post processor is registered before the data source bean is created.
+     */
+    @Bean
+    public static PostgresIdleTransactionTimeoutPostProcessor postgresIdleTransactionTimeoutPostProcessor(Environment env) {
+        return new PostgresIdleTransactionTimeoutPostProcessor(env.getProperty(PostgresIdleTransactionTimeoutPostProcessor.PROPERTY,
+                Long.class, PostgresIdleTransactionTimeoutPostProcessor.DEFAULT_SECONDS));
+    }
+
     @Bean
     @ConditionalOnMissingBean
     public CursorStorage cursorStorage(CursorRepository cursorRepository) {
