@@ -18,6 +18,14 @@ public class AnalyticsStoreProperties {
     private String exportPath = "./data/analytics";
 
     /**
+     * PostgreSQL {@code statement_timeout} (seconds) for the export pipeline's connections to the
+     * source database (DuckDB {@code postgres_scanner}, set as a libpq startup option).
+     * 0 = no timeout (default): a single export query can legitimately run for a long time on a
+     * large table. Set it to bound a stuck export query; the export then fails and is retried.
+     */
+    private int sourceStatementTimeoutSeconds = 0;
+
+    /**
      * Enabled tables for export (empty = all enabled).
      *
      * If empty, all registered table exporters are enabled.
@@ -433,8 +441,24 @@ public class AnalyticsStoreProperties {
          */
         private String catalogPath = "./data/analytics/ducklake.catalog.db";
 
-        // Note: DuckLake always uses 'public' schema for metadata tables
-        // catalogSchema is not configurable - removed in favor of hardcoded 'public'
+        /**
+         * PostgreSQL schema for the DuckLake catalog tables ({@code ducklake_*}), used when
+         * catalogType=postgresql (DuckLake {@code METADATA_SCHEMA}).
+         *
+         * Not set (default): the schema of the catalog connection ({@code currentSchema} of
+         * catalog-url, else of spring.datasource.url) if it already holds a catalog; otherwise an
+         * existing catalog in {@code public} (installations created before this property); otherwise
+         * a new catalog in the connection's schema. Instances that share one database must each
+         * use their own schema. See {@code CatalogSchemas}.
+         */
+        private String catalogSchema;
+
+        /**
+         * How long to wait at attach for another process to release the lock on the DuckDB
+         * catalog file (catalogType=duckdb), in seconds. A {@code duckdb} CLI that has the file
+         * open (even {@code -readonly}) holds that lock. 0 = fail at once. Default: 30.
+         */
+        private int catalogLockWaitSeconds = 30;
 
         /**
          * Longest time an export, a verification or a maintenance run waits for the single
