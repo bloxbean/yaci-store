@@ -5,6 +5,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -15,6 +17,7 @@ import java.util.ArrayList;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 @RequiredArgsConstructor
@@ -22,6 +25,9 @@ import java.util.TreeMap;
 public class ExportStateService {
 
     private final ExportStateRepository repository;
+
+    /** Partitions with an export running in this JVM. */
+    private final Set<ExportStateId> claims = ConcurrentHashMap.newKeySet();
 
     /**
      * Get current state for a partition
@@ -32,10 +38,38 @@ public class ExportStateService {
     }
 
     /**
-     * Mark export as in-progress (prevents concurrent exports)
+     * Whether an export of the partition is running in this JVM (claimed by
+     * {@link #markInProgress} and not yet finished by {@link #markCompleted} or {@link #markFailed}).
+     */
+    public boolean isExportInProgress(String tableName, String partitionValue) {
+        return claims.contains(new ExportStateId(tableName, partitionValue));
+    }
+
+    /**
+     * Mark export as in-progress, claiming the partition for the calling export.
+     *
+     * <p>The claim is held in this JVM until {@link #markCompleted} or {@link #markFailed}, so two
+     * exports of the same table and partition (a scheduled run and an admin call, say) never run
+     * at once: the second one fails here, before it touches the state row the first one owns.</p>
+     *
+     * @throws PartitionExportInProgressException if another export of the partition is running
      */
     @Transactional
     public ExportState markInProgress(String tableName, String partitionValue) {
+        ExportStateId id = new ExportStateId(tableName, partitionValue);
+        if (!claims.add(id)) {
+            throw new PartitionExportInProgressException(tableName, partitionValue);
+        }
+        releaseClaimUnlessCommitted(id);
+        try {
+            return doMarkInProgress(tableName, partitionValue);
+        } catch (RuntimeException e) {
+            claims.remove(id);
+            throw e;
+        }
+    }
+
+    private ExportState doMarkInProgress(String tableName, String partitionValue) {
         ExportState state = repository.findById(new ExportStateId(tableName, partitionValue))
             .orElse(new ExportState(tableName, partitionValue));
 
@@ -56,7 +90,41 @@ public class ExportStateService {
         state.setDurationSeconds(null);
         state.setErrorMessage(null);
 
-        return repository.save(state);
+        return repository.saveAndFlush(state);
+    }
+
+    /** Drops the claim if the transaction that took it does not commit. */
+    private void releaseClaimUnlessCommitted(ExportStateId id) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                if (status != STATUS_COMMITTED) {
+                    claims.remove(id);
+                }
+            }
+        });
+    }
+
+    /** Another export of the same table and partition is running in this JVM. */
+    public static class PartitionExportInProgressException extends IllegalStateException {
+        public PartitionExportInProgressException(String tableName, String partitionValue) {
+            super(String.format("Partition %s of table %s is already being exported; not starting a second export",
+                    partitionValue, tableName));
+        }
+    }
+
+    /**
+     * Drop this JVM's claim on the partition without changing its state row. For an export that
+     * ended without reaching {@link #markCompleted} or {@link #markFailed} (a JVM {@link Error} such
+     * as an OutOfMemoryError from the native library); the stale-export recovery fixes the row.
+     */
+    public void releaseClaim(ExportState state) {
+        if (state != null) {
+            claims.remove(state.getId());
+        }
     }
 
     /**
@@ -64,6 +132,14 @@ public class ExportStateService {
      */
     @Transactional
     public void markCompleted(ExportState state, ExportResult result, String checksum) {
+        try {
+            doMarkCompleted(state, result, checksum);
+        } finally {
+            claims.remove(state.getId());
+        }
+    }
+
+    private void doMarkCompleted(ExportState state, ExportResult result, String checksum) {
         state.setStatus(ExportStatus.COMPLETED);
         state.setCompletedAt(LocalDateTime.now());
         state.setRowCount(result.getRowCount());
@@ -90,6 +166,14 @@ public class ExportStateService {
      */
     @Transactional
     public void markFailed(ExportState state, String errorMessage) {
+        try {
+            doMarkFailed(state, errorMessage);
+        } finally {
+            claims.remove(state.getId());
+        }
+    }
+
+    private void doMarkFailed(ExportState state, String errorMessage) {
         state.setStatus(ExportStatus.FAILED);
         state.setCompletedAt(LocalDateTime.now());
 
