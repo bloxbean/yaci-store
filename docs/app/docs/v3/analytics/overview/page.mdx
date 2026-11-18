@@ -114,6 +114,8 @@ The module includes 47 built-in table exporters covering all indexed Cardano dat
 
 > **Note:** The `address` table is empty by default because address saving is disabled. To populate it, enable `store.utxo.save-address=true` in your configuration.
 
+> **Note:** A `rollback` row is filed under the day of its `current_slot` (the tip when the rollback happened). Its `block_time` is the start time of that slot, computed from the era configuration, because the block at `current_slot` is the one the rollback removed.
+
 ### Epoch Tables (16 — partitioned by epoch)
 
 `adapot`, `committee`, `committee_member`, `committee_state`, `constitution`, `drep_dist`, `epoch`, `epoch_param`, `epoch_stake`, `gov_action_proposal_status`, `gov_epoch_activity`, `instant_reward`, `mir`, `reward`, `reward_rest`, `unclaimed_reward_rest`

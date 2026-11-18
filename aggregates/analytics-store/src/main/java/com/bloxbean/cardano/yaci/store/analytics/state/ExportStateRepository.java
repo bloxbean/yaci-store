@@ -50,4 +50,14 @@ public interface ExportStateRepository extends JpaRepository<ExportState, Export
     List<ExportState> findByTableNameAndPartitionPrefix(@Param("tableName") String tableName,
                                                         @Param("prefix") String prefix);
 
+    /** Table name, partition value and row count of every COMPLETED partition that holds rows. */
+    @Query("SELECT e.id.tableName, e.id.partitionValue, e.rowCount FROM ExportState e " +
+           "WHERE e.status = 'COMPLETED' AND e.rowCount > 0")
+    List<Object[]> findCompletedPartitionsWithRows();
+
+    /** Table name and partition value of every COMPLETED partition stored with no rows. */
+    @Query("SELECT e.id.tableName, e.id.partitionValue FROM ExportState e " +
+           "WHERE e.status = 'COMPLETED' AND (e.rowCount = 0 OR e.rowCount IS NULL)")
+    List<Object[]> findCompletedEmptyPartitions();
+
 }

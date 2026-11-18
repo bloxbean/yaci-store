@@ -85,5 +85,5 @@ yaci:
 ```
 
 <Callout type="warning">
-When using `EPOCH` partition strategy, the query **must** output a column named `epoch`. If the source column has a different name, use an alias (e.g., `r.earned_epoch AS epoch`). Without this, the DuckLake table will not be partitioned and all Parquet files will be written flat without `epoch=N/` subdirectories.
+When using `EPOCH` partition strategy, the query **must** output a column named `epoch`. If the source column has a different name, use an alias (e.g., `r.earned_epoch AS epoch`). Without it, every DuckLake export of the table fails with an error saying the query returns no `epoch` column, and no table is created.
 </Callout>

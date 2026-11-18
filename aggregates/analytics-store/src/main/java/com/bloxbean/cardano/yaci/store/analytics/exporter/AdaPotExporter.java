@@ -57,7 +57,7 @@ public class AdaPotExporter extends AbstractTableExporter {
 
     /** The AdaPot job creates the epoch's row before it completes. */
     @Override
-    protected boolean allowsEmptyPartition(PartitionValue partition) {
+    public boolean allowsEmptyPartition(PartitionValue partition) {
         return false;
     }
 

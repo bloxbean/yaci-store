@@ -218,4 +218,13 @@ public interface TableExporter {
     default java.util.Map<String, String> getSourceColumnMappings() {
         return java.util.Map.of();
     }
+
+    /**
+     * Whether a final partition of this table may hold no rows. Most tables can be empty (a day
+     * without withdrawals); a table that always has rows for a final partition returns false, and
+     * an empty export of it is retried instead of being stored as COMPLETED.
+     */
+    default boolean allowsEmptyPartition(PartitionValue partition) {
+        return true;
+    }
 }
