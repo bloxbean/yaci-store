@@ -320,5 +320,5 @@ PostgreSQL ──(exporters, writer connection)──▶ DuckLake catalog + Parq
 | `yaci.store.analytics.duckdb.reader.maximum-pool-size` | CPU cores | Max concurrent queries on the engine |
 | `yaci.store.analytics.duckdb.reader.query-timeout-seconds` | `30` | Per-query timeout (REST endpoints always use it) |
 | `yaci.store.analytics.query.max-timeout-seconds` | `300` | Longest per-call timeout a trusted caller (the MCP `analytics-execute-sql` tool's `timeoutSeconds`) may request; never below the default |
-| `yaci.store.analytics.duckdb.memory-limit` | _(DuckDB default)_ | Memory limit per DuckDB instance (writer and query engine each) |
+| `yaci.store.analytics.duckdb.memory-limit` | _(50% of RAM minus JVM heap, split between instances)_ | Memory limit per DuckDB instance (writer and query engine each); see [Configuration](/docs/v3/analytics/configuration#duckdb-memory-usage-in-jvm) |
 | `yaci.store.analytics.duckdb.threads` | CPU cores | DuckDB threads per instance |

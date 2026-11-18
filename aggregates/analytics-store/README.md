@@ -199,7 +199,10 @@ duckdb -c "
 | `yaci.store.analytics.ducklake.catalog-username` | _(main datasource)_ | PostgreSQL catalog username (used when `catalog-type=postgresql`) |
 | `yaci.store.analytics.ducklake.catalog-password` | _(main datasource)_ | PostgreSQL catalog password (used when `catalog-type=postgresql`) |
 | `yaci.store.analytics.ducklake.catalog-path` | `./data/analytics/ducklake.catalog.db` | DuckDB catalog file path |
-| `yaci.store.analytics.duckdb.memory-limit` | _(empty = DuckDB default)_ | DuckDB buffer manager memory limit (e.g., `1GB`, `512MB`) |
+| `yaci.store.analytics.duckdb.memory-limit` | _(empty = 50% of RAM minus JVM heap, split between writer and query layer)_ | DuckDB buffer manager memory limit for **each** DuckDB instance (e.g., `1GB`, `512MB`). When empty: 50% of the RAM not reserved for the JVM heap (`-Xmx`), divided by the number of DuckDB instances in the JVM (export writer, query layer), at least `256MB` |
+| `yaci.store.analytics.duckdb.temp-directory` | _(empty = `<export-path>/.tmp`)_ | Base directory for DuckDB spill files. Each DuckDB instance uses its own subdirectory (`writer-<id>`, `reader-<id>`, ...), removed when the instance closes; leftovers of a crashed process are removed at the next start |
+| `yaci.store.analytics.duckdb.max-temp-directory-size` | _(empty = DuckDB default, 90% of free disk)_ | DuckDB `max_temp_directory_size` per instance (e.g., `50GB`) |
+| `yaci.store.analytics.duckdb.extension-directories` | _(empty = `~/.duckdb/extensions`)_ | Comma-separated directories DuckDB loads extensions (`ducklake`, `postgres_scanner`) from; missing extensions are installed into the first one. Use a persistent directory in containers, or a pre-seeded one on offline hosts |
 | `yaci.store.analytics.ducklake.export.codec` | `ZSTD` | Compression codec for DuckLake Parquet files |
 | `yaci.store.analytics.ducklake.export.compression-level` | `3` | ZSTD compression level (1-22) for DuckLake exports |
 | `yaci.store.analytics.ducklake.export.row-group-size` | `-1` | Row group size for DuckLake Parquet files (-1 = DuckDB default) |
