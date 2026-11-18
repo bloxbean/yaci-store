@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
 import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
+import com.bloxbean.cardano.yaci.store.common.util.RatifiedProposalOrder;
 import com.bloxbean.cardano.yaci.store.governance.storage.GovActionProposalStorage;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.GovActionProposalStatus;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.GovActionProposalStatusStorage;
@@ -60,19 +61,11 @@ public class ProposalStateClientImpl implements ProposalStateClient {
 
     @Override
     public Optional<GovActionProposal> getLastEnactedProposal(GovActionType govActionType, int currentEpoch) {
-        var govActionProposalStatusOpt = govActionProposalStatusStorage.findLastEnactedProposal(govActionType, currentEpoch);
-        if (govActionProposalStatusOpt.isEmpty()) {
+        var statuses = govActionProposalStatusStorage.findLastEnactedProposals(govActionType, currentEpoch);
+        if (statuses.isEmpty())
             return Optional.empty();
-        }
 
-        var govActionProposals = govActionProposalStorage.findByGovActionIds(
-                List.of(new GovActionId(govActionProposalStatusOpt.get().getGovActionTxHash(), govActionProposalStatusOpt.get().getGovActionIndex())));
-
-        if (govActionProposals.isEmpty()) {
-            return Optional.empty();
-        } else {
-            var govActionProposal = govActionProposals.get(0);
-            return proposalMapper.toGovActionProposal(govActionProposal);
-        }
+        var proposals = RatifiedProposalOrder.orderParameterChanges(getGovActionProposals(statuses));
+        return proposals.isEmpty() ? Optional.empty() : Optional.of(proposals.getLast());
     }
 }

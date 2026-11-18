@@ -70,7 +70,7 @@ result.isActionRatificationDelayed(); // True if a delaying action was ACCEPT in
   - `.../governanceaggr/storage/impl/mapper/GovernanceEvaluationInputMapper.java`
   - `.../governanceaggr/service/ProposalCollectionService.java`
 
-Ratification uses a private working copy of the input state. Each accepted withdrawal reduces the available treasury. Each accepted parameter change updates the parameters and parent action ID used by later proposals. A delaying action stops further ratification in that pass, but remaining proposals can still expire.
+Ratification uses a private working copy of the input state. Each accepted withdrawal reduces the available treasury. Each accepted parameter change updates the parameters and parent action ID used by later proposals. A delaying action stops further ratification in that pass, but remaining proposals can still expire. Persisted parameter changes are applied parent before child. The next epoch uses the tip of the chain from the latest ratification epoch as its last enacted parameter action.
 
 Upgrading the rules does not repair already stored results. If an epoch was affected by evaluation against stale state, recompute from before that epoch, including proposal statuses and dependent parameter, treasury, reward and snapshot calculations.
 
