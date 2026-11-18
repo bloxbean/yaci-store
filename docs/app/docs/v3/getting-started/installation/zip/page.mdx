@@ -9,7 +9,11 @@ Includes:
 
 ## Pre-requisites
 
-- Java 21 or Java 24 (Recommended)
+- Java 21 (21.0.5 or later) or Java 24 (Recommended)
+
+Java 21.0.4 and earlier have virtual thread bugs (JDK-8329088, JDK-8325469, fixed in 21.0.5) that can corrupt the
+heap under Yaci Store's virtual-thread workload. They have shown up as a hung sync and as a JVM crash in G1 garbage
+collection. If you use Java 21, use the latest 21.0.x update.
 
 You can use [sdkman](https://sdkman.io/) to install Java 21 or 24.
 
