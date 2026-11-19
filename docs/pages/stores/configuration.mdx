@@ -309,7 +309,7 @@ store.transaction.save-full-tx-cbor=true
 
 It works on its own and does not need `store.cardano.return-tx-body-cbor` or `store.transaction.save-cbor`. Enable it before the initial sync, since existing transactions are not backfilled.
 
-`transaction_cbor.cbor_size` holds the transaction's **ledger size**, the value db-sync reports as `tx.size`. It covers the body, witness set and auxiliary data, but not the Alonzo+ validity flag, so it is one byte smaller than the stored full CBOR from Alonzo on. With only `store.transaction.save-cbor`, the body alone gives no ledger size and `cbor_size` is `NULL`.
+`transaction_cbor.cbor_size` holds the transaction's **ledger size**, the value db-sync reports as `tx.size`. It covers the body, witness set and auxiliary data, but not the Alonzo+ validity flag, so it is one byte smaller than the stored full CBOR from Alonzo on. With only `store.transaction.save-cbor`, the body alone gives no ledger size and `cbor_size` is `NULL`. Rows indexed by earlier versions keep the body-only byte length in `cbor_size` and are not rewritten, so after an upgrade a body-only table can hold both old body sizes and `NULL` for newly indexed rows.
 
 #### Epoch Stake Pruning
 
