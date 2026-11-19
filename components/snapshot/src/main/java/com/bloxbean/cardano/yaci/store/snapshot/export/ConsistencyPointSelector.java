@@ -6,6 +6,7 @@ import com.bloxbean.cardano.yaci.store.snapshot.ducklake.DuckLakeFile;
 import com.bloxbean.cardano.yaci.store.snapshot.manifest.ConsistencyPoint;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.CompletedEpochType;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.CoverageType;
+import com.bloxbean.cardano.yaci.store.snapshot.spec.PartitionStrategy;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.RestoreMode;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.SnapshotTableSpec;
 import org.slf4j.Logger;
@@ -51,9 +52,21 @@ public class ConsistencyPointSelector {
     }
 
     private final DuckLakeCatalog catalog;
+    private final Map<String, Map<String, Long>> completedPartitions;
 
     public ConsistencyPointSelector(DuckLakeCatalog catalog) {
+        this(catalog, Map.of());
+    }
+
+    /**
+     * @param completedPartitions the source export journal (exporter id → partition value → completed
+     *                            row count). It lets a table that is exported but holds no rows yet, such
+     *                            as the Conway governance tables of a pre-Conway chain, still gate and
+     *                            cover the point.
+     */
+    public ConsistencyPointSelector(DuckLakeCatalog catalog, Map<String, Map<String, Long>> completedPartitions) {
         this.catalog = catalog;
+        this.completedPartitions = completedPartitions == null ? Map.of() : completedPartitions;
     }
 
     /**
@@ -88,10 +101,11 @@ public class ConsistencyPointSelector {
             if (rule.type() == CompletedEpochType.NONE) {
                 continue;
             }
-            Optional<long[]> bounds = catalog.numericBounds(spec.relation(), rule.column(), snapshotId);
+            Optional<long[]> bounds = bounds(spec, rule.column(), snapshotId);
             if (bounds.isEmpty()) {
                 blockers.add("Table '" + spec.id() + "' gates the consistency point on '" + rule.column()
-                        + "' but the export has no statistics for it (is the export empty?)");
+                        + "' but the export has no statistics for it and no completed empty epoch partitions"
+                        + " in the export journal (is the export empty?)");
                 continue;
             }
             long max = bounds.get()[1];
@@ -156,10 +170,11 @@ public class ConsistencyPointSelector {
             if (cov.type() == CoverageType.NONE) {
                 continue;
             }
-            Optional<long[]> b = catalog.numericBounds(spec.relation(), cov.column(), snapshotId);
+            Optional<long[]> b = bounds(spec, cov.column(), snapshotId);
             if (b.isEmpty()) {
                 blockers.add("Table '" + spec.id() + "' declares coverage on '" + cov.column()
-                        + "' but the export has no statistics for it");
+                        + "' but the export has no statistics for it and no completed empty epoch partitions"
+                        + " in the export journal");
                 continue;
             }
             long max = b.get()[1];
@@ -173,6 +188,52 @@ public class ConsistencyPointSelector {
         log.info("Selected completed epoch {} (limited by {}), point block {} slot {}",
                 completedEpoch, limitedBy, point.blockNumber(), point.slot());
         return new Selection(completedEpoch, point, gating, limitedBy, maxExportedBlock, blockers);
+    }
+
+    /**
+     * The catalog's bounds of {@code column}, or for a table without rows the epochs its export journal
+     * records as completed and empty.
+     */
+    private Optional<long[]> bounds(SnapshotTableSpec spec, String column, long snapshotId) throws SQLException {
+        Optional<long[]> bounds = catalog.numericBounds(spec.relation(), column, snapshotId);
+        if (bounds.isPresent() || spec.source() == null) {
+            return bounds;
+        }
+        return emptyExportBounds(spec, column,
+                completedPartitions.getOrDefault(spec.source().exporterId(), Map.of()));
+    }
+
+    /**
+     * Epoch bounds proven by the export journal alone, for a table the catalog has no rows for.
+     *
+     * <p>Only an epoch-partitioned table whose gating column is its partition column qualifies, and
+     * only when every completed partition recorded zero rows: a journal that claims rows the catalog
+     * lacks is a broken export, not an empty one, and stays a blocker. Per-partition completeness up
+     * to the point is still checked afterwards by {@link ExportCoverage}.
+     */
+    static Optional<long[]> emptyExportBounds(SnapshotTableSpec spec, String column, Map<String, Long> journal) {
+        SnapshotTableSpec.Partition partition = spec.source().partition();
+        if (partition == null || partition.strategy() != PartitionStrategy.EPOCH
+                || !column.equals(partition.column()) || journal.isEmpty()) {
+            return Optional.empty();
+        }
+        String prefix = column + "=";
+        long min = Long.MAX_VALUE;
+        long max = Long.MIN_VALUE;
+        for (Map.Entry<String, Long> e : journal.entrySet()) {
+            if (e.getValue() == null || e.getValue() != 0 || !e.getKey().startsWith(prefix)) {
+                return Optional.empty();
+            }
+            long epoch;
+            try {
+                epoch = Long.parseLong(e.getKey().substring(prefix.length()));
+            } catch (NumberFormatException ex) {
+                return Optional.empty();
+            }
+            min = Math.min(min, epoch);
+            max = Math.max(max, epoch);
+        }
+        return Optional.of(new long[]{min, max});
     }
 
     /** Read the last block of {@code epoch} straight from the block Parquet files that can hold it. */
