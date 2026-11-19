@@ -174,6 +174,49 @@ public class SnapshotCliSupport {
                 .withoutDisabledOptionalTables(this::setting);
     }
 
+    private Map<String, Boolean> configuredModules() {
+        return StoreModuleConfig.configured(environment);
+    }
+
+    /**
+     * A snapshot only covers the modules this CLI's configuration enables. Run without the source
+     * application's profile (ledger-state, for example) the adapot, reward and epoch-stake tables would
+     * be left out without a word, and the import would only refuse the snapshot after a full export.
+     * The source's export journal shows which tables it actually exports, so a disabled module whose
+     * tables have exported rows is a configuration mismatch.
+     *
+     * @return the problem, or null when the configuration matches what the source exports
+     */
+    static String disabledModulesWithExportedRows(SnapshotSpecRegistry builtIn, Map<String, Boolean> modules,
+                                                  Map<String, Map<String, Long>> completedPartitions) {
+        Map<String, java.util.Set<String>> tablesByModule = new java.util.TreeMap<>();
+        for (var spec : builtIn.importedTables()) {
+            if (spec.source() == null || !Boolean.FALSE.equals(modules.get(spec.module()))) {
+                continue;
+            }
+            Map<String, Long> journal = completedPartitions.getOrDefault(spec.source().exporterId(), Map.of());
+            if (journal.values().stream().anyMatch(rows -> rows != null && rows > 0)) {
+                tablesByModule.computeIfAbsent(spec.module(), k -> new java.util.TreeSet<>())
+                        .add(spec.source().exporterId());
+            }
+        }
+        if (tablesByModule.isEmpty()) {
+            return null;
+        }
+        StringBuilder sb = new StringBuilder("The source exports tables of modules this admin-cli configuration "
+                + "disables, so the snapshot would leave them out:");
+        tablesByModule.forEach((module, tables) -> {
+            var m = StoreModuleConfig.MODULES.get(module);
+            sb.append("\n  - ").append(module)
+                    .append(m != null && m.property() != null ? " (" + m.property() + "=false)" : "")
+                    .append(": ").append(String.join(", ", tables));
+        });
+        sb.append("\nRun admin-cli with the source application's configuration, for example from its directory with "
+                + "-Dspring.profiles.active=<its profiles> (ledger-state turns on adapot, epoch-aggr and the "
+                + "other ledger-state modules), or enable the modules explicitly.");
+        return sb.toString();
+    }
+
     /** A boolean store setting, false when unset. */
     private Boolean setting(String property) {
         return environment.getProperty(property, Boolean.class, false);
@@ -238,6 +281,11 @@ public class SnapshotCliSupport {
                             .put(rs.getString(2), rs.getLong(3));
                 }
             }
+        }
+        String unconfigured = disabledModulesWithExportedRows(registry(null, false), configuredModules(),
+                completedPartitions);
+        if (unconfigured != null) {
+            throw new IllegalStateException(unconfigured);
         }
         return new ExportOptions(
                 Path.of(dataDir != null ? dataDir : analyticsDataDir()).toAbsolutePath().normalize(),
