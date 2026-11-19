@@ -41,7 +41,8 @@ public class TransactionStoreProperties {
      * Enable/disable saving of the full signed transaction CBOR (body + witness set + isValid + auxiliary data)
      * instead of the transaction body-only CBOR.
      * When enabled, the full transaction CBOR spliced from the original block bytes by Yaci is stored
-     * instead of the body-only CBOR. Falls back to body-only CBOR when Yaci can't derive it byte-exact.
+     * instead of the body-only CBOR. If Yaci can't derive it byte-exact, no CBOR is stored for that transaction
+     * and an ErrorEvent is published; it does not fall back to body-only CBOR, even with {@code saveCbor} enabled.
      * This is useful for wallets and clients that need the complete signed transaction, e.g. for re-broadcast
      * or witness verification.
      * Note: Works standalone -- does not require {@code saveCbor} to also be enabled.
