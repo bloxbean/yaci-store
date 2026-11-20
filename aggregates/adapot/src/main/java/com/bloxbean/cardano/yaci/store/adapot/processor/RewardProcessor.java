@@ -8,6 +8,7 @@ import com.bloxbean.cardano.yaci.store.adapot.job.storage.AdaPotJobStorage;
 import com.bloxbean.cardano.yaci.store.adapot.snapshot.InstantRewardSnapshotService;
 import com.bloxbean.cardano.yaci.store.adapot.storage.RewardStorage;
 import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
+import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
 import com.bloxbean.cardano.yaci.store.events.domain.*;
 import com.bloxbean.cardano.yaci.store.events.internal.PreEpochTransitionEvent;
@@ -29,6 +30,7 @@ public class RewardProcessor {
     private final RewardStorage rewardStorage;
     private final InstantRewardSnapshotService instantRewardSnapshotService;
     private final AdaPotJobStorage rewardCalcJobStorage;
+    private final EraService eraService;
 
     @EventListener
     @Transactional
@@ -134,7 +136,11 @@ public class RewardProcessor {
         int count = rewardStorage.deleteInstantRewardsBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
         log.info("Rollback -- {} instant rewards records", count);
 
-        count = rewardStorage.deleteRewardsBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
+        long rollbackSlot = rollbackEvent.getRollbackTo().getSlot();
+        // No Shelley era yet means no rewards yet, so any lower bound works
+        int rollbackEpoch = eraService.getFirstNonByronEpoch().isPresent()
+                ? eraService.getEpochNo(Era.Shelley, rollbackSlot) : 0;
+        count = rewardStorage.deleteRewardsBySlotGreaterThan(rollbackSlot, rollbackEpoch);
         log.info("Rollback -- {} rewards records", count);
 
         count = rewardStorage.deleteRewardRestsBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());

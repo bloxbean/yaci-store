@@ -21,6 +21,7 @@ import lombok.NoArgsConstructor;
 public class TxnCbor {
     private String txHash;
     private byte[] cborData;
+    //Ledger size (excludes the Alonzo+ is_valid byte); null for body-only cbor
     private Integer cborSize;
     private Long slot;
 }

@@ -1,0 +1,17 @@
+[
+  {
+    "subject": "0b9bedfbfb62b21a2a41f581c2811ee74ee062ce32b0eca43964cf796D6174726978",
+    "name": "matrix",
+    "signed_properties": ["description", "name"]
+  },
+  {
+    "subject": "0e3bafea33081c3ac3773cd269bd26b141851d1323d1070c388f6cc04249544D454F57",
+    "name": "Bitmeow",
+    "signed_properties": ["decimals", "description", "logo", "name", "ticker", "url"]
+  },
+  {
+    "subject": "c0cb38a4ec36859acde16e5b887a848170bef14ed6de073ea9474e2d57495A444F4745",
+    "name": "WIZDOGE",
+    "signed_properties": ["description", "logo", "name", "ticker", "url"]
+  }
+]

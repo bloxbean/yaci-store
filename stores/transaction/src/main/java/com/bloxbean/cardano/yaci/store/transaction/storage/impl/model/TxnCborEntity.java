@@ -30,6 +30,7 @@ public class TxnCborEntity extends BaseEntity {
     @Column(name = "cbor_data", nullable = false)
     private byte[] cborData;
 
+    //Ledger size (excludes the Alonzo+ is_valid byte); null for body-only cbor
     @Column(name = "cbor_size")
     private Integer cborSize;
 

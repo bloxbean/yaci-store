@@ -9,6 +9,7 @@ import com.bloxbean.cardano.yaci.store.adapot.service.AdaPotService;
 import com.bloxbean.cardano.yaci.store.adapot.service.EpochRewardCalculationService;
 import com.bloxbean.cardano.yaci.store.adapot.snapshot.DepositSnapshotService;
 import com.bloxbean.cardano.yaci.store.adapot.snapshot.StakeSnapshotService;
+import com.bloxbean.cardano.yaci.store.adapot.storage.EpochStakeStorageReader;
 import com.bloxbean.cardano.yaci.store.adapot.storage.PartitionManager;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import org.jooq.DSLContext;
@@ -49,6 +50,7 @@ public class AdaPotJobProcessor {
     private final EraService eraService;
     private final EpochRewardCalculationService epochRewardCalculationService;
     private final StakeSnapshotService stakeSnapshotService;
+    private final EpochStakeStorageReader epochStakeStorageReader;
     private final DepositSnapshotService depositSnapshotService;
     private final AdaPotService adaPotService;
     private final TransactionStorageReader transactionStorageReader;
@@ -241,6 +243,11 @@ public class AdaPotJobProcessor {
             start = Instant.now();
             ensureCurrentJob(job, cancelled);
             stakeSnapshotService.takeStakeSnapshot(epoch - 1);
+
+            //Store the snapshot total (active stake of epoch + 1)
+            ensureCurrentJob(job, cancelled);
+            var totalEpochStake = epochStakeStorageReader.getTotalActiveStakeByEpoch(epoch + 1).orElse(null);
+            adaPotService.updateTotalEpochStake(epoch, totalEpochStake);
             end = Instant.now();
             job.setStakeSnapshotTime(end.toEpochMilli() - start.toEpochMilli());
 

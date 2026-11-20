@@ -310,6 +310,13 @@ public class GenesisPoolProcessor {
                     .build();
             adaPotService.updateAdaPotDeposit(0, genesisDeposits);
             adaPotService.updateAdaPot(0, result);
+
+            //Genesis epoch stakes are the snapshot that is active in epoch 1
+            var totalEpochStake = epochStakes.stream()
+                    .map(EpochStake::getAmount)
+                    .reduce(BigInteger::add)
+                    .orElse(null);
+            adaPotService.updateTotalEpochStake(0, totalEpochStake);
         }
     }
 }
