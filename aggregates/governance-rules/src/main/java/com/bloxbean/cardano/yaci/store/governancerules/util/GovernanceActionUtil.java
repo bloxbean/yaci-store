@@ -29,13 +29,12 @@ public class GovernanceActionUtil {
     public static boolean isPrevActionAsExpected(GovActionType govActionType,
                                                  GovActionId prevGovActionID,
                                                  GovActionId lastEnactedGovActionID) {
-        if (govActionType == GovActionType.TREASURY_WITHDRAWALS_ACTION || govActionType == GovActionType.INFO_ACTION
-                || lastEnactedGovActionID == null) {
+        if (govActionType == GovActionType.TREASURY_WITHDRAWALS_ACTION || govActionType == GovActionType.INFO_ACTION) {
             return true;
         }
 
-        if (prevGovActionID == null) {
-            return false;
+        if (prevGovActionID == null || lastEnactedGovActionID == null) {
+            return prevGovActionID == lastEnactedGovActionID;
         }
 
         return Objects.equals(lastEnactedGovActionID.getGov_action_index(), prevGovActionID.getGov_action_index())
