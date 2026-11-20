@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.snapshot.load;
 
+import com.bloxbean.cardano.yaci.store.snapshot.spec.SnapshotSpecRegistry;
 import org.junit.jupiter.api.Test;
 import java.sql.SQLException;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -23,5 +24,12 @@ class UtxoBatchLoaderTest {
         assertThat(UtxoBatchLoader.memoryBytes("953.6 MiB")).isBetween(999000000L, 1000000000L);
         assertThat(UtxoBatchLoader.isOutOfMemory(new SQLException("Out of Memory Error: failed to allocate"))).isTrue();
         assertThat(UtxoBatchLoader.isOutOfMemory(new SQLException("duplicate key value"))).isFalse();
+    }
+
+    @Test
+    void theShippedAddressUtxoSpecificationUsesTheMemoryBoundedLoader() {
+        // Without it every address_utxo batch runs in one pass; a dense mainnet day then needs ~2GB.
+        var spec = SnapshotSpecRegistry.builtIn().byId("address-utxo").orElseThrow();
+        assertThat(UtxoBatchLoader.supports(spec)).isTrue();
     }
 }
