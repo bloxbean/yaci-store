@@ -216,8 +216,6 @@ public class TransactionProcessor {
         }
 
         List<Transaction> transactions = event.getTransactions();
-        List<TxnWitness> txnWitnesses = new ArrayList<>();
-
         int index = 0;
         for(Transaction transaction: transactions) {
             if (transaction.isInvalid())
@@ -227,6 +225,7 @@ public class TransactionProcessor {
             if (witnesses == null)
                 return;
 
+            List<TxnWitness> txnWitnesses = new ArrayList<>();
             var vkeyWitnessList = witnesses.getVkeyWitnesses();
             var bootstrapWitnessList = witnesses.getBootstrapWitnesses();
 
