@@ -1,6 +1,6 @@
 snapshot-table:
   id: voting-procedure
-  spec-version: 2
+  spec-version: 1
   module: governance
   kind: CHAIN_DATA
   restore: IMPORT

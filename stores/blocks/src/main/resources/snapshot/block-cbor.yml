@@ -1,6 +1,6 @@
 snapshot-table:
   id: block-cbor
-  spec-version: 2
+  spec-version: 1
   module: blocks
   kind: CHAIN_DATA
   restore: IMPORT

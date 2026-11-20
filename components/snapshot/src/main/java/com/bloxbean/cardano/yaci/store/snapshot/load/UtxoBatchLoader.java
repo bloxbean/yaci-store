@@ -21,9 +21,14 @@ final class UtxoBatchLoader {
 
     private UtxoBatchLoader() {}
 
+    /**
+     * The slicing contract is the SQL resource: it groups by (tx_hash, output_index), so a hash of that
+     * key splits a batch without splitting an output. The check deliberately ignores the transform
+     * version, which moves with every change to the loaded rows; UtxoBatchLoaderTest checks that the
+     * shipped specification is supported, so a new resource has to opt in here.
+     */
     static boolean supports(SnapshotTableSpec spec) {
         return spec.id().equals("address-utxo") && spec.importSpec().mode() == ImportMode.SQL
-                && spec.importSpec().transformVersion() == 5
                 && "classpath:/snapshot/sql/address_utxo_v3.sql".equals(spec.importSpec().selectResource());
     }
 

@@ -1,6 +1,6 @@
 snapshot-table:
   id: stake-registration
-  spec-version: 2
+  spec-version: 1
   module: staking
   kind: CHAIN_DATA
   restore: IMPORT

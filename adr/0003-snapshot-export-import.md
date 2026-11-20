@@ -735,7 +735,7 @@ differed, and the AdaPot treasury drifted +28,639 lovelace at epoch 299,
 accumulating every epoch. With the rationals backfilled and the boundary
 replayed, the restored database computed reserves and treasury byte-identical to
 Koios for every recomputed epoch. The exporter now carries the
-rationals and the specification maps them, at `spec-version` 2 with transform
+rationals and the specification maps them, with transform
 `pool_registration_v2.sql`. Because the DuckLake writer creates a relation once
 and inserts into it thereafter, an existing export keeps its old schema: the
 `pool_registration` relation and its export state must be dropped so the wider
