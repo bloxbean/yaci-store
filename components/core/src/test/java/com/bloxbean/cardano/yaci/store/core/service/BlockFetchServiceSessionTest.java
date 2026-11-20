@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.core.service;
 
+import com.bloxbean.cardano.yaci.core.exception.BlockParseRuntimeException;
 import com.bloxbean.cardano.yaci.core.model.Block;
 import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
@@ -42,6 +43,7 @@ class BlockFetchServiceSessionTest {
     private StoreProperties storeProperties;
     private CursorService cursorService;
     private ShelleyBlockEventPublisher shelleyPublisher;
+    private ErrorStorage errorStorage;
     private SyncSessionGuard guard;
     private BlockFetchService blockFetchService;
 
@@ -53,6 +55,7 @@ class BlockFetchServiceSessionTest {
         shelleyPublisher = mock(ShelleyBlockEventPublisher.class);
         EraService eraService = mock(EraService.class);
         storeProperties = mock(StoreProperties.class);
+        errorStorage = mock(ErrorStorage.class);
         when(storeProperties.getKeepAliveInterval()).thenReturn(60_000);
         when(eraService.getEpochNo(eq(Era.Conway), anyLong())).thenReturn(100);
 
@@ -67,7 +70,7 @@ class BlockFetchServiceSessionTest {
                 mock(GenesisConfig.class),
                 shelleyPublisher,
                 mock(ByronBlockEventPublisher.class),
-                mock(ErrorStorage.class));
+                errorStorage);
         guard = new SyncSessionGuard();
         blockFetchService.setSessionGuard(guard);
 
@@ -255,6 +258,123 @@ class BlockFetchServiceSessionTest {
         verify(blockSync, never()).startSync(any(), any());
     }
 
+    @Test
+    void anOldThreadResumingAfterARestartDoesNotMarkItsBlockAccepted() throws Exception {
+        //#1332 review finding 1: the old range thread queues block 101 and waits before recording it. A restart from
+        //the cursor (block 100) resets the state. The old thread must not then record 101 as accepted, or the new
+        //session would skip 101 as a re-delivery: it is not written (the old batch is dropped).
+        when(storeProperties.isEnableParallelProcessing()).thenReturn(true);
+        BlockChainDataListener oldSession = startFetchFromCursorAndGetListener();
+        var restart = new java.util.concurrent.atomic.AtomicReference<BlockChainDataListener>();
+        doAnswer(inv -> {
+            restart.set(onAnotherThread(this::startFetchFromCursorAndGetListener));
+            return null;
+        }).when(shelleyPublisher).publishBlockEventsInParallel(any(), any(), any());
+
+        assertThatThrownBy(() -> oldSession.onBlock(Era.Conway, block(101, "h101", START_HASH), List.of()))
+                .isInstanceOf(SyncSessionGuard.StaleSyncSessionException.class);
+
+        doNothing().when(shelleyPublisher).publishBlockEventsInParallel(any(), any(), any());
+        Block replayed = block(101, "h101", START_HASH);
+        restart.get().onBlock(Era.Conway, replayed, List.of());
+
+        verify(shelleyPublisher).publishBlockEventsInParallel(any(), eq(replayed), any());
+        assertThat(blockFetchService.isError()).isFalse();
+    }
+
+    @Test
+    void aHangingFinalBatchWriteDoesNotBlockARestart() throws Exception {
+        //#1332 review finding 2: the last batch of the range fetch is written while a restart stops the old session
+        //and starts a new one. The restart must not wait for the write, and the old session must not then start chain
+        //sync.
+        when(storeProperties.isPrimaryInstance()).thenReturn(true);
+        BlockChainDataListener oldSession = startFetchFromCursorAndGetListener();
+        var inWrite = new java.util.concurrent.CountDownLatch(1);
+        var release = new java.util.concurrent.CountDownLatch(1);
+        doAnswer(inv -> {
+            inWrite.countDown();
+            release.await(10, java.util.concurrent.TimeUnit.SECONDS);
+            return null;
+        }).when(shelleyPublisher).processBlocksInParallel();
+        Thread batchDone = new Thread(oldSession::batchDone);
+        batchDone.start();
+        try {
+            assertThat(inWrite.await(5, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+
+            //The restart, on this thread: it would block here if batchDone held the service lock during the write
+            var restarted = java.util.concurrent.CompletableFuture.runAsync(() -> {
+                blockFetchService.stop();
+                startFetchFromCursorAndGetListener();
+            });
+            restarted.get(5, java.util.concurrent.TimeUnit.SECONDS);
+        } finally {
+            release.countDown();
+            batchDone.join(10_000);
+        }
+
+        assertThat(batchDone.isAlive()).isFalse();
+        verify(blockSync, never()).startSync(any(), any());
+        assertThat(blockFetchService.isError()).isFalse();
+    }
+
+    @Test
+    void aStopDuringTheFinalBatchWriteKeepsChainSyncFromStarting() throws Exception {
+        //#1332 review finding 5: nothing is running between closing the range connection and starting chain sync. A
+        //stop in that gap must still keep the range session from starting chain sync.
+        when(storeProperties.isPrimaryInstance()).thenReturn(true);
+        BlockChainDataListener session = startFetchFromCursorAndGetListener();
+        doAnswer(inv -> {
+            onAnotherThread(() -> {
+                blockFetchService.stop();
+                return null;
+            });
+            return null;
+        }).when(shelleyPublisher).processBlocksInParallel();
+
+        session.batchDone();
+
+        verify(blockSync, never()).startSync(any(), any());
+        assertThat(blockFetchService.isScheduledToStop()).isTrue();
+        //The stop went through while the batch was written, and the write did not fail the sync
+        assertThat(blockFetchService.isError()).isFalse();
+    }
+
+    @Test
+    void aParseErrorFromAnOldSessionDoesNotStopTheReplacement() throws Exception {
+        //#1332 review finding 3: a restart happens while the parse error row is saved, so the commit fence refuses it.
+        //The old thread must not flag the new session as failed or close its connection.
+        when(storeProperties.isContinueOnParseError()).thenReturn(true);
+        BlockChainDataListener oldSession = startFetchFromCursorAndGetListener();
+        doAnswer(inv -> {
+            onAnotherThread(this::startFetchFromCursorAndGetListener);
+            clearInvocations(blockRangeSync, blockSync);
+            guard.checkCaller();
+            return null;
+        }).when(errorStorage).save(any());
+
+        assertThatThrownBy(() -> oldSession.onParsingError(
+                new BlockParseRuntimeException(101L, null, new RuntimeException("bad cbor"))))
+                .isInstanceOf(RuntimeException.class);
+
+        assertThat(blockFetchService.isError()).isFalse();
+        verify(blockRangeSync, never()).stop();
+        verify(blockSync, never()).stop();
+    }
+
+    @Test
+    void aFailedStartAfterAStopLeavesTheSyncFailedNotStopped() {
+        //#1332 review finding 4: a restart stops the sync, then its start fails (a commit of the old session is still
+        //running). The health check skips a sync that is scheduled to stop, so it must look failed instead.
+        startSyncAndGetListener();
+        blockFetchService.stop();
+        assertThat(blockFetchService.isScheduledToStop()).isTrue();
+
+        blockFetchService.markStartFailed();
+
+        assertThat(blockFetchService.isScheduledToStop()).isFalse();
+        assertThat(blockFetchService.isError()).isTrue();
+    }
+
     private BlockChainDataListener startSyncAndGetListener() {
         clearInvocations(blockSync);
         when(cursorService.getCursor()).thenReturn(Optional.of(
@@ -263,6 +383,29 @@ class BlockFetchServiceSessionTest {
         var captor = ArgumentCaptor.forClass(BlockChainDataListener.class);
         verify(blockSync).startSync(any(), captor.capture());
         return captor.getValue();
+    }
+
+    private BlockChainDataListener startFetchFromCursorAndGetListener() {
+        clearInvocations(blockRangeSync);
+        Cursor cursor = Cursor.builder().slot(100L).block(100L).blockHash(START_HASH).prevBlockHash("h99")
+                .era(Era.Conway).build();
+        when(cursorService.getCursor()).thenReturn(Optional.of(cursor));
+        when(cursorService.getCursorByBlockHash(START_HASH)).thenReturn(Optional.of(cursor));
+        blockFetchService.startFetch(new Point(100, START_HASH), new Point(200, "h200"), 100L);
+        var captor = ArgumentCaptor.forClass(BlockChainDataListener.class);
+        verify(blockRangeSync).restart(captor.capture());
+        return captor.getValue();
+    }
+
+    //Runs on a thread outside any sync session, like a restart, and waits for it
+    private static <T> T onAnotherThread(java.util.concurrent.Callable<T> task) throws Exception {
+        return java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+            try {
+                return task.call();
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }).get(10, java.util.concurrent.TimeUnit.SECONDS);
     }
 
     private Block block(long number, String hash, String prevHash) {

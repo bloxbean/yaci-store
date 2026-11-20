@@ -46,6 +46,19 @@ public class StartService {
         if (alreadyStarted)
             throw new RuntimeException("StartService has already been started");
 
+        try {
+            doStart();
+        } catch (RuntimeException e) {
+            //e.g. a commit of the stopped session is still running after the wait. The restart's own stop must not
+            //leave the sync looking stopped on purpose, or the health check would never ask for another restart.
+            alreadyStarted = false;
+            blockFetchService.markStartFailed();
+            throw e;
+        }
+    }
+
+    private void doStart() {
+
         log.info("###### Genesis Config #####");
         log.info("Epoch Length            : " + genesisConfig.getEpochLength());
         log.info("ByronEra Slot Duration  : " + genesisConfig.slotDuration(Era.Byron));
@@ -176,12 +189,13 @@ public class StartService {
 
     public void stop() {
         log.info("Stopping the StartService >>>> ");
-        if (blockFetchService.isRunning()) {
-            try {
-                blockFetchService.stop();
-            } catch (Exception e) {
-                log.debug("Error stopping blockFetchService", e);
-            }
+        //Always, even when no connection is open: between the range fetch and chain sync (batchDone writes the last
+        //batch after closing the range connection) nothing is running, but the range session would still start chain
+        //sync. Ending the session stops that.
+        try {
+            blockFetchService.stop();
+        } catch (Exception e) {
+            log.debug("Error stopping blockFetchService", e);
         }
 
         alreadyStarted = false;
