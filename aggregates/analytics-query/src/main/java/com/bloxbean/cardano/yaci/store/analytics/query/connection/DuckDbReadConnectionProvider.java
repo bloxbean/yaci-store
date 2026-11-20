@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.analytics.query.connection;
 
+import com.bloxbean.cardano.yaci.store.analytics.query.service.SqlValidator;
 import lombok.extern.slf4j.Slf4j;
 import org.duckdb.DuckDBConnection;
 
@@ -140,6 +141,10 @@ public abstract class DuckDbReadConnectionProvider {
      *   <li>{@code lock_configuration = true} — prevents user SQL from weakening the sandbox.</li>
      * </ul>
      *
+     * <p>Before that, the table-only functions of this instance (including those of the
+     * extensions loaded by now) are registered with {@link SqlValidator}, which then rejects
+     * them by name in ad-hoc SQL.</p>
+     *
      * <p>DuckDB configuration is shared by the parent and all connections created with
      * {@link DuckDBConnection#duplicate()}. The allowed directory therefore also permits
      * trusted refresh DDL on the parent to recreate lazy {@code read_parquet()} views while
@@ -153,6 +158,7 @@ public abstract class DuckDbReadConnectionProvider {
         String escapedDirectory = normalizedDirectory.replace("'", "''");
 
         try (Statement stmt = parentConnection.createStatement()) {
+            SqlValidator.registerTableFunctions(parentConnection);
             stmt.execute("SET allowed_directories = ['" + escapedDirectory + "']");
             stmt.execute("SET autoload_known_extensions = false");
             stmt.execute("SET autoinstall_known_extensions = false");

@@ -240,7 +240,29 @@ Defense in depth, in this order:
    `COPY`/`EXPORT`, extension management, file/URL literals, catalog/metadata functions
    (`duckdb_*`, `pragma_*`, `SHOW`, `DESCRIBE`, `SUMMARIZE`, `information_schema`) and the attached
    PostgreSQL alias are rejected with `400`. Double-quoted identifiers that merely spell a keyword
-   (`"set"`, `"show"`) are allowed.
+   (`"set"`, `"show"`) are allowed. Further rules:
+   - **Table functions are denied by default.** Only `unnest`, `json_each` and `json_tree` may be
+     used as a table (`FROM`, `JOIN`, `LATERAL`, a `FROM` list, after a prefix alias such as
+     `FROM x: ...`, in any subquery); every other table function — file readers,
+     `range`/`generate_series`, `histogram(<table>, ...)` and functions that change engine-wide
+     state such as `enable_logging`, `enable_profiling` or `force_checkpoint` — is rejected.
+     In addition, at start-up the engine registers every function it (and its loaded extensions)
+     offers only as a table function or table macro, and those names are rejected wherever they
+     are called. Aggregate `histogram(col)` is unaffected.
+   - **Allocation-amplifying functions are bounded.** DuckDB's `memory_limit` does not cover a
+     single large value, so `lpad`/`rpad` need an integer-literal width of at most 10000,
+     `bitstring` an integer-literal length of at most 10000 bits, `printf`/`format` need a literal
+     format string whose widths and precisions have at most three digits (no `*` or `{}` width
+     taken from an argument), and `repeat`, `list_resize`, `array_resize`, `bitstring_agg`,
+     `sleep_ms` and `write_log` are rejected. Schema-qualified calls (`main.format(...)`,
+     `"system".main.printf(...)`) are checked like unqualified ones; a member call such as
+     `col.format(...)` is rejected because its format string is a value, not a literal.
+   - Control characters other than tab, line feed and carriage return are rejected, and a `--`
+     comment ends at either a line feed or a carriage return, as in DuckDB.
+   - Non-ASCII space and invisible formatting characters (no-break space U+00A0, U+2000–U+200B,
+     U+202F, U+3000, U+FEFF, zero-width joiner U+200D, ...) are rejected anywhere in the query,
+     including inside string literals, because DuckDB treats several of them as whitespace. To
+     match such a character in data, build it with `chr()`, e.g. `chr(160)` for a no-break space.
 3. **Limits** — per-query timeout (enforced for the whole execution — the engine deliberately
    uses non-streaming JDBC result sets, whose cancel timer would otherwise stop at the execute
    phase), the row limits above, concurrent readers bounded by
