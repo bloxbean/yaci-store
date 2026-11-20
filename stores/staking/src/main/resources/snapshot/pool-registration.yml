@@ -21,7 +21,7 @@ snapshot-table:
     target-table: pool_registration
     mode: SQL
     select-resource: classpath:/snapshot/sql/pool_registration_v2.sql
-    transform-version: 2
+    transform-version: 1
     dependencies: [block]
     columns:
       pool_owners:

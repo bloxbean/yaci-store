@@ -13,7 +13,7 @@
 -- cannot spill: the densest mainnet day (2.96M asset rows) needed over 3GB that way and fits in 2GB
 -- this way, at a third of the time. asset_index is unique within an output, so the order is the same.
 --
--- Transform version 6 restores owner_addr_full, the full address of an output longer than
+-- The transform also restores owner_addr_full, the full address of an output longer than
 -- owner_addr's 500 characters, which the export carries since the view gained it. A file exported
 -- before then reads it as NULL (the scan matches columns by name); the export inspection reports
 -- such files as a limitation of that snapshot.
