@@ -409,6 +409,7 @@ public class ConfigurationService {
                 putValueProperty(accountProps, "store.account.balance-calc-batch-mode", accountPrefix, accountDefaults);
                 putBooleanProperty(accountProps, "store.account.content-aware-rollback", accountPrefix, accountDefaults);
                 putBooleanProperty(accountProps, "store.account.current-balance-enabled", accountPrefix, accountDefaults);
+                putValueProperty(accountProps, "store.account.balance-save-timeout-seconds", accountPrefix, accountDefaults);
             }
             sections.add(ConfigSectionDto.builder()
                     .name("Account Store")
