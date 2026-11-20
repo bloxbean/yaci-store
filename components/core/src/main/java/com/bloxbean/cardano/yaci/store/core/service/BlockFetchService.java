@@ -24,6 +24,7 @@ import com.bloxbean.cardano.yaci.store.core.service.publisher.ByronBlockEventPub
 import com.bloxbean.cardano.yaci.store.core.service.publisher.ShelleyBlockEventPublisher;
 import com.bloxbean.cardano.yaci.store.core.util.SlotLeaderUtil;
 import com.bloxbean.cardano.yaci.store.events.*;
+import com.bloxbean.cardano.yaci.store.events.internal.PreBlockSyncEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.RequiredSyncRestartEvent;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -412,7 +413,13 @@ public class BlockFetchService implements BlockChainDataListener {
         startKeepAliveThread(syncMode);
     }
 
-    public synchronized void startSync(Point from) {
+    public void startSync(Point from) {
+        //Outside the lock: a listener may run for a long time (e.g. a one-off table build at the tip)
+        publisher.publishEvent(new PreBlockSyncEvent(from));
+        doStartSync(from);
+    }
+
+    private synchronized void doStartSync(Point from) {
         isError.set(false);
         scheduledToStop.set(false);
 

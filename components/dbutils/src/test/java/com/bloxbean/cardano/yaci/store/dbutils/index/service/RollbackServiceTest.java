@@ -6,6 +6,7 @@ import com.bloxbean.cardano.yaci.store.dbutils.index.model.RollbackConfig;
 import com.bloxbean.cardano.yaci.store.dbutils.index.model.TableRollbackAction;
 import com.bloxbean.cardano.yaci.store.dbutils.index.util.DatabaseUtils;
 import com.bloxbean.cardano.yaci.store.dbutils.index.util.RollbackLoader;
+import com.bloxbean.cardano.yaci.store.dbutils.utxo.UnspentUtxoBackfillService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -42,6 +43,35 @@ class RollbackServiceTest {
     void setUp() {
         configLoader = new RollbackLoader();
         rollbackService = new RollbackService(jdbcTemplate, databaseUtils);
+    }
+
+    @Test
+    void testExecuteRollback_UnspentUtxoTable_ShouldRestoreSpentOutputsBeforeTxInputIsTrimmed() {
+        RollbackContext context = RollbackContext.builder()
+                .epoch(100)
+                .eventPublisherId(1L)
+                .rollbackLedgerState(false)
+                .build();
+
+        when(databaseUtils.tableExists(anyString())).thenReturn(true);
+        when(jdbcTemplate.queryForObject(anyString(), any(SqlParameterSource.class), any(RowMapper.class))).thenReturn(
+                createMockRollbackBlock(100, 1000L, "block_hash_123", 2000L, 50, 5)
+        );
+        when(jdbcTemplate.update(anyString(), any(SqlParameterSource.class))).thenReturn(1);
+        when(jdbcTemplate.getJdbcTemplate()).thenReturn(plainJdbcTemplate);
+        when(plainJdbcTemplate.update(anyString())).thenReturn(1);
+
+        RollbackConfig config = configLoader.loadRollbackConfig("rollback.yml");
+        Pair<List<TableRollbackAction>, Boolean> result = rollbackService.executeRollback(config, context);
+
+        assertTrue(result.getSecond());
+        var inOrder = inOrder(jdbcTemplate);
+        inOrder.verify(jdbcTemplate).update(eq("DELETE FROM address_utxo_unspent WHERE slot > :slot"), any(SqlParameterSource.class));
+        inOrder.verify(jdbcTemplate).update(eq(UnspentUtxoBackfillService.RESTORE_SPENT_AFTER), any(SqlParameterSource.class));
+        inOrder.verify(jdbcTemplate).update(eq(UnspentUtxoBackfillService.STATE_AFTER_ROLLBACK), argThat((SqlParameterSource params) ->
+                Long.valueOf(1000L).equals(params.getValue("slot")) && Long.valueOf(2000L).equals(params.getValue("block"))
+                        && "block_hash_123".equals(params.getValue("block_hash"))));
+        inOrder.verify(jdbcTemplate).update(eq("DELETE FROM tx_input WHERE spent_at_slot > :slot"), any(SqlParameterSource.class));
     }
 
     @Test

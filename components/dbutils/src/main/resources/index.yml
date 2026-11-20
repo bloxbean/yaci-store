@@ -44,6 +44,21 @@
       columns:
         - epoch
 
+- table: address_utxo_unspent
+  indexes:
+    - name: idx_address_utxo_unspent_owner_addr
+      columns:
+        - owner_addr
+    - name: idx_address_utxo_unspent_owner_stake_addr
+      columns:
+        - owner_stake_addr
+    - name: idx_address_utxo_unspent_owner_paykey_hash
+      columns:
+        - owner_payment_credential
+    - name: idx_address_utxo_unspent_owner_stakekey_hash
+      columns:
+      - owner_stake_credential
+
 #assets store
 - table: assets
   indexes:
