@@ -11,6 +11,7 @@ public abstract class EpochMapper {
 
     public EpochEntity updateEntity(Epoch epoch, EpochEntity targetEntity) {
         targetEntity.setTotalOutput(epoch.getTotalOutput());
+        targetEntity.setTotalFees(epoch.getTotalFees());
         targetEntity.setTransactionCount(epoch.getTransactionCount());
         targetEntity.setBlockCount(epoch.getBlockCount());
         targetEntity.setStartTime(epoch.getStartTime());
