@@ -1,6 +1,10 @@
 dependencies {
     api project(':components:common')
     api project(':components:events')
+
+    // UnspentUtxoBackfillServiceTest runs the utxo store's H2 migrations
+    testImplementation 'org.flywaydb:flyway-core'
+    testRuntimeOnly 'com.h2database:h2'
 }
 
 publishing {

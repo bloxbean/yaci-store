@@ -1,3 +1,7 @@
+// Above the Spring Boot 3.3 BOM's Testcontainers 1.19.8, which cannot talk to Docker Engine 29+
+// (UnspentUtxoTablePostgresIT would skip itself as if no Docker were running). Test scope only.
+ext['testcontainers.version'] = '1.21.4'
+
 dependencies {
     api project(":components:common")
     api project(":components:events")
@@ -9,6 +13,13 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web'
 
     testImplementation project(':starters:spring-boot-starter')
+
+    // UnspentUtxoTablePostgresIT: the unspent-table SQL on PostgreSQL (skipped without Docker).
+    testImplementation 'org.testcontainers:postgresql'
+    testImplementation 'org.testcontainers:junit-jupiter'
+    testRuntimeOnly 'org.postgresql:postgresql'
+    testImplementation 'org.flywaydb:flyway-core'
+    testRuntimeOnly 'org.flywaydb:flyway-database-postgresql'
 }
 
 publishing {

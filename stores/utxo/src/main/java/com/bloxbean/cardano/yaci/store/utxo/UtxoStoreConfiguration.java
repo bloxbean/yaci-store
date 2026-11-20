@@ -7,6 +7,7 @@ import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorageReader;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.AddressStorageImpl;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UtxoCache;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UtxoStorageImpl;
+import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UnspentTableUtxoStorageReader;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.UtxoStorageReaderImpl;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.TxInputRepository;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.UtxoRepository;
@@ -50,8 +51,12 @@ public class UtxoStoreConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public UtxoStorageReader utxoStorageReader(UtxoRepository utxoRepository, DSLContext dslContext) {
-        return new UtxoStorageReaderImpl(utxoRepository, dslContext);
+    public UtxoStorageReader utxoStorageReader(UtxoRepository utxoRepository, DSLContext dslContext,
+                                               UtxoStoreProperties utxoStoreProperties) {
+        UtxoStorageReader reader = new UtxoStorageReaderImpl(utxoRepository, dslContext);
+        return utxoStoreProperties.isUnspentTableReadEnabled()
+                ? new UnspentTableUtxoStorageReader(reader, dslContext)
+                : reader;
     }
 
     @Bean
