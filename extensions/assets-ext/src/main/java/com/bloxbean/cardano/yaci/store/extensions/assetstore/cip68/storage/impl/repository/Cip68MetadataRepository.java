@@ -11,7 +11,9 @@ import org.springframework.stereotype.Repository;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -65,11 +67,15 @@ public interface Cip68MetadataRepository extends JpaRepository<Cip68Metadata, Ci
      * </ul>
      * The result stays exact: every key is in exactly one query, and the latest row is chosen per pair.
      * <p>
+     * Each stored pair is returned once, even when two different keys match it. With a case-insensitive collation
+     * (MySQL's default), {@code aabb...} and {@code AABB...} are distinct keys but match the same row; in one query the
+     * ranking returns it once, but keys in two queries would return it twice, so rows are kept once per stored pair.
+     * <p>
      * No label filter — see {@link #findFirstByPolicyIdAndAssetNameOrderBySlotDescTxIndexDesc} for why.
      *
      * @param concatenatedKeys {@code policy_id || asset_name} keys (reference-NFT asset names); keys shorter than a
      *                         policy ID are skipped
-     * @return one entity per requested key that has data; keys with no data are omitted
+     * @return one entity per stored pair that a requested key matches; keys with no data are omitted
      */
     default List<Cip68Metadata> findLatestByConcatenatedKeys(Collection<String> concatenatedKeys) {
         List<String> keys = concatenatedKeys.stream()
@@ -77,7 +83,7 @@ public interface Cip68MetadataRepository extends JpaRepository<Cip68Metadata, Ci
                 .distinct()
                 .toList();
 
-        List<Cip68Metadata> rows = new ArrayList<>();
+        Map<String, Cip68Metadata> rowByPair = new LinkedHashMap<>();
         for (int from = 0; from < keys.size(); from += MAX_KEYS_PER_QUERY) {
             List<String> chunk = keys.subList(from, Math.min(from + MAX_KEYS_PER_QUERY, keys.size()));
             Set<String> policyIds = new HashSet<>();
@@ -86,9 +92,11 @@ public interface Cip68MetadataRepository extends JpaRepository<Cip68Metadata, Ci
                 policyIds.add(key.substring(0, POLICY_ID_HEX_LENGTH));
                 assetNames.add(key.substring(POLICY_ID_HEX_LENGTH));
             }
-            rows.addAll(findLatestByPolicyIdsAndAssetNames(policyIds, assetNames, chunk));
+            for (Cip68Metadata row : findLatestByPolicyIdsAndAssetNames(policyIds, assetNames, chunk)) {
+                rowByPair.putIfAbsent(row.getPolicyId() + row.getAssetName(), row);
+            }
         }
-        return rows;
+        return new ArrayList<>(rowByPair.values());
     }
 
     /**
