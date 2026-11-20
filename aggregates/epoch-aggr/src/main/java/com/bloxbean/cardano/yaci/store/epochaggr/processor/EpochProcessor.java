@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.epochaggr.processor;
 
 import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
+import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import com.bloxbean.cardano.yaci.store.epochaggr.service.EpochService;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
@@ -24,6 +25,7 @@ import static com.bloxbean.cardano.yaci.store.epochaggr.EpochAggrConfiguration.S
 @ConditionalOnProperty(name = "store.epoch-aggr.epoch-calculation-enabled", havingValue = "true", matchIfMissing = false)
 @RequiredArgsConstructor
 @EnableIf(value = STORE_EPOCHAGGR_ENABLED, defaultValue = false)
+@ReadOnly(false)
 public class EpochProcessor {
 
     private final EpochService epochService;

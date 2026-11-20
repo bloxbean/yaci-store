@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.epochaggr.service;
 
 import com.bloxbean.cardano.yaci.store.blocks.domain.Block;
 import com.bloxbean.cardano.yaci.store.blocks.storage.BlockStorage;
+import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import com.bloxbean.cardano.yaci.store.epochaggr.domain.Epoch;
 import com.bloxbean.cardano.yaci.store.epochaggr.storage.EpochStorage;
 import lombok.RequiredArgsConstructor;
@@ -14,6 +15,7 @@ import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
+@ReadOnly(false)
 public class EpochService {
     private final EpochStorage epochStorage;
     private final BlockStorage blockStorage;
