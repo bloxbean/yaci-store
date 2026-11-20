@@ -1,6 +1,6 @@
 snapshot-table:
   id: withdrawal
-  spec-version: 2
+  spec-version: 1
   module: transaction
   kind: CHAIN_DATA
   restore: IMPORT

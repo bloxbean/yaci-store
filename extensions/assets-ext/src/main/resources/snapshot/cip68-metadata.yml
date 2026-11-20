@@ -1,6 +1,6 @@
 snapshot-table:
   id: cip68-metadata
-  spec-version: 2
+  spec-version: 1
   module: assets-ext
   kind: EXTENSION_DATA
   restore: IMPORT

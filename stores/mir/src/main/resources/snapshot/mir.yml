@@ -1,6 +1,6 @@
 snapshot-table:
   id: mir
-  spec-version: 3
+  spec-version: 1
   module: mir
   kind: CHAIN_DATA
   restore: IMPORT
@@ -21,7 +21,7 @@ snapshot-table:
     target-table: mir
     mode: SQL
     select-resource: classpath:/snapshot/sql/mir_v3.sql
-    transform-version: 3
+    transform-version: 1
     dependencies: [block]
     use-target-defaults: [update_datetime]
     batch-boundary: SINGLE_BATCH

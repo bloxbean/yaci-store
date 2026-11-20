@@ -1,6 +1,6 @@
 snapshot-table:
   id: address-utxo
-  spec-version: 3
+  spec-version: 1
   module: utxo
   kind: CHAIN_DATA
   restore: IMPORT
@@ -28,7 +28,7 @@ snapshot-table:
     target-table: address_utxo
     mode: SQL
     select-resource: classpath:/snapshot/sql/address_utxo_v3.sql
-    transform-version: 6
+    transform-version: 1
     dependencies: [block]
     use-target-defaults: [update_datetime]
     batch-boundary: WHOLE_PARTITION
