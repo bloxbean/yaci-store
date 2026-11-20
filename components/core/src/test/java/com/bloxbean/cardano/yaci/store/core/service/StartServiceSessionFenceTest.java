@@ -7,6 +7,7 @@ import com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.ApplicationEventPublisher;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
 
@@ -42,5 +43,22 @@ class StartServiceSessionFenceTest {
         assertThatThrownBy(startService::start).hasMessage("commit still running");
 
         verify(cursorService, never()).getStartCursor();
+        //#1332 review finding 4: the health check must try again, so the sync is marked failed, not stopped
+        verify(blockFetchService).markStartFailed();
+        assertThat(startService.isStarted()).isFalse();
+    }
+
+    @Test
+    void stopEndsTheSessionEvenWhenNoConnectionIsOpen() {
+        //#1332 review finding 5: e.g. between the range fetch and chain sync
+        BlockFetchService blockFetchService = mock(BlockFetchService.class);
+        when(blockFetchService.isRunning()).thenReturn(false);
+        StartService startService = new StartService(mock(ApplicationEventPublisher.class), blockFetchService,
+                mock(TipFinderService.class), mock(GenesisBlockFinder.class), mock(CursorService.class),
+                mock(InitService.class), new StoreProperties(), mock(GenesisConfig.class));
+
+        startService.stop();
+
+        verify(blockFetchService).stop();
     }
 }

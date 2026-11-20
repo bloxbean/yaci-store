@@ -43,4 +43,19 @@ class SyncSessionGuardTest {
         }
         assertThat(guard.isCallerStale()).isFalse();
     }
+
+    @Test
+    void aSessionOpensItsSuccessorOnlyWhileItIsCurrent() {
+        //#1332 review finding 5: a stop just before the range session hands over to chain sync wins
+        long range = guard.newSession();
+        guard.endSession();
+        long afterStop = guard.currentSession();
+
+        assertThatThrownBy(() -> guard.newSessionReplacing(range))
+                .isInstanceOf(SyncSessionGuard.StaleSyncSessionException.class);
+        assertThat(guard.currentSession()).isEqualTo(afterStop);
+
+        assertThat(guard.newSessionReplacing(afterStop)).isEqualTo(afterStop + 1);
+        assertThat(guard.newSessionReplacing(null)).isEqualTo(afterStop + 2);
+    }
 }

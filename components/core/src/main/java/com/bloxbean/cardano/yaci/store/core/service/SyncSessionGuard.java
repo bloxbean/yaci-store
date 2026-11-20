@@ -43,7 +43,19 @@ public class SyncSessionGuard {
      *                               sessions are stale all the same, but the caller must not start syncing yet.
      */
     public long newSession() {
-        return changeSession(true);
+        return changeSession(true, null);
+    }
+
+    /**
+     * Like {@link #newSession()}, but if {@code expected} is not null, opens the new session only if {@code expected}
+     * is still the current one, in one step. A session asking for its own successor (the range fetch handing over to
+     * chain sync) must not start it once a stop or a restart has ended it, even if that happens just before.
+     *
+     * @throws StaleSyncSessionException if {@code expected} is no longer current. Nothing is changed.
+     * @throws IllegalStateException     as {@link #newSession()}
+     */
+    public long newSessionReplacing(Long expected) {
+        return changeSession(true, expected);
     }
 
     /**
@@ -52,7 +64,7 @@ public class SyncSessionGuard {
      * (see {@link #awaitCommitsOfOldSessions()}).
      */
     public void endSession() {
-        changeSession(false);
+        changeSession(false, null);
     }
 
     /**
@@ -64,10 +76,10 @@ public class SyncSessionGuard {
      *                               tried again later.
      */
     public void awaitCommitsOfOldSessions() {
-        changeSession(true);
+        changeSession(true, null);
     }
 
-    private long changeSession(boolean strict) {
+    private long changeSession(boolean strict, Long expected) {
         Lock writeLock = commitLock.writeLock();
         boolean locked = false;
         try {
@@ -77,8 +89,17 @@ public class SyncSessionGuard {
         }
         try {
             //Always make the old session stale, so its commits that have not reached the fence are rolled back
-            long previous = currentSession.get();
-            long next = currentSession.incrementAndGet();
+            long previous;
+            long next;
+            if (expected != null) {
+                previous = expected;
+                next = expected + 1;
+                if (!currentSession.compareAndSet(expected, next))
+                    throw new StaleSyncSessionException(expected, currentSession.get());
+            } else {
+                previous = currentSession.get();
+                next = currentSession.incrementAndGet();
+            }
             if (!locked) {
                 if (strict)
                     throw new IllegalStateException("A commit of sync session " + previous + " is still running after "
