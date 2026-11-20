@@ -1,0 +1,13 @@
+snapshot-table:
+  id: address-utxo-unspent
+  spec-version: 1
+  module: utxo
+  kind: DERIVED_DATA
+  restore: RUNTIME_REBUILT
+  reason: >-
+    derived from address_utxo and tx_input; with store_state not restored, the table is not current
+    after a restore, queries use address_utxo and tx_input, and the application builds it again at
+    the tip when store.utxo.unspent-table-enabled is true
+
+  import:
+    target-table: address_utxo_unspent
