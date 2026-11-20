@@ -8,6 +8,7 @@ import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.service.CursorService;
 import com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig;
 import com.bloxbean.cardano.yaci.store.core.metrics.MetricsService;
+import com.bloxbean.cardano.yaci.store.core.storage.api.ErrorStorage;
 import com.bloxbean.cardano.yaci.store.core.service.publisher.ByronBlockEventPublisher;
 import com.bloxbean.cardano.yaci.store.core.service.publisher.ShelleyBlockEventPublisher;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
@@ -48,7 +49,8 @@ class BlockFetchServiceParallelModeTest {
                 storeProperties,
                 mock(GenesisConfig.class),
                 shelleyPublisher,
-                mock(ByronBlockEventPublisher.class));
+                mock(ByronBlockEventPublisher.class),
+                mock(ErrorStorage.class));
 
         ReflectionTestUtils.setField(blockFetchService, "previousEpoch", 100);
         ReflectionTestUtils.setField(blockFetchService, "previousEra", Era.Conway);
