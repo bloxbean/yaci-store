@@ -91,14 +91,12 @@ public class AdminController {
     @Operation(description = "Stop Sync")
     @SneakyThrows
     public String stopSync() {
-        if (startService.isStarted()) {
-            startService.stop();
-            log.info("Sync stopped !!!");
+        boolean wasStarted = startService.isStarted();
+        // Stop even if it is not running: after a failed restart, this keeps auto-recovery from starting it again
+        startService.stop();
+        log.info("Sync stopped !!!");
 
-            return "Sync stopped";
-        } else {
-            return "Skipped as sync is not running";
-        }
+        return wasStarted ? "Sync stopped" : "Sync was not running. It will stay stopped";
     }
 
     @PostMapping("/admin/start-sync")
