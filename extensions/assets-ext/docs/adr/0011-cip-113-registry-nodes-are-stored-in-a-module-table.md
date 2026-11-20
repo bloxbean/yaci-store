@@ -180,6 +180,8 @@ Mainnet, on a yaci-store test database on a Linux test machine, 2026-11-20: Post
 | The same walk as one recursive SQL query | The planner chose a parallel scan of `address_utxo`; cancelled after 10 min |
 | Index on `owner_payment_credential`, built on a 1% sample (3,632,317 rows, 3,397,171 with a credential) | 92 MB, built in 5.3 s; **about 8.4 GB** scaled to the whole table |
 | Inserting the 3.6 M sampled rows, without and with that index | 2.8 s and 18.0 s: **6.4 times** the cost |
+| Share of `address_utxo` rows a pruned database keeps (0.1% sample, 363,158 rows) | 2.96% unspent; 2.97% with the default 2,160 `pruning-safe-blocks`; 4.05% with 129,600 |
+| The same index on a pruned database, scaled | **About 250–340 MB** of live entries |
 | The proposed table, with the 7 real mainnet node outputs | 8 kB of data, 32 kB of indexes, **48 kB** in total; 745 bytes per row |
 | Lookup of 2 policies in the table | **0.027 ms** |
 
@@ -188,8 +190,9 @@ Notes on the estimates:
 - **Index size:** the index was not built on the whole table. The sample takes whole pages, so it may not repeat credentials as often as the
   whole table does, and PostgreSQL stores a repeated key once per leaf page.
 - **Insert cost:** the sample's index fits in memory. On an 8 GB index, which mostly does not, an insert costs more, not less.
-- **A pruned database** keeps only the unspent outputs and the spent outputs of the last `pruning-safe-blocks`, so its index would be
-  smaller. That size is being measured (see Open questions).
+- **A pruned database** keeps only the unspent outputs and the spent outputs of the last `pruning-safe-blocks`: about 3% of the rows, so its
+  index holds about 3% of the entries. A pruned database still inserts every output before pruning deletes the spent ones, so the index
+  would also hold space freed by deletes until it is reused; that is not measured (see Open questions).
 
 ## Consequences
 
@@ -235,9 +238,11 @@ Rejected because:
 
 Rejected because the cost falls on the largest table of another module, for a handful of rows:
 
-- **About 8.4 GB** on an unpruned mainnet database (Measurements). It is smaller on a pruned one; that size is being measured.
-- **Every output of every block pays for it,** CIP-113 or not: 6.4 times the insert cost in the sample. That includes the hundreds of millions
-  of outputs of a sync from genesis.
+- **About 8.4 GB** on an unpruned mainnet database, and about 250–340 MB of live entries on a pruned one (Measurements), for a handful of
+  rows the module needs.
+- **Every output of every block pays for it,** CIP-113 or not, pruned or not: 6.4 times the insert cost in the sample. A pruned database
+  inserts every output too, and pruning then deletes the spent ones from the index as well. That includes the hundreds of millions of outputs
+  of a sync from genesis.
 - **Building it** takes a full scan of `address_utxo` (5 minutes on this database) and a sort of about 310 M keys.
 - **No migration of the utxo store creates it.** The module would have to create an index on a table it does not own, or ask every pruned
   client to.
@@ -273,8 +278,8 @@ mainnet.
 - **The default of `store.assets.ext.cip113.enabled`:**
   - on, like CIP-26 and CIP-68, now that the registry is live on mainnet;
   - or off, as before #1134, when it was off until CIP-113 was live on mainnet.
-- **The index size on a pruned mainnet database,** to complete alternative D: the share of `address_utxo` rows a pruned client keeps, for the
-  default `pruning-safe-blocks` and for longer windows.
+- **The real size and cost of the index on a pruned database,** to complete alternative D. The 250–340 MB is scaled from a sample and counts
+  only live entries. A pruned sync from genesis with the index would measure its actual size after pruning, and how much it slows the sync.
 
 ## References
 
