@@ -30,6 +30,13 @@ public class EpochNonceProcessor {
             return;
         }
 
+        // Era notifications must not fold an epoch back into its own nonce state.
+        if (event.getPreviousEpoch() != null && event.getEpoch() <= event.getPreviousEpoch()) {
+            log.warn("Ignoring non-advancing epoch nonce transition: {} -> {}",
+                    event.getPreviousEpoch(), event.getEpoch());
+            return;
+        }
+
         // Skip Byron era — no VRF/nonce
         if (event.getEra() == Era.Byron) {
             return;
