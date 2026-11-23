@@ -1,5 +1,7 @@
 package com.bloxbean.cardano.yaci.store.script.processor;
 
+import com.bloxbean.cardano.yaci.store.common.executor.SyncSessionContext;
+
 import com.bloxbean.cardano.yaci.core.model.PlutusScript;
 import com.bloxbean.cardano.yaci.core.model.Redeemer;
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
@@ -93,10 +95,11 @@ public class ScriptRedeemerDatumProcessor {
         List<List<BatchBlock>> partitions = partition(blockCacheList, blockBatchPartitionSize);
         List<CompletableFuture> futures = new ArrayList<>();
         for (List<BatchBlock> partition : partitions) {
+            //The workers write for the caller's sync session (see SyncSessionContext)
             var future = CompletableFuture.supplyAsync(() -> {
                 processBlockPartition(partition);
                 return true;
-            }, executor);
+            }, SyncSessionContext.propagating(executor));
             futures.add(future);
         }
 
@@ -105,11 +108,11 @@ public class ScriptRedeemerDatumProcessor {
     }
 
     private void processBlockPartition(List<BatchBlock> blockCacheList) {
-        blockCacheList.stream().parallel().forEach(blockCache -> {
+        blockCacheList.stream().parallel().forEach(SyncSessionContext.propagating((BatchBlock blockCache) -> {
             for (Transaction transaction : blockCache.getTransactions()) {
                 handleScriptTransaction(blockCache.getMetadata(), transaction);
             }
-        });
+        }));
     }
 
     /**
