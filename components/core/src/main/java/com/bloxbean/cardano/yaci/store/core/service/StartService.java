@@ -162,8 +162,18 @@ public class StartService {
         log.info("From >> " + from);
         log.info("TO >> " + to);
 
-        //Send a rollback event to rollback data at and after this slot.
-        //This is because, during start up the from block will be processed again (For BlockFetch).
+        log.debug("Block diff configuration to start sync >>> " + storeProperties.getBlockDiffToStartSyncProtocol());
+        long diff = tip.getPoint().getSlot() - from.getSlot();
+        //BlockFetch requests the range from the from block inclusive, so the from block is processed again.
+        //ChainSync starts after the intersection, so it is not. Chain sync starts after its start point, so a start
+        //point that is not processed yet (a fresh start) is always fetched with a range fetch first, however close to
+        //the tip it is.
+        boolean fetchRange = !storeProperties.isPrimaryInstance()
+                || diff > storeProperties.getBlockDiffToStartSyncProtocol()
+                || processedBlockNumber == null;
+
+        //Send a rollback event to rollback data after this slot, and at this slot for stores
+        //that cannot overwrite the from block's rows when it is processed again (For BlockFetch).
         if (from.getSlot() > 0) {
             //Publish pre-rollback event to clean data
             PreRollbackEvent preRollbackEvent = PreRollbackEvent.builder()
@@ -179,6 +189,7 @@ public class StartService {
                     .rollbackTo(new Point(from.getSlot(), from.getHash()))
                     .currentBlock(tip.getBlock())
                     .currentPoint(new Point(tip.getPoint().getSlot(), tip.getPoint().getHash()))
+                    .rollbackPointReprocessed(fetchRange)
                     .build();
             log.info("Publishing rollback event to clean data after restart >>> " + rollbackEvent);
             publisher.publishEvent(rollbackEvent);
@@ -187,23 +198,16 @@ public class StartService {
         if (blockNumber != null && blockNumber > 0L)
             publisher.publishEvent(new PreSyncEvent(blockNumber));
 
-        log.debug("Block diff configuration to start sync >>> " + storeProperties.getBlockDiffToStartSyncProtocol());
-        long diff = tip.getPoint().getSlot() - from.getSlot();
         // The live connection has a time limit too: a node that stops answering after the checks above would
         // otherwise hold start() (and the restart lock) forever.
         long sessionTimeoutMs = NodeCalls.timeoutMs(storeProperties) > 0 ? sessionStartTimeoutMs : 0;
-        if (storeProperties.isPrimaryInstance()) {
-            //Chain sync starts after its start point, so a start point that is not processed yet (a fresh start) is
-            //always fetched with a range fetch first, however close to the tip it is
-            if (diff > storeProperties.getBlockDiffToStartSyncProtocol() || processedBlockNumber == null) {
+        if (fetchRange) {
+            if (storeProperties.isPrimaryInstance())
                 log.info("Start BlockRangeSync");
-                blockFetchService.startFetchWithTimeout(from, to, processedBlockNumber, sessionTimeoutMs);
-            } else {
-                log.info("Start BlockSync");
-                blockFetchService.startSyncWithTimeout(from, processedBlockNumber, sessionTimeoutMs);
-            }
-        } else {
             blockFetchService.startFetchWithTimeout(from, to, processedBlockNumber, sessionTimeoutMs);
+        } else {
+            log.info("Start BlockSync");
+            blockFetchService.startSyncWithTimeout(from, processedBlockNumber, sessionTimeoutMs);
         }
     }
 

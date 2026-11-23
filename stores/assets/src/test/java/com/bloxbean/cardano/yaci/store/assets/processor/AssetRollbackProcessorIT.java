@@ -36,4 +36,21 @@ class AssetRollbackProcessorIT {
         int count = txAssetRepository.findAll().size();
         assertThat(count).isEqualTo(4);
     }
+
+    @Test
+    @SqlGroup({
+            @Sql(value = "classpath:scripts/assets_data.sql", executionPhase = BEFORE_TEST_METHOD)
+    })
+    void givenRollbackEvent_rollbackPointReprocessed_shouldAlsoDeleteAssetsAtRollbackPoint() throws Exception {
+        RollbackEvent rollbackEvent = RollbackEvent.builder()
+                .rollbackTo(new Point(10702061, "5068285d5eccc63bbfe0caa446fde9c28d77e45b6f34d37c29bbae8d47c30b9b"))
+                .currentPoint(new Point(10707861, "5ca2e98fe743c4dc92b323a6cd244825e663aa1e35fd3123487c8c0a170196e2"))
+                .rollbackPointReprocessed(true)
+                .build();
+
+        assetRollbackProcessor.handleRollbackEvent(rollbackEvent);
+
+        assertThat(txAssetRepository.findAll()).hasSize(3)
+                .allSatisfy(asset -> assertThat(asset.getSlot()).isLessThan(10702061));
+    }
 }
