@@ -126,27 +126,30 @@ public class UtxoStorageImpl implements UtxoStorage {
 
         do {
             count = transactionTemplate.execute(status ->  {
-                var spentSubQuery = dsl.select(TX_INPUT.TX_HASH, TX_INPUT.OUTPUT_INDEX)
+                // Fetch the keys once and delete both tables by the same keys. spent_at_block is not unique,
+                // so two separate "order by spent_at_block limit N" selections can pick different rows (#1379).
+                var spentKeys = dsl.select(TX_INPUT.TX_HASH, TX_INPUT.OUTPUT_INDEX)
                         .from(TX_INPUT)
                         .where(TX_INPUT.SPENT_AT_BLOCK.lt(block))
                         .orderBy(TX_INPUT.SPENT_AT_BLOCK.asc())
-                        .limit(limit);
+                        .limit(limit)
+                        .fetch();
+
+                if (spentKeys.isEmpty())
+                    return 0;
 
                 int addressUtxoCount = dsl.deleteFrom(ADDRESS_UTXO)
                         .where(row(ADDRESS_UTXO.TX_HASH, ADDRESS_UTXO.OUTPUT_INDEX)
-                                .in(spentSubQuery))
+                                .in(spentKeys))
                         .execute();
 
-                var txInputQuery = dsl.deleteFrom(TX_INPUT)
-                        .where(TX_INPUT.SPENT_AT_BLOCK.lt(block))
-                        .orderBy(TX_INPUT.SPENT_AT_BLOCK.asc())
-                        .limit(limit);
-
-                int txInputCount = txInputQuery.execute();
+                int txInputCount = dsl.deleteFrom(TX_INPUT)
+                        .where(row(TX_INPUT.TX_HASH, TX_INPUT.OUTPUT_INDEX)
+                                .in(spentKeys))
+                        .execute();
 
                 if (log.isDebugEnabled())
-                    log.debug("Deleted {} address_utxo and {} utxo_amount records and tx_inputs: {}",
-                            addressUtxoCount, txInputCount);
+                    log.debug("Deleted {} address_utxo and {} tx_input records", addressUtxoCount, txInputCount);
 
                 int delCount  = addressUtxoCount + txInputCount;
                 return delCount;
