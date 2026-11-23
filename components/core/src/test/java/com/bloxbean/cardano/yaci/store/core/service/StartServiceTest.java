@@ -16,7 +16,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
-import reactor.core.publisher.Mono;
 
 import java.util.Optional;
 
@@ -94,7 +93,7 @@ class StartServiceTest {
     }
 
     private void tipAt(long slot) {
-        when(tipFinderService.getTip()).thenReturn(Mono.just(new Tip(new Point(slot, "tip_hash"), 10_000_100L)));
+        when(tipFinderService.findTip(anyLong())).thenReturn(new Tip(new Point(slot, "tip_hash"), 10_000_100L));
     }
 
     private RollbackEvent rollbackEvent() {
