@@ -137,7 +137,7 @@ public class BFTransactionStorageReaderImpl implements BFTransactionStorageReade
                         .ttl(record.get(TRANSACTION.TTL))
                         .validityIntervalStart(record.get(TRANSACTION.VALIDITY_INTERVAL_START))
                         .invalid(record.get(TRANSACTION.INVALID))
-                        .cborSize(record.get(TRANSACTION_CBOR.CBOR_SIZE))
+                        .size(record.get(TRANSACTION_CBOR.CBOR_SIZE))
                         .withdrawalCount(orZero(record.get("withdrawal_count", Integer.class)))
                         .delegationCount(orZero(record.get("delegation_count", Integer.class)))
                         .stakeCertCount(orZero(record.get("stake_cert_count", Integer.class)))

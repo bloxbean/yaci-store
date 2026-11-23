@@ -7,23 +7,31 @@ on:
       - develop
       - release/*
       - develop/*
+      - next
+      - next-*
   pull_request:
     branches:
       - main
       - develop
       - release/*
       - develop/*
+      - next
+      - next-*
+
+# PR builds run the pull request's own code: read-only token, no secrets.
+permissions:
+  contents: read
 
 jobs:
   commit-build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
-          submodules: 'true'
+          persist-credentials: false
       - name: Set up JDK 21
-        uses: actions/setup-java@v2
+        uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'liberica'
@@ -31,3 +39,7 @@ jobs:
         run: chmod +x gradlew
       - name: Build with Gradle
         run: ./gradlew build -PskipSigning=true --stacktrace
+      # Fails the PR, not release day, when a module starts or stops publishing without the Central deployment
+      # scope in build.gradle following it.
+      - name: Verify Maven Central publication scope
+        run: ./gradlew verifyMavenReleasePublicationScope -PskipSigning=true --stacktrace

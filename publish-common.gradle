@@ -133,7 +133,5 @@ if (jooq_modules.contains(name)) {
 ext.isReleaseVersion = !version.endsWith("SNAPSHOT")
 
 if (isReleaseVersion && !project.hasProperty("skipSigning")) {
-    signing {
-        sign publishing.publications
-    }
+    rootProject.configureReleaseSigning(project)
 }

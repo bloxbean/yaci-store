@@ -9,7 +9,8 @@ running yaci-store. For a setup that needs no DB access, use
 `verify_against_cf_registry.py` instead (slower, registry-enumerated).
 
 Targets the V2 endpoints only on both sides. CF V1 is intentionally not exercised
-because yaci-store does not persist off-chain signatures.
+because yaci-store has no V1 API; the off-chain signatures are compared all the same,
+in the standards.cip26 block.
 
 Usage examples
 --------------

@@ -2,7 +2,9 @@ package com.bloxbean.cardano.yaci.store.blocks.processor;
 
 import com.bloxbean.cardano.yaci.core.model.BlockHeader;
 import com.bloxbean.cardano.yaci.core.model.TransactionBody;
+import com.bloxbean.cardano.yaci.core.model.TransactionOutput;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
+import com.bloxbean.cardano.yaci.core.util.Tuple;
 import com.bloxbean.cardano.yaci.store.blocks.BlocksStoreProperties;
 import com.bloxbean.cardano.yaci.store.blocks.domain.Block;
 import com.bloxbean.cardano.yaci.store.blocks.domain.BlockCbor;
@@ -10,19 +12,31 @@ import com.bloxbean.cardano.yaci.store.blocks.domain.Vrf;
 import com.bloxbean.cardano.yaci.store.blocks.storage.BlockCborStorage;
 import com.bloxbean.cardano.yaci.store.blocks.storage.BlockStorage;
 import com.bloxbean.cardano.yaci.store.blocks.util.BlockUtil;
+import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClient;
 import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
+import com.bloxbean.cardano.yaci.store.common.util.ErrorCode;
+import com.bloxbean.cardano.yaci.store.common.util.TransactionFeeUtil;
 import com.bloxbean.cardano.yaci.store.events.BlockEvent;
+import com.bloxbean.cardano.yaci.store.events.ErrorEvent;
 import com.bloxbean.cardano.yaci.store.events.RollbackEvent;
+import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
 import jakarta.validation.constraints.NotNull;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestClientException;
 
 import java.math.BigInteger;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.IntStream;
 
 import static com.bloxbean.cardano.yaci.store.blocks.BlocksStoreConfiguration.STORE_BLOCKS_ENABLED;
 
@@ -33,13 +47,21 @@ public class BlockProcessor {
     private final BlockStorage blockStorage;
     private final BlockCborStorage blockCborStorage;
     private final BlocksStoreProperties blocksStoreProperties;
+    private final UtxoClient utxoClient;
+    private final ApplicationEventPublisher publisher;
+    private final List<Tuple<Block, com.bloxbean.cardano.yaci.core.model.Block>> pendingBlocks =
+            Collections.synchronizedList(new ArrayList<>());
 
     public BlockProcessor(BlockStorage blockStorage,
                           BlockCborStorage blockCborStorage,
-                          BlocksStoreProperties blocksStoreProperties) {
+                          BlocksStoreProperties blocksStoreProperties,
+                          UtxoClient utxoClient,
+                          ApplicationEventPublisher publisher) {
         this.blockStorage = blockStorage;
         this.blockCborStorage = blockCborStorage;
         this.blocksStoreProperties = blocksStoreProperties;
+        this.utxoClient = utxoClient;
+        this.publisher = publisher;
     }
 
     @EventListener
@@ -81,9 +103,19 @@ public class BlockProcessor {
             block.setOpCertSigma(blockHeader.getHeaderBody().getOperationalCert().getSigma());
         }
 
-        handleTransaction(block, blockEvent.getBlock().getTransactionBodies());
+        var invalidTransactionIndexes = blockEvent.getBlock().getInvalidTransactions();
+        Set<Integer> invalidTransactions = invalidTransactionIndexes == null
+                ? Set.of() : new HashSet<>(invalidTransactionIndexes);
 
-        blockStorage.save(block);
+        handleTransaction(block, blockEvent.getBlock().getTransactionBodies(), invalidTransactions);
+
+        if (resolveFees(block, blockEvent.getBlock(), false)) {
+            blockStorage.save(block);
+        } else {
+            // A collateral output may be produced by another block still processing in this batch.
+            // Defer saving the block until precommit so its fee is resolved before it becomes visible.
+            pendingBlocks.add(new Tuple<>(block, blockEvent.getBlock()));
+        }
 
         if (blocksStoreProperties.isSaveCbor()) {
             saveBlockCbor(blockEvent, blockHeader.getHeaderBody().getBlockHash(), slot);
@@ -116,13 +148,13 @@ public class BlockProcessor {
         blockCborStorage.save(blockCbor);
     }
 
-    public void handleTransaction(Block block, List<TransactionBody> transactionBodies) {
+    public void handleTransaction(Block block, List<TransactionBody> transactionBodies, Set<Integer> invalidTransactions) {
         if (transactionBodies == null || transactionBodies.size() == 0)
             return;
 
-        BigInteger transactionOutputInLovelace = transactionBodies
-                .stream()
-                .flatMap(transactionBody -> transactionBody.getOutputs().stream())
+        BigInteger transactionOutputInLovelace = IntStream.range(0, transactionBodies.size())
+                .mapToObj(i -> appliedOutputs(transactionBodies.get(i), invalidTransactions.contains(i)))
+                .flatMap(List::stream)
                 .flatMap(transactionOutput -> transactionOutput.getAmounts().stream())
                 .filter(amount -> BlockUtil.amountIsInADA(amount))
                 .map(amount -> amount.getQuantity())
@@ -137,10 +169,75 @@ public class BlockProcessor {
         block.setTotalFees(totalFees == null ? BigInteger.ZERO : totalFees);
     }
 
+    // An invalid transaction applies only its collateral return output, if present.
+    private List<TransactionOutput> appliedOutputs(TransactionBody body, boolean invalid) {
+        if (!invalid)
+            return body.getOutputs();
+
+        return body.getCollateralReturn() == null ? List.of() : List.of(body.getCollateralReturn());
+    }
+
+    private boolean resolveFees(Block block, com.bloxbean.cardano.yaci.core.model.Block source,
+                                boolean useDeclaredFeeIfUnresolved) {
+        var invalidTransactions = source.getInvalidTransactions();
+        if (invalidTransactions == null || invalidTransactions.isEmpty())
+            return true;
+
+        var bodies = source.getTransactionBodies();
+        BigInteger totalFees = BigInteger.ZERO;
+        for (int i = 0; i < bodies.size(); i++) {
+            var body = bodies.get(i);
+            BigInteger fee;
+            try {
+                fee = TransactionFeeUtil.resolveFee(body, invalidTransactions.contains(i),
+                        utxoClient::getUtxosByIds);
+            } catch (RestClientException e) {
+                log.debug("Collateral UTxO lookup failed for transaction {} in block {}",
+                        body.getTxHash(), block.getHash(), e);
+                fee = null;
+            }
+            if (fee == null) {
+                if (!useDeclaredFeeIfUnresolved)
+                    return false;
+
+                // Collateral values can be unavailable (no UTxO store, missing outputs, remote lookup failure).
+                // Fall back to the declared fee instead of halting sync; block and epoch totals are then
+                // inaccurate for this transaction.
+                fee = body.getFee();
+                log.warn("Collateral fee unresolved for transaction {} in block {} at slot {}; "
+                                + "using declared fee {}. Block and epoch total fees may be inaccurate.",
+                        body.getTxHash(), block.getHash(), block.getSlot(), fee);
+                publisher.publishEvent(ErrorEvent.builder()
+                        .block(block.getNumber())
+                        .errorCode(ErrorCode.DATA_MISSING_ERROR.name())
+                        .reason("Collateral fee unresolved; declared fee used in block total fees")
+                        .details("tx_hash: " + body.getTxHash() + ", block_hash: " + block.getHash())
+                        .build());
+            }
+            totalFees = totalFees.add(fee);
+        }
+        block.setTotalFees(totalFees);
+        return true;
+    }
+
+    @EventListener
+    @Transactional
+    public void handleCollateralFees(PreCommitEvent event) {
+        try {
+            for (var pendingBlock : pendingBlocks) {
+                resolveFees(pendingBlock._1, pendingBlock._2, true);
+                blockStorage.save(pendingBlock._1);
+            }
+        } finally {
+            pendingBlocks.clear();
+        }
+    }
+
     @EventListener
     @Order(1)
     @Transactional
     public void handleRollbackEvent(@NotNull RollbackEvent rollbackEvent) {
+        pendingBlocks.clear();
         int count = blockStorage.deleteBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
         log.info("Rollback -- {} block records", count);
 

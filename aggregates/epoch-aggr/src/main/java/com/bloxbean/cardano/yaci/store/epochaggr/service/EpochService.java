@@ -48,13 +48,17 @@ public class EpochService {
             Epoch epoch = Epoch.builder()
                     .number(epochNumber)
                     .startTime(blocks.get(0).getBlockTime())
-                    .endTime(blocks.get(blocks.size() - 1).getBlockTime())
+                    .endTime(blocks.get(0).getBlockTime())
                     .blockCount(blocks.size())
-                    .maxSlot(blocks.get(blocks.size() - 1).getSlot())
+                    .maxSlot(blocks.get(0).getSlot())
                     .totalOutput(BigInteger.ZERO)
                     .totalFees(BigInteger.ZERO)
                     .build();
             for (Block block : blocks) {
+                // Storage does not guarantee block order; derive each bound from all blocks.
+                epoch.setStartTime(Math.min(epoch.getStartTime(), block.getBlockTime()));
+                epoch.setEndTime(Math.max(epoch.getEndTime(), block.getBlockTime()));
+                epoch.setMaxSlot(Math.max(epoch.getMaxSlot(), block.getSlot()));
                 epoch.setTransactionCount(epoch.getTransactionCount() + block.getNoOfTxs());
 
                 if (block.getTotalOutput() != null)

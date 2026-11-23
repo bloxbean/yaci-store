@@ -64,8 +64,8 @@ class StartServiceTest {
 
         assertThat(rollbackEvent().isRollbackPointReprocessed()).isTrue();
         assertThat(rollbackEvent().generatedKeyRollbackSlot()).isEqualTo(CURSOR_SLOT - 1);
-        verify(blockFetchService).startFetch(eq(new Point(CURSOR_SLOT, "cursor_hash")), any());
-        verify(blockFetchService, never()).startSync(any());
+        verify(blockFetchService).startFetch(eq(new Point(CURSOR_SLOT, "cursor_hash")), any(), eq(10_000_000L));
+        verify(blockFetchService, never()).startSync(any(), any());
     }
 
     @Test
@@ -76,8 +76,8 @@ class StartServiceTest {
 
         assertThat(rollbackEvent().isRollbackPointReprocessed()).isFalse();
         assertThat(rollbackEvent().generatedKeyRollbackSlot()).isEqualTo(CURSOR_SLOT);
-        verify(blockFetchService).startSync(new Point(CURSOR_SLOT, "cursor_hash"));
-        verify(blockFetchService, never()).startFetch(any(), any());
+        verify(blockFetchService).startSync(new Point(CURSOR_SLOT, "cursor_hash"), 10_000_000L);
+        verify(blockFetchService, never()).startFetch(any(), any(), any());
     }
 
     @Test
@@ -89,7 +89,7 @@ class StartServiceTest {
         startService.start();
 
         assertThat(rollbackEvent().isRollbackPointReprocessed()).isTrue();
-        verify(blockFetchService).startFetch(new Point(CURSOR_SLOT, "cursor_hash"), new Point(CURSOR_SLOT + 10, "stop_hash"));
+        verify(blockFetchService).startFetch(new Point(CURSOR_SLOT, "cursor_hash"), new Point(CURSOR_SLOT + 10, "stop_hash"), 10_000_000L);
     }
 
     private void tipAt(long slot) {

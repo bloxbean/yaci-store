@@ -28,6 +28,7 @@ import static com.bloxbean.cardano.yaci.store.staking.jooq.Tables.*;
 import static com.bloxbean.cardano.yaci.store.blocks.jooq.Tables.BLOCK;
 import static com.bloxbean.cardano.yaci.store.transaction.jooq.Tables.WITHDRAWAL;
 import static com.bloxbean.cardano.yaci.store.governance.jooq.Tables.VOTING_PROCEDURE;
+import static com.bloxbean.cardano.yaci.store.adapot.jooq.Tables.ADAPOT_JOBS;
 import static com.bloxbean.cardano.yaci.store.adapot.jooq.Tables.EPOCH_STAKE;
 import static com.bloxbean.cardano.yaci.store.adapot.jooq.Tables.INSTANT_REWARD;
 import static com.bloxbean.cardano.yaci.store.adapot.jooq.Tables.REWARD;
@@ -1091,12 +1092,36 @@ public class BFPoolsStorageReaderImpl implements BFPoolsStorageReader {
                 .asTable(tableAlias);
     }
 
-    private record EpochBounds(Integer globalLatestEpoch, Integer poolLatestEpoch) {
+    record EpochBounds(Integer globalLatestEpoch, Integer poolLatestEpoch) {
     }
 
-    private EpochBounds fetchEpochBounds(String poolIdHex) {
+    // epoch_stake is partitioned by epoch, so max(epoch) without an epoch predicate plans and locks
+    // every partition (#1200). The lookups below first restrict to epoch >= the latest stake snapshot
+    // epoch: when that finds a row, its max is the max of the whole table. Otherwise they fall back
+    // to the unbounded query.
+    EpochBounds fetchEpochBounds(String poolIdHex) {
         Field<Integer> globalEpochField = max(EPOCH_STAKE.EPOCH).as("global_latest_epoch");
         Field<Integer> poolEpochField = max(when(EPOCH_STAKE.POOL_ID.eq(poolIdHex), EPOCH_STAKE.EPOCH)).as("pool_latest_epoch");
+
+        Integer snapshotEpoch = findLatestStakeSnapshotEpoch();
+        if (snapshotEpoch != null) {
+            Record recent = dsl.select(globalEpochField, poolEpochField)
+                    .from(EPOCH_STAKE)
+                    .where(EPOCH_STAKE.EPOCH.ge(snapshotEpoch))
+                    .fetchOne();
+            Integer globalLatestEpoch = recent != null ? recent.get(globalEpochField) : null;
+            if (globalLatestEpoch != null) {
+                Integer poolLatestEpoch = recent.get(poolEpochField);
+                if (poolLatestEpoch == null) {
+                    // The pool is not in the recent snapshots (e.g. retired): find its last epoch by pool_id.
+                    poolLatestEpoch = dsl.select(max(EPOCH_STAKE.EPOCH))
+                            .from(EPOCH_STAKE)
+                            .where(EPOCH_STAKE.POOL_ID.eq(poolIdHex))
+                            .fetchOneInto(Integer.class);
+                }
+                return new EpochBounds(globalLatestEpoch, poolLatestEpoch);
+            }
+        }
 
         Record rec = dsl.select(globalEpochField, poolEpochField)
                 .from(EPOCH_STAKE)
@@ -1110,6 +1135,33 @@ public class BFPoolsStorageReaderImpl implements BFPoolsStorageReader {
                 rec.get(globalEpochField),
                 rec.get(poolEpochField)
         );
+    }
+
+    Integer findLatestEpochStakeEpoch() {
+        Integer snapshotEpoch = findLatestStakeSnapshotEpoch();
+        if (snapshotEpoch != null) {
+            Integer latestEpoch = dsl.select(max(EPOCH_STAKE.EPOCH))
+                    .from(EPOCH_STAKE)
+                    .where(EPOCH_STAKE.EPOCH.ge(snapshotEpoch))
+                    .fetchOneInto(Integer.class);
+            if (latestEpoch != null) return latestEpoch;
+        }
+
+        return dsl.select(max(EPOCH_STAKE.EPOCH))
+                .from(EPOCH_STAKE)
+                .fetchOneInto(Integer.class);
+    }
+
+    private Integer findLatestStakeSnapshotEpoch() {
+        Integer completedJobEpoch = dsl.select(ADAPOT_JOBS.EPOCH)
+                .from(ADAPOT_JOBS)
+                .where(ADAPOT_JOBS.TYPE.eq("REWARD_CALC"))
+                .and(ADAPOT_JOBS.STATUS.eq("COMPLETED"))
+                .orderBy(ADAPOT_JOBS.EPOCH.desc())
+                .limit(1)
+                .fetchOne(ADAPOT_JOBS.EPOCH);
+        // Reward calculation for job epoch N materializes the epoch_stake snapshot for N - 1.
+        return completedJobEpoch == null ? null : completedJobEpoch - 1;
     }
 
     private Table<?> currentDelegatorStateTable() {
@@ -1340,9 +1392,7 @@ public class BFPoolsStorageReaderImpl implements BFPoolsStorageReader {
     public Map<String, BFPoolStakeInfo> getPoolsStakeInfoBatch(List<String> poolIdHexes) {
         if (poolIdHexes == null || poolIdHexes.isEmpty()) return Map.of();
 
-        Integer latestEpoch = dsl.select(max(EPOCH_STAKE.EPOCH))
-                .from(EPOCH_STAKE)
-                .fetchOneInto(Integer.class);
+        Integer latestEpoch = findLatestEpochStakeEpoch();
         if (latestEpoch == null) return Map.of();
 
         int activeEpoch = Math.max(latestEpoch - 2, 0);
