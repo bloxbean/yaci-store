@@ -106,9 +106,9 @@ public class BlockFetchService implements BlockChainDataListener {
     });
     private static final int RECENT_ACCEPTED_HASHES = 5000;
 
-    //Required to publish EpochChangeEvent
-    private Integer previousEpoch;
-    private Era previousEra;
+    //Required to publish EpochChangeEvent. Set by a start under sessionStateLock and read by the yaci network thread.
+    private volatile Integer previousEpoch;
+    private volatile Era previousEra;
 
     @Getter
     private long lastReceivedBlockTime;
@@ -407,7 +407,11 @@ public class BlockFetchService implements BlockChainDataListener {
     public void stop() {
         //Callbacks still on their way from the stopped session are ignored
         sessionGuard.endSession();
-        scheduledToStop.set(true);
+        //Under the lock a start clears it under, after the session ended: a start that opened its session just before
+        //sees it ended there and does not clear this, so the health check does not restart a sync stopped on purpose
+        synchronized (sessionStateLock) {
+            scheduledToStop.set(true);
+        }
         shutdownRangeSync();
         shutdownSync();
     }
@@ -589,15 +593,20 @@ public class BlockFetchService implements BlockChainDataListener {
 
             if (primary) {
                 //If primary instance, start sync
-                cursorService.getCursor()
-                        .ifPresent(cursor -> {
-                            String blockHash = cursor.getBlockHash();
-                            long slot = cursor.getSlot();
+                try {
+                    cursorService.getCursor()
+                            .ifPresent(cursor -> {
+                                String blockHash = cursor.getBlockHash();
+                                long slot = cursor.getSlot();
 
-                            log.info("Start N2N sync from block >> " + cursor.getBlock());
-                            //Start sync
-                            startSync(new Point(slot, blockHash), cursor.getBlock());
-                        });
+                                log.info("Start N2N sync from block >> " + cursor.getBlock());
+                                //Start sync
+                                startSync(new Point(slot, blockHash), cursor.getBlock());
+                            });
+                } catch (SyncSessionGuard.StaleSyncSessionException e) {
+                    //A stop or a restart ended the range session during the cursor read
+                    log.warn("The range session was ended before chain sync started: {}", e.getMessage());
+                }
             } else {
                 log.info("Blockfetch done");
             }
@@ -851,6 +860,19 @@ public class BlockFetchService implements BlockChainDataListener {
     }
 
     /**
+     * Call under sessionStateLock. True if a stop or a restart ended the session this start just opened. stop() ends
+     * the session before it marks the sync stopped under the same lock, so a start that gets here after the stop
+     * leaves the stop flag set and opens no connection.
+     */
+    private boolean startEnded(long session, String what, Point from) {
+        if (sessionGuard.isCurrent(session))
+            return false;
+        log.warn("Not starting {} from {}: its session {} was ended by a stop or a restart (current: {})",
+                what, from, session, sessionGuard.currentSession());
+        return true;
+    }
+
+    /**
      * @param fromBlockNumber the block number of {@code from} if that block is already processed (the cursor), or
      *                        null. The range fetch delivers {@code from} itself again: it is skipped only when it is
      *                        already processed.
@@ -868,6 +890,8 @@ public class BlockFetchService implements BlockChainDataListener {
         Long previous = sessionGuard.enter(session);
         try {
             synchronized (sessionStateLock) {
+                if (startEnded(session, "range fetch", from))
+                    return;
                 isError.set(false);
                 scheduledToStop.set(false);
                 resetAcceptedBlock(from.getHash(), fromBlockNumber);
@@ -885,6 +909,10 @@ public class BlockFetchService implements BlockChainDataListener {
             blockRangeSync.fetch(from, to);
 
             startKeepAliveThread(syncMode);
+        } catch (SyncSessionGuard.StaleSyncSessionException e) {
+            //A stop or a restart ended this session while it started (e.g. during the cursor read). It closes the
+            //connection once this start returns.
+            log.warn("The range fetch from {} was ended while it started: {}", from, e.getMessage());
         } finally {
             sessionGuard.exit(previous);
         }
@@ -912,6 +940,8 @@ public class BlockFetchService implements BlockChainDataListener {
         Long previous = sessionGuard.enter(session);
         try {
             synchronized (sessionStateLock) {
+                if (startEnded(session, "chain sync", from))
+                    return;
                 isError.set(false);
                 scheduledToStop.set(false);
             }
@@ -925,6 +955,8 @@ public class BlockFetchService implements BlockChainDataListener {
             //or they would be written a second time when the batch is flushed.
             reset();
             synchronized (sessionStateLock) {
+                if (startEnded(session, "chain sync", from))
+                    return;
                 //The first block from chain sync must build on the start point
                 resetAcceptedBlock(from.getHash(), fromBlockNumber);
                 expectedPrevBlockHash = from.getHash();
@@ -932,6 +964,10 @@ public class BlockFetchService implements BlockChainDataListener {
             }
             blockSync.startSync(from, new SessionListener(session));
             startKeepAliveThread(syncMode);
+        } catch (SyncSessionGuard.StaleSyncSessionException e) {
+            //A stop or a restart ended this session while it started (e.g. during the cursor read). It closes the
+            //connection once this start returns.
+            log.warn("Chain sync from {} was ended while it started: {}", from, e.getMessage());
         } finally {
             sessionGuard.exit(previous);
         }
@@ -1058,18 +1094,26 @@ public class BlockFetchService implements BlockChainDataListener {
         if (previousEpoch == null) {
             var prevCursor = cursorService.getPreviousCursor(slot);
             if (prevCursor.isPresent() && prevCursor.get().getSlot() != -1) { //Previous cursor is not genesis entry
-                previousEpoch = eraService.getEpochNo(prevCursor.get().getEra(), prevCursor.get().getSlot());
+                Integer epochOfPrevious = eraService.getEpochNo(prevCursor.get().getEra(), prevCursor.get().getSlot());
+                //Only for the caller's own session, which a restart may have replaced in the meantime
+                synchronized (sessionStateLock) {
+                    sessionGuard.checkCaller();
+                    if (previousEpoch == null)
+                        previousEpoch = epochOfPrevious;
+                }
             }
         }
 
-        if (previousEpoch == null ||  epoch == previousEpoch + 1) {
+        Integer previous = previousEpoch;
+        if (previous == null ||  epoch == previous + 1) {
             return true;
         } else
             return false;
     }
 
     private boolean detectIfNewEpochByronEra(Integer epoch) {
-        if (previousEpoch == null ||  epoch == previousEpoch + 1) {
+        Integer previous = previousEpoch;
+        if (previous == null ||  epoch == previous + 1) {
             return true;
         } else
             return false;

@@ -362,6 +362,36 @@ class BlockFetchServiceSessionTest {
     }
 
     @Test
+    void aStopJustAfterAStartOpenedItsSessionKeepsTheSyncStopped() throws Exception {
+        //#1332 review (ccf461e62) finding 1: a stop ends the session a start has just opened, before the start clears
+        //the stop flag. The start must not clear it or open the connection, or the health check would restart a sync
+        //that was stopped on purpose.
+        guard = spy(guard);
+        blockFetchService.setSessionGuard(guard);
+        var stopper = new java.util.concurrent.atomic.AtomicReference<Thread>();
+        doAnswer(inv -> {
+            Object session = inv.callRealMethod();
+            Thread stop = new Thread(blockFetchService::stop);
+            stopper.set(stop);
+            stop.start();
+            long deadline = System.currentTimeMillis() + 5_000;
+            while (!blockFetchService.isScheduledToStop() || guard.isCurrent((Long) session)) {
+                if (System.currentTimeMillis() > deadline)
+                    throw new AssertionError("stop did not end the session");
+                Thread.sleep(5);
+            }
+            return session;
+        }).when(guard).newSessionReplacing(any());
+
+        blockFetchService.startSync(new Point(100, START_HASH), 100L);
+        stopper.get().join(5_000);
+
+        assertThat(stopper.get().isAlive()).isFalse();
+        assertThat(blockFetchService.isScheduledToStop()).isTrue();
+        verify(blockSync, never()).startSync(any(), any());
+    }
+
+    @Test
     void aFailedStartAfterAStopLeavesTheSyncFailedNotStopped() {
         //#1332 review finding 4: a restart stops the sync, then its start fails (a commit of the old session is still
         //running). The health check skips a sync that is scheduled to stop, so it must look failed instead.
