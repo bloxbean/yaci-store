@@ -1,5 +1,6 @@
 package com.example.outside;
 
+import com.bloxbean.cardano.yaci.store.blockfrost.common.timeout.BFQueryTimeoutContext;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,5 +19,10 @@ public class OutsideController {
     @GetMapping("/outside/status")
     String status() {
         throw new ResponseStatusException(HttpStatus.NOT_FOUND, "not found");
+    }
+
+    @GetMapping("/outside/budget")
+    String budget() {
+        return String.valueOf(BFQueryTimeoutContext.isActive());
     }
 }
