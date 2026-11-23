@@ -7,6 +7,7 @@ import com.bloxbean.cardano.yaci.helper.model.Utxo;
 import com.bloxbean.cardano.yaci.store.client.utxo.DummyUtxoClient;
 import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClient;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
+import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.common.util.ErrorCode;
 import com.bloxbean.cardano.yaci.store.events.ErrorEvent;
@@ -142,6 +143,31 @@ class TransactionProcessorTest {
             //Body-only cbor: the ledger size is unknown
             assertThat(txnCbor.getCborSize()).isNull();
         });
+    }
+
+    @Test
+    void givenCollateralReturnWithZeroQuantityAsset_shouldDropZeroEntryFromCollateralReturnJson() {
+        String policyId = "10bebfc941207811e62882f02c0a69c0086f86186a4ef6ec1b5a2b0c";
+        Transaction transaction = transactions().get(0);
+        transaction.setBody(transaction.getBody().toBuilder()
+                .collateralReturn(TransactionOutput.builder()
+                        .address("addr_test1vpfwv0ezc5g8a4mkku8hhy3y3vp92t7s3ul8g778g5yegsgalc6gc")
+                        .amounts(List.of(
+                                Amount.builder().unit(LOVELACE).assetName(LOVELACE).quantity(BigInteger.valueOf(500)).build(),
+                                Amount.builder().unit(policyId + ".54554e41").policyId(policyId).assetName("TUNA")
+                                        .quantity(BigInteger.ZERO).build()))
+                        .build())
+                .build());
+
+        transactionProcessor.handleTransactionEvent(TransactionEvent.builder()
+                .transactions(List.of(transaction))
+                .metadata(eventMetadata())
+                .build());
+
+        verify(transactionStorage, Mockito.times(1)).saveAll(txnListCaptor.capture());
+        assertThat(txnListCaptor.getValue().get(0).getCollateralReturnJson().getAmounts())
+                .extracting(Amt::getUnit)
+                .containsExactly(LOVELACE);
     }
 
     @Test

@@ -5,9 +5,9 @@ Three Python scripts that byte-compare yaci-store's assets-ext API output agains
 **V2 API** for CIP-26 and CIP-68. Use these whenever you want to verify that a
 yaci-store build serves wire-shape parity with CF.
 
-V1 endpoints are intentionally **not** exercised. CF V1 wraps each property with
-off-chain signatures (`{value, signatures, sequenceNumber}`); yaci-store does not
-persist signatures, so a faithful V1 comparison is impossible.
+V1 endpoints are intentionally **not** exercised: yaci-store has no V1 API. The
+signatures (`{value, signatures, sequenceNumber}`) are compared all the same, in the
+`standards.cip26` block of V2.
 
 | Script | Enumerates from | Needs DB access? | Speed | Coverage |
 |---|---|---|---|---|
