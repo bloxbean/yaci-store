@@ -352,6 +352,183 @@ class BlockFetchServiceBlockSkipTest {
     }
 
     @Test
+    void freshRangeFetchStopsWhenItsFirstBlockIsMissing() {
+        //The start block 100 is not processed yet, so the range fetch must deliver it first. Here it never arrives.
+        blockFetchService.startFetch(new Point(100, START_HASH), TO, null);
+
+        Block next = block(101, "h101", START_HASH);
+        deliver(next);
+
+        verify(shelleyPublisher, never()).publishBlockEventsInParallel(any(), eq(next), any());
+        verify(shelleyPublisher, never()).publishBlockEvents(any(), eq(next), any());
+        assertThat(blockFetchService.isError()).isTrue();
+        verify(publisher).publishEvent(any(RequiredSyncRestartEvent.class));
+    }
+
+    @Test
+    void freshRangeFetchLinksTheBlocksAfterItsFirstBlock() {
+        blockFetchService.startFetch(new Point(100, START_HASH), TO, null);
+
+        Block first = block(100, START_HASH, "h99");
+        Block second = block(101, "h101", START_HASH);
+        deliver(first);
+        deliver(second);
+        Block afterHole = block(103, "h103", "h102"); //102 never arrives
+        deliver(afterHole);
+
+        verify(shelleyPublisher).publishBlockEventsInParallel(any(), eq(first), any());
+        verify(shelleyPublisher).publishBlockEventsInParallel(any(), eq(second), any());
+        verify(shelleyPublisher, never()).publishBlockEventsInParallel(any(), eq(afterHole), any());
+        assertThat(blockFetchService.isError()).isTrue();
+    }
+
+    @Test
+    void freshRangeFetchAcceptsARecordedParseErrorSkipOfItsFirstBlock() {
+        //continue-on-parse-error: the first block cannot be decoded, the skip is recorded, and the next block follows
+        blockFetchService.startFetch(new Point(100, START_HASH), TO, null);
+
+        blockFetchService.onParsingError(new BlockParseRuntimeException(100L, null, new RuntimeException("bad cbor")));
+        Block next = block(101, "h101", START_HASH);
+        deliver(next);
+
+        verify(errorStorage).save(any());
+        verify(shelleyPublisher).publishBlockEventsInParallel(any(), eq(next), any());
+        assertThat(blockFetchService.isError()).isFalse();
+    }
+
+    @Test
+    void parseErrorOfALaterBlockDoesNotStandInForTheLostStartBlock() {
+        //Start block 100 is lost, then block 101 cannot be parsed: skipping 101 must not hide the loss of 100
+        blockFetchService.startFetch(new Point(100, START_HASH), TO, null);
+
+        blockFetchService.onParsingError(new BlockParseRuntimeException(101L, null, new RuntimeException("bad cbor")));
+        Block b102 = block(102, "h102", "h101");
+        deliver(b102);
+
+        verify(shelleyPublisher, never()).publishBlockEventsInParallel(any(), eq(b102), any());
+        assertThat(blockFetchService.isError()).isTrue();
+    }
+
+    @Test
+    void startBlockHashIsComparedIgnoringCase() {
+        //store.cardano.sync-start-blockhash written in upper case
+        blockFetchService.startFetch(new Point(100, START_HASH.toUpperCase()), TO, null);
+
+        Block first = block(100, START_HASH, "h99");
+        deliver(first);
+
+        verify(shelleyPublisher).publishBlockEventsInParallel(any(), eq(first), any());
+        assertThat(blockFetchService.isError()).isFalse();
+    }
+
+    @Test
+    void batchDoneWritesThePartialBatchBeforeSwitchingToChainSync() {
+        //A short fresh range: its blocks are still in a batch when the range ends
+        when(storeProperties.isPrimaryInstance()).thenReturn(true);
+        blockFetchService.startFetch(new Point(100, START_HASH), TO, null);
+        deliver(block(100, START_HASH, "h99"));
+        deliver(block(101, "h101", START_HASH));
+        when(cursorService.getCursor()).thenReturn(Optional.of(cursor(101, "h101")));
+
+        blockFetchService.batchDone();
+
+        var order = inOrder(shelleyPublisher, blockSync);
+        order.verify(shelleyPublisher).processBlocksInParallel();
+        order.verify(blockSync).startSync(argThat(p -> p != null && "h101".equals(p.getHash())), any());
+        assertThat(blockFetchService.isError()).isFalse();
+    }
+
+    @Test
+    void batchDoneWithoutTheStartBlockFetchesAgain() {
+        //The range ended and the start block never came: chain sync from the placeholder would start after it
+        when(storeProperties.isPrimaryInstance()).thenReturn(true);
+        blockFetchService.startFetch(new Point(100, START_HASH), TO, null);
+
+        blockFetchService.batchDone();
+
+        verify(blockSync, never()).startSync(any(), any());
+        assertThat(blockFetchService.isError()).isTrue();
+        verify(publisher).publishEvent(any(RequiredSyncRestartEvent.class));
+    }
+
+    @Test
+    void batchDoneAfterAnErrorDoesNotSwitchToChainSync() {
+        when(storeProperties.isPrimaryInstance()).thenReturn(true);
+        blockFetchService.startFetch(new Point(100, START_HASH), TO, null);
+        deliver(block(101, "h101", START_HASH)); //the start block is missing: the sync stops
+        when(cursorService.getCursor()).thenReturn(Optional.of(cursor(100, START_HASH)));
+
+        blockFetchService.batchDone();
+
+        verify(blockSync, never()).startSync(any(), any());
+        verify(shelleyPublisher, never()).processBlocksInParallel();
+    }
+
+    @Test
+    void twoParseErrorsAfterALostStartBlockStillStopTheSync() {
+        blockFetchService.startFetch(new Point(100, START_HASH), TO, null);
+
+        blockFetchService.onParsingError(new BlockParseRuntimeException(101L, null, new RuntimeException("bad cbor")));
+        blockFetchService.onParsingError(new BlockParseRuntimeException(102L, null, new RuntimeException("bad cbor")));
+        Block b103 = block(103, "h103", "h102");
+        deliver(b103);
+
+        verify(shelleyPublisher, never()).publishBlockEventsInParallel(any(), eq(b103), any());
+        assertThat(blockFetchService.isError()).isTrue();
+    }
+
+    @Test
+    void rangeEndingAfterAParseErrorWithoutTheStartBlockFetchesAgain() {
+        when(storeProperties.isPrimaryInstance()).thenReturn(true);
+        when(cursorService.getCursor()).thenReturn(Optional.of(cursor(100, START_HASH)));
+        blockFetchService.startFetch(new Point(100, START_HASH), TO, null);
+        blockFetchService.onParsingError(new BlockParseRuntimeException(101L, null, new RuntimeException("bad cbor")));
+
+        blockFetchService.batchDone();
+
+        verify(blockSync, never()).startSync(any(), any());
+        assertThat(blockFetchService.isError()).isTrue();
+    }
+
+    @Test
+    void upperCaseStartHashWithARecordedSkipOfTheStartBlock() {
+        blockFetchService.startFetch(new Point(100, START_HASH.toUpperCase()), TO, null);
+
+        blockFetchService.onParsingError(new BlockParseRuntimeException(100L, null, new RuntimeException("bad cbor")));
+        Block next = block(101, "h101", START_HASH);
+        deliver(next);
+
+        verify(shelleyPublisher).publishBlockEventsInParallel(any(), eq(next), any());
+        assertThat(blockFetchService.isError()).isFalse();
+    }
+
+    @Test
+    void boundedRangeWritesItsLastPartialBatch() {
+        //Not a primary instance (sync-stop-slot): the range fetch ends the sync, so its last batch must be written
+        when(storeProperties.isPrimaryInstance()).thenReturn(false);
+        blockFetchService.startFetch(new Point(100, START_HASH), TO, 100L);
+        deliver(block(101, "h101", START_HASH));
+
+        blockFetchService.batchDone();
+
+        verify(shelleyPublisher).processBlocksInParallel();
+        verify(blockSync, never()).startSync(any(), any());
+        assertThat(blockFetchService.isError()).isFalse();
+    }
+
+    @Test
+    void rangeFetchFromAStoredBlockDoesNotRequireItAgain() {
+        //Resuming from the cursor: the cursor block may be delivered again or not, and the next block links to it
+        blockFetchService.startFetch(new Point(100, START_HASH), TO, 100L);
+
+        Block next = block(101, "h101", START_HASH);
+        deliver(next);
+
+        verify(shelleyPublisher).publishBlockEventsInParallel(any(), eq(next), any());
+        assertThat(blockFetchService.isError()).isFalse();
+    }
+
+    @Test
     void rangeBatchWithAMissingBlockStopsTheSync() {
         blockFetchService.startFetch(new Point(100, START_HASH), TO, 100L);
 
