@@ -141,6 +141,8 @@ class GenesisPoolProcessorTest {
         assertThat(epochCalculationResultCaptor.getValue().getReserves())
                 .isEqualTo(BigInteger.valueOf(20_000_000_000L)
                         .subtract(BigInteger.valueOf(3_000_000_000L)));
+        //Genesis balances are enterprise addresses, so both delegators have zero stake
+        verify(adaPotService).updateTotalEpochStake(0, BigInteger.ZERO);
     }
 
     @Test
@@ -154,6 +156,7 @@ class GenesisPoolProcessorTest {
         verify(adaPotService).updateAdaPot(org.mockito.ArgumentMatchers.eq(0), epochCalculationResultCaptor.capture());
         assertThat(epochCalculationResultCaptor.getValue().getReserves())
                 .isEqualTo(BigInteger.valueOf(17_000_000_000L));
+        verify(adaPotService).updateTotalEpochStake(0, null);
         verifyNoInteractions(depositParamService);
         verify(poolStorage, never()).save(any());
         verify(stakingCertificateStorage, never()).saveRegistrations(any());

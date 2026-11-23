@@ -46,6 +46,19 @@ public class StartService {
         if (alreadyStarted)
             throw new RuntimeException("StartService has already been started");
 
+        try {
+            doStart();
+        } catch (RuntimeException e) {
+            //e.g. a commit of the stopped session is still running after the wait. The restart's own stop must not
+            //leave the sync looking stopped on purpose, or the health check would never ask for another restart.
+            alreadyStarted = false;
+            blockFetchService.markStartFailed();
+            throw e;
+        }
+    }
+
+    private void doStart() {
+
         log.info("###### Genesis Config #####");
         log.info("Epoch Length            : " + genesisConfig.getEpochLength());
         log.info("ByronEra Slot Duration  : " + genesisConfig.slotDuration(Era.Byron));
@@ -56,6 +69,8 @@ public class StartService {
         log.info("Max Lovelace Supply     : " + genesisConfig.getMaxLovelaceSupply());
         log.info("###########################");
 
+        //A commit of the stopped session must not land after the cursor is read and the rollback below has run
+        blockFetchService.awaitCommitsOfOldSessions();
         initService.init();
         blockFetchService.reset();
 
@@ -65,13 +80,21 @@ public class StartService {
         String prevBlockHash = null;
         Era era = null;
         Long blockNumber = 0L;
+        //Block number of the start point if it is a block that is already processed (resuming from the cursor)
+        Long processedBlockNumber = null;
         Optional<Cursor> optional = cursorService.getStartCursor();
         if (optional.isPresent()) {
             log.info("Last block in DB : " + optional.get().getBlock());
             from = new Point(optional.get().getSlot(), optional.get().getBlockHash());
-            prevBlockHash = optional.get().getBlockHash();
+            //Keep the cursor's own previous hash. A null one marks the placeholder written below on a fresh start.
+            prevBlockHash = optional.get().getPrevBlockHash();
             era = optional.get().getEra();
             blockNumber = optional.get().getBlock();
+            //A fresh start saves a placeholder cursor at its start point before that block is processed (see
+            //"Reset cursor" below), with no previous hash. If the first block never got written, the placeholder
+            //is all there is: the block must still be processed, not skipped as already done.
+            if (optional.get().getPrevBlockHash() != null)
+                processedBlockNumber = optional.get().getBlock();
         } else {
             if (storeProperties.getSyncStartSlot() == 0 || storeProperties.getSyncStartBlockhash() == null
                     || storeProperties.getSyncStartBlockhash().isEmpty()) {
@@ -150,26 +173,29 @@ public class StartService {
         log.debug("Block diff configuration to start sync >>> " + storeProperties.getBlockDiffToStartSyncProtocol());
         long diff = tip.getPoint().getSlot() - from.getSlot();
         if (storeProperties.isPrimaryInstance()) {
-            if (diff > storeProperties.getBlockDiffToStartSyncProtocol()) {
+            //Chain sync starts after its start point, so a start point that is not processed yet (a fresh start) is
+            //always fetched with a range fetch first, however close to the tip it is
+            if (diff > storeProperties.getBlockDiffToStartSyncProtocol() || processedBlockNumber == null) {
                 log.info("Start BlockRangeSync");
-                blockFetchService.startFetch(from, to);
+                blockFetchService.startFetch(from, to, processedBlockNumber);
             } else {
                 log.info("Start BlockSync");
-                blockFetchService.startSync(from);
+                blockFetchService.startSync(from, processedBlockNumber);
             }
         } else {
-            blockFetchService.startFetch(from, to);
+            blockFetchService.startFetch(from, to, processedBlockNumber);
         }
     }
 
     public void stop() {
         log.info("Stopping the StartService >>>> ");
-        if (blockFetchService.isRunning()) {
-            try {
-                blockFetchService.stop();
-            } catch (Exception e) {
-                log.debug("Error stopping blockFetchService", e);
-            }
+        //Always, even when no connection is open: between the range fetch and chain sync (batchDone writes the last
+        //batch after closing the range connection) nothing is running, but the range session would still start chain
+        //sync. Ending the session stops that.
+        try {
+            blockFetchService.stop();
+        } catch (Exception e) {
+            log.debug("Error stopping blockFetchService", e);
         }
 
         alreadyStarted = false;

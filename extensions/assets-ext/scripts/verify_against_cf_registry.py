@@ -26,9 +26,9 @@ Why no V1 comparison
 --------------------
 CF V1 returns each property wrapped with the off-chain signatures from the
 registry JSON (`{"value": "...", "signatures": [...], "sequenceNumber": N}`).
-yaci-store does not persist signatures, so a faithful V1 comparison is not
-possible. V2 is the canonical merged-values endpoint and is what consumers
-actually use.
+yaci-store has no V1 API, so V1 is not compared; the same signatures are
+returned in the V2 standards.cip26 block. V2 is the canonical merged-values
+endpoint and is what consumers actually use.
 
 Reaching yaci-store via SSH
 ---------------------------
