@@ -13,7 +13,10 @@ import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.TX_INPUT;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest
-@TestPropertySource(properties = "store.utxo.pruning-batch-size=3")
+@TestPropertySource(properties = {
+        "store.utxo.pruning-batch-size=3",
+        "spring.datasource.url=jdbc:h2:mem:utxo_pruning"
+})
 class UtxoPruningIT {
 
     @Autowired

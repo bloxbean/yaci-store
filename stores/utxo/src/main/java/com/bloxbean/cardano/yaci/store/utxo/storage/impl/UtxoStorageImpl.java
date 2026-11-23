@@ -4,6 +4,7 @@ import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.TxInput;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.common.util.JsonUtil;
+import com.bloxbean.cardano.yaci.store.common.util.ListUtil;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import com.bloxbean.cardano.yaci.store.plugin.aspect.Plugin;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
@@ -15,6 +16,7 @@ import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.UtxoReposito
 import lombok.extern.slf4j.Slf4j;
 import org.jooq.DSLContext;
 import org.jooq.JSON;
+import org.jooq.Record2;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -33,6 +35,7 @@ import static org.jooq.impl.DSL.row;
 public class UtxoStorageImpl implements UtxoStorage {
     private static final String PLUGIN_UNSPENT = "utxo.unspent.save";
     private static final String PLUGIN_SPENT = "utxo.spent.save";
+    private static final int PRUNING_DELETE_CHUNK_SIZE = 1000;
 
     private final UtxoRepository utxoRepository;
     private final TxInputRepository spentOutputRepository;
@@ -138,15 +141,20 @@ public class UtxoStorageImpl implements UtxoStorage {
                 if (spentKeys.isEmpty())
                     return 0;
 
-                int addressUtxoCount = dsl.deleteFrom(ADDRESS_UTXO)
-                        .where(row(ADDRESS_UTXO.TX_HASH, ADDRESS_UTXO.OUTPUT_INDEX)
-                                .in(spentKeys))
-                        .execute();
+                int addressUtxoCount = 0;
+                int txInputCount = 0;
+                // Each key is 2 bind values; delete in chunks to stay under the JDBC/DB bind limits.
+                for (var keys : ListUtil.partition(spentKeys.map(Record2::valuesRow), PRUNING_DELETE_CHUNK_SIZE)) {
+                    addressUtxoCount += dsl.deleteFrom(ADDRESS_UTXO)
+                            .where(row(ADDRESS_UTXO.TX_HASH, ADDRESS_UTXO.OUTPUT_INDEX)
+                                    .in(keys))
+                            .execute();
 
-                int txInputCount = dsl.deleteFrom(TX_INPUT)
-                        .where(row(TX_INPUT.TX_HASH, TX_INPUT.OUTPUT_INDEX)
-                                .in(spentKeys))
-                        .execute();
+                    txInputCount += dsl.deleteFrom(TX_INPUT)
+                            .where(row(TX_INPUT.TX_HASH, TX_INPUT.OUTPUT_INDEX)
+                                    .in(keys))
+                            .execute();
+                }
 
                 if (log.isDebugEnabled())
                     log.debug("Deleted {} address_utxo and {} tx_input records", addressUtxoCount, txInputCount);
