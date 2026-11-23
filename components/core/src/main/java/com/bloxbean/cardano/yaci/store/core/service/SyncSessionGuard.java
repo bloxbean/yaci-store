@@ -80,38 +80,42 @@ public class SyncSessionGuard {
     }
 
     private long changeSession(boolean strict, Long expected) {
+        //First make the old session stale, before waiting: its callbacks are ignored from now on, and a commit that
+        //reaches the fence from now on (also one queued behind this change, which the lock lets in if the wait times
+        //out) sees the stale session and is rolled back. enterCommit takes the read lock before it reads the session,
+        //so a commit that passed the check holds the read lock and is waited for below.
+        long next;
+        if (expected != null) {
+            next = expected + 1;
+            if (!currentSession.compareAndSet(expected, next))
+                throw new StaleSyncSessionException(expected, currentSession.get());
+        } else {
+            next = currentSession.incrementAndGet();
+        }
+        long previous = next - 1;
+
+        //Then wait for the commits of the old session that are already past the fence
         Lock writeLock = commitLock.writeLock();
         boolean locked = false;
+        boolean interrupted = false;
         try {
             locked = writeLock.tryLock(sessionChangeWaitMs, TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
+            interrupted = true;
             Thread.currentThread().interrupt();
         }
-        try {
-            //Always make the old session stale, so its commits that have not reached the fence are rolled back
-            long previous;
-            long next;
-            if (expected != null) {
-                previous = expected;
-                next = expected + 1;
-                if (!currentSession.compareAndSet(expected, next))
-                    throw new StaleSyncSessionException(expected, currentSession.get());
-            } else {
-                previous = currentSession.get();
-                next = currentSession.incrementAndGet();
-            }
-            if (!locked) {
-                if (strict)
-                    throw new IllegalStateException("A commit of sync session " + previous + " is still running after "
-                            + sessionChangeWaitMs + " ms. Not starting the sync yet.");
-                log.warn("A commit of sync session {} did not finish within {} ms. Ending the session anyway.",
-                        previous, sessionChangeWaitMs);
-            }
+        if (locked) {
+            writeLock.unlock();
             return next;
-        } finally {
-            if (locked)
-                writeLock.unlock();
         }
+
+        String reason = interrupted
+                ? "Interrupted while waiting for a commit of sync session " + previous + "."
+                : "A commit of sync session " + previous + " is still running after " + sessionChangeWaitMs + " ms.";
+        if (strict)
+            throw new IllegalStateException(reason + " Not starting the sync yet.");
+        log.warn("{} Ending the session anyway.", reason);
+        return next;
     }
 
     /**
@@ -120,8 +124,13 @@ public class SyncSessionGuard {
      * commit is done: until then, the session cannot change.
      */
     Runnable enterCommit(long session) {
+        //Refused at once when already stale: otherwise it would queue behind a session change that waits for the
+        //commits in flight, and only be refused when that wait ends
+        if (session != currentSession.get())
+            throw new StaleSyncSessionException(session, currentSession.get());
         Lock readLock = commitLock.readLock();
         readLock.lock();
+        //Checked again under the lock: the session can change while this waits for it
         if (session != currentSession.get()) {
             readLock.unlock();
             throw new StaleSyncSessionException(session, currentSession.get());
