@@ -1,6 +1,8 @@
 dependencies {
     compileOnly project(":components:plugin")
 
+    // GraalPy's PKIX and ASN.1 utilities must match the provider used by Cardano Client Lib.
+    api platform(libs.bouncycastle.bom)
     api libs.graalvm.polyglot
     api libs.graalvm.js
     api libs.graalvm.python
