@@ -191,7 +191,7 @@ public class GovernanceTxHelper extends TransactionHelper {
         return updateCommittee;
     }
 
-    public static UpdateCommittee updateCommitteeAction(Map<Credential, Integer> newMembersAndTerms,
+    public static UpdateCommittee updateCommitteeAction(Map<Credential, Long> newMembersAndTerms,
                                                         UnitInterval quorumThreshold) {
         var updateCommittee = updateCommitteeAction(quorumThreshold);
         updateCommittee.setNewMembersAndTerms(newMembersAndTerms);
