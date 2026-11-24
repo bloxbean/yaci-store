@@ -9,7 +9,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.time.Duration;
 import java.util.Optional;
 
 @Component
@@ -29,7 +28,7 @@ public class ChainTipService {
      */
     public synchronized Optional<Tuple<Tip, Integer>> getTipAndCurrentEpoch() {
         try {
-            var tip = tipFinderService.getTip().block(Duration.ofSeconds(10));
+            var tip = tipFinderService.findTip(10_000);
 
             if (tip != null) {
                 int epoch = epochConfig.epochFromSlot(eraService.getFirstNonByronSlot(), Era.Shelley, tip.getPoint().getSlot());
