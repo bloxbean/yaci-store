@@ -55,9 +55,10 @@ public class GovernanceActionUtil {
         if (committeeMaxTermLength == null) {
             return true;
         }
-        final Map<Credential, Integer> newMembersAndTerms = updateCommittee.getNewMembersAndTerms();
+        final Map<Credential, Long> newMembersAndTerms = updateCommittee.getNewMembersAndTerms();
         if (newMembersAndTerms != null) {
-            return newMembersAndTerms.values().stream().allMatch(term -> term != null && term <= currentEpoch + committeeMaxTermLength);
+            return newMembersAndTerms.values().stream().allMatch(term -> term != null
+                    && Long.compareUnsigned(term, (long) currentEpoch + committeeMaxTermLength) <= 0);
         }
 
         return false;
