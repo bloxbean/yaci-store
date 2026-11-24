@@ -16,6 +16,12 @@ public interface PoolStatusRepository extends JpaRepository<PoolEntity, PoolId> 
     @Query("SELECT d FROM PoolEntity d WHERE d.poolId = :poolId AND d.status = :status AND d.epoch <= :epoch ORDER BY d.slot DESC, d.txIndex DESC, d.certIndex DESC limit 1")
     Optional<PoolEntity> findRecentByPoolIdAndStatus(String poolId, PoolStatusType status, Integer epoch);
 
+    @Query("SELECT d FROM PoolEntity d WHERE d.poolId = :poolId AND d.status = :status AND d.epoch <= :epoch " +
+            "AND (d.slot < :slot OR (d.slot = :slot AND (d.txIndex < :txIndex OR (d.txIndex = :txIndex AND d.certIndex < :certIndex)))) " +
+            "ORDER BY d.slot DESC, d.txIndex DESC, d.certIndex DESC limit 1")
+    Optional<PoolEntity> findRecentByPoolIdAndStatusBefore(String poolId, PoolStatusType status, Integer epoch,
+                                                           Long slot, Integer txIndex, Integer certIndex);
+
     //TODO -- Check this queries for correctness (should we do txIndex and certIndex check)
     @Query("SELECT ps FROM PoolEntity ps WHERE ps.status = 'RETIRING' AND ps.retireEpoch = :retireEpoch AND NOT EXISTS (" +
             "SELECT ps2 FROM PoolEntity ps2 WHERE ps2.poolId = ps.poolId AND (ps2.status = 'RETIRING' OR ps2.status = 'UPDATE') AND ps2.epoch < :retireEpoch " +
