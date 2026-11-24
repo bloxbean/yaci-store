@@ -78,6 +78,9 @@ public class RedeemerDatumMatcher {
                             log.info("Redeemer Proposing : " + transaction.getTxHash());
                         scriptContext = findProposingScriptForRedeemer(redeemer, transaction, scriptsMap).orElse(new ScriptContext());
                         scriptContext.setRedeemer(redeemer);
+                    } else if (redeemer.getTag() == RedeemerTag.Guarding) {
+                        scriptContext = findGuardingScript(redeemer.getIndex(), transaction.getBody().getGuards(), scriptsMap);
+                        scriptContext.setRedeemer(redeemer);
                     } else {
                         scriptContext = new ScriptContext();
                         scriptContext.setRedeemer(redeemer);
@@ -262,6 +265,19 @@ public class RedeemerDatumMatcher {
         scriptContext.setPlutusScript(null);
 
         return Optional.of(scriptContext);
+    }
+
+    private ScriptContext findGuardingScript(int index, List<Credential> guards, Map<String, PlutusScript> scriptsMap) {
+        ScriptContext context = new ScriptContext();
+        // The pointer counts every credential in the ordered set, including key guards.
+        if (guards == null || index < 0 || index >= guards.size())
+            return context;
+        Credential guard = guards.get(index);
+        if (guard.getType() == StakeCredType.SCRIPTHASH) {
+            context.setScriptHash(guard.getHash());
+            context.setPlutusScript(scriptsMap.get(guard.getHash()));
+        }
+        return context;
     }
 
     private static List<TransactionInput> getSortedInputs(List<TransactionInput> inputs) {

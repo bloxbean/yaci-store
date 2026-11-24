@@ -483,8 +483,8 @@ class GovernanceInterProposalIT extends BaseE2ETest {
     }
 
     private GovAction initialCommitteeAction() {
-        Map<com.bloxbean.cardano.client.address.Credential, Integer> members = new LinkedHashMap<>();
-        int term = getCurrentEpoch() + 100;
+        Map<com.bloxbean.cardano.client.address.Credential, Long> members = new LinkedHashMap<>();
+        long term = getCurrentEpoch() + 100L;
         for (Account committeeAccount : committeeAccounts) {
             members.put(committeeAccount.committeeColdCredential(), term);
         }

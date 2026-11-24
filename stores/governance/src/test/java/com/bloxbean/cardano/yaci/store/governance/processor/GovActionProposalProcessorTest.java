@@ -219,9 +219,9 @@ class GovActionProposalProcessorTest {
                 Set<Credential> membersForRemoval = new LinkedHashSet<>();
                 membersForRemoval.add(Credential.builder().type(StakeCredType.SCRIPTHASH)
                         .hash("e99454a98c986da98191342e156514d1d029f03acbe3e9d60e8d32b2").build());
-                Map<Credential, Integer> newMembersAndTerms = new LinkedHashMap<>();
+                Map<Credential, Long> newMembersAndTerms = new LinkedHashMap<>();
                 newMembersAndTerms.put(Credential.builder().type(StakeCredType.ADDR_KEYHASH)
-                        .hash("e99454a98c986da98191342e156514d1d029f03acbe3e9d60e8d32b2").build(), 300);
+                        .hash("e99454a98c986da98191342e156514d1d029f03acbe3e9d60e8d32b2").build(), 300L);
 
                 return UpdateCommittee.builder()
                         .govActionId(GovActionId.builder()
