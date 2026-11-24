@@ -219,12 +219,10 @@ public class TransactionProcessor {
         List<TxnWitness> txnWitnesses = new ArrayList<>();
         int index = 0;
         for(Transaction transaction: transactions) {
-            if (transaction.isInvalid())
+            if (transaction.isInvalid() || transaction.getWitnesses() == null)
                 continue;
 
             Witnesses witnesses = transaction.getWitnesses();
-            if (witnesses == null)
-                continue;
 
             var vkeyWitnessList = witnesses.getVkeyWitnesses();
             var bootstrapWitnessList = witnesses.getBootstrapWitnesses();
