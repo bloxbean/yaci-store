@@ -1,10 +1,9 @@
 [libraries]
-#Leios w42: local build of bloxbean/yaci PR #223 (feat/leios_w42), not published
-yaci = "com.bloxbean.cardano:yaci:0.5.0-leios-w42-4ababce-SNAPSHOT"
-cardano-client-lib = "com.bloxbean.cardano:cardano-client-lib:0.8.0-pre4"
-cardano-client-backend = "com.bloxbean.cardano:cardano-client-backend:0.8.0-pre4"
-cardano-client-backend-ogmios = "com.bloxbean.cardano:cardano-client-backend-ogmios:0.8.0-pre4"
-cardano-client-backend-blockfrost = "com.bloxbean.cardano:cardano-client-backend-blockfrost:0.8.0-pre4"
+yaci = "com.bloxbean.cardano:yaci:0.5.0-pre17"
+cardano-client-lib = "com.bloxbean.cardano:cardano-client-lib:0.8.0-pre8"
+cardano-client-backend = "com.bloxbean.cardano:cardano-client-backend:0.8.0-pre8"
+cardano-client-backend-ogmios = "com.bloxbean.cardano:cardano-client-backend-ogmios:0.8.0-pre8"
+cardano-client-backend-blockfrost = "com.bloxbean.cardano:cardano-client-backend-blockfrost:0.8.0-pre8"
 scalus-bloxbean-cardano-client-lib = "org.scalus:scalus-bloxbean-cardano-client-lib_3:1.1.0"
 
 cf-rewards="org.cardanofoundation:cf-rewards-calculation:1.0.2"
