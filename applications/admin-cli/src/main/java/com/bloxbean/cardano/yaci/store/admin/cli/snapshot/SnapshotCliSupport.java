@@ -166,6 +166,14 @@ public class SnapshotCliSupport {
      * Specs for producing a snapshot from this source: the imported tables of store modules the
      * source has disabled are left out, since it never writes their history.
      */
+    /** Specs selected by the configured store flags, for commands without a target schema. */
+    public SnapshotSpecRegistry configuredRegistry() {
+        java.util.Set<String> enabled = StoreModuleConfig.configured(environment).entrySet().stream()
+                .filter(Map.Entry::getValue).map(Map.Entry::getKey)
+                .collect(java.util.stream.Collectors.toSet());
+        return registry(null, false).selectModules(enabled).withoutDisabledOptionalTables(this::setting);
+    }
+
     public SnapshotSpecRegistry exportRegistry(String specFile, boolean allowCustomSpecs) {
         java.util.Set<String> disabled = StoreModuleConfig.configured(environment).entrySet().stream()
                 .filter(e -> !e.getValue()).map(Map.Entry::getKey)

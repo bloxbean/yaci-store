@@ -115,7 +115,7 @@ public class SnapshotRemoteCommands {
                     description = "Also list staged snapshots, from the store itself (needs an s3:// or local location)")
             boolean all,
             @Option(longNames = "check", defaultValue = "false",
-                    description = "Fetch each manifest and report whether this release can import it")
+                    description = "Fetch each manifest and report whether this release can import it with the configured stores")
             boolean check) {
         String net = network != null && !network.isBlank() ? network : support.network();
         try (SnapshotStore store = support.remoteStore(remote)) {
@@ -133,7 +133,7 @@ public class SnapshotRemoteCommands {
             }
             String format = "  %-36s %-6s %6s %10s %10s %-32s %s";
             writeLn(format, "id", "state", "epoch", "block", "size", "release", "signed");
-            SnapshotSpecRegistry registry = check ? support.registry(null, false) : null;
+            SnapshotSpecRegistry registry = check ? support.configuredRegistry() : null;
             for (SnapshotIndex.Entry e : entries) {
                 var d = SnapshotRepository.describe(e);
                 writeLn(format, d.get("id"), d.get("state"), d.get("epoch"), d.get("block"), d.get("size"),
@@ -141,7 +141,7 @@ public class SnapshotRemoteCommands {
                 if (check) {
                     try {
                         repo.resolve(net, e.snapshotId(), compatibility(registry), null);
-                        writeLn(success("    importable by this release"));
+                        writeLn(success("    importable by this release with the configured stores"));
                     } catch (Exception ex) {
                         writeLn(warn("    %s", ex.getMessage().replace("\n", "\n    ")));
                     }
@@ -186,7 +186,7 @@ public class SnapshotRemoteCommands {
         try (SnapshotStore store = support.remoteStore(remote)) {
             SnapshotRepository repo = new SnapshotRepository(store);
             ProgressPrinter printer = new ProgressPrinter(0);
-            var resolved = repo.resolve(net, snapshot, compatibility(support.registry(null, false)), printer);
+            var resolved = repo.resolve(net, snapshot, compatibility(support.configuredRegistry()), printer);
             printSnapshot(resolved, store);
             Path out = Path.of(output).toAbsolutePath().normalize();
             SnapshotCliSupport.ensureDirectory(out);
