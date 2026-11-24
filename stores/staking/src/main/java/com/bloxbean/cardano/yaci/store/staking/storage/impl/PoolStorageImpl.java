@@ -36,6 +36,13 @@ public class PoolStorageImpl implements PoolStorage {
     }
 
     @Override
+    public Optional<Pool> findRecentPoolRegistrationBefore(String poolId, Integer maxEpoch, long slot, int txIndex, int certIndex) {
+        return poolStatusRepository.findRecentByPoolIdAndStatusBefore(poolId, PoolStatusType.REGISTRATION, maxEpoch,
+                        slot, txIndex, certIndex)
+                .map(poolMapper::toDeposit);
+    }
+
+    @Override
     public Optional<Pool> findRecentPoolUpdate(String poolId, Integer maxEpoch) {
         return poolStatusRepository.findRecentByPoolIdAndStatus(poolId, PoolStatusType.UPDATE, maxEpoch)
                 .map(poolMapper::toDeposit);
