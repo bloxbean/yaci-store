@@ -127,6 +127,7 @@ public class ScalusTxEvaluationService {
             case Reward -> "withdraw";
             case Voting -> "vote";
             case Proposing -> "propose";
+            case Guarding -> "guard";
         };
     }
 }
