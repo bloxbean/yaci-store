@@ -26,6 +26,4 @@ public interface RewardRepository extends JpaRepository<RewardEntity, RewardId> 
     Slice<RewardEntity> findByAddress(String address, Pageable pageable);
 
     Slice<RewardEntity> findByPoolIdAndSpendableEpoch(String poolId, Integer spendableEpoch, Pageable pageable);
-
-    int deleteBySlotGreaterThan(Long slot);
 }

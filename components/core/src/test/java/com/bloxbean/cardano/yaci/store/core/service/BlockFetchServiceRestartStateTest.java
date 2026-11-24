@@ -37,7 +37,7 @@ class BlockFetchServiceRestartStateTest {
                 storeProperties,
                 mock(GenesisConfig.class),
                 mock(ShelleyBlockEventPublisher.class),
-                mock(ByronBlockEventPublisher.class));
+                mock(ByronBlockEventPublisher.class), mock(com.bloxbean.cardano.yaci.store.core.storage.api.ErrorStorage.class));
     }
 
     @Test
@@ -70,7 +70,7 @@ class BlockFetchServiceRestartStateTest {
 
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> blockFetchService.startFetchWithTimeout(
                 new com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point(1, "aa"),
-                new com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point(9, "bb"), 5_000));
+                new com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point(9, "bb"), null, 5_000));
 
         org.mockito.Mockito.verify(blockRangeSync).stop();
         org.mockito.Mockito.verify(blockRangeSync, org.mockito.Mockito.never())
