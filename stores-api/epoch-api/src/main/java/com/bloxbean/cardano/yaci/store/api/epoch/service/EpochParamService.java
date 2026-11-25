@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.api.epoch.service;
 
 import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.store.api.epoch.dto.EpochDto;
+import com.bloxbean.cardano.yaci.store.client.epoch.EpochNonceClient;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.epoch.domain.EpochParam;
 import com.bloxbean.cardano.yaci.store.epoch.dto.ProtocolParamsDto;
@@ -18,19 +19,21 @@ public class EpochParamService {
 
     private final EpochParamStorage epochParamStorage;
     private final EraService eraService;
+    private final EpochNonceClient epochNonceClient;
     private final DomainMapper mapper = DomainMapper.INSTANCE;
 
     public Optional<ProtocolParamsDto> getLatestProtocolParams() {
-        int epoch = epochParamStorage.getMaxEpoch();
-        return epochParamStorage.getProtocolParams(epoch)
-                .map(EpochParam::getParams)
-                .map(mapper::toProtocolParamsDto);
+        return getProtocolParams(epochParamStorage.getMaxEpoch());
     }
 
     public Optional<ProtocolParamsDto> getProtocolParams(int epoch) {
         return epochParamStorage.getProtocolParams(epoch)
                 .map(EpochParam::getParams)
-                .map(mapper::toProtocolParamsDto);
+                .map(mapper::toProtocolParamsDto)
+                .map(protocolParamsDto -> {
+                    protocolParamsDto.setNonce(epochNonceClient.getEpochNonce(epoch).orElse(null));
+                    return protocolParamsDto;
+                });
     }
 
     public int getLatestEpoch() {
