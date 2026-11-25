@@ -21,6 +21,8 @@ import pytest
 import requests
 
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8080")
+# BatchRequest accepts at most 100 subjects per query
+BATCH_QUERY_MAX_SUBJECTS = 100
 CIP113_FIELDS = ("minting_logic_script", "transfer_logic_script", "third_party_transfer_logic_script",
                  "unfracking_logic_script", "global_state_policy_id")
 
@@ -126,10 +128,13 @@ def make_test_class(fixture, with_mandatory_errors=None, native_subjects=()):
         def test_batch_query(self):
             if not cases:
                 pytest.skip("no programmable token is registered on this network")
-            resp = requests.post(f"{API_BASE_URL}/api/v1/tokens/subject/query",
-                                 json={"subjects": [s["subject"] for s, _ in cases]})
-            assert resp.status_code == 200
-            returned = {entry["subject"]: entry for entry in resp.json()["subjects"]}
+            subjects = [s["subject"] for s, _ in cases]
+            returned = {}
+            for i in range(0, len(subjects), BATCH_QUERY_MAX_SUBJECTS):
+                resp = requests.post(f"{API_BASE_URL}/api/v1/tokens/subject/query",
+                                     json={"subjects": subjects[i:i + BATCH_QUERY_MAX_SUBJECTS]})
+                assert resp.status_code == 200
+                returned.update({entry["subject"]: entry for entry in resp.json()["subjects"]})
             assert set(returned) == {s["subject"] for s, _ in cases}
             for subject, entry in returned.items():
                 _assert_programmable(entry, policies_by_id[subject[:56]])
