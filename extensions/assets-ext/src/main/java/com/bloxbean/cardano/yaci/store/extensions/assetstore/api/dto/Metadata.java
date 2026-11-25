@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto;
 
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.Cip26Metadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.annotation.Nullable;
 import lombok.Builder;
 
@@ -81,7 +82,11 @@ public record Metadata(@Nullable StringProperty name, @Nullable StringProperty d
         return new Metadata(nameProp, descProp, tickerProp, decimalsProp, logoProp, urlProp, versionProp);
     }
 
-    /** True when no property has a value (the {@code valid} flag is not a property). */
+    /**
+     * True when no property has a value (the {@code valid} flag is not a property). For the code only: not part of the
+     * response, which cf-token-metadata-registry's V2 API does not have either.
+     */
+    @JsonIgnore
     public boolean isEmpty() {
         return name == null && description == null && ticker == null && decimals == null
                 && logo == null && url == null && version == null;
