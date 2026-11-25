@@ -19,8 +19,8 @@ owner of a dropped token could not be told anything.
 CIP-113 (programmable tokens) will add more such items. A registry node links policies; tokens are held at a "jail" address
 (`programmableLogicBase`); the token's metadata is CIP-26 or CIP-68, so a programmable token is CIP-26 + CIP-113 or CIP-68 + CIP-113.
 Failures there are not about one datum: a policy found in the jail but not in the registry, a registry node that cannot be parsed or that
-looks spoofed. The module for CIP-113 was removed from `main`; this record makes room
-for it without implementing it.
+looks spoofed. When this record was written, the module for CIP-113 had been removed from `main`, so it made room for it without
+implementing it. ADR 0011 adds it back.
 
 ## Decision
 
@@ -32,12 +32,12 @@ for it without implementing it.
 |---|---|
 | `id` | SHA-256 of `standard, reason_code, policy_id, asset_name, tx_hash, output_index, origin` |
 | `standard` | the standard whose rule found the problem: `CIP-26`, `CIP-68`, `CIP-113` |
-| `combined_with` | the other standard of a combination, so a CIP-68 token in a jail is `standard=CIP-113, combined_with=CIP-68` (or the reverse, as the writer sees it) |
+| `combined_with` | the other standard of a combination, for example `standard=CIP-113, combined_with=CIP-68` (or the reverse, as the writer sees it) |
 | `reason_code`, `reason` | a stable code for programs, a message for people (at most 500 characters) |
 | `policy_id`, `asset_name`, `subject` | the token, when it is known |
 | `slot`, `tx_hash`, `tx_index`, `output_index` | the on-chain origin |
 | `origin` | the off-chain origin (the registry file name) |
-| `details` | bounded JSON (at most 2 KB) for what is specific to a standard: `inner_subject`, `datum_prefix`, `exception`; later `registry_key`, `script_hash`, `jail_address` |
+| `details` | bounded JSON (at most 2 KB) for what is specific to a standard: `inner_subject`, `datum_prefix`, `exception` |
 | `first_seen_at` | |
 
 *Why generic:* a column per standard would need a migration for every new one, and the question asked of it is the same: what, where, why.
@@ -55,7 +55,12 @@ Two of them follow the review of PR #1220: an exception of the CIP-26 check was 
 and is `processing_failure`; and a CIP-26 logo far beyond any real size, dropped while its entry is stored, had no record and is `logo_too_large`.
 That logo is the one item here whose token has a row: the row has no logo, so the dropped item is the logo.
 
-Reserved for CIP-113, documented and not written: `unregistered_policy_in_jail`, `registry_node_unparseable`, `registry_node_spoofed`.
+For CIP-113 (ADR 0011): `registry_node_unparseable`, an output holding a registry NFT whose datum is not a registry node, and
+`registry_node_spoofed`, one that is not at the registry's address or holds the NFT of another key than its datum's.
+
+**A token at the programmable-logic address whose policy is not registered is not a row here** (decided 2026-11-25; the code
+`unregistered_policy_in_jail` that was reserved for it is removed). Finding it would mean indexing every output at that address, and ADR 0011
+indexes only registry nodes. Such a token is not dropped either: it is served as `NATIVE`, with its CIP-26 or CIP-68 metadata.
 
 **A registered policy with nothing minted is not a row here** (decided 2026-10-27; the code `jail_without_token` that was reserved for it is
 removed). CIP-113 says a registration with no mint is valid, for example for real-world assets, and there is no token to store, serve or drop:
@@ -113,8 +118,6 @@ the rows written.
 
 ## Open questions
 
-- Whether `unregistered_policy_in_jail` is a row here or a validation error of the token: the token exists and can be served from CIP-26 or
-  CIP-68, so it may be a token that breaks a rule rather than a dropped item.
 - How long CIP-26 rows are kept for a file that disappears and comes back.
 
 ## References

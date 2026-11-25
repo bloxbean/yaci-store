@@ -31,8 +31,6 @@ public final class InvalidTokenReason {
     public static final String REGISTRY_NODE_UNPARSEABLE = "registry_node_unparseable";
     /** The output is not at the registry's address, or holds the registry NFT of another key than its datum's. */
     public static final String REGISTRY_NODE_SPOOFED = "registry_node_spoofed";
-    /** Reserved (ADR 0007), not written: a token held at a programmable-token address whose policy is not registered. */
-    public static final String UNREGISTERED_POLICY_IN_JAIL = "unregistered_policy_in_jail";
 
     private InvalidTokenReason() {
     }
