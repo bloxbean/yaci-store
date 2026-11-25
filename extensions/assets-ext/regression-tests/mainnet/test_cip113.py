@@ -1,8 +1,9 @@
 """
 CIP-113 programmable tokens on mainnet. See shared/cip113_suite.py.
 
-None of the tokens in the fixture has CIP-26 or CIP-68 metadata, so the API serves all of them without metadata, with the
-CIP-113 error that they have no companion. Five CIP-26 tokens of unregistered policies must stay NATIVE.
+Most registered tokens have no CIP-26 or CIP-68 metadata and are served with the CIP-113 error that they have no companion;
+the 333 token of e102a5c7... has CIP-68 metadata and is served with it. Five CIP-26 tokens of unregistered policies must
+stay NATIVE.
 """
 
 from shared.cip113_suite import load_fixture, make_test_class

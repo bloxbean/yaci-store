@@ -1,7 +1,7 @@
 {
   "network": "mainnet",
   "registry_policy_id": "484e733d122af44e6101988bcc47ed261a7af5c43c797e89d60e3075",
-  "generated_at": "2026-10-16T09:15:30Z",
+  "generated_at": "2026-11-25T10:32:57Z",
   "source": "https://api.koios.rest/api/v1",
   "policies": [
     {
@@ -24,7 +24,7 @@
     },
     {
       "policy_id": "b025efe5b44b43ed154419c66b0efc9cf148fd98f464e261018c89e8",
-      "registry_utxo": "642aba06dcdba9c378d7fda6897d31b5f82909d7d3a10f95a0f01dd6aa2ef70d#1",
+      "registry_utxo": "caf636cbb16ff7292c3fd7b07ffa3a8d0d312a229e389e2b8eaa01fbdc0e00a6#0",
       "cip113": {
         "minting_logic_script": "f462a4e22e5b138c17d893d4e0811790f51f1231b8be4198313e08d0",
         "transfer_logic_script": "62b98b0894870aadfba1a7fd1b368c56aa91caa2701fb7e92a3f1bf1",
@@ -37,6 +37,38 @@
           "subject": "b025efe5b44b43ed154419c66b0efc9cf148fd98f464e261018c89e8444953393837",
           "koios_cip26": false,
           "koios_cip68_labels": []
+        }
+      ]
+    },
+    {
+      "policy_id": "b6f47e52441e75240712320fd152e7bbf8b7aa11c2c3b6f761e0bbe4",
+      "registry_utxo": "93eb6868991e06cb2c806a76762261b135535eafa468a05a3b1de0bdff5dea80#0",
+      "cip113": {
+        "minting_logic_script": "c34be15de6ba21909a5a600d61b36056064fe90594bdbd511ff117ce",
+        "transfer_logic_script": "87cb2e1bd2d85450a7574c4ab243a28f2bf4eaabe19fd58b16d855ae",
+        "third_party_transfer_logic_script": "3c343901382560cdd602f87f90eeb62d0b6ad97d9f0ca182ae86ff53",
+        "unfracking_logic_script": null,
+        "global_state_policy_id": null
+      },
+      "subjects": []
+    },
+    {
+      "policy_id": "e102a5c79164c057b24b5172eb909bdbdee6023f84d339024c7c5b1f",
+      "registry_utxo": "93eb6868991e06cb2c806a76762261b135535eafa468a05a3b1de0bdff5dea80#1",
+      "cip113": {
+        "minting_logic_script": "e2837aed62195c136647b6e251fa472d5f25586914a6ec732572bc0e",
+        "transfer_logic_script": "87a9ae7ce1ef40adff8dbb3f1a0b91f0a99728b7177941ebd1525977",
+        "third_party_transfer_logic_script": "235a419c694778f3241d375e1212e977aa0df9c2a95093d10eb8ba29",
+        "unfracking_logic_script": null,
+        "global_state_policy_id": null
+      },
+      "subjects": [
+        {
+          "subject": "e102a5c79164c057b24b5172eb909bdbdee6023f84d339024c7c5b1f0014df10534243",
+          "koios_cip26": false,
+          "koios_cip68_labels": [
+            "333"
+          ]
         }
       ]
     },
