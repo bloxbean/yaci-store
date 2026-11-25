@@ -66,6 +66,7 @@ class Cip113ProcessorTest {
 
         Cip113RegistryNode node = singleSaved();
         assertThat(node.getKey()).isEqualTo(POLICY_01C2);
+        assertThat(node.getRegistryPolicyId()).isEqualTo(REGISTRY_POLICY_ID);
         assertThat(node.getNext()).isEqualTo("b025efe5b44b43ed154419c66b0efc9cf148fd98f464e261018c89e8");
         assertThat(node.getSlot()).isEqualTo(SLOT);
         assertThat(node.getTxHash()).isEqualTo(TX);
@@ -101,6 +102,25 @@ class Cip113ProcessorTest {
                 POLICY_01C2_DATUM)));
 
         verifyNoInteractions(repository, invalidTokenRecorder);
+    }
+
+    @Test
+    @DisplayName("stores the nodes of every configured registry, each with its own registry")
+    void storesTheRegistryOfEachNode() {
+        String registryB = "bb".repeat(28);
+        when(configuration.isRegistryPolicyId(any()))
+                .thenAnswer(i -> REGISTRY_POLICY_ID.equals(i.getArgument(0)) || registryB.equals(i.getArgument(0)));
+
+        processor.processTransaction(event(
+                nodeOutput(TX, 0, 0, POLICY_01C2, POLICY_01C2_DATUM),
+                output(TX, 0, 1, registryB, registryB + POLICY_01C2, BigInteger.ONE, POLICY_01C2_DATUM)));
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<Cip113RegistryNode>> saved = ArgumentCaptor.forClass(List.class);
+        verify(repository).saveAll(saved.capture());
+        assertThat(saved.getValue()).extracting(Cip113RegistryNode::getRegistryPolicyId)
+                .containsExactly(REGISTRY_POLICY_ID, registryB);
+        verifyNoInteractions(invalidTokenRecorder);
     }
 
     @Test

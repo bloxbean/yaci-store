@@ -19,18 +19,27 @@ import java.util.Optional;
 @Repository
 public interface Cip113RegistryNodeRepository extends JpaRepository<Cip113RegistryNode, Cip113RegistryNodeId> {
 
-    /** The current node of a key: the latest by slot, then by transaction index within the slot. */
-    Optional<Cip113RegistryNode> findFirstByKeyOrderBySlotDescTxIndexDesc(String key);
+    /**
+     * The current node of a key in the given registries: the latest by slot, then by transaction index, then by output
+     * index (two registries can each hold a node of the key in the same transaction).
+     */
+    Optional<Cip113RegistryNode> findFirstByKeyAndRegistryPolicyIdInOrderBySlotDescTxIndexDescOutputIndexDesc(
+            String key, Collection<String> registryPolicyIds);
 
     /**
-     * The current node of each of the keys, one row per key: the highest slot, then the highest {@code tx_index} within
-     * that slot. A node is in at most one output per transaction (it holds the one NFT of its key), so the pair is unique.
+     * The latest versions of each of the keys in the given registries: the highest slot, then the highest
+     * {@code tx_index} within that slot. Within one registry a node is in at most one output per transaction (it holds
+     * the one NFT of its key), so a key has one row, unless two registries each hold a node of it in that transaction;
+     * the caller then takes the highest {@code output_index}, as the single lookup does.
      */
     @Query("SELECT e FROM Cip113RegistryNode e " +
-            "WHERE e.key IN :keys " +
-            "AND e.slot = (SELECT MAX(e2.slot) FROM Cip113RegistryNode e2 WHERE e2.key = e.key) " +
-            "AND e.txIndex = (SELECT MAX(e3.txIndex) FROM Cip113RegistryNode e3 WHERE e3.key = e.key AND e3.slot = e.slot)")
-    List<Cip113RegistryNode> findLatestByKeys(@Param("keys") Collection<String> keys);
+            "WHERE e.key IN :keys AND e.registryPolicyId IN :registries " +
+            "AND e.slot = (SELECT MAX(e2.slot) FROM Cip113RegistryNode e2 " +
+            "WHERE e2.key = e.key AND e2.registryPolicyId IN :registries) " +
+            "AND e.txIndex = (SELECT MAX(e3.txIndex) FROM Cip113RegistryNode e3 " +
+            "WHERE e3.key = e.key AND e3.slot = e.slot AND e3.registryPolicyId IN :registries)")
+    List<Cip113RegistryNode> findLatestByKeys(@Param("keys") Collection<String> keys,
+                                              @Param("registries") Collection<String> registryPolicyIds);
 
     /** Bulk delete on rollback: one SQL statement instead of loading and deleting each row. */
     @Modifying

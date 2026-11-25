@@ -17,6 +17,9 @@ import java.util.stream.Collectors;
  * Looks a policy up by the {@code key} of the registry nodes. Keys are stored as the datum holds them, in lower-case
  * hex, so a policy ID asked in upper case is found too. The origin node (empty key) is never matched: no policy ID is
  * empty.
+ * <p>
+ * Only the nodes of the configured registries count. A policy registered in more than one of them is served from its
+ * most recent node: the latest by slot, then transaction index, then output index.
  */
 @RequiredArgsConstructor
 public class Cip113StorageReaderImpl implements Cip113StorageReader {
@@ -29,7 +32,8 @@ public class Cip113StorageReaderImpl implements Cip113StorageReader {
         if (!cip113Configuration.isEnabled() || policyId == null || policyId.isEmpty()) {
             return Optional.empty();
         }
-        return registryNodeRepository.findFirstByKeyOrderBySlotDescTxIndexDesc(policyId.toLowerCase(Locale.ROOT))
+        return registryNodeRepository.findFirstByKeyAndRegistryPolicyIdInOrderBySlotDescTxIndexDescOutputIndexDesc(
+                        policyId.toLowerCase(Locale.ROOT), cip113Configuration.getRegistryNftPolicyIds())
                 .map(Cip113StorageReaderImpl::toExtension);
     }
 
@@ -46,8 +50,15 @@ public class Cip113StorageReaderImpl implements Cip113StorageReader {
         if (keys.isEmpty()) {
             return Map.of();
         }
-        return registryNodeRepository.findLatestByKeys(keys).stream()
-                .collect(Collectors.toMap(Cip113RegistryNode::getKey, Cip113StorageReaderImpl::toExtension));
+        return registryNodeRepository.findLatestByKeys(keys, cip113Configuration.getRegistryNftPolicyIds()).stream()
+                .collect(Collectors.toMap(Cip113RegistryNode::getKey, node -> node, Cip113StorageReaderImpl::later))
+                .entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, entry -> toExtension(entry.getValue())));
+    }
+
+    /** Of two nodes of a key in the same transaction, in two registries: the later output, as the single lookup takes. */
+    private static Cip113RegistryNode later(Cip113RegistryNode a, Cip113RegistryNode b) {
+        return b.getOutputIndex() > a.getOutputIndex() ? b : a;
     }
 
     static ProgrammableTokenCip113 toExtension(Cip113RegistryNode node) {

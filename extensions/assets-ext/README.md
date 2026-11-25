@@ -94,6 +94,10 @@ before the registry was deployed (mainnet slot 199,384,339), or resync, otherwis
 a registry NFT but whose datum is not a registry node, or that is not at the registry's address with the NFT of its own key, is not stored and is
 recorded in `invalid_token` (`registry_node_unparseable`, `registry_node_spoofed`).
 
+Each node records the registry it belongs to (the policy of its NFT), and only the configured registries are read. When a new registry is
+deployed, list it together with the old one: the old registrations keep being served. A policy registered in more than one configured registry
+is served from its most recent node. A registry that is no longer configured stops being served, though its rows stay.
+
 ### Validation errors
 
 A token is **returned as it is indexed**, whatever is wrong with its metadata: nothing is dropped for breaking a CIP. Instead, every
@@ -228,7 +232,7 @@ store:
 
     cip113:
       enabled: true                    # Programmable tokens; the registry is bundled per network
-      # registry-nft-policy-ids: <id>  # Replaces the bundled registry, for another registry or a private network
+      # registry-nft-policy-ids: <id>,<id>  # Replaces the bundled registries; list every registry to keep serving
 
     query:
       priority: "CIP_68,CIP_26"       # Default merge priority

@@ -77,8 +77,8 @@ public class Cip113Processor {
         }
         if (!nodes.isEmpty()) {
             registryNodeRepository.saveAll(nodes);
-            nodes.forEach(node -> log.info("Indexed CIP-113 registry node: key={}, slot={}, tx={}#{}",
-                    node.getKey(), node.getSlot(), node.getTxHash(), node.getOutputIndex()));
+            nodes.forEach(node -> log.info("Indexed CIP-113 registry node: registry={}, key={}, slot={}, tx={}#{}",
+                    node.getRegistryPolicyId(), node.getKey(), node.getSlot(), node.getTxHash(), node.getOutputIndex()));
         }
     }
 
@@ -109,7 +109,7 @@ public class Cip113Processor {
                 report(output, slot, registryNft, InvalidTokenReason.REGISTRY_NODE_SPOOFED, spoofed);
                 return Optional.empty();
             }
-            return Optional.of(toEntity(output, parsed, slot));
+            return Optional.of(toEntity(output, registryNft, parsed, slot));
         } catch (RuntimeException e) {
             // never stop the sync for one output (ADR 0004): record it, as CIP-68 does
             log.warn("CIP-113 registry node {}#{} skipped: indexing it failed unexpectedly", output.getTxHash(),
@@ -135,9 +135,10 @@ public class Cip113Processor {
         return null;
     }
 
-    private Cip113RegistryNode toEntity(AddressUtxo output, ParsedRegistryNode parsed, Long slot) {
+    private Cip113RegistryNode toEntity(AddressUtxo output, AssetType registryNft, ParsedRegistryNode parsed, Long slot) {
         return Cip113RegistryNode.builder()
                 .key(parsed.key())
+                .registryPolicyId(registryNft.policyId())
                 .slot(slot)
                 .txHash(output.getTxHash())
                 .txIndex(output.getTxIndex())

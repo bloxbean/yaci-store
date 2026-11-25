@@ -8,8 +8,8 @@ import java.time.LocalDateTime;
 
 /**
  * One version of a CIP-113 registry node: the output that carries it (ADR 0011). A node is re-created on every insert
- * after it and every update, so a key has one row per version, and its current node is the latest by {@code slot}, then
- * {@code tx_index}. No row is updated in place.
+ * after it and every update, so a key has one row per version in its registry, and its current node is the latest by
+ * {@code slot}, then {@code tx_index}, over the configured registries. No row is updated in place.
  */
 @Entity
 @Table(name = "cip113_registry_node")
@@ -19,7 +19,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-// Business-key equals/hashCode: all three PK components are app-assigned and non-null at
+// Business-key equals/hashCode: all four PK components are app-assigned and non-null at
 // construction, so they're stable across the transient → managed → detached lifecycle.
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 public class Cip113RegistryNode {
@@ -33,6 +33,15 @@ public class Cip113RegistryNode {
     @Column(name = "`key`", length = 64, nullable = false)
     @EqualsAndHashCode.Include
     private String key;
+
+    /**
+     * The policy ID of the registry NFT the node holds: which registry the node belongs to. Only the configured
+     * registries are read, so the nodes of a registry added later, or of one no longer configured, never mix.
+     */
+    @Id
+    @Column(name = "registry_policy_id", length = 56, nullable = false)
+    @EqualsAndHashCode.Include
+    private String registryPolicyId;
 
     @Id
     @Column(nullable = false)

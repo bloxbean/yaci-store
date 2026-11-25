@@ -164,8 +164,9 @@ resync fills them in, and brings back the tokens that were dropped before; it is
 
 One row per **version** of a registry node: the output that carries it (ADR 0011). A node is an output at the registry's script address
 holding one NFT of the registry policy, whose token name is the node's key. It is re-created on every insert after it (its `next` changes) and
-on every update of its scripts, and never removed, so a key has one row per version and its current node is its latest row by `slot`, then
-`tx_index`. No row is updated in place. Filled by `Cip113Processor` from `AddressUtxoEvent`, not from the utxo store's tables, so it does not
+on every update of its scripts, and never removed, so a key has one row per version in its registry. Reads take only the configured
+registries, and the current node of a key is its latest row there by `slot`, then `tx_index`, then `output_index` (two registries can each
+hold a node of the key in one transaction). No row is updated in place. Filled by `Cip113Processor` from `AddressUtxoEvent`, not from the utxo store's tables, so it does not
 depend on the utxo store's pruning, indexes or plugin filters. Mainnet has 9 node outputs so far (2026-11-24), a few kB.
 
 An output is stored only if its datum is a registry node (7 fields, `Cip113RegistryNodeParser`), it is at the registry's script address (its
@@ -175,6 +176,7 @@ payment credential is the registry policy ID) and it holds the registry NFT of i
 | Column | Type | Bound / Rationale |
 |---|---|---|
 | `key` | `VARCHAR(64)` NOT NULL | The datum's key: the registered policy ID (56 hex), or empty for the origin node, the head of the list. Up to 32 bytes, as the parser accepts. Reserved in H2 and MySQL: quoted there. |
+| `registry_policy_id` | `VARCHAR(56)` NOT NULL | The policy of the registry NFT the node holds: which registry it belongs to. Reads take only the configured registries. |
 | `slot` | `BIGINT` NOT NULL | |
 | `tx_hash` | `VARCHAR(64)` NOT NULL | PK component: each version is its own row. |
 | `tx_index` | `INTEGER` NOT NULL | Orders two versions of a node in the same slot. Not part of the key. |
@@ -185,5 +187,5 @@ payment credential is the registry policy ID) and it holds the registry NFT of i
 | `datum` | `TEXT` NOT NULL | The inline datum, CBOR hex, for re-parse and audit. At most 4,096 hex characters (the parser rejects longer ones). |
 | `last_synced_at` | `TIMESTAMP` | |
 
-Primary key `(key, slot, tx_hash)`. Index: `idx_cip113_registry_node_slot` (rollback deletes the rows with `slot >` the rollback slot).
+Primary key `(key, registry_policy_id, slot, tx_hash)`: `key` first, as every read looks a key up. Index: `idx_cip113_registry_node_slot` (rollback deletes the rows with `slot >` the rollback slot).
 
