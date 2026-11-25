@@ -13,14 +13,14 @@ API_BASE_URL=http://localhost:8080 uv run pytest
 
 `API_BASE_URL` is the yaci-store host (default `http://localhost:8080`). The CIP-26 tests need the off-chain sync done
 (`assetStoreOffchainSync` UP), the CIP-68 tests need the indexer at the tip. Run one group with a marker:
-`-m cip26`, `-m cip68`, `-m rft`, `-m validation`, `-m batch`, `-m deletion`, `-m signatures`.
+`-m cip26`, `-m cip68`, `-m rft`, `-m validation`, `-m batch`, `-m deletion`, `-m signatures`, `-m cip113`. The CIP-113 tests need a
+sync that started before the registry was deployed (slot 199,384,339).
 
 ## Fixtures
 
 Copied on 2026-10-28 from [cf-token-metadata-registry](https://github.com/cardano-foundation/cf-token-metadata-registry)
 `regression-tests/mainnet/fixtures/`, which serves the same tokens, so both projects test against the same baseline.
-The tests are copied too, with the endpoint paths changed; V1 and CIP-113 tests are not copied (assets-ext has no V1 API
-and does not index CIP-113).
+The tests are copied too, with the endpoint paths changed; V1 tests are not copied (assets-ext has no V1 API).
 
 | Fixture | Tokens | Where it comes from |
 |---|---|---|
@@ -29,6 +29,7 @@ and does not index CIP-113).
 | `cip68_tokens.json` | 675 | CIP-68 fungible tokens (333), a reviewed snapshot of the registry's database |
 | `cip68_rft_tokens.json` | 479 | CIP-68 rich fungible tokens (444), from the chain via Koios |
 | `cip68_validation_errors_tokens.json` | 5 | hand-picked tokens that break CIP-68, with the errors they must report |
+| `cip113_tokens.json` | 3 | the policies registered in the mainnet CIP-113 registry on 2026-10-16, with the extension each must have and the tokens minted under it (`shared/cip113_suite.py`); copied on 2026-11-25. A policy registered later (`b6f47e52…`) is not in it |
 | `cip26_upper_case_subjects.json` | 3 | CIP-26 entries whose registry file writes the subject in upper case (39 on mainnet), with the properties it signs: found in either case, served with the subject as written, and every signature verifies against it (`shared/cip26_signatures.py`) |
 
 Where assets-ext deliberately differs from the registry, the copy says so:
