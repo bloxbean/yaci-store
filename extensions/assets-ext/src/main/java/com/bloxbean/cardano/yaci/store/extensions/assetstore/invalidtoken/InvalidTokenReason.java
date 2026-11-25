@@ -25,11 +25,14 @@ public final class InvalidTokenReason {
     /** CIP-68 and CIP-26: something nobody foresaw threw while an item was indexed or checked. The one reason to look into. */
     public static final String PROCESSING_FAILURE = "processing_failure";
 
-    // CIP-113, reserved: documented in ADR 0007, written when CIP-113 is indexed again. A registered policy with nothing
-    // minted is not one: it is valid, and there is nothing to drop (ADR 0007)
-    public static final String UNREGISTERED_POLICY_IN_JAIL = "unregistered_policy_in_jail";
+    // CIP-113: an output holding a registry NFT that is not stored as a registry node (ADR 0011). A registered policy with
+    // nothing minted is not one: it is valid, and there is nothing to drop (ADR 0007)
+    /** The datum is not a registry node. */
     public static final String REGISTRY_NODE_UNPARSEABLE = "registry_node_unparseable";
+    /** The output is not at the registry's address, or holds the registry NFT of another key than its datum's. */
     public static final String REGISTRY_NODE_SPOOFED = "registry_node_spoofed";
+    /** Reserved (ADR 0007), not written: a token held at a programmable-token address whose policy is not registered. */
+    public static final String UNREGISTERED_POLICY_IN_JAIL = "unregistered_policy_in_jail";
 
     private InvalidTokenReason() {
     }

@@ -13,6 +13,7 @@
   { "name": "org.eclipse.jgit.lib.CommitConfig$CleanupMode",          "allDeclaredMethods": true, "allDeclaredFields": true },
 
   { "name": "com.bloxbean.cardano.yaci.store.extensions.assetstore.validation.ValidationError", "allDeclaredMethods": true, "allDeclaredFields": true, "allDeclaredConstructors": true },
+  { "name": "com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.model.ProgrammableTokenCip113", "allDeclaredMethods": true, "allDeclaredFields": true, "allDeclaredConstructors": true },
   { "name": "com.bloxbean.cardano.yaci.store.extensions.assetstore.validation.FieldCategory",      "allDeclaredMethods": true, "allDeclaredFields": true },
 
   { "name": "com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.cip26.AnnotatedSignature",    "allDeclaredMethods": true, "allDeclaredFields": true, "allDeclaredConstructors": true },
