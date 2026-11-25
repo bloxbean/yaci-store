@@ -40,6 +40,7 @@ import java.util.Map;
 import java.util.LinkedHashMap;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 
 import static com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig.DEFAULT_SECURITY_PARAM;
 
@@ -112,6 +113,9 @@ public class BlockFetchService implements BlockChainDataListener {
 
     @Getter
     private long lastReceivedBlockTime;
+    // When the current session was started. The health check gives a new session the full block-receive delay
+    // before it treats it as stalled, even if the last block was received long ago.
+    private volatile long lastSessionStartTime;
 
     @Transactional
     @Override
@@ -878,6 +882,22 @@ public class BlockFetchService implements BlockChainDataListener {
      *                        already processed.
      */
     public synchronized void startFetch(Point from, Point to, Long fromBlockNumber) {
+        startFetch(from, to, fromBlockNumber, new AtomicBoolean());
+    }
+
+    /**
+     * Like {@link #startFetch(Point, Point, Long)}, but gives up if the node has not completed the connection within
+     * {@code timeoutMs} (0: no limit). yaci opens the connection and waits for the handshake inside the call, with
+     * no time limit.
+     *
+     * @throws NodeNotAnsweringException if the node did not answer in time
+     */
+    public void startFetchWithTimeout(Point from, Point to, Long fromBlockNumber, long timeoutMs) {
+        startWithTimeout("start the block fetch", timeoutMs,
+                cancelled -> startFetch(from, to, fromBlockNumber, cancelled), blockRangeSync::stop);
+    }
+
+    private synchronized void startFetch(Point from, Point to, Long fromBlockNumber, AtomicBoolean cancelled) {
         if (sessionGuard.isCallerStale()) {
             log.warn("Not starting a range fetch from {}: asked by an old sync session", from);
             return;
@@ -906,7 +926,11 @@ public class BlockFetchService implements BlockChainDataListener {
             syncMode = false;
             cursorService.setSyncMode(syncMode);
             blockRangeSync.restart(new SessionListener(session));
+            // yaci logs a cancelled handshake and returns: do not go on with a closed connection
+            if (cancelled.get())
+                throw new NodeNotAnsweringException("Cancelled: start the block fetch");
             blockRangeSync.fetch(from, to);
+            lastSessionStartTime = System.currentTimeMillis();
 
             startKeepAliveThread(syncMode);
         } catch (SyncSessionGuard.StaleSyncSessionException e) {
@@ -927,6 +951,21 @@ public class BlockFetchService implements BlockChainDataListener {
      *                        null. Chain sync delivers the blocks after {@code from}, so the first one must build on it.
      */
     public synchronized void startSync(Point from, Long fromBlockNumber) {
+        startSync(from, fromBlockNumber, new AtomicBoolean());
+    }
+
+    /**
+     * Like {@link #startSync(Point, Long)}, but gives up if the node has not completed the connection within
+     * {@code timeoutMs} (0: no limit).
+     *
+     * @throws NodeNotAnsweringException if the node did not answer in time
+     */
+    public void startSyncWithTimeout(Point from, Long fromBlockNumber, long timeoutMs) {
+        startWithTimeout("start the block sync", timeoutMs,
+                cancelled -> startSync(from, fromBlockNumber, cancelled), blockSync::stop);
+    }
+
+    private synchronized void startSync(Point from, Long fromBlockNumber, AtomicBoolean cancelled) {
         //e.g. an old range session finishing a long batchDone after a restart started a new session
         if (sessionGuard.isCallerStale()) {
             log.warn("Not starting chain sync from {}: asked by an old sync session", from);
@@ -963,6 +1002,9 @@ public class BlockFetchService implements BlockChainDataListener {
                 restoreEpochStateForStart(from, fromBlockNumber);
             }
             blockSync.startSync(from, new SessionListener(session));
+            if (cancelled.get())
+                throw new NodeNotAnsweringException("Cancelled: start the block sync");
+            lastSessionStartTime = System.currentTimeMillis();
             startKeepAliveThread(syncMode);
         } catch (SyncSessionGuard.StaleSyncSessionException e) {
             //A stop or a restart ended this session while it started (e.g. during the cursor read). It closes the
@@ -970,6 +1012,31 @@ public class BlockFetchService implements BlockChainDataListener {
             log.warn("Chain sync from {} was ended while it started: {}", from, e.getMessage());
         } finally {
             sessionGuard.exit(previous);
+        }
+    }
+
+    private void startWithTimeout(String what, long timeoutMs, Consumer<AtomicBoolean> start, Runnable closeConnection) {
+        AtomicBoolean cancelled = new AtomicBoolean();
+        if (timeoutMs <= 0) {
+            start.accept(cancelled);
+            return;
+        }
+
+        Runnable cancel = () -> {
+            cancelled.set(true);
+            // Not through shutdownRangeSync()/shutdownSync(): the stalled start holds this object's monitor.
+            closeConnection.run();
+        };
+        try {
+            NodeCalls.call(what, timeoutMs, () -> {
+                start.accept(cancelled);
+                return null;
+            }, cancel);
+        } catch (RuntimeException e) {
+            // The start can finish just after the time limit, when the cancel is no longer run. The caller treats
+            // this start as failed, so close the connection in every case.
+            cancel.run();
+            throw e;
         }
     }
 
@@ -1003,32 +1070,69 @@ public class BlockFetchService implements BlockChainDataListener {
         }
     }
 
-    public boolean isRunning() {
-        if (syncMode) {
-            return blockSync.isRunning();
-        }
+    // yaci's BlockSync and BlockRangeSync create their connection in start(). Before the first start (for example
+    // while the startup is still waiting for the node) these getters throw NullPointerException. Answer "not
+    // running" instead, so the health check can still decide what to do.
 
-        return blockRangeSync.isRunning();
+    public boolean isRunning() {
+        try {
+            return syncMode ? blockSync.isRunning() : blockRangeSync.isRunning();
+        } catch (NullPointerException e) {
+            return false;
+        }
     }
 
     public int getLastKeepAliveResponseCookie() {
-        if (syncMode) {
-            return blockSync.getLastKeepAliveResponseCookie();
+        try {
+            return syncMode ? blockSync.getLastKeepAliveResponseCookie() : blockRangeSync.getLastKeepAliveResponseCookie();
+        } catch (NullPointerException e) {
+            return 0;
         }
-
-        return blockRangeSync.getLastKeepAliveResponseCookie();
     }
 
     public long getLastKeepAliveResponseTime() {
-        if (syncMode) {
-            return blockSync.getLastKeepAliveResponseTime();
+        try {
+            return syncMode ? blockSync.getLastKeepAliveResponseTime() : blockRangeSync.getLastKeepAliveResponseTime();
+        } catch (NullPointerException e) {
+            return 0;
         }
-
-        return blockRangeSync.getLastKeepAliveResponseTime();
     }
 
     public boolean isScheduledToStop() {
         return scheduledToStop.get();
+    }
+
+    // True while StartService.start() runs. The connection is not up yet, so the health check must not judge it.
+    private volatile boolean starting;
+
+    public boolean isStarting() {
+        return starting;
+    }
+
+    public void setStarting(boolean starting) {
+        this.starting = starting;
+    }
+
+    /**
+     * Called when a restart stopped the sync but could not start it again (for example, the database was down).
+     * Clears the stop flag so the health check does not mistake this for a deliberate stop, and sets the error
+     * flag so it schedules another restart.
+     */
+    public void markRestartFailed() {
+        markStartFailed();
+    }
+
+    /**
+     * Clears the error left by a previous session or a failed restart, before a new start.
+     */
+    public void clearError() {
+        synchronized (sessionStateLock) {
+            isError.set(false);
+        }
+    }
+
+    public long getLastSessionStartTime() {
+        return lastSessionStartTime;
     }
 
     public boolean isError() {
@@ -1141,7 +1245,11 @@ public class BlockFetchService implements BlockChainDataListener {
     @Override
     public void intersactNotFound(Tip tip) {
         log.error("Intersection not found. Current tip: {}", tip);
-        
+
+        // Mark the session failed first. A restart request that is dropped (another restart is running, or within
+        // the debounce window) is only tried again while the sync is in the error state.
+        setError();
+
         // Publish restart event
         RequiredSyncRestartEvent restartEvent = RequiredSyncRestartEvent.builder()
                 .reason("IntersectionNotFound")
