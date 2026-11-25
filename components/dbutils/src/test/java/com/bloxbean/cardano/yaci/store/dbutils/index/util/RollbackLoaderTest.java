@@ -76,6 +76,21 @@ class RollbackLoaderTest {
     }
 
     @Test
+    void theAssetsExtTablesAreRolledBackBySlot() {
+        RollbackConfig config = configLoader.loadRollbackConfig("rollback.yml");
+
+        // assets-ext rolls these back on a RollbackEvent; rollback-data does not publish one, so it needs them here
+        for (String table : List.of("cip68_metadata", "invalid_token", "cip113_registry_node")) {
+            RollbackConfig.TableRollbackDefinition definition = findTableByName(config.getTables(), table);
+            assertNotNull(definition, table);
+            assertEquals("DELETE", definition.getOperation(), table);
+            assertEquals("slot", definition.getCondition().getType(), table);
+            assertEquals("slot", definition.getCondition().getColumn(), table);
+            assertEquals(">", definition.getCondition().getOperator(), table);
+        }
+    }
+
+    @Test
     void testLoadRollbackConfigFromMultipleFiles_WithValidFiles_ShouldCombineConfigs() {
         String[] yamlFilePaths = {"test-rollback-1.yml", "test-rollback-2.yml"};
 
