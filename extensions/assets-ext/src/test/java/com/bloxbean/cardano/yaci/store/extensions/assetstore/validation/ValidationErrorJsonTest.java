@@ -73,8 +73,8 @@ class ValidationErrorJsonTest {
         JsonNode valid = mapper.readTree(mapper.writeValueAsString(Metadata.builder().name(name).valid(true).build()));
         JsonNode invalid = mapper.readTree(mapper.writeValueAsString(Metadata.builder().name(name).build()));
 
-        // valid is in the JSON where it has always been, set from the errors of the token (TokenQueryService);
-        // isEmpty() is for the code and is not in the V2 response
+        // The valid flag stays in the JSON, set by the query service from the errors of the token.
+        // The empty helper is only for the code, so the V2 response does not have it.
         assertThat(valid.get("valid").asBoolean()).isTrue();
         assertThat(invalid.get("valid").asBoolean()).isFalse();
         assertThat(valid.has("empty")).isFalse();
