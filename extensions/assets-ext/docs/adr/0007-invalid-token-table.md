@@ -3,6 +3,8 @@
 ## Status
 
 Accepted. Implemented in PR #1220 (merged 2026-11-05, `d187db632`).
+Amended for CIP-113 by ADR 0011 (2026-11-25): the reserved codes `registry_node_unparseable` and `registry_node_spoofed` are written, and
+`unregistered_policy_in_jail` is removed.
 
 ## Date
 

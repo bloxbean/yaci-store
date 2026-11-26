@@ -5,7 +5,7 @@
 Accepted. It was proposed on 2026-11-20 to answer the maintainers' request to avoid a new table unless one is needed, and accepted at the
 maintainers' meeting of 2026-11-25. The main reason given there is module boundaries: one module should not depend on another module's
 storage. The measurements below support it. The design was then adjusted: the table records which registry each node belongs to
-(Decision 2), and CIP-113 is on by default (Decision 4).
+(Decision 3), and CIP-113 is on by default (Decision 5). How the API serves the nodes is in ADR 0012.
 
 ## Date
 
@@ -120,49 +120,108 @@ at the maintainers' meeting.
 **Performance points the same way.** Data loss is not the issue: the registry can be found fast for every client only through a table of
 the module, or through an index on the largest table of another module.
 
-### 2. What the table holds
+### 2. How CIP-113 fits into the module
 
-| Column | Content |
+CIP-113 is a third source next to CIP-26 and CIP-68, with its own package (`cip113`) and the same layers:
+
+```
+AddressUtxoEvent (utxo store, every block)
+  └─ Cip113Processor ──── Cip113RegistryNodeParser (7-field datum)
+       │  real node ──────────────► cip113_registry_node        (Decision 3)
+       │  not a node ─────────────► invalid_token               (Decision 4, ADR 0007)
+RollbackEvent
+  └─ Cip113RollbackProcessor ─────► delete rows with slot > rollback slot
+GET /subject/{subject}, POST /subject/query
+  └─ TokenQueryService ── Cip113StorageReader ── cip113_registry_node (configured registries only)
+       └─ Subject: type, extensions.cip113, companion_metadata error   (ADR 0012)
+Cip113Configuration: store.assets.ext.cip113.*, bundled registry IDs per network (Decision 5)
+```
+
+- **Write side:** `Cip113Processor` listens to the `AddressUtxoEvent` the utxo store publishes for each block, as the CIP-68 processor
+  does. It never reads the utxo store's tables (Decision 1). It is only created when `store.assets.ext.cip113.enabled` is on.
+- **Read side:** `TokenQueryService` asks `Cip113StorageReader` for the current node of a subject's policy and adds it to the response
+  (ADR 0012). The reader is the only code that reads the table. It returns nothing when CIP-113 is off.
+- **Rollback:** `Cip113RollbackProcessor` runs even when CIP-113 is off, so rows written while it was on never outlive their blocks.
+  admin-cli's `rollback-data` lists the table too (`components/dbutils/.../rollback.yml`).
+- **No dependency on another standard.** CIP-113 does not read `cip68_metadata` or the CIP-26 tables. They only meet in the response.
+
+### 3. The table: `cip113_registry_node` (migration `V0_1700_4`)
+
+One row per **version** of a node: each output that carries a node is a row.
+
+| Column | Type | Content |
+|---|---|---|
+| `key` | `VARCHAR(64)` NOT NULL | The node's key: the registered policy ID (56 hex), or empty for the origin node. 64 because the parser accepts up to 32 bytes, as some linked-list libraries write longer tail sentinels |
+| `registry_policy_id` | `VARCHAR(56)` NOT NULL | The policy of the registry NFT the output holds: which registry the node belongs to (see below) |
+| `slot` | `BIGINT` NOT NULL | The slot of the output |
+| `tx_hash` | `VARCHAR(64)` NOT NULL | The transaction of the output |
+| `tx_index` | `INTEGER` NOT NULL | Orders two versions of a node in one slot. Not in the key |
+| `output_index` | `INTEGER` NOT NULL | Which output of the transaction |
+| `next` | `VARCHAR(64)` NOT NULL | The next key in the sorted list, or the `0xff` sentinel |
+| `minting_logic_script`, `transfer_logic_script`, `third_party_transfer_logic_script`, `unfracking_logic_script` | `VARCHAR(56)` | The 28-byte hash of each credential, `NULL` when absent. A `NULL` unfracking script means unfracking is forbidden |
+| `global_state_policy_id` | `VARCHAR(56)` | `global_state_cs` of the datum, `NULL` when empty |
+| `datum` | `TEXT` NOT NULL | The inline datum (CBOR hex), kept so the node can be re-parsed if the parser changes, and for audit. At most 4,096 hex characters (the parser rejects longer ones) |
+| `last_synced_at` | `TIMESTAMP` | When the row was written |
+
+**Primary key `(key, registry_policy_id, slot, tx_hash)`.**
+
+- **`key` first,** because every read looks up a key: one policy, or the policies of a batch.
+- **`slot, tx_hash`** make each version its own row. Nothing is updated in place, as in `cip68_metadata` (alternative G).
+- **`registry_policy_id`** is in the key because the same key can be a node of two registries. Within one registry, a node sits in
+  at most one output per transaction, since it holds the one NFT of its key. Two registries can each re-create a node of the same policy
+  in one transaction, and without this column those two rows would have the same key.
+
+**Index `idx_cip113_registry_node_slot`** serves rollback, which deletes by `slot`. No other index is needed: the table has a few rows per
+registration.
+
+**Why the registry is recorded.** A network can have more than one registry, one after another or side by side:
+
+- **Registries are redeployed.** Preprod and preview have each been deployed again since the module first bundled them (Decision 5).
+  A client that indexed the old registry and then configures the new one would otherwise serve old and new nodes as if they were one list.
+- **The configuration can change without a resync.** A client can add a registry, or replace one, in
+  `store.assets.ext.cip113.registry-nft-policy-ids`.
+
+So each row records the registry whose NFT it holds, and **reads use only the configured registries**. The rows of a registry that is no
+longer configured stay in the table, but they are not served. A policy registered in more than one configured registry is served from its
+most recent node: the latest by `slot`, then `tx_index`, then `output_index`. To keep serving the old registrations when a new registry is
+deployed, a client lists both.
+
+**The current node of a policy** is its latest row in the configured registries, by `slot`, then `tx_index`, then `output_index`. A node is
+never removed (Context), so the latest version is the live one.
+
+**What the table does not hold, on purpose:**
+
+- **No foreign key and no `CHECK` constraint.** The module checks its input in the write path (ADR 0005): the parser enforces every bound
+  the columns have, so a hostile datum is rejected before it can fail an insert and stop the sync.
+- **Whether a credential is a key or a script.** The registry API does not serve it, so the old module's `*_type` columns are dropped.
+- **The registered tokens themselves.** The table holds nodes, which are policies. Which assets of a policy exist is the `assets` store's
+  business. The API answers for any subject of a registered policy (ADR 0012).
+
+### 4. Only real nodes are stored; the rest goes to `invalid_token`
+
+An output is looked at only if it holds one unit of a configured registry policy: the registry NFT. Then:
+
+| Check | When it fails |
 |---|---|
-| `key` | The node's key: the registered policy ID (56 hex), or empty for the origin node. `VARCHAR(64)` |
-| `registry_policy_id` | The policy of the registry NFT the node holds, i.e. the registry the node belongs to. `VARCHAR(56)` |
-| `slot`, `tx_hash`, `tx_index`, `output_index` | The output that carries this version of the node |
-| `next` | The next key in the list, or the `0xff` sentinel. `VARCHAR(64)` |
-| `minting_logic_script`, `transfer_logic_script`, `third_party_transfer_logic_script`, `unfracking_logic_script` | The 28-byte hash of each credential (56 hex), `NULL` when absent (an empty `VerificationKey`, as the origin node has) |
-| `global_state_policy_id` | `global_state_cs`, `NULL` when empty |
-| `datum` | The inline datum (CBOR hex) |
-| `last_synced_at` | When the row was written |
+| The datum is a 7-field registry node (`Cip113RegistryNodeParser`) | `registry_node_unparseable`: not stored |
+| The output is at the registry's own script address: its payment credential is the registry policy ID | `registry_node_spoofed`: not stored, WARN |
+| The NFT's token name is the datum's key | `registry_node_spoofed`: not stored, WARN |
+| Indexing the output throws something unexpected | `processing_failure`: not stored, WARN. As for CIP-68, one output never stops the sync (ADR 0004) |
 
-- **History is kept, as in `cip68_metadata`.** The primary key is `(key, registry_policy_id, slot, tx_hash)`, and no row is updated in place.
-  The current node of a key is the latest by `slot`, then `tx_index`, then `output_index`. An index on `slot` serves rollback.
-- **Each node records its registry, and reads use only the configured ones.** A registry can be deployed again (preprod and preview have
-  been, Decision 4), and a client can add or replace one in the configuration. The old registry's rows stay in the table, but they are not
-  served, so the nodes of two registries never mix. A policy registered in more than one configured registry is served from its most
-  recent node.
-- **Nodes are indexed straight from each block's `AddressUtxoEvent`,** not at the end of the batch as CIP-68 is (ADR 0010). Whether a node
-  is stored does not depend on any row stored before it, and two versions of a node are ordered by their own slot and `tx_index`, so the
-  blocks of a parallel sync can be indexed in any order.
-- **Only real nodes are stored.** An output is stored only if it is at an address whose payment credential is a configured registry policy ID
-  and holds the NFT `registry policy ID + key` of its own datum's key. Anyone can send an output with any datum to the registry address, but
-  only the registry can mint its NFT.
-- **What is not a real node goes to `invalid_token` (ADR 0007) and is not stored:**
-  - `registry_node_unparseable`: the output holds a registry NFT, but its datum is not a registry node;
-  - `registry_node_spoofed`: the output is not at the registry's address, or holds the NFT of another key than its datum's;
-  - `processing_failure`: indexing the output failed unexpectedly. As for CIP-68, one output never stops the sync (ADR 0004).
-- **Rollback** deletes the rows with `slot` greater than the rollback slot, as for CIP-68, both during the sync and in admin-cli's
-  `rollback-data`.
-- **Whether a credential is a key or a script is not stored.** The registry does not serve it, and the old module's `*_type` columns are
-  dropped.
+*Why the spoof checks:* anyone can send an output with any datum to the registry's address, but only the registry can mint its NFT and
+the registry's validator decides where it goes. A datum that claims a key without the NFT of that key, or an NFT away from the registry's
+address, is not a node.
 
-### 3. The API serves the registry's data
+*Why these are dropped and not stored with an error,* unlike CIP-26 and CIP-68 data that breaks its CIP (ADR 0006): a registry node is
+not metadata that an owner can get wrong. The registry's validator only accepts well-formed nodes, so an output that fails these checks
+was not written by the registry. Each case is still recorded in `invalid_token` (ADR 0007, with the registry NFT as the token and the
+first 256 characters of the datum in `details`), so it can be found without reading the logs.
 
-For a subject whose policy has a current node, the V2 subject endpoints serve `type: PROGRAMMABLE` and `extensions.cip113` with the five
-fields of that node. The policy ID is the first 56 characters of the subject, matched in lower case. A batch request reads the nodes of all
-its policies in one query. Without CIP-26 or CIP-68 metadata, the token is still served, with the `companion_metadata` error (ADR 0007).
-CIP-113 takes no part in the metadata merge: it has no display metadata. A token whose policy is not registered is served as `NATIVE`, even
-when it sits at the programmable-logic address (ADR 0007).
+**Nodes are indexed straight from each block's event,** not at the end of the batch as CIP-68 is (ADR 0010). Whether a node is stored does
+not depend on any row stored before it, and two versions of a node are ordered by their own slot and `tx_index`, so the blocks of a
+parallel sync can be indexed in any order.
 
-### 4. CIP-113 has its own flag, and the registries are bundled per network
+### 5. CIP-113 has its own flag, and the registries are bundled per network
 
 The configuration the module had before #1134 is brought back, so CIP-113 is switched like CIP-26 and CIP-68:
 
@@ -315,7 +374,7 @@ mainnet.
 
 None. The two questions of the proposal were settled on 2026-11-25:
 
-- **The default of `store.assets.ext.cip113.enabled`:** on (Decision 4).
+- **The default of `store.assets.ext.cip113.enabled`:** on (Decision 5).
 - **The size of the index on a pruned database:** measured by the pruned sync from genesis (Measurements). It is about 5 GB, not 250–340 MB.
 
 ## References

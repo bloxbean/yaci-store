@@ -245,7 +245,7 @@ store:
 | `cip26_metadata` | CIP-26 token metadata, logo included (subject as PK), with `validation_errors` |
 | `cip26_sync_state` | GitHub sync progress tracking |
 | `cip68_metadata` | CIP-68 on-chain reference NFT metadata (composite PK: policy_id, asset_name, slot, tx_hash). `label` is 222, 333 or 444; `validation_errors` says what the datum breaks. |
-| `cip113_registry_node` | Every version of every CIP-113 registry node (composite PK: key, slot, tx_hash); the current node of a policy is its latest row. |
+| `cip113_registry_node` | Every version of every CIP-113 registry node (composite PK: key, registry_policy_id, slot, tx_hash); the current node of a policy is its latest row. |
 | `invalid_token` | What is dropped, with the reason (ADR 0007). |
 
 All tables include a `last_synced_at` timestamp for monitoring. See [`db/store/README.md`](src/main/resources/db/store/README.md).

@@ -3,6 +3,7 @@
 ## Status
 
 Accepted. It applies ADR 0006 (validation errors are reported, not enforced) and is implemented in PR #1220 (merged 2026-11-05, `d187db632`).
+It covers the standards that carry metadata, CIP-26 and CIP-68. CIP-113 adds no metadata rule (ADR 0012).
 
 ## Date
 
