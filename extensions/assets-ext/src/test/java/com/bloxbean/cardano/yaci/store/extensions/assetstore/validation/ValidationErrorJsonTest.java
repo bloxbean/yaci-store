@@ -67,17 +67,18 @@ class ValidationErrorJsonTest {
     }
 
     @Test
-    void theMetadataKeepsItsValidAndEmptyFlagsSoTheExistingJsonDoesNotChange() throws Exception {
+    void theMetadataKeepsItsValidFlagButNotTheEmptyHelper() throws Exception {
         var name = new com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.StringProperty("n", "CIP_68");
 
         JsonNode valid = mapper.readTree(mapper.writeValueAsString(Metadata.builder().name(name).valid(true).build()));
         JsonNode invalid = mapper.readTree(mapper.writeValueAsString(Metadata.builder().name(name).build()));
 
-        // both are in the JSON where they have always been; valid is set from the errors of the token (TokenQueryService)
+        // The valid flag stays in the JSON, set by the query service from the errors of the token.
+        // The empty helper is only for the code, so the V2 response does not have it.
         assertThat(valid.get("valid").asBoolean()).isTrue();
         assertThat(invalid.get("valid").asBoolean()).isFalse();
-        assertThat(valid.get("empty").asBoolean()).isFalse();
-        assertThat(mapper.readTree(mapper.writeValueAsString(Metadata.empty())).get("empty").asBoolean()).isTrue();
+        assertThat(valid.has("empty")).isFalse();
+        assertThat(mapper.readTree(mapper.writeValueAsString(Metadata.empty())).has("empty")).isFalse();
     }
 
     @Test
