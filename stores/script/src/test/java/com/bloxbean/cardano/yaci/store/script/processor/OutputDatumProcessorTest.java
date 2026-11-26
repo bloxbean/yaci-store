@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.script.processor;
 
+import com.bloxbean.cardano.client.crypto.Blake2bUtil;
 import com.bloxbean.cardano.client.plutus.spec.PlutusData;
 import com.bloxbean.cardano.yaci.core.model.TransactionBody;
 import com.bloxbean.cardano.yaci.core.model.TransactionOutput;
@@ -22,6 +23,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 @ExtendWith(MockitoExtension.class)
 class OutputDatumProcessorTest {
@@ -39,10 +41,11 @@ class OutputDatumProcessorTest {
     private ArgumentCaptor<Collection<Datum>> datumCaptor;
 
     @Test
-    void givenDeeplyNestedInlineDatum_shouldSkipItAndSaveOtherDatums() throws Throwable {
+    void givenDeeplyNestedInlineDatum_shouldSaveItWithoutStackOverflow() throws Throwable {
         String normalDatum = "d8799f182aff"; //Constr 0 [42]
         String deepDatum = "81".repeat(100_000) + "00";
         String normalDatumHash = PlutusData.deserialize(HexUtil.decodeHexString(normalDatum)).getDatumHash();
+        String deepDatumHash = HexUtil.encodeHexString(Blake2bUtil.blake2bHash256(HexUtil.decodeHexString(deepDatum)));
 
         TransactionEvent transactionEvent = TransactionEvent.builder()
                 .metadata(EventMetadata.builder().slot(100).build())
@@ -82,9 +85,11 @@ class OutputDatumProcessorTest {
 
         Mockito.verify(datumStorage).saveAll(datumCaptor.capture());
         List<Datum> savedDatums = new ArrayList<>(datumCaptor.getValue());
-        assertThat(savedDatums).hasSize(1);
-        assertThat(savedDatums.get(0).getHash()).isEqualTo(normalDatumHash);
-        assertThat(savedDatums.get(0).getDatum()).isEqualTo(normalDatum);
+        assertThat(savedDatums)
+                .extracting(Datum::getHash, Datum::getDatum)
+                .containsExactlyInAnyOrder(
+                        tuple(normalDatumHash, normalDatum),
+                        tuple(deepDatumHash, deepDatum));
 
         Mockito.verify(publisher).publishEvent(Mockito.any(Object.class));
     }
