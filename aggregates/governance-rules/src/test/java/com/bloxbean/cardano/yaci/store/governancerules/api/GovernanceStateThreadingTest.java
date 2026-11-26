@@ -138,6 +138,39 @@ class GovernanceStateThreadingTest {
                 .containsExactly(RatificationResult.ACCEPT, RatificationResult.CONTINUE, RatificationResult.REJECT);
     }
 
+    @Test
+    void sameTransactionWithdrawalsFollowActionIndex() {
+        var tx = "ab".repeat(32);
+        var first = withdrawalAt(new GovActionId(tx, 0), 0, 70);
+        var second = withdrawalAt(new GovActionId(tx, 1), 0, 60);
+        assertThat(statusById(List.of(second, first), 100))
+                .containsEntry(first.getGovActionId(), RatificationResult.ACCEPT)
+                .containsEntry(second.getGovActionId(), RatificationResult.CONTINUE);
+    }
+
+    @Test
+    void sameSlotWithdrawalsFollowTransactionIndex() {
+        var later = withdrawalAt(id(1), 1, 70);
+        var earlier = withdrawalAt(id(2), 0, 60);
+        assertThat(statusById(List.of(later, earlier), 100))
+                .containsEntry(earlier.getGovActionId(), RatificationResult.ACCEPT)
+                .containsEntry(later.getGovActionId(), RatificationResult.CONTINUE);
+    }
+
+    private ProposalContext withdrawalAt(GovActionId govActionId, int txIndex, int amount) {
+        var base = proposal(1, TreasuryWithdrawalsAction.builder()
+                .withdrawals(Map.of("e1" + "11".repeat(28), BigInteger.valueOf(amount))).build(), 100);
+        return ProposalContext.builder().govActionId(govActionId).govAction(base.getGovAction())
+                .proposalSlot(500L).txIndex(txIndex).maxAllowedVotingEpoch(8).votingData(base.getVotingData()).build();
+    }
+
+    private Map<GovActionId, RatificationResult> statusById(List<ProposalContext> proposals, int treasury) {
+        var statuses = new HashMap<GovActionId, RatificationResult>();
+        service.evaluateGovernanceState(input(proposals, treasury, parent, "0.51")).getProposalResults()
+                .forEach(result -> statuses.put(result.getProposal().getGovActionId(), result.getStatus()));
+        return statuses;
+    }
+
     private List<RatificationResult> evaluate(List<ProposalContext> proposals, int treasury,
                                              GovActionId lastParent, String withdrawalThreshold) {
         return statuses(input(proposals, treasury, lastParent, withdrawalThreshold));

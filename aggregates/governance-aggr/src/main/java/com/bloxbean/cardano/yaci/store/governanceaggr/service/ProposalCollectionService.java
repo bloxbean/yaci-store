@@ -122,6 +122,7 @@ public class ProposalCollectionService {
                 .govActionId(govActionId)
                 .maxAllowedVotingEpoch(maxAllowedVotingEpoch)
                 .proposalSlot(proposal.getSlot())
+                .txIndex(proposal.getTxIndex())
                 .build();
     }
 

@@ -19,6 +19,7 @@ GovernanceEvaluationInput input = GovernanceEvaluationInput.builder()
             .votingData(votingData)                  // VotingData with DRep/SPO/Committee votes
             .govActionId(govActionId)
             .proposalSlot(slot)
+            .txIndex(txIndex)                        // position of the proposal's tx in its block
             .maxAllowedVotingEpoch(proposalEpoch + govActionLifetime)
             .build()
     ))
@@ -42,7 +43,7 @@ result.isActionRatificationDelayed(); // True if a delaying action was ACCEPT in
 
 ## Concepts and I/O
 - Input
-  - `currentProposals`: List of `ProposalContext` (GovAction, VotingData, GovActionId, slot, maxAllowedVotingEpoch).
+  - `currentProposals`: List of `ProposalContext` (GovAction, VotingData, GovActionId, slot, txIndex, maxAllowedVotingEpoch). Proposals of the same priority are evaluated in submission order: slot, then txIndex, then gov action index.
   - Governance state: `currentEpoch`, `ProtocolParams` (thresholds), `ConstitutionCommittee` (members/threshold/state), `isBootstrapPhase`, `treasury`, `lastEnactedGovActionIds`.
 - Output
   - `proposalResults`: ACCEPT (RATIFIED), CONTINUE (ACTIVE), REJECT (EXPIRED) per proposal.
