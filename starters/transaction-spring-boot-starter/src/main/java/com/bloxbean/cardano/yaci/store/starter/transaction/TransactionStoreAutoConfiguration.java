@@ -1,8 +1,10 @@
 package com.bloxbean.cardano.yaci.store.starter.transaction;
 
+import com.bloxbean.cardano.yaci.core.config.YaciConfig;
 import com.bloxbean.cardano.yaci.store.api.transaction.TransactionApiConfiguration;
 import com.bloxbean.cardano.yaci.store.transaction.TransactionStoreConfiguration;
 import com.bloxbean.cardano.yaci.store.transaction.TransactionStoreProperties;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -19,6 +21,13 @@ public class TransactionStoreAutoConfiguration {
     @Autowired
     TransactionAutoConfigProperties properties;
 
+    @PostConstruct
+    public void configureYaciFullTxCbor() {
+        if (properties.getTransaction().isSaveFullTxCbor()) {
+            YaciConfig.INSTANCE.setReturnFullTxCbor(true);
+        }
+    }
+
     @Bean
     public TransactionStoreProperties transactionStoreProperties() {
         var transactionStoreProperties = new TransactionStoreProperties();
@@ -28,6 +37,7 @@ public class TransactionStoreAutoConfiguration {
         transactionStoreProperties.setPruningSafeSlots(properties.getTransaction().getPruningSafeSlots());
         transactionStoreProperties.setSaveWitness(properties.getTransaction().isSaveWitness());
         transactionStoreProperties.setSaveCbor(properties.getTransaction().isSaveCbor());
+        transactionStoreProperties.setSaveFullTxCbor(properties.getTransaction().isSaveFullTxCbor());
         transactionStoreProperties.setCborPruningEnabled(properties.getTransaction().isCborPruningEnabled());
         transactionStoreProperties.setCborPruningSafeSlots(properties.getTransaction().getCborPruningSafeSlots());
 

@@ -75,6 +75,7 @@ class TransactionProcessorTest {
     private ArgumentCaptor<List<TxnCbor>> txnCborCaptor;
 
     private static final String TX_CBOR_HEX = "A1B2C3";
+    private static final String FULL_TX_CBOR_HEX = "84A1B2C3";
 
     @BeforeEach
     public void setup() {
@@ -138,7 +139,8 @@ class TransactionProcessorTest {
             assertThat(txnCbor.getTxHash()).isEqualTo("f0a6e529be26c2326c447c39159e05bb904ff1f7900b6df3852dd539de0343e8");
             assertThat(txnCbor.getSlot()).isEqualTo(eventMetadata().getSlot());
             assertThat(txnCbor.getCborData()).isEqualTo(HexUtil.decodeHexString(TX_CBOR_HEX));
-            assertThat(txnCbor.getCborSize()).isEqualTo(3);
+            //Body-only cbor: the ledger size is unknown
+            assertThat(txnCbor.getCborSize()).isNull();
         });
     }
 
@@ -323,6 +325,59 @@ class TransactionProcessorTest {
                 .transactions(List.of(transaction))
                 .metadata(eventMetadata())
                 .build();
+    }
+
+    @Test
+    void givenTransactionEvent_whenSaveFullTxCborAloneEnabled_shouldStoreFullTxCbor() {
+        // saveCbor is OFF -- only saveFullTxCbor is on. It must work standalone, without requiring saveCbor.
+        var transactions = transactions();
+        transactions.get(0).setTxCbor(FULL_TX_CBOR_HEX);
+
+        handleWithFullTxCborEnabled(transactions);
+
+        verify(transactionCborStorage, Mockito.times(1)).save(txnCborCaptor.capture());
+        assertThat(txnCborCaptor.getValue()).singleElement().satisfies(txnCbor -> {
+            assertThat(txnCbor.getTxHash()).isEqualTo("f0a6e529be26c2326c447c39159e05bb904ff1f7900b6df3852dd539de0343e8");
+            assertThat(txnCbor.getCborData()).isEqualTo(HexUtil.decodeHexString(FULL_TX_CBOR_HEX));
+            //Ledger size: the 4-byte Alonzo+ envelope without the is_valid byte
+            assertThat(txnCbor.getCborSize()).isEqualTo(3);
+        });
+    }
+
+    @Test
+    void givenTransactionEvent_whenFullTxCborNotAvailable_shouldSkipCborAndPublishErrorEvent() {
+        //Yaci returns a null tx cbor when it can't splice the exact on-chain bytes
+        handleWithFullTxCborEnabled(transactions());
+
+        verify(transactionCborStorage, Mockito.never()).save(any());
+
+        ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(publisher, Mockito.atLeastOnce()).publishEvent(eventCaptor.capture());
+
+        assertThat(eventCaptor.getAllValues())
+                .filteredOn(ErrorEvent.class::isInstance)
+                .map(ErrorEvent.class::cast)
+                .singleElement().satisfies(errorEvent -> {
+                    assertThat(errorEvent.getErrorCode()).isEqualTo(ErrorCode.DATA_MISSING_ERROR.name());
+                    assertThat(errorEvent.getBlock()).isEqualTo(eventMetadata().getBlock());
+                    assertThat(errorEvent.getDetails()).contains("f0a6e529be26c2326c447c39159e05bb904ff1f7900b6df3852dd539de0343e8");
+                });
+    }
+
+    private void handleWithFullTxCborEnabled(List<Transaction> transactions) {
+        TransactionStoreProperties properties = TransactionStoreProperties.builder()
+                .saveCbor(false)
+                .saveFullTxCbor(true)
+                .build();
+
+        TransactionProcessor processorWithFullTxCborOnly = new TransactionProcessor(
+                transactionStorage, transactionCborStorage, transactionWitnessStorage, invalidTransactionStorage,
+                new ObjectMapper(), feeResolver, publisher, properties);
+
+        processorWithFullTxCborOnly.handleTransactionEvent(TransactionEvent.builder()
+                .transactions(transactions)
+                .metadata(eventMetadata())
+                .build());
     }
 
     private EventMetadata eventMetadata() {

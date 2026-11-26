@@ -52,9 +52,8 @@ public class SyncStatusController {
         if (!adminUiProperties.isSyncControlEnabled() || storeProperties.isReadOnlyMode()) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
-        if (startService.isStarted()) {
-            startService.stop();
-        }
+        // Stop even if it is not running: after a failed restart, this keeps auto-recovery from starting it again
+        startService.stop();
         return ResponseEntity.ok().build();
     }
 
