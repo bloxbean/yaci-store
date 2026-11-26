@@ -74,7 +74,9 @@ public class GovernanceEvaluationService {
 
         List<ProposalContext> sortedProposals = input.getCurrentProposals().stream()
                 .sorted(Comparator.comparingInt((ProposalContext proposal) -> GovernanceActionUtil.getActionPriority(proposal.getGovAction().getType()))
-                        .thenComparingLong(ProposalContext::getProposalSlot))
+                        .thenComparingLong(ProposalContext::getProposalSlot)
+                        .thenComparingInt(ProposalContext::getTxIndex)
+                        .thenComparingInt(proposal -> proposal.getGovActionId().getGov_action_index()))
                 .toList();
 
         // ENACT changes the state used by later actions, without changing the caller's snapshot.
