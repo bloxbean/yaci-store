@@ -25,9 +25,9 @@ public class ScriptRollbackProcessor {
 
     @EventListener
     @Transactional
+    //TODO -- tests
     public void handleRollbackEvent(RollbackEvent rollbackEvent) {
-        //Rows have random ids, so a block processed again must not find its rows still there
-        int count = txScriptStorage.deleteBySlotGreaterThan(rollbackEvent.generatedKeyRollbackSlot());
+        int count = txScriptStorage.deleteBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
 
         log.info("Rollback -- {} transaction_scripts records", count);
     }

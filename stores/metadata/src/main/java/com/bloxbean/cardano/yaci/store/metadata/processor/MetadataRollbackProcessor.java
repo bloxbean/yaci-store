@@ -22,9 +22,9 @@ public class MetadataRollbackProcessor {
 
     @EventListener
     @Transactional
+    //TODO -- tests
     public void handleRollbackEvent(RollbackEvent rollbackEvent) {
-        //Rows have random ids, so a block processed again must not find its rows still there
-        int count = txMetadataStorage.deleteBySlotGreaterThan(rollbackEvent.generatedKeyRollbackSlot());
+        int count = txMetadataStorage.deleteBySlotGreaterThan(rollbackEvent.getRollbackTo().getSlot());
 
         log.info("Rollback -- {} transaction_metadata records", count);
     }

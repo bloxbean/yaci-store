@@ -154,9 +154,9 @@ public class MIRProcessor {
 
     @EventListener
     @Transactional
+    //TODO -- tests
     public void handleRollbackEvent(RollbackEvent rollbackEvent) {
-        //Rows have random ids, so a block processed again must not find its rows still there
-        int count = mirStorage.rollbackMIRs(rollbackEvent.generatedKeyRollbackSlot());
+        int count = mirStorage.rollbackMIRs(rollbackEvent.getRollbackTo().getSlot());
         log.info("Rollback -- {} MIR records", count);
     }
 }
