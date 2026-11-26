@@ -157,6 +157,14 @@ class GovernanceStateThreadingTest {
                 .containsEntry(later.getGovActionId(), RatificationResult.CONTINUE);
     }
 
+    @Test
+    void missingWithdrawalMapCountsAsZeroWhenEnacted() {
+        var empty = proposal(1, TreasuryWithdrawalsAction.builder().withdrawals(null).build(), 100);
+        var full = proposal(2, withdrawal(), 100);
+        assertThat(evaluate(List.of(empty, full), 70, parent, "0.51"))
+                .containsExactly(RatificationResult.ACCEPT, RatificationResult.ACCEPT);
+    }
+
     private ProposalContext withdrawalAt(GovActionId govActionId, int txIndex, int amount) {
         var base = proposal(1, TreasuryWithdrawalsAction.builder()
                 .withdrawals(Map.of("e1" + "11".repeat(28), BigInteger.valueOf(amount))).build(), 100);

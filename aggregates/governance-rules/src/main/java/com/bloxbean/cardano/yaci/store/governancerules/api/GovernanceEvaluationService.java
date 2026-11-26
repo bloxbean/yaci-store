@@ -129,8 +129,7 @@ public class GovernanceEvaluationService {
             }
             case TREASURY_WITHDRAWALS_ACTION -> {
                 var action = (TreasuryWithdrawalsAction) proposal.getGovAction();
-                BigInteger withdrawals = action.getWithdrawals().values().stream()
-                        .reduce(BigInteger.ZERO, BigInteger::add);
+                BigInteger withdrawals = GovernanceActionUtil.totalWithdrawal(action);
                 yield state.toBuilder().treasury(state.getTreasury().subtract(withdrawals)).build();
             }
             default -> state;

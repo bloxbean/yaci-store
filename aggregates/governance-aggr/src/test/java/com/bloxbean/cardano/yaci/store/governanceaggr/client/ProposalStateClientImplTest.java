@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.*;
 
@@ -71,6 +72,20 @@ class ProposalStateClientImplTest {
                 .lastEnactedGovActionIds(Map.of(ProposalType.P_PARAM_UPDATE, tipId)).build());
         assertThat(result.getProposalResults()).extracting(ProposalEvaluationResult::getStatus)
                 .containsExactly(RatificationResult.ACCEPT);
+    }
+
+    @Test
+    void failsWhenARatifiedProposalCannotBeRead() {
+        var a = new GovActionId("ff".repeat(32), 0);
+        var b = new GovActionId("00".repeat(32), 1);
+        when(statuses.findLastEnactedProposals(GovActionType.PARAMETER_CHANGE_ACTION, 28)).thenReturn(List.of(
+                GovActionProposalStatus.builder().govActionTxHash(a.getTransactionId()).govActionIndex(0).epoch(27).build(),
+                GovActionProposalStatus.builder().govActionTxHash(b.getTransactionId()).govActionIndex(1).epoch(27).build()));
+        when(proposals.findByGovActionIds(anyList())).thenReturn(List.of(stored(a, null)));
+
+        assertThatThrownBy(() -> client.getLastEnactedProposal(GovActionType.PARAMETER_CHANGE_ACTION, 28))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining(b.getTransactionId());
     }
 
     @Test
