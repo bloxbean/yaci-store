@@ -2,13 +2,14 @@
 
 ## Status
 
-Proposed, for discussion with the maintainers. Decision 1 (a table of the module) answers their request to avoid a new table unless it is
-needed. The measurements behind it were taken on 2026-11-20. Decisions 2 to 4 describe the table and the API as proposed. The open questions
-are still to be decided.
+Accepted. It was proposed on 2026-11-20 to answer the maintainers' request to avoid a new table unless one is needed, and accepted at the
+maintainers' meeting of 2026-11-25. The main reason given there is module boundaries: one module should not depend on another module's
+storage. The measurements below support it. The design was then adjusted: the table records which registry each node belongs to
+(Decision 2), and CIP-113 is on by default (Decision 4).
 
 ## Date
 
-2026-11-20
+2026-11-20 (proposed), 2026-11-25 (accepted)
 
 ## Context
 
@@ -112,14 +113,19 @@ The table needs none of them:
 - **It is tiny:** 7 rows and 48 kB on mainnet, one write per node output, one indexed read per lookup (0.027 ms).
 - **It works the same for every client** and on every database the module supports (PostgreSQL, MySQL, H2).
 
-The reason for the table is therefore performance and independence from the utxo store's configuration, not data loss: **the registry can be
-found fast for every client only through a table of the module, or through an index on the largest table of another module.**
+**The reason for the table is module boundaries.** assets-ext reads only events from other modules, never their tables, so the utxo store
+can change its schema, indexes or pruning without breaking it. This is how `cip68_metadata` works already, and it was the main reason given
+at the maintainers' meeting.
+
+**Performance points the same way.** Data loss is not the issue: the registry can be found fast for every client only through a table of
+the module, or through an index on the largest table of another module.
 
 ### 2. What the table holds
 
 | Column | Content |
 |---|---|
 | `key` | The node's key: the registered policy ID (56 hex), or empty for the origin node. `VARCHAR(64)` |
+| `registry_policy_id` | The policy of the registry NFT the node holds, i.e. the registry the node belongs to. `VARCHAR(56)` |
 | `slot`, `tx_hash`, `tx_index`, `output_index` | The output that carries this version of the node |
 | `next` | The next key in the list, or the `0xff` sentinel. `VARCHAR(64)` |
 | `minting_logic_script`, `transfer_logic_script`, `third_party_transfer_logic_script`, `unfracking_logic_script` | The 28-byte hash of each credential (56 hex), `NULL` when absent (an empty `VerificationKey`, as the origin node has) |
@@ -127,27 +133,41 @@ found fast for every client only through a table of the module, or through an in
 | `datum` | The inline datum (CBOR hex) |
 | `last_synced_at` | When the row was written |
 
-- **History is kept, as in `cip68_metadata`.** The primary key is `(key, slot, tx_hash)`, and no row is updated in place. The current node of
-  a key is the latest by `slot`, then `tx_index`. An index on `slot` serves rollback.
+- **History is kept, as in `cip68_metadata`.** The primary key is `(key, registry_policy_id, slot, tx_hash)`, and no row is updated in place.
+  The current node of a key is the latest by `slot`, then `tx_index`, then `output_index`. An index on `slot` serves rollback.
+- **Each node records its registry, and reads use only the configured ones.** A registry can be deployed again (preprod and preview have
+  been, Decision 4), and a client can add or replace one in the configuration. The old registry's rows stay in the table, but they are not
+  served, so the nodes of two registries never mix. A policy registered in more than one configured registry is served from its most
+  recent node.
+- **Nodes are indexed straight from each block's `AddressUtxoEvent`,** not at the end of the batch as CIP-68 is (ADR 0010). Whether a node
+  is stored does not depend on any row stored before it, and two versions of a node are ordered by their own slot and `tx_index`, so the
+  blocks of a parallel sync can be indexed in any order.
 - **Only real nodes are stored.** An output is stored only if it is at an address whose payment credential is a configured registry policy ID
   and holds the NFT `registry policy ID + key` of its own datum's key. Anyone can send an output with any datum to the registry address, but
   only the registry can mint its NFT.
-- **A datum that cannot be read is not stored.** It goes to `invalid_token` as `registry_node_unparseable` (ADR 0007), as the registry does.
-- **Rollback** deletes the rows with `slot` greater than the rollback slot, as for CIP-68.
+- **What is not a real node goes to `invalid_token` (ADR 0007) and is not stored:**
+  - `registry_node_unparseable`: the output holds a registry NFT, but its datum is not a registry node;
+  - `registry_node_spoofed`: the output is not at the registry's address, or holds the NFT of another key than its datum's;
+  - `processing_failure`: indexing the output failed unexpectedly. As for CIP-68, one output never stops the sync (ADR 0004).
+- **Rollback** deletes the rows with `slot` greater than the rollback slot, as for CIP-68, both during the sync and in admin-cli's
+  `rollback-data`.
 - **Whether a credential is a key or a script is not stored.** The registry does not serve it, and the old module's `*_type` columns are
   dropped.
 
 ### 3. The API serves the registry's data
 
 For a subject whose policy has a current node, the V2 subject endpoints serve `type: PROGRAMMABLE` and `extensions.cip113` with the five
-fields of that node. A batch request reads the nodes of all its policies in one query. Without CIP-26 or CIP-68 metadata, the token is served
-with the `companion_metadata` error (ADR 0007). CIP-113 takes no part in the metadata merge: it has no display metadata.
+fields of that node. The policy ID is the first 56 characters of the subject, matched in lower case. A batch request reads the nodes of all
+its policies in one query. Without CIP-26 or CIP-68 metadata, the token is still served, with the `companion_metadata` error (ADR 0007).
+CIP-113 takes no part in the metadata merge: it has no display metadata. A token whose policy is not registered is served as `NATIVE`, even
+when it sits at the programmable-logic address (ADR 0007).
 
 ### 4. CIP-113 has its own flag, and the registries are bundled per network
 
 The configuration the module had before #1134 is brought back, so CIP-113 is switched like CIP-26 and CIP-68:
 
-- **`store.assets.ext.cip113.enabled`** switches CIP-113 on or off, under the master flag `store.assets.ext.enabled`. When it is off, no
+- **`store.assets.ext.cip113.enabled`** switches CIP-113 on or off, under the master flag `store.assets.ext.enabled`. **It is on by
+  default,** like CIP-26 and CIP-68, now that the registry is live on mainnet. Before #1134 it was off until then. When it is off, no
   registry node is read or stored and every token is served as `NATIVE`.
 - **The policy IDs of the deployed registries are bundled per network** in `cip113/cip113-mainnet.properties`, `cip113-preprod.properties`
   and `cip113-preview.properties`, and picked by `store.cardano.protocol-magic`, as CIP-26 picks its registry (`Cip26NetworkDefaults`):
@@ -160,10 +180,11 @@ The configuration the module had before #1134 is brought back, so CIP-113 is swi
 
   The preprod and preview IDs differ from the ones the module bundled before #1134 (`b9b19dc6…` and `dc8a7d1f…`): the registries have been
   deployed again since.
-- **`store.assets.ext.cip113.registry-nft-policy-ids`** replaces the bundled IDs, for another registry or a private network.
+- **`store.assets.ext.cip113.registry-nft-policy-ids`** replaces the bundled IDs, for another registry or a private network. On a network
+  with no bundled registry and none configured, every token is served as `NATIVE`.
 
 The registry has no flag: CIP-113 is on when policy IDs are configured. A flag is kept here because the IDs are bundled, so without it a
-client could not turn CIP-113 off. The flag's default is an open question.
+client could not turn CIP-113 off.
 
 ## Measurements
 
@@ -192,7 +213,22 @@ Notes on the estimates:
 - **Insert cost:** the sample's index fits in memory. On an 8 GB index, which mostly does not, an insert costs more, not less.
 - **A pruned database** keeps only the unspent outputs and the spent outputs of the last `pruning-safe-blocks`: about 3% of the rows, so its
   index holds about 3% of the entries. A pruned database still inserts every output before pruning deletes the spent ones, so the index
-  would also hold space freed by deletes until it is reused; that is not measured (see Open questions).
+  also holds space freed by deletes until it is reused. The pruned sync below measures this.
+
+### A pruned sync from genesis with the index (2026-11-23 to 2026-11-25)
+
+To complete alternative D, mainnet was synced from genesis with `store.utxo.pruning-enabled=true` and the
+`address_utxo(owner_payment_credential)` index created on the empty table, so it was kept up to date during the whole sync. Same build and
+configuration as an unpruned run of the same week.
+
+- **The index does not stay small.** It was 5.05 GB at the tip, and it stayed 5.05 GB after pruning deleted 237 M rows. Its leaf pages were
+  only 12.6% full. A B-tree does not shrink after deletes without a `REINDEX`, so a pruned database synced from genesis carries an index
+  close to the unpruned size, not the 250–340 MB that the live entries alone would need.
+- **Pruning falls behind during a sync from genesis.** The deletes per epoch grew from milliseconds to 40 minutes, then 2.8 h (28 M rows),
+  then 11.35 h (103 M rows, about 2,500 rows/s). A run in progress blocks the next ones. At block 11.2 M the table still held 198 M live rows
+  (156 GB of heap), and the index was 4.5 GB.
+
+So alternative D costs a pruned client about as much index as an unpruned one, unless the operator rebuilds the index after the sync.
 
 ## Consequences
 
@@ -202,8 +238,10 @@ Notes on the estimates:
 - **The sync must start before the registry was deployed** (mainnet slot 199,384,339), or the nodes created before the start are missing.
   This holds for every option, with or without a table, and the same is true of CIP-68.
 - **The parser must change if the registry's datum changes,** as it did from 5 to 7 fields.
-- **The registry's CIP-113 regression suites** (`cip113_suite.py`, `test_v2_cip113.py`) are ported into `regression-tests` with the
-  implementation, so the module's CIP-113 answers are compared with the registry's, as for CIP-26 and CIP-68.
+- **The nodes of a registry that is no longer configured stay in the table.** They are a few rows, and they are not served.
+- **The CIP-113 regression suite** is in `regression-tests` (`shared/cip113_suite.py`, `mainnet/test_cip113.py`, `preprod/test_cip113.py`,
+  marker `cip113`). Its fixtures are generated from the chain (`shared/generate_cip113_fixtures.py`), and it compares the module's CIP-113
+  answers with cf-token-metadata-registry's, as for CIP-26 and CIP-68.
 
 ## Alternatives considered
 
@@ -275,11 +313,10 @@ mainnet.
 
 ## Open questions
 
-- **The default of `store.assets.ext.cip113.enabled`:**
-  - on, like CIP-26 and CIP-68, now that the registry is live on mainnet;
-  - or off, as before #1134, when it was off until CIP-113 was live on mainnet.
-- **The real size and cost of the index on a pruned database,** to complete alternative D. The 250–340 MB is scaled from a sample and counts
-  only live entries. A pruned sync from genesis with the index would measure its actual size after pruning, and how much it slows the sync.
+None. The two questions of the proposal were settled on 2026-11-25:
+
+- **The default of `store.assets.ext.cip113.enabled`:** on (Decision 4).
+- **The size of the index on a pruned database:** measured by the pruned sync from genesis (Measurements). It is about 5 GB, not 250–340 MB.
 
 ## References
 
