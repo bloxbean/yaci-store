@@ -65,7 +65,18 @@ public class ProposalStateClientImpl implements ProposalStateClient {
         if (statuses.isEmpty())
             return Optional.empty();
 
-        var proposals = RatifiedProposalOrder.orderParameterChanges(getGovActionProposals(statuses));
+        var found = getGovActionProposals(statuses);
+        var foundIds = found.stream().map(proposal -> new GovActionId(proposal.getTxHash(), proposal.getIndex()))
+                .collect(Collectors.toSet());
+        var missingIds = statuses.stream()
+                .map(status -> new GovActionId(status.getGovActionTxHash(), status.getGovActionIndex()))
+                .filter(id -> !foundIds.contains(id))
+                .toList();
+        // A missing link would make its parent look like the chain tip.
+        if (!missingIds.isEmpty())
+            throw new IllegalStateException("Ratified proposals not found or unreadable: " + missingIds);
+
+        var proposals = RatifiedProposalOrder.orderParameterChanges(found);
         return proposals.isEmpty() ? Optional.empty() : Optional.of(proposals.getLast());
     }
 }
