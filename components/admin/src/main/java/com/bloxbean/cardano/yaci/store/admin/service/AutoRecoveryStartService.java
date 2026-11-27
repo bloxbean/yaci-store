@@ -25,7 +25,8 @@ public class AutoRecoveryStartService {
     public void checkHealthAndStart() {
         var healthStatus = healthService.getHealthStatus();
 
-        if (healthStatus.isScheduleToStop())
+        // Stopped on purpose, or still starting (a start that fails is retried by the restart processor)
+        if (healthStatus.isScheduleToStop() || healthStatus.isStarting())
             return;
 
         // Check if system is healthy: connection alive, no errors, and receiving blocks

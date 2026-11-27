@@ -11,6 +11,7 @@ cf-rewards="org.cardanofoundation:cf-rewards-calculation:1.0.2"
 rocks-types="com.bloxbean:rocks-types:0.0.1-preview6"
 
 cbor = "co.nstant.in:cbor:0.9"
+datasource-proxy = "net.ttddyy:datasource-proxy:1.11.1"
 hibernate-types = "io.hypersistence:hypersistence-utils-hibernate-63:3.7.1"
 codehaus-janino = "org.codehaus.janino:janino:3.1.11"
 guava = "com.google.guava:guava:33.0.0-jre"

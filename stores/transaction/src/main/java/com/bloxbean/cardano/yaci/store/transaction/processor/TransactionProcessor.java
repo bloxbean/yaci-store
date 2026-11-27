@@ -12,6 +12,7 @@ import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.common.domain.TxOuput;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
+import com.bloxbean.cardano.yaci.store.common.util.AmountUtil;
 import com.bloxbean.cardano.yaci.store.common.util.ErrorCode;
 import com.bloxbean.cardano.yaci.store.events.ErrorEvent;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
@@ -29,6 +30,7 @@ import com.bloxbean.cardano.yaci.store.transaction.storage.InvalidTransactionSto
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionCborStorage;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionStorage;
 import com.bloxbean.cardano.yaci.store.transaction.storage.TransactionWitnessStorage;
+import com.bloxbean.cardano.yaci.store.transaction.util.TxSizeUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
@@ -215,15 +217,12 @@ public class TransactionProcessor {
 
         List<Transaction> transactions = event.getTransactions();
         List<TxnWitness> txnWitnesses = new ArrayList<>();
-
         int index = 0;
         for(Transaction transaction: transactions) {
-            if (transaction.isInvalid())
+            if (transaction.isInvalid() || transaction.getWitnesses() == null)
                 continue;
 
             Witnesses witnesses = transaction.getWitnesses();
-            if (witnesses == null)
-                return;
 
             var vkeyWitnessList = witnesses.getVkeyWitnesses();
             var bootstrapWitnessList = witnesses.getBootstrapWitnesses();
@@ -264,9 +263,10 @@ public class TransactionProcessor {
                 }
             }
 
-            if (txnWitnesses.size() > 0)
-                transactionWitnessStorage.saveAll(txnWitnesses);
         }
+
+        if (txnWitnesses.size() > 0)
+            transactionWitnessStorage.saveAll(txnWitnesses);
     }
 
     private String getKeyHash(String pubKey) {
@@ -307,11 +307,13 @@ public class TransactionProcessor {
         }
 
         byte[] cborData = HexUtil.decodeHexString(cborHex);
+        //Ledger size needs the full tx; a body-only cbor can't give it
+        Integer cborSize = transactionStoreProperties.isSaveFullTxCbor() ? TxSizeUtil.ledgerSize(cborData) : null;
 
         txnCborList.add(TxnCbor.builder()
                 .txHash(transaction.getTxHash())
                 .cborData(cborData)
-                .cborSize(cborData.length)
+                .cborSize(cborSize)
                 .slot(transaction.getSlot())
                 .build());
     }
@@ -319,7 +321,7 @@ public class TransactionProcessor {
     private TxOuput convertOutput(TransactionOutput output) {
         if (output == null)
             return null;
-        List<Amt> amounts = output.getAmounts().stream().map(amount ->
+        List<Amt> amounts = AmountUtil.withoutZeroQuantityAssets(output.getAmounts()).stream().map(amount ->
                         Amt.builder()
                                 .unit(amount.getUnit())
                                 .policyId(amount.getPolicyId())

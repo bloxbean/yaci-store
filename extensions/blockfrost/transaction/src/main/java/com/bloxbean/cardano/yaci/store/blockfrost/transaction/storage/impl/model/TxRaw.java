@@ -22,7 +22,7 @@ public class TxRaw {
     private BigInteger fees;
     private Long ttl;
     private Long validityIntervalStart;
-    private Integer cborSize;
+    private Integer size;
     private Boolean invalid;
     private int withdrawalCount;
     private int delegationCount;

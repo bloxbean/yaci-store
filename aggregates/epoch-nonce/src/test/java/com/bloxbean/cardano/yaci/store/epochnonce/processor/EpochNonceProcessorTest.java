@@ -116,6 +116,20 @@ class EpochNonceProcessorTest {
     }
 
     @Test
+    void handleEpochTransition_sameOrEarlierEpoch_shouldPreserveNonce() {
+        for (int epoch : new int[] {49, 50}) {
+            epochNonceProcessor.handleEpochTransition(EpochTransitionCommitEvent.builder()
+                    .previousEpoch(50)
+                    .epoch(epoch)
+                    .previousEra(Era.Conway)
+                    .era(Era.Babbage)
+                    .build());
+        }
+
+        verifyNoInteractions(epochNonceService);
+    }
+
+    @Test
     void handleRollback_shouldDelegateToService() {
         RollbackEvent rollbackEvent = RollbackEvent.builder()
                 .rollbackTo(new Point(44635389, "4bbe984de25c79052af653c2424122a7b324b27143886849028789a597ce4ae6"))

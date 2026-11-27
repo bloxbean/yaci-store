@@ -38,6 +38,3 @@ CREATE INDEX if not exists idx_stake_addr_balance_stake_addr
 
 CREATE INDEX if not exists idx_stake_addr_balance_block_time
     ON stake_address_balance (block_time);
-
-CREATE INDEX if not exists idx_stake_addr_balance_epoch
-    ON stake_address_balance (epoch);

@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
 import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
+import com.bloxbean.cardano.yaci.store.common.util.RatifiedProposalOrder;
 import com.bloxbean.cardano.yaci.store.governance.storage.GovActionProposalStorage;
 import com.bloxbean.cardano.yaci.store.governanceaggr.domain.GovActionProposalStatus;
 import com.bloxbean.cardano.yaci.store.governanceaggr.storage.GovActionProposalStatusStorage;
@@ -60,19 +61,22 @@ public class ProposalStateClientImpl implements ProposalStateClient {
 
     @Override
     public Optional<GovActionProposal> getLastEnactedProposal(GovActionType govActionType, int currentEpoch) {
-        var govActionProposalStatusOpt = govActionProposalStatusStorage.findLastEnactedProposal(govActionType, currentEpoch);
-        if (govActionProposalStatusOpt.isEmpty()) {
+        var statuses = govActionProposalStatusStorage.findLastEnactedProposals(govActionType, currentEpoch);
+        if (statuses.isEmpty())
             return Optional.empty();
-        }
 
-        var govActionProposals = govActionProposalStorage.findByGovActionIds(
-                List.of(new GovActionId(govActionProposalStatusOpt.get().getGovActionTxHash(), govActionProposalStatusOpt.get().getGovActionIndex())));
+        var found = getGovActionProposals(statuses);
+        var foundIds = found.stream().map(proposal -> new GovActionId(proposal.getTxHash(), proposal.getIndex()))
+                .collect(Collectors.toSet());
+        var missingIds = statuses.stream()
+                .map(status -> new GovActionId(status.getGovActionTxHash(), status.getGovActionIndex()))
+                .filter(id -> !foundIds.contains(id))
+                .toList();
+        // A missing link would make its parent look like the chain tip.
+        if (!missingIds.isEmpty())
+            throw new IllegalStateException("Ratified proposals not found or unreadable: " + missingIds);
 
-        if (govActionProposals.isEmpty()) {
-            return Optional.empty();
-        } else {
-            var govActionProposal = govActionProposals.get(0);
-            return proposalMapper.toGovActionProposal(govActionProposal);
-        }
+        var proposals = RatifiedProposalOrder.orderParameterChanges(found);
+        return proposals.isEmpty() ? Optional.empty() : Optional.of(proposals.getLast());
     }
 }
