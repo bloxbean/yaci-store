@@ -235,6 +235,19 @@ class AnalyticsQueryExecutorLimitTest {
     }
 
     @Test
+    void unionColumnHoldingATimestampDoesNotFailTheQuery() {
+        // The driver returns a java.sql.Timestamp for a UNION whose active member is a TIMESTAMP,
+        // but cannot convert the UNION column to LocalDateTime; that used to fail the whole query.
+        Map<String, Object> row = executor(100, 10_000).execute(
+                "SELECT union_value(t := TIMESTAMP '2024-07-01 12:00:00')::UNION(t TIMESTAMP, s VARCHAR) AS u_ts, "
+                        + "union_value(s := 'x')::UNION(t TIMESTAMP, s VARCHAR) AS u_str, "
+                        + "TIMESTAMP '2024-07-01 12:00:00' AS ts", 1).rows().get(0);
+        assertEquals("2024-07-01T12:00:00", row.get("u_ts"));
+        assertEquals("x", row.get("u_str"));
+        assertEquals("2024-07-01T12:00:00", row.get("ts"));
+    }
+
+    @Test
     void nanAndInfinityAreReturnedAsStrings() {
         Map<String, Object> row = executor(100, 10_000).execute(
                 "SELECT 'NaN'::DOUBLE AS n, 'inf'::DOUBLE AS pos, '-inf'::FLOAT AS neg, 1.5::DOUBLE AS ok", 1)

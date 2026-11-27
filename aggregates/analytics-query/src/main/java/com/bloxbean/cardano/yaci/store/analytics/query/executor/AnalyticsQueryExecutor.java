@@ -23,6 +23,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 
 /**
@@ -294,14 +295,25 @@ public class AnalyticsQueryExecutor {
      * {@link java.sql.Timestamp} is built in the JVM time zone, which shifts wall-clock times
      * that do not exist there: on an America/New_York JVM {@code TIMESTAMP '2024-03-10 02:30:00'}
      * (inside the DST gap) comes back as 03:30. A {@code LocalDateTime} is exactly the stored value.
+     *
+     * <p>The re-read is chosen by the column's declared type, not by the value's Java class: a
+     * {@code UNION} column whose active member is a TIMESTAMP also yields a {@code Timestamp},
+     * but the driver cannot convert a UNION to {@code LocalDateTime} and would fail the whole
+     * query. Such a value keeps the driver's {@code Timestamp}, like a TIMESTAMP nested in a
+     * LIST or STRUCT.</p>
      */
     static Object readColumn(ResultSet rs, int column) throws SQLException {
         Object value = rs.getObject(column);
-        if (value instanceof java.sql.Timestamp) {
+        if (value instanceof java.sql.Timestamp
+                && PLAIN_TIMESTAMP_TYPES.contains(rs.getMetaData().getColumnTypeName(column))) {
             return rs.getObject(column, LocalDateTime.class);
         }
         return value;
     }
+
+    /** DuckDB's zone-less timestamp types, as reported by {@code ResultSetMetaData#getColumnTypeName}. */
+    private static final Set<String> PLAIN_TIMESTAMP_TYPES =
+            Set.of("TIMESTAMP", "TIMESTAMP_NS", "TIMESTAMP_MS", "TIMESTAMP_S");
 
     static Object normalizeJdbcValue(Object value) throws SQLException {
         if (value == null) return null;
