@@ -719,6 +719,25 @@ class SnapshotImportIT {
     }
 
     @Test
+    void refusesASnapshotWhoseSourcePruned() throws Exception {
+        SnapshotFixture.Built built = fixture();
+        var m = built.manifest();
+        var pruned = new SnapshotManifest(m.formatVersion(), m.snapshotId(), m.createdAt(), m.producer(),
+                m.yaciStoreVersion(), m.specFormatVersion(), m.duckdbVersion(), m.ducklakeFormatVersion(),
+                m.point(), m.genesisHash(), m.modules(),
+                java.util.Map.of("store.utxo.pruning-enabled", "true", "store.transaction.save-cbor", "true"),
+                m.schemaFingerprint(), m.flywayFingerprint(), m.tables(), m.parts(), m.declaredLossy(),
+                m.tableSchemaFingerprints());
+        new ManifestCodec().writeAtomically(pruned, built.manifestPath());
+
+        SnapshotImporter.Preflight pre = new SnapshotImporter(registry).preflight(options(built.manifestPath(), 1));
+        assertThat(pre.ok()).isFalse();
+        assertThat(pre.blockers()).anySatisfy(b -> assertThat(b)
+                .contains("exported from a source that ran with store.utxo.pruning-enabled=true")
+                .doesNotContain("save-cbor"));
+    }
+
+    @Test
     void refusesAMismatchedSchemaFingerprint() throws Exception {
         SnapshotFixture.Built built = fixture();
         SnapshotManifest tampered = new SnapshotManifest(built.manifest().formatVersion(),

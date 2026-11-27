@@ -190,6 +190,10 @@ public class SnapshotCliSupport {
                 environment.getProperty("store.adapot.epoch-stake-pruning-enabled", "false"));
         out.put("store.account.pruning-enabled",
                 environment.getProperty("store.account.pruning-enabled", "false"));
+        out.put("store.blocks.cbor-pruning-enabled",
+                environment.getProperty("store.blocks.cbor-pruning-enabled", "false"));
+        out.put("store.transaction.cbor-pruning-enabled",
+                environment.getProperty("store.transaction.cbor-pruning-enabled", "false"));
         // What the optional CBOR tables hold (ADR 0006): a target must match the transaction form.
         for (String cbor : List.of("store.blocks.save-cbor", "store.transaction.save-cbor",
                 "store.transaction.save-full-tx-cbor")) {

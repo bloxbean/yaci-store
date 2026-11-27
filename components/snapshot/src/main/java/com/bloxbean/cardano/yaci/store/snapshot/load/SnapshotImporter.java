@@ -13,6 +13,7 @@ import com.bloxbean.cardano.yaci.store.snapshot.manifest.ManifestCodec;
 import com.bloxbean.cardano.yaci.store.snapshot.manifest.Retention;
 import com.bloxbean.cardano.yaci.store.snapshot.manifest.SnapshotSignature;
 import com.bloxbean.cardano.yaci.store.snapshot.manifest.SnapshotManifest;
+import com.bloxbean.cardano.yaci.store.snapshot.manifest.SourcePruning;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.RestoreMode;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.SnapshotSpecRegistry;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.SnapshotTableSpec;
@@ -162,6 +163,10 @@ public class SnapshotImporter {
         }
         blockers.addAll(retentionBlockers(manifest, options));
         blockers.addAll(matchingSettingBlockers(manifest, options));
+        List<String> sourcePruning = SourcePruning.enabled(manifest.pruningSettings());
+        if (!sourcePruning.isEmpty()) {
+            blockers.add(SourcePruning.importBlocker(sourcePruning));
+        }
 
         ImportJournal.Run existing = null;
         try (Connection pg = connect(options)) {

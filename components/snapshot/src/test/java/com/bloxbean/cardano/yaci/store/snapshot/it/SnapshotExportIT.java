@@ -81,6 +81,15 @@ class SnapshotExportIT {
         var exporter = new SnapshotExporter(registry);
         var report = exporter.inspect(complete);
         assertThat(report.blockers()).isEmpty();
+        // A pruning source can drop spends before they are exported: never packaged.
+        var pruningSource = withPruning(complete, Map.of("store.utxo.pruning-enabled", "true",
+                "store.blocks.cbor-pruning-enabled", "false"));
+        assertThat(exporter.inspect(pruningSource).blockers())
+                .anySatisfy(b -> assertThat(b).startsWith("The source runs with store.utxo.pruning-enabled=true.")
+                        .doesNotContain("cbor"));
+        assertThatThrownBy(() -> exporter.export(pruningSource, null))
+                .isInstanceOf(SnapshotExporter.BlockedException.class)
+                .hasMessageContaining("store.utxo.pruning-enabled=true");
         // Planned against the producing release's tables before anything is packaged.
         String blockColumns = "hash varchar(64), number bigint, slot bigint, prev_hash varchar(64), era integer,"
                 + " epoch integer, block_time timestamp with time zone, date date";
@@ -140,6 +149,14 @@ class SnapshotExportIT {
                 o.unsigned(), o.yaciStoreVersion(), o.modules(), o.pruningSettings(), o.schemaFingerprint(),
                 o.flywayFingerprint(), o.completedPartitions(), o.tableSchemaFingerprints(), o.memoryLimit(),
                 Map.of(target.name(), target));
+    }
+
+    private static ExportOptions withPruning(ExportOptions o, Map<String, String> pruning) {
+        return new ExportOptions(o.dataDir(), o.workDir(), o.outputDir(), o.network(), o.protocolMagic(),
+                o.genesisHash(), o.partSizeBytes(), o.targetEpoch(), o.minConfirmations(), o.allowIncomplete(),
+                o.unsigned(), o.yaciStoreVersion(), o.modules(), pruning, o.schemaFingerprint(),
+                o.flywayFingerprint(), o.completedPartitions(), o.tableSchemaFingerprints(), o.memoryLimit(),
+                o.targetTables());
     }
 
     private static TargetTable target(String name, String declaration) {
