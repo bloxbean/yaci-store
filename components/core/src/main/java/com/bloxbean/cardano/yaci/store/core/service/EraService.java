@@ -33,6 +33,11 @@ public class EraService {
     private long _shelleyStartTime;
     private boolean _shelleyEraResolved = false;
 
+    // Resolve the predecessor again after rollback or a new fetch session.
+    public void resetEraTracking() {
+        prevEra = null;
+    }
+
     public boolean checkIfNewEra(Era era, BlockHeader blockHeader) {
         if (prevEra == null) { //If prevEra is null, then try to find era of prevBlock
             long blockNumber = blockHeader.getHeaderBody().getBlockNumber();
