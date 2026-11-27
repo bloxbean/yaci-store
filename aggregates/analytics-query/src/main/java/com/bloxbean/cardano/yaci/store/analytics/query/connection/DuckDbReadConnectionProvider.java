@@ -1,11 +1,14 @@
 package com.bloxbean.cardano.yaci.store.analytics.query.connection;
 
+import com.bloxbean.cardano.yaci.store.analytics.query.service.SqlValidator;
+import com.bloxbean.cardano.yaci.store.analytics.config.AnalyticsStoreProperties;
+import com.bloxbean.cardano.yaci.store.analytics.config.DuckDbInstances;
+import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.duckdb.DuckDBConnection;
 
 import java.nio.file.Path;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.concurrent.Semaphore;
@@ -34,11 +37,31 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 public abstract class DuckDbReadConnectionProvider {
 
-    private Connection parentConnection;
+    private final DuckDbInstances.Instance instance;
+    private final Connection parentConnection;
     private final Semaphore semaphore;
     private final int queryTimeoutSeconds;
 
+    /**
+     * Open the parent DuckDB instance with the analytics DuckDB settings: its own temp directory
+     * (never shared with the export writer, see {@link DuckDbInstances}), the effective
+     * {@code memory_limit}, {@code threads} and extension directories.
+     */
+    protected DuckDbReadConnectionProvider(AnalyticsStoreProperties properties) {
+        this(properties.getDuckdb().getReader().getMaximumPoolSize(),
+                properties.getDuckdb().getReader().getQueryTimeoutSeconds(),
+                properties);
+    }
+
+    /**
+     * Stand-alone variant (tests): spill files go to a private directory under
+     * {@code java.io.tmpdir}.
+     */
     protected DuckDbReadConnectionProvider(int maxConcurrent, String memoryLimit, int threads, int queryTimeoutSeconds) {
+        this(maxConcurrent, queryTimeoutSeconds, standaloneProperties(memoryLimit, threads));
+    }
+
+    private DuckDbReadConnectionProvider(int maxConcurrent, int queryTimeoutSeconds, AnalyticsStoreProperties properties) {
         this.queryTimeoutSeconds = queryTimeoutSeconds;
         this.semaphore = new Semaphore(maxConcurrent);
 
@@ -47,21 +70,35 @@ public abstract class DuckDbReadConnectionProvider {
             // (jdbc_stream_results) Statement.setQueryTimeout() only covers the execute phase,
             // so a query would keep running unbounded inside ResultSet.next(). Result size is
             // bounded anyway by the LIMIT the executor wraps around every statement.
-            this.parentConnection = DriverManager.getConnection("jdbc:duckdb:");
+            this.instance = DuckDbInstances.open(properties, DuckDbInstances.Role.READER);
+            this.parentConnection = instance.connection();
 
-            try (Statement stmt = parentConnection.createStatement()) {
-                if (memoryLimit != null && !memoryLimit.isBlank()) {
-                    stmt.execute("SET memory_limit = '" + memoryLimit + "'");
-                    log.info("DuckDB memory_limit set to {}", memoryLimit);
-                }
-                stmt.execute("SET threads = " + threads);
-                log.info("DuckDB threads set to {}", threads);
-            }
-
-            log.info("DuckDB parent connection created (maxConcurrent={}, queryTimeout={}s)",
-                    maxConcurrent, queryTimeoutSeconds);
+            log.info("DuckDB parent connection created (maxConcurrent={}, queryTimeout={}s, temp_directory={})",
+                    maxConcurrent, queryTimeoutSeconds, instance.tempDirectory());
         } catch (SQLException e) {
-            throw new RuntimeException("Failed to create DuckDB parent connection", e);
+            throw new RuntimeException("Failed to create DuckDB parent connection: " + e.getMessage(), e);
+        }
+    }
+
+    private static AnalyticsStoreProperties standaloneProperties(String memoryLimit, int threads) {
+        AnalyticsStoreProperties properties = new AnalyticsStoreProperties();
+        properties.getQuery().setEnabled(true);
+        properties.getDuckdb().setMemoryLimit(memoryLimit);
+        properties.getDuckdb().setThreads(threads);
+        properties.getDuckdb().setTempDirectory(
+                Path.of(System.getProperty("java.io.tmpdir"), "yaci-store-duckdb").toString());
+        return properties;
+    }
+
+    /**
+     * Close the parent instance (DuckDB removes its spill files) and remove its temp directory.
+     */
+    @PreDestroy
+    public void closeParentConnection() {
+        try {
+            instance.close();
+        } catch (SQLException e) {
+            log.debug("Closing the DuckDB parent connection failed: {}", e.getMessage());
         }
     }
 
@@ -140,6 +177,10 @@ public abstract class DuckDbReadConnectionProvider {
      *   <li>{@code lock_configuration = true} — prevents user SQL from weakening the sandbox.</li>
      * </ul>
      *
+     * <p>Before that, the table-only functions of this instance (including those of the
+     * extensions loaded by now) are registered with {@link SqlValidator}, which then rejects
+     * them by name in ad-hoc SQL.</p>
+     *
      * <p>DuckDB configuration is shared by the parent and all connections created with
      * {@link DuckDBConnection#duplicate()}. The allowed directory therefore also permits
      * trusted refresh DDL on the parent to recreate lazy {@code read_parquet()} views while
@@ -153,6 +194,7 @@ public abstract class DuckDbReadConnectionProvider {
         String escapedDirectory = normalizedDirectory.replace("'", "''");
 
         try (Statement stmt = parentConnection.createStatement()) {
+            SqlValidator.registerTableFunctions(parentConnection);
             stmt.execute("SET allowed_directories = ['" + escapedDirectory + "']");
             stmt.execute("SET autoload_known_extensions = false");
             stmt.execute("SET autoinstall_known_extensions = false");

@@ -124,6 +124,34 @@ public sealed interface PartitionValue permits
     }
 
     /**
+     * Parse a partition as an operator writes it: {@code 2024-01-15} or {@code date=2024-01-15} for a
+     * day, {@code 450} or {@code epoch=450} for an epoch. Negative epochs are accepted so that
+     * state rows stored for them by mistake can be addressed.
+     *
+     * @param value the partition
+     * @return the partition value
+     * @throws IllegalArgumentException if the value is neither a date nor an epoch
+     */
+    public static PartitionValue parse(String value) {
+        String v = value == null ? "" : value.trim();
+        try {
+            if (v.startsWith("date=")) {
+                return ofDate(LocalDate.parse(v.substring("date=".length())));
+            }
+            if (v.startsWith("epoch=")) {
+                return ofEpoch(Integer.parseInt(v.substring("epoch=".length())));
+            }
+            if (v.matches("-?\\d+")) {
+                return ofEpoch(Integer.parseInt(v));
+            }
+            return ofDate(LocalDate.parse(v));
+        } catch (java.time.format.DateTimeParseException | NumberFormatException e) {
+            throw new IllegalArgumentException("Invalid partition '" + value
+                    + "': expected yyyy-MM-dd, date=yyyy-MM-dd, an epoch number or epoch=N");
+        }
+    }
+
+    /**
      * Factory method for creating epoch partitions.
      *
      * @param epoch The epoch number
