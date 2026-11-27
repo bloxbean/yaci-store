@@ -223,6 +223,55 @@ class TransactionProcessorTest {
     }
 
     @Test
+    void givenMultipleTransactions_shouldSubmitEachWitnessOnce() {
+        var transactions = java.util.stream.IntStream.range(0, 100)
+                .mapToObj(i -> Transaction.builder()
+                        .txHash("tx-" + i)
+                        .witnesses(Witnesses.builder()
+                                .vkeyWitnesses(List.of(VkeyWitness.builder()
+                                        .key("11".repeat(32))
+                                        .signature("22".repeat(64))
+                                        .build()))
+                                .build())
+                        .build())
+                .toList();
+        var submitted = new java.util.ArrayList<TxnWitness>();
+        Mockito.doAnswer(invocation -> {
+            List<TxnWitness> batch = invocation.getArgument(0);
+            submitted.addAll(batch);
+            return null;
+        }).when(transactionWitnessStorage).saveAll(anyList());
+
+        transactionProcessor.handleTransactionWitnesses(TransactionEvent.builder()
+                .transactions(transactions)
+                .metadata(eventMetadata())
+                .build());
+
+        verify(transactionWitnessStorage).saveAll(anyList());
+        assertThat(submitted).extracting(TxnWitness::getTxHash)
+                .containsExactlyElementsOf(transactions.stream().map(Transaction::getTxHash).toList());
+    }
+
+    @Test
+    void givenMissingWitnessSet_shouldSaveWitnessesBeforeAndAfterIt() {
+        var witnesses = Witnesses.builder()
+                .vkeyWitnesses(List.of(VkeyWitness.builder()
+                        .key("11".repeat(32)).signature("22".repeat(64)).build()))
+                .build();
+        var transactions = List.of(
+                Transaction.builder().txHash("before").witnesses(witnesses).build(),
+                Transaction.builder().txHash("missing").build(),
+                Transaction.builder().txHash("after").witnesses(witnesses).build());
+
+        transactionProcessor.handleTransactionWitnesses(TransactionEvent.builder()
+                .transactions(transactions).metadata(eventMetadata()).build());
+
+        verify(transactionWitnessStorage).saveAll(txnWitnessesCaptor.capture());
+        assertThat(txnWitnessesCaptor.getValue()).extracting(TxnWitness::getTxHash)
+                .containsExactly("before", "after");
+    }
+
+    @Test
     void givenTransactionEvent_whenWitnessStorageDisabled_shouldNotStoreWitnesses() {
         TransactionStoreProperties properties = TransactionStoreProperties.builder()
                 .saveWitness(false)

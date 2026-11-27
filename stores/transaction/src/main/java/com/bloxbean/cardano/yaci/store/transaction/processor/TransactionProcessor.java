@@ -217,15 +217,12 @@ public class TransactionProcessor {
 
         List<Transaction> transactions = event.getTransactions();
         List<TxnWitness> txnWitnesses = new ArrayList<>();
-
         int index = 0;
         for(Transaction transaction: transactions) {
-            if (transaction.isInvalid())
+            if (transaction.isInvalid() || transaction.getWitnesses() == null)
                 continue;
 
             Witnesses witnesses = transaction.getWitnesses();
-            if (witnesses == null)
-                return;
 
             var vkeyWitnessList = witnesses.getVkeyWitnesses();
             var bootstrapWitnessList = witnesses.getBootstrapWitnesses();
@@ -266,9 +263,10 @@ public class TransactionProcessor {
                 }
             }
 
-            if (txnWitnesses.size() > 0)
-                transactionWitnessStorage.saveAll(txnWitnesses);
         }
+
+        if (txnWitnesses.size() > 0)
+            transactionWitnessStorage.saveAll(txnWitnesses);
     }
 
     private String getKeyHash(String pubKey) {
