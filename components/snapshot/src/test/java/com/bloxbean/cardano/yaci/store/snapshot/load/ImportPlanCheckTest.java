@@ -68,7 +68,8 @@ class ImportPlanCheckTest {
     void mappedTablesArePlannedFromTheRecordedTypes() throws Exception {
         var adapot = registry.byId("adapot").orElseThrow();
         TargetTable target = new TargetTable("s", "adapot", ordered("epoch", "integer", "slot", "bigint",
-                "update_datetime", "timestamp"), Map.of("epoch", false, "slot", true, "update_datetime", true),
+                "update_datetime", "timestamp", "total_epoch_stake", "numeric"),
+                Map.of("epoch", false, "slot", true, "update_datetime", true, "total_epoch_stake", true),
                 Map.of(), List.of("epoch"), false);
         try (Connection duck = DuckDb.open("256MB", null, 1)) {
             assertThat(ImportPlanCheck.check(duck, planner, adapot, ordered("epoch", "int32", "slot", "int64"),

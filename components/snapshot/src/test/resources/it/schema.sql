@@ -89,7 +89,9 @@ create table adapot
     undistributed_rewards   numeric(38),
     rewards_pot             numeric(38),
     pool_rewards_pot        numeric(38),
-    update_datetime         timestamp
+    update_datetime         timestamp,
+    -- aggregates/adapot V0_1300_6__add_total_epoch_stake.sql
+    total_epoch_stake       numeric(38)
 );
 
 -- From aggregates/adapot V0_1300_1__init.sql: partitioned by epoch, with a default partition.

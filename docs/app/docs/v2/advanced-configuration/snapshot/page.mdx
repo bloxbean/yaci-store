@@ -1092,6 +1092,9 @@ snapshot produced from the current analytics export:
 - **`block_cbor` and `transaction_cbor`** have no analytics export.
 - **`epoch_nonce`** and **`ptr_address`** have no analytics export.
 - **`address.stake_credential`** is not exported and is not derivable from what is.
+- **`adapot.total_epoch_stake`** is not exported. Restored epochs keep it NULL, and the Blockfrost
+  epoch endpoints sum the restored `epoch_stake` instead;
+  `scripts/backfill/backfill-adapot-total-epoch-stake.sql` fills it.
 
 <Callout type="warning">
 **Snapshots produced before the margin fix cannot run the ledger-state profile.** The exporter now
