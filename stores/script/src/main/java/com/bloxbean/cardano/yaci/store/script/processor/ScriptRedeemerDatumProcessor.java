@@ -125,6 +125,10 @@ public class ScriptRedeemerDatumProcessor {
     private void handleScriptTransaction(EventMetadata metadata, Transaction transaction) {
         if (transaction.isInvalid())
             return;
+
+        //Native scripts don't need redeemers, so save them before the redeemer check
+        saveNativeScripts(metadata, transaction);
+
         if (transaction.getWitnesses().getRedeemers() == null || transaction.getWitnesses().getRedeemers().size() == 0)
             return;
 
@@ -210,6 +214,15 @@ public class ScriptRedeemerDatumProcessor {
         if (plutusScripts != null && plutusScripts.size() > 0)
             scriptStorage.saveScripts(plutusScripts);
 
+        if (txScripts.size() > 0) {
+            txScriptStorage.saveAll(txScripts);
+
+            //biz event
+            publisher.publishEvent(new TxScriptEvent(metadata, txScripts));
+        }
+    }
+
+    private void saveNativeScripts(EventMetadata metadata, Transaction transaction) {
         //Get all native scripts  and save
         if (transaction.getWitnesses().getNativeScripts() != null) {
             List<Script> nativeScripts = transaction.getWitnesses().getNativeScripts().stream()
@@ -231,13 +244,6 @@ public class ScriptRedeemerDatumProcessor {
                     .collect(Collectors.toList());
             if (nativeScripts != null && nativeScripts.size() > 0)
                 scriptStorage.saveScripts(nativeScripts);
-        }
-
-        if (txScripts.size() > 0) {
-            txScriptStorage.saveAll(txScripts);
-
-            //biz event
-            publisher.publishEvent(new TxScriptEvent(metadata, txScripts));
         }
     }
 
