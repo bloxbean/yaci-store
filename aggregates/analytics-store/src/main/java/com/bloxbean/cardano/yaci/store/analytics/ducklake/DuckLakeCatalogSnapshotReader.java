@@ -119,8 +119,38 @@ public class DuckLakeCatalogSnapshotReader {
         }
     }
 
+    /**
+     * The file's path spelled under {@code exportRoot}, or null when it is outside it. The catalog
+     * may record the export directory spelled differently from {@code export-path} (an absolute vs
+     * relative path, or through a symbolic link); the catalog attach accepts that when both name
+     * the same directory. Real paths are compared then, and the file is addressed through
+     * {@code exportRoot}, the directory the query engine's sandbox allows.
+     */
+    static Path inExportRoot(Path file, Path exportRoot, Path realExportRoot) {
+        if (file.startsWith(exportRoot)) {
+            return file;
+        }
+        if (realExportRoot == null) {
+            return null;
+        }
+        Path realFile = realPath(file);
+        if (realFile == null || !realFile.startsWith(realExportRoot)) {
+            return null;
+        }
+        return exportRoot.resolve(realExportRoot.relativize(realFile));
+    }
+
+    private static Path realPath(Path path) {
+        try {
+            return path.toRealPath();
+        } catch (java.io.IOException | RuntimeException e) {
+            return null;
+        }
+    }
+
     private Map<String, TableFiles> readSnapshot(Connection conn) throws SQLException {
         Path exportRoot = Paths.get(properties.getExportPath()).toAbsolutePath().normalize();
+        Path realExportRoot = realPath(exportRoot);
         Map<String, TableFiles> tables = new TreeMap<>();
 
         for (String table : listTables(conn)) {
@@ -138,8 +168,9 @@ public class DuckLakeCatalogSnapshotReader {
                         // was configured (e.g. "./data/analytics/..."); resolve against the JVM
                         // working directory the writer used, so the query engine can address the
                         // file inside its allowed_directories sandbox.
-                        Path resolved = Paths.get(dataFile).toAbsolutePath().normalize();
-                        if (!resolved.startsWith(exportRoot)) {
+                        Path resolved = inExportRoot(Paths.get(dataFile).toAbsolutePath().normalize(),
+                                exportRoot, realExportRoot);
+                        if (resolved == null) {
                             log.warn("Skipping DuckLake data file outside the analytics export path "
                                     + "(table '{}', export path '{}')", table, exportRoot);
                             continue;

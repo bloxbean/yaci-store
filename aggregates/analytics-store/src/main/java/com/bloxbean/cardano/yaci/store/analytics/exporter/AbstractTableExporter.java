@@ -176,6 +176,11 @@ public abstract class AbstractTableExporter implements TableExporter {
                     getTableName(), partitionKey, e.getMessage(), e);
             stateService.markFailed(state, e.getMessage());
             return false;
+        } catch (Error e) {
+            // Not caught above (OutOfMemoryError, a native library error): without this the claim
+            // would block every retry of the partition until the JVM restarts
+            stateService.releaseClaim(state);
+            throw e;
         }
     }
 
@@ -286,7 +291,8 @@ public abstract class AbstractTableExporter implements TableExporter {
      * that always have a row for a final partition return {@code false}: an empty result is then
      * marked FAILED, and retried, instead of COMPLETED.
      */
-    protected boolean allowsEmptyPartition(PartitionValue partition) {
+    @Override
+    public boolean allowsEmptyPartition(PartitionValue partition) {
         return true;
     }
 
