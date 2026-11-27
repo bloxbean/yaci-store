@@ -32,7 +32,13 @@ import { Callout } from 'nextra/components'
 | `yaci.store.analytics.ducklake.catalog-username` | _(main datasource)_ | PostgreSQL catalog username |
 | `yaci.store.analytics.ducklake.catalog-password` | _(main datasource)_ | PostgreSQL catalog password |
 | `yaci.store.analytics.ducklake.catalog-path` | `./data/analytics/ducklake.catalog.db` | DuckDB catalog file path |
-| `yaci.store.analytics.duckdb.memory-limit` | _(empty = DuckDB default)_ | DuckDB buffer manager memory limit (e.g., `1GB`, `512MB`) |
+| `yaci.store.analytics.ducklake.catalog-schema` | _(see below)_ | PostgreSQL schema for the DuckLake catalog tables (`ducklake_*`, DuckLake `METADATA_SCHEMA`). Not set: the catalog connection's `currentSchema` if it already holds a catalog, else an existing catalog in `public` (installations from before this property), else a new catalog in the connection's `currentSchema` |
+| `yaci.store.analytics.ducklake.catalog-lock-wait-seconds` | `30` | DuckDB catalog only: how long to wait for another process (e.g. a `duckdb` CLI, even `-readonly`) to release the catalog file lock before failing |
+| `yaci.store.analytics.source-statement-timeout-seconds` | `0` (off) | PostgreSQL `statement_timeout` for the export pipeline's source queries (libpq `options=-c statement_timeout`). Off by default because a single export query can run long on large tables |
+| `yaci.store.analytics.duckdb.memory-limit` | _(empty = 50% of RAM minus JVM heap, split between writer and query layer)_ | DuckDB buffer manager memory limit for **each** DuckDB instance (e.g., `1GB`, `512MB`). When empty: 50% of the RAM not reserved for the JVM heap (`-Xmx`), divided by the number of DuckDB instances in the JVM (export writer, query layer), at least `256MB` |
+| `yaci.store.analytics.duckdb.temp-directory` | _(empty = `<export-path>/.tmp`)_ | Base directory for DuckDB spill files. Each DuckDB instance uses its own subdirectory (`writer-<id>`, `reader-<id>`, ...), removed when the instance closes; leftovers of a crashed process are removed at the next start |
+| `yaci.store.analytics.duckdb.max-temp-directory-size` | _(empty = DuckDB default, 90% of free disk)_ | DuckDB `max_temp_directory_size` per instance (e.g., `50GB`) |
+| `yaci.store.analytics.duckdb.extension-directories` | _(empty = `~/.duckdb/extensions`)_ | Comma-separated directories DuckDB loads extensions (`ducklake`, `postgres_scanner`) from; missing extensions are installed into the first one. Use a persistent directory in containers, or a pre-seeded one on offline hosts |
 | `yaci.store.analytics.ducklake.export.codec` | `ZSTD` | Compression codec for DuckLake Parquet files |
 | `yaci.store.analytics.ducklake.export.compression-level` | `3` | ZSTD compression level (1-22) for DuckLake exports |
 | `yaci.store.analytics.ducklake.export.row-group-size` | `-1` | Row group size for DuckLake Parquet files (-1 = DuckDB default) |
@@ -62,19 +68,43 @@ yaci.store.analytics.export-path=/var/lib/yaci-store/analytics
 ### DuckDB memory usage in JVM
 
 <Callout type="warning">
-If not configured, DuckDB uses its default (80% of system RAM). It is recommended to set this explicitly in production and container environments to prevent OOM kills.
+It is recommended to set `yaci.store.analytics.duckdb.memory-limit` explicitly in production and container environments to prevent OOM kills.
 </Callout>
 
-DuckDB defaults to using 80% of system physical RAM for its buffer manager. Since DuckDB runs inside the JVM process, this can cause memory contention — JVM heap + DuckDB buffer may together exceed available system RAM, leading to OOM kills (especially in containers/Kubernetes).
+DuckDB runs inside the JVM process. The export writer is one DuckDB instance; the analytics query layer (if enabled) is a second one shared by all concurrent readers. DuckDB's own default gives **each** instance 80% of the physical RAM, so with both instances and a JVM heap the process could try to use far more memory than the host has.
 
-To limit DuckDB memory usage:
+When `memory-limit` is not set, yaci-store therefore sets one itself: 50% of the RAM not reserved for the JVM heap (`-Xmx`), divided by the number of DuckDB instances in the JVM, at least 256 MB. For example, 16 GB RAM, `-Xmx4g`, writer and query layer: `(16 - 4) × 0.5 / 2 = 3 GB` per instance. The chosen value is logged at startup. The RAM size is read container-aware (cgroup limit).
+
+To set the limit yourself:
 
 ```properties
 # Limit each DuckDB instance's buffer manager to 1GB
 yaci.store.analytics.duckdb.memory-limit=1GB
 ```
 
-Note: The limit applies per DuckDB instance. The export writer is one instance; the analytics query layer (if enabled) is a second one shared by all concurrent readers, so plan for up to `memory_limit * 2`. Some DuckDB aggregate functions may also allocate memory outside the buffer manager, so actual usage can slightly exceed the configured limit.
+Note: The limit applies per DuckDB instance, so plan for up to `memory_limit * 2` when the query layer is enabled. Operations that exceed the limit spill to the temp directory (`yaci.store.analytics.duckdb.temp-directory`, default `<export-path>/.tmp`). Some DuckDB aggregate functions may also allocate memory outside the buffer manager, so actual usage can slightly exceed the configured limit.
+
+### DuckDB spill files
+
+Each DuckDB instance spills into its own directory under `yaci.store.analytics.duckdb.temp-directory` (default `<export-path>/.tmp`). Instances must never share a spill directory: DuckDB uses the same spill file names in every instance, and one instance overwriting or deleting another's spill files crashes the JVM. Earlier versions used DuckDB's default `.tmp` in the working directory for all instances; that directory is no longer used and can be deleted.
+
+### DuckDB extensions on offline hosts and in containers
+
+The `ducklake` and `postgres_scanner` extensions are not built into the DuckDB JDBC driver. yaci-store first tries to `LOAD` them, and only downloads them (`INSTALL`, from `extensions.duckdb.org`) when they are not installed yet. They are stored in `~/.duckdb/extensions` unless `yaci.store.analytics.duckdb.extension-directories` is set.
+
+- **Docker:** the container's home directory is not a volume, so every new container downloads the extensions again. The shipped `docker/config/application-analytics.properties` sets `yaci.store.analytics.duckdb.extension-directories=./data/duckdb/extensions`, inside the mounted `data` volume.
+- **Offline / air-gapped hosts:** install the extensions on a machine with access, using the same DuckDB version as the bundled JDBC driver (shown in the startup error), and copy the directory over:
+
+```bash
+duckdb -c "SET extension_directory='/opt/duckdb-ext'; INSTALL ducklake; INSTALL postgres_scanner;"
+# copies /opt/duckdb-ext/v<duckdb-version>/<platform>/*.duckdb_extension
+```
+
+```properties
+yaci.store.analytics.duckdb.extension-directories=/opt/duckdb-ext
+```
+
+If an extension can be neither loaded nor installed, startup fails with a message that names the extension, the DuckDB version and platform, and the directories searched.
 
 ### Pruning and the analytics store
 
@@ -94,9 +124,36 @@ A day is exported once its oldest rows are `buffer-days × 24 h` + the finality 
 
 Reward and epoch-stake pruning are not managed: both follow the AdaPot jobs that the same tables wait for. Custom exporters are not covered.
 
-### DuckLake requires `public` schema in PostgreSQL
+### PostgreSQL catalog schema
 
-DuckLake stores its metadata tables in the `public` schema. The application automatically creates this schema if it doesn't exist. If your PostgreSQL instance restricts schema creation, ensure `public` exists before enabling DuckLake.
+The DuckLake catalog tables (`ducklake_*`) live in one PostgreSQL schema, chosen with `yaci.store.analytics.ducklake.catalog-schema`:
+
+- **Not set** (default): the schema of the catalog connection (`currentSchema` of `catalog-url`, else of `spring.datasource.url`) if it already holds a catalog; otherwise an existing catalog in `public` — installations created before this property always used `public` and keep using it; otherwise a new catalog is created in the connection's schema.
+- **Set**: that schema is used. If it holds no catalog yet while `public` holds this instance's catalog, startup is refused, because an empty catalog would skip every partition already marked as exported. Move the tables first (`ALTER TABLE public.ducklake_... SET SCHEMA ...`) or keep `catalog-schema=public`.
+
+The schema is created if it does not exist. A user without `CREATE` on the database can be given an existing schema it may create tables in.
+
+Each catalog records which source it belongs to (`<database>/<schema>` of `spring.datasource.url`, key `yaci_store_source` in `ducklake_metadata`). Two instances must never share one catalog — they overwrite each other's partitions — so an instance whose source differs from the recorded one is refused at startup with a message naming the catalog. Catalogs from older versions record no source; the first instance that writes to one claims it. If the database or schema of an instance is renamed, update the record as the startup error explains.
+
+### Catalog `DATA_PATH`
+
+DuckLake records the export directory (`DATA_PATH`) in the catalog. An existing catalog is opened with the recorded path; `export-path` written differently but naming the same directory (`./data/analytics` vs `/app/data/analytics`, a symbolic link) is accepted. A catalog recorded for a different directory is refused with a message that names both paths.
+
+### DuckDB catalog file locked
+
+Only one process can open a DuckDB catalog file, even read-only: a `duckdb` CLI session on the file blocks yaci-store from attaching it. yaci-store waits up to `yaci.store.analytics.ducklake.catalog-lock-wait-seconds` (default 30) for the lock and then fails with a message that names the file. To look at the data while yaci-store runs, read the Parquet files or use the analytics query layer.
+
+### PostgreSQL connection settings
+
+DuckDB connects to PostgreSQL through libpq (`postgres_scanner`, PostgreSQL catalog), using the JDBC URLs (`spring.datasource.url`, `catalog-url`). Hosts (also IPv6 `[::1]` and several hosts `h1:5432,h2:5432`), the database, `currentSchema` and these URL parameters are passed on:
+
+| JDBC URL parameter | libpq parameter |
+|---|---|
+| `sslmode`, `sslrootcert`, `sslcert`, `sslkey`, `sslpassword` | same name (`ssl=true` without `sslmode` = `verify-full`, as in PgJDBC; with a Java `sslfactory` or `sslhostnameverifier`, such as `NonValidatingFactory`, it is `require`: encrypted, certificate not verified. Set `sslmode` and `sslrootcert` to have it verified) |
+| `targetServerType` | `target_session_attrs` (`primary`, `standby`, `prefer-standby`, `any`) |
+| `connectTimeout`, `ApplicationName`, `gssEncMode`, `channelBinding`, `options` | `connect_timeout`, `application_name`, `gssencmode`, `channel_binding`, `options` |
+
+Java-only parameters (`sslfactory`, ...) are ignored with a warning. Note that libpq expects `sslkey` as a PEM file, while PgJDBC also accepts PKCS-8 DER (`.pk8`). User names and passwords may contain any characters; they are quoted for libpq and never logged.
 
 ## Admin API
 
