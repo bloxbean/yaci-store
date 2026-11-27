@@ -82,6 +82,9 @@ public class SnapshotCommands {
             InspectionReport report = new SnapshotExporter(registry).inspect(options);
             printInspection(report, verbose);
             printBlockerReport(report, options.workDir(), verbose);
+            if (!report.canExport()) {
+                throw new CommandFailedException("snapshot inspect: export is blocked", null);
+            }
         } catch (CommandFailedException e) {
             throw e;
         } catch (Exception e) {
@@ -229,13 +232,22 @@ public class SnapshotCommands {
             }
             writeLn("  Parts verified : %d (%s)", m.parts().size(),
                     SnapshotCliSupport.humanBytes(result.bytesVerified()));
+            var trusted = support.trustedKeys(trustedKey);
             var signature = com.bloxbean.cardano.yaci.store.snapshot.manifest.SnapshotSignature.verify(manifestPath,
-                    support.trustedKeys(trustedKey));
+                    trusted);
             switch (signature.status()) {
                 case VERIFIED -> writeLn(success("Signature: %s", signature.describe()));
                 case INVALID -> {
                     writeLn(error("Signature: %s", signature.describe()));
                     throw new CommandFailedException("snapshot verify: signature verification failed", null);
+                }
+                case UNSIGNED -> {
+                    // With a trusted key configured, the caller asked for a signed snapshot.
+                    if (!trusted.isEmpty()) {
+                        writeLn(error("Signature: %s, but a trusted key is configured", signature.describe()));
+                        throw new CommandFailedException("snapshot verify: the snapshot is not signed", null);
+                    }
+                    writeLn(warn("Signature: %s", signature.describe()));
                 }
                 default -> writeLn(warn("Signature: %s", signature.describe()));
             }
@@ -350,10 +362,10 @@ public class SnapshotCommands {
                 if (!pre.ok()) {
                     writeLn(error("Import is blocked:"));
                     pre.blockers().forEach(bl -> writeLn("    - %s", bl));
-                } else {
-                    writeLn(success("Preflight passed (mappings and transform output types checked against the target; "
-                            + "part existence and sizes checked, digests are verified during import). Nothing written."));
+                    throw new CommandFailedException("snapshot import --dry-run: import is blocked", null);
                 }
+                writeLn(success("Preflight passed (mappings and transform output types checked against the target; "
+                        + "part existence and sizes checked, digests are verified during import). Nothing written."));
                 return;
             }
 

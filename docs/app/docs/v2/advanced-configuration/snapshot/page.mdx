@@ -114,6 +114,17 @@ and that extension must be enabled from the start of sync so its history is comp
 registry data is not part of a snapshot; when CIP-26 sync is on, the restored instance runs a full
 registry sync on start-up.
 
+The source must never prune. Every snapshot packages the full history, and a pruning target picks
+the tiers it keeps at import ([full and pruned tiers](#full-and-pruned-tiers)). A pruning service
+deletes rows before the analytics export reads them: UTxO pruning, for example, deletes a spent
+output and its spend about 2160 blocks after the spend, so the spend never reaches the export and
+the snapshot would restore the output as unspent. Sync the source from genesis with every
+`*pruning-enabled` setting off (`store.utxo`, `store.transaction`, `store.adapot.reward`,
+`store.adapot.epoch-stake`, `store.account`, `store.blocks.cbor`, `store.transaction.cbor`).
+Inspect and export refuse a source configured with any of them on, and import refuses a snapshot
+whose manifest records one. `snapshot inspect` exits with a non-zero code whenever export would be
+blocked.
+
 Before inspecting or exporting, backfill daily partitions from the beginning of the chain and
 epoch partitions from the first non-Byron epoch, including empty partitions. Snapshot inspection
 derives this epoch boundary from the exported blocks, matching analytics gap detection.
@@ -417,7 +428,8 @@ snapshot verify --manifest /path/to/yaci-preprod-e308-<id>.manifest.json  # admi
 ```
 
 The import checks every part and file digest again while it extracts, so this step only finds a
-bad copy before the import starts.
+bad copy before the import starts. With a trusted key configured (`--trusted-key` or
+`store.snapshot.trusted-keys`), `snapshot verify` also fails on an unsigned snapshot.
 
 ### 3. Preflight
 
@@ -429,6 +441,8 @@ Import refuses to run unless the archive verifies, the network and protocol magi
 configured instance, selected tables have matching schema fingerprints and specification versions
 and digests, every table in the target schema has a classification,
 and the schema is either empty or holds a matching incomplete import journal.
+`--dry-run` exits with a non-zero code when the import would be blocked, so a script can use it as a
+gate.
 
 A network mismatch is never overridable. Preflight reports selected and skipped tables. The import
 scope is saved in the journal and cannot change on resume or validation. All archive parts and
@@ -823,6 +837,7 @@ original manifest or journal.
 | Remove or duplicate a table entry in a copied manifest. | Import rejects the manifest before loading. Include a zero-row table in this test. |
 | After interrupting import, change the manifest but keep its snapshot ID. | Resume rejects the manifest digest mismatch. |
 | Configure a different network/protocol magic. | Import rejects the network mismatch. |
+| Inspect or export with a `*pruning-enabled` setting on, or import a copied manifest whose `pruningSettings` has one set to `true`. | Export and import are blocked: a pruning source can drop spends before they are exported. |
 | Import into a target containing chain data with no matching journal. | Import rejects the non-empty target. |
 | Inspect/export while another process holds the catalog open for writes. | Catalog access fails with instructions to stop analytics. |
 

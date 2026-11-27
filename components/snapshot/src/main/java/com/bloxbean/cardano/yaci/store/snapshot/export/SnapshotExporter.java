@@ -9,6 +9,7 @@ import com.bloxbean.cardano.yaci.store.snapshot.ducklake.DuckLakeCatalog;
 import com.bloxbean.cardano.yaci.store.snapshot.ducklake.DuckLakeFile;
 import com.bloxbean.cardano.yaci.store.snapshot.manifest.ManifestCodec;
 import com.bloxbean.cardano.yaci.store.snapshot.manifest.SnapshotManifest;
+import com.bloxbean.cardano.yaci.store.snapshot.manifest.SourcePruning;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.RestoreMode;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.SnapshotSpecRegistry;
 import com.bloxbean.cardano.yaci.store.snapshot.spec.SnapshotTableSpec;
@@ -89,6 +90,10 @@ public class SnapshotExporter {
         if (deletes > 0) {
             blockers.add("The pinned catalog snapshot references " + deletes + " deletion file(s). "
                     + "The initial snapshot format requires immutable, append-only Parquet.");
+        }
+        List<String> sourcePruning = SourcePruning.enabled(options.pruningSettings());
+        if (!sourcePruning.isEmpty()) {
+            blockers.add(SourcePruning.exportBlocker(sourcePruning));
         }
 
         List<SnapshotTableSpec> imported = registry.importedTables();
