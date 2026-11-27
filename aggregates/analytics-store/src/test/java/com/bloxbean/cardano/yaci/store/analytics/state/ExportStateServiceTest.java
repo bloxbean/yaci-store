@@ -301,4 +301,24 @@ public class ExportStateServiceTest {
         assertThat(stateService.getState("block", "date=2024-03-03").getErrorMessage()).isEqualTo("boom");
         assertThat(stateService.getCompletedPartitions("block")).containsExactly("date=2024-03-02");
     }
+
+    @Test
+    public void aSecondExportOfARunningPartitionIsRefusedWithoutTouchingItsState() {
+        ExportState first = stateService.markInProgress("block", "date=2024-03-04");
+        entityManager.flush();
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> stateService.markInProgress("block", "date=2024-03-04"))
+                .isInstanceOf(ExportStateService.PartitionExportInProgressException.class);
+        assertThat(stateService.isExportInProgress("block", "date=2024-03-04")).isTrue();
+        // Another partition of the same table is not blocked
+        stateService.markFailed(stateService.markInProgress("block", "date=2024-03-05"), "x");
+
+        stateService.markCompleted(first, new ExportResult("p", 3, 0, 1), null);
+        assertThat(stateService.isExportInProgress("block", "date=2024-03-04")).isFalse();
+        assertThat(stateService.getState("block", "date=2024-03-04").getRowCount()).isEqualTo(3);
+
+        // Finished: the partition can be exported again
+        stateService.markFailed(stateService.markInProgress("block", "date=2024-03-04"), "again");
+        assertThat(stateService.isExportInProgress("block", "date=2024-03-04")).isFalse();
+    }
 }

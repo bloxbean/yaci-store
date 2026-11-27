@@ -1,6 +1,10 @@
 package com.bloxbean.cardano.yaci.store.analytics.gap;
 
 import com.bloxbean.cardano.yaci.store.analytics.config.AnalyticsStoreProperties;
+import com.bloxbean.cardano.yaci.store.analytics.exporter.PartitionValue;
+import com.bloxbean.cardano.yaci.store.analytics.exporter.TableExporter;
+import com.bloxbean.cardano.yaci.store.analytics.scheduler.ExportReadinessService;
+import com.bloxbean.cardano.yaci.store.analytics.state.ExportState;
 import com.bloxbean.cardano.yaci.store.analytics.state.ExportStateService;
 import com.bloxbean.cardano.yaci.store.blocks.domain.Block;
 import com.bloxbean.cardano.yaci.store.blocks.storage.BlockStorageReader;
@@ -10,15 +14,21 @@ import com.bloxbean.cardano.yaci.core.model.Era;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -39,6 +49,19 @@ public class GapDetectionService {
     private final ExportStateService stateService;
     private final AnalyticsStoreProperties properties;
     private final EraService eraService;
+
+    private Clock clock = Clock.systemDefaultZone();
+
+    /**
+     * The readiness check shared with the admin API. It depends on this service, so it is looked up
+     * lazily; without it (unit tests) the exporter's own check is used.
+     */
+    private ObjectProvider<ExportReadinessService> readinessService;
+
+    @Autowired(required = false)
+    void setReadinessService(ObjectProvider<ExportReadinessService> readinessService) {
+        this.readinessService = readinessService;
+    }
 
     @PostConstruct
     void validateAndLogFinalitySettings() {
@@ -105,7 +128,7 @@ public class GapDetectionService {
             current = current.plusDays(1);
         }
 
-        log.info("Gap detection for {}: {} missing exports from {} to {}",
+        log.debug("Gap detection for {}: {} missing exports from {} to {}",
             tableName, missing.size(), startDate, endDate);
 
         return missing;
@@ -211,7 +234,8 @@ public class GapDetectionService {
      * Find all missing epoch exports for a table.
      *
      * Checks from the first non-Byron epoch (Shelley start) to the current epoch (inclusive).
-     * Each exporter's preExportValidation() decides whether the epoch is ready for export.
+     * Not every missing epoch is ready to export; {@link #findGaps(TableExporter)} applies each
+     * exporter's readiness check.
      * Byron epochs are skipped unless the table includes them.
      *
      * @param tableName The table to check for missing epoch exports
@@ -255,10 +279,119 @@ public class GapDetectionService {
             }
         }
 
-        log.info("Epoch gap detection for {}: {} missing exports from epoch {} to {}",
+        log.debug("Epoch gap detection for {}: {} missing exports from epoch {} to {}",
             tableName, missing.size(), startEpoch, endEpoch);
 
         return missing;
+    }
+
+    /**
+     * Missing partitions of one table, split by what the scheduler can do with them.
+     *
+     * @param tableName  the table
+     * @param due        ready and not waiting for a retry: export these now
+     * @param backingOff exported before and failed; the next retry is not due yet
+     * @param notReady   not exportable yet (for example waiting for an AdaPot job), or never
+     *                   (AdaPot disabled); these are not gaps
+     */
+    public record TableGaps(String tableName, List<PartitionValue> due, List<PartitionValue> backingOff,
+                            List<PartitionValue> notReady) {
+        /** Partitions that could be exported but are not: {@code due} plus {@code backingOff}. */
+        public int readyMissing() {
+            return due.size() + backingOff.size();
+        }
+    }
+
+    /**
+     * Missing partitions of an exporter's table, split into due, backing off and not ready.
+     *
+     * <p>Daily partitions up to {@link #getExportEndDate()} and epoch partitions up to the current
+     * epoch are candidates; each is then checked with {@link #isReady}. A partition whose last
+     * export FAILED is retried only after {@link #retryDelay(int)} since that failure.</p>
+     */
+    public TableGaps findGaps(TableExporter exporter) {
+        String tableName = exporter.getTableName();
+        List<PartitionValue> missing = switch (exporter.getPartitionStrategy()) {
+            case DAILY -> findMissingExports(tableName).stream().map(PartitionValue::ofDate).toList();
+            case EPOCH -> findMissingEpochExports(tableName, exporter.includesByronEpochs()).stream()
+                    .map(PartitionValue::ofEpoch).toList();
+            default -> List.of();
+        };
+        if (missing.isEmpty()) {
+            return new TableGaps(tableName, List.of(), List.of(), List.of());
+        }
+
+        Map<String, ExportState> failed = new HashMap<>();
+        for (ExportState state : stateService.getFailedExports(tableName, Integer.MAX_VALUE)) {
+            failed.put(state.getId().getPartitionValue(), state);
+        }
+
+        LocalDateTime now = LocalDateTime.now(clock);
+        List<PartitionValue> due = new ArrayList<>();
+        List<PartitionValue> backingOff = new ArrayList<>();
+        List<PartitionValue> notReady = new ArrayList<>();
+        for (PartitionValue partition : missing) {
+            ExportState lastFailure = failed.get(partition.toPathSegment());
+            if (lastFailure != null && !isRetryDue(lastFailure, now)) {
+                // It failed after passing the readiness check, so it was ready
+                backingOff.add(partition);
+            } else if (isReady(exporter, partition)) {
+                due.add(partition);
+            } else {
+                notReady.add(partition);
+            }
+        }
+        return new TableGaps(tableName, due, backingOff, notReady);
+    }
+
+    /**
+     * Whether the partition can be exported now: {@link ExportReadinessService#checkExporter}, the
+     * check the admin API and the export itself use (an unavailable table, an epoch that is not
+     * finalized, the exporter's own {@link TableExporter#preExportValidation}). An exception means
+     * "not ready".
+     */
+    boolean isReady(TableExporter exporter, PartitionValue partition) {
+        ExportReadinessService readiness = readinessService == null ? null : readinessService.getIfAvailable();
+        if (readiness != null) {
+            // Same rules as the admin API: unavailable tables, finalized epochs, the exporter's own check
+            return readiness.checkExporter(exporter, partition).isReady();
+        }
+        try {
+            return exporter.preExportValidation(partition);
+        } catch (RuntimeException e) {
+            log.debug("Readiness check of {} {} failed ({}); treating it as not ready",
+                    exporter.getTableName(), partition.toPathSegment(), e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Wait before retrying a partition whose export failed: {@code retry-backoff-initial-minutes}
+     * doubled for every earlier retry, at most {@code retry-backoff-max-minutes}.
+     *
+     * @param retryCount retries already made (the state's {@code retry_count})
+     */
+    public Duration retryDelay(int retryCount) {
+        long initial = Math.max(1, properties.getContinuousSync().getRetryBackoffInitialMinutes());
+        long max = Math.max(initial, properties.getContinuousSync().getRetryBackoffMaxMinutes());
+        int doublings = Math.min(Math.max(0, retryCount), 40);
+        long minutes = initial;
+        for (int i = 0; i < doublings && minutes < max; i++) {
+            minutes *= 2;
+        }
+        return Duration.ofMinutes(Math.min(minutes, max));
+    }
+
+    private boolean isRetryDue(ExportState failed, LocalDateTime now) {
+        if (failed.getCompletedAt() == null) {
+            return true;
+        }
+        int retryCount = failed.getRetryCount() != null ? failed.getRetryCount() : 0;
+        return !now.isBefore(failed.getCompletedAt().plus(retryDelay(retryCount)));
+    }
+
+    void setClock(Clock clock) {
+        this.clock = clock;
     }
 
     /**

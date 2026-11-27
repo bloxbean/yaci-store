@@ -64,12 +64,14 @@ public class ParquetWriterService implements StorageWriter {
             // Ensure output directory exists
             Files.createDirectories(targetDirectory);
 
-            // Clean up any orphaned .tmp files from previous failed writes
-            cleanupTempFiles(targetDirectory);
-
             // Get DuckDB connection from pool
             try (Connection duckConn = duckDbDataSource.getConnection();
                  Statement stmt = duckConn.createStatement()) {
+
+                // Clean up orphaned .tmp files from previous failed writes. Only while holding the
+                // pool's single connection: before that, another export of the same partition may
+                // still be writing its .tmp file here.
+                cleanupTempFiles(targetDirectory);
 
                 // Setup PostgreSQL connection using helper
                 if (!connectionHelper.isDatabaseAttached(duckConn, "source_db")) {

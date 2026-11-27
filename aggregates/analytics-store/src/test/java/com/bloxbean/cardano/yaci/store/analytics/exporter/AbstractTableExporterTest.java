@@ -87,6 +87,19 @@ class AbstractTableExporterTest {
     }
 
     @Test
+    void releasesTheClaimWhenTheExportEndsWithAnError() {
+        ExportState inProgress = new ExportState("t", "epoch=500");
+        when(stateService.markInProgress("t", "epoch=500")).thenReturn(inProgress);
+        when(writer.export(anyString(), anyString(), anyString())).thenThrow(new OutOfMemoryError("native"));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> exporter(false, jobs).exportForPartition(EPOCH_500))
+                .isInstanceOf(OutOfMemoryError.class);
+
+        verify(stateService).releaseClaim(inProgress);
+        verify(stateService, never()).markCompleted(any(), any(), any());
+    }
+
+    @Test
     void doesNotTouchTheStateWhenValidationFails() {
         TestExporter exporter = exporter(false, jobs);
         exporter.valid = false;

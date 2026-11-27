@@ -18,6 +18,14 @@ public class AnalyticsStoreProperties {
     private String exportPath = "./data/analytics";
 
     /**
+     * PostgreSQL {@code statement_timeout} (seconds) for the export pipeline's connections to the
+     * source database (DuckDB {@code postgres_scanner}, set as a libpq startup option).
+     * 0 = no timeout (default): a single export query can legitimately run for a long time on a
+     * large table. Set it to bound a stuck export query; the export then fails and is retried.
+     */
+    private int sourceStatementTimeoutSeconds = 0;
+
+    /**
      * Enabled tables for export (empty = all enabled).
      *
      * If empty, all registered table exporters are enabled.
@@ -43,6 +51,29 @@ public class AnalyticsStoreProperties {
     @Data
     public static class ExporterConfig {
         private boolean enabled = true;
+    }
+
+    private PruningCheck pruningCheck = new PruningCheck();
+
+    /**
+     * Startup check that PostgreSQL pruning does not delete rows before they are exported.
+     */
+    @Data
+    public static class PruningCheck {
+        /**
+         * Keep the configured pruning windows: do not raise a window that deletes rows of an
+         * enabled exporter's source table before they are exported, and do not hold pruning while
+         * the export is behind. The affected tables then miss data; a warning is logged.
+         * Default: false.
+         */
+        private boolean acceptDataLoss = false;
+
+        /**
+         * Extra hours a raised pruning window keeps beyond the analytics export delay
+         * (finality window + buffer days), to cover scheduler intervals, retries and short
+         * outages. Default: 12.
+         */
+        private int marginHours = 12;
     }
 
     private StateManagement stateManagement = new StateManagement();
@@ -102,6 +133,15 @@ public class AnalyticsStoreProperties {
          * Set to false to allow exports during sync
          */
         private boolean exportAfterSync = true;
+
+        /**
+         * Wait before the first retry of a partition whose export failed (minutes). Each further
+         * failure doubles the wait, up to {@link #retryBackoffMaxMinutes}. Default: 1.
+         */
+        private int retryBackoffInitialMinutes = 1;
+
+        /** Longest wait between retries of a partition that keeps failing (minutes). Default: 360. */
+        private int retryBackoffMaxMinutes = 360;
     }
 
     @Data
@@ -144,16 +184,46 @@ public class AnalyticsStoreProperties {
     @Data
     public static class DuckDb {
         /**
-         * DuckDB memory_limit setting.
-         * Controls the maximum memory DuckDB's buffer manager can use.
-         * DuckDB defaults to 80% of system RAM if not set, which can cause OOM
-         * when running inside a JVM process.
+         * DuckDB memory_limit setting, applied to <em>each</em> DuckDB instance (the export
+         * writer and the query layer are separate instances).
          *
          * Format: DuckDB size string (e.g., "1GB", "512MB", "2GB")
-         * Empty = use DuckDB default (80% of system RAM).
-         * Recommended: Set explicitly in production/container environments.
+         *
+         * Empty = 50% of the RAM not reserved for the JVM heap, split evenly between the
+         * export writer and the query layer (whichever are enabled), at least 256MB. DuckDB's
+         * own default (80% of the RAM for each instance) over-commits as soon as both run in
+         * one JVM. Recommended: set explicitly in production/container environments.
          */
         private String memoryLimit;
+
+        /**
+         * Base directory for DuckDB spill files ({@code temp_directory}). Every DuckDB
+         * instance gets its own subdirectory ({@code writer-<id>}, {@code reader-<id>}, ...)
+         * that is removed when the instance closes. Instances must never share a temp
+         * directory: they use the same spill file names and delete each other's files.
+         *
+         * Empty = {@code <export-path>/.tmp}.
+         */
+        private String tempDirectory;
+
+        /**
+         * DuckDB {@code max_temp_directory_size} per instance (e.g. "50GB").
+         * Empty = DuckDB default (90% of the free disk space of the temp directory).
+         */
+        private String maxTempDirectorySize;
+
+        /**
+         * Directories DuckDB searches for extensions ({@code extension_directories}); the first
+         * one is also where missing extensions are installed. Applied to every DuckDB instance
+         * (export writer, catalog pre-initializer, query layer).
+         *
+         * <p>The {@code ducklake} and {@code postgres_scanner} extensions are downloaded on first
+         * use. Point this at a persistent directory (for Docker: inside a mounted volume), or at
+         * a directory pre-seeded with the extensions ({@code <dir>/v<duckdb-version>/<platform>/})
+         * for offline or air-gapped hosts. An extension that is already present is loaded
+         * without network access. Empty = DuckDB's default ({@code ~/.duckdb/extensions}).</p>
+         */
+        private List<String> extensionDirectories = new ArrayList<>();
 
         /**
          * Number of DuckDB threads for query execution.
@@ -371,8 +441,24 @@ public class AnalyticsStoreProperties {
          */
         private String catalogPath = "./data/analytics/ducklake.catalog.db";
 
-        // Note: DuckLake always uses 'public' schema for metadata tables
-        // catalogSchema is not configurable - removed in favor of hardcoded 'public'
+        /**
+         * PostgreSQL schema for the DuckLake catalog tables ({@code ducklake_*}), used when
+         * catalogType=postgresql (DuckLake {@code METADATA_SCHEMA}).
+         *
+         * Not set (default): the schema of the catalog connection ({@code currentSchema} of
+         * catalog-url, else of spring.datasource.url) if it already holds a catalog; otherwise an
+         * existing catalog in {@code public} (installations created before this property); otherwise
+         * a new catalog in the connection's schema. Instances that share one database must each
+         * use their own schema. See {@code CatalogSchemas}.
+         */
+        private String catalogSchema;
+
+        /**
+         * How long to wait at attach for another process to release the lock on the DuckDB
+         * catalog file (catalogType=duckdb), in seconds. A {@code duckdb} CLI that has the file
+         * open (even {@code -readonly}) holds that lock. 0 = fail at once. Default: 30.
+         */
+        private int catalogLockWaitSeconds = 30;
 
         /**
          * Longest time an export, a verification or a maintenance run waits for the single
