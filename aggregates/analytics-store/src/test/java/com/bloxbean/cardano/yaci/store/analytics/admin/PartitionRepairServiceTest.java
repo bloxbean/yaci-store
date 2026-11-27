@@ -4,6 +4,9 @@ import com.bloxbean.cardano.yaci.store.analytics.exporter.PartitionStrategy;
 import com.bloxbean.cardano.yaci.store.analytics.exporter.PartitionValue;
 import com.bloxbean.cardano.yaci.store.analytics.exporter.TableExporter;
 import com.bloxbean.cardano.yaci.store.analytics.exporter.TableExporterRegistry;
+import com.bloxbean.cardano.yaci.store.analytics.scheduler.ExportReadinessService;
+import com.bloxbean.cardano.yaci.store.analytics.scheduler.PartitionNotReadyException;
+import com.bloxbean.cardano.yaci.store.analytics.scheduler.PartitionReadiness;
 import com.bloxbean.cardano.yaci.store.analytics.writer.DuckLakeWriterService;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,6 +38,7 @@ class PartitionRepairServiceTest {
     private final EraService eraService = mock(EraService.class);
     private final DuckLakeWriterService writer = mock(DuckLakeWriterService.class);
     private final TableExporter exporter = mock(TableExporter.class);
+    private final ExportReadinessService readiness = mock(ExportReadinessService.class);
     private PartitionRepairService service;
 
     @BeforeEach
@@ -46,7 +50,9 @@ class PartitionRepairServiceTest {
         when(eraService.slotAtOrAfterTime(anyLong())).thenAnswer(i -> i.getArgument(0));
         ObjectProvider<DuckLakeWriterService> provider = mock(ObjectProvider.class);
         when(provider.getIfAvailable()).thenReturn(writer);
-        service = new PartitionRepairService(registry, adminService, eraService, provider);
+        when(readiness.checkFinal(any())).thenReturn(PartitionReadiness.READY);
+        when(readiness.checkExporter(any(), any())).thenReturn(PartitionReadiness.READY);
+        service = new PartitionRepairService(registry, adminService, eraService, provider, readiness);
     }
 
     @Test
@@ -95,5 +101,32 @@ class PartitionRepairServiceTest {
         assertThatThrownBy(() -> service.repairDateRange("reward", DAY, DAY))
                 .isInstanceOf(IllegalArgumentException.class);
         verify(epochExporter, never()).exportForPartition(any());
+    }
+
+    @Test
+    void refusesARangeThatEndsAfterTheLatestExportableDay() {
+        when(readiness.checkFinal(PartitionValue.ofDate(DAY.plusDays(1))))
+                .thenReturn(PartitionReadiness.notFinal("date=2024-09-02 is not final yet"));
+
+        assertThatThrownBy(() -> service.repairDateRange("stake_address_balance_snapshot", DAY, DAY.plusDays(1)))
+                .isInstanceOf(PartitionNotReadyException.class)
+                .hasMessageContaining("not final");
+        verify(adminService, never()).resetExportState(anyString(), anyString());
+        verify(exporter, never()).exportForPartition(any());
+    }
+
+    @Test
+    void keepsTheStateOfADayWhoseTableIsNotReady() {
+        when(exporter.exportForPartition(any())).thenReturn(true);
+        when(readiness.checkExporter(exporter, PartitionValue.ofDate(DAY)))
+                .thenReturn(PartitionReadiness.dependencyPending("not ready"));
+
+        PartitionRepairService.RepairResult result =
+                service.repairDateRange("stake_address_balance_snapshot", DAY, DAY.plusDays(1));
+
+        assertThat(result.failedDates()).containsExactly(DAY);
+        verify(adminService, never()).resetExportState("stake_address_balance_snapshot", "date=" + DAY);
+        verify(exporter, never()).exportForPartition(PartitionValue.ofDate(DAY));
+        verify(exporter).exportForPartition(PartitionValue.ofDate(DAY.plusDays(1)));
     }
 }
