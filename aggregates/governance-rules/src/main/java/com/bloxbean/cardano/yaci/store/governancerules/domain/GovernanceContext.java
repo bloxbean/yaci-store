@@ -10,7 +10,7 @@ import java.math.BigInteger;
 import java.util.Map;
 
 @Value
-@Builder
+@Builder(toBuilder = true)
 public class GovernanceContext {
     // Current epoch information
     int currentEpoch;
