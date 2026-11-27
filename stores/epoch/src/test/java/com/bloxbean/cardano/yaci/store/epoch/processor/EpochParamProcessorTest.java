@@ -3,6 +3,7 @@ package com.bloxbean.cardano.yaci.store.epoch.processor;
 import com.bloxbean.cardano.yaci.core.model.Era;
 import com.bloxbean.cardano.yaci.core.model.ProtocolParamUpdate;
 import com.bloxbean.cardano.yaci.core.model.governance.actions.ParameterChangeAction;
+import com.bloxbean.cardano.yaci.core.model.governance.GovActionId;
 import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
 import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
@@ -165,7 +166,7 @@ class EpochParamProcessorTest {
                 );
         Mockito.when(proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, 27)).thenReturn(
                 List.of(
-                        GovActionProposal.builder()
+                        GovActionProposal.builder().txHash("01".repeat(32)).index(0)
                                 .govAction(
                                         ParameterChangeAction.builder()
                                                 .protocolParamUpdate(ProtocolParamUpdate
@@ -176,9 +177,9 @@ class EpochParamProcessorTest {
                                                         .costModelsHash("e5393f1bbc6ed875c925918ee63acb34ca2cf3534312cf531227265538e6c076")
                                                         .build()).build())
                                 .build(),
-                        GovActionProposal.builder()
+                        GovActionProposal.builder().txHash("02".repeat(32)).index(0)
                                 .govAction(
-                                        ParameterChangeAction.builder()
+                                        ParameterChangeAction.builder().govActionId(new GovActionId("01".repeat(32), 0))
                                                 .protocolParamUpdate(ProtocolParamUpdate
                                                         .builder()
                                                         .drepActivity(20)
@@ -201,6 +202,36 @@ class EpochParamProcessorTest {
         assertThat(epochParam.getParams().getDrepActivity()).isEqualTo(20);
         assertThat(epochParam.getParams().getMaxTxSize()).isEqualTo(1000);
     }
+    @Test
+    void appliesParentBeforeChildWhenRatifiedProposalsAreReturnedInReverseOrder() {
+        when(eraService.getEraForEpoch(28)).thenReturn(Era.Conway);
+        when(eraService.getEraForEpoch(27)).thenReturn(Era.Conway);
+        when(storeProperties.getProtocolMagic()).thenReturn(1L);
+        when(epochParamStorage.getProtocolParams(28)).thenReturn(Optional.empty());
+        when(epochParamStorage.getProtocolParams(27)).thenReturn(Optional.of(EpochParam.builder()
+                .params(ProtocolParams.builder().keyDeposit(BigInteger.TEN).maxTxSize(1000).build()).build()));
+        var parent = GovActionProposal.builder().txHash("ff".repeat(32)).index(0).slot(100L)
+                .govAction(ParameterChangeAction.builder()
+                        .protocolParamUpdate(ProtocolParamUpdate.builder().keyDeposit(BigInteger.valueOf(20))
+                                .drepActivity(10).build()).build()).build();
+        var child = GovActionProposal.builder().txHash("00".repeat(32)).index(1).slot(100L)
+                .govAction(ParameterChangeAction.builder()
+                        .govActionId(new GovActionId(parent.getTxHash(), parent.getIndex()))
+                        .protocolParamUpdate(ProtocolParamUpdate.builder().keyDeposit(BigInteger.valueOf(30)).build())
+                        .build()).build();
+        when(proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, 27))
+                .thenReturn(List.of(child, parent));
+
+        epochParamProcessor.handlePreAdaPotJobProcessingEvent(
+                PreAdaPotJobProcessingEvent.builder().epoch(28).slot(1000).build());
+
+        Mockito.verify(epochParamStorage).save(argCaptor.capture());
+        var params = argCaptor.getValue().getParams();
+        assertThat(params.getKeyDeposit()).isEqualTo(BigInteger.valueOf(30));
+        assertThat(params.getDrepActivity()).isEqualTo(10);
+        assertThat(params.getMaxTxSize()).isEqualTo(1000);
+    }
+
     @Test
     void givenGenesisBlockEvent_directConwayStart_shouldNormalizeProtocolParams() {
         //Direct Conway start (custom/devnet): merged genesis params carry raw pre-Babbage values

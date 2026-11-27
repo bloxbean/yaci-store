@@ -72,9 +72,16 @@ public class GovernanceActionUtil {
      *         {@code false} otherwise.
      */
     public static boolean withdrawalCanWithdraw(TreasuryWithdrawalsAction treasuryWithdrawalsAction, BigInteger treasury) {
+        return totalWithdrawal(treasuryWithdrawalsAction).compareTo(treasury) <= 0;
+    }
+
+    /**
+     * Sum of all withdrawals in the action; a missing withdrawal map counts as zero.
+     */
+    public static BigInteger totalWithdrawal(TreasuryWithdrawalsAction treasuryWithdrawalsAction) {
         final Map<String, BigInteger> withdrawals = treasuryWithdrawalsAction.getWithdrawals();
         if (withdrawals == null) {
-            return true;
+            return BigInteger.ZERO;
         }
 
         BigInteger totalWithdrawal = BigInteger.ZERO;
@@ -82,7 +89,7 @@ public class GovernanceActionUtil {
             totalWithdrawal = totalWithdrawal.add(withdrawalAmount);
         }
 
-        return totalWithdrawal.compareTo(treasury) <= 0;
+        return totalWithdrawal;
     }
 
 
