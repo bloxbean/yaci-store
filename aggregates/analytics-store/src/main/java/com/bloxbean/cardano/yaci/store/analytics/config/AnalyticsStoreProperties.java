@@ -149,6 +149,25 @@ public class AnalyticsStoreProperties {
          */
         private int threads = Runtime.getRuntime().availableProcessors();
 
+        /**
+         * Directories DuckDB searches for extensions ({@code extension_directories}), applied to
+         * the export writer and to the query layer before its sandbox lockdown.
+         *
+         * <p>DuckDB 2.x builds {@code parquet}, {@code json} and {@code icu} in, but downloads
+         * {@code ducklake} and {@code postgres} on first use. Point this at directories pre-seeded
+         * with those extensions ({@code <dir>/v<engine-version>/<platform>/}) for air-gapped or
+         * offline deployments. Empty = DuckDB's default ({@code ~/.duckdb/extensions}).</p>
+         */
+        private List<String> extensionDirectories = new ArrayList<>();
+
+        /**
+         * Refuse to start the analytics store on an x86-64 Linux CPU below x86-64-v3 (no AVX2,
+         * BMI2, FMA, ...). DuckDB 2.0's downloaded {@code ducklake} and {@code postgres}
+         * extensions need that level and crash the JVM with SIGILL without it. Turn off only when
+         * the extensions in use are known to run on this CPU.
+         */
+        private boolean cpuCheck = true;
+
         private ReaderConfig reader = new ReaderConfig();
 
         @Data
@@ -358,6 +377,18 @@ public class AnalyticsStoreProperties {
 
         // Note: DuckLake always uses 'public' schema for metadata tables
         // catalogSchema is not configurable - removed in favor of hardcoded 'public'
+
+        /**
+         * Let DuckLake migrate a catalog it cannot otherwise open (ADR 0008 D2).
+         *
+         * <p>Off by default: the export writer never migrates a catalog implicitly. A catalog
+         * made by DuckDB 1.4.x ({@code v3.0.0-beta1}-{@code beta3}, DuckLake spec 0.3) is then
+         * refused at startup with resync steps. Setting this to {@code true} passes
+         * {@code AUTOMATIC_MIGRATION} instead, which rewrites the catalog to the engine's spec in
+         * place. That is one-way and best effort: take a backup first, and resync if it fails.
+         * DuckLake 1.0 catalogs ({@code v3.0.0-beta4} and later) need no migration.</p>
+         */
+        private boolean autoMigrate = false;
 
         private DuckLakeExport export = new DuckLakeExport();
 

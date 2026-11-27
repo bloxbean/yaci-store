@@ -43,7 +43,7 @@ EOF
 > - `SELECT * FROM block;` — Table not found
 > - `SELECT * FROM analytics.block;` — Correct
 
-> **Note:** With the DuckDB-file catalog type the catalog file is locked by the running yaci-store process; an `ATTACH` from another process fails with `Could not set lock on file ...` until the application is stopped. While it is running, use `read_parquet()` on the exported files (below) or the [Query API](/docs/v3/analytics/query-api). This does not apply to the PostgreSQL catalog type. Use a DuckDB CLI version at least as new as the one bundled with yaci-store (1.5.x): the DuckLake catalog is written in that version's format.
+> **Note:** With the DuckDB-file catalog type the catalog file is locked by the running yaci-store process; an `ATTACH` from another process fails with `Could not set lock on file ...` until the application is stopped. While it is running, use `read_parquet()` on the exported files (below) or the [Query API](/docs/v3/analytics/query-api). This does not apply to the PostgreSQL catalog type. Use a DuckDB CLI with **the same minor version** as the one bundled with yaci-store (2.0.x). An older CLI cannot open a DuckDB-file catalog that 2.0 has written to (`Trying to read a database file with version number 69 ...`), and a newer CLI that writes to it can make it unreadable to yaci-store.
 
 ### Using `read_parquet()` with DuckLake
 

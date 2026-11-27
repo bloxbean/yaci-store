@@ -316,5 +316,7 @@ public class ContinuousSyncScheduler {
         private int missingEpochExportCount;
         private int enabledEpochTableCount;
         private boolean exportDeferred;
+        /** DuckDB, DuckLake extension and catalog spec versions; {@code null} outside DuckLake mode. */
+        private com.bloxbean.cardano.yaci.store.analytics.ducklake.DuckLakeEngineInfo.Snapshot engine;
     }
 }

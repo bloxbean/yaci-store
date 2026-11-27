@@ -221,4 +221,17 @@ class AnalyticsQueryExecutorLimitTest {
         assertEquals(103, preview.length());
         assertTrue(preview.endsWith("..."));
     }
+
+    /**
+     * ADR 0008 D1: DuckDB JDBC 2.0 fills in SQL states and error codes. A statement timeout is
+     * still reported as {@code SQLTimeoutException} ("INTERRUPT Error: Interrupted!"), so callers
+     * keep getting the timeout message rather than the generic failure.
+     */
+    @Test
+    void statementTimeoutIsClassifiedAsTimeout() {
+        when(provider.getQueryTimeoutSeconds()).thenReturn(1);
+        AnalyticsQueryExecutor executor = executor(100, 10_000);
+        assertThrows(AnalyticsQueryExecutor.QueryTimeoutException.class, () -> executor.execute(
+                "SELECT count(*) FROM range(10000000000) a, range(10) b WHERE a.range % 7 = b.range", null));
+    }
 }

@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.analytics.admin;
 
+import com.bloxbean.cardano.yaci.store.analytics.ducklake.DuckLakeEngineInfo;
 import com.bloxbean.cardano.yaci.store.analytics.exporter.PartitionStrategy;
 import com.bloxbean.cardano.yaci.store.analytics.exporter.PartitionValue;
 import com.bloxbean.cardano.yaci.store.analytics.exporter.TableExporterRegistry;
@@ -10,6 +11,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -47,6 +49,7 @@ public class AnalyticsAdminController {
     private final TableExporterRegistry registry;
     private final ExportStateAdminService adminService;
     private final PartitionRepairService repairService;
+    private final ObjectProvider<DuckLakeEngineInfo> engineInfo;
 
     /**
      * List all registered table exporters.
@@ -264,7 +267,12 @@ public class AnalyticsAdminController {
                     + "deferred until the node reaches the chain tip, and whether everything is fully exported.")
     @GetMapping("/status")
     public ResponseEntity<ContinuousSyncScheduler.SyncStatus> getStatus() {
-        return ResponseEntity.ok(continuousSyncScheduler.getSyncStatus());
+        ContinuousSyncScheduler.SyncStatus status = continuousSyncScheduler.getSyncStatus();
+        DuckLakeEngineInfo info = engineInfo.getIfAvailable();
+        if (info != null) {
+            status.setEngine(info.snapshot());
+        }
+        return ResponseEntity.ok(status);
     }
 
     /**

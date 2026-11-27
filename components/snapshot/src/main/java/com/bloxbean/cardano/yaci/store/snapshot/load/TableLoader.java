@@ -252,12 +252,14 @@ public class TableLoader {
                 }
             }
             String record = "INSERT INTO " + journal
-                    + " (snapshot_id, batch_id, spec_id, target_table, row_count) VALUES ("
+                    // completed_at is written explicitly: through DuckDB 2.x's postgres extension an
+                    // omitted column is sent as NULL instead of taking the PostgreSQL DEFAULT.
+                    + " (snapshot_id, batch_id, spec_id, target_table, row_count, completed_at) VALUES ("
                     + Identifiers.literal(snapshotId) + ", "
                     + Identifiers.literal(batch.batchId()) + ", "
                     + Identifiers.literal(batch.spec().id()) + ", "
                     + Identifiers.literal(batch.spec().targetTable()) + ", "
-                    + rows + ")";
+                    + rows + ", CAST(now() AS TIMESTAMP))";
             session.exec(record);
             session.exec("COMMIT");
         } catch (SQLException e) {
