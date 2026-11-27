@@ -72,7 +72,7 @@ public class RollbackExporter extends AbstractTableExporter {
                     r.current_block,
                     to_timestamp(COALESCE(b.block_time, 0)) as block_time
                 FROM %s.rollback r
-                INNER JOIN %s.block b ON r.current_slot = b.slot
+                LEFT JOIN %s.block b ON r.current_slot = b.slot
                 WHERE r.current_slot >= %d
                   AND r.current_slot < %d
                 ORDER BY r.current_slot
