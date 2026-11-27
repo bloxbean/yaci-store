@@ -12,9 +12,11 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.List;
 import java.util.Map;
+import java.util.TimeZone;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -201,6 +203,59 @@ class AnalyticsQueryExecutorLimitTest {
         assertEquals("2026-08-19T08:00:00Z", row.get("tstz"));        // normalized to UTC
         assertEquals("10:00:00", row.get("t"));
         assertEquals("2026-08-19T00:10:25Z", row.get("epoch_ts"));
+    }
+
+    @Test
+    void plainTimestampsAreRenderedAsStoredWhateverTheJvmTimeZone() {
+        TimeZone original = TimeZone.getDefault();
+        TimeZone.setDefault(TimeZone.getTimeZone("America/New_York"));
+        try {
+            AnalyticsQueryExecutor executor = executor(100, 10_000);
+            // 02:30 on 2024-03-10 does not exist in New York (DST gap); it used to come back as 03:30.
+            Map<String, Object> row = executor.execute(
+                    "SELECT TIMESTAMP '2024-03-10 02:30:00' AS ts, "
+                            + "TIMESTAMP_NS '2024-03-10 02:30:00.123456789' AS ts_ns, "
+                            + "TIMESTAMP_MS '2024-03-10 02:30:00.123' AS ts_ms, "
+                            + "TIMESTAMP_S '2024-03-10 02:30:00' AS ts_s, "
+                            + "TIMESTAMP '2024-07-01 12:00:00.5' AS summer, "
+                            + "TIMESTAMPTZ '2024-03-10 02:30:00+00' AS tstz, "
+                            + "TIMETZ '10:00:00+02' AS ttz, "
+                            + "CAST(NULL AS TIMESTAMP) AS missing", 1).rows().get(0);
+            assertEquals("2024-03-10T02:30:00", row.get("ts"));
+            assertEquals("2024-03-10T02:30:00.123456789", row.get("ts_ns"));
+            assertEquals("2024-03-10T02:30:00.123", row.get("ts_ms"));
+            assertEquals("2024-03-10T02:30:00", row.get("ts_s"));
+            assertEquals("2024-07-01T12:00:00.5", row.get("summer"));
+            assertEquals("2024-03-10T02:30:00Z", row.get("tstz"));    // still normalized to UTC
+            assertEquals("10:00:00+02:00", row.get("ttz"));
+            assertNull(row.get("missing"));
+        } finally {
+            TimeZone.setDefault(original);
+        }
+    }
+
+    @Test
+    void unionColumnHoldingATimestampDoesNotFailTheQuery() {
+        // The driver returns a java.sql.Timestamp for a UNION whose active member is a TIMESTAMP,
+        // but cannot convert the UNION column to LocalDateTime; that used to fail the whole query.
+        Map<String, Object> row = executor(100, 10_000).execute(
+                "SELECT union_value(t := TIMESTAMP '2024-07-01 12:00:00')::UNION(t TIMESTAMP, s VARCHAR) AS u_ts, "
+                        + "union_value(s := 'x')::UNION(t TIMESTAMP, s VARCHAR) AS u_str, "
+                        + "TIMESTAMP '2024-07-01 12:00:00' AS ts", 1).rows().get(0);
+        assertEquals("2024-07-01T12:00:00", row.get("u_ts"));
+        assertEquals("x", row.get("u_str"));
+        assertEquals("2024-07-01T12:00:00", row.get("ts"));
+    }
+
+    @Test
+    void nanAndInfinityAreReturnedAsStrings() {
+        Map<String, Object> row = executor(100, 10_000).execute(
+                "SELECT 'NaN'::DOUBLE AS n, 'inf'::DOUBLE AS pos, '-inf'::FLOAT AS neg, 1.5::DOUBLE AS ok", 1)
+                .rows().get(0);
+        assertEquals("NaN", row.get("n"));
+        assertEquals("Infinity", row.get("pos"));
+        assertEquals("-Infinity", row.get("neg"));
+        assertEquals(1.5, row.get("ok"));
     }
 
     @Test

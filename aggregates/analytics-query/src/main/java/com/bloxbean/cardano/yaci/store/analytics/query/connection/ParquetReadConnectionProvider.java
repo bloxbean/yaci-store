@@ -12,14 +12,19 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
@@ -71,6 +76,14 @@ public class ParquetReadConnectionProvider extends DuckDbReadConnectionProvider 
     /** Tables currently served by a unified (Parquet UNION ALL live PostgreSQL) view. */
     private volatile Set<String> federatedTables = Set.of();
 
+    /** Files per {@code parquet_schema} query when checking whether a table's files share a schema. */
+    private static final int SCHEMA_PROBE_BATCH = 500;
+    /**
+     * Per table: the schema signature of each data file already inspected. Parquet files are
+     * written once, so a refresh only reads the footers of files it has not seen.
+     */
+    private final Map<String, Map<FileKey, String>> fileSchemaSignatures = new ConcurrentHashMap<>();
+
     public ParquetReadConnectionProvider(
             AnalyticsStoreProperties properties,
             ParquetTableRegistry tableRegistry,
@@ -78,12 +91,7 @@ public class ParquetReadConnectionProvider extends DuckDbReadConnectionProvider 
             ObjectProvider<CutoffSlotResolver> cutoffResolverProvider,
             ObjectProvider<TableExporterRegistry> exporterRegistryProvider,
             ObjectProvider<DuckLakeCatalogSnapshotReader> snapshotReaderProvider) {
-        super(
-                properties.getDuckdb().getReader().getMaximumPoolSize(),
-                properties.getDuckdb().getMemoryLimit(),
-                properties.getDuckdb().getThreads(),
-                properties.getDuckdb().getReader().getQueryTimeoutSeconds()
-        );
+        super(properties);
         this.properties = properties;
         this.tableRegistry = tableRegistry;
         this.connectionHelperProvider = connectionHelperProvider;
@@ -384,19 +392,113 @@ public class ParquetReadConnectionProvider extends DuckDbReadConnectionProvider 
             String fileList = files.stream()
                     .map(path -> "'" + escapePath(path.toString()) + "'")
                     .collect(Collectors.joining(", "));
-            source = "read_parquet([" + fileList + "], hive_partitioning=" + hivePartitioning + hiveTypes + ")";
+            source = "read_parquet([" + fileList + "], hive_partitioning=" + hivePartitioning
+                    + unionByNameClause(tableName, files) + hiveTypes + ")";
             // Newer DuckLake versions may store internal bookkeeping columns in some data
             // files (e.g. _ducklake_internal_row_id); they are not part of the table.
             projection = "COLUMNS(c -> NOT starts_with(c, '_ducklake_internal_'))";
         } else {
             String parquetPath = tableRegistry.getParquetGlobPath(tableName);
-            source = "read_parquet('" + escapePath(parquetPath) + "', hive_partitioning=true)";
+            source = "read_parquet('" + escapePath(parquetPath) + "', hive_partitioning=true"
+                    + unionByNameClause(tableName, tableRegistry.listParquetFiles(tableName)) + ")";
         }
         String sql = "CREATE OR REPLACE VIEW " + quoteIdentifier(viewName)
                 + " AS SELECT " + projection + " FROM " + source;
         executeOnParent(sql);
         log.debug("Created historical view '{}'", viewName);
         return true;
+    }
+
+    /**
+     * {@code , union_by_name=true} when the table's data files do not all have the same columns,
+     * otherwise empty.
+     *
+     * <p>Without {@code union_by_name}, {@code read_parquet} takes the schema of the first file:
+     * when the writer has added a column over time, an old file first silently drops the new
+     * column from the view, and a new file first fails the whole view with "schema mismatch in
+     * glob" as soon as an old file is scanned. {@code union_by_name} fixes both but makes DuckDB
+     * open every file's footer on each query, even files that partition pruning would skip
+     * (measured ~8x slower on a partition-pruned query over 6000 files), so it is only used when
+     * the schemas actually differ. Footers are read once per file (see
+     * {@link #fileSchemaSignatures}); if they cannot be read, union_by_name is used.</p>
+     *
+     * <p>For the glob-based (direct Parquet) view the check covers the files present at view
+     * creation; a file with a new column that appears before the next refresh can be read with
+     * the older schema until that refresh switches the view over.</p>
+     */
+    private String unionByNameClause(String tableName, List<Path> files) {
+        return needsUnionByName(tableName, files) ? ", union_by_name=true" : "";
+    }
+
+    boolean needsUnionByName(String tableName, List<Path> files) {
+        if (files.size() < 2) {
+            return false;
+        }
+        Map<FileKey, String> known = fileSchemaSignatures.getOrDefault(tableName, Map.of());
+        Map<FileKey, String> current = new HashMap<>();
+        List<FileKey> unknown = new ArrayList<>();
+        for (Path file : files) {
+            FileKey key = FileKey.of(file);
+            if (key == null) {
+                return true;
+            }
+            String signature = known.get(key);
+            if (signature != null) {
+                current.put(key, signature);
+            } else {
+                unknown.add(key);
+            }
+        }
+        try {
+            current.putAll(readSchemaSignatures(unknown));
+        } catch (SQLException e) {
+            log.debug("Could not read Parquet schemas of '{}' ({}); using union_by_name",
+                    tableName, DuckDbConnectionHelper.redactSecrets(e.getMessage()));
+            return true;
+        }
+        // Keep only the current files, so the cache does not grow with compacted-away files.
+        fileSchemaSignatures.put(tableName, Map.copyOf(current));
+        boolean mixed = current.size() < files.size() || current.values().stream().distinct().count() > 1;
+        if (mixed) {
+            log.debug("Data files of '{}' differ in their columns; view uses union_by_name", tableName);
+        }
+        return mixed;
+    }
+
+    /** Column names and DuckDB types of each file, as a comparable string, read from the footers. */
+    private Map<FileKey, String> readSchemaSignatures(List<FileKey> files) throws SQLException {
+        Map<FileKey, String> signatures = new HashMap<>();
+        for (int from = 0; from < files.size(); from += SCHEMA_PROBE_BATCH) {
+            List<FileKey> batch = files.subList(from, Math.min(files.size(), from + SCHEMA_PROBE_BATCH));
+            Map<String, FileKey> byPath = new HashMap<>();
+            batch.forEach(key -> byPath.put(key.path(), key));
+            String fileList = batch.stream()
+                    .map(key -> "'" + escapePath(key.path()) + "'")
+                    .collect(Collectors.joining(", "));
+            String sql = "SELECT file_name, CAST(list_sort(list(concat_ws(':', name, duckdb_type))) AS VARCHAR) "
+                    + "FROM parquet_schema([" + fileList + "]) GROUP BY file_name";
+            try (Statement stmt = getParentConnection().createStatement();
+                 ResultSet rs = stmt.executeQuery(sql)) {
+                while (rs.next()) {
+                    FileKey key = byPath.get(rs.getString(1));
+                    if (key != null) {
+                        signatures.put(key, rs.getString(2));
+                    }
+                }
+            }
+        }
+        return signatures;
+    }
+
+    /** A data file as of a size and modification time, so a rewritten file is read again. */
+    record FileKey(String path, long size, long lastModified) {
+        static FileKey of(Path file) {
+            try {
+                return new FileKey(file.toString(), Files.size(file), Files.getLastModifiedTime(file).toMillis());
+            } catch (IOException e) {
+                return null;
+            }
+        }
     }
 
     /**

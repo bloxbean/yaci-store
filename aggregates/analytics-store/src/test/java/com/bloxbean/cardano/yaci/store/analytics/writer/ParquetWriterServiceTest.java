@@ -110,6 +110,23 @@ class ParquetWriterServiceTest {
         assertFalse(Files.exists(output), "no output file for a failed export");
     }
 
+    @Test
+    void aSecondExportOfThePartitionDoesNotDeleteTheFirstOnesTempFile() throws Exception {
+        Path output = exportDir.resolve("block/date=2024-01-17/data.parquet");
+        Files.createDirectories(output.getParent());
+        // The first export holds the writer connection and is writing its temp file
+        Path inFlight = output.getParent().resolve("data.parquet.tmp");
+        try (Connection heldByFirstExport = writerDataSource.getConnection()) {
+            Files.writeString(inFlight, "being written");
+
+            // The second export waits for the connection (and here times out)
+            assertThrows(RuntimeException.class, () -> writer.export(
+                    "SELECT * FROM source_db.main.block WHERE slot < 10", output.toString(), "block_time"));
+
+            assertTrue(Files.exists(inFlight), "the in-flight temp file of the first export must not be deleted");
+        }
+    }
+
     private static long readParquetCount(Path parquet) throws SQLException {
         try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
              Statement stmt = conn.createStatement();
