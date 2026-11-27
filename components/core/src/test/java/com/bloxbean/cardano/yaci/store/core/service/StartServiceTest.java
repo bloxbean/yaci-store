@@ -16,12 +16,12 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
-import reactor.core.publisher.Mono;
 
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -64,8 +64,8 @@ class StartServiceTest {
 
         assertThat(rollbackEvent().isRollbackPointReprocessed()).isTrue();
         assertThat(rollbackEvent().generatedKeyRollbackSlot()).isEqualTo(CURSOR_SLOT - 1);
-        verify(blockFetchService).startFetch(eq(new Point(CURSOR_SLOT, "cursor_hash")), any());
-        verify(blockFetchService, never()).startSync(any());
+        verify(blockFetchService).startFetchWithTimeout(eq(new Point(CURSOR_SLOT, "cursor_hash")), any(), eq(10_000_000L), anyLong());
+        verify(blockFetchService, never()).startSyncWithTimeout(any(), any(), anyLong());
     }
 
     @Test
@@ -76,8 +76,8 @@ class StartServiceTest {
 
         assertThat(rollbackEvent().isRollbackPointReprocessed()).isFalse();
         assertThat(rollbackEvent().generatedKeyRollbackSlot()).isEqualTo(CURSOR_SLOT);
-        verify(blockFetchService).startSync(new Point(CURSOR_SLOT, "cursor_hash"));
-        verify(blockFetchService, never()).startFetch(any(), any());
+        verify(blockFetchService).startSyncWithTimeout(eq(new Point(CURSOR_SLOT, "cursor_hash")), eq(10_000_000L), anyLong());
+        verify(blockFetchService, never()).startFetchWithTimeout(any(), any(), any(), anyLong());
     }
 
     @Test
@@ -89,11 +89,11 @@ class StartServiceTest {
         startService.start();
 
         assertThat(rollbackEvent().isRollbackPointReprocessed()).isTrue();
-        verify(blockFetchService).startFetch(new Point(CURSOR_SLOT, "cursor_hash"), new Point(CURSOR_SLOT + 10, "stop_hash"));
+        verify(blockFetchService).startFetchWithTimeout(eq(new Point(CURSOR_SLOT, "cursor_hash")), eq(new Point(CURSOR_SLOT + 10, "stop_hash")), eq(10_000_000L), anyLong());
     }
 
     private void tipAt(long slot) {
-        when(tipFinderService.getTip()).thenReturn(Mono.just(new Tip(new Point(slot, "tip_hash"), 10_000_100L)));
+        when(tipFinderService.findTip(anyLong())).thenReturn(new Tip(new Point(slot, "tip_hash"), 10_000_100L));
     }
 
     private RollbackEvent rollbackEvent() {
