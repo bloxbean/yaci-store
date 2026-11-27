@@ -82,6 +82,9 @@ public class SnapshotCommands {
             InspectionReport report = new SnapshotExporter(registry).inspect(options);
             printInspection(report, verbose);
             printBlockerReport(report, options.workDir(), verbose);
+            if (!report.canExport()) {
+                throw new CommandFailedException("snapshot inspect: export is blocked", null);
+            }
         } catch (CommandFailedException e) {
             throw e;
         } catch (Exception e) {

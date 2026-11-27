@@ -122,7 +122,8 @@ the snapshot would restore the output as unspent. Sync the source from genesis w
 `*pruning-enabled` setting off (`store.utxo`, `store.transaction`, `store.adapot.reward`,
 `store.adapot.epoch-stake`, `store.account`, `store.blocks.cbor`, `store.transaction.cbor`).
 Inspect and export refuse a source configured with any of them on, and import refuses a snapshot
-whose manifest records one.
+whose manifest records one. `snapshot inspect` exits with a non-zero code whenever export would be
+blocked.
 
 Before inspecting or exporting, backfill daily partitions from the beginning of the chain and
 epoch partitions from the first non-Byron epoch, including empty partitions. Snapshot inspection
