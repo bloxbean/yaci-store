@@ -41,7 +41,7 @@ public class DRepStorageImpl implements DRepStorage {
 
     @Override
     public Optional<DRep> findRecentDRepRegistrationBefore(String dRepId, Integer maxEpoch, long slot, int txIndex, int certIndex) {
-        return dRepRepository.findRecentByDRepIdAndEpochBefore(dRepId, maxEpoch, slot, txIndex, certIndex)
+        return dRepRepository.findRecentRegistrationByDRepIdAndEpochBefore(dRepId, maxEpoch, slot, txIndex, certIndex)
                 .map(dRepMapper::toDRep);
     }
 
