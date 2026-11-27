@@ -225,15 +225,16 @@ class ColumnPlannerTest {
                 "name", "varchar", "description", "varchar", "ticker", "varchar", "url", "varchar",
                 "decimals", "int64", "logo", "varchar", "image", "varchar", "media_type", "varchar",
                 "version", "int64", "datum", "varchar", "properties", "varchar",
+                "validation_errors", "varchar",
                 "last_synced_at", "timestamp", "block_date", "date", "date", "date");
-        // V0_1700_1__init.sql
+        // V0_1700_1__init.sql, with V0_1700_2__validation_errors.sql
         Map<String, String> columns = source("policy_id", "character varying(56)",
                 "asset_name", "character varying(64)", "slot", "bigint", "tx_hash", "character varying(64)",
-                "tx_index", "integer", "label", "integer", "name", "character varying(255)",
-                "description", "text", "ticker", "character varying(32)", "url", "character varying(250)",
-                "decimals", "bigint", "logo", "text", "image", "text", "media_type", "character varying(255)",
+                "tx_index", "integer", "label", "integer", "name", "text",
+                "description", "text", "ticker", "text", "url", "text",
+                "decimals", "bigint", "logo", "text", "image", "text", "media_type", "text",
                 "version", "bigint", "datum", "text", "properties", "jsonb",
-                "last_synced_at", "timestamp without time zone");
+                "last_synced_at", "timestamp without time zone", "validation_errors", "jsonb");
         Map<String, Boolean> nullable = new LinkedHashMap<>();
         columns.keySet().forEach(c -> nullable.put(c, true));
         TargetTable target = new TargetTable("s", "cip68_metadata", columns, nullable, Map.of(),

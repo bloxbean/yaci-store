@@ -73,6 +73,7 @@ public class Cip68MetadataExporter extends AbstractTableExporter {
                     c.version,
                     c.datum,
                     c.properties::text as properties,
+                    c.validation_errors::text as validation_errors,
                     c.last_synced_at,
                     CAST(''%s'' AS DATE) as block_date
                 FROM %s.cip68_metadata c

@@ -24,6 +24,9 @@ snapshot-table:
       properties:
         source: properties
         converter: "varchar-to-jsonb"
+      validation_errors:
+        source: validation_errors
+        converter: "varchar-to-jsonb"
     ignore-source-columns: [block_date, date]
     batch-boundary: FILE_SET
     batch-size: 64
@@ -31,4 +34,5 @@ snapshot-table:
   validation:
     key: [policy_id, asset_name, slot, tx_hash]
     bounds: [slot]
-    required-columns: [policy_id, asset_name, slot, tx_hash, tx_index, label, version, datum]
+    # version is NULL for a token whose version is not a valid integer (V0_1700_2)
+    required-columns: [policy_id, asset_name, slot, tx_hash, tx_index, label, datum]
