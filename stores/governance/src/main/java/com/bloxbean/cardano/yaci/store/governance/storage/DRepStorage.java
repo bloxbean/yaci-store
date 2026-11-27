@@ -11,9 +11,12 @@ public interface DRepStorage {
     Optional<DRep> findRecentDRepRegistration(String dRepId, Integer maxEpoch);
 
     /**
-     * Find the latest stored row of a DRep that comes before the given certificate in chain order
+     * Find the latest stored REGISTERED row of a DRep that comes before the given certificate in chain order
      * (slot, then tx index, then cert index). Rows of the certificate itself and of later certificates are ignored,
      * so the answer is the same when a block is processed again after a restart.
+     * <p>
+     * Only registration rows are used, because an update row stored by an older version can carry
+     * the registration slot and deposit of an earlier registration.
      * <p>
      * It is used for every DRep update and retirement certificate. Do not answer with
      * {@link #findRecentDRepRegistration}: it could return a later row when a block is processed again.
@@ -23,7 +26,7 @@ public interface DRepStorage {
      * @param slot slot of the certificate
      * @param txIndex tx index of the certificate
      * @param certIndex cert index of the certificate
-     * @return the latest earlier row, if any
+     * @return the latest earlier registration row, if any
      */
     Optional<DRep> findRecentDRepRegistrationBefore(String dRepId, Integer maxEpoch, long slot, int txIndex, int certIndex);
     List<DRep> findDRepsByStatusAndEpoch(DRepStatus status, Integer epoch);

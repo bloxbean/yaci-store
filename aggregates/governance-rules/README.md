@@ -19,6 +19,7 @@ GovernanceEvaluationInput input = GovernanceEvaluationInput.builder()
             .votingData(votingData)                  // VotingData with DRep/SPO/Committee votes
             .govActionId(govActionId)
             .proposalSlot(slot)
+            .txIndex(txIndex)                        // position of the proposal's tx in its block
             .maxAllowedVotingEpoch(proposalEpoch + govActionLifetime)
             .build()
     ))
@@ -42,7 +43,7 @@ result.isActionRatificationDelayed(); // True if a delaying action was ACCEPT in
 
 ## Concepts and I/O
 - Input
-  - `currentProposals`: List of `ProposalContext` (GovAction, VotingData, GovActionId, slot, maxAllowedVotingEpoch).
+  - `currentProposals`: List of `ProposalContext` (GovAction, VotingData, GovActionId, slot, txIndex, maxAllowedVotingEpoch). Proposals of the same priority are evaluated in submission order: slot, then txIndex, then gov action index.
   - Governance state: `currentEpoch`, `ProtocolParams` (thresholds), `ConstitutionCommittee` (members/threshold/state), `isBootstrapPhase`, `treasury`, `lastEnactedGovActionIds`.
 - Output
   - `proposalResults`: ACCEPT (RATIFIED), CONTINUE (ACTIVE), REJECT (EXPIRED) per proposal.
@@ -69,6 +70,10 @@ result.isActionRatificationDelayed(); // True if a delaying action was ACCEPT in
   - `.../governanceaggr/processor/ProposalStateProcessor.java`
   - `.../governanceaggr/storage/impl/mapper/GovernanceEvaluationInputMapper.java`
   - `.../governanceaggr/service/ProposalCollectionService.java`
+
+Ratification uses a private working copy of the input state. Each accepted withdrawal reduces the available treasury. Each accepted parameter change updates the parameters and parent action ID used by later proposals. A delaying action stops further ratification in that pass, but remaining proposals can still expire. Persisted parameter changes are applied parent before child. The next epoch uses the tip of the chain from the latest ratification epoch as its last enacted parameter action.
+
+Upgrading the rules does not repair already stored results. If an epoch was affected by evaluation against stale state, recompute from before that epoch, including proposal statuses and dependent parameter, treasury, reward and snapshot calculations.
 
 ## Guarantees & Compatibility
 - Ledger-aligned behaviors (high level):

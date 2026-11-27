@@ -29,13 +29,12 @@ public class GovernanceActionUtil {
     public static boolean isPrevActionAsExpected(GovActionType govActionType,
                                                  GovActionId prevGovActionID,
                                                  GovActionId lastEnactedGovActionID) {
-        if (govActionType == GovActionType.TREASURY_WITHDRAWALS_ACTION || govActionType == GovActionType.INFO_ACTION
-                || lastEnactedGovActionID == null) {
+        if (govActionType == GovActionType.TREASURY_WITHDRAWALS_ACTION || govActionType == GovActionType.INFO_ACTION) {
             return true;
         }
 
-        if (prevGovActionID == null) {
-            return false;
+        if (prevGovActionID == null || lastEnactedGovActionID == null) {
+            return prevGovActionID == lastEnactedGovActionID;
         }
 
         return Objects.equals(lastEnactedGovActionID.getGov_action_index(), prevGovActionID.getGov_action_index())
@@ -72,9 +71,16 @@ public class GovernanceActionUtil {
      *         {@code false} otherwise.
      */
     public static boolean withdrawalCanWithdraw(TreasuryWithdrawalsAction treasuryWithdrawalsAction, BigInteger treasury) {
+        return totalWithdrawal(treasuryWithdrawalsAction).compareTo(treasury) <= 0;
+    }
+
+    /**
+     * Sum of all withdrawals in the action; a missing withdrawal map counts as zero.
+     */
+    public static BigInteger totalWithdrawal(TreasuryWithdrawalsAction treasuryWithdrawalsAction) {
         final Map<String, BigInteger> withdrawals = treasuryWithdrawalsAction.getWithdrawals();
         if (withdrawals == null) {
-            return true;
+            return BigInteger.ZERO;
         }
 
         BigInteger totalWithdrawal = BigInteger.ZERO;
@@ -82,7 +88,7 @@ public class GovernanceActionUtil {
             totalWithdrawal = totalWithdrawal.add(withdrawalAmount);
         }
 
-        return totalWithdrawal.compareTo(treasury) <= 0;
+        return totalWithdrawal;
     }
 
 

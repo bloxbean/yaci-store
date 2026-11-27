@@ -120,13 +120,14 @@ class TokenApiEndToEndTest {
 
     @Test
     void theStandardsOfShowCipsDetailsHoldOnlyTheStandards() throws Exception {
-        // Standards.isEmpty() is for the code: it was serialized as "empty": false
+        // Standards.isEmpty() and Metadata.isEmpty() are for the code: they were serialized as "empty": false
         store(row(333).name("Coin").description("A coin").validationErrors(List.of()).build());
 
         mockMvc.perform(get("/api/v1/tokens/subject/{s}", FT_SUBJECT).param("show_cips_details", "true"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.subject.standards.cip68.name").value("Coin"))
-                .andExpect(jsonPath("$.subject.standards.empty").doesNotExist());
+                .andExpect(jsonPath("$.subject.standards.empty").doesNotExist())
+                .andExpect(jsonPath("$.subject.metadata.empty").doesNotExist());
     }
 
     @Test

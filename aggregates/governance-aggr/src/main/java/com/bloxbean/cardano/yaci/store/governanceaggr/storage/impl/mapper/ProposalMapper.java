@@ -63,6 +63,7 @@ public class ProposalMapper {
         return Optional.of(GovActionProposal.builder()
                 .txHash(govActionProposal.getTxHash())
                 .index((int) govActionProposal.getIndex())
+                .txIndex(govActionProposal.getTxIndex())
                 .anchorUrl(govActionProposal.getAnchorUrl())
                 .anchorHash(govActionProposal.getAnchorHash())
                 .deposit(govActionProposal.getDeposit())
