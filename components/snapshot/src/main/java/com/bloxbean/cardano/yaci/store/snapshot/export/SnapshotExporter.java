@@ -109,7 +109,7 @@ public class SnapshotExporter {
             }
         }
 
-        ConsistencyPointSelector selector = new ConsistencyPointSelector(catalog);
+        ConsistencyPointSelector selector = new ConsistencyPointSelector(catalog, options.completedPartitions());
         ConsistencyPointSelector.Selection selection = snapshotId < 0
                 ? new ConsistencyPointSelector.Selection(-1, null, Map.of(), List.of(), -1,
                 List.of("No catalog snapshot"))
