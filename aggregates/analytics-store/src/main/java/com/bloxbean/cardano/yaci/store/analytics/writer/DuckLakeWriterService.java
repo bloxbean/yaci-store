@@ -50,8 +50,6 @@ import java.util.TreeSet;
 public class DuckLakeWriterService implements StorageWriter {
 
     static final String CATALOG = "ducklake_catalog";
-    /** Database DuckLake attaches the catalog's metadata tables as. */
-    static final String META = "__ducklake_metadata_" + CATALOG;
 
     private final DataSource duckDbDataSource;
     private final AnalyticsStoreProperties properties;
@@ -344,13 +342,14 @@ public class DuckLakeWriterService implements StorageWriter {
      */
     List<String> partitionKeys(Connection conn, String tableName) throws SQLException {
         List<String> keys = new ArrayList<>();
+        String meta = connectionHelper.metadataTablePrefix(conn);
         try (PreparedStatement stmt = conn.prepareStatement(
-                "SELECT c.column_name, pc.transform FROM " + META + ".ducklake_table t "
-                        + "JOIN " + META + ".ducklake_schema s ON s.schema_id = t.schema_id AND s.end_snapshot IS NULL "
-                        + "JOIN " + META + ".ducklake_partition_info pi ON pi.table_id = t.table_id AND pi.end_snapshot IS NULL "
-                        + "JOIN " + META + ".ducklake_partition_column pc ON pc.partition_id = pi.partition_id "
+                "SELECT c.column_name, pc.transform FROM " + meta + ".ducklake_table t "
+                        + "JOIN " + meta + ".ducklake_schema s ON s.schema_id = t.schema_id AND s.end_snapshot IS NULL "
+                        + "JOIN " + meta + ".ducklake_partition_info pi ON pi.table_id = t.table_id AND pi.end_snapshot IS NULL "
+                        + "JOIN " + meta + ".ducklake_partition_column pc ON pc.partition_id = pi.partition_id "
                         + "AND pc.table_id = t.table_id "
-                        + "JOIN " + META + ".ducklake_column c ON c.table_id = t.table_id AND c.column_id = pc.column_id "
+                        + "JOIN " + meta + ".ducklake_column c ON c.table_id = t.table_id AND c.column_id = pc.column_id "
                         + "AND c.end_snapshot IS NULL "
                         + "WHERE t.end_snapshot IS NULL AND s.schema_name = 'main' AND t.table_name = ? "
                         + "ORDER BY pc.partition_key_index")) {
@@ -368,14 +367,15 @@ public class DuckLakeWriterService implements StorageWriter {
     }
 
     /** Live data files of the table whose column statistics do not show exactly one non-NULL value of the column. */
-    private static long filesWithoutSingleValue(Connection conn, String tableName, String column) throws SQLException {
+    private long filesWithoutSingleValue(Connection conn, String tableName, String column) throws SQLException {
+        String meta = connectionHelper.metadataTablePrefix(conn);
         try (PreparedStatement stmt = conn.prepareStatement(
-                "SELECT COUNT(*) FROM " + META + ".ducklake_data_file df "
-                        + "JOIN " + META + ".ducklake_table t ON t.table_id = df.table_id AND t.end_snapshot IS NULL "
-                        + "JOIN " + META + ".ducklake_schema s ON s.schema_id = t.schema_id AND s.end_snapshot IS NULL "
-                        + "LEFT JOIN " + META + ".ducklake_column c ON c.table_id = t.table_id AND c.column_name = ? "
+                "SELECT COUNT(*) FROM " + meta + ".ducklake_data_file df "
+                        + "JOIN " + meta + ".ducklake_table t ON t.table_id = df.table_id AND t.end_snapshot IS NULL "
+                        + "JOIN " + meta + ".ducklake_schema s ON s.schema_id = t.schema_id AND s.end_snapshot IS NULL "
+                        + "LEFT JOIN " + meta + ".ducklake_column c ON c.table_id = t.table_id AND c.column_name = ? "
                         + "AND c.end_snapshot IS NULL "
-                        + "LEFT JOIN " + META + ".ducklake_file_column_stats st ON st.data_file_id = df.data_file_id "
+                        + "LEFT JOIN " + meta + ".ducklake_file_column_stats st ON st.data_file_id = df.data_file_id "
                         + "AND st.column_id = c.column_id "
                         + "WHERE df.end_snapshot IS NULL AND s.schema_name = 'main' AND t.table_name = ? "
                         + "AND (st.min_value IS NULL OR st.max_value IS NULL OR st.min_value <> st.max_value "
