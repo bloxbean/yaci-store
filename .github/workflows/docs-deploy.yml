@@ -1,44 +1,92 @@
-name: Deploy to GitHub Pages
+# From the release-ops standard (templates/workflows/docs-deploy.yml, 2026-09-14), adapted for yaci-store: the
+# Next.js site in docs/ builds with yarn (`yarn export`) into docs/out.
+name: Documentation
+
+# Pull requests that touch the docs only build. A push to the default branch that touches them, or a manual
+# run on the default branch, also pushes the site to the gh-pages branch. The live site does not change
+# until GitHub's Pages deployment for that push is approved in the `github-pages` environment, so every
+# publish -- whichever way it was triggered -- goes through that approval.
 
 on:
   push:
-    tags:
-      - 'rel-docs*'
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - '.github/workflows/docs-deploy.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - '.github/workflows/docs-deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-deploy-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  deploy:
-    name: Deploy to GitHub Pages
+  build:
+    name: Build documentation
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: yarn
-          cache-dependency-path: "./docs/yarn.lock"
+          cache-dependency-path: docs/yarn.lock
 
-      - name: Install dependencies
+      - name: Build docs
+        working-directory: docs
         run: |
-          cd docs
           yarn install --frozen-lockfile
-      - name: Build website
-        run: |
-          cd docs
           yarn export
 
-      # Popular action to deploy to GitHub Pages:
-      # Docs: https://github.com/peaceiris/actions-gh-pages#%EF%B8%8F-docusaurus
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
+      - uses: actions/upload-artifact@v4
+        with:
+          name: docs-site
+          path: docs/out
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish to gh-pages
+    needs: build
+    # Only the default branch publishes; a pull request, or a manual run on another branch, only builds.
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: docs-site
+          path: site
+
+      # Replaces the whole gh-pages tree with the built site.
+      - name: Push site to gh-pages
+        uses: peaceiris/actions-gh-pages@84c30a85c19949d7eee79c4ff27748b70285e453 # v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          # Build output to publish to the `gh-pages` branch:
-          publish_dir: ./docs/out
+          publish_branch: gh-pages
+          publish_dir: ./site
           cname: store.yaci.xyz
-          # The following lines assign commit authorship to the official
-          # GH-Actions bot for deploys to `gh-pages` branch:
-          # https://github.com/actions/checkout/issues/13#issuecomment-724415212
-          # The GH actions bot is used by default if you didn't specify the two fields.
-          # You can swap them out with your own user credentials.
-#          user_name: github-actions[bot]
-#          user_email: 41898282+github-actions[bot]@users.noreply.github.com
+
+      - name: Record the pending Pages deployment
+        shell: bash
+        run: |
+          {
+            echo "## Pushed to gh-pages - waiting for approval"
+            echo
+            echo "The site updates after the \`pages-build-deployment\` run for this push is approved in the"
+            echo "\`github-pages\` environment:"
+            echo "https://github.com/$GITHUB_REPOSITORY/actions/workflows/pages/pages-build-deployment"
+            echo
+            echo "If several are waiting, approve the newest and reject the older ones."
+          } >> "$GITHUB_STEP_SUMMARY"

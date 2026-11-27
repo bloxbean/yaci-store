@@ -34,6 +34,7 @@ class AssetsExporterTest {
 
         assertThat(sql).contains("postgres_query('source_db'");
         assertThat(sql).contains("FROM mainnet.assets a");
+        assertThat(sql).contains("a.tx_index");
         assertThat(sql).contains("WHERE a.slot >= 10");
         assertThat(sql).contains("AND a.slot < 20");
         assertThat(sql).contains("ORDER BY a.slot");

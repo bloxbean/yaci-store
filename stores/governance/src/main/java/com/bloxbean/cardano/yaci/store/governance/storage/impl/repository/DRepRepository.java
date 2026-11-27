@@ -12,5 +12,10 @@ public interface DRepRepository extends JpaRepository<DRepEntity, String> {
     @Query("SELECT d FROM DRepEntity d WHERE d.drepId =:dRepId AND d.epoch <= :epoch ORDER BY d.slot DESC, d.txIndex DESC, d.certIndex DESC limit 1")
     Optional<DRepEntity> findRecentByDRepIdAndEpoch(String dRepId, Integer epoch);
 
+    @Query("SELECT d FROM DRepEntity d WHERE d.drepId =:dRepId AND d.epoch <= :epoch " +
+            "AND (d.slot < :slot OR (d.slot = :slot AND (d.txIndex < :txIndex OR (d.txIndex = :txIndex AND d.certIndex < :certIndex)))) " +
+            "ORDER BY d.slot DESC, d.txIndex DESC, d.certIndex DESC limit 1")
+    Optional<DRepEntity> findRecentByDRepIdAndEpochBefore(String dRepId, Integer epoch, Long slot, Integer txIndex, Integer certIndex);
+
     int deleteBySlotGreaterThan(long slot);
 }

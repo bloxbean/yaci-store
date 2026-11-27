@@ -6,11 +6,12 @@ import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.model.Order;
 
 import java.util.List;
-import java.util.Optional;
 import java.util.Map;
 import java.math.BigInteger;
 
 public interface BFAddressStorageReader {
+    boolean addressExists(String address);
+
     List<String> findTxHashesByAddress(String address, int page, int count, Order order);
 
     List<BFAddressTransactionDTO> findAddressTransactions(String address, int page, int count, Order order, String from, String to);
@@ -25,7 +26,7 @@ public interface BFAddressStorageReader {
      */
     List<AddressUtxo> findAddressUtxosForAsset(String address, String unit, int page, int count, Order order);
 
-    Optional<BFAddressTotal> getAddressTotal(String address);
+    BFAddressTotal getAddressTotal(String address);
 
     Map<String, BigInteger> findCurrentAddressBalanceByUnit(String address);
 

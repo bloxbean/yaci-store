@@ -1,0 +1,54 @@
+# Yaci Store Native (GraalVM) Distribution *(Preview)*
+
+Native binaries are available under a separate release tag:
+`rel-native-<version>` (e.g., `rel-native-2.0.3`)
+
+## Download Format
+
+Look for platform-specific ZIP files in this format:
+
+```text
+yaci-store-<version>-<os>-<arch>-all.zip
+```
+
+Example:
+
+```text
+yaci-store-2.0.3-linux-x64-all.zip
+```
+
+> ⚠️ Only use the ZIP files ending with `-all`.
+> Ignore files ending with `n2c`.
+
+## Setup
+
+1. Extract the ZIP.
+2. Edit `config/application.properties` to configure:
+   - Cardano network info (host/port/protocol magic)
+   - PostgreSQL connection settings
+
+3. Run the app:
+
+```bash
+./yaci-store
+```
+
+4. Run with ledger-state profile:
+
+```bash
+SPRING_PROFILES_ACTIVE=ledger-state ./yaci-store
+```
+
+## PostgreSQL Configuration for Ledger-State (Optional but Recommended)
+
+If you are running ledger-state calculation for mainnet, you should **tune your PostgreSQL configuration** for optimal performance. While the default config will work, sync time will be significantly longer without these optimizations.
+
+### For Native Distribution users:
+
+1. Increase PostgreSQL shared memory to 4GB or more (minimum 2GB recommended)
+2. Configure the following PostgreSQL-related properties in your application configuration (application-ledger-state.properties):
+   - `store.adapot.reward-bulk-load-work-mem=1GB`
+   - `store.adapot.reward-bulk-load-maintenance-work-mem=2GB`
+   - `store.adapot.stake-snapshot-work-mem=512MB`
+   - `store.governance-aggr.drep-dist-work-mem=512MB`
+3. Set `max_locks_per_transaction=1024` in your PostgreSQL configuration (for example in `postgresql.conf`), then restart PostgreSQL. The `reward`, `epoch_stake` and `drep_dist` tables are partitioned by epoch, and with the default (64) queries that span many epochs fail with `ERROR: out of shared memory`. Yaci Store logs a warning at startup when the value is below 1024.

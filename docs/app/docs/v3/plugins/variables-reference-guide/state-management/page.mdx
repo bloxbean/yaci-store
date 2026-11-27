@@ -1,0 +1,892 @@
+import { Callout, Tabs } from 'nextra/components'
+
+# State Management Guide
+
+## When to Use State Management
+
+State management is essential for:
+- Tracking plugin progress and counters
+- Caching expensive computations or API responses
+- Sharing data between plugin executions
+- Coordinating between multiple plugins (global_state)
+- Implementing rate limiting and throttling
+- Managing distributed locks and flags
+
+<Callout type="info">
+**Key Difference**: `state` is private to each plugin, while `global_state` is shared across all plugins.
+</Callout>
+
+## Quick Start
+
+### Basic Operations
+```javascript
+// MVEL - Store and retrieve plugin state
+state.put("last_processed_item", itemId);
+state.put("request_count", 1000);
+
+lastItem = state.get("last_processed_item");
+if (state.containsKey("request_count")) {
+    count = state.get("request_count");
+}
+```
+
+```java
+// Java - Store and retrieve plugin state (state() from the PluginContext)
+State<String, Object> state = state();
+state.put("last_processed_item", itemId);
+state.put("request_count", 1000);
+
+Object lastItem = state.get("last_processed_item");
+if (state.containsKey("request_count")) {
+    Object count = state.get("request_count");
+}
+```
+
+### Atomic Counter
+```javascript
+// JavaScript - Thread-safe counter
+const requestCount = state.increment("api_requests");
+if (requestCount > 1000) {
+    console.log("Milestone: 1000 API requests processed!");
+}
+```
+
+```java
+// Java - Thread-safe counter (increment is atomic)
+long requestCount = state().increment("api_requests");
+if (requestCount > 1000) {
+    System.out.println("Milestone: 1000 API requests processed!");
+}
+```
+
+## Core Concepts
+
+### state vs global_state
+
+| Feature | `state` | `global_state` |
+|---------|---------|----------------|
+| **Scope** | Plugin-specific | Shared across all plugins |
+| **Isolation** | Complete - other plugins can't access | None - all plugins can read/write |
+| **Use Cases** | Plugin config, progress tracking | Cross-plugin coordination, shared cache |
+| **Namespace** | Automatic (plugin name) | Global namespace |
+| **Java access** | `state()` | `globalState()` |
+
+### Operation Categories
+
+1. **Basic Operations** - Simple key-value storage
+2. **Atomic Counters** - Thread-safe numeric operations
+3. **Set Operations** - Manage collections atomically
+4. **Compute Operations** - Update values based on current state
+5. **Compare-and-Set** - Conditional updates for coordination
+
+## API Reference
+
+### Basic Operations
+
+<Tabs items={['MVEL', 'JavaScript', 'Python', 'Java']}>
+<Tabs.Tab>
+```javascript
+// Store values
+state.put("key", "value");
+state.put("counter", 42);
+state.put("data", complexObject);
+
+// Retrieve values
+value = state.get("key");
+counter = state.get("counter", 0); // With default
+
+// Check existence
+if (state.containsKey("key")) {
+    // Key exists
+}
+
+// Remove values
+state.remove("key");
+
+// Clear all state (use with caution!)
+state.clear();
+```
+</Tabs.Tab>
+<Tabs.Tab>
+```javascript
+// Store values
+state.put("key", "value");
+state.put("counter", 42);
+state.put("data", complexObject);
+
+// Retrieve values
+const value = state.get("key");
+const counter = state.get("counter") || 0; // With default
+
+// Check existence
+if (state.containsKey("key")) {
+    // Key exists
+}
+
+// Remove values
+state.remove("key");
+
+// Clear all state (use with caution!)
+state.clear();
+```
+</Tabs.Tab>
+<Tabs.Tab>
+```python
+# Store values
+state.put("key", "value")
+state.put("counter", 42)
+state.put("data", complex_object)
+
+# Retrieve values
+value = state.get("key")
+counter = state.get("counter", 0)  # With default
+
+# Check existence
+if state.containsKey("key"):
+    # Key exists
+    pass
+
+# Remove values
+state.remove("key")
+
+# Clear all state (use with caution!)
+state.clear()
+```
+</Tabs.Tab>
+<Tabs.Tab>
+```java
+// Store values (state() returns a State<String, Object>)
+State<String, Object> state = state();
+state.put("key", "value");
+state.put("counter", 42);
+state.put("data", complexObject);
+
+// Retrieve values (State#get has no default-value overload — compute one inline)
+String value = (String) state.get("key");
+long counter = state.containsKey("counter") ? ((Number) state.get("counter")).longValue() : 0L;
+
+// Check existence
+if (state.containsKey("key")) {
+    // Key exists
+}
+
+// Remove values
+state.remove("key");
+
+// Clear all state (use with caution!)
+state.clear();
+```
+</Tabs.Tab>
+</Tabs>
+
+### Atomic Counter Operations
+
+These operations are thread-safe and perfect for concurrent environments:
+
+<Tabs items={['MVEL', 'JavaScript', 'Python', 'Java']}>
+<Tabs.Tab>
+```javascript
+// Increment operations
+count = state.increment("counter");        // +1, returns new value
+count = state.increment("counter", 5);     // +5, returns new value
+
+// Decrement operations
+count = state.decrement("counter");        // -1, returns new value
+count = state.decrement("counter", 3);     // -3, returns new value
+
+// Add and get variations
+newVal = state.addAndGet("counter", 10);   // Add 10, return new value
+oldVal = state.getAndAdd("counter", 10);   // Return old value, then add 10
+```
+</Tabs.Tab>
+<Tabs.Tab>
+```javascript
+// Increment operations
+let count = state.increment("counter");        // +1, returns new value
+count = state.increment("counter", 5);         // +5, returns new value
+
+// Decrement operations
+count = state.decrement("counter");            // -1, returns new value
+count = state.decrement("counter", 3);         // -3, returns new value
+
+// Add and get variations
+const newVal = state.addAndGet("counter", 10); // Add 10, return new value
+const oldVal = state.getAndAdd("counter", 10); // Return old value, then add 10
+```
+</Tabs.Tab>
+<Tabs.Tab>
+```python
+# Increment operations
+count = state.increment("counter")        # +1, returns new value
+count = state.increment("counter", 5)     # +5, returns new value
+
+# Decrement operations
+count = state.decrement("counter")        # -1, returns new value
+count = state.decrement("counter", 3)     # -3, returns new value
+
+# Add and get variations
+new_val = state.addAndGet("counter", 10)  # Add 10, return new value
+old_val = state.getAndAdd("counter", 10)  # Return old value, then add 10
+```
+</Tabs.Tab>
+<Tabs.Tab>
+```java
+State<String, Object> state = state();
+
+// Increment operations (return long)
+long count = state.increment("counter");        // +1, returns new value
+count = state.increment("counter", 5);          // +5, returns new value
+
+// Decrement operations
+count = state.decrement("counter");            // -1, returns new value
+count = state.decrement("counter", 3);          // -3, returns new value
+
+// Add and get variations
+long newVal = state.addAndGet("counter", 10);   // Add 10, return new value
+long oldVal = state.getAndAdd("counter", 10);    // Return old value, then add 10
+```
+</Tabs.Tab>
+</Tabs>
+
+### Set Operations
+
+Manage collections of unique elements atomically:
+
+<Tabs items={['MVEL', 'JavaScript', 'Python', 'Java']}>
+<Tabs.Tab>
+```javascript
+// Add elements to set
+added = state.addToSet("processed_items", itemId);  // Returns true if new
+
+// Remove elements
+removed = state.removeFromSet("processed_items", itemId);
+
+// Check membership
+exists = state.containsInSet("processed_items", itemId);
+
+// Get entire set (immutable view)
+allItems = state.getSet("processed_items");
+
+// Get set size
+size = state.setSize("processed_items");
+```
+</Tabs.Tab>
+<Tabs.Tab>
+```javascript
+// Add elements to set
+const added = state.addToSet("processed_items", itemId);  // Returns true if new
+
+// Remove elements
+const removed = state.removeFromSet("processed_items", itemId);
+
+// Check membership
+const exists = state.containsInSet("processed_items", itemId);
+
+// Get entire set (immutable view)
+const allItems = state.getSet("processed_items");
+
+// Get set size
+const size = state.setSize("processed_items");
+```
+</Tabs.Tab>
+<Tabs.Tab>
+```python
+# Add elements to set
+added = state.addToSet("processed_items", item_id)  # Returns true if new
+
+# Remove elements
+removed = state.removeFromSet("processed_items", item_id)
+
+# Check membership
+exists = state.containsInSet("processed_items", item_id)
+
+# Get entire set (immutable view)
+all_items = state.getSet("processed_items")
+
+# Get set size
+size = state.setSize("processed_items")
+```
+</Tabs.Tab>
+<Tabs.Tab>
+```java
+State<String, Object> state = state();
+
+// Add elements to set (returns true if the element was newly added)
+boolean added = state.addToSet("processed_items", itemId);
+
+// Remove elements
+boolean removed = state.removeFromSet("processed_items", itemId);
+
+// Check membership
+boolean exists = state.containsInSet("processed_items", itemId);
+
+// Get entire set (immutable view of Set<Object>)
+java.util.Set<Object> allItems = state.getSet("processed_items");
+
+// Get set size
+long size = state.setSize("processed_items");
+```
+</Tabs.Tab>
+</Tabs>
+
+### Advanced Compute Operations
+
+Update values based on their current state:
+
+<Tabs items={['MVEL', 'JavaScript', 'Python', 'Java']}>
+<Tabs.Tab>
+```javascript
+// Compute - update based on current value
+state.compute("max_amount", (key, current) -> {
+    return Math.max(current ?: 0, newAmount);
+});
+
+// Merge - combine new value with existing
+state.merge("total_volume", amount, (existing, new) -> {
+    return (existing ?: 0) + new;
+});
+
+// Compare and set - atomic conditional update
+success = state.compareAndSet("status", "pending", "processing");
+
+// Get and set - return old value, set new
+oldValue = state.getAndSet("flag", true);
+```
+</Tabs.Tab>
+<Tabs.Tab>
+```javascript
+// Compute - update based on current value
+state.compute("max_amount", (key, current) => {
+    return Math.max(current || 0, newAmount);
+});
+
+// Merge - combine new value with existing
+state.merge("total_volume", amount, (existing, newVal) => {
+    return (existing || 0) + newVal;
+});
+
+// Compare and set - atomic conditional update
+const success = state.compareAndSet("status", "pending", "processing");
+
+// Get and set - return old value, set new
+const oldValue = state.getAndSet("flag", true);
+```
+</Tabs.Tab>
+<Tabs.Tab>
+```python
+# Compute - update based on current value
+def update_max(key, current):
+    return max(current or 0, new_amount)
+state.compute("max_amount", update_max)
+
+# Merge - combine new value with existing
+def sum_values(existing, new):
+    return (existing or 0) + new
+state.merge("total_volume", amount, sum_values)
+
+# Compare and set - atomic conditional update
+success = state.compareAndSet("status", "pending", "processing")
+
+# Get and set - return old value, set new
+old_value = state.getAndSet("flag", True)
+```
+</Tabs.Tab>
+<Tabs.Tab>
+```java
+State<String, Object> state = state();
+
+// Compute - update based on current value (BiFunction: key, current -> newValue)
+state.compute("max_amount", (key, current) -> Math.max(
+        current == null ? 0 : ((Number) current).longValue(), newAmount));
+
+// Merge - combine new value with existing (existing, incoming -> newValue)
+state.merge("total_volume", amount, (existing, incoming) ->
+        (existing == null ? 0L : ((Number) existing).longValue()) + ((Number) incoming).longValue());
+
+// Compare and set - atomic conditional update (returns true if it swapped)
+boolean success = state.compareAndSet("status", "pending", "processing");
+
+// Get and set - return old value, set new
+Object oldValue = state.getAndSet("flag", true);
+```
+</Tabs.Tab>
+</Tabs>
+
+## Common Patterns
+
+### 1. Progress Tracking
+
+```javascript
+// JavaScript - Track processing progress
+function processBlocks(blocks) {
+    // Get last processed block
+    let lastProcessed = state.get("last_block") || 0;
+
+    blocks.forEach(block => {
+        if (block.number <= lastProcessed) {
+            return; // Skip already processed
+        }
+
+        // Process block
+        processBlock(block);
+
+        // Update progress atomically
+        state.put("last_block", block.number);
+        state.increment("blocks_processed");
+    });
+
+    // Log statistics
+    const total = state.get("blocks_processed");
+    console.log(`Total blocks processed: ${total}`);
+}
+```
+
+```java
+// Java - Track processing progress (state() from the PluginContext)
+void processBlocks(List<Block> blocks) {
+    State<String, Object> state = state();
+    long lastProcessed = state.containsKey("last_block")
+            ? ((Number) state.get("last_block")).longValue() : 0L;
+
+    for (Block block : blocks) {
+        if (block.getNumber() <= lastProcessed) {
+            continue; // Skip already processed
+        }
+
+        // Process block
+        processBlock(block);
+
+        // Update progress atomically
+        state.put("last_block", block.getNumber());
+        state.increment("blocks_processed");
+    }
+
+    // Log statistics
+    long total = state.get("blocks_processed") == null
+            ? 0L : (long) state.get("blocks_processed");
+    System.out.println("Total blocks processed: " + total);
+}
+```
+
+### 2. Rate Limiting
+
+```javascript
+// MVEL - Implement rate limiting
+function checkRateLimit(clientId) {
+    key = "rate_limit:" + clientId;
+    windowKey = "rate_window:" + clientId;
+
+    currentWindow = System.currentTimeMillis() / 60000; // 1-minute windows
+    lastWindow = state.get(windowKey, 0);
+
+    if (currentWindow != lastWindow) {
+        // New time window, reset counter
+        state.put(windowKey, currentWindow);
+        state.put(key, 1);
+        return true;
+    }
+
+    // Same window, check limit
+    requests = state.increment(key);
+    return requests <= 100; // 100 requests per minute
+}
+```
+
+```java
+// Java - Implement rate limiting (state() from the PluginContext)
+boolean checkRateLimit(String clientId) {
+    State<String, Object> state = state();
+    String key = "rate_limit:" + clientId;
+    String windowKey = "rate_window:" + clientId;
+
+    long currentWindow = System.currentTimeMillis() / 60_000L; // 1-minute windows
+    long lastWindow = state.containsKey(windowKey)
+            ? ((Number) state.get(windowKey)).longValue() : 0L;
+
+    if (currentWindow != lastWindow) {
+        // New time window, reset counter
+        state.put(windowKey, currentWindow);
+        state.put(key, 1L);
+        return true;
+    }
+
+    // Same window, check limit
+    long requests = state.increment(key);
+    return requests <= 100; // 100 requests per minute
+}
+```
+
+### 3. Deduplication
+
+```javascript
+// JavaScript - Prevent duplicate processing
+function processTransaction(tx) {
+    const txHash = tx.getTxHash();
+
+    // Atomic check-and-add
+    if (!state.addToSet("processed_transactions", txHash)) {
+        console.log(`Transaction ${txHash} already processed, skipping`);
+        return false;
+    }
+
+    try {
+        // Process the transaction
+        const result = doProcessing(tx);
+
+        // Track successful processing
+        state.increment("successful_txs");
+        return true;
+
+    } catch (error) {
+        // Remove from set on failure to allow retry
+        state.removeFromSet("processed_transactions", txHash);
+        state.increment("failed_txs");
+        throw error;
+    }
+}
+```
+
+```java
+// Java - Prevent duplicate processing (state() from the PluginContext)
+boolean processTransaction(Transaction tx) {
+    State<String, Object> state = state();
+    String txHash = tx.getTxHash();
+
+    // Atomic check-and-add
+    if (!state.addToSet("processed_transactions", txHash)) {
+        System.out.println("Transaction " + txHash + " already processed, skipping");
+        return false;
+    }
+
+    try {
+        // Process the transaction
+        doProcessing(tx);
+
+        // Track successful processing
+        state.increment("successful_txs");
+        return true;
+    } catch (RuntimeException error) {
+        // Remove from set on failure to allow retry
+        state.removeFromSet("processed_transactions", txHash);
+        state.increment("failed_txs");
+        throw error;
+    }
+}
+```
+
+### 4. Distributed Locking
+
+```javascript
+// MVEL - Simple distributed lock using compare-and-set
+function acquireLock(lockName, timeout) {
+    lockKey = "lock:" + lockName;
+    lockHolder = Thread.currentThread().getName() + ":" + System.currentTimeMillis();
+
+    // Try to acquire lock
+    if (global_state.compareAndSet(lockKey, null, lockHolder)) {
+        return lockHolder; // Lock acquired
+    }
+
+    // Check if existing lock is expired
+    existing = global_state.get(lockKey);
+    if (existing != null) {
+        parts = existing.split(":");
+        lockTime = Long.parseLong(parts[1]);
+
+        if (System.currentTimeMillis() - lockTime > timeout) {
+            // Lock expired, try to take over
+            if (global_state.compareAndSet(lockKey, existing, lockHolder)) {
+                return lockHolder;
+            }
+        }
+    }
+
+    return null; // Failed to acquire
+}
+
+function releaseLock(lockName, lockHolder) {
+    lockKey = "lock:" + lockName;
+    return global_state.compareAndSet(lockKey, lockHolder, null);
+}
+```
+
+```java
+// Java - Simple distributed lock using compare-and-set (globalState() from the PluginContext)
+// Tip: for production locking prefer context().locker() over a hand-rolled CAS lock.
+String acquireLock(String lockName, long timeoutMillis) {
+    State<String, Object> globalState = globalState();
+    String lockKey = "lock:" + lockName;
+    String lockHolder = Thread.currentThread().getName() + ":" + System.currentTimeMillis();
+
+    // Try to acquire lock
+    if (globalState.compareAndSet(lockKey, null, lockHolder)) {
+        return lockHolder; // Lock acquired
+    }
+
+    // Check if existing lock is expired
+    String existing = (String) globalState.get(lockKey);
+    if (existing != null) {
+        String[] parts = existing.split(":");
+        long lockTime = Long.parseLong(parts[1]);
+
+        if (System.currentTimeMillis() - lockTime > timeoutMillis) {
+            // Lock expired, try to take over
+            if (globalState.compareAndSet(lockKey, existing, lockHolder)) {
+                return lockHolder;
+            }
+        }
+    }
+
+    return null; // Failed to acquire
+}
+
+boolean releaseLock(String lockName, String lockHolder) {
+    return globalState().compareAndSet("lock:" + lockName, lockHolder, null);
+}
+```
+
+### 5. Caching with Expiry
+
+```python
+# Python - Cache with TTL
+def get_cached_data(key, fetch_function, ttl_seconds=300):
+    cache_key = f"cache:{key}"
+    timestamp_key = f"cache_time:{key}"
+
+    # Check cache validity
+    cached_time = state.get(timestamp_key, 0)
+    current_time = System.currentTimeMillis() / 1000
+
+    if current_time - cached_time < ttl_seconds:
+        # Cache is valid
+        cached_data = state.get(cache_key)
+        if cached_data:
+            return cached_data
+
+    # Fetch fresh data
+    fresh_data = fetch_function()
+
+    # Update cache atomically
+    state.put(cache_key, fresh_data)
+    state.put(timestamp_key, current_time)
+
+    return fresh_data
+```
+
+```java
+// Java - Cache with TTL (state() from the PluginContext)
+Object getCachedData(String key, java.util.function.Supplier<Object> fetchFunction, long ttlSeconds) {
+    State<String, Object> state = state();
+    String cacheKey = "cache:" + key;
+    String timestampKey = "cache_time:" + key;
+
+    // Check cache validity
+    long cachedTime = state.containsKey(timestampKey)
+            ? ((Number) state.get(timestampKey)).longValue() : 0L;
+    long currentTime = System.currentTimeMillis() / 1000L;
+
+    if (currentTime - cachedTime < ttlSeconds) {
+        // Cache is valid
+        Object cachedData = state.get(cacheKey);
+        if (cachedData != null) {
+            return cachedData;
+        }
+    }
+
+    // Fetch fresh data
+    Object freshData = fetchFunction.get();
+
+    // Update cache atomically
+    state.put(cacheKey, freshData);
+    state.put(timestampKey, currentTime);
+
+    return freshData;
+}
+```
+
+### 6. Metrics Aggregation
+
+```javascript
+// JavaScript - Aggregate metrics across events
+function updateMetrics(event) {
+    const amount = event.getAmount();
+
+    // Update various metrics atomically
+    state.increment("event_count");
+    state.merge("total_amount", amount, (old, val) => (old || 0) + val);
+
+    // Track maximum
+    state.compute("max_amount", (key, current) => {
+        return Math.max(current || 0, amount);
+    });
+
+    // Track unique addresses
+    state.addToSet("unique_addresses", event.getAddress());
+
+    // Update hourly buckets
+    const hour = Math.floor(Date.now() / 3600000);
+    state.increment(`hourly_count:${hour}`);
+}
+
+function getMetricsSummary() {
+    return {
+        total_events: state.get("event_count", 0),
+        total_amount: state.get("total_amount", 0),
+        max_amount: state.get("max_amount", 0),
+        unique_addresses: state.setSize("unique_addresses")
+    };
+}
+```
+
+```java
+// Java - Aggregate metrics across events (state() from the PluginContext)
+void updateMetrics(Event event) {
+    State<String, Object> state = state();
+    long amount = event.getAmount();
+
+    // Update various metrics atomically
+    state.increment("event_count");
+    state.merge("total_amount", amount, (old, val) ->
+            (old == null ? 0L : ((Number) old).longValue()) + ((Number) val).longValue());
+
+    // Track maximum
+    state.compute("max_amount", (key, current) ->
+            Math.max(current == null ? 0L : ((Number) current).longValue(), amount));
+
+    // Track unique addresses
+    state.addToSet("unique_addresses", event.getAddress());
+
+    // Update hourly buckets
+    long hour = System.currentTimeMillis() / 3_600_000L;
+    state.increment("hourly_count:" + hour);
+}
+
+Map<String, Object> getMetricsSummary() {
+    State<String, Object> state = state();
+    // Note: Map.of rejects null values, and state.get() returns null before the first event —
+    // use a HashMap (or null defaults) instead.
+    Map<String, Object> summary = new HashMap<>();
+    summary.put("total_events", state.get("event_count"));
+    summary.put("total_amount", state.get("total_amount"));
+    summary.put("max_amount", state.get("max_amount"));
+    summary.put("unique_addresses", state.setSize("unique_addresses"));
+    return summary;
+}
+```
+
+## Best Practices
+
+### 1. Use Atomic Operations for Counters
+
+<Callout type="warning">
+Always use atomic operations (`increment`, `decrement`) for counters instead of get/put to avoid race conditions.
+</Callout>
+
+```javascript
+// ❌ BAD - Race condition risk
+let count = state.get("counter") || 0;
+state.put("counter", count + 1);
+
+// ✅ GOOD - Atomic operation
+const count = state.increment("counter");
+```
+
+```java
+// BAD - Race condition risk
+State<String, Object> state = state();
+long count = state.containsKey("counter") ? ((Number) state.get("counter")).longValue() : 0L;
+state.put("counter", count + 1);
+
+// GOOD - Atomic operation
+long atomicCount = state.increment("counter");
+```
+
+### 2. Namespace Your Keys
+
+```javascript
+// Good key naming prevents collisions
+const keys = {
+    lastBlock: "processor:last_block",
+    apiCache: "cache:api:response",
+    rateLimit: `rate:${clientId}:${window}`
+};
+```
+
+```java
+// Java - Good key naming prevents collisions
+String LAST_BLOCK = "processor:last_block";
+String API_CACHE = "cache:api:response";
+String rateLimit = "rate:" + clientId + ":" + window;
+```
+
+### 3. Handle Missing Keys Gracefully
+
+```javascript
+// Always provide defaults or check existence
+const config = state.get("config") || getDefaultConfig();
+const retries = state.get("retry_count", 0);
+
+if (state.containsKey("important_flag")) {
+    // Process only if flag exists
+}
+```
+
+```java
+// Java - Always provide defaults or check existence (State#get has no default overload)
+State<String, Object> state = state();
+Object config = state.get("config");
+if (config == null) config = getDefaultConfig();
+
+if (state.containsKey("retry_count")) {
+    long retries = ((Number) state.get("retry_count")).longValue();
+}
+
+if (state.containsKey("important_flag")) {
+    // Process only if flag exists
+}
+```
+
+### 4. Clean Up Stale Data
+
+```javascript
+// Periodically clean up old data
+function cleanupOldData() {
+    const cutoff = Date.now() - (24 * 60 * 60 * 1000); // 24 hours ago
+
+    // Remove old cache entries
+    const cacheKeys = state.getKeys().filter(k => k.startsWith("cache:"));
+    cacheKeys.forEach(key => {
+        const timestamp = state.get(key + ":time");
+        if (timestamp && timestamp < cutoff) {
+            state.remove(key);
+            state.remove(key + ":time");
+        }
+    });
+}
+```
+
+```java
+// Java - Periodically clean up old data
+// Note: State has no getKeys() enumerator; track keys you create in a set instead.
+void cleanupOldData() {
+    State<String, Object> state = state();
+    long cutoff = System.currentTimeMillis() - (24 * 60 * 60 * 1000L); // 24 hours ago
+
+    // Remove old cache entries for the keys this plugin manages
+    for (String key : trackedCacheKeys) {
+        Object ts = state.get(key + ":time");
+        if (ts instanceof Number n && n.longValue() < cutoff) {
+            state.remove(key);
+            state.remove(key + ":time");
+        }
+    }
+}
+```
+
+
+## Performance Considerations
+
+- **Atomic operations** are fast and lock-free
+- **Set operations** maintain uniqueness automatically
+- **Large objects** in state can impact memory - consider storing IDs and fetching from database
+- **In Java**, obtain `State` once per call via `state()` / `globalState()` rather than re-fetching

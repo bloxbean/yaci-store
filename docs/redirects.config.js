@@ -54,6 +54,10 @@ export const wildcardRedirects = [
   { pattern: /^\/ledger-state-mismatches\/2-0-0-beta3\/mainnet\/(.*)$/, replacement: '/docs/v2/ledger-state-mismatches/2-0-0-beta3/mainnet/$1' },
   { pattern: /^\/ledger-state-mismatches\/2-0-0-beta5\/mainnet\/(.*)$/, replacement: '/docs/v2/ledger-state-mismatches/2-0-0-beta5/mainnet/$1' },
 
+  // ===== 3.x-ONLY SECTIONS MOVED FROM v2 =====
+  { pattern: /^\/docs\/v2\/blockfrost(\/.*)?$/, replacement: '/docs/v3/blockfrost$1' },
+  { pattern: /^\/docs\/v2\/analytics(\/.*)?$/, replacement: '/docs/v3/analytics$1' },
+
   // ===== LATEST VERSION ALIASES =====
   { pattern: /^\/docs\/getting-started\/(.*)$/, replacement: '/docs/v2/getting-started/$1' },
   { pattern: /^\/docs\/introduction\/(.*)$/, replacement: '/docs/v2/introduction/$1' },

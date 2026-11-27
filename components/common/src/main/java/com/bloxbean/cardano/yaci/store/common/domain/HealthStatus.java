@@ -14,6 +14,11 @@ public class HealthStatus {
     private boolean isScheduleToStop;
 
     /**
+     * The sync is being started and has not connected yet
+     */
+    private boolean isStarting;
+
+    /**
      * This is to indicate if there is any error
      */
     private boolean isError;

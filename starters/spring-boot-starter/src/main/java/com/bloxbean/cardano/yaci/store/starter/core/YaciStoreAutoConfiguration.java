@@ -3,6 +3,8 @@ package com.bloxbean.cardano.yaci.store.starter.core;
 import com.bloxbean.cardano.yaci.core.config.YaciConfig;
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
 import com.bloxbean.cardano.yaci.helper.*;
+import com.bloxbean.cardano.yaci.store.client.epoch.DummyEpochNonceClient;
+import com.bloxbean.cardano.yaci.store.client.epoch.EpochNonceClient;
 import com.bloxbean.cardano.yaci.store.client.governance.DummyProposalStateClientImpl;
 import com.bloxbean.cardano.yaci.store.client.governance.ProposalStateClient;
 import com.bloxbean.cardano.yaci.store.client.staking.DummyStakingClient;
@@ -153,6 +155,12 @@ public class YaciStoreAutoConfiguration {
     }
 
     @Bean
+    @ConditionalOnMissingBean(name = "epochNonceClient")
+    public EpochNonceClient epochNonceClient() {
+        return new DummyEpochNonceClient();
+    }
+
+    @Bean
     @ConditionalOnMissingBean
     public RestTemplate restTemplate() {
         return new RestTemplate();
@@ -277,6 +285,7 @@ public class YaciStoreAutoConfiguration {
         storeProperties.setAutoRestartMaxAttempts(properties.getAutoRestart().getMaxAttempts());
         storeProperties.setAutoRestartBackoffBaseMs(properties.getAutoRestart().getBackoffBaseMs());
         storeProperties.setAutoRestartWindowMs(properties.getAutoRestart().getWindowMs());
+        storeProperties.setAutoRestartRetryIntervalAfterMaxMs(properties.getAutoRestart().getRetryIntervalAfterMaxMs());
 
         return storeProperties;
     }

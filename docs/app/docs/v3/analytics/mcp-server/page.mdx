@@ -1,0 +1,235 @@
+import { Callout } from 'nextra/components'
+
+# MCP Server
+
+*Available in 3.x only (3.0.0-beta and later).*
+
+The **MCP server** (`mcp-server` module) exposes Yaci Store to AI agents over the
+[Model Context Protocol](https://modelcontextprotocol.io). An agent connected to it can discover the
+analytics tables, read their schemas, run read-only SQL over the exported data (optionally reaching
+the chain tip through [unified views](/docs/v3/analytics/query-api#data-freshness-and-unified-views)),
+look up address balances, identify dApps and convert between Cardano units, slots and timestamps.
+
+The analytics tools are a thin layer over the [Query API](/docs/v3/analytics/query-api): they use the
+same engine in-process, so SQL validation, row limits, timeouts and unified views behave exactly as
+described there.
+
+<Callout type="warning">
+The MCP server is **off by default** and the `/mcp` endpoint is **unauthenticated**. The
+`analytics-execute-sql` tool runs ad-hoc SQL over your chain data, so only expose the endpoint to
+trusted clients — keep it on localhost or put an authenticating proxy in front of it.
+</Callout>
+
+## Quick start
+
+Activate the `analytics` and `mcp` profiles together. `analytics` runs the export that produces the
+data; `mcp` turns on the MCP server, the query layer and unified views.
+
+**Docker / zip distribution** — edit `config/env`:
+
+```env
+SPRING_PROFILES_ACTIVE=analytics,mcp
+
+# or together with ledger-state
+SPRING_PROFILES_ACTIVE=ledger-state,analytics,mcp
+```
+
+**Jar**:
+
+```bash
+java -jar yaci-store.jar --spring.profiles.active=analytics,mcp
+```
+
+Then point an MCP client at the endpoint:
+
+```
+http://localhost:8080/mcp
+```
+
+The analytics tools only return data once the first export partitions have completed; until then
+`analytics-list-tables` reports no tables. See [Analytics Store](/docs/v3/analytics/overview) for
+how the export catches up.
+
+### What the `mcp` profile enables
+
+`config/application-mcp.yml` sets:
+
+```yaml
+yaci:
+  store:
+    mcp-server:
+      enabled: true                 # the MCP server and the /mcp endpoint
+      dapp-registry:
+        enabled: true
+        external-registry:
+          enabled: false            # no outbound sync of the CRFA dApp registry
+      tools:
+        external-metadata:
+          enabled: true             # token registry / IPFS lookups (outbound HTTP)
+
+    analytics:
+      query:
+        enabled: true               # query layer behind the analytics tools
+        live-data-enabled: true     # unified views: exported history + live PostgreSQL
+        rest-api-enabled: false     # REST query endpoints stay off
+```
+
+`yaci.store.mcp-server.enabled` is the only switch for the server itself. Without it, `/mcp` returns
+`404` and no tools are registered. The analytics tools additionally require
+`yaci.store.analytics.query.enabled=true`; if the query layer is off, the server still starts with
+the dApp, metadata and utility tools only.
+
+## Unified views
+
+With `live-data-enabled=true` (the `mcp` profile default), each eligible table is a **unified view**:
+rows inside the exported range come from Parquet/DuckLake, rows after it come from your PostgreSQL
+database. A query such as `SELECT count(*) FROM transaction WHERE epoch = <current epoch>` therefore
+reaches the chain tip instead of stopping at the last completed export.
+
+- `analytics-list-tables` reports a `dataScope` for every table: `historical+live` (reaches the tip)
+  or `historical` (exported data only).
+- Unified views need the PostgreSQL database Yaci Store syncs into; they add read load on it only for
+  the live tail.
+- To keep the tools on exported data only, override the profile:
+
+  ```properties
+  yaci.store.analytics.query.live-data-enabled=false
+  ```
+
+- To keep specific heavy tables historical, list them in
+  `yaci.store.analytics.query.live-data-excluded-tables`.
+
+How the exported range and the boundary are calculated is described in
+[Query API & Unified Views](/docs/v3/analytics/query-api#data-freshness-and-unified-views).
+
+## Connecting a client
+
+The server uses Spring AI's streamable HTTP transport in stateless mode at `/mcp`.
+
+**Claude Code**:
+
+```bash
+claude mcp add --transport http yaci-store http://localhost:8080/mcp
+```
+
+**Clients that accept a server URL** (for example Cursor's `mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "yaci-store": {
+      "url": "http://localhost:8080/mcp"
+    }
+  }
+}
+```
+
+**Clients that only support stdio** can connect through the
+[`mcp-remote`](https://www.npmjs.com/package/mcp-remote) bridge:
+
+```json
+{
+  "mcpServers": {
+    "yaci-store": {
+      "command": "npx",
+      "args": ["mcp-remote", "http://localhost:8080/mcp"]
+    }
+  }
+}
+```
+
+To inspect the tools by hand, run the [MCP Inspector](https://github.com/modelcontextprotocol/inspector)
+(`npx @modelcontextprotocol/inspector`), choose the **Streamable HTTP** transport and enter the URL
+above.
+
+## Tools
+
+### Analytics
+
+Require `yaci.store.analytics.query.enabled=true`.
+
+| Tool | Purpose |
+|---|---|
+| `analytics-list-tables` | Tables with row counts, partitioning, date ranges, `dataScope` and row limits. Call this first. |
+| `analytics-describe-table` | Column names and DuckDB types of one table |
+| `analytics-execute-sql` | Read-only DuckDB SQL, with optional `maxRows` (default 1,000) and `timeoutSeconds` |
+| `analytics-address-balance` | Current balance of one address, read directly from PostgreSQL |
+| `analytics-top-balances` | Top N addresses by ADA balance, from the exported data |
+
+The recommended flow for an agent is `analytics-list-tables` → `analytics-describe-table` →
+`analytics-execute-sql`. Row limits and timeouts come from the query layer
+(`yaci.store.analytics.query.*`); every `analytics-execute-sql` result reports the applied
+`row_limit` and `timeout_seconds`.
+
+### dApp registry
+
+| Tool | Purpose |
+|---|---|
+| `dapp-lookup` | Find a dApp by name |
+| `dapp-reverse-lookup` | Identify a dApp from an address, policy ID or script hash |
+| `dapp-list-by-category` | List dApps by category (DEX, NFT Marketplace, Lending, ...) |
+| `dapp-list-all` | List registered dApps |
+| `dapp-registry-status` | Registry size and last sync |
+
+The registry is empty unless you configure local entries or enable the external registry sync (see
+[Configuration](#configuration)).
+
+### External metadata
+
+These tools make outbound HTTP calls.
+
+| Tool | Purpose |
+|---|---|
+| `get-token-registry-metadata` | Cardano Token Registry metadata for one asset |
+| `get-token-registry-metadata-batch` | Same, for up to 100 assets |
+| `fetch-ipfs-content` | Fetch an IPFS document, such as a governance anchor |
+
+### Cardano utilities
+
+No database access and no external calls.
+
+| Tool | Purpose |
+|---|---|
+| `cardano-network-info` | Network, protocol magic, slot and epoch lengths, genesis start |
+| `cardano-blockchain-time-info` | Slot/time context for a slot or timestamp |
+| `cardano-slot-to-timestamp` / `cardano-timestamp-to-slot` | Slot ↔ wall-clock conversion |
+| `cardano-slots-to-timestamps-batch` | Batched slot → timestamp |
+| `cardano-format-timestamp` | Human-readable timestamp formatting |
+| `cardano-amount-units-info` | Lovelace/ADA unit reference |
+| `convert-lovelace-to-ada` | Lovelace → ADA |
+| `convert-metadata-cbor-to-json` / `convert-datum-cbor-to-json` | CBOR → JSON |
+| `extract-stake-address` | Stake address from a base address |
+| `address-to-payment-hash` | Payment key/script hash from an address |
+| `script-hash-to-address` | Enterprise script address from a script hash |
+| `gov-action-id-from-bech32` | Decode a bech32 governance action ID |
+
+`cardano-network-info` is worth calling before any slot-range query: it includes the conversion
+details an agent needs to turn dates into slots correctly.
+
+## Configuration
+
+| Property | Default | Description |
+|---|---|---|
+| `yaci.store.mcp-server.enabled` | `false` | Enable the MCP server, its tools and the `/mcp` endpoint |
+| `yaci.store.mcp-server.dapp-registry.enabled` | `true` | Register the dApp registry tools |
+| `yaci.store.mcp-server.dapp-registry.external-registry.enabled` | `false` | Sync dApps from the [CRFA off-chain registry](https://github.com/Cardano-Fans/crfa-offchain-data-registry) (outbound HTTP) |
+| `yaci.store.mcp-server.dapp-registry.external-registry.schedule` | `0 0 2 * * ?` | Cron for the external sync |
+| `yaci.store.mcp-server.dapp-registry.dapps` | _(empty)_ | Local dApp entries, keyed by network |
+| `yaci.store.mcp-server.tools.external-metadata.enabled` | `true` | Register the token registry and IPFS tools (outbound HTTP) |
+| `yaci.store.analytics.query.enabled` | `false` | Enable the query layer behind the analytics tools (`true` in the `mcp` profile) |
+| `yaci.store.analytics.query.live-data-enabled` | `false` | Build unified views (`true` in the `mcp` profile) |
+| `yaci.store.analytics.query.max-rows` | `10000` | Hard row limit per query; caps `maxRows` of `analytics-execute-sql` |
+| `yaci.store.analytics.query.max-timeout-seconds` | `300` | Longest `timeoutSeconds` an `analytics-execute-sql` call may request |
+
+The remaining query-layer settings are listed in
+[Query API & Unified Views](/docs/v3/analytics/query-api#configuration).
+
+## Security
+
+- `analytics-execute-sql` is unauthenticated, like the REST `/sql` endpoint. Statements pass the
+  query layer's [validator and sandbox](/docs/v3/analytics/query-api#security): a single
+  `SELECT`/`WITH`, no file or URL access, read-only engine.
+- `dapp-registry.external-registry` and `tools.external-metadata` make outbound HTTP calls (GitHub,
+  the Cardano Token Registry, IPFS gateways). Disable them in egress-restricted deployments.
+- Tool errors are returned to the agent as a short, sanitized message rather than a stack trace, so
+  the agent can correct its query.

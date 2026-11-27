@@ -20,6 +20,7 @@ import com.bloxbean.cardano.yaci.store.common.util.ErrorCode;
 import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig;
 import com.bloxbean.cardano.yaci.store.core.metrics.MetricsService;
+import com.bloxbean.cardano.yaci.store.core.storage.api.ErrorStorage;
 import com.bloxbean.cardano.yaci.store.core.service.publisher.ByronBlockEventPublisher;
 import com.bloxbean.cardano.yaci.store.core.service.publisher.ShelleyBlockEventPublisher;
 import com.bloxbean.cardano.yaci.store.core.util.SlotLeaderUtil;
@@ -35,8 +36,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.LinkedHashMap;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 
 import static com.bloxbean.cardano.yaci.store.core.configuration.GenesisConfig.DEFAULT_SECURITY_PARAM;
 
@@ -55,18 +59,63 @@ public class BlockFetchService implements BlockChainDataListener {
     private final GenesisConfig genesisConfig;
     private final ShelleyBlockEventPublisher postShelleyBlockEventPublisher;
     private final ByronBlockEventPublisher byronBlockEventPublisher;
+    private final ErrorStorage errorStorage;
 
-    private boolean syncMode;
+    //Only the current sync session may write. A default instance keeps hand-built instances (tests) working.
+    private SyncSessionGuard sessionGuard = new SyncSessionGuard();
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setSessionGuard(SyncSessionGuard sessionGuard) {
+        this.sessionGuard = sessionGuard;
+    }
+
+    //Written by the thread that starts the sync and read by the yaci network thread
+    private volatile boolean syncMode;
     private AtomicBoolean isError = new AtomicBoolean(false);
     private AtomicBoolean scheduledToStop = new AtomicBoolean(false);
     private Thread keepAliveThread;
 
-    //Required to publish EpochChangeEvent
-    private Integer previousEpoch;
-    private Era previousEra;
+    //Guards the state a session owns: the accepted-block state below, the epoch state and the error flag. A start sets
+    //it for the new session under this lock, after the new session is open. A callback checks under the same lock that
+    //its session is still current before it changes that state, so a thread of an old session that resumes after a
+    //restart cannot change the state of the session that replaced it (e.g. mark a block accepted that the replacement
+    //has not written yet, which would then skip it as a re-delivery). Held only briefly, never across I/O to the node.
+    private final Object sessionStateLock = new Object();
+
+    //The last block accepted in this session: written, or handed to a parallel batch. The next block must build on
+    //it, otherwise a block was skipped or the order is wrong. A block at or below it that was already accepted is a
+    //re-delivery and is skipped, so each block is processed once.
+    //A null hash means there is nothing to check the link against, e.g. right after a block was skipped as a parse
+    //error. A block number of -1 means it is not known.
+    private volatile String expectedPrevBlockHash;
+    private volatile long lastAcceptedBlockNumber = -1;
+    //True when the last accepted block was handed to a parallel batch. Chain sync never writes such a batch.
+    private volatile boolean lastAcceptedInBatch;
+    //A range fetch from a block that is not processed yet (a fresh start) delivers that block first. Until the start
+    //block is confirmed, the first block accepted must be the start block, or, after a recorded parse-error skip, a
+    //block that builds on it (the skipped block was the start block). Parse errors never clear it, and a range that
+    //ends with it still set is fetched again, so a lost start block is never missed. Null when there is none.
+    private volatile String requiredFirstBlockHash;
+    //True when a block was skipped as a parse error while the start block was still required
+    private volatile boolean parseErrorBeforeStartBlock;
+    //Hashes accepted in this session, so a re-delivered block can be recognised before its batch is written
+    private final Map<String, Boolean> recentAcceptedHashes = Collections.synchronizedMap(new LinkedHashMap<>(256, 0.75f, false) {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<String, Boolean> eldest) {
+            return size() > RECENT_ACCEPTED_HASHES;
+        }
+    });
+    private static final int RECENT_ACCEPTED_HASHES = 5000;
+
+    //Required to publish EpochChangeEvent. Set by a start under sessionStateLock and read by the yaci network thread.
+    private volatile Integer previousEpoch;
+    private volatile Era previousEra;
 
     @Getter
     private long lastReceivedBlockTime;
+    // When the current session was started. The health check gives a new session the full block-receive delay
+    // before it treats it as stalled, even if the last block was received long ago.
+    private volatile long lastSessionStartTime;
 
     @Transactional
     @Override
@@ -78,39 +127,47 @@ public class BlockFetchService implements BlockChainDataListener {
 
         checkError();
         lastReceivedBlockTime = System.currentTimeMillis();
-        byronBlockEventPublisher.processBlocksInParallel();
 
         final BlockHeader blockHeader = block.getHeader();
-        final long slot = blockHeader.getHeaderBody().getSlot();
-        final boolean newEra = eraService.checkIfNewEra(era, blockHeader);
-        final int epochNumber = eraService.getEpochNo(era, slot);
-        final int epochSlot = eraService.getShelleyEpochSlot(slot);
-        final long blockTime = eraService.blockTime(era, slot);
-        final String slotLeader = SlotLeaderUtil.getShelleySlotLeader(blockHeader.getHeaderBody().getIssuerVkey());
-        final boolean newEpoch = detectIfNewEpoch(epochNumber, slot);
+        EventMetadata eventMetadata = null;
 
-        //paralleMode is true when not fully synced and parallel processing is enabled
-        boolean parallelMode = !syncMode && storeProperties.isEnableParallelProcessing();
-
-        EventMetadata eventMetadata = EventMetadata.builder()
-                .mainnet(storeProperties.isMainnet())
-                .protocolMagic(storeProperties.getProtocolMagic())
-                .era(era)
-                .block(blockHeader.getHeaderBody().getBlockNumber())
-                .epochNumber(epochNumber)
-                .slotLeader(slotLeader)
-                .blockHash(blockHeader.getHeaderBody().getBlockHash())
-                .blockTime(blockTime)
-                .prevBlockHash(blockHeader.getHeaderBody().getPrevHash())
-                .slot(slot)
-                .epochSlot(epochSlot)
-                .noOfTxs(transactions.size())
-                .syncMode(syncMode)
-                .parallelMode(parallelMode)
-                .build();
-
-
+        //Everything below can fail on a database error (era/cursor lookups, saving the block). Any failure must stop
+        //the sync. If it escapes to yaci instead, yaci reports it as a parse error and moves on to the next block.
         try {
+            if (!acceptBlock(blockHeader.getHeaderBody().getBlockNumber(),
+                    blockHeader.getHeaderBody().getBlockHash(), blockHeader.getHeaderBody().getPrevHash()))
+                return;
+
+            byronBlockEventPublisher.processBlocksInParallel();
+
+            final long slot = blockHeader.getHeaderBody().getSlot();
+            final boolean newEra = eraService.checkIfNewEra(era, blockHeader);
+            final int epochNumber = eraService.getEpochNo(era, slot);
+            final int epochSlot = eraService.getShelleyEpochSlot(slot);
+            final long blockTime = eraService.blockTime(era, slot);
+            final String slotLeader = SlotLeaderUtil.getShelleySlotLeader(blockHeader.getHeaderBody().getIssuerVkey());
+            final boolean newEpoch = detectIfNewEpoch(epochNumber, slot);
+
+            //paralleMode is true when not fully synced and parallel processing is enabled
+            boolean parallelMode = !syncMode && storeProperties.isEnableParallelProcessing();
+
+            eventMetadata = EventMetadata.builder()
+                    .mainnet(storeProperties.isMainnet())
+                    .protocolMagic(storeProperties.getProtocolMagic())
+                    .era(era)
+                    .block(blockHeader.getHeaderBody().getBlockNumber())
+                    .epochNumber(epochNumber)
+                    .slotLeader(slotLeader)
+                    .blockHash(blockHeader.getHeaderBody().getBlockHash())
+                    .blockTime(blockTime)
+                    .prevBlockHash(blockHeader.getHeaderBody().getPrevHash())
+                    .slot(slot)
+                    .epochSlot(epochSlot)
+                    .noOfTxs(transactions.size())
+                    .syncMode(syncMode)
+                    .parallelMode(parallelMode)
+                    .build();
+
             if (newEra || newEpoch) { //Also add epoch change
                 log.info("Publish EpochChangeEvent >>>");
                 //Incase of era change. Process all pending blocks and then process era change block first
@@ -119,24 +176,32 @@ public class BlockFetchService implements BlockChainDataListener {
                 }
 
                 //Publish epoch change event first and then process first block of the epoch
+                sessionGuard.checkCaller();
                 publishEpochChangeEvent(eventMetadata);
 
                 //Now process first block
                 log.info("Processing first block of the epoch {}, block {}", eventMetadata.getEpochNumber(), eventMetadata.getBlock());
-                postShelleyBlockEventPublisher.publishBlockEvents(eventMetadata, block, transactions);
+                //Published on the sequential path, so it must not be marked parallel (it is never part of a batch)
+                postShelleyBlockEventPublisher.publishBlockEvents(eventMetadata.toBuilder().parallelMode(false).build(), block, transactions);
+                blockAccepted(eventMetadata, false);
             } else {
                 if (parallelMode) {
+                    //Handed to a batch. If the batch fails to write, the sync stops and restarts from the cursor.
                     postShelleyBlockEventPublisher.publishBlockEventsInParallel(eventMetadata, block, transactions);
                 } else {
                     postShelleyBlockEventPublisher.publishBlockEvents(eventMetadata, block, transactions);
                 }
+                blockAccepted(eventMetadata, parallelMode);
             }
 
-            previousEpoch = eventMetadata.getEpochNumber();
-            previousEra = eventMetadata.getEra();
-
-        } catch (Exception e) {
-            log.error("Error saving : " + eventMetadata, e);
+        } catch (Throwable e) {
+            if (sessionGuard.isCallerStale()) {
+                //An old session's thread, whatever went wrong in it (the stale check, or state the new session
+                //changed underneath it). Its writes are not committed. The current session is fine: leave it running.
+                log.warn("Error in a thread of an old sync session, not stopping the current one: {}", e.toString());
+                throw e instanceof RuntimeException re ? re : new RuntimeException(e);
+            }
+            log.error("Error saving : " + (eventMetadata != null ? eventMetadata : blockHeader.getHeaderBody()), e);
             log.error("Stopping fetcher");
             log.error("Error at block no #" + blockHeader.getHeaderBody().getBlockNumber());
             stopSyncOnError();
@@ -155,6 +220,11 @@ public class BlockFetchService implements BlockChainDataListener {
     @Transactional
     @Override
     public void onByronBlock(ByronMainBlock byronBlock) {
+        if (scheduledToStop.get()) {
+            log.debug("Stopping BlockFetchService as scheduled");
+            return;
+        }
+
         checkError();
         lastReceivedBlockTime = System.currentTimeMillis();
         try {
@@ -166,6 +236,9 @@ public class BlockFetchService implements BlockChainDataListener {
             final long blockTime = eraService.blockTime(Era.Byron, absoluteSlot);
 
             long blockNumber = byronBlock.getHeader().getConsensusData().getDifficulty().longValue();
+            if (!acceptBlock(blockNumber, byronBlock.getHeader().getBlockHash(), byronBlock.getHeader().getPrevBlock()))
+                return;
+
             final String slotLeader = SlotLeaderUtil
                     .getByronSlotLeader(byronBlock.getHeader().getConsensusData().getPubKey());
             final boolean newEpoch = detectIfNewEpochByronEra((int)epochNumber);
@@ -196,24 +269,31 @@ public class BlockFetchService implements BlockChainDataListener {
 
                 log.info("Publish EpochChangeEvent >>>");
                 //Publish epoch change event
+                sessionGuard.checkCaller();
                 publishEpochChangeEvent(eventMetadata);
 
                 log.info("Processing first block of the epoch {}, block {}", eventMetadata.getEpochNumber(), eventMetadata.getBlock());
                 //Process single block (First block of epoch)
-                byronBlockEventPublisher.publishBlockEvents(eventMetadata, byronBlock, Collections.emptyList());
+                byronBlockEventPublisher.publishBlockEvents(eventMetadata.toBuilder().parallelMode(false).build(), byronBlock, Collections.emptyList());
+                blockAccepted(eventMetadata, false);
 
             } else {
                 if (parallelMode) {
+                    //Handed to a batch. If the batch fails to write, the sync stops and restarts from the cursor.
                     byronBlockEventPublisher.publishBlockEventsInParallel(eventMetadata, byronBlock, Collections.emptyList());
                 } else {
                     byronBlockEventPublisher.publishBlockEvents(eventMetadata, byronBlock, Collections.emptyList());
                 }
+                blockAccepted(eventMetadata, parallelMode);
             }
 
-            previousEpoch = eventMetadata.getEpochNumber();
-            previousEra = eventMetadata.getEra();
-
-        } catch (Exception e) {
+        } catch (Throwable e) {
+            if (sessionGuard.isCallerStale()) {
+                //An old session's thread, whatever went wrong in it (the stale check, or state the new session
+                //changed underneath it). Its writes are not committed. The current session is fine: leave it running.
+                log.warn("Error in a thread of an old sync session, not stopping the current one: {}", e.toString());
+                throw e instanceof RuntimeException re ? re : new RuntimeException(e);
+            }
             log.error("Error saving : Slot >>" + byronBlock.getHeader().getConsensusData().getSlotId(), e);
             log.error("Error at block hash #" + byronBlock.getHeader().getBlockHash());
             log.error("Stopping fetcher");
@@ -225,6 +305,11 @@ public class BlockFetchService implements BlockChainDataListener {
     @Transactional
     @Override
     public void onByronEbBlock(ByronEbBlock byronEbBlock) {
+        if (scheduledToStop.get()) {
+            log.debug("Stopping BlockFetchService as scheduled");
+            return;
+        }
+
         checkError();
         lastReceivedBlockTime = System.currentTimeMillis();
         try {
@@ -234,6 +319,8 @@ public class BlockFetchService implements BlockChainDataListener {
             final long blockTime = eraService.blockTime(Era.Byron, absoluteSlot);
 
             long blockNumber = byronEbBlock.getHeader().getConsensusData().getDifficulty().longValue();
+            if (!acceptBlock(blockNumber, byronEbBlock.getHeader().getBlockHash(), byronEbBlock.getHeader().getPrevBlock()))
+                return;
 
             EventMetadata eventMetadata = EventMetadata.builder()
                     .mainnet(storeProperties.isMainnet())
@@ -249,12 +336,23 @@ public class BlockFetchService implements BlockChainDataListener {
                     .syncMode(syncMode)
                     .build();
 
+            //The EB block writes the cursor itself. Write the Byron blocks still waiting in a batch first, or the cursor
+            //would move past blocks that are not written yet.
+            byronBlockEventPublisher.processBlocksInParallel();
+            sessionGuard.checkCaller();
             publisher.publishEvent(new ByronEbBlockEvent(eventMetadata, byronEbBlock));
 
-            //Finally Set the cursor
-            cursorService.setCursor(new Cursor(eventMetadata.getSlot(), eventMetadata.getBlockHash(),
-                    eventMetadata.getBlock(), eventMetadata.getPrevBlockHash(), eventMetadata.getEra()));
-        } catch (Exception e) {
+            //Finally Set the cursor, only for the current session (checked again after the write, in its transaction)
+            sessionGuard.writeIfCurrent(() -> cursorService.setCursor(new Cursor(eventMetadata.getSlot(), eventMetadata.getBlockHash(),
+                    eventMetadata.getBlock(), eventMetadata.getPrevBlockHash(), eventMetadata.getEra())));
+            blockAccepted(eventMetadata.getBlock(), eventMetadata.getBlockHash(), false);
+        } catch (Throwable e) {
+            if (sessionGuard.isCallerStale()) {
+                //An old session's thread, whatever went wrong in it (the stale check, or state the new session
+                //changed underneath it). Its writes are not committed. The current session is fine: leave it running.
+                log.warn("Error in a thread of an old sync session, not stopping the current one: {}", e.toString());
+                throw e instanceof RuntimeException re ? re : new RuntimeException(e);
+            }
             log.error("Error saving EbBlock : epoch >>" + byronEbBlock.getHeader().getConsensusData().getEpoch(), e);
             log.error("Error at block hash #" + byronEbBlock.getHeader().getBlockHash());
             log.error("Stopping fetcher");
@@ -275,16 +373,64 @@ public class BlockFetchService implements BlockChainDataListener {
         }
     }
 
-    private void stopSyncOnError() {
-        setError();
+    /**
+     * Marks the sync as failed and stops its connection, but only for the caller's own session. A thread of an old
+     * session (e.g. one whose write the commit fence refused after a restart) must not flag or stop the session that
+     * replaced it.
+     *
+     * @return false if the caller's session is no longer current, and nothing was done
+     */
+    private boolean stopSyncOnError() {
+        synchronized (sessionStateLock) {
+            if (sessionGuard.isCallerStale()) {
+                log.warn("Not stopping the sync on an error in a thread of an old sync session");
+                return false;
+            }
+            setError();
+        }
+        //Checked again under the lock the starts open a session under, so a start in between keeps its connection
+        synchronized (this) {
+            if (sessionGuard.isCallerStale()) {
+                log.warn("Not stopping the connection of the sync session that replaced the failed one");
+                return false;
+            }
+            shutdownRangeSync();
+            shutdownSync();
+        }
+        return true;
+    }
+
+    /**
+     * Waits until nothing of an earlier sync session can still be committed. See
+     * {@link SyncSessionGuard#awaitCommitsOfOldSessions()}.
+     */
+    public void awaitCommitsOfOldSessions() {
+        sessionGuard.awaitCommitsOfOldSessions();
+    }
+
+    public void stop() {
+        //Callbacks still on their way from the stopped session are ignored
+        sessionGuard.endSession();
+        //Under the lock a start clears it under, after the session ended: a start that opened its session just before
+        //sees it ended there and does not clear this, so the health check does not restart a sync stopped on purpose
+        synchronized (sessionStateLock) {
+            scheduledToStop.set(true);
+        }
         shutdownRangeSync();
         shutdownSync();
     }
 
-    public void stop() {
-        scheduledToStop.set(true);
-        shutdownRangeSync();
-        shutdownSync();
+    /**
+     * Called when a start fails, e.g. because a commit of the stopped session is still running after the wait. The
+     * stop before it (a restart's own stop) must not leave the sync marked as stopped on purpose: the health check
+     * skips a sync scheduled to stop, so no restart would ever be tried again. Mark it failed instead, so the health
+     * check asks for another restart. An operator's stop after this still marks it stopped.
+     */
+    public void markStartFailed() {
+        synchronized (sessionStateLock) {
+            scheduledToStop.set(false);
+            setError();
+        }
     }
 
     @Transactional
@@ -298,14 +444,57 @@ public class BlockFetchService implements BlockChainDataListener {
                 .orElse(-1L);
 
         log.info("Current cursor point >> " + currentPoint);
-        if ((point.getSlot() == 0 && point.getHash() == null)
-                || (currentPoint.getSlot() - point.getSlot()) > DEFAULT_SECURITY_PARAM) {
-            log.error("Rollback point doesn't seem to be valid. Ignoring rollback event to slot. " + point);
+        if (point.getSlot() == 0 && point.getHash() == null) {
+            log.warn("Rollback point doesn't seem to be valid. Ignoring rollback event to slot. " + point);
             return;
         }
 
+        if (currentPoint == null) {
+            log.info("Nothing stored yet. Nothing to roll back for rollback event to " + point);
+            return;
+        }
+
+        // A node never rolls back more than k blocks. Note that k counts blocks: comparing it with a distance in
+        // slots, as before, refused every rollback deeper than ~36 minutes on mainnet.
+        String refusal = checkRollbackDepth(point, currentPoint, currentBlockNum);
+        if (refusal != null) {
+            // Ignoring the rollback and carrying on would write the blocks that follow it on top of newer data.
+            // Stop this session instead; the restart resumes from the cursor.
+            log.error("Refusing rollback to {} from cursor {} (block {}): {}. Restarting the sync from the cursor.",
+                    point, currentPoint, currentBlockNum, refusal);
+            //A rollback from an old session must not stop or restart the session that replaced it
+            if (!stopSyncOnError())
+                return;
+            publisher.publishEvent(RequiredSyncRestartEvent.builder()
+                    .reason("RollbackTooDeep")
+                    .errorCode("ROLLBACK_TOO_DEEP")
+                    .timestamp(System.currentTimeMillis())
+                    .source("BlockFetchService")
+                    .details(String.format("Rollback to %s, cursor at %s: %s", point, currentPoint, refusal))
+                    .build());
+            return;
+        }
+
+        //A rollback from an old session (it may have waited a long time) must not delete the current session's data
+        sessionGuard.checkCaller();
         cursorService.rollback(point.getSlot());
-        restoreEpochStateFromCursor();
+        synchronized (sessionStateLock) {
+            //A restart can have replaced this session during the rollback. Its state is not this session's to reset.
+            sessionGuard.checkCaller();
+            restoreEpochStateFromCursor(cursorService.getCursor());
+            log.info("Restored epoch state after rollback. previousEpoch: {}, previousEra: {}",
+                    previousEpoch, previousEra);
+            //The next block must build on the rollback point. A point after the last stored block means yaci holds a
+            //block that was never stored. Keep the old expectation so the next block fails the link check and sync
+            //restarts from the cursor.
+            if (point.getSlot() <= currentPoint.getSlot()) {
+                resetAcceptedBlock(point.getHash(), cursorService.getCursor().map(Cursor::getBlock).orElse(null));
+                //Chain sync continues right after the rollback point, so the next block must build on it, even when
+                //its block number is not known (no cursor left)
+                expectedPrevBlockHash = point.getHash();
+            } else
+                log.warn("Rollback point {} is after the last stored block {}", point, currentPoint);
+        }
 
         //Publish Pre-rollback event
         PreRollbackEvent preRollbackEvent = PreRollbackEvent
@@ -328,8 +517,55 @@ public class BlockFetchService implements BlockChainDataListener {
         publisher.publishEvent(rollbackEvent);
     }
 
-    private void restoreEpochStateFromCursor() {
-        cursorService.getCursor().ifPresentOrElse(cursor -> {
+    /**
+     * Returns why a rollback must be refused, or null if it is fine.
+     * <p>
+     * The depth is counted in blocks, using the block number stored for the rollback point in the cursor table.
+     * The cursor table has one row per block in chain-sync, but only one row per batch for blocks written by the
+     * range fetch, and old rows are cleaned up. When the point has no row, fall back to slots: 3k/f slots is the
+     * window in which the chain normally has k blocks (129600 slots on mainnet and preprod).
+     * <p>
+     * The slot check is only a heuristic. It is not the deepest valid rollback in slots: after a long run of empty
+     * slots, a rollback of fewer than k blocks can be more than 3k/f slots deep. It is refused only when the point has
+     * no cursor row. A refused rollback is not lost: the session stops and the restart finds the intersection again
+     * from the stored cursors, so the cost is a restart, not wrong data.
+     */
+    String checkRollbackDepth(Point point, Point currentPoint, long currentBlockNum) {
+        long k = securityParam();
+        Optional<Cursor> pointCursor = point.getHash() != null
+                ? cursorService.getCursorByBlockHash(point.getHash())
+                : Optional.empty();
+
+        if (pointCursor.isPresent() && pointCursor.get().getBlock() != null && currentBlockNum >= 0) {
+            long depthBlocks = currentBlockNum - pointCursor.get().getBlock();
+            return depthBlocks > k
+                    ? String.format("%d blocks deep, more than k = %d", depthBlocks, k)
+                    : null;
+        }
+
+        long depthSlots = currentPoint.getSlot() - point.getSlot();
+        long maxSlots = maxRollbackSlots();
+        return depthSlots > maxSlots
+                ? String.format("rollback point not in the cursor table and %d slots deep, more than 3k/f = %d slots",
+                        depthSlots, maxSlots)
+                : null;
+    }
+
+    private long securityParam() {
+        int k = genesisConfig.getSecurityParam();
+        return k > 0 ? k : DEFAULT_SECURITY_PARAM;
+    }
+
+    long maxRollbackSlots() {
+        long k = securityParam();
+        double f = genesisConfig.getActiveSlotsCoeff();
+        if (f <= 0)
+            f = 0.05;
+        return (long) Math.ceil(3 * k / f);
+    }
+
+    private void restoreEpochStateFromCursor(Optional<Cursor> cursorOptional) {
+        cursorOptional.ifPresentOrElse(cursor -> {
             previousEra = cursor.getEra();
             // Byron blocks carry their epoch, but the cursor does not. AdaPot starts after Byron,
             // so leave it unset and let the next Byron block provide the epoch if this ever occurs.
@@ -340,32 +576,113 @@ public class BlockFetchService implements BlockChainDataListener {
             previousEpoch = null;
             previousEra = null;
         });
-
-        log.info("Restored epoch state after rollback. previousEpoch: {}, previousEra: {}",
-                previousEpoch, previousEra);
     }
 
+    /**
+     * A start block that is already processed is skipped, so it never sets the epoch state. Take it from that block's
+     * cursor instead. Otherwise an in-process restart keeps the epoch of the old session, which can be ahead of the
+     * start block, and the first block of the next epoch would not be seen as a new epoch.
+     */
+    private void restoreEpochStateForStart(Point from, Long fromBlockNumber) {
+        if (fromBlockNumber == null || from.getHash() == null)
+            return;
+        restoreEpochStateFromCursor(cursorService.getCursorByBlockHash(from.getHash()));
+        log.info("Restored epoch state from start block {}. previousEpoch: {}, previousEra: {}",
+                fromBlockNumber, previousEpoch, previousEra);
+    }
+
+    /**
+     * The end of the range fetch: writes the blocks left in a partly filled batch, then (primary instance) hands over
+     * to chain sync.
+     * <p>
+     * The session checks and the connection changes run under the same lock as startFetch/startSync, which open a new
+     * session, so a late batchDone cannot stop or replace the connection of the session that replaced it. The write in
+     * between runs without that lock: it can hang (e.g. in the database or a commit listener), and a restart needs the
+     * lock to stop the old connection and start a new one. It is checked again after the write.
+     */
     @Override
     public void batchDone() {
+        boolean primary;
+        synchronized (this) {
+            //An old range session must not stop the fetcher of the session that replaced it
+            if (sessionGuard.isCallerStale()) {
+                log.warn("Ignoring batch done from an old sync session");
+                return;
+            }
 
-        if (!syncMode) {
+            if (syncMode)
+                return;
+
             log.info("Batch Done >>>");
 
-            if (storeProperties.isPrimaryInstance()) {
-                //Stop BlockRange Sync before starting BlockSync
+            //The sync already stopped on an error and asked for a restart from the cursor
+            if (isError.get()) {
+                log.info("Range fetch ended after the sync stopped on an error. Not switching to chain sync.");
+                return;
+            }
+
+            primary = storeProperties.isPrimaryInstance();
+            //Stop BlockRange Sync before starting BlockSync
+            if (primary)
                 shutdownRangeSync();
+        }
 
+        //Write the blocks still waiting in a partly filled batch. A bounded range (not primary) ends here, and
+        //chain sync starts after the cursor: dropping them would lose the start block of a fresh start, whose
+        //cursor is only the start block's placeholder.
+        try {
+            byronBlockEventPublisher.processBlocksInParallel();
+            postShelleyBlockEventPublisher.processBlocksInParallel();
+        } catch (Throwable e) {
+            if (sessionGuard.isCallerStale()) {
+                log.warn("The last batch of an old range session was not written: a restart or stop replaced the " +
+                        "session. {}", e.toString());
+                return;
+            }
+            log.error("Could not write the last batch of the range fetch. Stopping sync to fetch again " +
+                    "from the last stored block.", e);
+            stopSyncAndRefetch("BatchWriteFailed", "BATCH_WRITE_FAILED", String.valueOf(e.getMessage()));
+            return;
+        }
+
+        synchronized (this) {
+            //A restart or a stop during the write ended this session: do not switch to chain sync
+            if (sessionGuard.isCallerStale()) {
+                log.warn("The range session was replaced or stopped while its last batch was written. " +
+                        "Not switching to chain sync.");
+                return;
+            }
+
+            if (isError.get()) {
+                log.info("The sync stopped on an error while the last batch was written. Not switching to chain sync.");
+                return;
+            }
+
+            //A fresh range fetch that ended without its start block confirmed
+            if (requiredFirstBlockHash != null) {
+                log.error("The range fetch ended without its start block {}. Stopping sync to fetch again.",
+                        requiredFirstBlockHash);
+                stopSyncAndRefetch("StartBlockNotDelivered", "BLOCK_NOT_LINKED",
+                        "The range fetch ended without its start block " + requiredFirstBlockHash);
+                return;
+            }
+
+            if (primary) {
                 //If primary instance, start sync
-                //start sync
-                cursorService.getCursor()
-                        .ifPresent(cursor -> {
-                            String blockHash = cursor.getBlockHash();
-                            long slot = cursor.getSlot();
+                try {
+                    cursorService.getCursor()
+                            .ifPresent(cursor -> {
+                                String blockHash = cursor.getBlockHash();
+                                long slot = cursor.getSlot();
 
-                            log.info("Start N2N sync from block >> " + cursor.getBlock());
-                            //Start sync
-                            startSync(new Point(slot, blockHash));
-                        });
+                                log.info("Start N2N sync from block >> " + cursor.getBlock());
+                                //Start sync
+                                startSync(new Point(slot, blockHash), cursor.getBlock());
+                            });
+                } catch (SyncSessionGuard.StaleSyncSessionException e) {
+                    //A stop or a restart ended the range session during the cursor read
+                    log.warn("The range session was ended before chain sync started: {}", e.getMessage());
+                }
             } else {
                 log.info("Blockfetch done");
             }
@@ -374,8 +691,29 @@ public class BlockFetchService implements BlockChainDataListener {
 
     @Override
     public void onParsingError(BlockParseRuntimeException e) {
+        //yaci also reports exceptions thrown by onBlock as parse errors. onBlock stops the sync before it throws,
+        //so this is a block that could not be stored, not one that could not be decoded. Never skip it.
+        if (isError.get()) {
+            log.error("Sync is stopped after a failure to store block {}. The block is not skipped.", e.getBlockNumber());
+            return;
+        }
+
         log.error("Block parsing error", e);
         if (storeProperties.isContinueOnParseError()) {
+            //Only the block after the last accepted one may be skipped, or a Byron epoch boundary block with the same
+            //number. Otherwise another block is missing before the failed one: fetch again from the last stored block.
+            Long failedBlockNumber = e.getBlockNumber(); //null when yaci could not decode the header either
+            long lastNumber = lastAcceptedBlockNumber;
+            if (failedBlockNumber != null && failedBlockNumber > 0 && lastNumber >= 0
+                    && failedBlockNumber != lastNumber + 1 && failedBlockNumber != lastNumber) {
+                log.error("Block {} could not be parsed, but the last block accepted is {}. A block is missing before " +
+                        "it. Stopping sync to fetch again from the last stored block.", failedBlockNumber, lastNumber);
+                stopSyncAndRefetch("ParseErrorAfterMissingBlock", "BLOCK_NOT_LINKED",
+                        String.format("Block %d could not be parsed, last block accepted is %d",
+                                failedBlockNumber, lastNumber));
+                return;
+            }
+
             log.info("Continue on parse error is enabled. Continuing sync ...");
             String cbor = null;
             if (e.getBlockCbor() != null) {
@@ -391,35 +729,387 @@ public class BlockFetchService implements BlockChainDataListener {
                     .reason(e.getMessage())
                     .details(cbor)
                     .build();
-            publisher.publishEvent(errorEvent);
+
+            //A block is only skipped once the error row that records the skip is saved
+            try {
+                errorStorage.save(errorEvent);
+            } catch (Exception ex) {
+                log.error("Could not record parse error for block {}. Stopping sync instead of skipping the block.",
+                        e.getBlockNumber(), ex);
+                stopSyncOnError();
+                throw new RuntimeException(e);
+            }
+
+            synchronized (sessionStateLock) {
+                //A restart can have replaced this session while the error row was saved. Leave the new one's state.
+                if (sessionGuard.isCallerStale()) {
+                    log.warn("Parse error of block {} from an old sync session. Not changing the current session.",
+                            e.getBlockNumber());
+                    return;
+                }
+                //The skipped block's hash is not known, so accept the next block without the link check. While the
+                //start block of a fresh range fetch is still required, acceptBlock checks that the next block builds
+                //on it.
+                if (requiredFirstBlockHash != null)
+                    parseErrorBeforeStartBlock = true;
+                expectedPrevBlockHash = null;
+                //The next block must be the one after the skipped block, or a Byron epoch boundary block with the same
+                //number. If the skipped block's number is not known, take it as the block after the last accepted
+                //one: then the next block may be the one after it (or, for a skipped Byron epoch boundary block, the
+                //one after the last accepted block), and any other number is a missing block.
+                Long skippedBlockNumber = e.getBlockNumber(); //null when yaci could not decode the header either
+                if (skippedBlockNumber != null && skippedBlockNumber > 0)
+                    lastAcceptedBlockNumber = skippedBlockNumber;
+                else if (lastNumber >= 0)
+                    lastAcceptedBlockNumber = lastNumber + 1;
+                else
+                    lastAcceptedBlockNumber = -1;
+            }
         } else {
             stopSyncOnError();
             throw new RuntimeException(e);
         }
     }
 
+    /**
+     * Decides whether a block is processed. In range fetch and in chain sync, a block must build on the last block
+     * accepted in this session.
+     * <ul>
+     *     <li>It builds on it: process it.</li>
+     *     <li>It is at or below the last accepted block and was already accepted (in this session, or it is in the
+     *     cursor table, so it is fully written): it is a re-delivery. Skip it, without publishing, so it is processed
+     *     only once.</li>
+     *     <li>Otherwise a block was skipped, or blocks came in the wrong order: stop the sync without storing this
+     *     block and restart from the cursor, the last stored block.</li>
+     * </ul>
+     *
+     * @return true if the block must be processed
+     */
+    private boolean acceptBlock(long blockNumber, String blockHash, String prevBlockHash) {
+        String requiredFirst = requiredFirstBlockHash;
+        if (requiredFirst != null) {
+            if (requiredFirst.equalsIgnoreCase(blockHash))
+                return true;
+            //The skipped block was the start block. If it was a later block, this one cannot build on the start block.
+            //Two undecodable blocks in a row at the start never pass: the sync stops instead of losing one silently.
+            if (parseErrorBeforeStartBlock && requiredFirst.equalsIgnoreCase(prevBlockHash))
+                return true;
+
+            log.error("The first block of the range fetch must be the start block {}, but block {} ({}) came first. " +
+                    "Stopping sync to fetch again from the last stored block.", requiredFirst, blockNumber, blockHash);
+            stopSyncAndRefetch("FirstBlockNotStartBlock", "BLOCK_NOT_LINKED",
+                    String.format("First block %d (%s) of the range fetch is not the start block %s",
+                            blockNumber, blockHash, requiredFirst));
+            return false;
+        }
+
+        String expected = expectedPrevBlockHash;
+        long lastNumber = lastAcceptedBlockNumber;
+
+        //Chain sync writes each block at once and never flushes a parallel batch. A previous block that went to a
+        //batch in this session (the range-to-sync startup race) is lost, even though this block links to it.
+        boolean previousBlockLost = syncMode && lastAcceptedInBatch;
+
+        if (!previousBlockLost && expected != null && expected.equals(prevBlockHash))
+            return true;
+
+        if (lastNumber >= 0 && blockNumber <= lastNumber) {
+            if (isAlreadyAccepted(blockHash)) {
+                log.info("Block {} ({}) was already processed. Skipping the re-delivered block.", blockNumber, blockHash);
+                return false;
+            }
+            //After a skipped parse error the hash is unknown. A Byron epoch boundary block has the same number as
+            //the block before it.
+            if (expected == null && !previousBlockLost && blockNumber == lastNumber)
+                return true;
+        } else if (expected == null && !previousBlockLost) {
+            //Nothing to check the hash against: the block after a skipped parse error, which must be the next block,
+            //or a first block with no known start (the start point has no hash). A fresh range fetch checks its first
+            //block against the start block above.
+            if (lastNumber < 0 || blockNumber == lastNumber + 1)
+                return true;
+        }
+
+        log.error("Block {} ({}) does not build on the last block accepted (block {}{}). Expected previous block hash {}, " +
+                "found {}. Stopping sync to fetch again from the last stored block.",
+                blockNumber, blockHash, lastNumber, previousBlockLost ? ", left in a batch that chain sync never writes" : "",
+                expected, prevBlockHash);
+        stopSyncAndRefetch("BlockNotLinkedToPreviousBlock", "BLOCK_NOT_LINKED",
+                String.format("Block %d (%s) has previous block hash %s, expected %s",
+                        blockNumber, blockHash, prevBlockHash, expected));
+        return false;
+    }
+
+    //Stops the sync and asks for a restart from the cursor, the last stored block
+    private void stopSyncAndRefetch(String reason, String errorCode, String details) {
+        if (!stopSyncOnError())
+            return;
+
+        publisher.publishEvent(RequiredSyncRestartEvent.builder()
+                .reason(reason)
+                .errorCode(errorCode)
+                .timestamp(System.currentTimeMillis())
+                .source("BlockFetchService")
+                .details(details)
+                .build());
+    }
+
+    private boolean isAlreadyAccepted(String blockHash) {
+        if (blockHash == null)
+            return false;
+        if (recentAcceptedHashes.containsKey(blockHash))
+            return true;
+        //Publishers write a cursor row only after the block (or its batch) is fully written. The placeholder cursor of a
+        //fresh start has no previous hash and does not count.
+        return cursorService.getCursorByBlockHash(blockHash)
+                .filter(cursor -> cursor.getPrevBlockHash() != null)
+                .isPresent();
+    }
+
+    //A block and its epoch are recorded together, for the current session only
+    private void blockAccepted(EventMetadata eventMetadata, boolean inBatch) {
+        synchronized (sessionStateLock) {
+            blockAccepted(eventMetadata.getBlock(), eventMetadata.getBlockHash(), inBatch);
+            previousEpoch = eventMetadata.getEpochNumber();
+            previousEra = eventMetadata.getEra();
+        }
+    }
+
+    /**
+     * Records a block as accepted in the calling thread's session. A thread of an old session can get here after a
+     * restart reset this state for the new session (it passed the session checks while queueing the block, then
+     * waited). Its block is not written, so recording it would make the new session skip that block as a re-delivery.
+     * The session is checked under the lock the start sets this state under, so it throws instead.
+     */
+    private void blockAccepted(long blockNumber, String blockHash, boolean inBatch) {
+        synchronized (sessionStateLock) {
+            sessionGuard.checkCaller();
+            requiredFirstBlockHash = null;
+            parseErrorBeforeStartBlock = false;
+            expectedPrevBlockHash = blockHash;
+            lastAcceptedBlockNumber = blockNumber;
+            lastAcceptedInBatch = inBatch;
+            recentAcceptedHashes.put(blockHash, Boolean.TRUE);
+        }
+    }
+
+    /**
+     * Sets the block the next block must build on.
+     *
+     * @param blockNumber the block number if this block is already processed, or null if it is not (for example,
+     *                    the first block of a fresh start, which the range fetch delivers and which must be processed)
+     */
+    private void resetAcceptedBlock(String blockHash, Long blockNumber) {
+        recentAcceptedHashes.clear();
+        lastAcceptedInBatch = false;
+        requiredFirstBlockHash = null;
+        parseErrorBeforeStartBlock = false;
+        if (blockNumber != null && blockHash != null) {
+            expectedPrevBlockHash = blockHash;
+            lastAcceptedBlockNumber = blockNumber;
+            recentAcceptedHashes.put(blockHash, Boolean.TRUE);
+        } else {
+            expectedPrevBlockHash = null;
+            lastAcceptedBlockNumber = -1;
+        }
+    }
+
     public synchronized void startFetch(Point from, Point to) {
-        isError.set(false);
-        scheduledToStop.set(false);
+        startFetch(from, to, null);
+    }
 
-        stopKeepAliveThread();
-        blockRangeSync.restart(this);
-        blockRangeSync.fetch(from, to);
-        syncMode = false;
-        cursorService.setSyncMode(syncMode);
+    /**
+     * Opens the session of a start, before anything is reset. Throws if a commit of the old session is still running,
+     * and the error state is left as it was, so the restart is tried again. A start asked by a thread of a session
+     * (batchDone handing over to chain sync) opens the new one only if that session is still current, in one step: a
+     * stop that ends it just before must not be followed by a start.
+     *
+     * @return the new session, or null if the calling thread's session was ended in the meantime
+     */
+    private Long openSession(String what) {
+        try {
+            return sessionGuard.newSessionReplacing(sessionGuard.callerSession());
+        } catch (SyncSessionGuard.StaleSyncSessionException e) {
+            log.warn("Not starting {}: the sync session that asked for it was ended", what);
+            return null;
+        }
+    }
 
-        startKeepAliveThread(syncMode);
+    /**
+     * Call under sessionStateLock. True if a stop or a restart ended the session this start just opened. stop() ends
+     * the session before it marks the sync stopped under the same lock, so a start that gets here after the stop
+     * leaves the stop flag set and opens no connection.
+     */
+    private boolean startEnded(long session, String what, Point from) {
+        if (sessionGuard.isCurrent(session))
+            return false;
+        log.warn("Not starting {} from {}: its session {} was ended by a stop or a restart (current: {})",
+                what, from, session, sessionGuard.currentSession());
+        return true;
+    }
+
+    /**
+     * @param fromBlockNumber the block number of {@code from} if that block is already processed (the cursor), or
+     *                        null. The range fetch delivers {@code from} itself again: it is skipped only when it is
+     *                        already processed.
+     */
+    public synchronized void startFetch(Point from, Point to, Long fromBlockNumber) {
+        startFetch(from, to, fromBlockNumber, new AtomicBoolean());
+    }
+
+    /**
+     * Like {@link #startFetch(Point, Point, Long)}, but gives up if the node has not completed the connection within
+     * {@code timeoutMs} (0: no limit). yaci opens the connection and waits for the handshake inside the call, with
+     * no time limit.
+     *
+     * @throws NodeNotAnsweringException if the node did not answer in time
+     */
+    public void startFetchWithTimeout(Point from, Point to, Long fromBlockNumber, long timeoutMs) {
+        startWithTimeout("start the block fetch", timeoutMs,
+                cancelled -> startFetch(from, to, fromBlockNumber, cancelled), blockRangeSync::stop);
+    }
+
+    private synchronized void startFetch(Point from, Point to, Long fromBlockNumber, AtomicBoolean cancelled) {
+        if (sessionGuard.isCallerStale()) {
+            log.warn("Not starting a range fetch from {}: asked by an old sync session", from);
+            return;
+        }
+        Long session = openSession("a range fetch from " + from);
+        if (session == null)
+            return;
+        //The rest of the start (e.g. reading the cursor) belongs to the new session. The calling thread can still be
+        //marked with the session this start replaces (batchDone at the end of the range fetch).
+        Long previous = sessionGuard.enter(session);
+        try {
+            synchronized (sessionStateLock) {
+                if (startEnded(session, "range fetch", from))
+                    return;
+                isError.set(false);
+                scheduledToStop.set(false);
+                resetAcceptedBlock(from.getHash(), fromBlockNumber);
+                //The range fetch delivers the start block first. When it is not processed yet, it must not be lost.
+                if (fromBlockNumber == null)
+                    requiredFirstBlockHash = from.getHash();
+                restoreEpochStateForStart(from, fromBlockNumber);
+            }
+
+            stopKeepAliveThread();
+            //Set the mode before fetching starts, because the first blocks can arrive before fetch() returns
+            syncMode = false;
+            cursorService.setSyncMode(syncMode);
+            blockRangeSync.restart(new SessionListener(session));
+            // yaci logs a cancelled handshake and returns: do not go on with a closed connection
+            if (cancelled.get())
+                throw new NodeNotAnsweringException("Cancelled: start the block fetch");
+            blockRangeSync.fetch(from, to);
+            lastSessionStartTime = System.currentTimeMillis();
+
+            startKeepAliveThread(syncMode);
+        } catch (SyncSessionGuard.StaleSyncSessionException e) {
+            //A stop or a restart ended this session while it started (e.g. during the cursor read). It closes the
+            //connection once this start returns.
+            log.warn("The range fetch from {} was ended while it started: {}", from, e.getMessage());
+        } finally {
+            sessionGuard.exit(previous);
+        }
     }
 
     public synchronized void startSync(Point from) {
-        isError.set(false);
-        scheduledToStop.set(false);
+        startSync(from, null);
+    }
 
-        stopKeepAliveThread();
-        blockSync.startSync(from, this);
-        syncMode = true;
-        cursorService.setSyncMode(syncMode);
-        startKeepAliveThread(syncMode);
+    /**
+     * @param fromBlockNumber the block number of {@code from} if that block is already processed (the cursor), or
+     *                        null. Chain sync delivers the blocks after {@code from}, so the first one must build on it.
+     */
+    public synchronized void startSync(Point from, Long fromBlockNumber) {
+        startSync(from, fromBlockNumber, new AtomicBoolean());
+    }
+
+    /**
+     * Like {@link #startSync(Point, Long)}, but gives up if the node has not completed the connection within
+     * {@code timeoutMs} (0: no limit).
+     *
+     * @throws NodeNotAnsweringException if the node did not answer in time
+     */
+    public void startSyncWithTimeout(Point from, Long fromBlockNumber, long timeoutMs) {
+        startWithTimeout("start the block sync", timeoutMs,
+                cancelled -> startSync(from, fromBlockNumber, cancelled), blockSync::stop);
+    }
+
+    private synchronized void startSync(Point from, Long fromBlockNumber, AtomicBoolean cancelled) {
+        //e.g. an old range session finishing a long batchDone after a restart started a new session
+        if (sessionGuard.isCallerStale()) {
+            log.warn("Not starting chain sync from {}: asked by an old sync session", from);
+            return;
+        }
+        Long session = openSession("chain sync from " + from);
+        if (session == null)
+            return;
+        //The rest of the start (e.g. reading the cursor) belongs to the new session. The calling thread can still be
+        //marked with the session this start replaces (batchDone at the end of the range fetch).
+        Long previous = sessionGuard.enter(session);
+        try {
+            synchronized (sessionStateLock) {
+                if (startEnded(session, "chain sync", from))
+                    return;
+                isError.set(false);
+                scheduledToStop.set(false);
+            }
+
+            stopKeepAliveThread();
+            //Set the mode before connecting. BlockSync.startSync waits for the handshake, and blocks can arrive
+            //during that wait. A block seen with syncMode still false would go to a batch that is never written.
+            syncMode = true;
+            cursorService.setSyncMode(syncMode);
+            //Sync restarts from the last stored block, so blocks still waiting in a batch are fetched again. Drop them,
+            //or they would be written a second time when the batch is flushed.
+            reset();
+            synchronized (sessionStateLock) {
+                if (startEnded(session, "chain sync", from))
+                    return;
+                //The first block from chain sync must build on the start point
+                resetAcceptedBlock(from.getHash(), fromBlockNumber);
+                expectedPrevBlockHash = from.getHash();
+                restoreEpochStateForStart(from, fromBlockNumber);
+            }
+            blockSync.startSync(from, new SessionListener(session));
+            if (cancelled.get())
+                throw new NodeNotAnsweringException("Cancelled: start the block sync");
+            lastSessionStartTime = System.currentTimeMillis();
+            startKeepAliveThread(syncMode);
+        } catch (SyncSessionGuard.StaleSyncSessionException e) {
+            //A stop or a restart ended this session while it started (e.g. during the cursor read). It closes the
+            //connection once this start returns.
+            log.warn("Chain sync from {} was ended while it started: {}", from, e.getMessage());
+        } finally {
+            sessionGuard.exit(previous);
+        }
+    }
+
+    private void startWithTimeout(String what, long timeoutMs, Consumer<AtomicBoolean> start, Runnable closeConnection) {
+        AtomicBoolean cancelled = new AtomicBoolean();
+        if (timeoutMs <= 0) {
+            start.accept(cancelled);
+            return;
+        }
+
+        Runnable cancel = () -> {
+            cancelled.set(true);
+            // Not through shutdownRangeSync()/shutdownSync(): the stalled start holds this object's monitor.
+            closeConnection.run();
+        };
+        try {
+            NodeCalls.call(what, timeoutMs, () -> {
+                start.accept(cancelled);
+                return null;
+            }, cancel);
+        } catch (RuntimeException e) {
+            // The start can finish just after the time limit, when the cancel is no longer run. The caller treats
+            // this start as failed, so close the connection in every case.
+            cancel.run();
+            throw e;
+        }
     }
 
     public synchronized void shutdown() {
@@ -430,6 +1120,10 @@ public class BlockFetchService implements BlockChainDataListener {
         try {
             if (blockRangeSync != null)
                 blockRangeSync.stop();
+        } catch (NullPointerException e) {
+            //yaci throws this when the session was never started or is already closed (#1314)
+            log.warn("blockRangeSync was not running, nothing to stop");
+            log.debug("Error stopping blockRangeSync", e);
         } catch (Exception e) {
             log.error("Error stopping blockRangeSync", e);
         }
@@ -439,37 +1133,78 @@ public class BlockFetchService implements BlockChainDataListener {
         try {
             if (blockSync != null)
                 blockSync.stop();
+        } catch (NullPointerException e) {
+            //yaci throws this when the session was never started or is already closed (#1314)
+            log.warn("blockSync was not running, nothing to stop");
+            log.debug("Error stopping blockSync", e);
         } catch (Exception e) {
             log.error("Error stopping blockSync", e);
         }
     }
 
-    public boolean isRunning() {
-        if (syncMode) {
-            return blockSync.isRunning();
-        }
+    // yaci's BlockSync and BlockRangeSync create their connection in start(). Before the first start (for example
+    // while the startup is still waiting for the node) these getters throw NullPointerException. Answer "not
+    // running" instead, so the health check can still decide what to do.
 
-        return blockRangeSync.isRunning();
+    public boolean isRunning() {
+        try {
+            return syncMode ? blockSync.isRunning() : blockRangeSync.isRunning();
+        } catch (NullPointerException e) {
+            return false;
+        }
     }
 
     public int getLastKeepAliveResponseCookie() {
-        if (syncMode) {
-            return blockSync.getLastKeepAliveResponseCookie();
+        try {
+            return syncMode ? blockSync.getLastKeepAliveResponseCookie() : blockRangeSync.getLastKeepAliveResponseCookie();
+        } catch (NullPointerException e) {
+            return 0;
         }
-
-        return blockRangeSync.getLastKeepAliveResponseCookie();
     }
 
     public long getLastKeepAliveResponseTime() {
-        if (syncMode) {
-            return blockSync.getLastKeepAliveResponseTime();
+        try {
+            return syncMode ? blockSync.getLastKeepAliveResponseTime() : blockRangeSync.getLastKeepAliveResponseTime();
+        } catch (NullPointerException e) {
+            return 0;
         }
-
-        return blockRangeSync.getLastKeepAliveResponseTime();
     }
 
     public boolean isScheduledToStop() {
         return scheduledToStop.get();
+    }
+
+    // True while StartService.start() runs. The connection is not up yet, so the health check must not judge it.
+    private volatile boolean starting;
+
+    public boolean isStarting() {
+        return starting;
+    }
+
+    public void setStarting(boolean starting) {
+        this.starting = starting;
+    }
+
+    /**
+     * Called when a restart stopped the sync but could not start it again (for example, the database was down).
+     * Clears the stop flag so the health check does not mistake this for a deliberate stop, and sets the error
+     * flag so it schedules another restart.
+     */
+    public void markRestartFailed() {
+        markStartFailed();
+    }
+
+    /**
+     * Clears the error left by a previous session or a failed restart, before a new start.
+     */
+    public void clearError() {
+        synchronized (sessionStateLock) {
+            isError.set(false);
+        }
+    }
+
+    public long getLastSessionStartTime() {
+        return lastSessionStartTime;
     }
 
     public boolean isError() {
@@ -543,18 +1278,26 @@ public class BlockFetchService implements BlockChainDataListener {
         if (previousEpoch == null) {
             var prevCursor = cursorService.getPreviousCursor(slot);
             if (prevCursor.isPresent() && prevCursor.get().getSlot() != -1) { //Previous cursor is not genesis entry
-                previousEpoch = eraService.getEpochNo(prevCursor.get().getEra(), prevCursor.get().getSlot());
+                Integer epochOfPrevious = eraService.getEpochNo(prevCursor.get().getEra(), prevCursor.get().getSlot());
+                //Only for the caller's own session, which a restart may have replaced in the meantime
+                synchronized (sessionStateLock) {
+                    sessionGuard.checkCaller();
+                    if (previousEpoch == null)
+                        previousEpoch = epochOfPrevious;
+                }
             }
         }
 
-        if (previousEpoch == null ||  epoch == previousEpoch + 1) {
+        Integer previous = previousEpoch;
+        if (previous == null ||  epoch == previous + 1) {
             return true;
         } else
             return false;
     }
 
     private boolean detectIfNewEpochByronEra(Integer epoch) {
-        if (previousEpoch == null ||  epoch == previousEpoch + 1) {
+        Integer previous = previousEpoch;
+        if (previous == null ||  epoch == previous + 1) {
             return true;
         } else
             return false;
@@ -574,7 +1317,11 @@ public class BlockFetchService implements BlockChainDataListener {
     @Override
     public void intersactNotFound(Tip tip) {
         log.error("Intersection not found. Current tip: {}", tip);
-        
+
+        // Mark the session failed first. A restart request that is dropped (another restart is running, or within
+        // the debounce window) is only tried again while the sync is in the error state.
+        setError();
+
         // Publish restart event
         RequiredSyncRestartEvent restartEvent = RequiredSyncRestartEvent.builder()
                 .reason("IntersectionNotFound")
@@ -585,5 +1332,66 @@ public class BlockFetchService implements BlockChainDataListener {
                 .build();
         
         publisher.publishEvent(restartEvent);
+    }
+
+    /**
+     * The listener handed to yaci for one sync session. Callbacks that arrive after a newer session started, or after
+     * the sync was stopped, are ignored. While a callback runs, the thread is marked as working for this session, so
+     * the publishers can refuse to commit if a restart starts a new session in the meantime.
+     */
+    private class SessionListener implements BlockChainDataListener {
+        private final long session;
+
+        SessionListener(long session) {
+            this.session = session;
+        }
+
+        private void call(String what, Runnable callback) {
+            if (!sessionGuard.isCurrent(session)) {
+                log.warn("Ignoring {} from old sync session {} (current: {})", what, session, sessionGuard.currentSession());
+                return;
+            }
+            Long previous = sessionGuard.enter(session);
+            try {
+                callback.run();
+            } finally {
+                sessionGuard.exit(previous);
+            }
+        }
+
+        @Override
+        public void onBlock(Era era, Block block, List<Transaction> transactions) {
+            call("block", () -> BlockFetchService.this.onBlock(era, block, transactions));
+        }
+
+        @Override
+        public void onByronBlock(ByronMainBlock byronBlock) {
+            call("Byron block", () -> BlockFetchService.this.onByronBlock(byronBlock));
+        }
+
+        @Override
+        public void onByronEbBlock(ByronEbBlock byronEbBlock) {
+            call("Byron EB block", () -> BlockFetchService.this.onByronEbBlock(byronEbBlock));
+        }
+
+        @Override
+        public void onRollback(Point point) {
+            call("rollback to " + point, () -> BlockFetchService.this.onRollback(point));
+        }
+
+        @Override
+        public void batchDone() {
+            call("batch done", BlockFetchService.this::batchDone);
+        }
+
+        @Override
+        public void onParsingError(BlockParseRuntimeException e) {
+            call("parse error", () -> BlockFetchService.this.onParsingError(e));
+        }
+
+        @Override
+        public void intersactNotFound(Tip tip) {
+            call("intersect not found", () -> BlockFetchService.this.intersactNotFound(tip));
+        }
     }
 }

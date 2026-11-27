@@ -4,6 +4,7 @@ import com.bloxbean.cardano.client.crypto.Bech32;
 import com.bloxbean.cardano.client.util.HexUtil;
 import com.bloxbean.cardano.yaci.core.util.Constants;
 import com.bloxbean.cardano.yaci.store.blockfrost.common.util.AmountsJsonUtil;
+import com.bloxbean.cardano.yaci.store.blockfrost.common.util.DatumHashUtil;
 import com.bloxbean.cardano.yaci.store.blockfrost.transaction.dto.*;
 import com.bloxbean.cardano.yaci.store.blockfrost.transaction.storage.impl.model.*;
 import com.bloxbean.cardano.yaci.store.mir.domain.MirPot;
@@ -105,7 +106,7 @@ public abstract class BFTransactionMapper {
                 .index(raw.getTxIndex() != null ? raw.getTxIndex() : 0)
                 .fees(raw.getFees() != null ? raw.getFees().toString() : "0")
                 .deposit(deposit)
-                .size(raw.getCborSize())
+                .size(raw.getSize())
                 .invalidBefore(raw.getValidityIntervalStart() != null && raw.getValidityIntervalStart() > 0
                         ? raw.getValidityIntervalStart().toString() : null)
                 .invalidHereafter(raw.getTtl() != null && raw.getTtl() > 0
@@ -136,7 +137,7 @@ public abstract class BFTransactionMapper {
                                 : buildAmounts(i.getLovelaceAmount(), i.getAmountsJson()))
                         .txHash(i.getTxHash())
                         .outputIndex(i.getOutputIndex())
-                        .dataHash(i.getDataHash())
+                        .dataHash(DatumHashUtil.resolveDataHash(i.getDataHash(), i.getInlineDatum()))
                         .inlineDatum(i.getInlineDatum())
                         .referenceScriptHash(i.getReferenceScriptHash())
                         .collateral(i.isCollateral())
@@ -149,7 +150,7 @@ public abstract class BFTransactionMapper {
                         .address(o.getAddress())
                         .amount(buildAmounts(o.getLovelaceAmount(), o.getAmountsJson()))
                         .outputIndex(o.getOutputIndex())
-                        .dataHash(o.getDataHash())
+                        .dataHash(DatumHashUtil.resolveDataHash(o.getDataHash(), o.getInlineDatum()))
                         .inlineDatum(o.getInlineDatum())
                         .referenceScriptHash(o.getReferenceScriptHash())
                         .collateral(!txInvalid && Boolean.TRUE.equals(o.getIsCollateralReturn()))
@@ -303,11 +304,12 @@ public abstract class BFTransactionMapper {
             Integer outputIndex = refNode.has("output_index")
                     ? refNode.path("output_index").asInt() : null;
             String address = jsonNode.path("address").asText(null);
-            List<BFAmountDto> amounts = parseCollateralReturnAmounts(jsonNode.path("amounts"));
-            String dataHash = jsonNode.path("dataHash").isNull()
-                    ? null : jsonNode.path("dataHash").asText(null);
+            // Lovelace only, like collateral inputs: Blockfrost does not report assets on collateral outputs
+            List<BFAmountDto> amounts = lovelaceOnlyAmount(parseCollateralReturnLovelace(jsonNode.path("amounts")));
             String inlineDatum = jsonNode.path("inlineDatum").isNull()
                     ? null : jsonNode.path("inlineDatum").asText(null);
+            String dataHash = DatumHashUtil.resolveDataHash(jsonNode.path("dataHash").isNull()
+                    ? null : jsonNode.path("dataHash").asText(null), inlineDatum);
             String refScriptHash = jsonNode.path("referenceScriptHash").isNull()
                     ? null : jsonNode.path("referenceScriptHash").asText(null);
             return Optional.of(BFTxOutputDto.builder()
@@ -321,19 +323,14 @@ public abstract class BFTransactionMapper {
         }
     }
 
-    private List<BFAmountDto> parseCollateralReturnAmounts(JsonNode amountsNode) {
-        if (amountsNode == null || !amountsNode.isArray()) return Collections.emptyList();
-        List<BFAmountDto> result = new ArrayList<>();
+    private Long parseCollateralReturnLovelace(JsonNode amountsNode) {
+        if (amountsNode == null || !amountsNode.isArray()) return null;
         for (JsonNode a : amountsNode) {
-            String unit = a.path("unit").asText(null);
-            if (unit != null) {
-                result.add(BFAmountDto.builder()
-                        .unit(unit)
-                        .quantity(a.path("quantity").asText("0"))
-                        .build());
+            if (Constants.LOVELACE.equals(a.path("unit").asText(null))) {
+                return a.path("quantity").asLong(0);
             }
         }
-        return result;
+        return null;
     }
 
     private List<String> parseOwners(String json) {

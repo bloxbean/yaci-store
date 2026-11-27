@@ -6,7 +6,7 @@ import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.server.ResponseStatusException;
 
-@ControllerAdvice
+@ControllerAdvice(basePackages = "com.bloxbean.cardano.yaci.store.blockfrost")
 public class BFGlobalExceptionHandler {
 
     @ExceptionHandler(ResponseStatusException.class)

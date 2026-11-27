@@ -10,17 +10,26 @@ import com.bloxbean.cardano.yaci.store.events.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.test.util.ReflectionTestUtils;
+import org.mockito.stubbing.Answer;
+import com.bloxbean.cardano.yaci.store.core.service.SyncSessionGuard;
+import com.bloxbean.cardano.yaci.store.events.internal.PreCommitEvent;
 
 import java.math.BigInteger;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -68,6 +77,101 @@ class ShelleyBlockEventPublisherTest {
         assertThat(mintBurnEvent).isNotNull();
         assertThat(mintBurnEvent.getTxMintBurns()).hasSize(1);
         assertThat(mintBurnEvent.getTxMintBurns().get(0).getTxHash()).isEqualTo("aaaaaaaaaa9cecf2602f1110e53331a3b305ec668ad57081df98416b30473f5d");
+    }
+
+    @Test
+    void shouldSetMintBurnTxIndexCountingInvalidTransactions() {
+        List<Transaction> transactions = List.of(
+                invalidTransactionWithMintData("bbbbbbbbbb9cecf2602f1110e53331a3b305ec668ad57081df98416b30473f5d"),
+                validTransactionWithMintData("aaaaaaaaaa9cecf2602f1110e53331a3b305ec668ad57081df98416b30473f5d")
+        );
+
+        shelleyBlockEventPublisher.publishBlockEvents(eventMetadata(), mockBlock(), transactions);
+
+        var mintBurnEvent = capturePublishedEvent(MintBurnEvent.class);
+        assertThat(mintBurnEvent).isNotNull();
+        assertThat(mintBurnEvent.getTxMintBurns()).hasSize(1);
+        assertThat(mintBurnEvent.getTxMintBurns().get(0).getTxIndex()).isEqualTo(1);
+    }
+
+    @Test
+    void shouldDropZeroQuantityMintEntries() {
+        String policyId = "10bebfc941207811e62882f02c0a69c0086f86186a4ef6ec1b5a2b0c";
+        Amount zeroMint = Amount.builder()
+                .unit(policyId + ".54554e41")
+                .policyId(policyId)
+                .assetName("TUNA")
+                .assetNameBytes("TUNA".getBytes())
+                .quantity(BigInteger.ZERO)
+                .build();
+        Amount positiveMint = Amount.builder()
+                .unit(policyId + ".4c4f5244")
+                .policyId(policyId)
+                .assetName("LORD")
+                .assetNameBytes("LORD".getBytes())
+                .quantity(BigInteger.ONE)
+                .build();
+
+        List<Transaction> transactions = List.of(
+                transactionWithMint("aaaaaaaaaa9cecf2602f1110e53331a3b305ec668ad57081df98416b30473f5d", List.of(zeroMint, positiveMint)),
+                transactionWithMint("bbbbbbbbbb9cecf2602f1110e53331a3b305ec668ad57081df98416b30473f5d", List.of(zeroMint))
+        );
+
+        shelleyBlockEventPublisher.publishBlockEvents(eventMetadata(), mockBlock(), transactions);
+
+        var mintBurnEvent = capturePublishedEvent(MintBurnEvent.class);
+        assertThat(mintBurnEvent).isNotNull();
+        assertThat(mintBurnEvent.getTxMintBurns()).singleElement().satisfies(txMintBurn -> {
+            assertThat(txMintBurn.getTxHash()).isEqualTo("aaaaaaaaaa9cecf2602f1110e53331a3b305ec668ad57081df98416b30473f5d");
+            assertThat(txMintBurn.getAmounts()).extracting(Amount::getUnit).containsExactly(policyId + "4c4f5244");
+        });
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldKeepTxIndexWhenZeroOnlyMintIsDropped(boolean parallel) {
+        String policyId = "10bebfc941207811e62882f02c0a69c0086f86186a4ef6ec1b5a2b0c";
+        Amount zeroMint = Amount.builder()
+                .unit(policyId + ".54554e41").policyId(policyId).assetName("TUNA")
+                .assetNameBytes("TUNA".getBytes()).quantity(BigInteger.ZERO).build();
+        Amount positiveMint = Amount.builder()
+                .unit(policyId + ".4c4f5244").policyId(policyId).assetName("LORD")
+                .assetNameBytes("LORD".getBytes()).quantity(BigInteger.ONE).build();
+        List<Transaction> transactions = List.of(
+                transactionWithMint("bbbbbbbbbb9cecf2602f1110e53331a3b305ec668ad57081df98416b30473f5d", List.of(zeroMint)),
+                transactionWithMint("aaaaaaaaaa9cecf2602f1110e53331a3b305ec668ad57081df98416b30473f5d", List.of(positiveMint))
+        );
+
+        if (parallel) {
+            ExecutorService executor = Executors.newFixedThreadPool(2);
+            try {
+                ShelleyBlockEventPublisher parallelPublisher = new ShelleyBlockEventPublisher(executor, executor, publisher, cursorService,
+                        StoreProperties.builder().blocksBatchSize(100).blocksPartitionSize(15).processingThreadsTimeout(1).build());
+                parallelPublisher.publishBlockEventsInParallel(eventMetadata(), mockBlock(), transactions);
+                parallelPublisher.processBlocksInParallel();
+            } finally {
+                executor.shutdownNow();
+            }
+        } else {
+            shelleyBlockEventPublisher.publishBlockEvents(eventMetadata(), mockBlock(), transactions);
+        }
+
+        var mintBurnEvent = capturePublishedEvent(MintBurnEvent.class);
+        assertThat(mintBurnEvent).isNotNull();
+        assertThat(mintBurnEvent.getTxMintBurns()).singleElement().satisfies(txMintBurn -> {
+            assertThat(txMintBurn.getTxHash()).isEqualTo("aaaaaaaaaa9cecf2602f1110e53331a3b305ec668ad57081df98416b30473f5d");
+            assertThat(txMintBurn.getTxIndex()).isEqualTo(1);
+            assertThat(txMintBurn.getAmounts()).extracting(Amount::getUnit).containsExactly(policyId + "4c4f5244");
+        });
+    }
+
+    private Transaction transactionWithMint(String txHash, List<Amount> mint) {
+        return Transaction.builder()
+                .txHash(txHash)
+                .body(TransactionBody.builder().mint(mint).build())
+                .witnesses(emptyWitnesses())
+                .invalid(false)
+                .build();
     }
 
     @Test
@@ -249,6 +353,211 @@ class ShelleyBlockEventPublisherTest {
         var mintBurnEvent = capturePublishedEvent(MintBurnEvent.class);
         assertThat(mintBurnEvent).isNotNull();
         assertThat(mintBurnEvent.getTxMintBurns()).isEmpty();
+    }
+
+    @Test
+    void blockFromAnOldSyncSessionIsNotCommitted() {
+        var guard = new com.bloxbean.cardano.yaci.store.core.service.SyncSessionGuard();
+        shelleyBlockEventPublisher.setSessionGuard(guard);
+        long oldSession = guard.newSession();
+        guard.newSession(); //a restart started a new session while this thread was still writing
+
+        guard.enter(oldSession);
+        try {
+            org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                            shelleyBlockEventPublisher.publishBlockEvents(eventMetadata(), mockBlock(), List.of()))
+                    .isInstanceOf(com.bloxbean.cardano.yaci.store.core.service.SyncSessionGuard.StaleSyncSessionException.class);
+        } finally {
+            guard.exit();
+        }
+
+        verify(cursorService, never()).setCursor(any());
+        verify(publisher, never()).publishEvent(any(com.bloxbean.cardano.yaci.store.events.internal.CommitEvent.class));
+    }
+
+    @Test
+    void flushFromAnOldSyncSessionLeavesTheCurrentBatchAlone() {
+        var guard = new com.bloxbean.cardano.yaci.store.core.service.SyncSessionGuard();
+        shelleyBlockEventPublisher.setSessionGuard(guard);
+        long oldSession = guard.newSession();
+        long newSession = guard.newSession();
+
+        guard.enter(newSession);
+        try {
+            shelleyBlockEventPublisher.publishBlockEventsInParallel(eventMetadata(), mock(Block.class), List.of());
+        } finally {
+            guard.exit();
+        }
+
+        guard.enter(oldSession);
+        try {
+            org.assertj.core.api.Assertions.assertThatThrownBy(shelleyBlockEventPublisher::processBlocksInParallel)
+                    .isInstanceOf(com.bloxbean.cardano.yaci.store.core.service.SyncSessionGuard.StaleSyncSessionException.class);
+        } finally {
+            guard.exit();
+        }
+
+        List<?> batch = (List<?>) org.springframework.test.util.ReflectionTestUtils.getField(shelleyBlockEventPublisher, "batchBlockList");
+        assertThat(batch).hasSize(1);
+        verify(cursorService, never()).setCursor(any());
+    }
+
+    @Test
+    void sessionReplacedDuringCommitEventsDoesNotMoveTheCursor() {
+        //#1344 finding 1: a commit listener hangs while a restart starts a new session
+        var guard = new SyncSessionGuard();
+        shelleyBlockEventPublisher.setSessionGuard(guard);
+        long session = guard.newSession();
+        lenient().doAnswer(inv -> guard.newSession()).when(publisher).publishEvent(any(PreCommitEvent.class));
+
+        guard.enter(session);
+        try {
+            assertThatThrownBy(() -> shelleyBlockEventPublisher.publishBlockEvents(eventMetadata(), mockBlock(), List.of()))
+                    .isInstanceOf(SyncSessionGuard.StaleSyncSessionException.class);
+        } finally {
+            guard.exit();
+        }
+
+        verify(cursorService, never()).setCursor(any());
+    }
+
+    @Test
+    void sessionReplacedDuringTheCursorWriteFailsTheBlockTransaction() {
+        //The check after the write throws inside the block's transaction, so the cursor is rolled back
+        var guard = new SyncSessionGuard();
+        shelleyBlockEventPublisher.setSessionGuard(guard);
+        long session = guard.newSession();
+        doAnswer(inv -> guard.newSession()).when(cursorService).setCursor(any());
+
+        guard.enter(session);
+        try {
+            assertThatThrownBy(() -> shelleyBlockEventPublisher.publishBlockEvents(eventMetadata(), mockBlock(), List.of()))
+                    .isInstanceOf(SyncSessionGuard.StaleSyncSessionException.class);
+        } finally {
+            guard.exit();
+        }
+    }
+
+    @Test
+    void sessionReplacedDuringCommitEventsOfABatchDoesNotMoveTheCursor() {
+        runExecutorsInline();
+        var guard = new SyncSessionGuard();
+        shelleyBlockEventPublisher.setSessionGuard(guard);
+        long session = guard.newSession();
+        lenient().doAnswer(inv -> guard.newSession()).when(publisher).publishEvent(any(PreCommitEvent.class));
+
+        guard.enter(session);
+        try {
+            shelleyBlockEventPublisher.publishBlockEventsInParallel(eventMetadata(), mockBlock(), List.of());
+            assertThatThrownBy(shelleyBlockEventPublisher::processBlocksInParallel)
+                    .isInstanceOf(SyncSessionGuard.StaleSyncSessionException.class);
+        } finally {
+            guard.exit();
+        }
+
+        verify(publisher).publishEvent(any(PreCommitEvent.class));
+        verify(cursorService, never()).setCursor(any());
+    }
+
+    @Test
+    void oldFlushWaitingForTheBatchLockLeavesTheNewBatchAlone() throws Exception {
+        //#1344 finding 2: the old flush passes the session check, then waits for the lock while a new session starts
+        //and queues a block
+        runExecutorsInline();
+        var guard = new SyncSessionGuard();
+        shelleyBlockEventPublisher.setSessionGuard(guard);
+        long oldSession = guard.newSession();
+        List<?> batch = (List<?>) ReflectionTestUtils.getField(shelleyBlockEventPublisher, "batchBlockList");
+
+        BlockedCall oldFlush;
+        synchronized (batch) {
+            oldFlush = startBlockedOn(guard, oldSession, shelleyBlockEventPublisher::processBlocksInParallel);
+
+            long newSession = guard.newSession();
+            guard.enter(newSession);
+            try {
+                shelleyBlockEventPublisher.publishBlockEventsInParallel(eventMetadata(), mock(Block.class), List.of());
+            } finally {
+                guard.exit();
+            }
+        }
+        Throwable oldError = oldFlush.await();
+
+        assertThat(oldError).isNotNull();
+        assertThat(batch).hasSize(1);
+        verify(cursorService, never()).setCursor(any());
+    }
+
+    @Test
+    void oldEnqueueWaitingForTheBatchLockDoesNotAddToTheNewBatch() throws Exception {
+        //A block of the old session must not be committed by the session that replaced it
+        var guard = new SyncSessionGuard();
+        shelleyBlockEventPublisher.setSessionGuard(guard);
+        long oldSession = guard.newSession();
+        List<?> batch = (List<?>) ReflectionTestUtils.getField(shelleyBlockEventPublisher, "batchBlockList");
+
+        BlockedCall oldEnqueue;
+        synchronized (batch) {
+            oldEnqueue = startBlockedOn(guard, oldSession, () ->
+                    shelleyBlockEventPublisher.publishBlockEventsInParallel(eventMetadata(), mock(Block.class), List.of()));
+
+            long newSession = guard.newSession();
+            guard.enter(newSession);
+            try {
+                shelleyBlockEventPublisher.publishBlockEventsInParallel(eventMetadata(), mock(Block.class), List.of());
+            } finally {
+                guard.exit();
+            }
+        }
+        Throwable oldError = oldEnqueue.await();
+
+        assertThat(oldError).isInstanceOf(SyncSessionGuard.StaleSyncSessionException.class);
+        assertThat(batch).hasSize(1);
+    }
+
+    private void runExecutorsInline() {
+        Answer<Void> runInline = inv -> {
+            ((Runnable) inv.getArgument(0)).run();
+            return null;
+        };
+        lenient().doAnswer(runInline).when(blockExecutor).execute(any());
+        lenient().doAnswer(runInline).when(eventExecutor).execute(any());
+    }
+
+    /**
+     * Starts the call on a thread of the given session and waits until it is blocked on a lock the test holds.
+     */
+    static BlockedCall startBlockedOn(SyncSessionGuard guard, long session, Runnable call) throws InterruptedException {
+        var error = new AtomicReference<Throwable>();
+        var thread = new Thread(() -> {
+            guard.enter(session);
+            try {
+                call.run();
+            } catch (Throwable e) {
+                error.set(e);
+            } finally {
+                guard.exit();
+            }
+        });
+        thread.start();
+        long deadline = System.currentTimeMillis() + 10_000;
+        while (thread.getState() != Thread.State.BLOCKED) {
+            if (System.currentTimeMillis() > deadline)
+                throw new AssertionError("Call did not block on the lock, state: " + thread.getState());
+            Thread.sleep(5);
+        }
+        return new BlockedCall(thread, error);
+    }
+
+    record BlockedCall(Thread thread, AtomicReference<Throwable> error) {
+        /**
+         * Call after releasing the lock: waits for the call to end and returns what it threw (null: nothing).
+         */
+        Throwable await() throws InterruptedException {
+            thread.join(10_000);
+            assertThat(thread.isAlive()).isFalse();
+            return error.get();
+        }
     }
 
     private EventMetadata eventMetadata() {

@@ -57,7 +57,8 @@ public class CursorServiceImpl implements CursorService {
 
             if (currentCursor.isPresent()) {
                 //check if cursor exists
-                boolean blockExists = blockFinder.blockExists(new Point(currentCursor.get().getSlot(), currentCursor.get().getBlockHash()));
+                boolean blockExists = blockFinder.blockExists(new Point(currentCursor.get().getSlot(), currentCursor.get().getBlockHash()),
+                        NodeCalls.timeoutMs(storeProperties));
                 if (blockExists) {
                     log.info("Valid block. slot:" + currentCursor.get().getSlot() + ", blockHash: " + currentCursor.get().getBlockHash()
                             + ", block : " + currentCursor.get().getBlock());

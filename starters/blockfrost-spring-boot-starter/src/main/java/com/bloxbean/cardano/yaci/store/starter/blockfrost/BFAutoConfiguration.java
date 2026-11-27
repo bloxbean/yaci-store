@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.starter.blockfrost;
 
 import com.bloxbean.cardano.yaci.store.blockfrost.account.BFAccountConfiguration;
 import com.bloxbean.cardano.yaci.store.blockfrost.asset.BFAssetConfiguration;
+import com.bloxbean.cardano.yaci.store.blockfrost.common.BFCommonConfiguration;
 import com.bloxbean.cardano.yaci.store.blockfrost.epoch.BFEpochConfiguration;
 import com.bloxbean.cardano.yaci.store.blockfrost.address.BFAddressConfiguration;
 import com.bloxbean.cardano.yaci.store.blockfrost.transaction.BFTransactionConfiguration;
@@ -27,7 +28,7 @@ import org.springframework.context.annotation.Import;
         matchIfMissing = false
 )
 @EnableConfigurationProperties(BFProperties.class)
-@Import({BFEpochConfiguration.class, BFAddressConfiguration.class, BFAssetConfiguration.class, BFAccountConfiguration.class, BFTransactionConfiguration.class, BFBlockConfiguration.class, BFScriptsConfiguration.class, BFMetadataConfiguration.class, BFUtilConfiguration.class, BFPoolsConfiguration.class, BFGovernanceConfiguration.class, BFNetworkConfiguration.class})
+@Import({BFCommonConfiguration.class, BFEpochConfiguration.class, BFAddressConfiguration.class, BFAssetConfiguration.class, BFAccountConfiguration.class, BFTransactionConfiguration.class, BFBlockConfiguration.class, BFScriptsConfiguration.class, BFMetadataConfiguration.class, BFUtilConfiguration.class, BFPoolsConfiguration.class, BFGovernanceConfiguration.class, BFNetworkConfiguration.class})
 @Slf4j
 public class BFAutoConfiguration {
 

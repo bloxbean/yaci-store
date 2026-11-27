@@ -1,0 +1,362 @@
+[
+  {
+    "subject": "007394e3117755fbb0558b93c54ce3bc6c85770920044ade143dc7424506f636b65744368616e6765",
+    "name": "Pocket Change",
+    "deleted_commit": "2c17d0672550b8b0b18ff19c6f9af3e5011a3668",
+    "deleted_at": "2022-12-12T12:03:24+01:00"
+  },
+  {
+    "subject": "160a880d9fc45380737cb7e57ff859763230aab28b3ef6a84007bfcc4d49524",
+    "name": "VOID",
+    "deleted_commit": "81459cacb37427c59e20ae893747bc5f02651a15",
+    "deleted_at": "2022-09-29T14:01:25+02:00"
+  },
+  {
+    "subject": "1b12639e4d78aedd982cfd489900b2e7628c8d0afc20ddcaec7b1cf04c494649",
+    "name": "Linkage Finance",
+    "deleted_commit": "8325a77725fb18d6daf67d2cd18d0ff5c7520e97",
+    "deleted_at": "2023-08-02T11:17:00+02:00"
+  },
+  {
+    "subject": "1d7f33bd23d85e1a25d87d86fac4f199c3197a2f7afeb662a0f34e1e576f726c64204d6f62696c6520546f6b656e",
+    "name": "VOID",
+    "deleted_commit": "85d23579125d4320fec3baf393775f37d0e72995",
+    "deleted_at": "2021-07-09T02:01:28-07:00"
+  },
+  {
+    "subject": "227fe9345cb9ef390d1acf14dba24b6522ad8a5788c5224555f58bd95452555354",
+    "name": "TRUST Pool",
+    "deleted_commit": "4660dfb71593b94a1c2c05f8f3564940cf1d51f0",
+    "deleted_at": "2022-01-28T21:39:51-08:00"
+  },
+  {
+    "subject": "230ad52f87dde3e38dcf01521dc5c0e62f611cb528917fef2fe6ef8d4d6574617370616365706164",
+    "name": "VOID",
+    "deleted_commit": "8306a9bc84bfd5d8840cf6072f8f45163bf9fedb",
+    "deleted_at": "2024-09-06T12:12:11-03:00"
+  },
+  {
+    "subject": "244f52eae7aa628c21285c4666b02d05d541057f9ed583ce315fce4542414e4b",
+    "name": "Bankercoin",
+    "deleted_commit": "26bb32f57002db75228f5127a4f34ffad069be41",
+    "deleted_at": "2023-06-05T12:13:25+02:00"
+  },
+  {
+    "subject": "28193a95061f7f7a64877b6cb8ffea32b30cdb1a73780bfee914032c0014df1052656c61784149",
+    "name": "VOID",
+    "deleted_commit": "1e368505400e735042bdd9b5b8201cf8196b1485",
+    "deleted_at": "2024-09-06T12:45:42-03:00"
+  },
+  {
+    "subject": "2d8cee2c3c82664023da28372e46995daab7111070abf5fc9aee72ea6672414441",
+    "name": "ADAFR Pool Reward ADA",
+    "deleted_commit": "875a4b5c954374cdca6b656e8b116dd47562ccc7",
+    "deleted_at": "2026-08-13T12:18:21+02:00"
+  },
+  {
+    "subject": "36088d63cf12e1e23d163c8be5c7fcfa2871623dc650c915e89c6f03",
+    "name": "Liqwid ETH Liquidation",
+    "deleted_commit": "458ee6d7ad054c9e3062f09ec92c80cc1550f9e6",
+    "deleted_at": "2025-05-15T13:26:14+01:00"
+  },
+  {
+    "subject": "3b933dac8e862b1ed3f4a1c319165f34dd7b1e7a47826b67a10883e54347454d",
+    "name": "VOID",
+    "deleted_commit": "fcbce18eab45b7be59ef66df9b6e5a2a2ad40288",
+    "deleted_at": "2023-05-17T12:15:57+02:00"
+  },
+  {
+    "subject": "3d3170d07cd2ddfd9be6fc24c36309c1a4ccdf43c3520d0395ceb5f3444f52454d4f4e",
+    "name": "DOREMON",
+    "deleted_commit": "56296098f8de593c034eec0ba4cfa1dfd31ebb42",
+    "deleted_at": "2024-04-01T15:50:21+07:00"
+  },
+  {
+    "subject": "3f0adaa27a6626c5f5d4e0128a7050cbc34effbad68fabc6369dfb31",
+    "name": "Liqwid LQ Borrow",
+    "deleted_commit": "458ee6d7ad054c9e3062f09ec92c80cc1550f9e6",
+    "deleted_at": "2025-05-15T13:26:14+01:00"
+  },
+  {
+    "subject": "42021555abb9323dfc9d7fb022203f90b4f857f7725722fa2c7e126843686f73656e20436f696e",
+    "name": "VOID",
+    "deleted_commit": "7877b8a66bba77a38e46ab8dfcb6f9ed35f4e295",
+    "deleted_at": "2023-02-25T09:59:35+01:00"
+  },
+  {
+    "subject": "43037651dfa0a5b01235828ead1f42ff74db2ae6cc9b6d96d1dc34654c5158",
+    "name": "LiqwidUSD Governance Token",
+    "deleted_commit": "1ee9e1e459c8faa96353f82a952af809e661b796",
+    "deleted_at": "2022-02-12T22:06:08+01:00"
+  },
+  {
+    "subject": "4343662b13b2e9bd01deb6df527dc49ceeca6cb4d9909ec3dfa27b004655434b53414d",
+    "name": "FUCK SAM BANKMAN FRIED",
+    "deleted_commit": "6a95d69ecdc7e9e72d5abed6504344e282928b88",
+    "deleted_at": "2023-05-04T07:09:50-06:00"
+  },
+  {
+    "subject": "43b07d4037f0d75ee10f9863097463fc02ff3c0b8b705ae61d9c75bf",
+    "name": "VOID",
+    "deleted_commit": "5836081f8627891a655cbeb66aca0c837705a17d",
+    "deleted_at": "2023-05-03T15:43:48+02:00"
+  },
+  {
+    "subject": "4c5d3e85af1072e82a7d9b3fdad1532312e937b955f19c3b8c2475b9",
+    "name": "Liqwid iUSD Action",
+    "deleted_commit": "30feb1cf1baeef0cc196e36c45c3edc4c5492f6f",
+    "deleted_at": "2023-05-30T15:40:11+02:00"
+  },
+  {
+    "subject": "585f042622bebacfe75f6b0d64d4ca2020c1d3ae2645b2d28a8ba7c8447261676f6e61757261303031",
+    "name": "Dragon aura rarity 1/5",
+    "deleted_commit": "a2331215063464909c2918faa4f8325d67994712",
+    "deleted_at": "2022-02-06T13:05:06+01:00"
+  },
+  {
+    "subject": "585f042622bebacfe75f6b0d64d4ca2020c1d3ae2645b2d28a8ba7c8447261676f6e61757261303032",
+    "name": "Dragon aura rarity 2/5",
+    "deleted_commit": "a2331215063464909c2918faa4f8325d67994712",
+    "deleted_at": "2022-02-06T13:05:06+01:00"
+  },
+  {
+    "subject": "585f042622bebacfe75f6b0d64d4ca2020c1d3ae2645b2d28a8ba7c8447261676f6e61757261303033",
+    "name": "Dragon aura rarity 3/5",
+    "deleted_commit": "a2331215063464909c2918faa4f8325d67994712",
+    "deleted_at": "2022-02-06T13:05:06+01:00"
+  },
+  {
+    "subject": "585f042622bebacfe75f6b0d64d4ca2020c1d3ae2645b2d28a8ba7c8447261676f6e61757261303034",
+    "name": "Dragon aura rarity 4/5",
+    "deleted_commit": "a2331215063464909c2918faa4f8325d67994712",
+    "deleted_at": "2022-02-06T13:05:06+01:00"
+  },
+  {
+    "subject": "585f042622bebacfe75f6b0d64d4ca2020c1d3ae2645b2d28a8ba7c8447261676f6e61757261303035",
+    "name": "Dragon aura rarity 5/5",
+    "deleted_commit": "a2331215063464909c2918faa4f8325d67994712",
+    "deleted_at": "2022-02-06T13:05:06+01:00"
+  },
+  {
+    "subject": "585f042622bebacfe75f6b0d64d4ca2020c1d3ae2645b2d28a8ba7c8466c79696e674672616e6365736361312f3130",
+    "name": "Flying Francesca #116 rarity 1/10",
+    "deleted_commit": "a2331215063464909c2918faa4f8325d67994712",
+    "deleted_at": "2022-02-06T13:05:06+01:00"
+  },
+  {
+    "subject": "585f042622bebacfe75f6b0d64d4ca2020c1d3ae2645b2d28a8ba7c8466c79696e674672616e636573636131302f3130",
+    "name": "Flying Francesca #116 rarity 10/10",
+    "deleted_commit": "a2331215063464909c2918faa4f8325d67994712",
+    "deleted_at": "2022-02-06T13:05:06+01:00"
+  },
+  {
+    "subject": "585f042622bebacfe75f6b0d64d4ca2020c1d3ae2645b2d28a8ba7c8466c79696e674672616e6365736361322f3130",
+    "name": "Flying Francesca #116 rarity 2/10",
+    "deleted_commit": "a2331215063464909c2918faa4f8325d67994712",
+    "deleted_at": "2022-02-06T13:05:06+01:00"
+  },
+  {
+    "subject": "585f042622bebacfe75f6b0d64d4ca2020c1d3ae2645b2d28a8ba7c8466c79696e674672616e6365736361332f3130",
+    "name": "Flying Francesca #116 rarity 3/10",
+    "deleted_commit": "a2331215063464909c2918faa4f8325d67994712",
+    "deleted_at": "2022-02-06T13:05:06+01:00"
+  },
+  {
+    "subject": "585f042622bebacfe75f6b0d64d4ca2020c1d3ae2645b2d28a8ba7c8466c79696e674672616e6365736361342f3130",
+    "name": "Flying Francesca #116 rarity 4/10",
+    "deleted_commit": "a2331215063464909c2918faa4f8325d67994712",
+    "deleted_at": "2022-02-06T13:05:06+01:00"
+  },
+  {
+    "subject": "585f042622bebacfe75f6b0d64d4ca2020c1d3ae2645b2d28a8ba7c8466c79696e674672616e6365736361352f3130",
+    "name": "Flying Francesca #116 rarity 5/10",
+    "deleted_commit": "a2331215063464909c2918faa4f8325d67994712",
+    "deleted_at": "2022-02-06T13:05:06+01:00"
+  },
+  {
+    "subject": "585f042622bebacfe75f6b0d64d4ca2020c1d3ae2645b2d28a8ba7c8466c79696e674672616e6365736361362f3130",
+    "name": "Flying Francesca #116 rarity 6/10",
+    "deleted_commit": "a2331215063464909c2918faa4f8325d67994712",
+    "deleted_at": "2022-02-06T13:05:06+01:00"
+  },
+  {
+    "subject": "585f042622bebacfe75f6b0d64d4ca2020c1d3ae2645b2d28a8ba7c8466c79696e674672616e6365736361372f3130",
+    "name": "Flying Francesca #116 rarity 7/10",
+    "deleted_commit": "a2331215063464909c2918faa4f8325d67994712",
+    "deleted_at": "2022-02-06T13:05:06+01:00"
+  },
+  {
+    "subject": "585f042622bebacfe75f6b0d64d4ca2020c1d3ae2645b2d28a8ba7c8466c79696e674672616e6365736361382f3130",
+    "name": "Flying Francesca #116 rarity 8/10",
+    "deleted_commit": "a2331215063464909c2918faa4f8325d67994712",
+    "deleted_at": "2022-02-06T13:05:06+01:00"
+  },
+  {
+    "subject": "585f042622bebacfe75f6b0d64d4ca2020c1d3ae2645b2d28a8ba7c8466c79696e674672616e6365736361392f3130",
+    "name": "Flying Francesca #116 rarity 9/10",
+    "deleted_commit": "a2331215063464909c2918faa4f8325d67994712",
+    "deleted_at": "2022-02-06T13:05:06+01:00"
+  },
+  {
+    "subject": "585f042622bebacfe75f6b0d64d4ca2020c1d3ae2645b2d28a8ba7c84672616e63657363614e6f63657261303031",
+    "name": "Francesca Nocera rarity 1/5",
+    "deleted_commit": "a2331215063464909c2918faa4f8325d67994712",
+    "deleted_at": "2022-02-06T13:05:06+01:00"
+  },
+  {
+    "subject": "585f042622bebacfe75f6b0d64d4ca2020c1d3ae2645b2d28a8ba7c84672616e63657363614e6f63657261303032",
+    "name": "Francesca Nocera rarity 2/5",
+    "deleted_commit": "a2331215063464909c2918faa4f8325d67994712",
+    "deleted_at": "2022-02-06T13:05:06+01:00"
+  },
+  {
+    "subject": "585f042622bebacfe75f6b0d64d4ca2020c1d3ae2645b2d28a8ba7c84672616e63657363614e6f63657261303033",
+    "name": "Francesca Nocera rarity 3/5",
+    "deleted_commit": "a2331215063464909c2918faa4f8325d67994712",
+    "deleted_at": "2022-02-06T13:05:06+01:00"
+  },
+  {
+    "subject": "585f042622bebacfe75f6b0d64d4ca2020c1d3ae2645b2d28a8ba7c84672616e63657363614e6f63657261303034",
+    "name": "Francesca Nocera rarity 4/5",
+    "deleted_commit": "a2331215063464909c2918faa4f8325d67994712",
+    "deleted_at": "2022-02-06T13:05:06+01:00"
+  },
+  {
+    "subject": "585f042622bebacfe75f6b0d64d4ca2020c1d3ae2645b2d28a8ba7c84672616e63657363614e6f63657261303035",
+    "name": "Francesca Nocera rarity 5/5",
+    "deleted_commit": "a2331215063464909c2918faa4f8325d67994712",
+    "deleted_at": "2022-02-06T13:05:06+01:00"
+  },
+  {
+    "subject": "585f042622bebacfe75f6b0d64d4ca2020c1d3ae2645b2d28a8ba7c8476f6c64656e6272696465303031",
+    "name": "Golden bride rarity 1/5",
+    "deleted_commit": "a2331215063464909c2918faa4f8325d67994712",
+    "deleted_at": "2022-02-06T13:05:06+01:00"
+  },
+  {
+    "subject": "585f042622bebacfe75f6b0d64d4ca2020c1d3ae2645b2d28a8ba7c8476f6c64656e6272696465303032",
+    "name": "Golden bride rarity 2/5",
+    "deleted_commit": "a2331215063464909c2918faa4f8325d67994712",
+    "deleted_at": "2022-02-06T13:05:06+01:00"
+  },
+  {
+    "subject": "585f042622bebacfe75f6b0d64d4ca2020c1d3ae2645b2d28a8ba7c8476f6c64656e6272696465303033",
+    "name": "Golden bride rarity 3/5",
+    "deleted_commit": "a2331215063464909c2918faa4f8325d67994712",
+    "deleted_at": "2022-02-06T13:05:06+01:00"
+  },
+  {
+    "subject": "585f042622bebacfe75f6b0d64d4ca2020c1d3ae2645b2d28a8ba7c8476f6c64656e6272696465303034",
+    "name": "Golden bride rarity 4/5",
+    "deleted_commit": "a2331215063464909c2918faa4f8325d67994712",
+    "deleted_at": "2022-02-06T13:05:06+01:00"
+  },
+  {
+    "subject": "585f042622bebacfe75f6b0d64d4ca2020c1d3ae2645b2d28a8ba7c8476f6c64656e6272696465303035",
+    "name": "Golden bride rarity 5/5",
+    "deleted_commit": "a2331215063464909c2918faa4f8325d67994712",
+    "deleted_at": "2022-02-06T13:05:06+01:00"
+  },
+  {
+    "subject": "585f042622bebacfe75f6b0d64d4ca2020c1d3ae2645b2d28a8ba7c8477265656e676f7369303032",
+    "name": "Greengosi rarity 2/5",
+    "deleted_commit": "a2331215063464909c2918faa4f8325d67994712",
+    "deleted_at": "2022-02-06T13:05:06+01:00"
+  },
+  {
+    "subject": "585f042622bebacfe75f6b0d64d4ca2020c1d3ae2645b2d28a8ba7c8477265656e676f7369303033",
+    "name": "Greengosi rarity 3/5",
+    "deleted_commit": "a2331215063464909c2918faa4f8325d67994712",
+    "deleted_at": "2022-02-06T13:05:06+01:00"
+  },
+  {
+    "subject": "585f042622bebacfe75f6b0d64d4ca2020c1d3ae2645b2d28a8ba7c8477265656e676f7369303034",
+    "name": "Greengosi rarity 4/5",
+    "deleted_commit": "a2331215063464909c2918faa4f8325d67994712",
+    "deleted_at": "2022-02-06T13:05:06+01:00"
+  },
+  {
+    "subject": "585f042622bebacfe75f6b0d64d4ca2020c1d3ae2645b2d28a8ba7c8477265656e676f7369303035",
+    "name": "Greengosi rarity 5/5",
+    "deleted_commit": "a2331215063464909c2918faa4f8325d67994712",
+    "deleted_at": "2022-02-06T13:05:06+01:00"
+  },
+  {
+    "subject": "585f042622bebacfe75f6b0d64d4ca2020c1d3ae2645b2d28a8ba7c84d6574726f706f6c6974616e6f303031",
+    "name": "VOID",
+    "deleted_commit": "a2331215063464909c2918faa4f8325d67994712",
+    "deleted_at": "2022-02-06T13:05:06+01:00"
+  },
+  {
+    "subject": "585f042622bebacfe75f6b0d64d4ca2020c1d3ae2645b2d28a8ba7c84d6574726f706f6c6974616e6f303032",
+    "name": "Metropolitano rarity 2/5",
+    "deleted_commit": "a2331215063464909c2918faa4f8325d67994712",
+    "deleted_at": "2022-02-06T13:05:06+01:00"
+  },
+  {
+    "subject": "585f042622bebacfe75f6b0d64d4ca2020c1d3ae2645b2d28a8ba7c84d6574726f706f6c6974616e6f303033",
+    "name": "Metropolitano rarity 3/5",
+    "deleted_commit": "a2331215063464909c2918faa4f8325d67994712",
+    "deleted_at": "2022-02-06T13:05:06+01:00"
+  },
+  {
+    "subject": "585f042622bebacfe75f6b0d64d4ca2020c1d3ae2645b2d28a8ba7c84d6574726f706f6c6974616e6f303034",
+    "name": "Metropolitano rarity 4/5",
+    "deleted_commit": "a2331215063464909c2918faa4f8325d67994712",
+    "deleted_at": "2022-02-06T13:05:06+01:00"
+  },
+  {
+    "subject": "585f042622bebacfe75f6b0d64d4ca2020c1d3ae2645b2d28a8ba7c84d6574726f706f6c6974616e6f303035",
+    "name": "Metropolitano rarity 5/5",
+    "deleted_commit": "a2331215063464909c2918faa4f8325d67994712",
+    "deleted_at": "2022-02-06T13:05:06+01:00"
+  },
+  {
+    "subject": "585f042622bebacfe75f6b0d64d4ca2020c1d3ae2645b2d28a8ba7c8506561636566756c7361696c696e67303031",
+    "name": "Peaceful sailing rarity 1/5",
+    "deleted_commit": "a2331215063464909c2918faa4f8325d67994712",
+    "deleted_at": "2022-02-06T13:05:06+01:00"
+  },
+  {
+    "subject": "585f042622bebacfe75f6b0d64d4ca2020c1d3ae2645b2d28a8ba7c8506561636566756c7361696c696e67303032",
+    "name": "Peaceful sailing rarity 2/5",
+    "deleted_commit": "a2331215063464909c2918faa4f8325d67994712",
+    "deleted_at": "2022-02-06T13:05:06+01:00"
+  },
+  {
+    "subject": "585f042622bebacfe75f6b0d64d4ca2020c1d3ae2645b2d28a8ba7c8506561636566756c7361696c696e67303033",
+    "name": "Peaceful sailing rarity 3/5",
+    "deleted_commit": "a2331215063464909c2918faa4f8325d67994712",
+    "deleted_at": "2022-02-06T13:05:06+01:00"
+  },
+  {
+    "subject": "585f042622bebacfe75f6b0d64d4ca2020c1d3ae2645b2d28a8ba7c8506561636566756c7361696c696e67303034",
+    "name": "Peaceful sailing rarity 4/5",
+    "deleted_commit": "a2331215063464909c2918faa4f8325d67994712",
+    "deleted_at": "2022-02-06T13:05:06+01:00"
+  },
+  {
+    "subject": "585f042622bebacfe75f6b0d64d4ca2020c1d3ae2645b2d28a8ba7c8506561636566756c7361696c696e67303035",
+    "name": "Peaceful sailing rarity 5/5",
+    "deleted_commit": "a2331215063464909c2918faa4f8325d67994712",
+    "deleted_at": "2022-02-06T13:05:06+01:00"
+  },
+  {
+    "subject": "585f042622bebacfe75f6b0d64d4ca2020c1d3ae2645b2d28a8ba7c8536361726564303031",
+    "name": "Scared rarity 1/5",
+    "deleted_commit": "a2331215063464909c2918faa4f8325d67994712",
+    "deleted_at": "2022-02-06T13:05:06+01:00"
+  },
+  {
+    "subject": "585f042622bebacfe75f6b0d64d4ca2020c1d3ae2645b2d28a8ba7c8536361726564303032",
+    "name": "Scared rarity 2/5",
+    "deleted_commit": "a2331215063464909c2918faa4f8325d67994712",
+    "deleted_at": "2022-02-06T13:05:06+01:00"
+  },
+  {
+    "subject": "585f042622bebacfe75f6b0d64d4ca2020c1d3ae2645b2d28a8ba7c8536361726564303033",
+    "name": "Scared rarity 3/5",
+    "deleted_commit": "a2331215063464909c2918faa4f8325d67994712",
+    "deleted_at": "2022-02-06T13:05:06+01:00"
+  }
+]

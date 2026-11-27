@@ -22,6 +22,7 @@ import java.math.BigInteger;
 public class TxAsset extends BlockAwareDomain {
     private Long slot;
     private String txHash;
+    private Integer txIndex;
     private String policy;
     private String assetName;
     private String unit;
