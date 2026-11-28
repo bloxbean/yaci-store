@@ -160,9 +160,11 @@ public class BFBlockService {
         return blockRow.height();
     }
 
+    /** transaction_cbor is written when either setting is on: bodies with save-cbor, whole transactions with save-full-tx-cbor. */
     private void ensureTransactionCborEnabled() {
         TransactionStoreProperties transactionStoreProperties = transactionStorePropertiesProvider.getIfAvailable();
-        if (transactionStoreProperties == null || !transactionStoreProperties.isSaveCbor()) {
+        if (transactionStoreProperties == null
+                || !(transactionStoreProperties.isSaveCbor() || transactionStoreProperties.isSaveFullTxCbor())) {
             throw notFound();
         }
     }

@@ -207,4 +207,22 @@ class SnapshotSpecRegistryTest {
 
         assertThat(all.withoutDisabledOptionalTables(p -> true)).isSameAs(all);
     }
+
+    /** A target without store.utxo.save-address skips a snapshot's address table; one with it loads it. */
+    @Test
+    void theAddressTableFollowsSaveAddress() {
+        SnapshotSpecRegistry all = SnapshotSpecRegistry.builtIn();
+        assertThat(all.byId("address").orElseThrow().enabledBy()).containsExactly("store.utxo.save-address");
+        assertThat(all.byId("address").orElseThrow().mustMatch()).isEmpty();
+
+        SnapshotSpecRegistry notSaving = all.withoutDisabledOptionalTables(p -> false);
+        assertThat(notSaving.isSelected("address")).isFalse();
+        assertThat(notSaving.importedTables()).noneMatch(s -> s.id().equals("address"));
+        assertThat(notSaving.isSelected("address-utxo")).isTrue();
+        assertThat(notSaving.knownTables()).anyMatch(s -> s.id().equals("address"));
+
+        SnapshotSpecRegistry saving = all.withoutDisabledOptionalTables("store.utxo.save-address"::equals);
+        assertThat(saving.isSelected("address")).isTrue();
+        assertThat(saving.isSelected("transaction-cbor")).isFalse();
+    }
 }

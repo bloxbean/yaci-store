@@ -102,8 +102,38 @@ log.
 ## Producing a snapshot
 
 Configure the source for [DuckLake analytics export](/docs/v3/analytics/overview), including the
-ledger-state data required by the snapshot specs. The `ledger-state,analytics` profiles are the
-usual source setup; enabling the analytics property alone does not populate historical data.
+ledger-state data required by the snapshot specs. Enabling the analytics property alone does not
+populate historical data.
+
+The `snapshot` profile is the recommended setup, for the source and for the restored node alike:
+
+```bash
+SPRING_PROFILES_ACTIVE=snapshot
+```
+
+It is a profile group that activates `ledger-state`, `analytics`, `blockfrost` and, last,
+`snapshot-settings`. That profile's file, `config/application-snapshot-settings.properties` (and the
+same file under `docker/config/`):
+- turns every `*pruning-enabled` setting off, and `store.account.history-cleanup-enabled`;
+- saves the `address` table (`store.utxo.save-address=true`);
+- saves whole signed transaction CBOR (`store.transaction.save-full-tx-cbor=true`), which the
+  Blockfrost `/txs/{hash}` size and `/txs/{hash}/cbor` need.
+
+Choose it before the first sync from genesis: the address table and the CBOR are complete only when
+saved from the start. Because `snapshot-settings` is the last profile in the group, these settings
+win over `config/application.properties` and over the other profiles' files, so a pruning or CBOR
+setting in any of them does not apply while the profile is active. Settings of your own go in a
+file for a profile listed after it (`SPRING_PROFILES_ACTIVE=snapshot,mine`), in an environment
+variable, or on the command line.
+
+With the Docker distribution, set `SPRING_PROFILES_ACTIVE=snapshot` in `config/env`; the node and
+`admin-cli.sh` both read it.
+
+The `address` table and `transaction_cbor` are optional in a snapshot: they are exported only when
+the source saves them. A target that does not save them skips them. A target that saves them needs a
+snapshot that carries them, and `transaction_cbor` must also hold the same form: a target with
+`store.transaction.save-cbor=true` (bodies only) refuses a snapshot of whole transactions, and the
+other way round.
 
 Run `snapshot inspect` and `snapshot export` with the source application's own configuration and
 profiles. A snapshot carries the tables of the store modules the source has enabled; the imported
@@ -125,7 +155,9 @@ deletes rows before the analytics export reads them: UTxO pruning, for example, 
 output and its spend about 2160 blocks after the spend, so the spend never reaches the export and
 the snapshot would restore the output as unspent. Sync the source from genesis with every
 `*pruning-enabled` setting off (`store.utxo`, `store.transaction`, `store.adapot.reward`,
-`store.adapot.epoch-stake`, `store.account`, `store.blocks.cbor`, `store.transaction.cbor`).
+`store.adapot.epoch-stake`, `store.account`, `store.blocks.cbor`, `store.transaction.cbor`), and
+with `store.account.history-cleanup-enabled` off: it deletes older `address_balance` and
+`stake_address_balance` history the same way.
 Inspect and export refuse a source configured with any of them on, and import refuses a snapshot
 whose manifest records one. `snapshot inspect` exits with a non-zero code whenever export would be
 blocked.
@@ -842,7 +874,7 @@ original manifest or journal.
 | Remove or duplicate a table entry in a copied manifest. | Import rejects the manifest before loading. Include a zero-row table in this test. |
 | After interrupting import, change the manifest but keep its snapshot ID. | Resume rejects the manifest digest mismatch. |
 | Configure a different network/protocol magic. | Import rejects the network mismatch. |
-| Inspect or export with a `*pruning-enabled` setting on, or import a copied manifest whose `pruningSettings` has one set to `true`. | Export and import are blocked: a pruning source can drop spends before they are exported. |
+| Inspect or export with a `*pruning-enabled` setting or `store.account.history-cleanup-enabled` on, or import a copied manifest whose `pruningSettings` has one set to `true`. | Export and import are blocked: a pruning source can drop spends before they are exported. |
 | Import into a target containing chain data with no matching journal. | Import rejects the non-empty target. |
 | Inspect/export while another process holds the catalog open for writes. | Catalog access fails with instructions to stop analytics. |
 
@@ -1094,7 +1126,9 @@ snapshot produced from the current analytics export:
   remain lossy analytics projections and are left empty, along with the `*_current` caches.
   `stake_address_balance` is restored from the separate lossless
   `stake_address_balance_snapshot` export, and `account_config` is seeded at the snapshot point.
-- **`block_cbor` and `transaction_cbor`** have no analytics export.
+- **`block_cbor`, `transaction_cbor` and `address`** are carried only when the source saves them
+  (`store.blocks.save-cbor`, `store.transaction.save-cbor` or `save-full-tx-cbor`,
+  `store.utxo.save-address`).
 - **`epoch_nonce`** and **`ptr_address`** have no analytics export.
 - **`address.stake_credential`** is not exported and is not derivable from what is.
 

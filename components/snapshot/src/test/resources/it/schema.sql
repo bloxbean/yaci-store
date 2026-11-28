@@ -148,7 +148,7 @@ create table era
     block_hash varchar(64) not null
 );
 
--- Exercises sequence reset after a bulk load that writes explicit key values.
+-- EMPTY_EXPECTED in a snapshot; SequenceResetIT uses its sequence.
 create table rollback
 (
     id                    bigint not null primary key,

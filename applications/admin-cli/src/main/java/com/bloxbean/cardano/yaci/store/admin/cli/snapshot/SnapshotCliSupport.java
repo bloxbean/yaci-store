@@ -5,6 +5,7 @@ import com.bloxbean.cardano.yaci.store.snapshot.load.ImportOptions;
 import com.bloxbean.cardano.yaci.store.snapshot.load.PgSchema;
 import com.bloxbean.cardano.yaci.store.snapshot.load.TargetTable;
 import com.bloxbean.cardano.yaci.store.snapshot.manifest.SnapshotSignature;
+import com.bloxbean.cardano.yaci.store.snapshot.manifest.SourcePruning;
 import com.bloxbean.cardano.yaci.store.snapshot.remote.S3SnapshotStore;
 import com.bloxbean.cardano.yaci.store.snapshot.remote.SnapshotLocations;
 import com.bloxbean.cardano.yaci.store.snapshot.remote.SnapshotStore;
@@ -155,7 +156,7 @@ public class SnapshotCliSupport {
                     profile.put(spec.module(), environment.getProperty("store." + spec.module() + ".enabled", Boolean.class, false));
                 }
             }
-            // Optional tables (transaction_cbor, block_cbor) only when the target saves them (ADR 0006).
+            // Optional tables (transaction_cbor, block_cbor, address) only when the target saves them (ADR 0006).
             return registry.selectModules(profile.entrySet().stream().filter(Map.Entry::getValue)
                     .map(Map.Entry::getKey).collect(java.util.stream.Collectors.toSet()))
                     .withoutDisabledOptionalTables(this::setting);
@@ -233,6 +234,8 @@ public class SnapshotCliSupport {
                 environment.getProperty("store.adapot.epoch-stake-pruning-enabled", "false"));
         out.put("store.account.pruning-enabled",
                 environment.getProperty("store.account.pruning-enabled", "false"));
+        out.put(SourcePruning.ACCOUNT_HISTORY_CLEANUP,
+                environment.getProperty(SourcePruning.ACCOUNT_HISTORY_CLEANUP, "false"));
         out.put("store.blocks.cbor-pruning-enabled",
                 environment.getProperty("store.blocks.cbor-pruning-enabled", "false"));
         out.put("store.transaction.cbor-pruning-enabled",
