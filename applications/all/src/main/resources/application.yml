@@ -7,6 +7,10 @@ spring:
     name: Yaci Store App
   profiles:
     include: plugins
+    group:
+      # A snapshot source or restored node: everything a snapshot carries, plus the Blockfrost API
+      # (config/application-snapshot.properties holds the settings of its own).
+      snapshot: ledger-state,analytics,blockfrost
 
   boot:
     admin:

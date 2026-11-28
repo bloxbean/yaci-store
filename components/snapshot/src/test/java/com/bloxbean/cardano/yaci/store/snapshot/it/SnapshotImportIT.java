@@ -326,6 +326,25 @@ class SnapshotImportIT {
                         && b.contains("target runs with store.transaction.save-full-tx-cbor=true"));
     }
 
+    /** A source without store.utxo.save-address exports no address table; only a target that saves it refuses. */
+    @Test
+    void aTargetThatSavesAddressesNeedsASnapshotThatCarriesThem() throws Exception {
+        SnapshotFixture.Built built = fixture();
+        SnapshotManifest withoutAddress = replaceTables(built.manifest(), built.manifest().tables().stream()
+                .filter(t -> !t.specId().equals("address")).toList());
+        Path path = built.archiveDir().resolve("no-address.manifest.json");
+        new ManifestCodec().writeAtomically(withoutAddress, path);
+
+        var saving = registry.withoutDisabledOptionalTables("store.utxo.save-address"::equals);
+        assertThat(new SnapshotImporter(saving).preflight(options(path, 1)).blockers())
+                .anySatisfy(b -> assertThat(b).contains("does not carry address")
+                        .contains("store.utxo.save-address"));
+
+        var notSaving = registry.withoutDisabledOptionalTables(setting -> false);
+        assertThat(new SnapshotImporter(notSaving).preflight(options(path, 1)).blockers())
+                .noneMatch(b -> b.contains("does not carry address"));
+    }
+
     @Test
     void aTrustedSignatureReplacesAllowUnsignedAndABadOneIsNeverAccepted() throws Exception {
         var built = fixture();

@@ -4,6 +4,8 @@ snapshot-table:
   module: utxo
   kind: CHAIN_DATA
   restore: IMPORT
+  # Written only when the store saves addresses; exported and imported only then.
+  enabled-by: [store.utxo.save-address]
 
   source:
     exporter-id: address
