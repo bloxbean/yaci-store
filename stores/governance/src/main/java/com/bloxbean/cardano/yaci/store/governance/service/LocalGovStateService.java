@@ -16,6 +16,7 @@ import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.GovStateQueryR
 import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.model.Proposal;
 import com.bloxbean.cardano.yaci.helper.LocalClientProvider;
 import com.bloxbean.cardano.yaci.store.common.util.Tuple;
+import com.bloxbean.cardano.yaci.store.common.util.UnitIntervalUtil;
 import com.bloxbean.cardano.yaci.store.core.annotation.LocalSupport;
 import com.bloxbean.cardano.yaci.store.core.annotation.ReadOnly;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
@@ -386,7 +387,7 @@ public class LocalGovStateService {
 
     private LocalCommittee buildLocalCommittee(Committee committee, Integer currentEpoch, Long slot) {
         return LocalCommittee.builder()
-                .threshold(committee.getThreshold().doubleValue())
+                .threshold(UnitIntervalUtil.toBigDecimal(committee.getThreshold()).doubleValue())
                 .epoch(currentEpoch)
                 .slot(slot)
                 .build();
