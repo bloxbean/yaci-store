@@ -44,7 +44,7 @@ public final class ManifestValidator {
             }
             SnapshotTableSpec spec = registry.byId(t.specId()).orElse(null);
             // A table with no rows and no files carries nothing to load: a specification removed since
-            // the export (e.g. cip113-registry-node) must not make the snapshot unimportable.
+            // the export must not make the snapshot unimportable.
             if (spec == null && t.rowCount() == 0 && (t.files() == null || t.files().isEmpty())) {
                 continue;
             }

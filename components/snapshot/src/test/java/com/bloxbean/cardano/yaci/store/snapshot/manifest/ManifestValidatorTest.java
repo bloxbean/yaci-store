@@ -79,8 +79,8 @@ class ManifestValidatorTest {
 
     @Test
     void anEmptyTableOfARemovedSpecificationIsIgnoredButOneWithDataIsNot() {
-        var removed = new SnapshotManifest.TableManifest("cip113-registry-node", 1, "d", "assets-ext", "EXTENSION_DATA",
-                "EMPTY_EXPECTED", "gone", null, null, "cip113_registry_node", null, null, 0, List.of(), 0, List.of(),
+        var removed = new SnapshotManifest.TableManifest("retired-table", 1, "d", "assets-ext", "EXTENSION_DATA",
+                "EMPTY_EXPECTED", "gone", null, null, "retired_table", null, null, 0, List.of(), 0, List.of(),
                 null, Map.of(), Map.of(), List.of(), "c");
         var withData = new SnapshotManifest.TableManifest("gone-table", 1, "d", "x", "CHAIN_DATA", "IMPORT", null,
                 "gone", "gone", "gone", "MAPPED", null, 1, List.of(), 5, List.of(), null, Map.of(), Map.of(),

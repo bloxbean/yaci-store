@@ -1,0 +1,31 @@
+snapshot-table:
+  id: cip113-registry-node
+  spec-version: 1
+  module: assets-ext
+  kind: EXTENSION_DATA
+  restore: IMPORT
+
+  source:
+    exporter-id: cip113_registry_node
+    ducklake-relation: cip113_registry_node
+    partition:
+      strategy: DAILY
+      column: block_date
+
+  consistency:
+    cutoff:
+      type: SLOT_LTE
+      column: slot
+
+  import:
+    target-table: cip113_registry_node
+    mode: MAPPED
+    ignore-source-columns: [block_date, date]
+    batch-boundary: FILE_SET
+    batch-size: 64
+
+  validation:
+    key: [key, registry_policy_id, slot, tx_hash]
+    bounds: [slot]
+    # The script and global-state columns are NULL for a node that does not set them (V0_1700_4).
+    required-columns: [key, registry_policy_id, slot, tx_hash, tx_index, output_index, next, datum]

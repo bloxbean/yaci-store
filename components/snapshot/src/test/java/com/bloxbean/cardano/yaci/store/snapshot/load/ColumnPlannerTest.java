@@ -244,4 +244,34 @@ class ColumnPlannerTest {
 
         assertThat(plan.targetColumns()).containsExactlyInAnyOrderElementsOf(columns.keySet());
     }
+
+    @Test
+    void cip113RegistryNodeExportCoversItsTargetTable() {
+        SnapshotTableSpec cip113 = com.bloxbean.cardano.yaci.store.snapshot.spec.SnapshotSpecRegistry.builtIn()
+                .byId("cip113-registry-node").orElseThrow();
+        // Column types as DuckLake records them for Cip113RegistryNodeExporter's query
+        Map<String, String> exported = source("key", "varchar", "registry_policy_id", "varchar",
+                "slot", "int64", "tx_hash", "varchar", "tx_index", "int32", "output_index", "int32",
+                "next", "varchar", "minting_logic_script", "varchar", "transfer_logic_script", "varchar",
+                "third_party_transfer_logic_script", "varchar", "unfracking_logic_script", "varchar",
+                "global_state_policy_id", "varchar", "datum", "varchar",
+                "last_synced_at", "timestamp", "block_date", "date", "date", "date");
+        // V0_1700_4__cip113_registry_node.sql
+        Map<String, String> columns = source("key", "character varying(64)",
+                "registry_policy_id", "character varying(56)", "slot", "bigint", "tx_hash", "character varying(64)",
+                "tx_index", "integer", "output_index", "integer", "next", "character varying(64)",
+                "minting_logic_script", "character varying(56)", "transfer_logic_script", "character varying(56)",
+                "third_party_transfer_logic_script", "character varying(56)",
+                "unfracking_logic_script", "character varying(56)", "global_state_policy_id", "character varying(56)",
+                "datum", "text", "last_synced_at", "timestamp without time zone");
+        Map<String, Boolean> nullable = new LinkedHashMap<>();
+        columns.keySet().forEach(c -> nullable.put(c, !java.util.Set.of("key", "registry_policy_id", "slot",
+                "tx_hash", "tx_index", "output_index", "next", "datum").contains(c)));
+        TargetTable target = new TargetTable("s", "cip113_registry_node", columns, nullable, Map.of(),
+                List.of("key", "registry_policy_id", "slot", "tx_hash"), false);
+
+        ColumnPlan plan = planner.plan(cip113, exported, target);
+
+        assertThat(plan.targetColumns()).containsExactlyInAnyOrderElementsOf(columns.keySet());
+    }
 }

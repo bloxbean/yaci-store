@@ -175,6 +175,8 @@ class SnapshotSpecRegistryTest {
         SnapshotSpecRegistry export = all.withoutImportedTablesOf(java.util.Set.of("assets-ext"));
 
         assertThat(export.isSelected("cip68-metadata")).isFalse();
+        assertThat(export.isSelected("cip113-registry-node")).isFalse();
+        assertThat(all.isSelected("cip113-registry-node")).isTrue();
         assertThat(export.importedTables()).noneMatch(s -> s.module().equals("assets-ext"));
         // registry-sourced extension tables stay classified, so the manifest still lists them
         assertThat(export.isSelected("cip26-metadata")).isTrue();
