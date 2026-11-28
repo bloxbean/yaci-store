@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.analytics.ducklake;
 
 import com.bloxbean.cardano.yaci.store.analytics.config.AnalyticsStoreProperties;
+import com.bloxbean.cardano.yaci.store.analytics.helper.CatalogSchemas;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.core.env.StandardEnvironment;
@@ -10,6 +11,8 @@ import org.springframework.mock.env.MockEnvironment;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.SQLException;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -140,5 +143,61 @@ class CatalogTypeGuardTest {
         assertThatCode(new CatalogTypeGuard(fromEnvVar, properties(), (u, n, p) -> {
             throw new AssertionError("probed");
         })::check).doesNotThrowAnyException();
+    }
+
+    /** Schema to its ducklake_metadata values; a schema absent from the map has no catalog. */
+    private static CatalogSchemas.CatalogLookup catalogs(Map<String, Map<String, String>> bySchema) {
+        return new CatalogSchemas.CatalogLookup() {
+            @Override
+            public boolean hasCatalog(String schema) {
+                return bySchema.containsKey(schema);
+            }
+
+            @Override
+            public String metadata(String schema, String key) {
+                return bySchema.getOrDefault(schema, Map.of()).get(key);
+            }
+        };
+    }
+
+    @Test
+    void theSchemasLookedAtAreCatalogSchemaThenTheUrlsCurrentSchemaThenPublic() {
+        AnalyticsStoreProperties p = properties();
+        var guard = new CatalogTypeGuard(pgDatasource(), p, (u, n, pw) -> false);
+        assertThat(guard.candidateSchemas(PG_URL + "?currentSchema=preprod,public"))
+                .containsExactly("preprod", "public");
+        assertThat(guard.candidateSchemas(PG_URL)).containsExactly("public");
+
+        p.getDucklake().setCatalogSchema("lake");
+        assertThat(guard.candidateSchemas(PG_URL + "?currentSchema=preprod"))
+                .containsExactly("lake", "preprod", "public");
+    }
+
+    /** A catalog this branch created in the source schema, recording its owner, is found; public is empty. */
+    @Test
+    void aCatalogOfThisNodeInItsOwnSchemaCounts() throws Exception {
+        var lookup = catalogs(Map.of("preprod", Map.of(CatalogSchemas.OWNER_KEY, "yaci_store/preprod",
+                "data_path", "/elsewhere")));
+        assertThat(CatalogTypeGuard.hasOwnCatalog(lookup, new LinkedHashSet<>(List.of("preprod", "public")),
+                "yaci_store/preprod", "./data/analytics")).isTrue();
+    }
+
+    /** Another instance's catalog in a shared database is not this node's, so the default may apply. */
+    @Test
+    void anotherInstancesCatalogDoesNotCount() throws Exception {
+        var lookup = catalogs(Map.of("public", Map.of(CatalogSchemas.OWNER_KEY, "yaci_store/mainnet")));
+        assertThat(CatalogTypeGuard.hasOwnCatalog(lookup, new LinkedHashSet<>(List.of("preprod", "public")),
+                "yaci_store/preprod", "./data/analytics")).isFalse();
+    }
+
+    /** A beta catalog in public records no owner: it counts when it was written for this node's export path. */
+    @Test
+    void aBetaCatalogInPublicCountsWhenItsDataPathIsThisNodes() throws Exception {
+        String exportPath = dir.resolve("analytics").toString();
+        var lookup = catalogs(Map.of("public", Map.of("data_path", exportPath + "/")));
+        assertThat(CatalogTypeGuard.hasOwnCatalog(lookup, new LinkedHashSet<>(List.of("public")),
+                "yaci_store/public", exportPath)).isTrue();
+        assertThat(CatalogTypeGuard.hasOwnCatalog(lookup, new LinkedHashSet<>(List.of("public")),
+                "yaci_store/public", dir.resolve("other").toString())).isFalse();
     }
 }

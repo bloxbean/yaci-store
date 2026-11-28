@@ -127,7 +127,11 @@ public final class CatalogSchemas {
         return Objects.toString(database, "") + "/" + Objects.toString(schema, PUBLIC);
     }
 
-    private static boolean belongsTo(CatalogLookup lookup, String schema, String owner, String exportPath)
+    /**
+     * Whether the catalog in {@code schema} is this instance's: it records {@code owner}, or it records no
+     * owner (older installations) and was written for {@code exportPath}.
+     */
+    public static boolean belongsTo(CatalogLookup lookup, String schema, String owner, String exportPath)
             throws java.sql.SQLException {
         String recorded = lookup.metadata(schema, OWNER_KEY);
         if (recorded != null && !recorded.isBlank()) {
