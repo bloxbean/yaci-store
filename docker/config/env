@@ -21,6 +21,11 @@ JAVA_TOOL_OPTIONS=-Dsun.net.inetaddr.ttl=60 -Dsun.net.inetaddr.negative.ttl=10
 ## Enable Ledger State, Analytics, Blockfrost profiles
 #SPRING_PROFILES_ACTIVE=ledger-state,analytics,blockfrost
 
+## Snapshot source or restored node: ledger-state, analytics and blockfrost, with no pruning and
+## the address table and full transaction CBOR saved (config/application-snapshot-settings.properties).
+## Choose it before the first sync from genesis.
+#SPRING_PROFILES_ACTIVE=snapshot
+
 ## Enable polyglot plugins (Python, JS) support.
 # LOADER_PATH=plugins,plugins/lib,plugins/ext-jars
 

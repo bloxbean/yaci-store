@@ -8,9 +8,10 @@ spring:
   profiles:
     include: plugins
     group:
-      # A snapshot source or restored node: everything a snapshot carries, plus the Blockfrost API
-      # (config/application-snapshot.properties holds the settings of its own).
-      snapshot: ledger-state,analytics,blockfrost
+      # A snapshot source or restored node: everything a snapshot carries, plus the Blockfrost API.
+      # snapshot-settings (config/application-snapshot-settings.properties) comes last, so its
+      # settings win over the other profiles' files.
+      snapshot: ledger-state,analytics,blockfrost,snapshot-settings
 
   boot:
     admin:

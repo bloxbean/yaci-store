@@ -111,17 +111,23 @@ The `snapshot` profile is the recommended setup, for the source and for the rest
 SPRING_PROFILES_ACTIVE=snapshot
 ```
 
-It is a profile group that also activates `ledger-state`, `analytics` and `blockfrost`, and its own
-file, `config/application-snapshot.properties` (and the same file under `docker/config/`):
+It is a profile group that activates `ledger-state`, `analytics`, `blockfrost` and, last,
+`snapshot-settings`. That profile's file, `config/application-snapshot-settings.properties` (and the
+same file under `docker/config/`):
 - turns every `*pruning-enabled` setting off, and `store.account.history-cleanup-enabled`;
 - saves the `address` table (`store.utxo.save-address=true`);
 - saves whole signed transaction CBOR (`store.transaction.save-full-tx-cbor=true`), which the
   Blockfrost `/txs/{hash}` size and `/txs/{hash}/cbor` need.
 
 Choose it before the first sync from genesis: the address table and the CBOR are complete only when
-saved from the start. A profile file overrides `config/application.properties`, so a pruning or
-CBOR setting there does not apply while the profile is active. Settings of your own go in a file
-for a profile listed after it, or on the command line.
+saved from the start. Because `snapshot-settings` is the last profile in the group, these settings
+win over `config/application.properties` and over the other profiles' files, so a pruning or CBOR
+setting in any of them does not apply while the profile is active. Settings of your own go in a
+file for a profile listed after it (`SPRING_PROFILES_ACTIVE=snapshot,mine`), in an environment
+variable, or on the command line.
+
+With the Docker distribution, set `SPRING_PROFILES_ACTIVE=snapshot` in `config/env`; the node and
+`admin-cli.sh` both read it.
 
 The `address` table and `transaction_cbor` are optional in a snapshot: they are exported only when
 the source saves them. A target that does not save them skips them. A target that saves them needs a

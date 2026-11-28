@@ -31,11 +31,7 @@ class SnapshotProfileTest {
     @Test
     void activatesLedgerStateAnalyticsAndBlockfrostWithTheSnapshotSettings(@TempDir Path config) throws Exception {
         // The shipped profile files, next to a user's own application.properties that a profile file overrides.
-        try (var files = Files.list(REPO.resolve("config"))) {
-            for (Path f : files.filter(f -> f.getFileName().toString().startsWith("application-")).toList()) {
-                Files.copy(f, config.resolve(f.getFileName()));
-            }
-        }
+        copyProfileFiles(config);
         Files.writeString(config.resolve("application.properties"), """
                 store.utxo.pruning-enabled=true
                 store.transaction.save-full-tx-cbor=false
@@ -45,7 +41,7 @@ class SnapshotProfileTest {
                 "--spring.config.additional-location=file:" + config + "/")) {
             Environment env = ctx.getEnvironment();
             assertThat(env.getActiveProfiles())
-                    .contains("snapshot", "ledger-state", "analytics", "blockfrost");
+                    .containsExactly("snapshot", "ledger-state", "analytics", "blockfrost", "snapshot-settings");
 
             // ledger-state, analytics and blockfrost profile files
             assertThat(env.getProperty("store.adapot.enabled")).isEqualTo("true");
@@ -53,7 +49,7 @@ class SnapshotProfileTest {
             assertThat(env.getProperty("store.extensions.blockfrost.enabled")).isEqualTo("true");
             assertThat(env.getProperty("store.epoch-aggr.enabled")).isEqualTo("true");
 
-            // application-snapshot.properties
+            // application-snapshot-settings.properties
             for (String key : new String[]{"store.utxo.pruning-enabled", "store.transaction.pruning-enabled",
                     "store.transaction.cbor-pruning-enabled", "store.blocks.cbor-pruning-enabled",
                     "store.account.pruning-enabled", "store.account.history-cleanup-enabled",
@@ -66,17 +62,57 @@ class SnapshotProfileTest {
     }
 
     @Test
+    void theSnapshotSettingsWinOverTheOtherProfilesInTheGroup(@TempDir Path config) throws Exception {
+        copyProfileFiles(config);
+        // A member profile's file that sets a key the snapshot settings also set, the other way.
+        for (String member : new String[]{"ledger-state", "analytics", "blockfrost"}) {
+            Path f = config.resolve("application-" + member + ".properties");
+            Files.writeString(f, Files.readString(f) + """
+
+                    store.utxo.pruning-enabled=true
+                    store.utxo.save-address=false
+                    """);
+        }
+
+        try (ConfigurableApplicationContext ctx = start("--spring.profiles.active=snapshot",
+                "--spring.config.additional-location=file:" + config + "/")) {
+            Environment env = ctx.getEnvironment();
+            assertThat(env.getProperty("store.utxo.pruning-enabled")).isEqualTo("false");
+            assertThat(env.getProperty("store.utxo.save-address")).isEqualTo("true");
+        }
+    }
+
+    @Test
+    void aProfileListedAfterSnapshotStillOverridesIt(@TempDir Path config) throws Exception {
+        copyProfileFiles(config);
+        Files.writeString(config.resolve("application-mine.properties"), "store.utxo.save-address=false\n");
+
+        try (ConfigurableApplicationContext ctx = start("--spring.profiles.active=snapshot,mine",
+                "--spring.config.additional-location=file:" + config + "/")) {
+            assertThat(ctx.getEnvironment().getProperty("store.utxo.save-address")).isEqualTo("false");
+        }
+    }
+
+    @Test
     void theNodeDeclaresTheSameGroupAsTheCli() throws Exception {
         assertThat(group(REPO.resolve("applications/all/src/main/resources/application.yml")))
                 .isEqualTo(group(REPO.resolve("applications/admin-cli/src/main/resources/application.yml")))
-                .isEqualTo("ledger-state,analytics,blockfrost");
+                .isEqualTo("ledger-state,analytics,blockfrost,snapshot-settings");
     }
 
     @Test
     void theDockerProfileFilesMatchTheOnesInConfig() throws Exception {
-        for (String file : new String[]{"application-snapshot.properties", "application-blockfrost.properties"}) {
+        for (String file : new String[]{"application-snapshot-settings.properties", "application-blockfrost.properties"}) {
             assertThat(Files.readString(REPO.resolve("docker/config").resolve(file))).as(file)
                     .isEqualTo(Files.readString(REPO.resolve("config").resolve(file)));
+        }
+    }
+
+    private static void copyProfileFiles(Path config) throws Exception {
+        try (var files = Files.list(REPO.resolve("config"))) {
+            for (Path f : files.filter(f -> f.getFileName().toString().startsWith("application-")).toList()) {
+                Files.copy(f, config.resolve(f.getFileName()));
+            }
         }
     }
 
