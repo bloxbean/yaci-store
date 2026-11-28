@@ -1,0 +1,22 @@
+diff --git a/aggregates/analytics-query/src/main/java/com/bloxbean/cardano/yaci/store/analytics/query/connection/ParquetReadConnectionProvider.java b/aggregates/analytics-query/src/main/java/com/bloxbean/cardano/yaci/store/analytics/query/connection/ParquetReadConnectionProvider.java
+index 031c4c8d9..75568dd1d 100644
+--- a/aggregates/analytics-query/src/main/java/com/bloxbean/cardano/yaci/store/analytics/query/connection/ParquetReadConnectionProvider.java
++++ b/aggregates/analytics-query/src/main/java/com/bloxbean/cardano/yaci/store/analytics/query/connection/ParquetReadConnectionProvider.java
+@@ -387,7 +387,7 @@ public class ParquetReadConnectionProvider extends DuckDbReadConnectionProvider
+             source = "read_parquet([" + fileList + "], hive_partitioning=" + hivePartitioning + hiveTypes + ")";
+             // Newer DuckLake versions may store internal bookkeeping columns in some data
+             // files (e.g. _ducklake_internal_row_id); they are not part of the table.
+-            projection = "COLUMNS(c -> NOT starts_with(c, '_ducklake_internal_'))";
++            projection = "COLUMNS(lambda c: NOT starts_with(c, '_ducklake_internal_'))";
+         } else {
+             String parquetPath = tableRegistry.getParquetGlobPath(tableName);
+             source = "read_parquet('" + escapePath(parquetPath) + "', hive_partitioning=true)";
+@@ -461,7 +461,7 @@ public class ParquetReadConnectionProvider extends DuckDbReadConnectionProvider
+         }
+         String types = keys.stream()
+                 .filter(fileTypes::containsKey)
+-                .map(key -> "'" + key.replace("'", "''") + "': " + fileTypes.get(key))
++                .map(key -> "'" + key.replace("'", "''") + "': '" + fileTypes.get(key) + "'")
+                 .collect(Collectors.joining(", "));
+         return types.isEmpty() ? "" : ", hive_types={" + types + "}";
+     }
