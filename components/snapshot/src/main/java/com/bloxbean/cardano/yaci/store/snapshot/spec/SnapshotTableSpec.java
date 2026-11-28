@@ -49,7 +49,9 @@ public record SnapshotTableSpec(
         /**
          * Store settings whose value must be the same on the source (recorded in the manifest) and the
          * target, because they change what the table holds: {@code store.transaction.save-full-tx-cbor}
-         * decides between whole transactions and bodies.
+         * decides between whole transactions and bodies, the CIP-113 settings which registries'
+         * nodes {@code cip113_registry_node} holds. Checked for an optional table only when the
+         * snapshot carries rows of it; for any other table always, an empty one included.
          */
         List<String> mustMatch
 ) {

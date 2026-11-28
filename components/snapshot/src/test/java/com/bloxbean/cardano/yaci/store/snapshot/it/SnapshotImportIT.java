@@ -326,6 +326,44 @@ class SnapshotImportIT {
                         && b.contains("target runs with store.transaction.save-full-tx-cbor=true"));
     }
 
+    /**
+     * cip113_registry_node holds the nodes of the registries the source followed, so a target must follow
+     * the same ones, even when the source's table is empty (CIP-113 off, or no registry known).
+     */
+    @Test
+    void aTargetMustFollowTheSameCip113RegistriesAsTheSource() throws Exception {
+        SnapshotFixture.Built built = fixture();
+        var settings = new java.util.LinkedHashMap<>(built.manifest().pruningSettings() == null
+                ? java.util.Map.<String, String>of() : built.manifest().pruningSettings());
+        settings.put("store.assets.ext.cip113.enabled", "false");
+        settings.put("store.assets.ext.cip113.registry-nft-policy-ids", "");
+        SnapshotManifest m = built.manifest();
+        SnapshotManifest cip113Off = new SnapshotManifest(m.formatVersion(), m.snapshotId(), m.createdAt(),
+                m.producer(), m.yaciStoreVersion(), m.specFormatVersion(), m.duckdbVersion(),
+                m.ducklakeFormatVersion(), m.point(), m.genesisHash(), m.modules(), settings,
+                m.schemaFingerprint(), m.flywayFingerprint(), m.tables(), m.parts(), m.declaredLossy());
+        Path path = built.archiveDir().resolve("cip113-off.manifest.json");
+        new ManifestCodec().writeAtomically(cip113Off, path);
+        assertThat(cip113Off.table("cip113-registry-node").rowCount()).isZero();
+
+        var on = java.util.Map.of("store.assets.ext.cip113.enabled", "true",
+                "store.assets.ext.cip113.registry-nft-policy-ids", "");
+        assertThat(new SnapshotImporter(registry).preflight(options(path, 1, java.util.Map.of(), on)).blockers())
+                .anySatisfy(b -> assertThat(b)
+                        .contains("cip113_registry_node was exported with store.assets.ext.cip113.enabled=false")
+                        .contains("import a snapshot exported with it"));
+
+        var off = java.util.Map.of("store.assets.ext.cip113.enabled", "false",
+                "store.assets.ext.cip113.registry-nft-policy-ids", "");
+        assertThat(new SnapshotImporter(registry).preflight(options(path, 1, java.util.Map.of(), off)).blockers())
+                .noneMatch(b -> b.contains("cip113_registry_node"));
+
+        var otherRegistry = java.util.Map.of("store.assets.ext.cip113.enabled", "false",
+                "store.assets.ext.cip113.registry-nft-policy-ids", "ab");
+        assertThat(new SnapshotImporter(registry).preflight(options(path, 1, java.util.Map.of(), otherRegistry))
+                .blockers()).anyMatch(b -> b.contains("store.assets.ext.cip113.registry-nft-policy-ids="));
+    }
+
     /** A source without store.utxo.save-address exports no address table; only a target that saves it refuses. */
     @Test
     void aTargetThatSavesAddressesNeedsASnapshotThatCarriesThem() throws Exception {

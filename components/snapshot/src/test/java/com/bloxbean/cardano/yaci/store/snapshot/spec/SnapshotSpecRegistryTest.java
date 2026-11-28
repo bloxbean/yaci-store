@@ -177,6 +177,9 @@ class SnapshotSpecRegistryTest {
         assertThat(export.isSelected("cip68-metadata")).isFalse();
         assertThat(export.isSelected("cip113-registry-node")).isFalse();
         assertThat(all.isSelected("cip113-registry-node")).isTrue();
+        assertThat(all.byId("cip113-registry-node").orElseThrow().optional()).isFalse();
+        assertThat(all.byId("cip113-registry-node").orElseThrow().mustMatch()).containsExactly(
+                "store.assets.ext.cip113.enabled", "store.assets.ext.cip113.registry-nft-policy-ids");
         assertThat(export.importedTables()).noneMatch(s -> s.module().equals("assets-ext"));
         // registry-sourced extension tables stay classified, so the manifest still lists them
         assertThat(export.isSelected("cip26-metadata")).isTrue();

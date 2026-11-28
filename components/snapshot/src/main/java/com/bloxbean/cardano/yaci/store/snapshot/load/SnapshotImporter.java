@@ -281,15 +281,17 @@ public class SnapshotImporter {
     }
 
     /**
-     * An optional table holds what the source's settings made it hold, e.g. whole transactions or only
-     * their bodies in {@code transaction_cbor}; a target that expects the other form is refused.
+     * A table holds what the source's settings made it hold, e.g. whole transactions or only their bodies
+     * in {@code transaction_cbor}, or the nodes of the CIP-113 registries the source followed; a target
+     * that expects something else is refused. An empty optional table holds nothing either way; an empty
+     * table that is always written is still checked, since its emptiness came from the source's settings.
      */
     private List<String> matchingSettingBlockers(SnapshotManifest manifest, ImportOptions options) {
         List<String> problems = new ArrayList<>();
         Map<String, String> source = manifest.pruningSettings() == null ? Map.of() : manifest.pruningSettings();
         for (SnapshotTableSpec spec : registry.importedTables()) {
             SnapshotManifest.TableManifest t = manifest.table(spec.id());
-            if (t == null || t.rowCount() == 0) {
+            if (t == null || (spec.optional() && t.rowCount() == 0)) {
                 continue;
             }
             for (String setting : spec.mustMatch()) {
@@ -297,8 +299,9 @@ public class SnapshotImporter {
                 String wanted = options.targetSettings().getOrDefault(setting, "false");
                 if (!exported.equalsIgnoreCase(wanted)) {
                     problems.add(String.format("%s was exported with %s=%s, but the target runs with %s=%s. Use the"
-                            + " same setting, or turn %s off on the target.", spec.targetTable(), setting, exported,
-                            setting, wanted, spec.targetTable()));
+                            + " same setting%s.", spec.targetTable(), setting, exported, setting, wanted,
+                            spec.optional() ? ", or turn " + spec.targetTable() + " off on the target"
+                                    : ", or import a snapshot exported with it"));
                 }
             }
         }

@@ -146,9 +146,10 @@ when the source runs the assets extension (`store.assets.ext.enabled=true`, with
 and that extension must be enabled from the start of sync so its history is complete. CIP-113
 registry nodes (`cip113_registry_node`) are exported and restored whenever the source runs the assets
 extension; the table is empty when CIP-113 is off or no registry is known for the network. The
-target must follow the same registries as the source (`store.assets.ext.cip113.registry-nft-policy-ids`,
-or the ones bundled for the network): the snapshot carries only the nodes of the registries the
-source followed. CIP-26 registry data is not part of a snapshot; when CIP-26 sync is on, the restored instance runs a full
+snapshot carries only the nodes of the registries the source followed, so the manifest records
+`store.assets.ext.cip113.enabled` and `store.assets.ext.cip113.registry-nft-policy-ids`, and import
+refuses a target whose values differ (an empty list means the registries bundled with the release
+for the network; restore with the release that produced the snapshot if those changed). CIP-26 registry data is not part of a snapshot; when CIP-26 sync is on, the restored instance runs a full
 registry sync on start-up.
 
 The source must never prune. Every snapshot packages the full history, and a pruning target picks

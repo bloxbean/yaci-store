@@ -4,6 +4,9 @@ snapshot-table:
   module: assets-ext
   kind: EXTENSION_DATA
   restore: IMPORT
+  # The table holds the nodes of the registries the source followed (none with CIP-113 off): the target
+  # must follow the same ones. Empty registry-nft-policy-ids means the ones bundled for the network.
+  must-match: [store.assets.ext.cip113.enabled, store.assets.ext.cip113.registry-nft-policy-ids]
 
   source:
     exporter-id: cip113_registry_node

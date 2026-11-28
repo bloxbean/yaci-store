@@ -113,9 +113,6 @@ public class SnapshotSpecLoader {
         }
         List<String> enabledBy = stringList(n, "enabled-by", origin);
         List<String> mustMatch = stringList(n, "must-match", origin);
-        if (!mustMatch.isEmpty() && enabledBy.isEmpty()) {
-            throw new SpecException(origin + ": 'must-match' is only for an optional table, with 'enabled-by'");
-        }
         SnapshotTableSpec spec = new SnapshotTableSpec(id, specVersion, module, kind, restore, reason,
                 source, consistency, importSpec, validation, lossy, lossyNote, digest, origin, enabledBy, mustMatch);
         validateSemantics(spec, origin);

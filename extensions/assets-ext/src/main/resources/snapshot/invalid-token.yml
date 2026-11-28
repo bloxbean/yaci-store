@@ -5,7 +5,7 @@ snapshot-table:
   kind: EXTENSION_DATA
   restore: NOT_RESTORED
   reason: >-
-    the assets extension's records of dropped or unusable CIP-26 and CIP-68 items have no analytics
+    the assets extension's records of dropped or unusable CIP-26, CIP-68 and CIP-113 items have no analytics
     export; a restored store records only the ones it meets after the restore
 
   import:

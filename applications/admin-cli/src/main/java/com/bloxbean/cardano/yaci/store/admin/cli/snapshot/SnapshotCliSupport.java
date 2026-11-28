@@ -245,7 +245,27 @@ public class SnapshotCliSupport {
                 "store.transaction.save-full-tx-cbor")) {
             out.put(cbor, environment.getProperty(cbor, "false"));
         }
+        // Which CIP-113 registries' nodes cip113_registry_node holds: a target must follow the same ones.
+        out.put(CIP113_ENABLED, environment.getProperty(CIP113_ENABLED, "true"));
+        out.put(CIP113_REGISTRIES, cip113Registries());
         return out;
+    }
+
+    static final String CIP113_ENABLED = "store.assets.ext.cip113.enabled";
+    static final String CIP113_REGISTRIES = "store.assets.ext.cip113.registry-nft-policy-ids";
+
+    /**
+     * The configured registry policy IDs, lower case, sorted and comma separated; empty when none is
+     * configured, so the ones bundled for the network apply.
+     */
+    private String cip113Registries() {
+        List<String> ids = environment instanceof org.springframework.core.env.ConfigurableEnvironment
+                ? org.springframework.boot.context.properties.bind.Binder.get(environment)
+                        .bind(CIP113_REGISTRIES, org.springframework.boot.context.properties.bind.Bindable
+                                .listOf(String.class)).orElse(List.of())
+                : List.of(environment.getProperty(CIP113_REGISTRIES, "").split(","));
+        return ids.stream().filter(java.util.Objects::nonNull).map(id -> id.trim().toLowerCase(Locale.ROOT))
+                .filter(id -> !id.isEmpty()).distinct().sorted().collect(java.util.stream.Collectors.joining(","));
     }
 
     public SnapshotSpecRegistry registry(String specFile, boolean allowCustomSpecs) {

@@ -131,7 +131,7 @@ a column the export cannot carry:
 | `import.handler` | `HANDLER` mode: the name of the Java `SnapshotHandler` that rebuilds the table. |
 | `validation.key`, `bounds`, `required-columns` | Offline validation after import: unique key, columns that must not pass the point, columns that must not be NULL. `source-key` only when a transform changes the row count. |
 | `lossy`, `lossy-note` | Declared limitations. They appear in `snapshot inspect`, in the manifest and in the import report. |
-| `enabled-by`, `must-match` | Optional tables written only when a setting is on (`block_cbor` with `store.blocks.save-cbor`), and settings that must be equal on source and target. |
+| `enabled-by`, `must-match` | Optional tables written only when a setting is on (`block_cbor` with `store.blocks.save-cbor`), and settings that must be equal on source and target (`store.transaction.save-full-tx-cbor` for `transaction_cbor`, the CIP-113 settings for `cip113_registry_node`). The settings are recorded in the manifest by `SnapshotCliSupport.pruningSettings()`. |
 
 The full key list and the checks are in `SnapshotSpecLoader`; it rejects unknown keys, so a typo
 fails the build's tests rather than an import hours later.
