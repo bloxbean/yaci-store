@@ -22,6 +22,7 @@ import org.springframework.context.annotation.Import;
 import java.math.BigInteger;
 import java.util.List;
 
+import static com.bloxbean.cardano.yaci.store.assets.jooq.Tables.ASSETS;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @DataJpaTest
@@ -47,8 +48,10 @@ class AssetStorageImplTest {
     @Test
     void saveAll_sameRowsTwice_keepsOneRowPerUnit() {
         //"a\u0000" and "a " are different units with the same sanitized asset name
-        assetStorage.saveAll(List.of(txAsset("a ", POLICY + "6100", 1), txAsset("a ", POLICY + "6120", 2)));
-        assetStorage.saveAll(List.of(txAsset("a ", POLICY + "6100", 10), txAsset("a ", POLICY + "6120", 20)));
+        assetStorage.saveAll(List.of(txAsset("a ", POLICY + "6100", 1, 0), txAsset("a ", POLICY + "6120", 2, 0)));
+        //Read with jOOQ, a JPA read here would keep stale entities for the read below
+        assertThat(dsl.select(ASSETS.TX_INDEX).from(ASSETS).fetch(ASSETS.TX_INDEX)).containsOnly(0);
+        assetStorage.saveAll(List.of(txAsset("a ", POLICY + "6100", 10, 3), txAsset("a ", POLICY + "6120", 20, 3)));
 
         List<TxAssetEntity> rows = repository.findAll();
         assertThat(rows).hasSize(2);
@@ -58,9 +61,11 @@ class AssetStorageImplTest {
                 .singleElement().satisfies(row -> assertThat(row.getQuantity()).isEqualTo(BigInteger.valueOf(10)));
         assertThat(rows).filteredOn(row -> row.getUnit().equals(POLICY + "6120"))
                 .singleElement().satisfies(row -> assertThat(row.getQuantity()).isEqualTo(BigInteger.valueOf(20)));
+        //tx_index orders same-slot rows, so it is written on insert and on update
+        assertThat(rows).extracting(TxAssetEntity::getTxIndex).containsOnly(3);
     }
 
-    private TxAsset txAsset(String assetName, String unit, long quantity) {
+    private TxAsset txAsset(String assetName, String unit, long quantity, int txIndex) {
         return TxAsset.builder()
                 .slot(10707576L)
                 .txHash(TX_HASH)
@@ -69,6 +74,7 @@ class AssetStorageImplTest {
                 .unit(unit)
                 .quantity(BigInteger.valueOf(quantity))
                 .mintType(MintType.MINT)
+                .txIndex(txIndex)
                 .blockNumber(179428L)
                 .blockTime(1666390776L)
                 .build();

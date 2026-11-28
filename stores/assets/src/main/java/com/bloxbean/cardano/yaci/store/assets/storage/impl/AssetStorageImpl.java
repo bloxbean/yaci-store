@@ -43,6 +43,7 @@ public class AssetStorageImpl implements AssetStorage {
                         .set(ASSETS.FINGERPRINT, entity.getFingerprint())
                         .set(ASSETS.QUANTITY, entity.getQuantity() != null ? entity.getQuantity().longValue() : null)
                         .set(ASSETS.MINT_TYPE, entity.getMintType() != null ? entity.getMintType().name() : null)
+                        .set(ASSETS.TX_INDEX, entity.getTxIndex())
                         .set(ASSETS.BLOCK, entity.getBlockNumber())
                         .set(ASSETS.BLOCK_TIME, entity.getBlockTime())
                         .set(ASSETS.UPDATE_DATETIME, localDateTime)
@@ -55,6 +56,7 @@ public class AssetStorageImpl implements AssetStorage {
                         .set(ASSETS.FINGERPRINT, entity.getFingerprint())
                         .set(ASSETS.QUANTITY, entity.getQuantity() != null ? entity.getQuantity().longValue() : null)
                         .set(ASSETS.MINT_TYPE, entity.getMintType() != null ? entity.getMintType().name() : null)
+                        .set(ASSETS.TX_INDEX, entity.getTxIndex())
                         .set(ASSETS.BLOCK, entity.getBlockNumber())
                         .set(ASSETS.BLOCK_TIME, entity.getBlockTime())
                         .set(ASSETS.UPDATE_DATETIME, localDateTime)).toList();
