@@ -100,7 +100,7 @@ yaci.store.analytics.ducklake.catalog-type=postgresql
 
 - ACID transactions, time-travel queries, schema evolution
 - PostgreSQL catalog supports multi-instance deployments
-- DuckDB catalog is lightweight for development
+- DuckDB catalog (the default) is a single local file, for a node that is the catalog's only writer
 
 ## Connecting External Tools
 

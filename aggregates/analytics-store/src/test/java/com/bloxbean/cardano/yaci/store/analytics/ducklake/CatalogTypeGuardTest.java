@@ -3,11 +3,14 @@ package com.bloxbean.cardano.yaci.store.analytics.ducklake;
 import com.bloxbean.cardano.yaci.store.analytics.config.AnalyticsStoreProperties;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.springframework.core.env.StandardEnvironment;
+import org.springframework.core.env.SystemEnvironmentPropertySource;
 import org.springframework.mock.env.MockEnvironment;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.SQLException;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -89,14 +92,53 @@ class CatalogTypeGuardTest {
     }
 
     @Test
-    void aNonPostgresDatasourceOrAnUnreachableOneIsSkipped() {
+    void aNonPostgresDatasourceIsSkipped() {
         var h2 = new MockEnvironment().withProperty("spring.datasource.url", "jdbc:h2:mem:test");
         assertThatCode(new CatalogTypeGuard(h2, properties(), (u, n, p) -> {
             throw new AssertionError("probed");
         })::check).doesNotThrowAnyException();
+    }
 
-        assertThatCode(new CatalogTypeGuard(pgDatasource(), properties(), (u, n, p) -> {
+    @Test
+    void aDatabaseThatCannotBeCheckedRefusesStartInsteadOfCreatingTheFile() {
+        var guard = new CatalogTypeGuard(pgDatasource(), properties(), (u, n, p) -> {
+            throw new SQLException("connection to dbname=yaci user=yaci password=secret host=db refused");
+        });
+
+        assertThatThrownBy(guard::check).isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("spring.datasource.url")
+                .hasMessageContaining("yaci.store.analytics.ducklake.catalog-type=postgresql")
+                .hasMessageContaining("yaci.store.analytics.ducklake.catalog-type=duckdb")
+                .hasMessageContaining("password=***")
+                .hasMessageNotContaining("secret")
+                .hasNoCause();
+    }
+
+    @Test
+    void aSeparateCatalogDatabaseThatCannotBeCheckedIsNamed() {
+        AnalyticsStoreProperties p = properties();
+        p.getDucklake().setCatalogUrl("jdbc:postgresql://catalog:5432/lake");
+        var guard = new CatalogTypeGuard(pgDatasource(), p, (u, n, pw) -> {
             throw new SQLException("connection refused");
+        });
+
+        assertThatThrownBy(guard::check).isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("yaci.store.analytics.ducklake.catalog-url");
+    }
+
+    @Test
+    void aRelaxedFormOfTheSettingCountsAsSet() {
+        var camelCase = pgDatasource().withProperty("yaci.store.analytics.ducklake.catalogType", "duckdb");
+        assertThatCode(new CatalogTypeGuard(camelCase, properties(), (u, n, p) -> {
+            throw new AssertionError("probed");
+        })::check).doesNotThrowAnyException();
+
+        StandardEnvironment fromEnvVar = new StandardEnvironment();
+        fromEnvVar.getPropertySources().replace(StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME, new SystemEnvironmentPropertySource(StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME, Map.of(
+                "SPRING_DATASOURCE_URL", PG_URL,
+                "YACI_STORE_ANALYTICS_DUCKLAKE_CATALOGTYPE", "duckdb")));
+        assertThatCode(new CatalogTypeGuard(fromEnvVar, properties(), (u, n, p) -> {
+            throw new AssertionError("probed");
         })::check).doesNotThrowAnyException();
     }
 }
