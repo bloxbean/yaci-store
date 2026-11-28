@@ -1,8 +1,8 @@
 # Architecture decision records: assets-ext
 
-Decisions specific to the `assets-ext` module (CIP-26 and CIP-68 token metadata). They record where the
+Decisions specific to the `assets-ext` module (CIP-26 and CIP-68 token metadata, CIP-113 programmable tokens). They record where the
 module is strict or lenient, what it does with data that does not fit the standards, and why. They do not
-restate CIP-26 or CIP-68.
+restate the CIPs.
 
 The records are numbered within this module, independently of the other ADRs in the repository, since
 yaci-store is modular and these decisions only concern this module.
@@ -19,6 +19,8 @@ yaci-store is modular and these decisions only concern this module.
 | [0008](0008-reference-nft-answers-for-its-333-and-444-subjects.md) | A reference NFT answers for its 333 and 444 subjects (the lookup is not changed) |
 | [0009](0009-a-datum-minted-with-the-nft-alone-is-not-stored.md) | A CIP-68 datum minted with the 222 NFT alone is not stored |
 | [0010](0010-cip-68-outputs-of-a-batch-are-indexed-in-chain-order.md) | The CIP-68 outputs of a batch are indexed in chain order |
+| [0011](0011-cip-113-registry-nodes-are-stored-in-a-module-table.md) | CIP-113 registry nodes are stored in a table of the module |
+| [0012](0012-cip-113-in-the-read-model-and-api.md) | CIP-113 in the read model and API |
 
 A record has a status (`Proposed`, `Accepted`, `Superseded`), a date, the context, the decisions with their
 trade-offs, the consequences and the open questions. When a decision changes, add a new record that supersedes

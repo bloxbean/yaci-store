@@ -10,6 +10,7 @@ query a single yaci-store instance and get merged metadata transparently.
 |----------|--------|-------------|
 | CIP-26 | Off-chain (GitHub [cardano-token-registry](https://github.com/cardano-foundation/cardano-token-registry)) | Fungible token metadata synced periodically from Git |
 | CIP-68 | On-chain (reference NFT inline datums; fungible tokens, label 333, and rich fungible tokens, label 444) | Token metadata parsed from blockchain. NFTs (label 222) are not served, and a datum minted with the NFT alone is not stored. |
+| CIP-113 | On-chain (the nodes of the programmable-token registry) | Marks a token whose policy is registered as `PROGRAMMABLE` and returns the scripts that govern it. Adds to CIP-26 or CIP-68 metadata, which still describe the token. |
 
 ## REST API
 
@@ -51,6 +52,51 @@ GET /api/v1/subject/577f0b1342f8f8f4aed3388b80a8535812950c7a892495c0ecdf0f1e0014
   "queryPriority": ["CIP_68", "CIP_26"]
 }
 ```
+
+Every subject has a `type`: `NATIVE`, or `PROGRAMMABLE` when its policy is registered in CIP-113 (see below); the example leaves it out.
+
+### CIP-113 programmable tokens
+
+A programmable token is a native asset whose every transfer is checked by a smart contract, so it cannot leave its issuer's rules (for
+example a freeze-and-seize list). A token is programmable when its policy is registered in the on-chain CIP-113 registry. The registry says
+which scripts govern the token; its name, ticker, decimals and logo still come from CIP-26 or CIP-68. As in cf-token-metadata-registry's V2 API:
+
+- `type` is `PROGRAMMABLE`, and `extensions.cip113` holds the registry node of the token's policy: `minting_logic_script`,
+  `transfer_logic_script`, `third_party_transfer_logic_script`, `unfracking_logic_script` (`null` means unfracking is forbidden) and
+  `global_state_policy_id`. Each is `null` when the node has none. A native token has `type: NATIVE` and no `extensions`.
+- A programmable token **without CIP-26 or CIP-68 metadata** is served, without metadata and with a `MANDATORY` error: `cip` `CIP-113`,
+  `field_name` `companion_metadata`, `code` `missing_value`. `?validation=MANDATORY_ONLY` and `STRICT` leave it out.
+
+```
+"subject": {
+  "subject": "01c24df7...5257414d696e74696e6754657374",
+  "type": "PROGRAMMABLE",
+  "metadata": { "valid": false },
+  "extensions": {
+    "cip113": {
+      "minting_logic_script": "4e9ba4785eebbeb77fe694c8451f1abec411f7774c09bbacfa3ba1ac",
+      "transfer_logic_script": "ddf0363f0d73f54778e792e16bad802df5fa50061319b1f01d280a37",
+      "third_party_transfer_logic_script": "446fc9584df8316cfab440c60d140e2007f236cdb65180917a374fb8",
+      "unfracking_logic_script": null,
+      "global_state_policy_id": "218ba0c5b7156b13c51e41096e34f0310823adf0e0d3fc70a741f3c2"
+    }
+  },
+  "validation_errors": [
+    { "cip": "CIP-113", "field_name": "companion_metadata", "field_category": "MANDATORY", "code": "missing_value", "error": "..." }
+  ]
+}
+```
+
+The module keeps every version of every registry node in its own table, `cip113_registry_node`, filled from the blocks it indexes: it does not
+read the utxo store's tables, so it works whether or not the utxo store prunes (ADR 0011). The registries deployed on mainnet, preprod and preview
+are bundled and picked by `store.cardano.protocol-magic`. **A node is only seen if the sync covers the block that created it**: start the sync
+before the registry was deployed (mainnet slot 199,384,339), or resync, otherwise a registered token is served as `NATIVE`. An output that holds
+a registry NFT but whose datum is not a registry node, or that is not at the registry's address with the NFT of its own key, is not stored and is
+recorded in `invalid_token` (`registry_node_unparseable`, `registry_node_spoofed`).
+
+Each node records the registry it belongs to (the policy of its NFT), and only the configured registries are read. When a new registry is
+deployed, list it together with the old one: the old registrations keep being served. A policy registered in more than one configured registry
+is served from its most recent node. A registry that is no longer configured stops being served, though its rows stay.
 
 ### Validation errors
 
@@ -129,7 +175,7 @@ counts for `logo` (a rich fungible token's image is served as its logo), the err
 and errors about what the merged endpoint cannot return (`files`, extra properties, keys) are not reported under a filter. Without `property`, all
 errors are returned. The filter runs on the rows the request already reads, so it adds no query.
 
-What is dropped is recorded in the `invalid_token` table (CIP-26 entries and CIP-68 datums that are unusable or look like an
+What is dropped is recorded in the `invalid_token` table (CIP-26 entries, CIP-68 datums and CIP-113 registry nodes that are unusable or look like an
 attack: the reason, the token, the transaction and output or the registry file). There is no API for it; read it with SQL, for example
 `SELECT standard, reason_code, count(*) FROM invalid_token GROUP BY 1, 2`. See `db/store/README.md` and ADR 0007. The `yaci.store.assets.invalid_tokens` counter
 (`standard`, `reason_code`) counts the rows written.
@@ -184,6 +230,10 @@ store:
     cip68:
       enabled: true                    # Fungible (333) and rich fungible (444) token support
 
+    cip113:
+      enabled: true                    # Programmable tokens; the registry is bundled per network
+      # registry-nft-policy-ids: <id>,<id>  # Replaces the bundled registries; list every registry to keep serving
+
     query:
       priority: "CIP_68,CIP_26"       # Default merge priority
 ```
@@ -195,6 +245,8 @@ store:
 | `cip26_metadata` | CIP-26 token metadata, logo included (subject as PK), with `validation_errors` |
 | `cip26_sync_state` | GitHub sync progress tracking |
 | `cip68_metadata` | CIP-68 on-chain reference NFT metadata (composite PK: policy_id, asset_name, slot, tx_hash). `label` is 222, 333 or 444; `validation_errors` says what the datum breaks. |
+| `cip113_registry_node` | Every version of every CIP-113 registry node (composite PK: key, registry_policy_id, slot, tx_hash); the current node of a policy is its latest row. |
+| `invalid_token` | What is dropped, with the reason (ADR 0007). |
 
 All tables include a `last_synced_at` timestamp for monitoring. See [`db/store/README.md`](src/main/resources/db/store/README.md).
 

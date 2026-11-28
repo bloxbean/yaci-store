@@ -27,7 +27,7 @@ import { Callout } from 'nextra/components'
 | `yaci.store.analytics.parquet-export.codec` | `ZSTD` | Compression codec |
 | `yaci.store.analytics.parquet-export.compression-level` | `3` | ZSTD compression level (1-22) |
 | `yaci.store.analytics.parquet-export.row-group-size` | `-1` | Parquet row group size (-1 = DuckDB default ~122,880 rows) |
-| `yaci.store.analytics.ducklake.catalog-type` | `postgresql` | DuckLake catalog: `postgresql` or `duckdb` |
+| `yaci.store.analytics.ducklake.catalog-type` | `duckdb` | DuckLake catalog: `duckdb` (a local file) or `postgresql`. The 3.0.0 betas defaulted to `postgresql`; see [Catalog options](/docs/v3/analytics/storage-modes#catalog-options) |
 | `yaci.store.analytics.ducklake.catalog-url` | _(main datasource)_ | PostgreSQL URL for catalog |
 | `yaci.store.analytics.ducklake.catalog-username` | _(main datasource)_ | PostgreSQL catalog username |
 | `yaci.store.analytics.ducklake.catalog-password` | _(main datasource)_ | PostgreSQL catalog password |

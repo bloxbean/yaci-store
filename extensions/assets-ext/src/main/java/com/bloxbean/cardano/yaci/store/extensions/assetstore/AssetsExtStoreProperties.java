@@ -6,6 +6,9 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Plain properties POJO for the assets-ext extension module.
  * <p>
@@ -22,6 +25,9 @@ public class AssetsExtStoreProperties {
 
     @Builder.Default
     private Cip26 cip26 = new Cip26();
+
+    @Builder.Default
+    private Cip113 cip113 = new Cip113();
 
     @Builder.Default
     private String defaultQueryPriority = "CIP_68,CIP_26";
@@ -55,5 +61,18 @@ public class AssetsExtStoreProperties {
 
         @Builder.Default
         private boolean forceClone = false;
+    }
+
+    @Data
+    @AllArgsConstructor
+    @NoArgsConstructor
+    @Builder
+    public static class Cip113 {
+        @Builder.Default
+        private boolean enabled = true;
+
+        // Empty means "use the registries bundled for the network" (Cip113Configuration).
+        @Builder.Default
+        private List<String> registryNftPolicyIds = new ArrayList<>();
     }
 }

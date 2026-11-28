@@ -6,6 +6,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.core.env.Environment;
+import org.springframework.mock.env.MockEnvironment;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -48,7 +49,7 @@ class DuckDbFileCatalogAttachTest {
         Path base = Files.createDirectories(tempDir.resolve("it's here"));
         AnalyticsStoreProperties properties = properties(base.resolve("analytics"), base.resolve("cat'alog.db"));
 
-        new DuckDbCatalogPreInitializer(properties).afterPropertiesSet();
+        new DuckDbCatalogPreInitializer(properties, catalogTypeSet()).afterPropertiesSet();
         assertTrue(Files.isRegularFile(base.resolve("cat'alog.db")));
 
         try (Connection conn = DriverManager.getConnection("jdbc:duckdb:")) {
@@ -137,7 +138,7 @@ class DuckDbFileCatalogAttachTest {
         AnalyticsStoreProperties properties = properties(tempDir.resolve("a"), tempDir.resolve("c.db"));
         properties.getDucklake().setCatalogType("postgres");
         IllegalStateException e = assertThrows(IllegalStateException.class,
-                () -> new DuckDbCatalogPreInitializer(properties).afterPropertiesSet());
+                () -> new DuckDbCatalogPreInitializer(properties, catalogTypeSet()).afterPropertiesSet());
         assertTrue(e.getMessage().contains("'postgres'"), e.getMessage());
         assertTrue(e.getMessage().contains("'postgresql'") && e.getMessage().contains("'duckdb'"), e.getMessage());
         assertThrows(IllegalStateException.class,
@@ -147,7 +148,7 @@ class DuckDbFileCatalogAttachTest {
     // ---------------------------------------------------------------------
 
     private void createCatalog(AnalyticsStoreProperties properties) throws Exception {
-        new DuckDbCatalogPreInitializer(properties).afterPropertiesSet();
+        new DuckDbCatalogPreInitializer(properties, catalogTypeSet()).afterPropertiesSet();
         try (Connection conn = DriverManager.getConnection("jdbc:duckdb:")) {
             helper(properties).prepareConnectionForDuckLake(conn, false, false);
             exec(conn, "CREATE TABLE t AS SELECT 1 AS a");
@@ -221,5 +222,10 @@ class DuckDbFileCatalogAttachTest {
         } catch (Exception e) {
             return false;
         }
+    }
+
+    /** catalog-type set explicitly, so the first start does not check for a PostgreSQL catalog (CatalogTypeGuard). */
+    private static Environment catalogTypeSet() {
+        return new MockEnvironment().withProperty("yaci.store.analytics.ducklake.catalog-type", "duckdb");
     }
 }

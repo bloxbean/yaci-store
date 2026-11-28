@@ -183,7 +183,7 @@ class TokenMetadataSubjectControllerTest {
         @Test
         void returns200WithBatchResultsWhenValid() throws Exception {
             when(tokenQueryService.prefetchBatch(anyList(), anyList()))
-                    .thenReturn(new BatchPrefetchData(Map.of(), Map.of(), Map.of()));
+                    .thenReturn(new BatchPrefetchData(Map.of(), Map.of(), Map.of(), Map.of()));
             when(tokenQueryService.querySubjectBatch(eq(VALID_SUBJECT), anyList(), anyList(), any(), anyBoolean(), any(ValidationScope.class)))
                     .thenReturn(Optional.of(subjectWithName(VALID_SUBJECT, "Nutcoin")));
             when(tokenQueryService.querySubjectBatch(eq(VALID_SUBJECT_2), anyList(), anyList(), any(), anyBoolean(), any(ValidationScope.class)))
@@ -204,7 +204,7 @@ class TokenMetadataSubjectControllerTest {
         @Test
         void filtersOutSubjectsNoStandardKnows() throws Exception {
             when(tokenQueryService.prefetchBatch(anyList(), anyList()))
-                    .thenReturn(new BatchPrefetchData(Map.of(), Map.of(), Map.of()));
+                    .thenReturn(new BatchPrefetchData(Map.of(), Map.of(), Map.of(), Map.of()));
             when(tokenQueryService.querySubjectBatch(eq(VALID_SUBJECT), anyList(), anyList(), any(), anyBoolean(), any(ValidationScope.class)))
                     .thenReturn(Optional.empty());
 
@@ -256,7 +256,7 @@ class TokenMetadataSubjectControllerTest {
         void keepsATokenThatBreaksItsCipWithItsErrors() throws Exception {
             ValidationError error = ValidationError.mandatory("CIP-26", null, "name", "missing_value", "name field is missing a mandatory value");
             when(tokenQueryService.prefetchBatch(anyList(), anyList()))
-                    .thenReturn(new BatchPrefetchData(Map.of(), Map.of(), Map.of()));
+                    .thenReturn(new BatchPrefetchData(Map.of(), Map.of(), Map.of(), Map.of()));
             when(tokenQueryService.querySubjectBatch(eq(VALID_SUBJECT), anyList(), anyList(), any(), anyBoolean(), any(ValidationScope.class)))
                     .thenReturn(Optional.of(new Subject(VALID_SUBJECT, Metadata.empty(), null, List.of(error))));
 
@@ -275,7 +275,7 @@ class TokenMetadataSubjectControllerTest {
         @Test
         void acceptsAPropertyFilterWithoutNameAndDescription() throws Exception {
             when(tokenQueryService.prefetchBatch(anyList(), anyList()))
-                    .thenReturn(new BatchPrefetchData(Map.of(), Map.of(), Map.of()));
+                    .thenReturn(new BatchPrefetchData(Map.of(), Map.of(), Map.of(), Map.of()));
             when(tokenQueryService.querySubjectBatch(eq(VALID_SUBJECT), anyList(), anyList(), any(), anyBoolean(), any(ValidationScope.class)))
                     .thenReturn(Optional.empty());
             String body = objectMapper.writeValueAsString(Map.of(

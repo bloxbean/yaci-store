@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.Ordered;
+import org.springframework.core.env.Environment;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
@@ -47,6 +48,7 @@ import java.sql.Statement;
 public class DuckDbCatalogPreInitializer implements InitializingBean {
 
     private final AnalyticsStoreProperties properties;
+    private final Environment environment;
 
     @Override
     public void afterPropertiesSet() throws Exception {
@@ -67,6 +69,10 @@ public class DuckDbCatalogPreInitializer implements InitializingBean {
             log.info("DuckDB catalog already exists: {}", catalogPath);
             return;
         }
+
+        // First start on a DuckDB catalog: refuse if this node's catalog is in PostgreSQL and it only
+        // lands here because the default changed.
+        new CatalogTypeGuard(environment, properties).check();
 
         log.info("Pre-initializing DuckDB catalog at: {}", catalogPath);
 

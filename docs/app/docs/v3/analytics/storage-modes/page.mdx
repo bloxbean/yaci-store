@@ -14,7 +14,21 @@ yaci.store.analytics.storage.type=ducklake
 
 ### Catalog Options
 
-**PostgreSQL catalog (recommended for production):**
+Both options store the data as DuckLake Parquet files under the export path; the catalog type only
+chooses where DuckLake keeps its catalog.
+
+**DuckDB file catalog (the default, and what the `analytics` profile uses):**
+
+```properties
+yaci.store.analytics.ducklake.catalog-type=duckdb
+yaci.store.analytics.ducklake.catalog-path=./data/analytics/ducklake.catalog.db
+```
+
+The exporting node is the only writer. Keep the catalog file with the export path: one is
+useless without the other.
+
+**PostgreSQL catalog**, for when other processes or hosts read the catalog while the node writes
+it:
 
 ```properties
 yaci.store.analytics.ducklake.catalog-type=postgresql
@@ -28,18 +42,21 @@ yaci.store.analytics.ducklake.catalog-username=postgres
 yaci.store.analytics.ducklake.catalog-password=pass
 ```
 
-**DuckDB file catalog (development / single-instance):**
-
-```properties
-yaci.store.analytics.ducklake.catalog-type=duckdb
-yaci.store.analytics.ducklake.catalog-path=./data/analytics/ducklake.catalog.db
-```
+<Callout type="warning">
+**Upgrading from a 3.0.0 beta.** The default was `postgresql` in the betas and is `duckdb` now. A
+node that set `storage.type=ducklake` but never set `catalog-type` refuses to start when its
+PostgreSQL database already holds a DuckLake catalog and no DuckDB catalog file exists, instead of
+starting a new, empty catalog. Set `yaci.store.analytics.ducklake.catalog-type=postgresql` to keep
+the existing catalog. If that database cannot be reached for the check, the node also refuses to
+start rather than create the DuckDB catalog file; start it again once the database is up, or set
+`catalog-type` either way.
+</Callout>
 
 ### Characteristics
 
 - ACID transactions, time-travel queries, schema evolution
 - PostgreSQL catalog supports multi-instance deployments
-- DuckDB catalog is lightweight for development
+- DuckDB catalog (the default) is a single local file, for a node that is the catalog's only writer
 - Query tables directly by name (e.g., `SELECT * FROM analytics.block`)
 
 ### Partitioning
@@ -112,5 +129,5 @@ yaci.store.analytics.storage.type=parquet
 | **Best for** | Production, shared environments | Simple setups, ad-hoc analysis |
 
 <Callout type="info">
-For most users, the default **DuckLake** mode with PostgreSQL catalog is recommended. Use **Parquet** mode if you want a simpler setup without catalog management.
+For most users, **DuckLake** mode with the default DuckDB catalog is recommended; use the PostgreSQL catalog when other processes or hosts read the catalog. Use **Parquet** mode if you want a simpler setup without catalog management.
 </Callout>

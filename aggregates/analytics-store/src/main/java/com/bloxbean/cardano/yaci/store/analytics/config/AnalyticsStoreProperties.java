@@ -390,22 +390,18 @@ public class AnalyticsStoreProperties {
     @Data
     public static class DuckLake {
         /**
-         * DuckLake catalog type: "postgresql" or "duckdb"
+         * DuckLake catalog type: "duckdb" (default) or "postgresql". Both store the data as DuckLake
+         * Parquet files under the export path; this only chooses where the catalog lives.
          *
-         * - postgresql: Production-grade catalog with multi-instance support
-         * - duckdb: Lightweight catalog for development/single-instance deployments
+         * - duckdb: a local DuckDB file ({@link #catalogPath}). One writer, the exporting node; the
+         *   default, and what the shipped analytics profile uses.
+         * - postgresql: tables in a PostgreSQL database ({@link #catalogUrl}, or the main datasource).
+         *   Choose it when other processes or hosts read the catalog while the node writes it.
          *
-         * PostgreSQL catalog is recommended for:
-         * - Production deployments
-         * - Multi-writer scenarios
-         * - High availability requirements
-         *
-         * DuckDB catalog is suitable for:
-         * - Development/testing
-         * - Single-writer deployments
-         * - Embedded use cases
+         * The 3.0.0 betas defaulted to "postgresql". A node whose catalog is in PostgreSQL and that
+         * never set this property refuses to start until it is set (see CatalogTypeGuard).
          */
-        private String catalogType = "postgresql";
+        private String catalogType = "duckdb";
 
         /**
          * PostgreSQL catalog JDBC URL (used when catalogType=postgresql).

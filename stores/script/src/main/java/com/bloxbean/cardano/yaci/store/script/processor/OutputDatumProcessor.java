@@ -12,6 +12,7 @@ import com.bloxbean.cardano.yaci.store.script.domain.DatumEvent;
 import com.bloxbean.cardano.yaci.store.script.domain.OutputDatumContext;
 import com.bloxbean.cardano.yaci.store.script.domain.WitnessDatumContext;
 import com.bloxbean.cardano.yaci.store.script.storage.DatumStorage;
+import com.bloxbean.cardano.yaci.store.script.helper.AppliedOutput;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -21,7 +22,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 import static com.bloxbean.cardano.yaci.store.script.ScriptStoreConfiguration.STORE_SCRIPT_ENABLED;
 import static com.bloxbean.cardano.yaci.store.script.helper.ScriptUtil.getDatumHash;
@@ -43,16 +43,12 @@ public class OutputDatumProcessor {
     }
 
     private void handleOutputDatums(EventMetadata metadata, Transaction transaction) {
-        if (transaction.isInvalid())
-            return;
-
         //Get both inline datum / datum hash from outputs
-        var outputs = transaction.getBody().getOutputs();
-        List<OutputDatumContext> outputDatumContexts = IntStream.range(0, outputs.size())
-                .mapToObj(i -> {
-                    var output = outputs.get(i);
+        List<OutputDatumContext> outputDatumContexts = AppliedOutput.from(transaction)
+                .map(appliedOutput -> {
+                    var output = appliedOutput.output();
                     return output.getDatumHash() != null || output.getInlineDatum() != null
-                            ? getDatumFromTxOut(output, transaction.getTxHash(), i, metadata.getSlot())
+                            ? getDatumFromTxOut(output, transaction.getTxHash(), appliedOutput.index(), metadata.getSlot())
                             : null;
                 })
                 .filter(Objects::nonNull)
@@ -64,7 +60,8 @@ public class OutputDatumProcessor {
         outputDatumContexts.forEach(datumContext -> datumHashToDatumMap.put(datumContext.getDatum().getHash(), datumContext.getDatum()));
 
         //If datum value exists in witnessset, create a map for such values
-        Map<String, WitnessDatumContext> witnessDatumMap = findWitnessDatum(transaction, metadata.getSlot());
+        Map<String, WitnessDatumContext> witnessDatumMap = transaction.isInvalid()
+                ? Collections.emptyMap() : findWitnessDatum(transaction, metadata.getSlot());
         if (witnessDatumMap.size() > 0) {
             witnessDatumMap.forEach((hash, datumContext) -> {
                 datumHashToDatumMap.put(hash, datumContext.getDatum());

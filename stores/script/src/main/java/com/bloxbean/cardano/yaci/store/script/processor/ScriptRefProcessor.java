@@ -11,6 +11,7 @@ import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import com.bloxbean.cardano.yaci.store.script.domain.Script;
 import com.bloxbean.cardano.yaci.store.script.domain.ScriptType;
 import com.bloxbean.cardano.yaci.store.script.helper.ScriptUtil;
+import com.bloxbean.cardano.yaci.store.script.helper.AppliedOutput;
 import com.bloxbean.cardano.yaci.store.script.storage.ScriptStorage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -39,9 +40,8 @@ public class ScriptRefProcessor {
         try {
             List<Script> scriptList = transactionEvent.getTransactions()
                     .stream()
-                    .filter(transaction -> !transaction.isInvalid())
-                    .flatMap(transaction -> transaction.getBody().getOutputs().stream())
-                    .map(transactionOutput -> transactionOutput.getScriptRef())
+                    .flatMap(AppliedOutput::from)
+                    .map(appliedOutput -> appliedOutput.output().getScriptRef())
                     .filter(Objects::nonNull)
                     .map(scriptRef -> {
                         com.bloxbean.cardano.client.spec.Script script;

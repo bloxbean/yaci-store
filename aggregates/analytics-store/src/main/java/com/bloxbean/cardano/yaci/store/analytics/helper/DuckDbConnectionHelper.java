@@ -2,9 +2,13 @@ package com.bloxbean.cardano.yaci.store.analytics.helper;
 
 import com.bloxbean.cardano.yaci.store.analytics.config.AnalyticsStoreProperties;
 import com.bloxbean.cardano.yaci.store.analytics.config.DuckDbInstances;
+import com.bloxbean.cardano.yaci.store.analytics.ducklake.CatalogTypeGuard;
+import com.bloxbean.cardano.yaci.store.analytics.ducklake.DuckDbCatalogPreInitializer;
 import lombok.Builder;
 import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
@@ -70,6 +74,20 @@ public class DuckDbConnectionHelper {
         java.util.Map<String, String> parameters = java.util.Map.of();
         String options;
         String unavailableReason;
+    }
+
+    /**
+     * Every DuckLake connection is prepared here, and attaching a DuckDB catalog that does not exist yet
+     * creates its file. {@link DuckDbCatalogPreInitializer} checks, before creating that file, that this node
+     * does not belong on an existing PostgreSQL catalog ({@link CatalogTypeGuard}).
+     * {@code @Order} does not order singleton creation, so asking for it here makes it run before any
+     * connection can be prepared.
+     */
+    @Autowired
+    public DuckDbConnectionHelper(Environment environment, AnalyticsStoreProperties properties,
+                                  ObjectProvider<DuckDbCatalogPreInitializer> catalogPreInitializer) {
+        this(environment, properties);
+        catalogPreInitializer.ifAvailable(preInitializer -> { });
     }
 
     public DuckDbConnectionHelper(Environment environment, AnalyticsStoreProperties properties) {
