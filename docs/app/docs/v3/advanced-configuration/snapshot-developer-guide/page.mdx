@@ -91,17 +91,22 @@ snapshot-table:
   import:                        # how the files are loaded into the target table
     target-table: adapot
     mode: MAPPED
-    use-target-defaults: [update_datetime, total_epoch_stake]
+    use-target-defaults: [update_datetime]   # left to the target's default
     batch-boundary: SINGLE_BATCH
 
   validation:                    # offline checks after import
     key: [epoch]                 # must be unique
     bounds: [epoch, slot]        # must not pass the consistency point
     required-columns: [epoch]    # must not be NULL
+```
 
-  lossy:                         # declared limitations, per column, with the reason
-    total_epoch_stake: >-
-      not present in the analytics export; restored epochs keep it NULL ...
+A specification may also declare limitations, per column, with the reason. `address.yml` does so for
+a column the export cannot carry:
+
+```yaml
+  lossy:
+    stake_credential: >-
+      not present in the analytics export and not derivable from it
 ```
 
 ### Reference
@@ -187,7 +192,7 @@ Exporters select their columns explicitly, for example `AdaPotExporter.buildQuer
 
 ```java
 SELECT * FROM postgres_query('source_db', '
-    SELECT ap.epoch, ap.slot, ap.deposits_stake, ... ap.pool_rewards_pot
+    SELECT ap.epoch, ap.slot, ap.deposits_stake, ... ap.pool_rewards_pot, ap.total_epoch_stake
     FROM %s.adapot ap
     WHERE ap.epoch = %d
 ')
@@ -200,7 +205,9 @@ Add the column to the exporter's `SELECT`. On the first export after an upgrade 
 adds the column to the existing relation (`ALTER TABLE ... ADD COLUMN`), so nothing has to be
 dropped. Files written before the upgrade read the column as NULL; `snapshot inspect` reports each
 such column with the number of files that predate it, and those partitions must be re-exported
-before a release snapshot is made (see
+before a release snapshot is made. Until that first export the relation has no such column at all,
+so a snapshot export from an upgraded store refuses with `would be left unwritten`; re-exporting
+one partition adds it (see
 [Widening an exporter](/docs/v3/advanced-configuration/snapshot#widening-an-exporter)).
 
 **b. Don't export it.** Acceptable when the column is derivable after the restore, or is an
@@ -221,11 +228,10 @@ operator.
 
 ```yaml
   import:
-    use-target-defaults: [update_datetime, total_epoch_stake]
+    use-target-defaults: [id, stake_credential, update_datetime]
   lossy:
-    total_epoch_stake: >-
-      not present in the analytics export; restored epochs keep it NULL, and readers sum the restored
-      epoch_stake instead. scripts/backfill/backfill-adapot-total-epoch-stake.sql fills it
+    stake_credential: >-
+      not present in the analytics export and not derivable from it
 ```
 
 A `NOT NULL` column needs a PostgreSQL default to be listed; otherwise it must be exported. Because

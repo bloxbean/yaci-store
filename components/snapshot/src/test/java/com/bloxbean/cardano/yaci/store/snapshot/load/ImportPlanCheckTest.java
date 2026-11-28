@@ -72,10 +72,16 @@ class ImportPlanCheckTest {
                 Map.of("epoch", false, "slot", true, "update_datetime", true, "total_epoch_stake", true),
                 Map.of(), List.of("epoch"), false);
         try (Connection duck = DuckDb.open("256MB", null, 1)) {
+            assertThat(ImportPlanCheck.check(duck, planner, adapot, ordered("epoch", "int32", "slot", "int64",
+                    "total_epoch_stake", "decimal(38,0)"), null, Map.of(), target, 1, 1)).isEmpty();
+            assertThat(ImportPlanCheck.check(duck, planner, adapot, ordered("epoch", "int64", "slot", "int64",
+                    "total_epoch_stake", "decimal(38,0)"), null, Map.of(), target, 1, 1))
+                    .singleElement().asString().contains("narrowing");
+            // A DuckLake table written before the exporter added total_epoch_stake has no such column
+            // until its next AdaPot export; the plan refuses rather than restoring it silently as NULL.
             assertThat(ImportPlanCheck.check(duck, planner, adapot, ordered("epoch", "int32", "slot", "int64"),
-                    null, Map.of(), target, 1, 1)).isEmpty();
-            assertThat(ImportPlanCheck.check(duck, planner, adapot, ordered("epoch", "int64", "slot", "int64"),
-                    null, Map.of(), target, 1, 1)).singleElement().asString().contains("narrowing");
+                    null, Map.of(), target, 1, 1))
+                    .singleElement().asString().contains("total_epoch_stake").contains("left unwritten");
         }
     }
 

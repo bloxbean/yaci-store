@@ -1092,9 +1092,6 @@ snapshot produced from the current analytics export:
 - **`block_cbor` and `transaction_cbor`** have no analytics export.
 - **`epoch_nonce`** and **`ptr_address`** have no analytics export.
 - **`address.stake_credential`** is not exported and is not derivable from what is.
-- **`adapot.total_epoch_stake`** is not exported. Restored epochs keep it NULL, and the Blockfrost
-  epoch endpoints sum the restored `epoch_stake` instead;
-  `scripts/backfill/backfill-adapot-total-epoch-stake.sql` fills it.
 
 <Callout type="warning">
 **Snapshots produced before the margin fix cannot run the ledger-state profile.** The exporter now
@@ -1134,6 +1131,21 @@ column as NULL; a snapshot scan matches columns by name, so it reads old and new
 `snapshot inspect` and `export` list each such column with the number of files that predate it, and
 the manifest records it as a limitation. To fill the column for older days, re-export those
 partitions (each re-export replaces its day).
+
+Until that first export the relation has no such column at all. A spec that maps the column by name
+then refuses the export, with `target column(s) [...] would be left unwritten`, rather than
+restoring it as NULL without saying so. To add the column at once, reset and re-export one
+partition through the analytics admin API. For example, `adapot.total_epoch_stake` on a store that
+exported AdaPot before it was added (`N` is the newest exported epoch):
+
+```bash
+curl -X DELETE http://localhost:8080/api/v1/analytics/admin/state/adapot/epoch=N
+curl -X POST   http://localhost:8080/api/v1/analytics/admin/export/table/adapot/epoch/N
+```
+
+Re-export the older epochs the same way to fill them (AdaPot is one row per epoch). Epochs left as
+they are restore `total_epoch_stake` as NULL, and the Blockfrost epoch endpoints sum the restored
+`epoch_stake` for them instead.
 
 A snapshot with a non-empty limitations list is a development snapshot. `snapshot export` refuses to
 package one unless `--allow-incomplete` is given.

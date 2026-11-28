@@ -493,6 +493,11 @@ class SnapshotImportIT {
             assertThat(scalarString(conn, "SELECT relpages > 0 AND relallvisible = relpages FROM pg_class"
                     + " WHERE oid = '" + qt("block") + "'::regclass")).isEqualTo("t");
 
+            // MAPPED by name: adapot.total_epoch_stake comes from the export, not a target default.
+            assertThat(count(conn, "adapot")).isPositive();
+            assertThat(scalarLong(conn, "SELECT count(*) FROM " + qt("adapot")
+                    + " WHERE total_epoch_stake = 1000 + epoch")).isEqualTo(count(conn, "adapot"));
+
             // MAPPED with a rename: epoch.number comes from the export's epoch column.
             assertThat(count(conn, "epoch")).isEqualTo(3);
             assertThat(scalarLong(conn, "SELECT max(number) FROM " + qt("epoch"))).isEqualTo(2);

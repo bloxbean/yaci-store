@@ -190,7 +190,8 @@ final class SnapshotFixture {
                     "deposits_stake", "decimal(38,0)", "fees", "decimal(38,0)", "utxo", "decimal(38,0)",
                     "treasury", "decimal(38,0)", "reserves", "decimal(38,0)", "circulation", "decimal(38,0)",
                     "distributed_rewards", "decimal(38,0)", "undistributed_rewards", "decimal(38,0)",
-                    "rewards_pot", "decimal(38,0)", "pool_rewards_pot", "decimal(38,0)");
+                    "rewards_pot", "decimal(38,0)", "pool_rewards_pot", "decimal(38,0)",
+                    "total_epoch_stake", "decimal(38,0)");
             case "epoch_stake" -> ordered("epoch", "int32", "address", "varchar", "amount", "decimal(38,0)",
                     "pool_id", "varchar", "delegation_epoch", "int32", "active_epoch", "int32");
             case "transaction_cbor" -> ordered("tx_hash", "varchar", "cbor_data", "blob", "cbor_size", "int32",
@@ -396,7 +397,8 @@ final class SnapshotFixture {
                     + " CAST(7 AS DECIMAL(38,0)) AS distributed_rewards,"
                     + " CAST(8 AS DECIMAL(38,0)) AS undistributed_rewards,"
                     + " CAST(9 AS DECIMAL(38,0)) AS rewards_pot,"
-                    + " CAST(10 AS DECIMAL(38,0)) AS pool_rewards_pot)"
+                    + " CAST(10 AS DECIMAL(38,0)) AS pool_rewards_pot,"
+                    + " CAST(" + (1000 + epoch) + " AS DECIMAL(38,0)) AS total_epoch_stake)"
                     + " TO '" + target + "' (FORMAT PARQUET)");
         }
     }

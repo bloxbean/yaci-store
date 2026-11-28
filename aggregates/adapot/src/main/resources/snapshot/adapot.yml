@@ -27,7 +27,7 @@ snapshot-table:
   import:
     target-table: adapot
     mode: MAPPED
-    use-target-defaults: [update_datetime, total_epoch_stake]
+    use-target-defaults: [update_datetime]
     batch-boundary: SINGLE_BATCH
 
   validation:
@@ -35,7 +35,3 @@ snapshot-table:
     bounds: [epoch, slot]
     required-columns: [epoch]
 
-  lossy:
-    total_epoch_stake: >-
-      not present in the analytics export; restored epochs keep it NULL, and readers sum the restored
-      epoch_stake instead. scripts/backfill/backfill-adapot-total-epoch-stake.sql fills it

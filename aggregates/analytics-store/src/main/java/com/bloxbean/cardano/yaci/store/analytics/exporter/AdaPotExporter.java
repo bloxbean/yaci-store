@@ -87,7 +87,8 @@ public class AdaPotExporter extends AbstractTableExporter {
                     ap.distributed_rewards,
                     ap.undistributed_rewards,
                     ap.rewards_pot,
-                    ap.pool_rewards_pot
+                    ap.pool_rewards_pot,
+                    ap.total_epoch_stake
                 FROM %s.adapot ap
                 WHERE ap.epoch = %d
             ')
