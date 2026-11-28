@@ -25,6 +25,7 @@ import com.bloxbean.cardano.yaci.store.core.service.publisher.ByronBlockEventPub
 import com.bloxbean.cardano.yaci.store.core.service.publisher.ShelleyBlockEventPublisher;
 import com.bloxbean.cardano.yaci.store.core.util.SlotLeaderUtil;
 import com.bloxbean.cardano.yaci.store.events.*;
+import com.bloxbean.cardano.yaci.store.events.internal.PreBlockSyncEvent;
 import com.bloxbean.cardano.yaci.store.events.internal.RequiredSyncRestartEvent;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -1076,6 +1077,10 @@ public class BlockFetchService implements BlockChainDataListener {
                 eraService.resetEraTracking();
                 restoreEpochStateForStart(from, fromBlockNumber);
             }
+            //Every start of chain sync goes through here (StartService, batchDone at the end of the range fetch,
+            //startSync): the blocks up to `from` are committed and none is being processed. Published under this
+            //object's lock, so listeners must return quickly (the address_utxo_unspent build runs in the background).
+            publisher.publishEvent(new PreBlockSyncEvent(from));
             blockSync.startSync(from, new SessionListener(session));
             if (cancelled.get())
                 throw new NodeNotAnsweringException("Cancelled: start the block sync");

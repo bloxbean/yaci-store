@@ -12,6 +12,14 @@
       columns:
         - block
 
+- table: address_utxo_unspent
+  indexes:
+    # Hash, as on address_utxo: a Byron address can exceed the btree row limit.
+    - name: idx_address_utxo_unspent_owner_addr_full
+      columns:
+        - owner_addr_full
+      type: hash
+
 - table: assets
   indexes:
     - name: idx_assets_unit_slot

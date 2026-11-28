@@ -1,0 +1,12 @@
+snapshot-table:
+  id: store-state
+  spec-version: 1
+  module: core
+  kind: CONTROL_STATE
+  restore: RUNTIME_REBUILT
+  reason: >-
+    per-feature progress records, such as how far address_utxo_unspent is kept; a restored store
+    starts without them and each feature rebuilds what its record tracks
+
+  import:
+    target-table: store_state

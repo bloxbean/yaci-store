@@ -27,6 +27,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -87,15 +88,17 @@ class RequiredRestartProcessorRecoveryTest {
         // ... and the node answers that it does not have the start point
         blockFetchService.intersactNotFound(new Tip(new Point(5000, "cc"), 50));
         ArgumentCaptor<Object> event = ArgumentCaptor.forClass(Object.class);
-        verify(fetchPublisher).publishEvent(event.capture());
-        assertThat(event.getValue()).isInstanceOf(RequiredSyncRestartEvent.class);
+        //Starting chain sync also publishes a PreBlockSyncEvent; only the restart request matters here
+        verify(fetchPublisher, atLeastOnce()).publishEvent(event.capture());
+        var restartEvents = event.getAllValues().stream().filter(RequiredSyncRestartEvent.class::isInstance).toList();
+        assertThat(restartEvents).hasSize(1);
 
         var startAttempted = new CountDownLatch(1);
         doAnswer(inv -> {
             startAttempted.countDown();
             throw new IllegalStateException("start attempted");
         }).when(cursorService).getStartCursor();
-        processor.handleRestartInterval((RequiredSyncRestartEvent) event.getValue());
+        processor.handleRestartInterval((RequiredSyncRestartEvent) restartEvents.get(0));
 
         // The dropped request is tried again once the debounce window has passed
         assertThat(startAttempted.await(5, TimeUnit.SECONDS)).isTrue();

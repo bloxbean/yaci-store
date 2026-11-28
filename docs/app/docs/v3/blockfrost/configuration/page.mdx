@@ -34,6 +34,8 @@ SPRING_PROFILES_ACTIVE=ledger-state,blockfrost
 
 The profile sets `store.extensions.blockfrost.enabled=true` and overrides `blockfrost.apiPrefix=/api/v1/blockfrost` so the Blockfrost-compatible endpoints don't collide with yaci-store's own `/api/v1/...` controllers.
 
+It also turns on the [unspent UTxO table](/docs/v3/stores/configuration#unspent-utxo-table) (`store.utxo.unspent-table-enabled` and `store.utxo.unspent-table-read-enabled`), which serves `/addresses/{address}`, `/addresses/{address}/utxos[/{asset}]` and `/assets/{asset}/addresses` from the outputs that are not spent yet. It does not slow the initial sync: the table is built in the background once the sync reaches the tip (about 2 hours on mainnet, ~15 GB with its indexes), and the endpoints use `address_utxo` and `tx_input` until then. Apply its read indexes with the admin CLI's `apply-indexes`, as for the other tables; without them the address endpoints are slower on the table than without it. Set both flags to `false` to keep the profile without the table.
+
 ## API base path
 
 `blockfrost.apiPrefix` is a required property when the extension is enabled — every yaci-store Blockfrost-compatible controller is mapped under `${blockfrost.apiPrefix}`. It has no default; if missing, the application fails to start.
