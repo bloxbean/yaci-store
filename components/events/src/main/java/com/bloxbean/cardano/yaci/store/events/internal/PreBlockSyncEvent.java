@@ -8,8 +8,9 @@ import lombok.Getter;
 /**
  * This is an internal event. It is published just before the store starts following the chain block by block
  * (BlockSync): when the bulk fetch from the cursor reaches the tip, or at startup when the cursor is already near
- * the tip. Every block up to {@code from} is committed and no block is being processed. Listeners run synchronously
- * and the sync starts after they return, so this is the place for one-off work that should happen at the tip.
+ * the tip. Every block up to {@code from} is committed and no block is being processed. Listeners run synchronously,
+ * while BlockFetchService holds its lock, and the sync starts after they return: they must return quickly, so one-off
+ * work at the tip (e.g. building address_utxo_unspent) is started in the background from here.
  */
 @Getter
 @AllArgsConstructor

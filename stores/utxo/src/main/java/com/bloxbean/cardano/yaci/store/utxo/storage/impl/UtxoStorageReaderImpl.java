@@ -225,6 +225,14 @@ public class UtxoStorageReaderImpl implements UtxoStorageReader {
         Pageable pageable = getPageable(page, count, order);
         Condition unitCondition = getUnitCondition(unit);
 
+        SortOrder sortOrder = order == Order.desc ? SortOrder.DESC : SortOrder.ASC;
+        // Transaction position preserves chain order. The hash also orders older rows without an index.
+        SortField<?>[] transactionOrder = {
+                field(DSL.name("slot")).sort(sortOrder),
+                field(DSL.name("txIndex")).sort(sortOrder),
+                field(DSL.name("txHash")).sort(sortOrder)
+        };
+
         // Query to fetch distinct transaction hashes
         Table<?> distinctTx = dsl
                 .select(
@@ -232,12 +240,13 @@ public class UtxoStorageReaderImpl implements UtxoStorageReader {
                         DSL.min(ADDRESS_UTXO.BLOCK).as("blockHeight"),
                         DSL.min(ADDRESS_UTXO.BLOCK).as("blockNumber"),    // Use MIN or MAX as block number is consistent
                         DSL.min(ADDRESS_UTXO.BLOCK_TIME).as("blockTime"), // Use MIN or MAX as block time is consistent,
-                        DSL.min(ADDRESS_UTXO.SLOT).as("slot")
+                        DSL.min(ADDRESS_UTXO.SLOT).as("slot"),
+                        DSL.min(ADDRESS_UTXO.TX_INDEX).as("txIndex")
                 )
                 .from(ADDRESS_UTXO)
                 .where(unitCondition)
                 .groupBy(ADDRESS_UTXO.TX_HASH) // Group by transaction hash to get distinct results
-                .orderBy(order.equals(Order.desc) ? DSL.field("slot").desc() : DSL.field("slot").asc())
+                .orderBy(transactionOrder)
                 .limit(pageable.getPageSize())
                 .offset((int) pageable.getOffset())
                 .asTable("distinct_tx");
@@ -250,7 +259,8 @@ public class UtxoStorageReaderImpl implements UtxoStorageReader {
                         distinctTx.field("blockNumber", Long.class),
                         distinctTx.field("blockTime", Long.class)
                 )
-                .from(distinctTx);
+                .from(distinctTx)
+                .orderBy(transactionOrder);
 
         if (log.isDebugEnabled())
             log.debug(query.toString());

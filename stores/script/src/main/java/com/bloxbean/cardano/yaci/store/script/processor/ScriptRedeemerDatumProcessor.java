@@ -1,5 +1,7 @@
 package com.bloxbean.cardano.yaci.store.script.processor;
 
+import com.bloxbean.cardano.yaci.store.common.executor.SyncSessionContext;
+
 import com.bloxbean.cardano.yaci.core.model.PlutusScript;
 import com.bloxbean.cardano.yaci.core.model.Redeemer;
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
@@ -30,6 +32,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static com.bloxbean.cardano.yaci.store.common.util.ListUtil.partition;
 import static com.bloxbean.cardano.yaci.store.script.ScriptStoreConfiguration.STORE_SCRIPT_ENABLED;
@@ -93,10 +96,11 @@ public class ScriptRedeemerDatumProcessor {
         List<List<BatchBlock>> partitions = partition(blockCacheList, blockBatchPartitionSize);
         List<CompletableFuture> futures = new ArrayList<>();
         for (List<BatchBlock> partition : partitions) {
+            //The workers write for the caller's sync session (see SyncSessionContext)
             var future = CompletableFuture.supplyAsync(() -> {
                 processBlockPartition(partition);
                 return true;
-            }, executor);
+            }, SyncSessionContext.propagating(executor));
             futures.add(future);
         }
 
@@ -105,11 +109,11 @@ public class ScriptRedeemerDatumProcessor {
     }
 
     private void processBlockPartition(List<BatchBlock> blockCacheList) {
-        blockCacheList.stream().parallel().forEach(blockCache -> {
+        blockCacheList.stream().parallel().forEach(SyncSessionContext.propagating((BatchBlock blockCache) -> {
             for (Transaction transaction : blockCache.getTransactions()) {
                 handleScriptTransaction(blockCache.getMetadata(), transaction);
             }
-        });
+        }));
     }
 
     /**
@@ -122,6 +126,10 @@ public class ScriptRedeemerDatumProcessor {
     private void handleScriptTransaction(EventMetadata metadata, Transaction transaction) {
         if (transaction.isInvalid())
             return;
+
+        //Native scripts don't need redeemers, so save them before the redeemer check
+        saveNativeScripts(metadata, transaction);
+
         if (transaction.getWitnesses().getRedeemers() == null || transaction.getWitnesses().getRedeemers().size() == 0)
             return;
 
@@ -134,8 +142,10 @@ public class ScriptRedeemerDatumProcessor {
         Map<String, String> datumHashToDatumMap = findWitnessDatum(transaction);
 
         //Convert to TxScript objects
-        List<TxScript> txScripts = scriptContexts.stream()
-                .map(scriptContext -> {
+        //One context per redeemer, in witness order. The position is part of the row id, since (purpose, redeemer_index) can repeat
+        List<TxScript> txScripts = IntStream.range(0, scriptContexts.size())
+                .mapToObj(position -> {
+                    ScriptContext scriptContext = scriptContexts.get(position);
                     //Try to set datum
                     if (StringUtil.isEmpty(scriptContext.getDatum())) {
                         String datumHash = scriptContext.getDatumHash();
@@ -167,6 +177,7 @@ public class ScriptRedeemerDatumProcessor {
                             .unitSteps(redeemer.getExUnits() != null? redeemer.getExUnits().getSteps(): null)
                             .purpose(redeemer.getTag())
                             .redeemerIndex(redeemer.getIndex())
+                            .redeemerPosition(position)
                             .redeemerData(redeemer.getData() != null? redeemer.getData().getCbor(): null)
                             .redeemerDatahash(redeemer.getData() != null? redeemer.getData().getHash(): null)
                             .build();
@@ -213,6 +224,15 @@ public class ScriptRedeemerDatumProcessor {
         if (plutusScripts != null && plutusScripts.size() > 0)
             scriptStorage.saveScripts(plutusScripts);
 
+        if (txScripts.size() > 0) {
+            txScriptStorage.saveAll(txScripts);
+
+            //biz event
+            publisher.publishEvent(new TxScriptEvent(metadata, txScripts));
+        }
+    }
+
+    private void saveNativeScripts(EventMetadata metadata, Transaction transaction) {
         //Get all native scripts  and save
         if (transaction.getWitnesses().getNativeScripts() != null) {
             List<Script> nativeScripts = transaction.getWitnesses().getNativeScripts().stream()
@@ -235,13 +255,6 @@ public class ScriptRedeemerDatumProcessor {
                     .collect(Collectors.toList());
             if (nativeScripts != null && nativeScripts.size() > 0)
                 scriptStorage.saveScripts(nativeScripts);
-        }
-
-        if (txScripts.size() > 0) {
-            txScriptStorage.saveAll(txScripts);
-
-            //biz event
-            publisher.publishEvent(new TxScriptEvent(metadata, txScripts));
         }
     }
 

@@ -103,11 +103,20 @@ public class BFTransactionService {
         }
         List<TxMetadataLabel> labels = metadataReader.findByTxHash(txHash);
         return labels.stream()
-                .map(label -> BFTxMetadataCborDto.builder()
-                        .label(label.getLabel())
-                        .cborMetadata(label.getCbor())
-                        .build())
+                .map(this::toTxMetadataCborDto)
                 .collect(Collectors.toList());
+    }
+
+    // Blockfrost returns the CBOR twice: `cbor_metadata` in PostgreSQL bytea text form (\x prefix, deprecated)
+    // and `metadata` as plain hex.
+    private BFTxMetadataCborDto toTxMetadataCborDto(TxMetadataLabel label) {
+        String cbor = label.getCbor();
+        boolean present = cbor != null && !cbor.isBlank();
+        return BFTxMetadataCborDto.builder()
+                .label(label.getLabel())
+                .cborMetadata(present ? "\\x" + cbor : null)
+                .metadata(present ? cbor : null)
+                .build();
     }
 
     public List<BFTxRedeemerDto> getTxRedeemers(String txHash) {

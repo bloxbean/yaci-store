@@ -1,5 +1,6 @@
 package com.bloxbean.cardano.yaci.store.governancerules.api;
 
+import com.bloxbean.cardano.yaci.core.model.ProtocolParamUpdate;
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionId;
 import com.bloxbean.cardano.yaci.core.model.governance.GovActionType;
 import com.bloxbean.cardano.yaci.core.model.governance.actions.*;
@@ -20,7 +21,6 @@ import java.util.EnumMap;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -91,7 +91,7 @@ class GovernanceEvaluationServiceTest {
                 .proposalSlot(20L)
                 .build();
 
-        // Stub ratification: accept the delaying action, continue sibling, reject parameter change to exercise drop + expire paths.
+        // Accept the delaying action. The later parameter change must remain pending.
         stubEvaluator(GovActionType.UPDATE_COMMITTEE,
                 evaluatorFor(singletonOutcome(updateCommittee, RatificationResult.ACCEPT), RatificationResult.CONTINUE));
         stubEvaluator(GovActionType.NO_CONFIDENCE,
@@ -120,13 +120,13 @@ class GovernanceEvaluationServiceTest {
                         GovActionType.PARAMETER_CHANGE_ACTION
                 );
 
-        // Expect statuses determined by stubs and drop service triggered by rejection.
+        // The delay prevents ratification of the later parameter change.
         assertThat(result.getProposalResults())
                 .extracting(ProposalEvaluationResult::getStatus)
                 .containsExactly(
                         RatificationResult.CONTINUE,
                         RatificationResult.ACCEPT,
-                        RatificationResult.REJECT
+                        RatificationResult.CONTINUE
                 );
 
         // Delaying action accepted -> ratification should be marked as delayed.
@@ -153,6 +153,7 @@ class GovernanceEvaluationServiceTest {
         ParameterChangeAction higherSlotAction = mock(ParameterChangeAction.class);
         when(higherSlotAction.getType()).thenReturn(GovActionType.PARAMETER_CHANGE_ACTION);
         when(higherSlotAction.getGovActionId()).thenReturn(null);
+        when(higherSlotAction.getProtocolParamUpdate()).thenReturn(ProtocolParamUpdate.builder().build());
 
         ParameterChangeAction lowerSlotAction = mock(ParameterChangeAction.class);
         when(lowerSlotAction.getType()).thenReturn(GovActionType.PARAMETER_CHANGE_ACTION);
@@ -218,8 +219,8 @@ class GovernanceEvaluationServiceTest {
     }
 
     @Test
-    void evaluateGovernanceState_propagatesDelayFlagToSubsequentEvaluations() {
-        // Purpose: ensure evaluating a delaying proposal sets the flag consumed by later evaluations within the same epoch.
+    void evaluateGovernanceState_onlyChecksExpiryAfterDelayingAcceptance() {
+        // A delaying acceptance stops later evaluations but does not prevent expiry.
         VotingData votingData = VotingData.builder().build();
 
         GovActionId updateCommitteeActionId = mock(GovActionId.class);
@@ -233,13 +234,10 @@ class GovernanceEvaluationServiceTest {
         ParameterChangeAction parameterChange = mock(ParameterChangeAction.class);
         when(parameterChange.getType()).thenReturn(GovActionType.PARAMETER_CHANGE_ACTION);
 
-        AtomicBoolean ppChangeContextWasDelayed = new AtomicBoolean(false);
-
-        // Stub the update evaluator to return ACCEPT so the delay flag becomes true, capture flag visible inside param change evaluation.
+        // The parameter evaluator must not run after the delaying action accepts.
         stubEvaluator(GovActionType.UPDATE_COMMITTEE, context -> RatificationResult.ACCEPT);
         stubEvaluator(GovActionType.PARAMETER_CHANGE_ACTION, context -> {
-            ppChangeContextWasDelayed.set(context.getGovernanceContext().isActionRatificationDelayed());
-            return RatificationResult.CONTINUE;
+            throw new AssertionError("A delayed proposal must not be evaluated");
         });
 
         ProposalContext updateCommitteeProposal = ProposalContext.builder()
@@ -278,9 +276,10 @@ class GovernanceEvaluationServiceTest {
                         GovActionType.PARAMETER_CHANGE_ACTION
                 );
 
-        // Delay flag must stay true and be observable inside later evaluation.
+        // The delay stays set, but the remaining proposal can still expire.
         assertThat(result.isActionRatificationDelayed()).isTrue();
-        assertThat(ppChangeContextWasDelayed.get()).isTrue();
+        assertThat(result.getProposalResults()).extracting(ProposalEvaluationResult::getStatus)
+                .containsExactly(RatificationResult.ACCEPT, RatificationResult.REJECT);
     }
 
     @SuppressWarnings("unchecked")

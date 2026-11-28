@@ -1,12 +1,5 @@
 package com.bloxbean.cardano.yaci.store.epoch.mapper;
 
-import co.nstant.in.cbor.model.Array;
-import co.nstant.in.cbor.model.DataItem;
-import co.nstant.in.cbor.model.Special;
-import co.nstant.in.cbor.model.Number;
-import com.bloxbean.cardano.yaci.core.model.ProtocolParamUpdate;
-import com.bloxbean.cardano.yaci.core.util.CborSerializationUtil;
-import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import com.bloxbean.cardano.yaci.store.common.domain.DrepVoteThresholds;
 import com.bloxbean.cardano.yaci.store.common.domain.PoolVotingThresholds;
 import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
@@ -14,7 +7,7 @@ import com.bloxbean.cardano.yaci.store.common.genesis.util.PlutusKeys;
 import com.bloxbean.cardano.yaci.store.epoch.dto.ProtocolParamsDto;
 import com.bloxbean.cardano.yaci.store.epoch.util.PlutusOps;
 
-import java.math.BigInteger;
+import java.math.BigDecimal;
 import java.util.*;
 
 import static com.bloxbean.cardano.yaci.store.common.util.UnitIntervalUtil.safeRatio;
@@ -24,64 +17,6 @@ public class DomainMapperDecorator implements DomainMapper {
 
     public DomainMapperDecorator(DomainMapper delegate) {
         this.delegate = delegate;
-    }
-
-    @Override
-    public ProtocolParams toProtocolParams(ProtocolParamUpdate protocolParamUpdate) {
-        ProtocolParams protocolParams = delegate.toProtocolParams(protocolParamUpdate);
-
-        //extra entropy
-        if (protocolParamUpdate.getExtraEntropy() != null) {
-            Integer k = protocolParamUpdate.getExtraEntropy()._1;
-            String v = protocolParamUpdate.getExtraEntropy()._2;
-
-            protocolParams.setExtraEntropy(k + "," + v);
-        }
-
-        var updatedCostModelMap = getCostModels(protocolParamUpdate);
-        if (updatedCostModelMap != null && updatedCostModelMap.size() > 0) {
-            protocolParams.setCostModels(updatedCostModelMap);
-            protocolParams.setCostModelsHash(protocolParams.getCostModelsHash());
-        }
-
-        return protocolParams;
-    }
-
-    private Map<String, long[]> getCostModels(ProtocolParamUpdate protocolParamUpdate) {
-        var costModelmap = protocolParamUpdate.getCostModels();
-        if (costModelmap == null)
-            return null;
-
-        Map<String, long[]> resultMap = new HashMap<>();
-        var languageKeys = costModelmap.keySet();
-        for (var key : languageKeys) {
-            String strKey = null;
-            if (key == 0) {
-                strKey = PlutusKeys.PLUTUS_V1;
-            } else if (key == 1) {
-                strKey = PlutusKeys.PLUTUS_V2;
-            } else if (key == 2) {
-                strKey = PlutusKeys.PLUTUS_V3;
-            }
-
-            var cborCostModelValue = costModelmap.get(key);
-            Array array = (Array) CborSerializationUtil.deserializeOne(HexUtil.decodeHexString(cborCostModelValue));
-            List<Long> costs = new ArrayList<>();
-            for (DataItem di : array.getDataItems()) {
-                if (di == Special.BREAK)
-                    continue;
-                BigInteger val = ((Number) di).getValue();
-                costs.add(val.longValue());
-            }
-
-            long[] costArray = costs.stream()
-                    .mapToLong(Long::longValue)
-                    .toArray();
-
-            resultMap.put(strKey, costArray);
-        }
-
-        return resultMap;
     }
 
     @Override
@@ -104,13 +39,12 @@ public class DomainMapperDecorator implements DomainMapper {
                     default -> Collections.emptyList();
                 };
 
-                Map<String, Long> langCost = new TreeMap<>();
+                Map<String, Long> langCost = new LinkedHashMap<>();
                 var costArr = costModelMap.get(key);
-                if (costArr.length == ops.size()) {
-                    int index = 0;
-
-                    for (String op : ops) {
-                        langCost.put(op, costArr[index++]);
+                //New params are appended to the end, so an older, shorter model uses the leading names
+                if (costArr.length <= ops.size()) {
+                    for (int index = 0; index < costArr.length; index++) {
+                        langCost.put(ops.get(index), costArr[index]);
                     }
                 } else {
                     int index = 0;
@@ -131,6 +65,20 @@ public class DomainMapperDecorator implements DomainMapper {
         protocolParamsDto.setDecentralisationParam(safeRatio(protocolParams.getDecentralisationParam()));
         protocolParamsDto.setPriceMem(safeRatio(protocolParams.getPriceMem()));
         protocolParamsDto.setPriceStep(safeRatio(protocolParams.getPriceStep()));
+
+        //Blockfrost compatibility: Blockfrost's /epochs/{number}/parameters returns these legacy (pre-Babbage) params
+        //for every era instead of omitting them, e.g. for a Conway epoch: "decentralisation_param": 0,
+        //"min_utxo": "4310", "coins_per_utxo_word": "4310" (same value as coins_per_utxo_size).
+        //Some clients read them unconditionally, e.g. PyCardano's BlockFrostChainContext fails if they are missing.
+        //Values that are actually set for the era (e.g. min_utxo in Shelley) are kept as is.
+        if (protocolParamsDto.getDecentralisationParam() == null)
+            protocolParamsDto.setDecentralisationParam(BigDecimal.ZERO);
+        if (protocolParamsDto.getCoinsPerUtxoSize() != null) {
+            if (protocolParamsDto.getMinUtxo() == null)
+                protocolParamsDto.setMinUtxo(protocolParamsDto.getCoinsPerUtxoSize());
+            if (protocolParamsDto.getCoinsPerUtxoWord() == null)
+                protocolParamsDto.setCoinsPerUtxoWord(protocolParamsDto.getCoinsPerUtxoSize());
+        }
 
         //pvt
         PoolVotingThresholds poolVotingThresholds = protocolParams.getPoolVotingThresholds();

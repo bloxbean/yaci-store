@@ -7,6 +7,7 @@ import com.bloxbean.cardano.yaci.helper.model.Utxo;
 import com.bloxbean.cardano.yaci.store.client.utxo.DummyUtxoClient;
 import com.bloxbean.cardano.yaci.store.client.utxo.UtxoClient;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
+import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.common.util.ErrorCode;
 import com.bloxbean.cardano.yaci.store.events.ErrorEvent;
@@ -139,8 +140,34 @@ class TransactionProcessorTest {
             assertThat(txnCbor.getTxHash()).isEqualTo("f0a6e529be26c2326c447c39159e05bb904ff1f7900b6df3852dd539de0343e8");
             assertThat(txnCbor.getSlot()).isEqualTo(eventMetadata().getSlot());
             assertThat(txnCbor.getCborData()).isEqualTo(HexUtil.decodeHexString(TX_CBOR_HEX));
-            assertThat(txnCbor.getCborSize()).isEqualTo(3);
+            //Body-only cbor: the ledger size is unknown
+            assertThat(txnCbor.getCborSize()).isNull();
         });
+    }
+
+    @Test
+    void givenCollateralReturnWithZeroQuantityAsset_shouldDropZeroEntryFromCollateralReturnJson() {
+        String policyId = "10bebfc941207811e62882f02c0a69c0086f86186a4ef6ec1b5a2b0c";
+        Transaction transaction = transactions().get(0);
+        transaction.setBody(transaction.getBody().toBuilder()
+                .collateralReturn(TransactionOutput.builder()
+                        .address("addr_test1vpfwv0ezc5g8a4mkku8hhy3y3vp92t7s3ul8g778g5yegsgalc6gc")
+                        .amounts(List.of(
+                                Amount.builder().unit(LOVELACE).assetName(LOVELACE).quantity(BigInteger.valueOf(500)).build(),
+                                Amount.builder().unit(policyId + ".54554e41").policyId(policyId).assetName("TUNA")
+                                        .quantity(BigInteger.ZERO).build()))
+                        .build())
+                .build());
+
+        transactionProcessor.handleTransactionEvent(TransactionEvent.builder()
+                .transactions(List.of(transaction))
+                .metadata(eventMetadata())
+                .build());
+
+        verify(transactionStorage, Mockito.times(1)).saveAll(txnListCaptor.capture());
+        assertThat(txnListCaptor.getValue().get(0).getCollateralReturnJson().getAmounts())
+                .extracting(Amt::getUnit)
+                .containsExactly(LOVELACE);
     }
 
     @Test
@@ -193,6 +220,55 @@ class TransactionProcessorTest {
                 assertThat(txWitness.getAdditionalData().get("attributes").asText()).isEqualTo("a1024101");
             }
         }
+    }
+
+    @Test
+    void givenMultipleTransactions_shouldSubmitEachWitnessOnce() {
+        var transactions = java.util.stream.IntStream.range(0, 100)
+                .mapToObj(i -> Transaction.builder()
+                        .txHash("tx-" + i)
+                        .witnesses(Witnesses.builder()
+                                .vkeyWitnesses(List.of(VkeyWitness.builder()
+                                        .key("11".repeat(32))
+                                        .signature("22".repeat(64))
+                                        .build()))
+                                .build())
+                        .build())
+                .toList();
+        var submitted = new java.util.ArrayList<TxnWitness>();
+        Mockito.doAnswer(invocation -> {
+            List<TxnWitness> batch = invocation.getArgument(0);
+            submitted.addAll(batch);
+            return null;
+        }).when(transactionWitnessStorage).saveAll(anyList());
+
+        transactionProcessor.handleTransactionWitnesses(TransactionEvent.builder()
+                .transactions(transactions)
+                .metadata(eventMetadata())
+                .build());
+
+        verify(transactionWitnessStorage).saveAll(anyList());
+        assertThat(submitted).extracting(TxnWitness::getTxHash)
+                .containsExactlyElementsOf(transactions.stream().map(Transaction::getTxHash).toList());
+    }
+
+    @Test
+    void givenMissingWitnessSet_shouldSaveWitnessesBeforeAndAfterIt() {
+        var witnesses = Witnesses.builder()
+                .vkeyWitnesses(List.of(VkeyWitness.builder()
+                        .key("11".repeat(32)).signature("22".repeat(64)).build()))
+                .build();
+        var transactions = List.of(
+                Transaction.builder().txHash("before").witnesses(witnesses).build(),
+                Transaction.builder().txHash("missing").build(),
+                Transaction.builder().txHash("after").witnesses(witnesses).build());
+
+        transactionProcessor.handleTransactionWitnesses(TransactionEvent.builder()
+                .transactions(transactions).metadata(eventMetadata()).build());
+
+        verify(transactionWitnessStorage).saveAll(txnWitnessesCaptor.capture());
+        assertThat(txnWitnessesCaptor.getValue()).extracting(TxnWitness::getTxHash)
+                .containsExactly("before", "after");
     }
 
     @Test
@@ -259,6 +335,8 @@ class TransactionProcessorTest {
         assertThat(txnCborCaptor.getValue()).singleElement().satisfies(txnCbor -> {
             assertThat(txnCbor.getTxHash()).isEqualTo("f0a6e529be26c2326c447c39159e05bb904ff1f7900b6df3852dd539de0343e8");
             assertThat(txnCbor.getCborData()).isEqualTo(HexUtil.decodeHexString(FULL_TX_CBOR_HEX));
+            //Ledger size: the 4-byte Alonzo+ envelope without the is_valid byte
+            assertThat(txnCbor.getCborSize()).isEqualTo(3);
         });
     }
 

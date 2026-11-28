@@ -13,6 +13,20 @@ rollback:
         type: "slot"
         column: "slot"
         operator: ">"
+
+    - name: "invalid_token"
+      operation: "DELETE"
+      condition:
+        type: "slot"
+        column: "slot"
+        operator: ">"
+
+    - name: "cip113_registry_node"
+      operation: "DELETE"
+      condition:
+        type: "slot"
+        column: "slot"
+        operator: ">"
         
     - name: "block"
       operation: "DELETE"

@@ -110,9 +110,6 @@
     - name: idx_stake_addr_balance_block_time
       columns:
         - block_time
-    - name: idx_stake_addr_balance_epoch
-      columns:
-        - epoch
 
 #metadata store
 

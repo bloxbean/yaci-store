@@ -161,6 +161,48 @@ The application will re-process the epoch and recalculate the AdaPot values from
 
 ---
 
+### PostgreSQL does not start after a crash: "could not create file ... File exists"
+
+<Callout type="info">
+This is a rare scenario. It needs PostgreSQL to stop uncleanly (a crash, an out-of-memory kill, a power loss, or a container stopped with a very short timeout) within a few minutes of an epoch's stake snapshot or DRep distribution calculation.
+</Callout>
+
+**Symptom:** PostgreSQL fails during crash recovery and does not start. Its log ends with:
+
+```
+LOG:  redo done at ...
+FATAL:  could not create file "base/16384/405207": File exists
+LOG:  startup process (PID ...) exited with exit code 1
+```
+
+Yaci Store waits for the database and then exits, logging `Database 'dataSource' still not reachable ... Giving up`.
+
+**Cause:** With the `ledger-state` profile, the stake snapshot and DRep distribution calculations use `UNLOGGED` working tables (named `ss_*`). They are dropped and created again at every epoch. Unlogged tables are used because they are fast, and they stay in the database, so you can inspect them after a calculation. PostgreSQL has a known crash-recovery issue with unlogged tables that are created or dropped shortly before a crash ([BUG #17731](https://www.postgresql.org/message-id/17731-85ab9766c4257f8f%40postgresql.org)): an empty data file is left behind, and recovery stops on it.
+
+No Yaci Store data is lost. PostgreSQL empties unlogged tables during crash recovery anyway, and Yaci Store rebuilds the `ss_*` tables at the next calculation.
+
+**Workaround:**
+
+1. Keep PostgreSQL stopped. Find the file named in the error under the PostgreSQL data directory:
+   - With the Docker Compose files shipped with Yaci Store, the data directory is `db-data/yaci-store` on the host. On PostgreSQL 18 the file is under `db-data/yaci-store/18/docker/`, and on 17 under `db-data/yaci-store/`.
+   - Otherwise it is under `$PGDATA`.
+2. Check that the file is **empty (0 bytes)** and that a file with the same name plus `_init` exists next to it:
+   ```bash
+   ls -l <data-dir>/base/16384/405207 <data-dir>/base/16384/405207_init
+   ```
+3. Move the empty file out of the data directory. Moving it, rather than deleting it, keeps a copy:
+   ```bash
+   mv <data-dir>/base/16384/405207 /path/to/a/backup/folder/
+   ```
+4. Start PostgreSQL. It finishes crash recovery and accepts connections.
+5. Start Yaci Store. It resumes from where it stopped, and an interrupted AdaPot job runs again.
+
+<Callout type="warning">
+Only move the file if it is empty and has a matching `_init` file. If the file named in the error contains data, or has no `_init` file, it is a different problem: do not move it.
+</Callout>
+
+---
+
 ## Need More Help?
 
 If your question isn't answered here, please:

@@ -4,6 +4,8 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.QueryPriori
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.Subject;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.service.TokenQueryService;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.service.TokenQueryService.BatchPrefetchData;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.model.ProgrammableTokenCip113;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.Cip113StorageReader;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.Cip26Metadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.Cip26StorageReader;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
@@ -12,7 +14,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -25,6 +29,7 @@ import java.util.Optional;
  *   <li>{@link #getSubject} — merged metadata with configurable CIP priority</li>
  *   <li>{@link #getCip26Metadata} — CIP-26 offchain metadata only</li>
  *   <li>{@link #getCip68Metadata} — CIP-68 on-chain reference NFT metadata only</li>
+ *   <li>{@link #getCip113RegistryNode} — CIP-113 programmable token data only (when enabled)</li>
  * </ul>
  */
 @Service
@@ -35,6 +40,7 @@ public class AssetsReader {
     private final TokenQueryService tokenQueryService;
     private final Cip26StorageReader cip26StorageReader;
     private final Cip68StorageReader cip68StorageReader;
+    private final Cip113StorageReader cip113StorageReader;
 
     // ========== Merged queries ==========
 
@@ -76,14 +82,15 @@ public class AssetsReader {
      *
      * @param subjects      list of subject identifiers
      * @param queryPriority ordered list of CIP standards
-     * @return list of subjects with valid metadata (invalid/not-found subjects are excluded)
+     * @return the subjects that have something indexed (subjects no standard knows are excluded); each is returned as
+     *         indexed, with its validation errors
      */
     public List<Subject> getSubjects(List<String> subjects, List<QueryPriority> queryPriority) {
         BatchPrefetchData prefetchData = tokenQueryService.prefetchBatch(subjects, List.of());
         return subjects.stream()
                 .map(subject -> tokenQueryService.querySubjectBatch(
                         subject, queryPriority, List.of(), prefetchData, false))
-                .filter(subject -> subject.metadata() != null && subject.metadata().isValid())
+                .flatMap(Optional::stream)
                 .toList();
     }
 
@@ -109,6 +116,21 @@ public class AssetsReader {
      */
     public Optional<FungibleTokenMetadata> getCip68Metadata(String subject) {
         return cip68StorageReader.findBySubject(subject);
+    }
+
+    /**
+     * Look up the CIP-113 extension of the tokens of a policy: the current node of the policy in the registry.
+     * Empty when the policy is not registered, or when CIP-113 is off.
+     */
+    public Optional<ProgrammableTokenCip113> getCip113RegistryNode(String policyId) {
+        return cip113StorageReader.findByPolicyId(policyId);
+    }
+
+    /**
+     * Look up the CIP-113 extensions of several policies in one query, keyed by policy ID in lower case.
+     */
+    public Map<String, ProgrammableTokenCip113> getCip113RegistryNodes(Collection<String> policyIds) {
+        return cip113StorageReader.findByPolicyIds(policyIds);
     }
 
 }
