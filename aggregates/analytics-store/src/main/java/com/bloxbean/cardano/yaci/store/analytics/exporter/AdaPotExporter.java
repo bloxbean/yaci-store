@@ -51,6 +51,17 @@ public class AdaPotExporter extends AbstractTableExporter {
     }
 
     @Override
+    protected boolean dependsOnAdaPotJob() {
+        return true;
+    }
+
+    /** The AdaPot job creates the epoch's row before it completes. */
+    @Override
+    public boolean allowsEmptyPartition(PartitionValue partition) {
+        return false;
+    }
+
+    @Override
     public boolean preExportValidation(PartitionValue partition) {
         // AdaPot table depends on AdaPot job completion
         int epoch = ((PartitionValue.EpochPartition) partition).epoch();
@@ -76,7 +87,8 @@ public class AdaPotExporter extends AbstractTableExporter {
                     ap.distributed_rewards,
                     ap.undistributed_rewards,
                     ap.rewards_pot,
-                    ap.pool_rewards_pot
+                    ap.pool_rewards_pot,
+                    ap.total_epoch_stake
                 FROM %s.adapot ap
                 WHERE ap.epoch = %d
             ')

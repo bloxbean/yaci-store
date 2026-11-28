@@ -13,7 +13,7 @@ public class MetadataStoreProperties {
     @Getter
     @Setter
     public static final class Metadata  {
-       private boolean enabled = true;
+       private boolean enabled = com.bloxbean.cardano.yaci.store.common.config.StoreModuleConfig.defaultEnabled("metadata");
        private boolean apiEnabled = true;
        private Endpoints endpoints = new Endpoints();
     }

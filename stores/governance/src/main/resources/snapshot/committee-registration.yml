@@ -1,0 +1,35 @@
+snapshot-table:
+  id: committee-registration
+  spec-version: 1
+  module: governance
+  kind: CHAIN_DATA
+  restore: IMPORT
+
+  source:
+    exporter-id: committee_registration
+    ducklake-relation: committee_registration
+    partition:
+      strategy: DAILY
+      column: block_time
+
+  consistency:
+    cutoff:
+      type: SLOT_LTE
+      column: slot
+
+  import:
+    target-table: committee_registration
+    mode: MAPPED
+    columns:
+      block_time:
+        source: block_time
+        converter: "timestamp-to-epoch-seconds"
+    ignore-source-columns: [date]
+    use-target-defaults: [update_datetime]
+    batch-boundary: FILE_SET
+    batch-size: 64
+
+  validation:
+    key: [tx_hash, cert_index]
+    bounds: [slot, epoch]
+    required-columns: [tx_hash, cert_index]

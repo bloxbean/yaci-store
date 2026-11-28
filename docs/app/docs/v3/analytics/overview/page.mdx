@@ -110,13 +110,21 @@ The module includes 47 built-in table exporters covering all indexed Cardano dat
 
 ### Daily Tables (31 — partitioned by date)
 
-`address`, `address_balance`, `address_tx_amount`, `address_utxo`, `assets`, `block`, `committee_deregistration`, `committee_registration`, `cost_model`, `datum`, `delegation`, `delegation_vote`, `drep`, `drep_registration`, `gov_action_proposal`, `invalid_transaction`, `pool`, `pool_registration`, `pool_retirement`, `protocol_params_proposal`, `rollback`, `script`, `stake_address_balance`, `stake_registration`, `transaction`, `transaction_metadata`, `transaction_scripts`, `transaction_witness`, `tx_input`, `voting_procedure`, `withdrawal`
+`address`, `address_balance`, `address_tx_amount`, `address_utxo`, `assets`, `block`, `committee_deregistration`, `committee_registration`, `cost_model`, `datum`, `delegation`, `delegation_vote`, `drep`, `drep_registration`, `gov_action_proposal`, `invalid_transaction`, `pool`, `pool_registration`, `pool_retirement`, `protocol_params_proposal`, `script`, `stake_address_balance`, `stake_registration`, `transaction`, `transaction_metadata`, `transaction_scripts`, `transaction_witness`, `tx_input`, `voting_procedure`, `withdrawal`
 
 > **Note:** The `address` table is empty by default because address saving is disabled. To populate it, enable `store.utxo.save-address=true` in your configuration.
+
+> **Note:** The `rollback` table is not exported. It logs the rollbacks one node went through, which another node syncing the same chain does not share. Analytics stores written by earlier versions keep their `rollback` relation; nothing updates it any more.
 
 ### Epoch Tables (16 — partitioned by epoch)
 
 `adapot`, `committee`, `committee_member`, `committee_state`, `constitution`, `drep_dist`, `epoch`, `epoch_param`, `epoch_stake`, `gov_action_proposal_status`, `gov_epoch_activity`, `instant_reward`, `mir`, `reward`, `reward_rest`, `unclaimed_reward_rest`
+
+An epoch is exported only once the table's data for it is final. Some tables need another module for that:
+
+- `adapot`, `committee`, `committee_member`, `committee_state`, `constitution`, `drep_dist`, `epoch_stake`, `gov_action_proposal_status`, `gov_epoch_activity`, `reward`, `reward_rest` and `unclaimed_reward_rest` are written by the AdaPot reward calculation. Each epoch waits until its AdaPot job has completed. If the job status cannot be read, the epoch is tried again on the next run. With the adapot module disabled (`store.adapot.enabled=false`) these tables are not exported at all, and a warning is logged at startup.
+- `epoch` holds the per-epoch summary that the epoch-aggr module computes. It needs `store.epoch-aggr.enabled=true` and `store.epoch-aggr.epoch-calculation-enabled=true`. Both are `false` in the shipped configuration, and without them the table is not exported (a warning is logged at startup). Epoch N is exported once the chain has moved past it and its `epoch` row counts every block of epoch N.
+- `adapot`, `epoch_param` (from the first non-Byron epoch) and `epoch` (for an epoch with blocks) always have rows for a final epoch. If their export returns no rows, the partition is marked `FAILED` and retried instead of `COMPLETED`.
 
 ### Selecting Specific Tables
 

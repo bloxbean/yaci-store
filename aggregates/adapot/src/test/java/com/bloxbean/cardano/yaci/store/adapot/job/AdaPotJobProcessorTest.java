@@ -22,11 +22,15 @@ import org.mockito.InOrder;
 import org.springframework.context.ApplicationEventPublisher;
 
 import java.math.BigInteger;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
@@ -111,6 +115,39 @@ class AdaPotJobProcessorTest {
         assertThat(result).isTrue();
         verify(storage).save(job);
         verify(publisher, never()).publishEvent(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void retriedJob_clearsPreviousFailureMessage() throws InterruptedException {
+        AdaPotJob job = job(644, 192844802L, 13695759L);
+        when(storage.getJobByTypeAndEpoch(AdaPotJobType.REWARD_CALC, 644))
+                .thenReturn(Optional.of(job(644, 192844802L, 13695759L)));
+        when(dsl.dialect()).thenReturn(SQLDialect.H2);
+        List<String> saved = new ArrayList<>();
+        doAnswer(inv -> {
+            AdaPotJob j = inv.getArgument(0);
+            saved.add(j.getStatus() + ":" + j.getErrorMessage());
+            return null;
+        }).when(storage).save(any());
+
+        //First attempt fails outside the reward calculation, the retry succeeds
+        when(adaPotService.createAdaPot(644, 192844802L))
+                .thenThrow(new NoSuchElementException("No value present"))
+                .thenReturn(null);
+        assertThat(processor.processJob(job)).isFalse();
+        assertThat(job.getErrorMessage()).isEqualTo("Reward calculation failed due to unknown exception : No value present");
+
+        //Restart resets the STARTED job, then it is processed again and succeeds
+        job.setStatus(AdaPotJobStatus.NOT_STARTED);
+        assertThat(processor.processJob(job)).isTrue();
+
+        assertThat(job.getStatus()).isEqualTo(AdaPotJobStatus.COMPLETED);
+        assertThat(job.getErrorMessage()).isNull();
+        assertThat(saved).containsExactly(
+                "STARTED:null",
+                "STARTED:Reward calculation failed due to unknown exception : No value present",
+                "STARTED:null",
+                "COMPLETED:null");
     }
 
     @Test

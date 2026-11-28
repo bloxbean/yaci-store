@@ -54,7 +54,7 @@ class CutoffSlotResolverTest {
         when(registry.hasExporter("block")).thenReturn(true);
         when(registry.getExporter("block")).thenReturn(exporter);
         EraService eraService = mock(EraService.class);
-        when(eraService.slotFromTime(anyLong())).thenAnswer(inv -> inv.<Long>getArgument(0) - 1_700_000_000L);
+        when(eraService.slotAtOrAfterTime(anyLong())).thenAnswer(inv -> inv.<Long>getArgument(0) - 1_700_000_000L);
 
         CutoffSlotResolver resolver = new CutoffSlotResolver(stateService, eraService, registry);
         CutoffSlotResolver.Cutoff cutoff = resolver.getCutoff("block");

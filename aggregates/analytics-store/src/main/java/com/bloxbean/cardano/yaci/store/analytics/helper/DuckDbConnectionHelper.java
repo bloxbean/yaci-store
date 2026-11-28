@@ -1,6 +1,7 @@
 package com.bloxbean.cardano.yaci.store.analytics.helper;
 
 import com.bloxbean.cardano.yaci.store.analytics.config.AnalyticsStoreProperties;
+import com.bloxbean.cardano.yaci.store.analytics.config.DuckDbInstances;
 import com.bloxbean.cardano.yaci.store.analytics.ducklake.CatalogTypeGuard;
 import com.bloxbean.cardano.yaci.store.analytics.ducklake.DuckDbCatalogPreInitializer;
 import lombok.Builder;
@@ -19,6 +20,7 @@ import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.List;
 import java.util.regex.Pattern;
 
 /**
@@ -44,8 +46,19 @@ public class DuckDbConnectionHelper {
     private final DatabaseCredentials sourceCredentials;
     private final DatabaseCredentials catalogCredentials;
 
+    /** Catalog schema decision for a PostgreSQL catalog, made once per JVM. */
+    private volatile CatalogSchemas.Resolution catalogResolution;
+    /** Set once the catalog is known to exist (attached successfully). */
+    private volatile boolean catalogKnownToExist;
+
     /**
      * Immutable credentials container.
+     *
+     * <p>{@code host}/{@code port} are libpq values (comma separated for several hosts).
+     * {@code parameters} are the libpq connection parameters translated from the JDBC URL
+     * (SSL settings, {@code target_session_attrs}, ...); {@code options} is the URL's
+     * {@code options} value. {@code unavailableReason} is set when the URL is not a usable
+     * PostgreSQL URL; the credentials can then not be used to attach PostgreSQL.</p>
      */
     @Value
     @Builder
@@ -57,6 +70,10 @@ public class DuckDbConnectionHelper {
         String host;
         String port;
         String dbName;
+        @Builder.Default
+        java.util.Map<String, String> parameters = java.util.Map.of();
+        String options;
+        String unavailableReason;
     }
 
     /**
@@ -77,9 +94,12 @@ public class DuckDbConnectionHelper {
         this.environment = environment;
         this.properties = properties;
 
-        // Resolve credentials at startup (cached for performance)
+        // Resolve credentials at startup (cached for performance). A URL that is not a usable
+        // PostgreSQL URL does not fail here: only attaching PostgreSQL needs it.
         this.sourceCredentials = resolveSourceCredentials();
         this.catalogCredentials = resolveCatalogCredentials();
+        registerSecret(sourceCredentials.password);
+        registerSecret(catalogCredentials.password);
 
         log.debug("Initialized DuckDbConnectionHelper (source schema: {}, catalog URL: {})",
                 sourceCredentials.schema,
@@ -103,28 +123,118 @@ public class DuckDbConnectionHelper {
     }
 
     /**
-     * Install postgres_scanner extension (idempotent).
+     * Load the postgres_scanner extension, installing it only when it is not present yet.
      */
     public void installPostgresScanner(Connection conn) throws SQLException {
-        executeSql(conn, "INSTALL postgres_scanner;");
-        executeSql(conn, "LOAD postgres_scanner;");
-        log.debug("Installed postgres_scanner extension");
+        loadExtension(conn, POSTGRES_EXTENSION, properties.getDuckdb().getExtensionDirectories());
     }
 
     /**
-     * Install ducklake extension (idempotent).
+     * Load the ducklake extension, installing it only when it is not present yet.
      */
     public void installDuckLake(Connection conn) throws SQLException {
-        executeSql(conn, "INSTALL ducklake;");
-        executeSql(conn, "LOAD ducklake;");
-        log.debug("Installed ducklake extension");
+        loadExtension(conn, DUCKLAKE_EXTENSION, properties.getDuckdb().getExtensionDirectories());
+    }
+
+    public static final String DUCKLAKE_EXTENSION = "ducklake";
+    public static final String POSTGRES_EXTENSION = "postgres_scanner";
+
+    /**
+     * Apply {@code yaci.store.analytics.duckdb.extension-directories}, if set, so that
+     * {@code INSTALL}/{@code LOAD} use those directories. The setting is per DuckDB instance
+     * and idempotent.
+     */
+    public void applyExtensionDirectories(Connection conn) throws SQLException {
+        applyExtensionDirectories(conn, properties.getDuckdb().getExtensionDirectories());
+    }
+
+    private static void applyExtensionDirectories(Connection conn, List<String> directories) throws SQLException {
+        String sql = extensionDirectoriesSql(directories);
+        if (sql != null) {
+            try (Statement stmt = conn.createStatement()) {
+                stmt.execute(sql);
+            } catch (SQLException e) {
+                // A locked-down instance (lock_configuration) was given the setting when it
+                // was opened (DuckDbInstances.open); it cannot be changed any more.
+                if (e.getMessage() == null || !e.getMessage().toLowerCase().contains("lock")) {
+                    throw e;
+                }
+                log.debug("extension_directories not re-applied: configuration is locked");
+            }
+        }
     }
 
     /**
-     * Attach source PostgreSQL database with specified alias (no statement timeout).
+     * {@code SET extension_directories = [...]} for the given directories, or {@code null} when
+     * none are configured.
+     */
+    public static String extensionDirectoriesSql(List<String> directories) {
+        return DuckDbInstances.extensionDirectoriesSql(directories);
+    }
+
+    /**
+     * Load a DuckDB extension without touching the network when it is already installed:
+     * {@code LOAD} first, and only if that fails {@code INSTALL} + {@code LOAD}. When both fail
+     * (offline host, extension repository outage), throw an error that names the extension, the
+     * directories searched and how to pre-install it.
+     */
+    public static void loadExtension(Connection conn, String extension, List<String> extensionDirectories)
+            throws SQLException {
+        applyExtensionDirectories(conn, extensionDirectories);
+        try (Statement stmt = conn.createStatement()) {
+            stmt.execute("LOAD " + extension + ";");
+            log.debug("Loaded DuckDB extension {}", extension);
+            return;
+        } catch (SQLException loadFailure) {
+            log.debug("LOAD {} failed ({}); installing it", extension, loadFailure.getMessage());
+        }
+        try (Statement stmt = conn.createStatement()) {
+            stmt.execute("INSTALL " + extension + ";");
+            stmt.execute("LOAD " + extension + ";");
+            log.info("Installed and loaded DuckDB extension {}", extension);
+        } catch (SQLException e) {
+            throw extensionUnavailable(conn, extension, e);
+        }
+    }
+
+    private static SQLException extensionUnavailable(Connection conn, String extension, SQLException cause) {
+        String version = querySetting(conn, "SELECT library_version FROM pragma_version()", "<duckdb-version>");
+        String platform = querySetting(conn, "SELECT platform FROM pragma_platform()", "<platform>");
+        String directories = querySetting(conn, "SELECT current_setting('extension_directories')::VARCHAR", "");
+        if (directories.isBlank() || "[]".equals(directories)) {
+            String single = querySetting(conn, "SELECT current_setting('extension_directory')", "");
+            directories = single.isBlank() ? Paths.get(System.getProperty("user.home"), ".duckdb", "extensions").toString()
+                    : single;
+        }
+        String message = "DuckDB extension '" + extension + "' (DuckDB " + version + ", platform " + platform
+                + ") is not installed in " + directories + " and could not be installed: " + cause.getMessage()
+                + ". If this host has no access to the DuckDB extension repository (extensions.duckdb.org), "
+                + "install the extension on a machine with access, using the same DuckDB version, e.g. "
+                + "duckdb -c \"SET extension_directory='/path/to/extensions'; INSTALL " + extension + ";\", "
+                + "copy /path/to/extensions/" + version + "/" + platform + "/" + extension + ".duckdb_extension "
+                + "to the same relative path on this host, and point yaci.store.analytics.duckdb.extension-directories "
+                + "at that directory.";
+        SQLException e = new SQLException(redactSecrets(message), cause.getSQLState(), cause.getErrorCode());
+        e.setStackTrace(cause.getStackTrace());
+        return e;
+    }
+
+    private static String querySetting(Connection conn, String sql, String fallback) {
+        try (Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(sql)) {
+            if (rs.next() && rs.getString(1) != null) {
+                return rs.getString(1);
+            }
+        } catch (SQLException ignored) {
+            // diagnostics only
+        }
+        return fallback;
+    }
+
+    /**
+     * Attach source PostgreSQL database with specified alias, for the export pipeline.
      *
-     * <p>Used by the export pipeline where queries are long-running and timeout
-     * is not desired. For the analytics query layer, use
+     * <p>Uses {@code yaci.store.analytics.source-statement-timeout-seconds} (default 0 = no
+     * timeout: export queries are long-running). For the analytics query layer, use
      * {@link #attachSourceDatabase(Connection, String, int)} instead.</p>
      *
      * @param conn      DuckDB connection
@@ -132,7 +242,7 @@ public class DuckDbConnectionHelper {
      * @throws SQLException if the ATTACH command fails
      */
     public void attachSourceDatabase(Connection conn, String aliasName) throws SQLException {
-        attachSourceDatabase(conn, aliasName, 0);
+        attachSourceDatabase(conn, aliasName, Math.max(0, properties.getSourceStatementTimeoutSeconds()));
     }
 
     /**
@@ -151,28 +261,21 @@ public class DuckDbConnectionHelper {
      * @throws SQLException if the ATTACH command fails
      */
     public void attachSourceDatabase(Connection conn, String aliasName, int statementTimeoutSeconds) throws SQLException {
-        DatabaseCredentials creds = sourceCredentials;
-
-        StringBuilder connInfo = new StringBuilder();
-        appendConnInfo(connInfo, "dbname", creds.dbName);
-        appendConnInfo(connInfo, "user", creds.username);
-        appendConnInfo(connInfo, "password", creds.password);
-        appendConnInfo(connInfo, "host", creds.host);
-        appendConnInfo(connInfo, "port", creds.port);
+        DatabaseCredentials creds = requirePostgres(sourceCredentials, "spring.datasource.url",
+                "attach the source database as '" + aliasName + "'");
 
         // Put both settings in libpq's startup options. postgres_scanner can open a pool
         // of libpq connections, so a SET executed on one connection is not sufficient.
-        StringBuilder options = new StringBuilder();
+        java.util.List<String> settings = new java.util.ArrayList<>();
         if (creds.schema != null && !creds.schema.isEmpty()) {
-            options.append("-csearch_path=").append(creds.schema);
+            settings.add("search_path=" + creds.schema);
         }
         if (statementTimeoutSeconds > 0) {
-            if (!options.isEmpty()) options.append(' ');
-            options.append("-cstatement_timeout=").append(statementTimeoutSeconds * 1000L);
+            settings.add("statement_timeout=" + (statementTimeoutSeconds * 1000L));
         }
-        if (!options.isEmpty()) appendConnInfo(connInfo, "options", options.toString());
+        String connInfo = libpqConnInfo(creds, settings);
 
-        String cmd = "ATTACH '" + escapeSqlLiteral(connInfo.toString()) + "' AS "
+        String cmd = "ATTACH '" + escapeSqlLiteral(connInfo) + "' AS "
                 + quoteIdentifier(aliasName) + " (TYPE POSTGRES, READ_ONLY);";
 
         if (isDatabaseAttached(conn, aliasName)) {
@@ -257,8 +360,36 @@ public class DuckDbConnectionHelper {
         return sanitized;
     }
 
-    private static final Pattern PASSWORD_PATTERN = Pattern.compile(
-            "(?i)(password\\s*=\\s*)('(?:\\\\.|[^'\\\\])*'|\\S+)");
+    /** {@code password=} / {@code sslpassword=} (any case), followed by the value. */
+    private static final Pattern PASSWORD_KEY = Pattern.compile("(?i)(?:ssl)?password\\s*=\\s*");
+
+    /**
+     * A password value: libpq-quoted ({@code 'a b\'c'}), libpq-quoted inside an SQL literal
+     * ({@code ''a b\''c''}), or bare up to the next whitespace.
+     */
+    private static final Pattern PASSWORD_VALUE = Pattern.compile(
+            "''(?:\\\\''|\\\\\\\\|[^'])*''|'(?:\\\\.|[^'\\\\])*'|\\S+");
+
+    /** Configured passwords (and their escaped spellings) that are redacted wherever they appear. */
+    private static final java.util.Set<String> KNOWN_SECRETS = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    /** Passwords shorter than this are only redacted after {@code password=}. */
+    private static final int MIN_KNOWN_SECRET_LENGTH = 4;
+
+    /**
+     * Remember a secret so that {@link #redactSecrets} removes it from any message, also in
+     * its libpq- and SQL-escaped forms.
+     */
+    static void registerSecret(String secret) {
+        if (secret == null || secret.length() < MIN_KNOWN_SECRET_LENGTH) {
+            return;
+        }
+        String libpq = secret.replace("\\", "\\\\").replace("'", "\\'");
+        KNOWN_SECRETS.add(secret);
+        KNOWN_SECRETS.add(libpq);
+        KNOWN_SECRETS.add(escapeSqlLiteral(libpq));
+        KNOWN_SECRETS.add(escapeSqlLiteral(secret));
+    }
 
     /**
      * Redact credential values from a DuckDB/libpq error message.
@@ -271,7 +402,55 @@ public class DuckDbConnectionHelper {
         if (message == null || message.isEmpty()) {
             return message;
         }
-        return PASSWORD_PATTERN.matcher(message).replaceAll("$1***");
+        // Known passwords first: a configured password may contain spaces or quotes and appear
+        // unquoted, which no pattern can delimit. Only text right after "password=" is compared,
+        // so a password that happens to be a common word does not garble the rest of the message.
+        java.util.List<String> secrets = new java.util.ArrayList<>(KNOWN_SECRETS);
+        secrets.sort((a, b) -> Integer.compare(b.length(), a.length()));
+        StringBuilder out = new StringBuilder();
+        java.util.regex.Matcher key = PASSWORD_KEY.matcher(message);
+        int last = 0;
+        while (key.find()) {
+            if (key.start() < last) {
+                continue; // inside a value that was already redacted
+            }
+            int valueStart = key.end();
+            int valueEnd = knownSecretEnd(message, valueStart, secrets);
+            if (valueEnd < 0) {
+                java.util.regex.Matcher value = PASSWORD_VALUE.matcher(message);
+                value.region(valueStart, message.length());
+                valueEnd = value.lookingAt() ? value.end() : valueStart;
+            }
+            out.append(message, last, valueStart).append("***");
+            last = valueEnd;
+        }
+        out.append(message, last, message.length());
+        return out.toString();
+    }
+
+    /** End of a known secret (with its optional quotes) starting at {@code start}, or -1. */
+    private static int knownSecretEnd(String message, int start, java.util.List<String> secrets) {
+        for (String quote : new String[]{"''", "'", ""}) {
+            if (!message.startsWith(quote, start)) {
+                continue;
+            }
+            int from = start + quote.length();
+            for (String secret : secrets) {
+                if (!message.startsWith(secret, from)) {
+                    continue;
+                }
+                int end = from + secret.length();
+                if (!quote.isEmpty()) {
+                    if (message.startsWith(quote, end)) {
+                        return end + quote.length();
+                    }
+                } else if (end == message.length() || Character.isWhitespace(message.charAt(end))
+                        || message.charAt(end) == '"') {
+                    return end;
+                }
+            }
+        }
+        return -1;
     }
 
     private static void appendConnInfo(StringBuilder target, String key, String value) {
@@ -279,12 +458,61 @@ public class DuckDbConnectionHelper {
         target.append(key).append('=').append(quoteConnInfoValue(value));
     }
 
+    /**
+     * Build a libpq connection string ({@code key='value' ...}, every value quoted and escaped)
+     * from parsed credentials. Null credentials are omitted (libpq then uses its defaults:
+     * {@code PGUSER}/{@code PGPASSWORD}, {@code ~/.pgpass}, ...). {@code settings} are added as
+     * {@code -c name=value} startup options after the URL's own {@code options}.
+     */
+    static String libpqConnInfo(DatabaseCredentials creds, java.util.List<String> settings) {
+        StringBuilder connInfo = new StringBuilder();
+        if (creds.dbName != null && !creds.dbName.isEmpty()) appendConnInfo(connInfo, "dbname", creds.dbName);
+        if (creds.username != null) appendConnInfo(connInfo, "user", creds.username);
+        if (creds.password != null) appendConnInfo(connInfo, "password", creds.password);
+        if (creds.host != null) appendConnInfo(connInfo, "host", creds.host);
+        if (creds.port != null) appendConnInfo(connInfo, "port", creds.port);
+        for (java.util.Map.Entry<String, String> e : creds.parameters.entrySet()) {
+            appendConnInfo(connInfo, e.getKey(), e.getValue());
+        }
+        StringBuilder options = new StringBuilder();
+        if (creds.options != null && !creds.options.isBlank()) {
+            options.append(creds.options.trim());
+        }
+        if (settings != null) {
+            for (String setting : settings) {
+                if (!options.isEmpty()) options.append(' ');
+                options.append("-c").append(escapeOptionValue(setting));
+            }
+        }
+        if (!options.isEmpty()) appendConnInfo(connInfo, "options", options.toString());
+        return connInfo.toString();
+    }
+
+    /** libpq splits {@code options} at whitespace; a backslash escapes the next character. */
+    private static String escapeOptionValue(String value) {
+        return value.replace("\\", "\\\\").replace(" ", "\\ ");
+    }
+
+    /**
+     * Credentials that can be used to connect to PostgreSQL, or a clear error naming the
+     * property when the configured URL is not a usable PostgreSQL URL.
+     */
+    private static DatabaseCredentials requirePostgres(DatabaseCredentials creds, String property, String purpose)
+            throws SQLException {
+        if (creds.unavailableReason != null) {
+            throw new SQLException("Cannot " + purpose + ": " + property + " ('" + redactSecrets(creds.url)
+                    + "') is not usable: " + creds.unavailableReason
+                    + ". The analytics store needs a PostgreSQL JDBC URL (jdbc:postgresql://host:port/db).");
+        }
+        return creds;
+    }
+
     private static String quoteConnInfoValue(String value) {
         String safe = value == null ? "" : value;
         return "'" + safe.replace("\\", "\\\\").replace("'", "\\'") + "'";
     }
 
-    private static String escapeSqlLiteral(String value) {
+    static String escapeSqlLiteral(String value) {
         return value.replace("'", "''");
     }
 
@@ -388,11 +616,17 @@ public class DuckDbConnectionHelper {
      * Attach DuckLake catalog (PostgreSQL or DuckDB).
      * Checks if already attached (connection pooling aware).
      *
+     * <p>An existing catalog is attached <em>without</em> {@code DATA_PATH}, so DuckLake uses the
+     * path recorded in the catalog, and that path is then compared with {@code export-path}: the
+     * same directory written differently ({@code ./data/analytics} vs {@code /app/data/analytics},
+     * a symbolic link) is accepted, a different directory is refused with a clear message. A new
+     * catalog is created with {@code DATA_PATH = export-path}.</p>
+     *
      * @param conn DuckDB connection
      * @param readOnly If true, attaches catalog in READ_ONLY mode (prevents writes)
      */
     public void attachDuckLakeCatalog(Connection conn, boolean readOnly) throws SQLException {
-        String catalogType = properties.getDucklake().getCatalogType();
+        CatalogType catalogType = CatalogType.of(properties.getDucklake().getCatalogType());
         String dataPath = properties.getExportPath();
 
         // Ensure data path directory exists
@@ -412,10 +646,33 @@ public class DuckDbConnectionHelper {
         }
 
         // Attach the appropriate catalog type
-        if ("postgresql".equalsIgnoreCase(catalogType)) {
+        if (catalogType == CatalogType.POSTGRESQL) {
             attachPostgresCatalog(conn, dataPath, readOnly);
         } else {
             attachDuckDbCatalog(conn, dataPath, readOnly);
+        }
+    }
+
+    /** The supported {@code yaci.store.analytics.ducklake.catalog-type} values. */
+    public enum CatalogType {
+        DUCKDB, POSTGRESQL;
+
+        /**
+         * Parse {@code catalog-type} ({@code duckdb} or {@code postgresql}, case-insensitive).
+         *
+         * @throws IllegalStateException for any other value
+         */
+        public static CatalogType of(String value) {
+            String v = value == null ? "" : value.trim();
+            if ("duckdb".equalsIgnoreCase(v)) {
+                return DUCKDB;
+            }
+            if ("postgresql".equalsIgnoreCase(v)) {
+                return POSTGRESQL;
+            }
+            throw new IllegalStateException("Unsupported yaci.store.analytics.ducklake.catalog-type '" + value
+                    + "'. Use 'postgresql' (catalog tables in PostgreSQL) or 'duckdb' (catalog in the file "
+                    + "yaci.store.analytics.ducklake.catalog-path).");
         }
     }
 
@@ -428,62 +685,107 @@ public class DuckDbConnectionHelper {
      * migrate the metadata in place. Migration is one-way — an older DuckDB/DuckLake can no
      * longer open the migrated catalog — so back up the catalog before upgrading DuckDB.
      * Read-only attaches cannot migrate and therefore do not request it.</p>
+     *
+     * @param dataPath {@code DATA_PATH} for a new catalog, or null for an existing one (DuckLake
+     *                 then uses the path recorded in the catalog)
      */
-    private static String duckLakeAttachOptions(String dataPath, boolean readOnly) {
-        String data = "DATA_PATH '" + escapeSqlLiteral(dataPath) + "'";
-        return readOnly ? "READ_ONLY, " + data : data + ", AUTOMATIC_MIGRATION true";
+    static String duckLakeAttachOptions(String dataPath, boolean readOnly) {
+        java.util.List<String> options = new java.util.ArrayList<>();
+        if (readOnly) {
+            options.add("READ_ONLY");
+        }
+        if (dataPath != null) {
+            options.add("DATA_PATH '" + escapeSqlLiteral(dataPath) + "'");
+        }
+        if (!readOnly) {
+            options.add("AUTOMATIC_MIGRATION true");
+        }
+        return String.join(", ", options);
+    }
+
+    /**
+     * After attaching an existing catalog without {@code DATA_PATH}: refuse it when its recorded
+     * data path is a different directory than {@code export-path}.
+     */
+    private void verifyDataPath(Connection conn, String dataPath, String catalogDescription) throws SQLException {
+        String stored = null;
+        try (Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(
+                     "SELECT value FROM ducklake_options('ducklake_catalog') WHERE option_name = 'data_path'")) {
+            if (rs.next()) {
+                stored = rs.getString(1);
+            }
+        }
+        if (stored == null || CatalogSchemas.sameDirectory(stored, dataPath)) {
+            if (stored != null && !stripTrailingSlash(stored).equals(stripTrailingSlash(dataPath))) {
+                log.info("DuckLake catalog records DATA_PATH '{}', yaci.store.analytics.export-path is '{}': same "
+                        + "directory, using the recorded path", stored, dataPath);
+            }
+            return;
+        }
+        try {
+            executeSql(conn, "DETACH ducklake_catalog;");
+        } catch (SQLException ignored) {
+            // the failure below is what matters
+        }
+        throw new SQLException("The DuckLake catalog " + catalogDescription + " belongs to the export directory '"
+                + stored + "', but yaci.store.analytics.export-path is '" + dataPath + "' (a different directory). "
+                + "If the export directory was moved, set export-path back to '" + stored + "' or move the "
+                + "directory back. If the catalog belongs to another yaci-store instance, give this instance a "
+                + "catalog of its own (yaci.store.analytics.ducklake.catalog-schema for a PostgreSQL catalog, "
+                + "catalog-path for a DuckDB catalog).");
+    }
+
+    private static String stripTrailingSlash(String path) {
+        String p = path.trim();
+        while (p.length() > 1 && p.endsWith("/")) {
+            p = p.substring(0, p.length() - 1);
+        }
+        return p;
     }
 
     // ========== URL Parsing Utilities ==========
 
     /**
-     * Extract database name from JDBC URL.
-     * Example: jdbc:postgresql://localhost:5432/yaci_store?currentSchema=mainnet → yaci_store
+     * Parse a JDBC URL into libpq connection values. {@code currentSchema} becomes the schema
+     * (default {@code public}); {@code user}/{@code password} in the URL win over the separate
+     * properties, as in PgJDBC; SSL and other connection parameters are translated to libpq
+     * (see {@link PostgresJdbcUrl#libpqParameters}). A URL that is not a PostgreSQL URL (for
+     * example an H2 URL in tests) gives credentials with {@code unavailableReason} set.
      */
-    public String extractDbName(String jdbcUrl) {
-        String[] parts = jdbcUrl.split("/");
-        String dbPart = parts[parts.length - 1];
-        return dbPart.split("\\?")[0]; // Remove query parameters
-    }
-
-    /**
-     * Extract host from JDBC URL.
-     * Example: jdbc:postgresql://localhost:5432/yaci_store → localhost
-     */
-    public String extractHost(String jdbcUrl) {
-        String[] parts = jdbcUrl.split("//")[1].split("/")[0].split(":");
-        return parts[0];
-    }
-
-    /**
-     * Extract port from JDBC URL.
-     * Example: jdbc:postgresql://localhost:5432/yaci_store → 5432
-     */
-    public String extractPort(String jdbcUrl) {
-        String[] parts = jdbcUrl.split("//")[1].split("/")[0].split(":");
-        return parts.length > 1 ? parts[1] : "5432";
-    }
-
-    /**
-     * Extract schema from JDBC URL query parameters.
-     * Example: jdbc:postgresql://localhost:5432/yaci_store?currentSchema=mainnet → mainnet
-     * Default: public
-     */
-    public String extractSchema(String jdbcUrl) {
-        if (jdbcUrl == null) {
-            return "public";
+    static DatabaseCredentials parseCredentials(String url, String username, String password, String property) {
+        PostgresJdbcUrl parsed;
+        try {
+            parsed = PostgresJdbcUrl.parse(url);
+        } catch (IllegalArgumentException e) {
+            return DatabaseCredentials.builder()
+                    .url(url == null ? "" : url)
+                    .username(username)
+                    .password(password)
+                    .schema("public")
+                    .unavailableReason(e.getMessage())
+                    .build();
         }
-
-        // Look for currentSchema parameter
-        if (jdbcUrl.contains("currentSchema=")) {
-            String[] parts = jdbcUrl.split("currentSchema=");
-            if (parts.length > 1) {
-                return parts[1].split("&")[0]; // Handle multiple parameters
-            }
+        String urlUser = parsed.parameter("user");
+        String urlPassword = parsed.parameter("password");
+        String schema = parsed.parameter("currentSchema");
+        java.util.List<String> ignored = new java.util.ArrayList<>();
+        java.util.Map<String, String> libpq = parsed.libpqParameters(ignored);
+        if (!ignored.isEmpty()) {
+            log.warn("{}: JDBC URL parameter(s) {} have no libpq equivalent and are not used for DuckDB's "
+                    + "PostgreSQL connections", property, ignored);
         }
-
-        // Default to public schema
-        return "public";
+        return DatabaseCredentials.builder()
+                .url(url)
+                .username(urlUser != null && !urlUser.isEmpty() ? urlUser : username)
+                .password(urlPassword != null ? urlPassword : password)
+                .schema(schema == null || schema.isBlank() ? "public" : schema.trim())
+                .host(parsed.libpqHost())
+                .port(parsed.libpqPort())
+                .dbName(parsed.database())
+                .parameters(libpq)
+                .options(parsed.parameter("options"))
+                .build();
     }
 
     /**
@@ -512,26 +814,19 @@ public class DuckDbConnectionHelper {
      * Resolve source database credentials (always main datasource).
      */
     private DatabaseCredentials resolveSourceCredentials() {
-        String url = environment.getProperty("spring.datasource.url");
-        String username = environment.getProperty("spring.datasource.username");
-        String password = environment.getProperty("spring.datasource.password");
-
-        return DatabaseCredentials.builder()
-                .url(url)
-                .username(username)
-                .password(password)
-                .schema(extractSchema(url))
-                .host(extractHost(url))
-                .port(extractPort(url))
-                .dbName(extractDbName(url))
-                .build();
+        return parseCredentials(
+                environment.getProperty("spring.datasource.url"),
+                environment.getProperty("spring.datasource.username"),
+                environment.getProperty("spring.datasource.password"),
+                "spring.datasource.url");
     }
 
     /**
      * Resolve catalog database credentials (catalog-specific if provided, else main datasource).
      */
     private DatabaseCredentials resolveCatalogCredentials() {
-        String url = properties.getDucklake().getCatalogUrl() != null ?
+        boolean custom = properties.getDucklake().getCatalogUrl() != null;
+        String url = custom ?
                 properties.getDucklake().getCatalogUrl() :
                 environment.getProperty("spring.datasource.url");
 
@@ -543,90 +838,51 @@ public class DuckDbConnectionHelper {
                 properties.getDucklake().getCatalogPassword() :
                 environment.getProperty("spring.datasource.password");
 
-        return DatabaseCredentials.builder()
-                .url(url)
-                .username(username)
-                .password(password)
-                .schema(extractSchema(url))
-                .host(extractHost(url))
-                .port(extractPort(url))
-                .dbName(extractDbName(url))
-                .build();
+        return parseCredentials(url, username, password,
+                custom ? "yaci.store.analytics.ducklake.catalog-url" : "spring.datasource.url");
+    }
+
+    /** This instance's source identity recorded in the catalog ({@code <database>/<schema>}). */
+    public String catalogOwnerIdentity() {
+        return CatalogSchemas.ownerIdentity(sourceCredentials.dbName, sourceCredentials.schema);
     }
 
     /**
-     * Attach PostgreSQL-based DuckLake catalog.
-     *
-     * @param readOnly If true, attaches catalog in READ_ONLY mode
+     * Prefix for querying the attached catalog's metadata tables ({@code <prefix>.ducklake_table}).
+     * A PostgreSQL catalog keeps them in its {@linkplain #catalogSchema metadata schema}, which is
+     * not the default schema of the attached database when it is not {@code public}, so the
+     * schema must be named; a DuckDB-file catalog keeps them in the file's default schema.
      */
-    private void attachPostgresCatalog(Connection conn, String dataPath, boolean readOnly) throws SQLException {
-        DatabaseCredentials creds = catalogCredentials;
-
-        // Note: Schema creation is now handled by DuckLakeCatalogInitializer at startup
-        // DuckLake always uses 'public' schema for metadata tables
-
-        String connectionString = String.format(
-                "ducklake:postgres:dbname=%s host=%s port=%s user=%s password=%s options=-csearch_path=public",
-                creds.dbName,
-                creds.host,
-                creds.port,
-                creds.username,
-                creds.password
-        );
-
-        // Build ATTACH statement with optional READ_ONLY
-        String attachSql = String.format(
-                "ATTACH '%s' AS ducklake_catalog (%s);",
-                connectionString,
-                duckLakeAttachOptions(dataPath, readOnly)
-        );
-
-        try {
-            executeSql(conn, attachSql);
-            log.debug("Attached PostgreSQL DuckLake catalog (schema: public, DATA_PATH: {}, READ_ONLY: {})",
-                    dataPath, readOnly);
-        } catch (SQLException e) {
-            // Handle "already attached" error (shouldn't happen after check, but safety net)
-            if (isAlreadyAttached(e)) {
-                log.debug("PostgreSQL catalog already attached, skipping");
-                return;
-            }
-            // The DuckLake/postgres_scanner error echoes the catalog connection string,
-            // including the password. Callers log the message and stack trace.
-            throw sanitizedAttachFailure("Failed to attach PostgreSQL DuckLake catalog", e);
+    public String metadataTablePrefix(Connection conn) throws SQLException {
+        String metadataDatabase = "__ducklake_metadata_ducklake_catalog";
+        if (CatalogType.of(properties.getDucklake().getCatalogType()) != CatalogType.POSTGRESQL) {
+            return metadataDatabase;
         }
+        return metadataDatabase + "." + quoteIdentifier(catalogSchema(conn));
     }
 
     /**
-     * Ensure catalog schema exists in PostgreSQL.
-     * Creates the schema if it doesn't exist by temporarily connecting to PostgreSQL.
-     *
-     * This should be called once at application startup by DuckLakeCatalogInitializer.
-     *
-     * Note: DuckLake requires 'public' schema for its metadata tables. This method
-     * creates the 'public' schema to ensure DuckLake can initialize properly.
+     * The schema of the PostgreSQL DuckLake catalog, deciding it on first use (see
+     * {@link CatalogSchemas}). Uses a temporary {@code catalog_temp} attach on {@code conn}.
      */
-    public void ensureCatalogSchemaExists(Connection conn) throws SQLException {
-        DatabaseCredentials creds = catalogCredentials;
-        log.debug("Ensuring catalog schema 'public' exists in PostgreSQL (required by DuckLake)");
+    public String catalogSchema(Connection conn) throws SQLException {
+        return resolveCatalogSchema(conn).schema();
+    }
 
-        // Install postgres_scanner if not already installed
-        executeSql(conn, "INSTALL postgres_scanner;");
-        executeSql(conn, "LOAD postgres_scanner;");
+    private synchronized CatalogSchemas.Resolution resolveCatalogSchema(Connection conn) throws SQLException {
+        if (catalogResolution != null) {
+            return catalogResolution;
+        }
+        DatabaseCredentials creds = requirePostgres(catalogCredentials,
+                properties.getDucklake().getCatalogUrl() != null
+                        ? "yaci.store.analytics.ducklake.catalog-url" : "spring.datasource.url",
+                "attach the PostgreSQL DuckLake catalog");
+        installPostgresScanner(conn);
 
-        // Check if already attached (in case of connection pooling)
         boolean wasAlreadyAttached = isDatabaseAttached(conn, "catalog_temp");
-
         if (!wasAlreadyAttached) {
-            // Attach catalog PostgreSQL temporarily to create schema
-            String tempAttach = String.format(
-                    "ATTACH 'dbname=%s user=%s password=%s host=%s port=%s' AS catalog_temp (TYPE POSTGRES);",
-                    creds.dbName,
-                    creds.username,
-                    creds.password,
-                    creds.host,
-                    creds.port
-            );
+            String tempAttach = "ATTACH '" + escapeSqlLiteral(libpqConnInfo(creds, null))
+                    + "' AS catalog_temp (TYPE POSTGRES);";
             try {
                 executeSql(conn, tempAttach);
             } catch (SQLException e) {
@@ -638,52 +894,178 @@ public class DuckDbConnectionHelper {
         }
 
         try {
-            // Start explicit transaction to ensure schema creation is committed
-            executeSql(conn, "BEGIN TRANSACTION;");
-
-            // DuckLake requires 'public' schema for metadata tables - ensure it exists
-            executeSql(conn, "CREATE SCHEMA IF NOT EXISTS catalog_temp.public;");
-            log.debug("Created/verified 'public' schema (required by DuckLake)");
-
-            // IMPORTANT: Commit the schema creation to PostgreSQL before detaching
-            // This ensures the schema persists in PostgreSQL
-            executeSql(conn, "COMMIT;");
-            log.debug("Catalog schema created and committed");
-        } catch (SQLException e) {
-            // Rollback on error
+            String connectionSchema = firstSchema(creds.schema);
+            CatalogSchemas.Resolution resolution;
             try {
-                executeSql(conn, "ROLLBACK;");
-            } catch (SQLException rollbackEx) {
-                log.warn("Failed to rollback transaction: {}", rollbackEx.getMessage());
+                resolution = CatalogSchemas.resolve(properties.getDucklake().getCatalogSchema(), connectionSchema,
+                        catalogOwnerIdentity(), properties.getExportPath(), new PostgresCatalogLookup(conn));
+            } catch (IllegalStateException e) {
+                throw new SQLException(e.getMessage(), e);
             }
-            throw e;
+            if (resolution.legacyPublic()) {
+                log.info("DuckLake catalog: using the existing catalog in schema 'public' (created before "
+                        + "yaci.store.analytics.ducklake.catalog-schema existed). Set catalog-schema=public to "
+                        + "make this explicit.");
+            } else {
+                log.info("DuckLake catalog schema: '{}' ({})", resolution.schema(),
+                        resolution.exists() ? "existing catalog" : "new catalog");
+            }
+            ensureSchemaExists(conn, resolution.schema());
+            catalogResolution = resolution;
+            return resolution;
+        } catch (SQLException e) {
+            throw sanitize(e);
         } finally {
-            // Only detach if we attached it (avoid detaching pooled connection's attachment)
             if (!wasAlreadyAttached) {
                 try {
-                    // Force rollback any remaining transaction before detaching
-                    try {
-                        executeSql(conn, "ROLLBACK;");
-                    } catch (SQLException e) {
-                        // Ignore if no active transaction
-                    }
-
-                    // Detach catalog_temp
                     executeSql(conn, "DETACH catalog_temp;");
-
-                    // Verify it's actually detached
-                    if (isDatabaseAttached(conn, "catalog_temp")) {
-                        throw new SQLException("CRITICAL: catalog_temp still attached after DETACH!");
-                    }
-
-                    log.debug("Successfully detached temporary PostgreSQL connection");
                 } catch (SQLException e) {
-                    log.error("CRITICAL: Failed to cleanup catalog_temp attachment: {}",
-                            redactSecrets(e.getMessage()));
-                    throw new RuntimeException("Failed to cleanup temporary PostgreSQL connection", e);
+                    log.error("Failed to detach catalog_temp: {}", redactSecrets(e.getMessage()));
                 }
             }
         }
+    }
+
+    /** {@code currentSchema} may be a search path ({@code a,b}): the catalog goes into the first. */
+    private static String firstSchema(String schema) {
+        if (schema == null || schema.isBlank()) {
+            return CatalogSchemas.PUBLIC;
+        }
+        String first = schema.split(",")[0].trim();
+        if (first.length() > 1 && first.startsWith("\"") && first.endsWith("\"")) {
+            return first.substring(1, first.length() - 1).replace("\"\"", "\"");
+        }
+        return first.isEmpty() ? CatalogSchemas.PUBLIC : first;
+    }
+
+    /** Looks at the catalog database through the {@code catalog_temp} attach. */
+    private final class PostgresCatalogLookup implements CatalogSchemas.CatalogLookup {
+        private final Connection conn;
+
+        private PostgresCatalogLookup(Connection conn) {
+            this.conn = conn;
+        }
+
+        @Override
+        public boolean hasCatalog(String schema) throws SQLException {
+            String sql = "SELECT to_regclass(" + pgLiteral(pgIdentifier(schema) + ".ducklake_metadata")
+                    + ") IS NOT NULL";
+            return "true".equalsIgnoreCase(postgresQuery(conn, sql));
+        }
+
+        @Override
+        public String metadata(String schema, String key) throws SQLException {
+            String sql = "SELECT value FROM " + pgIdentifier(schema) + ".ducklake_metadata WHERE key = "
+                    + pgLiteral(key) + " LIMIT 1";
+            return postgresQuery(conn, sql);
+        }
+    }
+
+    private static String postgresQuery(Connection conn, String postgresSql) throws SQLException {
+        String sql = "SELECT * FROM postgres_query('catalog_temp', '" + escapeSqlLiteral(postgresSql) + "')";
+        try (Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(sql)) {
+            return rs.next() ? rs.getString(1) : null;
+        }
+    }
+
+    private static String pgIdentifier(String identifier) {
+        return "\"" + identifier.replace("\"", "\"\"") + "\"";
+    }
+
+    private static String pgLiteral(String value) {
+        return "'" + value.replace("'", "''") + "'";
+    }
+
+    /**
+     * Create the catalog schema when it does not exist. Checks first, so a user without
+     * {@code CREATE} on the database can use a schema that was created for it.
+     */
+    private void ensureSchemaExists(Connection conn, String schema) throws SQLException {
+        String exists = postgresQuery(conn,
+                "SELECT count(*) FROM pg_namespace WHERE nspname = " + pgLiteral(schema));
+        if (exists != null && !"0".equals(exists)) {
+            return;
+        }
+        try {
+            executeSql(conn, "CALL postgres_execute('catalog_temp', '"
+                    + escapeSqlLiteral("CREATE SCHEMA IF NOT EXISTS " + pgIdentifier(schema)) + "');");
+            log.info("Created PostgreSQL schema '{}' for the DuckLake catalog", schema);
+        } catch (SQLException e) {
+            throw new SQLException("The DuckLake catalog schema '" + schema + "' does not exist and could not be "
+                    + "created (" + redactSecrets(e.getMessage()) + "). Create it, or grant CREATE on the database "
+                    + "to the catalog user, or set yaci.store.analytics.ducklake.catalog-schema to an existing "
+                    + "schema the catalog user can create tables in.", e.getSQLState(), e.getErrorCode());
+        }
+    }
+
+    /**
+     * Attach PostgreSQL-based DuckLake catalog.
+     *
+     * @param readOnly If true, attaches catalog in READ_ONLY mode
+     */
+    private void attachPostgresCatalog(Connection conn, String dataPath, boolean readOnly) throws SQLException {
+        DatabaseCredentials creds = catalogCredentials;
+        CatalogSchemas.Resolution resolution = resolveCatalogSchema(conn);
+        String schema = resolution.schema();
+        boolean exists = resolution.exists() || catalogKnownToExist;
+
+        String connectionString = "ducklake:postgres:"
+                + libpqConnInfo(creds, java.util.List.of("search_path=" + pgIdentifier(schema)));
+
+        String attachSql = "ATTACH '" + escapeSqlLiteral(connectionString) + "' AS ducklake_catalog ("
+                + duckLakeAttachOptions(exists ? null : dataPath, readOnly)
+                + ", METADATA_SCHEMA '" + escapeSqlLiteral(schema) + "');";
+
+        try {
+            executeSql(conn, attachSql);
+            log.debug("Attached PostgreSQL DuckLake catalog (schema: {}, DATA_PATH: {}, READ_ONLY: {})",
+                    schema, exists ? "recorded" : dataPath, readOnly);
+        } catch (SQLException e) {
+            // Handle "already attached" error (shouldn't happen after check, but safety net)
+            if (isAlreadyAttached(e)) {
+                log.debug("PostgreSQL catalog already attached, skipping");
+                return;
+            }
+            // The DuckLake/postgres_scanner error echoes the catalog connection string,
+            // including the password. Callers log the message and stack trace.
+            throw sanitizedAttachFailure("Failed to attach PostgreSQL DuckLake catalog", e);
+        }
+        if (exists) {
+            verifyDataPath(conn, dataPath, "in PostgreSQL schema '" + schema + "'");
+        }
+        catalogKnownToExist = true;
+        if (!readOnly && resolution.claimOwner()) {
+            claimCatalog(conn, schema);
+        }
+    }
+
+    /** Record this instance's source in a catalog that does not record its owner yet. */
+    private synchronized void claimCatalog(Connection conn, String schema) {
+        CatalogSchemas.Resolution resolution = catalogResolution;
+        if (resolution == null || !resolution.claimOwner()) {
+            return;
+        }
+        String table = "__ducklake_metadata_ducklake_catalog." + quoteIdentifier(schema) + ".ducklake_metadata";
+        try {
+            executeSql(conn, "INSERT INTO " + table + " (key, value) VALUES ('" + CatalogSchemas.OWNER_KEY + "', '"
+                    + escapeSqlLiteral(catalogOwnerIdentity()) + "');");
+            log.info("DuckLake catalog in schema '{}' recorded as belonging to source {}", schema,
+                    catalogOwnerIdentity());
+        } catch (SQLException e) {
+            log.warn("Could not record the source of the DuckLake catalog in schema '{}' ({}); a second "
+                    + "instance using the same catalog is not detected", schema, redactSecrets(e.getMessage()));
+        }
+        catalogResolution = new CatalogSchemas.Resolution(resolution.schema(), true, false,
+                resolution.legacyPublic());
+    }
+
+    /**
+     * Decide the PostgreSQL catalog schema and make sure it exists (see {@link CatalogSchemas}).
+     * Called once at application startup by DuckLakeCatalogInitializer; the decision is cached.
+     */
+    public void ensureCatalogSchemaExists(Connection conn) throws SQLException {
+        String schema = catalogSchema(conn);
+        log.debug("DuckLake catalog schema '{}' is ready", schema);
     }
 
     /**
@@ -777,10 +1159,14 @@ public class DuckDbConnectionHelper {
         }
     }
 
-    // ========== Private Helper Methods ==========
-
     /**
      * Attach DuckDB file-based DuckLake catalog.
+     *
+     * <p>When another process holds the catalog file (another yaci-store, or a {@code duckdb}
+     * session that opened it, even with {@code -readonly}), DuckDB refuses with "Could not set
+     * lock on file". The attach is retried for up to
+     * {@code yaci.store.analytics.ducklake.catalog-lock-wait-seconds} before failing with a
+     * message that says what holds the lock and what to do.</p>
      *
      * @param readOnly If true, attaches catalog in READ_ONLY mode
      */
@@ -797,37 +1183,87 @@ public class DuckDbConnectionHelper {
             }
         }
 
-        // Build ATTACH statement with optional READ_ONLY
-        String attachSql = String.format(
-                "ATTACH 'ducklake:%s' AS ducklake_catalog (%s);",
-                catalogPath,
-                duckLakeAttachOptions(dataPath, readOnly)
-        );
+        boolean exists = catalogKnownToExist || isNonEmptyFile(Paths.get(catalogPath));
+        String attachSql = "ATTACH 'ducklake:" + escapeSqlLiteral(catalogPath) + "' AS ducklake_catalog ("
+                + duckLakeAttachOptions(exists ? null : dataPath, readOnly) + ");";
 
+        long waitMillis = Math.max(0, properties.getDucklake().getCatalogLockWaitSeconds()) * 1000L;
+        long deadline = System.currentTimeMillis() + waitMillis;
+        boolean warned = false;
+        while (true) {
+            try {
+                executeSql(conn, attachSql);
+                log.debug("Attached DuckDB DuckLake catalog: {} (DATA_PATH: {}, READ_ONLY: {})",
+                        catalogPath, exists ? "recorded" : dataPath, readOnly);
+                break;
+            } catch (SQLException e) {
+                if (isAlreadyAttached(e)) {
+                    log.debug("DuckDB catalog already attached (file: {}), skipping", catalogPath);
+                    return;
+                }
+                if (isFileHandleConflict(e)) {
+                    // Another DuckDB instance in this JVM (normally the export writer's pooled
+                    // connection) has the catalog file open. DuckDB allows exactly one instance per
+                    // file per process, READ_ONLY included. This connection does NOT have the
+                    // catalog — do not silently return.
+                    SQLException conflict = new SQLException(
+                            "DuckLake catalog file '" + catalogPath + "' is already open in another DuckDB "
+                                    + "instance of this JVM (DuckDB allows one instance per file per process, "
+                                    + "READ_ONLY included). Read the catalog through the export writer's "
+                                    + "connection instead of attaching it here. Cause: " + e.getMessage(),
+                            e.getSQLState(), e.getErrorCode());
+                    conflict.setStackTrace(e.getStackTrace());
+                    throw conflict;
+                }
+                if (isLockConflict(e)) {
+                    if (System.currentTimeMillis() < deadline) {
+                        if (!warned) {
+                            log.warn("DuckLake catalog file '{}' is locked by another process; waiting up to {}s "
+                                    + "for it to be released ({})", catalogPath, waitMillis / 1000, e.getMessage());
+                            warned = true;
+                        }
+                        sleepQuietly(1000);
+                        continue;
+                    }
+                    SQLException locked = new SQLException("The DuckLake catalog file '" + catalogPath
+                            + "' is locked by another process" + (waitMillis > 0 ? " (waited " + waitMillis / 1000
+                            + "s)" : "") + ". Only one process can open a DuckDB catalog file, even read-only: stop "
+                            + "the other process (for example a duckdb CLI or another yaci-store instance using "
+                            + "the same catalog-path) and restart. To inspect the data while yaci-store runs, read "
+                            + "the Parquet files or use the analytics query layer. DuckDB: " + e.getMessage(),
+                            e.getSQLState(), e.getErrorCode());
+                    locked.setStackTrace(e.getStackTrace());
+                    throw locked;
+                }
+                throw e;
+            }
+        }
+        if (exists) {
+            verifyDataPath(conn, dataPath, "'" + catalogPath + "'");
+        }
+        catalogKnownToExist = true;
+    }
+
+    /** DuckDB's cross-process lock error ("Could not set lock on file ... Conflicting lock is held"). */
+    static boolean isLockConflict(SQLException e) {
+        String message = e.getMessage();
+        return message != null && message.contains("Could not set lock on file");
+    }
+
+    private static boolean isNonEmptyFile(Path path) {
         try {
-            executeSql(conn, attachSql);
-            log.debug("Attached DuckDB DuckLake catalog: {} (DATA_PATH: {}, READ_ONLY: {})",
-                    catalogPath, dataPath, readOnly);
-        } catch (SQLException e) {
-            if (isAlreadyAttached(e)) {
-                log.debug("DuckDB catalog already attached (file: {}), skipping", catalogPath);
-                return;
-            }
-            if (isFileHandleConflict(e)) {
-                // Another DuckDB instance in this JVM (normally the export writer's pooled
-                // connection) has the catalog file open. DuckDB allows exactly one instance per
-                // file per process, READ_ONLY included. This connection does NOT have the
-                // catalog — do not silently return.
-                SQLException conflict = new SQLException(
-                        "DuckLake catalog file '" + catalogPath + "' is already open in another DuckDB "
-                                + "instance of this JVM (DuckDB allows one instance per file per process, "
-                                + "READ_ONLY included). Read the catalog through the export writer's "
-                                + "connection instead of attaching it here. Cause: " + e.getMessage(),
-                        e.getSQLState(), e.getErrorCode());
-                conflict.setStackTrace(e.getStackTrace());
-                throw conflict;
-            }
-            throw e;
+            return Files.isRegularFile(path) && Files.size(path) > 0;
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    private static void sleepQuietly(long millis) throws SQLException {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new SQLException("Interrupted while waiting for the DuckLake catalog lock", e);
         }
     }
 }

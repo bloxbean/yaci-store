@@ -15,6 +15,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
+import java.time.OffsetTime;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Base64;
@@ -22,6 +23,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 
 /**
@@ -278,7 +280,7 @@ public class AnalyticsQueryExecutor {
             int colCount = meta.getColumnCount();
             Map<String, Object> row = new LinkedHashMap<>(colCount);
             for (int i = 1; i <= colCount; i++) {
-                row.put(meta.getColumnLabel(i), normalizeJdbcValue(rs.getObject(i)));
+                row.put(meta.getColumnLabel(i), normalizeJdbcValue(readColumn(rs, i)));
             }
             return row;
         } catch (SQLException e) {
@@ -288,8 +290,41 @@ public class AnalyticsQueryExecutor {
         }
     }
 
+    /**
+     * Read a column, fetching a plain TIMESTAMP as {@link LocalDateTime}. The driver's default
+     * {@link java.sql.Timestamp} is built in the JVM time zone, which shifts wall-clock times
+     * that do not exist there: on an America/New_York JVM {@code TIMESTAMP '2024-03-10 02:30:00'}
+     * (inside the DST gap) comes back as 03:30. A {@code LocalDateTime} is exactly the stored value.
+     *
+     * <p>The re-read is chosen by the column's declared type, not by the value's Java class: a
+     * {@code UNION} column whose active member is a TIMESTAMP also yields a {@code Timestamp},
+     * but the driver cannot convert a UNION to {@code LocalDateTime} and would fail the whole
+     * query. Such a value keeps the driver's {@code Timestamp}, like a TIMESTAMP nested in a
+     * LIST or STRUCT.</p>
+     */
+    static Object readColumn(ResultSet rs, int column) throws SQLException {
+        Object value = rs.getObject(column);
+        if (value instanceof java.sql.Timestamp
+                && PLAIN_TIMESTAMP_TYPES.contains(rs.getMetaData().getColumnTypeName(column))) {
+            return rs.getObject(column, LocalDateTime.class);
+        }
+        return value;
+    }
+
+    /** DuckDB's zone-less timestamp types, as reported by {@code ResultSetMetaData#getColumnTypeName}. */
+    private static final Set<String> PLAIN_TIMESTAMP_TYPES =
+            Set.of("TIMESTAMP", "TIMESTAMP_NS", "TIMESTAMP_MS", "TIMESTAMP_S");
+
     static Object normalizeJdbcValue(Object value) throws SQLException {
         if (value == null) return null;
+        // JSON has no NaN/Infinity numbers; return them as the strings "NaN", "Infinity",
+        // "-Infinity" rather than leaving the choice to whichever serializer renders the row.
+        if (value instanceof Double d && (d.isNaN() || d.isInfinite())) {
+            return d.toString();
+        }
+        if (value instanceof Float f && (f.isNaN() || f.isInfinite())) {
+            return f.toString();
+        }
         if (value instanceof java.sql.Array sqlArray) {
             try {
                 return normalizeArray(sqlArray.getArray());
@@ -323,13 +358,22 @@ public class AnalyticsQueryExecutor {
      * serializer (which would emit {@code [2026,8,19]} for a DATE or epoch seconds for a
      * TIMESTAMPTZ). TIMESTAMP WITH TIME ZONE values come back from the driver in the JVM's
      * local offset and are normalized to UTC ({@code ...Z}) so the output does not depend on the
-     * host's time zone.
+     * host's time zone. Plain TIMESTAMP values are rendered exactly as stored, without a zone
+     * (top-level columns are read as {@link LocalDateTime}, see {@link #readColumn}); TIME WITH
+     * TIME ZONE keeps its offset ({@code 10:00:00+02:00}).
+     *
+     * <p>A plain TIMESTAMP nested in a LIST or STRUCT still arrives as a driver-built
+     * {@link java.sql.Timestamp}; it is exact except for wall-clock times inside a DST gap of the
+     * JVM's time zone.</p>
      *
      * @return the ISO string, or {@code null} if {@code value} is not a temporal type
      */
     static String normalizeTemporal(Object value) {
         if (value instanceof java.sql.Timestamp ts) {
             return DateTimeFormatter.ISO_LOCAL_DATE_TIME.format(ts.toLocalDateTime());
+        }
+        if (value instanceof OffsetTime ot) {
+            return DateTimeFormatter.ISO_OFFSET_TIME.format(ot);
         }
         if (value instanceof java.sql.Date d) {
             return d.toLocalDate().toString();

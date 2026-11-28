@@ -1,0 +1,384 @@
+import { Callout } from 'nextra/components'
+
+# Snapshot Developer Guide
+
+This guide is for Yaci Store developers who change the database schema: a new migration that adds a
+column or a table. It explains what a snapshot **table specification** is, and the steps that keep
+snapshot export and import working after your change.
+
+For running the tool (inspect, export, sign, import, validate), see
+[Snapshot Export and Import](/docs/v3/advanced-configuration/snapshot).
+
+<Callout type="warning">
+**Every schema change needs a snapshot decision.** A new table without a specification makes every
+import refuse with "has no snapshot classification". A new column the specification does not
+account for makes every import refuse with "would be left unwritten". Neither is caught by a normal
+sync, so make the decision in the same pull request as the migration.
+</Callout>
+
+## How a snapshot is made
+
+A snapshot is not a database dump. It is built from the **analytics export**, the Parquet files the
+analytics store writes into DuckLake, and it is loaded back into PostgreSQL by a declarative importer:
+
+```text
+ source PostgreSQL ──(analytics exporters)──▶ DuckLake Parquet files
+                                                    │
+                     snapshot export  ◀─────────────┘  picks a consistency point, packages
+                          │                            the files up to it, writes a manifest
+                          ▼
+                 archive + manifest (signed)
+                          │
+                     snapshot import  ──▶ target PostgreSQL (migrated by the same release)
+```
+
+Two pieces of code take part, and both must know about your column or table:
+
+| Piece | Where | What it decides |
+|---|---|---|
+| **Analytics exporter** | `aggregates/analytics-store/.../exporter/*Exporter.java` | Which rows and columns are written to Parquet, and how they are partitioned (daily or by epoch) |
+| **Snapshot specification** | `<module>/src/main/resources/snapshot/<table>.yml` | How those files become a target table: the cut-off at the consistency point, the column mapping, validation, and what is declared lossy |
+
+A specification is additive. It never registers or runs an exporter; it describes what an existing
+exporter already produces. Analytics works unchanged without any specification.
+
+## What a table specification is
+
+One YAML file per target table, kept next to the migrations of the module that owns the table. At
+build time the `collectSnapshotSpecs` task in `components/snapshot/build.gradle` copies every
+module's `src/main/resources/snapshot/` into the snapshot component and writes a sorted
+`specs.index`, so the admin CLI loads them without a Spring context.
+
+Two rules are enforced at import time:
+
+1. **Every table a migration creates is claimed by exactly one specification.** The importer lists
+   the target schema's tables and refuses any table without one (`flyway_schema_history` and the
+   importer's own tables excepted).
+2. **Every column is accounted for.** In each `IMPORT` specification, every source column must be
+   mapped or ignored, and every target column must be written or explicitly left to its default.
+   A permissive name-based mapper would silently write NULL into a renamed or new column; this one
+   refuses instead.
+
+### A complete example
+
+```yaml
+snapshot-table:
+  id: adapot                     # stable id, kebab-case; the manifest refers to tables by it
+  spec-version: 1                # version of the export contract (see "Versioning" below)
+  module: adapot                 # store module; the table is in scope when store.adapot.enabled=true
+  kind: DERIVED_DATA             # CHAIN_DATA | DERIVED_DATA | CONTROL_STATE | EXTENSION_DATA
+  restore: IMPORT                # how the table is restored (see "Restore modes")
+
+  source:                        # the analytics export this table is loaded from
+    exporter-id: adapot          # = TableExporter.getTableName()
+    ducklake-relation: adapot    # the DuckLake table the exporter writes
+    partition:
+      strategy: EPOCH            # DAILY | EPOCH | NONE, as the exporter partitions it
+      column: epoch
+
+  consistency:                   # how this table relates to the snapshot's consistency point
+    completed-epoch:             # optional: this table limits the newest completed epoch
+      type: MAX_EPOCH_OFFSET
+      column: epoch
+      offset: -1
+    cutoff:                      # removes rows beyond the point
+      type: EPOCH_LTE
+      column: epoch
+    coverage:                    # fails the export if the table stops short of the point
+      type: EPOCH_GTE_COMPLETED
+      column: epoch
+
+  import:                        # how the files are loaded into the target table
+    target-table: adapot
+    mode: MAPPED
+    use-target-defaults: [update_datetime]   # left to the target's default
+    batch-boundary: SINGLE_BATCH
+
+  validation:                    # offline checks after import
+    key: [epoch]                 # must be unique
+    bounds: [epoch, slot]        # must not pass the consistency point
+    required-columns: [epoch]    # must not be NULL
+```
+
+A specification may also declare limitations, per column, with the reason. `address.yml` does so for
+a column the export cannot carry:
+
+```yaml
+  lossy:
+    stake_credential: >-
+      not present in the analytics export and not derivable from it
+```
+
+### Reference
+
+| Key | Meaning |
+|---|---|
+| `id`, `spec-version` | Identity of the specification. The manifest records `id@spec-version` and its contract digest for every table. |
+| `module` | The store module that owns the table. A table is exported and imported only when its module is enabled (`store.<module>.enabled`, or the property listed in `StoreModuleConfig.MODULES`). |
+| `kind` | Reporting class: `CHAIN_DATA` (blocks, transactions, certificates), `DERIVED_DATA` (balances, rewards, stake), `CONTROL_STATE` (cursor, job state), `EXTENSION_DATA`. |
+| `restore` | How the table is restored, see below. Anything other than `IMPORT` needs a `reason`. |
+| `source` | `IMPORT` only. The exporter and DuckLake relation, and the exporter's partitioning. `include-byron-epochs` applies to epoch-partitioned tables that also have Byron rows. |
+| `consistency.cutoff` | `SLOT_LTE` (`column <= cut slot`), `EPOCH_LTE` (`column <= completed epoch`), `EPOCH_LTE_OFFSET`, or `NONE` for tables that never hold rows past the point. No rule is inferred from a column name. |
+| `consistency.completed-epoch` | Only for tables that produce rows for **every** epoch (`adapot`, `epoch_stake`). Sparse tables leave it out, so a quiet epoch cannot drag the snapshot backwards. |
+| `consistency.coverage` | `SLOT_GTE_CUT` or `EPOCH_GTE_COMPLETED`: the export fails when the table's data stops short of the point. |
+| `import.mode` | `DIRECT` (identical names and types), `MAPPED` (renames, converters, constants, defaults), `SQL` (one read-only DuckDB `SELECT` resource for joins or regrouping). |
+| `import.columns` | Explicit mappings: `target: {source: x, converter: name}`, `{constant: ...}` or `{use-default: true}`. Columns not listed are matched by identical name when the types are compatible. |
+| `import.ignore-source-columns` | Export-only columns, such as the `date` partition column or `block_time`. |
+| `import.use-target-defaults` | Target columns deliberately left to their PostgreSQL default. A `NOT NULL` column without a default cannot be listed. |
+| `import.select-resource`, `transform-version`, `dependencies` | `SQL` mode: the transform file, its version, and the other specifications whose files it reads (for example `block`). |
+| `import.batch-boundary`, `batch-size` | Commit unit: `FILE_SET` (some files), `WHOLE_PARTITION` (required when a transform groups rows), `SINGLE_BATCH` (small tables). |
+| `import.target-partitioning` | For a range-partitioned PostgreSQL target (`epoch_stake`): the importer creates the partitions first. |
+| `import.handler` | `HANDLER` mode: the name of the Java `SnapshotHandler` that rebuilds the table. |
+| `validation.key`, `bounds`, `required-columns` | Offline validation after import: unique key, columns that must not pass the point, columns that must not be NULL. `source-key` only when a transform changes the row count. |
+| `lossy`, `lossy-note` | Declared limitations. They appear in `snapshot inspect`, in the manifest and in the import report. |
+| `enabled-by`, `must-match` | Optional tables written only when a setting is on (`block_cbor` with `store.blocks.save-cbor`), and settings that must be equal on source and target (`store.transaction.save-full-tx-cbor` for `transaction_cbor`, the CIP-113 settings for `cip113_registry_node`). The settings are recorded in the manifest by `SnapshotCliSupport.pruningSettings()`. |
+
+The full key list and the checks are in `SnapshotSpecLoader`; it rejects unknown keys, so a typo
+fails the build's tests rather than an import hours later.
+
+### Restore modes
+
+| `restore` | Use it when | Examples |
+|---|---|---|
+| `IMPORT` | An analytics exporter writes the table's rows. | `block`, `address_utxo`, `reward`, `adapot` |
+| `HANDLER` | The table is control state that is not a projection of exported rows; a small Java handler rebuilds it at the snapshot point. | `cursor_`, `era`, `account_config`, `adapot_jobs` |
+| `EMPTY_EXPECTED` | The table is always empty for a supported source, is filled from outside the chain after start-up, or records what one node went through. | `cip26_metadata`, `error`, `analytics_export_state`, `rollback` |
+| `RUNTIME_REBUILT` | The application refills it by itself after the restore (local state, caches). | `local_drep_dist`, `local_epoch_param`, the other `local_*` governance tables |
+| `NOT_RESTORED` | There is no source for it. This is a declared limitation, shown to operators. | `invalid_token`, `epoch_nonce`, `ptr_address`, `address_balance` |
+
+Prefer `IMPORT`. Use `NOT_RESTORED` only when the data genuinely cannot be exported, and never for
+data the ledger-state calculations read: a restored node would compute wrong rewards.
+
+## Versioning: export contract and import side
+
+A specification has two halves:
+
+- The **export contract**: `id`, `spec-version`, `module`, `kind`, `restore`, `reason`, `source`,
+  `consistency`, `validation.key`, `bounds` and `source-key`, and `lossy`. It decides which files
+  and rows a snapshot contains and what its manifest records. A manifest pins its digest.
+- The **import side**: everything under `import`, and `validation.required-columns`. It decides how
+  the files are loaded, and can change without invalidating existing snapshots.
+
+`SpecContractVersionTest` compares each specification's contract digest with
+`components/snapshot/src/test/resources/snapshot-contracts.txt`:
+
+- **Import-side change** (a mapping, a converter, `use-target-defaults`, batching): no contract
+  change, nothing to record. When it changes the rows an `SQL` transform produces, bump
+  `transform-version`.
+- **Contract change, specification not yet released**: keep `spec-version` and replace the digest
+  line in `snapshot-contracts.txt`. The snapshot tool has not shipped yet, so every specification is
+  still at version 1.
+- **Contract change, specification already released**: bump `spec-version` and **add** a line; keep
+  the old one. An importer refuses a manifest whose specification version differs from its own, so
+  snapshots made before the change must be re-exported.
+
+When the test fails, it prints the new `id@version=digest` line to record.
+
+## Adding a column to a table
+
+### 1. Find the table's specification and exporter
+
+```bash
+grep -rl "target-table: my_table" --include=*.yml .          # the specification
+grep -rn 'return "my_table"' aggregates/analytics-store/src/main  # the exporter, by getTableName()
+```
+
+If the specification is not `restore: IMPORT`, the table is not loaded from the export. Check
+whether that is still right; usually nothing else changes, and you can go to step 5.
+
+### 2. Decide whether the exporter can carry the column
+
+Exporters select their columns explicitly, for example `AdaPotExporter.buildQuery()`:
+
+```java
+SELECT * FROM postgres_query('source_db', '
+    SELECT ap.epoch, ap.slot, ap.deposits_stake, ... ap.pool_rewards_pot, ap.total_epoch_stake
+    FROM %s.adapot ap
+    WHERE ap.epoch = %d
+')
+```
+
+A column the exporter does not select never reaches a snapshot. Choose one:
+
+**a. Export it.** This is the right choice for anything a restored node needs to be correct.
+Add the column to the exporter's `SELECT`. On the first export after an upgrade the DuckLake writer
+adds the column to the existing relation (`ALTER TABLE ... ADD COLUMN`), so nothing has to be
+dropped. Files written before the upgrade read the column as NULL; `snapshot inspect` reports each
+such column with the number of files that predate it, and those partitions must be re-exported
+before a release snapshot is made. Until that first export the relation has no such column at all,
+so a snapshot export from an upgraded store refuses with `would be left unwritten`; re-exporting
+one partition adds it (see
+[Widening an exporter](/docs/v3/advanced-configuration/snapshot#widening-an-exporter)).
+
+**b. Don't export it.** Acceptable when the column is derivable after the restore, or is an
+operational detail. Then the specification must say so (step 3b), and the reason is shown to every
+operator.
+
+### 3. Update the specification
+
+**a. The column is exported.**
+- `MAPPED`/`DIRECT` with the same name and a compatible type: nothing to add; it is matched by name.
+- Different name or type: add an explicit mapping under `import.columns`, with a converter if
+  needed (`timestamp-to-epoch-seconds`, `varchar-to-jsonb`, `to-bigint`, ... see
+  [Named converters](/docs/v3/advanced-configuration/snapshot#named-converters)).
+- `SQL` mode: add the column to the `SELECT` resource under `src/main/resources/snapshot/sql/` and
+  bump `transform-version`.
+
+**b. The column is not exported.** List it in `use-target-defaults` and declare it in `lossy`:
+
+```yaml
+  import:
+    use-target-defaults: [id, stake_credential, update_datetime]
+  lossy:
+    stake_credential: >-
+      not present in the analytics export and not derivable from it
+```
+
+A `NOT NULL` column needs a PostgreSQL default to be listed; otherwise it must be exported. Because
+`lossy` is part of the export contract, record the new digest (see [Versioning](#versioning-export-contract-and-import-side)).
+
+### 4. Update the integration test schema
+
+The snapshot integration tests build their target from a hand-written schema,
+`components/snapshot/src/test/resources/it/schema.sql`, not from Flyway. Add the column there,
+mirroring your migration, or the tests will not see it.
+
+### 5. Document a declared limitation
+
+If you added a `lossy` entry, add a line to
+[Known limitations](/docs/v3/advanced-configuration/snapshot#known-limitations).
+
+## Adding a table
+
+### 1. Classify it
+
+Pick the restore mode from the [table above](#restore-modes). A specification is required in every
+case; `NOT_RESTORED`, `EMPTY_EXPECTED` and `RUNTIME_REBUILT` need only identity, `restore`, `reason`
+and `import.target-table`:
+
+```yaml
+snapshot-table:
+  id: invalid-token
+  spec-version: 1
+  module: assets-ext
+  kind: EXTENSION_DATA
+  restore: NOT_RESTORED
+  reason: >-
+    the assets extension's records of dropped or unusable CIP-26 and CIP-68 items have no analytics
+    export; a restored store records only the ones it meets after the restore
+
+  import:
+    target-table: invalid_token
+```
+
+### 2. For `IMPORT`: add an exporter
+
+Create a `TableExporter`, usually by extending `AbstractTableExporter`:
+
+- `getTableName()` returns the DuckLake relation name; it becomes `source.exporter-id`.
+- `getPartitionStrategy()` is `DAILY` for chain data with a `block_time`, `EPOCH` for per-epoch data.
+- `buildQuery(partition, slotRange)` selects the rows of one partition from PostgreSQL. Select
+  every column a restore needs, and the column the specification cuts on (`slot` or `epoch`).
+- `preExportValidation(partition)` when the rows are complete only after a job finishes (the AdaPot
+  exporters wait for the reward calculation of the epoch).
+
+The exporter is a Spring bean conditional on `yaci.store.analytics.enabled`; it is picked up by
+`TableExporterRegistry` with no other registration.
+
+### 3. Write the specification
+
+Start from a similar table:
+
+| Your table looks like | Start from |
+|---|---|
+| Chain data with a slot, exported daily | `stores/staking/src/main/resources/snapshot/pool-registration.yml` |
+| One row per epoch, every epoch | `aggregates/adapot/src/main/resources/snapshot/adapot.yml` |
+| Partitioned by epoch in PostgreSQL | `aggregates/adapot/src/main/resources/snapshot/epoch-stake.yml` |
+| Needs a join or regrouping on import | `stores/mir/src/main/resources/snapshot/mir.yml` (`SQL` mode) |
+| Written only when a setting is on | `stores/blocks/src/main/resources/snapshot/block-cbor.yml` (`enabled-by`) |
+
+Then check:
+
+- **The cut-off.** Every row must be at or before the consistency point after the cut. Use
+  `SLOT_LTE` on `slot` when the table has one; `EPOCH_LTE` for epoch tables.
+- **`completed-epoch`** only if the table has rows for every epoch. Otherwise leave it out.
+- **`coverage`** so an export that stopped short of the point fails instead of producing a short
+  snapshot.
+- **`validation.key`** is the table's natural unique key; `bounds` are the columns the cut uses.
+- **A new module**: `module` must be a key of `StoreModuleConfig.MODULES`, or a custom module
+  enabled by `store.<module>.enabled`.
+
+### 4. Record the contract and update the test schema
+
+Run the snapshot tests; `SpecContractVersionTest` prints the `id@1=digest` line to add to
+`snapshot-contracts.txt`. Add the table to `it/schema.sql` if the integration tests load its module.
+
+## Renaming or removing a column
+
+- **Renamed target column**: map it explicitly under `import.columns` (`new_name: {source: old_name}`),
+  or rename it in the exporter too.
+- **Dropped target column** that the export still has: add it to `ignore-source-columns`, or remove
+  it from the exporter.
+- **Dropped table**: delete its specification. Keep its line in `snapshot-contracts.txt` if the
+  specification was released.
+
+## Testing your change
+
+### Unit and integration tests
+
+```bash
+export JAVA_HOME=<JDK 21>
+
+# A throwaway PostgreSQL for the snapshot integration tests
+docker run -d --rm --name snapshot-it-pg -e POSTGRES_USER=it -e POSTGRES_PASSWORD=it \
+  -e POSTGRES_DB=it -p 127.0.0.1:55443:5432 postgres:18 -c max_locks_per_transaction=1024
+
+export SNAPSHOT_IT_JDBC_URL=jdbc:postgresql://127.0.0.1:55443/it
+export SNAPSHOT_IT_USER=it SNAPSHOT_IT_PASSWORD=it SNAPSHOT_IT_ALTER_SYSTEM=true
+
+./gradlew :components:snapshot:test :applications:admin-cli:test
+```
+
+Without `SNAPSHOT_IT_JDBC_URL` the integration tests are skipped and only the unit tests run.
+
+| Test | Catches |
+|---|---|
+| `SnapshotSpecRegistryTest` | A specification that does not load, two specifications claiming one table, unresolved dependencies, an unsafe SQL transform |
+| `SpecContractVersionTest` | A contract change that was not recorded |
+| `ImportPlanCheckTest` | A mapping that cannot be planned from the recorded types |
+| `SnapshotExportIT`, `SnapshotImportIT` | Export and import end to end against `it/schema.sql` |
+
+<Callout type="info">
+No unit test runs your Flyway migrations, so the tests alone do not prove that a new migration is
+covered. `it/schema.sql` is maintained by hand, and the final check is a real export.
+</Callout>
+
+### Check against a real schema
+
+On a source synced with your branch (analytics enabled), run:
+
+```bash
+java -Dspring.profiles.active=<the source's profiles> -jar yaci-store-admin-cli.jar \
+  snapshot inspect --data-dir <analytics data dir>
+```
+
+`inspect` plans every specification against the source's own migrated tables, which are the import
+targets of that release, and exits non-zero with the reason when something does not match: an
+unclassified table, an unwritten column, a type that does not fit. On a fresh target created with
+`store.schema-only=true`, `snapshot import --dry-run` runs the same checks from the importer's side.
+
+## Checklist
+
+For every migration that adds or changes a table:
+
+- [ ] The table has a specification (any `restore` mode), owned by the table's module.
+- [ ] For `IMPORT`: the exporter selects every column, or the specification lists the rest in
+      `use-target-defaults` with a `lossy` reason.
+- [ ] Mappings, converters or the `SQL` transform are updated; `transform-version` bumped if the
+      loaded rows change.
+- [ ] `snapshot-contracts.txt` updated: the digest replaced (unreleased) or a new `spec-version`
+      line added (released).
+- [ ] `it/schema.sql` mirrors the migration.
+- [ ] Snapshot unit and integration tests pass.
+- [ ] Declared limitations are listed in the user documentation.
+- [ ] `snapshot inspect` on a source synced with the change reports no blocker for the table.

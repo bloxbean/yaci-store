@@ -66,7 +66,7 @@ class TableExporterFederationMetadataTest {
         assertThat(constitution.getSourceColumnMappings()).isEqualTo(Map.of("epoch", "active_epoch"));
 
         EpochExporter epoch = new EpochExporter(writer(), stateService(), eraService(), props(), adaPot(),
-                mock(com.bloxbean.cardano.yaci.store.blocks.storage.BlockStorageReader.class));
+                mock(com.bloxbean.cardano.yaci.store.blocks.storage.BlockStorageReader.class), mock(EpochAggregateReader.class));
         assertThat(epoch.getSourceColumnMappings()).isEqualTo(Map.of("epoch", "number"));
 
         PoolRegistrationExporter pool = new PoolRegistrationExporter(writer(), stateService(), eraService(), props(), adaPot());

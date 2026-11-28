@@ -200,4 +200,32 @@ class DuckLakeCatalogSnapshotReaderTest {
         when(environment.getProperty("spring.datasource.password")).thenReturn("password");
         return environment;
     }
+
+    @Test
+    void filesRecordedUnderTheRealExportDirectoryAreReadThroughASymlinkedExportPath() throws IOException {
+        Path base = Files.createTempDirectory("snapshot-reader-link");
+        try {
+            Path real = Files.createDirectories(base.resolve("real/analytics"));
+            Path file = Files.createDirectories(real.resolve("main/block/date=2024-03-01")).resolve("f.parquet");
+            Files.writeString(file, "x");
+            Path link = Files.createSymbolicLink(base.resolve("link"), real);
+            Path realRoot = link.toRealPath();
+
+            // the catalog recorded the real directory, export-path goes through the link
+            Path seen = DuckLakeCatalogSnapshotReader.inExportRoot(file.toRealPath(), link, realRoot);
+            org.assertj.core.api.Assertions.assertThat(seen)
+                    .isEqualTo(link.resolve("main/block/date=2024-03-01/f.parquet"));
+            // same spelling: unchanged
+            org.assertj.core.api.Assertions.assertThat(
+                    DuckLakeCatalogSnapshotReader.inExportRoot(seen, link, realRoot)).isEqualTo(seen);
+            // a file really outside the export directory stays out
+            Path outside = Files.writeString(base.resolve("other.parquet"), "x");
+            org.assertj.core.api.Assertions.assertThat(
+                    DuckLakeCatalogSnapshotReader.inExportRoot(outside, link, realRoot)).isNull();
+        } finally {
+            try (Stream<Path> walk = Files.walk(base)) {
+                walk.sorted(Comparator.reverseOrder()).forEach(p -> p.toFile().delete());
+            }
+        }
+    }
 }

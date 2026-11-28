@@ -13,7 +13,7 @@ public class EpochStoreProperties {
     @Getter
     @Setter
     public static final class Epoch {
-       private boolean enabled = true;
+       private boolean enabled = com.bloxbean.cardano.yaci.store.common.config.StoreModuleConfig.defaultEnabled("epoch");
        private boolean apiEnabled = true;
        private Endpoints endpoints = new Endpoints();
 

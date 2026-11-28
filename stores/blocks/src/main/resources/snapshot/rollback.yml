@@ -1,0 +1,12 @@
+snapshot-table:
+  id: rollback
+  spec-version: 1
+  module: blocks
+  kind: CONTROL_STATE
+  restore: EMPTY_EXPECTED
+  reason: >-
+    log of the rollbacks this node went through, not chain data: another node syncing the same chain
+    records different ones. A restored node starts with none and records its own
+
+  import:
+    target-table: rollback
