@@ -5,16 +5,20 @@ import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @Getter
 @Setter
 @ConfigurationProperties(prefix = "store.assets.ext", ignoreUnknownFields = true)
 public class AssetsExtProperties {
     // Defaults mirror the @ConditionalOnProperty gates so config metadata matches runtime.
-    // Blockfrost-extension pattern: the master flag is OFF by default; the sub-flags CIP-26 and
-    // CIP-68 default ON, so enabling the master flag alone yields the default behaviour.
+    // Blockfrost-extension pattern: the master flag is OFF by default; the sub-flags CIP-26,
+    // CIP-68 and CIP-113 default ON, so enabling the master flag alone yields the default behaviour.
     private boolean enabled = false;
     private Cip26 cip26 = new Cip26();
     private Cip68 cip68 = new Cip68();
+    private Cip113 cip113 = new Cip113();
     private Query query = new Query();
 
     /**
@@ -58,6 +62,19 @@ public class AssetsExtProperties {
     @Setter
     public static final class Cip68 {
         private boolean enabled = true;
+    }
+
+    /**
+     * CIP-113 programmable tokens. The policy IDs of the registries deployed on mainnet, preprod and preview are bundled
+     * with the module and picked by {@code store.cardano.protocol-magic}; {@link #registryNftPolicyIds} replaces them,
+     * for another registry or a private network. Empty by default for the same reason as the CIP-26 git settings: a
+     * value here would shadow the per-network resolution.
+     */
+    @Getter
+    @Setter
+    public static final class Cip113 {
+        private boolean enabled = true;
+        private List<String> registryNftPolicyIds = new ArrayList<>();
     }
 
     @Getter

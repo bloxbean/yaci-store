@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.store.epoch.mapper;
 
 import com.bloxbean.cardano.yaci.core.model.ProtocolParamUpdate;
 import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
+import com.bloxbean.cardano.yaci.store.common.mapper.ProtocolParamUpdateMapper;
 import com.bloxbean.cardano.yaci.store.epoch.dto.ProtocolParamsDto;
 import org.mapstruct.DecoratedWith;
 import org.mapstruct.Mapper;
@@ -13,10 +14,9 @@ import org.mapstruct.factory.Mappers;
 public interface DomainMapper {
     DomainMapper INSTANCE = Mappers.getMapper(DomainMapper.class);
 
-    @Mapping(target = "costModels", ignore = true) //TODO
-    @Mapping(target = "extraEntropy", ignore = true)
-    @Mapping(target = "nOpt", source = "NOpt")
-    ProtocolParams toProtocolParams(ProtocolParamUpdate protocolParamUpdate);
+    default ProtocolParams toProtocolParams(ProtocolParamUpdate protocolParamUpdate) {
+        return ProtocolParamUpdateMapper.INSTANCE.toProtocolParams(protocolParamUpdate);
+    }
 
 
     @Mapping(target = "nOpt", source = "NOpt")

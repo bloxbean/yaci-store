@@ -2,8 +2,11 @@ package com.bloxbean.cardano.yaci.store.script.processor;
 
 import com.bloxbean.cardano.client.transaction.spec.script.ScriptPubkey;
 import com.bloxbean.cardano.client.util.HexUtil;
+import com.bloxbean.cardano.yaci.core.model.Datum;
+import com.bloxbean.cardano.yaci.core.model.ExUnits;
 import com.bloxbean.cardano.yaci.core.model.NativeScript;
 import com.bloxbean.cardano.yaci.core.model.Redeemer;
+import com.bloxbean.cardano.yaci.core.model.RedeemerTag;
 import com.bloxbean.cardano.yaci.core.model.Witnesses;
 import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
@@ -12,7 +15,9 @@ import com.bloxbean.cardano.yaci.store.events.internal.BatchBlocksProcessedEvent
 import com.bloxbean.cardano.yaci.store.events.model.internal.BatchBlock;
 import com.bloxbean.cardano.yaci.store.script.domain.Script;
 import com.bloxbean.cardano.yaci.store.script.domain.ScriptType;
+import com.bloxbean.cardano.yaci.store.script.domain.TxScript;
 import com.bloxbean.cardano.yaci.store.script.helper.RedeemerDatumMatcher;
+import com.bloxbean.cardano.yaci.store.script.helper.ScriptContext;
 import com.bloxbean.cardano.yaci.store.script.helper.TxScriptFinder;
 import com.bloxbean.cardano.yaci.store.script.storage.DatumStorage;
 import com.bloxbean.cardano.yaci.store.script.storage.ScriptStorage;
@@ -27,10 +32,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.math.BigInteger;
 import java.util.Collections;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.groups.Tuple.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -54,6 +61,8 @@ class ScriptRedeemerDatumProcessorTest {
 
     @Captor
     private ArgumentCaptor<List<Script>> scriptsCaptor;
+    @Captor
+    private ArgumentCaptor<List<TxScript>> txScriptsCaptor;
 
     private ScriptRedeemerDatumProcessor processor;
     private String expectedScriptHash;
@@ -121,6 +130,37 @@ class ScriptRedeemerDatumProcessorTest {
                 .build());
 
         verifyNoInteractions(scriptStorage);
+    }
+
+    @Test
+    void repeatedPurposeAndIndex_shouldSetRedeemerPositionInWitnessOrder() {
+        List<Redeemer> redeemers = List.of(mintRedeemer(100), mintRedeemer(101), mintRedeemer(102));
+        when(txScriptFinder.getScripts(any())).thenReturn(Collections.emptyMap());
+        when(redeemerMatcher.findScriptsForRedeemers(any(), any())).thenReturn(redeemers.stream()
+                .map(redeemer -> {
+                    ScriptContext scriptContext = new ScriptContext();
+                    scriptContext.setRedeemer(redeemer);
+                    return scriptContext;
+                }).toList());
+
+        processor.handleScriptTransactionEvent(TransactionEvent.builder()
+                .metadata(metadata(false))
+                .transactions(List.of(tx(redeemers)))
+                .build());
+
+        verify(txScriptStorage).saveAll(txScriptsCaptor.capture());
+        assertThat(txScriptsCaptor.getValue())
+                .extracting(TxScript::getRedeemerIndex, TxScript::getRedeemerPosition, txScript -> txScript.getUnitMem().longValue())
+                .containsExactly(tuple(0, 0, 100L), tuple(0, 1, 101L), tuple(0, 2, 102L));
+    }
+
+    private Redeemer mintRedeemer(long unitMem) {
+        return Redeemer.builder()
+                .tag(RedeemerTag.Mint)
+                .index(0)
+                .data(Datum.builder().hash("hash" + unitMem).cbor("d87980").build())
+                .exUnits(new ExUnits(BigInteger.valueOf(unitMem), BigInteger.valueOf(unitMem * 1000)))
+                .build();
     }
 
     private void assertNativeScriptSaved() {

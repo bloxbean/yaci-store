@@ -78,14 +78,9 @@ from typing import Any
 SUBJECT_REGEX = re.compile(r"^[0-9a-f]{56,120}$")
 
 # Fields the cf-token-metadata-registry V2 response has and yaci-store's does not, by design. They are reported
-# per subject as known differences, not as divergences:
-#   subject.type        NATIVE / PROGRAMMABLE, from the registry's CIP-113 support; assets-ext does not index
-#                       CIP-113 (ADR 0007), so it cannot tell a programmable token from a native one.
-#   subject.extensions  the CIP-113 registry node of a programmable token, for the same reason.
-KNOWN_DIFFERENCES = {
-    "subject.type": "registry-only: CIP-113 is not indexed by assets-ext",
-    "subject.extensions": "registry-only: CIP-113 is not indexed by assets-ext",
-}
+# per subject as known differences, not as divergences. None since assets-ext indexes CIP-113 (ADR 0011): subject.type
+# and subject.extensions used to be here.
+KNOWN_DIFFERENCES: dict[str, str] = {}
 
 # Per-network config. The two registries differ in three ways:
 #   - repo URL (testnet under input-output-hk; mainnet under cardano-foundation)
@@ -701,7 +696,8 @@ def main() -> int:
     if check_cf and check_yaci:
         print(f"  CF vs yaci      : agree={len(result.contract.matched)} "
               f"diverged={len(result.contract.diverged)}")
-        print(f"  known differences, not counted: {', '.join(sorted(KNOWN_DIFFERENCES))}")
+        if KNOWN_DIFFERENCES:
+            print(f"  known differences, not counted: {', '.join(sorted(KNOWN_DIFFERENCES))}")
         cip68_total = (len(result.cip68.agree) + len(result.cip68.diverged)
                        + len(result.cip68.cf_only) + len(result.cip68.yaci_only))
         print(f"  CIP-68 standards: total={cip68_total} "

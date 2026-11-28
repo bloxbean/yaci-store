@@ -5,6 +5,9 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.QueryPriori
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.ValidationScope;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.*;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.cip26.Cip26TokenMetadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.Cip113Validation;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.model.ProgrammableTokenCip113;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.Cip113StorageReader;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.Cip26StorageReader;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.Cip26Metadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.util.MappingsUtil;
@@ -24,17 +27,21 @@ import java.util.stream.Collectors;
 /**
  * Core query and merge logic for multi-standard token metadata.
  * <p>
- * Merges CIP-26 and CIP-68 metadata based on a configurable priority order.
+ * Merges CIP-26 and CIP-68 metadata based on a configurable priority order, and adds the CIP-113 extension of a
+ * programmable token. CIP-113 takes no part in the merge: a registry node has no display metadata (ADR 0011).
  */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class TokenQueryService {
 
+    private static final int POLICY_ID_LENGTH = 56;
+
     private static final ResolvedMetadata IDENTITY = new ResolvedMetadata(Metadata.empty(), Standards.empty(), List.of());
 
     private final Cip26StorageReader cip26StorageReader;
     private final Cip68StorageReader cip68StorageReader;
+    private final Cip113StorageReader cip113StorageReader;
 
     /**
      * Query and merge metadata for a single subject.
@@ -43,8 +50,9 @@ public class TokenQueryService {
      * @param queryPriority   ordered list of CIP standards to query
      * @param queryProperties list of properties to include (empty means all)
      * @param showCipsDetails whether to include raw per-standard metadata
-     * @return the merged Subject, or empty if no standard has anything indexed for it. A subject that is indexed is
-     *         returned as indexed, whatever is wrong with it: {@code validationErrors} says what
+     * @return the merged Subject, or empty if no standard has anything indexed for it and its policy is not registered in
+     *         CIP-113. A subject that is indexed is returned as indexed, whatever is wrong with it: {@code validationErrors}
+     *         says what
      */
     public Optional<Subject> querySubject(String subject,
                                           List<QueryPriority> queryPriority,
@@ -62,21 +70,23 @@ public class TokenQueryService {
                                           boolean showCipsDetails,
                                           ValidationScope scope) {
 
-        ResolvedMetadata resolved = queryPriority.stream()
-                .reduce(IDENTITY, combineStandards(subject, queryProperties), aggregateResults());
+        ProgrammableTokenCip113 cip113 = cip113StorageReader.findByPolicyId(policyIdOf(subject)).orElse(null);
+        ResolvedMetadata resolved = withoutCompanion(queryPriority.stream()
+                .reduce(IDENTITY, combineStandards(subject, queryProperties), aggregateResults()), cip113);
 
-        if (resolved.standards().isEmpty()) {
+        if (resolved.standards().isEmpty() && cip113 == null) {
             return Optional.empty();
         }
 
-        return Optional.of(toSubject(subject, resolved, showCipsDetails, queryProperties)).filter(scope::accepts);
+        return Optional.of(toSubject(subject, resolved, cip113, showCipsDetails, queryProperties)).filter(scope::accepts);
     }
 
     /**
      * Query and merge metadata for a single subject in batch context,
      * using pre-fetched data maps to avoid N+1 queries.
      *
-     * @return the merged Subject, or empty if no standard has anything indexed for it
+     * @return the merged Subject, or empty if no standard has anything indexed for it and its policy is not registered in
+     *         CIP-113
      */
     public Optional<Subject> querySubjectBatch(String subject,
                                                List<QueryPriority> queryPriority,
@@ -96,21 +106,43 @@ public class TokenQueryService {
                                                boolean showCipsDetails,
                                                ValidationScope scope) {
 
-        ResolvedMetadata resolved = queryPriority.stream()
-                .reduce(IDENTITY, combineStandardsBatch(subject, queryProperties, prefetchData), aggregateResults());
+        ProgrammableTokenCip113 cip113 = prefetchData.cip113Map().get(policyIdOf(subject));
+        ResolvedMetadata resolved = withoutCompanion(queryPriority.stream()
+                .reduce(IDENTITY, combineStandardsBatch(subject, queryProperties, prefetchData), aggregateResults()), cip113);
 
-        return resolved.standards().isEmpty()
+        return resolved.standards().isEmpty() && cip113 == null
                 ? Optional.empty()
-                : Optional.of(toSubject(subject, resolved, showCipsDetails, queryProperties)).filter(scope::accepts);
+                : Optional.of(toSubject(subject, resolved, cip113, showCipsDetails, queryProperties)).filter(scope::accepts);
     }
 
-    private static Subject toSubject(String subject, ResolvedMetadata resolved, boolean showCipsDetails, List<String> properties) {
+    /**
+     * A programmable token without CIP-26 or CIP-68 metadata is served as it is, with the error that it has none
+     * ({@link Cip113Validation#missingCompanion()}). The error concerns every property, so a property filter keeps it.
+     */
+    private static ResolvedMetadata withoutCompanion(ResolvedMetadata resolved, @Nullable ProgrammableTokenCip113 cip113) {
+        if (cip113 == null || !resolved.standards().isEmpty()) {
+            return resolved;
+        }
+        return new ResolvedMetadata(resolved.metadata(), resolved.standards(), List.of(Cip113Validation.missingCompanion()));
+    }
+
+    /** The policy ID of a subject, in lower case, as the registry nodes are keyed. */
+    private static String policyIdOf(String subject) {
+        String policyId = subject.length() > POLICY_ID_LENGTH ? subject.substring(0, POLICY_ID_LENGTH) : subject;
+        return policyId.toLowerCase(Locale.ROOT);
+    }
+
+    private static Subject toSubject(String subject, ResolvedMetadata resolved, @Nullable ProgrammableTokenCip113 cip113,
+                                     boolean showCipsDetails, List<String> properties) {
         // valid: the token follows its CIP completely, mandatory and optional fields alike. A row indexed before validation
         // existed has no errors to look at (null, not empty): the rule it always had applies, name and description present.
         List<ValidationError> errors = resolved.validationErrors();
         boolean valid = errors != null ? errors.isEmpty() : legacyValid(resolved.metadata(), properties);
         Metadata metadata = resolved.metadata().toBuilder().valid(valid).build();
-        return new Subject(subject, metadata, showCipsDetails ? resolved.standards() : null, resolved.validationErrors());
+        TokenType type = cip113 == null ? TokenType.NATIVE : TokenType.PROGRAMMABLE;
+        Map<String, Extension> extensions = cip113 == null ? null : Map.of(ProgrammableTokenCip113.EXTENSION_KEY, cip113);
+        return new Subject(subject, type, metadata, showCipsDetails ? resolved.standards() : null, extensions,
+                resolved.validationErrors());
     }
 
     /**
@@ -126,8 +158,8 @@ public class TokenQueryService {
 
     /**
      * Pre-fetch all data for a batch of subjects in bulk queries to avoid N+1.
-     * Issues at most 3 queries regardless of batch size:
-     * CIP-26 metadata, CIP-26 logos, CIP-68 reference NFTs.
+     * Issues at most 4 queries regardless of batch size:
+     * CIP-26 metadata, CIP-26 logos, CIP-68 reference NFTs, CIP-113 registry nodes.
      */
     public BatchPrefetchData prefetchBatch(List<String> subjects, List<String> queryProperties) {
         // CIP-26: one query for all metadata, one query for all logos
@@ -144,7 +176,11 @@ public class TokenQueryService {
         // batch is safe and avoids a double prefix-check here.
         Map<String, FungibleTokenMetadata> cip68MetadataMap = cip68StorageReader.findBySubjects(subjects, queryProperties);
 
-        return new BatchPrefetchData(cip26MetadataMap, cip26LogoMap, cip68MetadataMap);
+        // CIP-113: one query for the distinct policies of the batch
+        Map<String, ProgrammableTokenCip113> cip113Map = cip113StorageReader.findByPolicyIds(
+                subjects.stream().map(TokenQueryService::policyIdOf).distinct().toList());
+
+        return new BatchPrefetchData(cip26MetadataMap, cip26LogoMap, cip68MetadataMap, cip113Map);
     }
 
     /**
@@ -153,7 +189,8 @@ public class TokenQueryService {
     public record BatchPrefetchData(
             Map<String, Cip26Metadata> cip26MetadataMap,
             Map<String, String> cip26LogoMap,
-            Map<String, FungibleTokenMetadata> cip68MetadataMap) {
+            Map<String, FungibleTokenMetadata> cip68MetadataMap,
+            Map<String, ProgrammableTokenCip113> cip113Map) {
     }
 
     private Optional<ResolvedMetadata> findMetadata(String subject, List<String> properties, QueryPriority priority) {

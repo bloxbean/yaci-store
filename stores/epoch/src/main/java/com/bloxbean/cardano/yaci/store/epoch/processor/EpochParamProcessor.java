@@ -11,6 +11,7 @@ import com.bloxbean.cardano.yaci.store.common.config.StoreProperties;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionProposal;
 import com.bloxbean.cardano.yaci.store.common.domain.GovActionStatus;
 import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
+import com.bloxbean.cardano.yaci.store.common.util.RatifiedProposalOrder;
 import com.bloxbean.cardano.yaci.store.common.util.JsonUtil;
 import com.bloxbean.cardano.yaci.store.core.service.EraService;
 import com.bloxbean.cardano.yaci.store.epoch.domain.EpochParam;
@@ -174,7 +175,7 @@ public class EpochParamProcessor {
             List<GovActionProposal> ratifiedProposalsInPrevEpoch =
                     proposalStateClient.getProposalsByStatusAndEpoch(GovActionStatus.RATIFIED, newEpoch - 1);
 
-            for (var proposal : ratifiedProposalsInPrevEpoch) {
+            for (var proposal : RatifiedProposalOrder.orderParameterChanges(ratifiedProposalsInPrevEpoch)) {
                 if (proposal.getGovAction() != null) {
                     if (proposal.getGovAction().getType() == GovActionType.PARAMETER_CHANGE_ACTION) {
                         ParameterChangeAction parameterChangeAction = (ParameterChangeAction) proposal.getGovAction();

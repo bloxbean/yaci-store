@@ -6,6 +6,7 @@ import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.StringPrope
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.Subject;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.service.TokenQueryService;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.service.TokenQueryService.BatchPrefetchData;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.Cip113StorageReader;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.Cip26StorageReader;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.Cip26Metadata;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
@@ -48,6 +49,7 @@ class AssetsReaderTest {
     @Mock private TokenQueryService tokenQueryService;
     @Mock private Cip26StorageReader cip26StorageReader;
     @Mock private Cip68StorageReader cip68StorageReader;
+    @Mock private Cip113StorageReader cip113StorageReader;
 
     @InjectMocks private AssetsReader assetsReader;
 
@@ -101,7 +103,7 @@ class AssetsReaderTest {
             // The batch facade drops the subjects that have nothing indexed; the others are returned as indexed,
             // with their validation errors.
             List<String> subjects = List.of("a-valid-subject", "an-invalid-subject");
-            BatchPrefetchData prefetch = new BatchPrefetchData(Map.of(), Map.of(), Map.of());
+            BatchPrefetchData prefetch = new BatchPrefetchData(Map.of(), Map.of(), Map.of(), Map.of());
 
             when(tokenQueryService.prefetchBatch(subjects, List.of())).thenReturn(prefetch);
             when(tokenQueryService.querySubjectBatch(eq("a-valid-subject"), any(), any(), eq(prefetch), eq(false)))
@@ -118,7 +120,7 @@ class AssetsReaderTest {
         @Test
         void emptyInputReturnsEmptyResult() {
             when(tokenQueryService.prefetchBatch(List.of(), List.of()))
-                    .thenReturn(new BatchPrefetchData(Map.of(), Map.of(), Map.of()));
+                    .thenReturn(new BatchPrefetchData(Map.of(), Map.of(), Map.of(), Map.of()));
 
             assertThat(assetsReader.getSubjects(List.of(), List.of(QueryPriority.CIP_68))).isEmpty();
         }

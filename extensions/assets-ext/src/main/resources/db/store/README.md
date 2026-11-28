@@ -112,11 +112,11 @@ What the module **drops** or cannot use, one row per item (ADR 0007). A token th
 | Column | Type | Meaning |
 |---|---|---|
 | `id` | `VARCHAR(64)` PK | SHA-256 of `standard, reason_code, policy_id, asset_name, tx_hash, output_index, origin`: the same item has the same id, so a replayed block or a re-run sync adds nothing |
-| `standard` | `VARCHAR(16)` | the standard whose rule found the problem: `CIP-26`, `CIP-68` (`CIP-113` is reserved) |
+| `standard` | `VARCHAR(16)` | the standard whose rule found the problem: `CIP-26`, `CIP-68`, `CIP-113` |
 | `combined_with` | `VARCHAR(16)` NULL | the other standard of a combination (CIP-113 with CIP-26 or CIP-68) |
-| `reason_code` | `VARCHAR(64)` | stable code: CIP-26 `filename_subject_mismatch`, `unusable_subject`, `unparseable_mapping`, `missing_git_history`, `logo_too_large` (the entry is stored without its logo); CIP-68 `datum_undecodable`, `datum_too_deep_to_decode`; both `processing_failure` (something nobody foresaw threw) |
+| `reason_code` | `VARCHAR(64)` | stable code: CIP-26 `filename_subject_mismatch`, `unusable_subject`, `unparseable_mapping`, `missing_git_history`, `logo_too_large` (the entry is stored without its logo); CIP-68 `datum_undecodable`, `datum_too_deep_to_decode`; CIP-113 `registry_node_unparseable`, `registry_node_spoofed`; all `processing_failure` (something nobody foresaw threw) |
 | `reason` | `TEXT` | message for people, at most 500 characters |
-| `policy_id`, `asset_name` | NULL | the token, when known (CIP-68: the reference NFT) |
+| `policy_id`, `asset_name` | NULL | the token, when known (CIP-68: the reference NFT; CIP-113: the registry NFT, whose name is the registered policy) |
 | `subject` | `VARCHAR(256)` NULL | the identifier as written |
 | `slot`, `tx_hash`, `tx_index`, `output_index` | NULL | the on-chain origin (NULL for CIP-26) |
 | `origin` | `VARCHAR(512)` NULL | the registry file name (CIP-26) |
@@ -157,3 +157,35 @@ has a migration for it (`V0_1700_4`).
 Rows written before the upgrade have `validation_errors = NULL`: never checked, which is not the same as "no errors". The API leaves
 `validation_errors` out for them and `metadata.valid` falls back to the rule it had before (name and description both present). Only a
 resync fills them in, and brings back the tokens that were dropped before; it is not needed for the node to work.
+
+---
+
+## `cip113_registry_node` (V0_1700_4) — CIP-113 programmable-token registry
+
+One row per **version** of a registry node: the output that carries it (ADR 0011). A node is an output at the registry's script address
+holding one NFT of the registry policy, whose token name is the node's key. It is re-created on every insert after it (its `next` changes) and
+on every update of its scripts, and never removed, so a key has one row per version in its registry. Reads take only the configured
+registries, and the current node of a key is its latest row there by `slot`, then `tx_index`, then `output_index` (two registries can each
+hold a node of the key in one transaction). No row is updated in place. Filled by `Cip113Processor` from `AddressUtxoEvent`, not from the utxo store's tables, so it does not
+depend on the utxo store's pruning, indexes or plugin filters. Mainnet has 9 node outputs so far (2026-11-24), a few kB.
+
+An output is stored only if its datum is a registry node (7 fields, `Cip113RegistryNodeParser`), it is at the registry's script address (its
+payment credential is the registry policy ID) and it holds the registry NFT of its own key. Anything else that holds a registry NFT is an
+`invalid_token` row: `registry_node_unparseable` or `registry_node_spoofed`.
+
+| Column | Type | Bound / Rationale |
+|---|---|---|
+| `key` | `VARCHAR(64)` NOT NULL | The datum's key: the registered policy ID (56 hex), or empty for the origin node, the head of the list. Up to 32 bytes, as the parser accepts. Reserved in H2 and MySQL: quoted there. |
+| `registry_policy_id` | `VARCHAR(56)` NOT NULL | The policy of the registry NFT the node holds: which registry it belongs to. Reads take only the configured registries. |
+| `slot` | `BIGINT` NOT NULL | |
+| `tx_hash` | `VARCHAR(64)` NOT NULL | PK component: each version is its own row. |
+| `tx_index` | `INTEGER` NOT NULL | Orders two versions of a node in the same slot. Not part of the key. |
+| `output_index` | `INTEGER` NOT NULL | The output that carries the node. |
+| `next` | `VARCHAR(64)` NOT NULL | The next key in the sorted list, or the `0xff` sentinel after the last node. Reserved in H2 and MySQL: quoted there. |
+| `minting_logic_script`, `transfer_logic_script`, `third_party_transfer_logic_script`, `unfracking_logic_script` | `VARCHAR(56)` | The 28-byte hash of each credential, key or script (which one is not kept: the API does not serve it). `NULL` when absent; a `NULL` unfracking script means unfracking is forbidden. |
+| `global_state_policy_id` | `VARCHAR(56)` | `global_state_cs` of the datum; `NULL` when empty. |
+| `datum` | `TEXT` NOT NULL | The inline datum, CBOR hex, for re-parse and audit. At most 4,096 hex characters (the parser rejects longer ones). |
+| `last_synced_at` | `TIMESTAMP` | |
+
+Primary key `(key, registry_policy_id, slot, tx_hash)`: `key` first, as every read looks a key up. Index: `idx_cip113_registry_node_slot` (rollback deletes the rows with `slot >` the rollback slot).
+

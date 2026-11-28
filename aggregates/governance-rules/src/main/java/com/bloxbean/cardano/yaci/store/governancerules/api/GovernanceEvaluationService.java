@@ -1,5 +1,10 @@
 package com.bloxbean.cardano.yaci.store.governancerules.api;
 
+import com.bloxbean.cardano.yaci.core.model.governance.actions.ParameterChangeAction;
+import com.bloxbean.cardano.yaci.core.model.governance.actions.TreasuryWithdrawalsAction;
+import com.bloxbean.cardano.yaci.core.protocol.localstate.queries.model.ProposalType;
+import com.bloxbean.cardano.yaci.store.common.domain.ProtocolParams;
+import com.bloxbean.cardano.yaci.store.common.mapper.ProtocolParamUpdateMapper;
 import com.bloxbean.cardano.yaci.store.governancerules.domain.GovernanceContext;
 import com.bloxbean.cardano.yaci.store.governancerules.domain.Proposal;
 import com.bloxbean.cardano.yaci.store.governancerules.domain.RatificationContext;
@@ -8,7 +13,9 @@ import com.bloxbean.cardano.yaci.store.governancerules.ratification.Ratification
 import com.bloxbean.cardano.yaci.store.governancerules.service.ProposalDropService;
 import com.bloxbean.cardano.yaci.store.governancerules.util.GovernanceActionUtil;
 
+import java.math.BigInteger;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Comparator;
 import java.util.List;
 
@@ -67,13 +74,26 @@ public class GovernanceEvaluationService {
 
         List<ProposalContext> sortedProposals = input.getCurrentProposals().stream()
                 .sorted(Comparator.comparingInt((ProposalContext proposal) -> GovernanceActionUtil.getActionPriority(proposal.getGovAction().getType()))
-                        .thenComparingLong(ProposalContext::getProposalSlot))
+                        .thenComparingLong(ProposalContext::getProposalSlot)
+                        .thenComparingInt(ProposalContext::getTxIndex)
+                        .thenComparingInt(proposal -> proposal.getGovActionId().getGov_action_index()))
                 .toList();
 
-        boolean isDelayedByDelayingAction = false;
+        // ENACT changes the state used by later actions, without changing the caller's snapshot.
+        ProtocolParams protocolParams = new ProtocolParams();
+        protocolParams.merge(input.getProtocolParams());
+        GovernanceContext governanceContext = GovernanceContext.builder()
+                .currentEpoch(input.getCurrentEpoch())
+                .protocolParams(protocolParams)
+                .committee(input.getCommittee())
+                .isInBootstrapPhase(input.isBootstrapPhase())
+                .treasury(input.getTreasury())
+                .lastEnactedGovActionIds(input.getLastEnactedGovActionIds() == null
+                        ? new HashMap<>() : new HashMap<>(input.getLastEnactedGovActionIds()))
+                .build();
 
         for (ProposalContext proposalContext : sortedProposals) {
-            RatificationResult result = evaluateProposal(proposalContext, input, isDelayedByDelayingAction);
+            RatificationResult result = evaluateProposal(proposalContext, governanceContext);
 
             ProposalEvaluationResult evaluationResult = ProposalEvaluationResult.builder()
                     .proposal(Proposal.builder().type(proposalContext.getGovAction().getType())
@@ -85,28 +105,42 @@ public class GovernanceEvaluationService {
 
             results.add(evaluationResult);
 
-            if (GovernanceActionUtil.isDelayingAction(proposalContext.getGovAction().getType()) && result == RatificationResult.ACCEPT) {
-                isDelayedByDelayingAction = true;
+            if (result == RatificationResult.ACCEPT) {
+                if (GovernanceActionUtil.isDelayingAction(proposalContext.getGovAction().getType())) {
+                    // No later action can ratify, so changes to committee/constitution/version
+                    // cannot affect this pass. Only expiry is checked for the remaining proposals.
+                    governanceContext = governanceContext.toBuilder().isActionRatificationDelayed(true).build();
+                } else {
+                    governanceContext = enactNonDelayingAction(proposalContext, governanceContext);
+                }
             }
         }
 
         return results;
     }
 
-    private RatificationResult evaluateProposal(
-            ProposalContext proposalContext,
-            GovernanceEvaluationInput input,
-            boolean isDelayedByDelayingAction) {
+    private GovernanceContext enactNonDelayingAction(ProposalContext proposal, GovernanceContext state) {
+        return switch (proposal.getGovAction().getType()) {
+            case PARAMETER_CHANGE_ACTION -> {
+                var action = (ParameterChangeAction) proposal.getGovAction();
+                state.getProtocolParams().merge(ProtocolParamUpdateMapper.INSTANCE.toProtocolParams(action.getProtocolParamUpdate()));
+                state.getLastEnactedGovActionIds().put(ProposalType.P_PARAM_UPDATE, proposal.getGovActionId());
+                yield state;
+            }
+            case TREASURY_WITHDRAWALS_ACTION -> {
+                var action = (TreasuryWithdrawalsAction) proposal.getGovAction();
+                BigInteger withdrawals = GovernanceActionUtil.totalWithdrawal(action);
+                yield state.toBuilder().treasury(state.getTreasury().subtract(withdrawals)).build();
+            }
+            default -> state;
+        };
+    }
 
-        GovernanceContext governanceContext = GovernanceContext.builder()
-                .currentEpoch(input.getCurrentEpoch())
-                .protocolParams(input.getProtocolParams())
-                .committee(input.getCommittee())
-                .isInBootstrapPhase(input.isBootstrapPhase())
-                .treasury(input.getTreasury())
-                .lastEnactedGovActionIds(input.getLastEnactedGovActionIds())
-                .isActionRatificationDelayed(isDelayedByDelayingAction)
-                .build();
+    private RatificationResult evaluateProposal(ProposalContext proposalContext, GovernanceContext governanceContext) {
+        if (governanceContext.isActionRatificationDelayed()) {
+            return governanceContext.getCurrentEpoch() > proposalContext.getMaxAllowedVotingEpoch()
+                    ? RatificationResult.REJECT : RatificationResult.CONTINUE;
+        }
 
         RatificationContext context = RatificationContext.builder()
                 .govAction(proposalContext.getGovAction())

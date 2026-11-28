@@ -481,6 +481,7 @@ public class BlockFetchService implements BlockChainDataListener {
         synchronized (sessionStateLock) {
             //A restart can have replaced this session during the rollback. Its state is not this session's to reset.
             sessionGuard.checkCaller();
+            eraService.resetEraTracking();
             restoreEpochStateFromCursor(cursorService.getCursor());
             log.info("Restored epoch state after rollback. previousEpoch: {}, previousEra: {}",
                     previousEpoch, previousEra);
@@ -990,6 +991,7 @@ public class BlockFetchService implements BlockChainDataListener {
                 //The range fetch delivers the start block first. When it is not processed yet, it must not be lost.
                 if (fromBlockNumber == null)
                     requiredFirstBlockHash = from.getHash();
+                eraService.resetEraTracking();
                 restoreEpochStateForStart(from, fromBlockNumber);
             }
 
@@ -1071,6 +1073,7 @@ public class BlockFetchService implements BlockChainDataListener {
                 //The first block from chain sync must build on the start point
                 resetAcceptedBlock(from.getHash(), fromBlockNumber);
                 expectedPrevBlockHash = from.getHash();
+                eraService.resetEraTracking();
                 restoreEpochStateForStart(from, fromBlockNumber);
             }
             blockSync.startSync(from, new SessionListener(session));
