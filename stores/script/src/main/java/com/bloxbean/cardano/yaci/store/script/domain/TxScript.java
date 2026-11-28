@@ -26,6 +26,7 @@ public class TxScript extends BlockAwareDomain {
     private BigInteger unitSteps;
     private RedeemerTag purpose;
     private Integer redeemerIndex;
+    private Integer redeemerPosition; //position in the witness redeemer list, part of the row id, not stored
     private String redeemerData;
     private String redeemerDatahash;
 }

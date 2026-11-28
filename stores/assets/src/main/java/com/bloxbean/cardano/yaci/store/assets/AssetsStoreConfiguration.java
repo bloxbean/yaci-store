@@ -6,6 +6,7 @@ import com.bloxbean.cardano.yaci.store.assets.storage.impl.AssetStorageImpl;
 import com.bloxbean.cardano.yaci.store.assets.storage.impl.AssetStorageReaderImpl;
 import com.bloxbean.cardano.yaci.store.assets.storage.impl.mapper.AssetMapper;
 import com.bloxbean.cardano.yaci.store.assets.storage.impl.repository.TxAssetRepository;
+import org.jooq.DSLContext;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
@@ -31,8 +32,8 @@ public class AssetsStoreConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public AssetStorage assetStorage(TxAssetRepository txAssetRepository, AssetMapper assetMapper) {
-        return new AssetStorageImpl(txAssetRepository, assetMapper);
+    public AssetStorage assetStorage(TxAssetRepository txAssetRepository, AssetMapper assetMapper, DSLContext dslContext) {
+        return new AssetStorageImpl(txAssetRepository, assetMapper, dslContext);
     }
 
     @Bean
