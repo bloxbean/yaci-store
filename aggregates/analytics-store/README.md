@@ -90,12 +90,12 @@ DuckLake-managed Parquet files with a catalog (PostgreSQL or DuckDB) storing met
 ```properties
 yaci.store.analytics.storage.type=ducklake
 
-# PostgreSQL catalog (recommended for production)
-yaci.store.analytics.ducklake.catalog-type=postgresql
-
-# Or DuckDB file catalog (development/single-instance)
+# DuckDB file catalog (the default; the exporting node is the only writer)
 yaci.store.analytics.ducklake.catalog-type=duckdb
 yaci.store.analytics.ducklake.catalog-path=./data/analytics/ducklake.catalog.db
+
+# Or a PostgreSQL catalog, when other processes or hosts read it while the node writes
+yaci.store.analytics.ducklake.catalog-type=postgresql
 ```
 
 - ACID transactions, time-travel queries, schema evolution
@@ -194,7 +194,7 @@ duckdb -c "
 | `yaci.store.analytics.parquet-export.codec` | `ZSTD` | Compression codec |
 | `yaci.store.analytics.parquet-export.compression-level` | `3` | ZSTD compression level (1-22) |
 | `yaci.store.analytics.parquet-export.row-group-size` | `-1` | Parquet row group size (-1 = DuckDB default ~122,880 rows) |
-| `yaci.store.analytics.ducklake.catalog-type` | `postgresql` | DuckLake catalog: `postgresql` or `duckdb` |
+| `yaci.store.analytics.ducklake.catalog-type` | `duckdb` | DuckLake catalog: `duckdb` (a local file) or `postgresql` (`postgresql` in the 3.0.0 betas) |
 | `yaci.store.analytics.ducklake.catalog-url` | _(main datasource)_ | PostgreSQL URL for catalog (used when `catalog-type=postgresql`) |
 | `yaci.store.analytics.ducklake.catalog-username` | _(main datasource)_ | PostgreSQL catalog username (used when `catalog-type=postgresql`) |
 | `yaci.store.analytics.ducklake.catalog-password` | _(main datasource)_ | PostgreSQL catalog password (used when `catalog-type=postgresql`) |

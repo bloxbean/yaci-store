@@ -14,7 +14,21 @@ yaci.store.analytics.storage.type=ducklake
 
 ### Catalog Options
 
-**PostgreSQL catalog (recommended for production):**
+Both options store the data as DuckLake Parquet files under the export path; the catalog type only
+chooses where DuckLake keeps its catalog.
+
+**DuckDB file catalog (the default, and what the `analytics` profile uses):**
+
+```properties
+yaci.store.analytics.ducklake.catalog-type=duckdb
+yaci.store.analytics.ducklake.catalog-path=./data/analytics/ducklake.catalog.db
+```
+
+The exporting node is the only writer. Keep the catalog file with the export path: one is
+useless without the other.
+
+**PostgreSQL catalog**, for when other processes or hosts read the catalog while the node writes
+it:
 
 ```properties
 yaci.store.analytics.ducklake.catalog-type=postgresql
@@ -28,12 +42,13 @@ yaci.store.analytics.ducklake.catalog-username=postgres
 yaci.store.analytics.ducklake.catalog-password=pass
 ```
 
-**DuckDB file catalog (development / single-instance):**
-
-```properties
-yaci.store.analytics.ducklake.catalog-type=duckdb
-yaci.store.analytics.ducklake.catalog-path=./data/analytics/ducklake.catalog.db
-```
+<Callout type="warning">
+**Upgrading from a 3.0.0 beta.** The default was `postgresql` in the betas and is `duckdb` now. A
+node that set `storage.type=ducklake` but never set `catalog-type` refuses to start when its
+PostgreSQL database already holds a DuckLake catalog and no DuckDB catalog file exists, instead of
+starting a new, empty catalog. Set `yaci.store.analytics.ducklake.catalog-type=postgresql` to keep
+the existing catalog.
+</Callout>
 
 ### Characteristics
 
