@@ -1,9 +1,11 @@
 package com.bloxbean.cardano.yaci.store.common.util;
 
+import co.nstant.in.cbor.CborException;
 import co.nstant.in.cbor.model.Array;
 import co.nstant.in.cbor.model.ByteString;
 import co.nstant.in.cbor.model.DataItem;
 import co.nstant.in.cbor.model.UnsignedInteger;
+import com.bloxbean.cardano.client.crypto.Blake2bUtil;
 import com.bloxbean.cardano.client.exception.CborRuntimeException;
 import com.bloxbean.cardano.client.exception.CborSerializationException;
 import com.bloxbean.cardano.client.plutus.spec.PlutusV1Script;
@@ -11,6 +13,7 @@ import com.bloxbean.cardano.client.plutus.spec.PlutusV2Script;
 import com.bloxbean.cardano.client.plutus.spec.PlutusV3Script;
 import com.bloxbean.cardano.client.spec.Script;
 import com.bloxbean.cardano.client.transaction.spec.script.NativeScript;
+import com.bloxbean.cardano.yaci.core.model.serializers.util.CborSlice;
 import com.bloxbean.cardano.yaci.core.util.HexUtil;
 import lombok.extern.slf4j.Slf4j;
 
@@ -64,6 +67,17 @@ public class ScriptReferenceUtil {
      */
     public static String getReferenceScriptHash(byte[] scriptRefBytes) throws CborSerializationException {
         Script script = deserializeScriptRef(scriptRefBytes);
+        if (script.getScriptType() == 0) {
+            // Native script hash = blake2b-224(0x00 || original script bytes)
+            try {
+                byte[] nativeScriptBytes = CborSlice.arrayItem(scriptRefBytes, 1).bytes();
+                byte[] hashInput = new byte[nativeScriptBytes.length + 1];
+                System.arraycopy(nativeScriptBytes, 0, hashInput, 1, nativeScriptBytes.length);
+                return HexUtil.encodeHexString(Blake2bUtil.blake2bHash224(hashInput));
+            } catch (CborException e) {
+                throw new CborRuntimeException("Native script slicing failed.", e);
+            }
+        }
         return HexUtil.encodeHexString(script.getScriptHash());
     }
 }

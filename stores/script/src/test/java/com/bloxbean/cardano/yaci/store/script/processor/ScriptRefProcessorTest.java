@@ -65,6 +65,43 @@ public class ScriptRefProcessorTest {
     }
 
     @Test
+    void givenNativeScriptRefWithIndefiniteArray_shouldStoreOnChainHash() throws Exception {
+        // preprod tx 1af1e563f9e574ecd52a59daf929ea8c777fa70fdd53ed470b270e42550e67d9#0: the sub-script array is indefinite (9f ... ff)
+        String scriptRef;
+        try (var in = getClass().getResourceAsStream("/script-ref/preprod-1af1e563-0.hex")) {
+            scriptRef = new String(in.readAllBytes()).trim();
+        }
+
+        TransactionEvent transactionEvent = TransactionEvent.builder()
+                .metadata(EventMetadata.builder()
+                        .slot(1000)
+                        .block(100)
+                        .build())
+                .transactions(List.of(
+                        Transaction.builder()
+                                .txHash("1af1e563f9e574ecd52a59daf929ea8c777fa70fdd53ed470b270e42550e67d9")
+                                .body(TransactionBody.builder()
+                                        .outputs(List.of(
+                                                TransactionOutput.builder()
+                                                        .address("addr_test1wpnlxv2xv9a9ucvnvzqakwepzl9ltx7jzgm53av2e9ncv4sysemm8")
+                                                        .scriptRef(scriptRef)
+                                                        .build()
+                                        ))
+                                        .build()
+                                )
+                                .build()
+                )).build();
+
+        scriptRefProcessor.processScriptRefInUtxo(transactionEvent);
+
+        Mockito.verify(scriptStorage, Mockito.times(1)).saveScripts(scriptProcessorArgCaptor.capture());
+        List<Script> scripts = scriptProcessorArgCaptor.getValue();
+        assertThat(scripts).hasSize(1);
+        assertThat(scripts.get(0).getScriptHash()).isEqualTo("a69b61fe37022390d0ad3be62c9b3a1455719a319669a0d8b6a7b454");
+        assertThat(scripts.get(0).getScriptType()).isEqualTo(ScriptType.NATIVE_SCRIPT);
+    }
+
+    @Test
     void givenTransaction_whenInvalidScriptRefPresent_shouldNotStoreScript() throws IOException {
         TransactionEvent transactionEvent = TransactionEvent.builder()
                 .transactions(List.of(
