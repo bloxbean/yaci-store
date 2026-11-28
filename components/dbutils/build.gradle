@@ -1,6 +1,13 @@
+// Testcontainers 1.19.8 from the Spring Boot BOM cannot use Docker Engine 29+.
+ext['testcontainers.version'] = '1.21.4'
+
 dependencies {
     api project(':components:common')
     api project(':components:events')
+
+    testImplementation 'org.testcontainers:junit-jupiter'
+    testImplementation 'org.testcontainers:postgresql'
+    testRuntimeOnly "org.postgresql:postgresql:${postgresDriverVersion}"
 }
 
 publishing {
