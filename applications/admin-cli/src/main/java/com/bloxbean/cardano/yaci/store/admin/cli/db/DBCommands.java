@@ -163,9 +163,11 @@ public class DBCommands {
 
     @Command(description = "Build address_utxo_unspent for a store synced before store.utxo.unspent-table-enabled was turned on. Stop the store first.")
     public void backfillUnspentUtxos(
-            @Option(longNames = "from-output-index", defaultValue = "0", description = "0 rebuilds the table from scratch; to resume an interrupted run, pass the output_index it last reported") int fromOutputIndex) {
-        if (!databaseUtils.tableExists("address_utxo_unspent") || !databaseUtils.tableExists("store_state")) {
-            writeLn(error("Table address_utxo_unspent or store_state not found. Start the store once with this version so its migrations run."));
+            @Option(longNames = "from-output-index", defaultValue = "0", description = "0 rebuilds the table from scratch; to resume an interrupted run, pass the output_index it last reported") int fromOutputIndex,
+            @Option(longNames = "event-publisher-id", defaultValue = "1", description = "Event Publisher ID of the store whose cursor the table is built at") long eventPublisherId) {
+        if (!databaseUtils.tableExists("address_utxo_unspent") || !databaseUtils.tableExists("store_state")
+                || !databaseUtils.tableExists("cursor_")) {
+            writeLn(error("Table address_utxo_unspent, store_state or cursor_ not found. Start the store once with this version so its migrations run."));
             return;
         }
 
@@ -174,20 +176,23 @@ public class DBCommands {
             return;
         }
 
-        boolean hasCursor = databaseUtils.tableExists("cursor_");
-        Long cursorBefore = hasCursor ? unspentUtxoBackfillService.cursorSlot() : null;
+        Long cursorBefore = unspentUtxoBackfillService.cursorSlot(eventPublisherId);
         writeLn(info("Building address_utxo_unspent at cursor slot %s from output_index %d. The store must stay stopped until this finishes.",
                 cursorBefore, fromOutputIndex));
         long copied = unspentUtxoBackfillService.rebuild(fromOutputIndex);
 
-        Long cursorAfter = hasCursor ? unspentUtxoBackfillService.cursorSlot() : null;
+        Long cursorAfter = unspentUtxoBackfillService.cursorSlot(eventPublisherId);
         if (!Objects.equals(cursorBefore, cursorAfter)) {
             writeLn(error("The store's cursor moved from slot %s to %s while the table was built, so the store was running and the table may be wrong. "
                     + "Stop the store and run this command again.", cursorBefore, cursorAfter));
             return;
         }
 
-        unspentUtxoBackfillService.markCurrentAtCursor();
+        if (!unspentUtxoBackfillService.markCurrentAtCursor(eventPublisherId)) {
+            writeLn(warn("Copied %d unspent outputs, but the store has no cursor for event publisher %d, so the table is not "
+                    + "recorded as current: the store builds it again when its sync reaches the tip.", copied, eventPublisherId));
+            return;
+        }
         writeLn(success("Copied %d unspent outputs.", copied));
         writeLn(info("Now start the store with store.utxo.unspent-table-enabled=true (it keeps the table current from slot %s) "
                 + "and store.utxo.unspent-table-read-enabled=true.", cursorAfter));

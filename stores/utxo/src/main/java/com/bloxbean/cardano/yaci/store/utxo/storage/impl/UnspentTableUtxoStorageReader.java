@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.BooleanSupplier;
 
+import static com.bloxbean.cardano.yaci.store.common.Constants.QUERY_TIMEOUT_SECONDS;
 import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.ADDRESS_UTXO_UNSPENT;
 import static org.jooq.impl.DSL.field;
 
@@ -82,6 +83,9 @@ public class UnspentTableUtxoStorageReader implements UtxoStorageReader {
                 .orderBy(sort(order))
                 .offset((long) page * count)
                 .limit(count)
+                //Bounded like the Blockfrost reads: a plan gone wrong (no owner index applied yet) or a wait behind the
+                //build's TRUNCATE must not hold a connection after the client has gone
+                .queryTimeout(QUERY_TIMEOUT_SECONDS)
                 .fetch()
                 .into(AddressUtxo.class);
     }

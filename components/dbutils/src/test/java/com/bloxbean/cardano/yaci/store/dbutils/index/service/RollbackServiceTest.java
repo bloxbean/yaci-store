@@ -57,6 +57,7 @@ class RollbackServiceTest {
         when(jdbcTemplate.queryForObject(anyString(), any(SqlParameterSource.class), any(RowMapper.class))).thenReturn(
                 createMockRollbackBlock(100, 1000L, "block_hash_123", 2000L, 50, 5)
         );
+        when(jdbcTemplate.queryForObject(contains("from store_state"), any(SqlParameterSource.class), eq(Integer.class))).thenReturn(1);
         when(jdbcTemplate.update(anyString(), any(SqlParameterSource.class))).thenReturn(1);
         when(jdbcTemplate.getJdbcTemplate()).thenReturn(plainJdbcTemplate);
         when(plainJdbcTemplate.update(anyString())).thenReturn(1);
@@ -72,6 +73,49 @@ class RollbackServiceTest {
                 Long.valueOf(1000L).equals(params.getValue("slot")) && Long.valueOf(2000L).equals(params.getValue("block"))
                         && "block_hash_123".equals(params.getValue("block_hash"))));
         inOrder.verify(jdbcTemplate).update(eq("DELETE FROM tx_input WHERE spent_at_slot > :slot"), any(SqlParameterSource.class));
+    }
+
+    @Test
+    void testExecuteRollback_UnspentUtxoTableNotCurrent_ShouldOnlyDeleteItsRows() {
+        RollbackContext context = RollbackContext.builder().epoch(100).eventPublisherId(1L).rollbackLedgerState(false).build();
+
+        when(databaseUtils.tableExists(anyString())).thenReturn(true);
+        when(jdbcTemplate.queryForObject(anyString(), any(SqlParameterSource.class), any(RowMapper.class))).thenReturn(
+                createMockRollbackBlock(100, 1000L, "block_hash_123", 2000L, 50, 5));
+        //Never turned on, stale, or kept only to a slot before the point
+        when(jdbcTemplate.queryForObject(contains("from store_state"), any(SqlParameterSource.class), eq(Integer.class))).thenReturn(0);
+        when(jdbcTemplate.update(anyString(), any(SqlParameterSource.class))).thenReturn(1);
+        when(jdbcTemplate.getJdbcTemplate()).thenReturn(plainJdbcTemplate);
+        when(plainJdbcTemplate.update(anyString())).thenReturn(1);
+
+        var result = rollbackService.executeRollback(configLoader.loadRollbackConfig("rollback.yml"), context);
+
+        assertTrue(result.getSecond());
+        verify(jdbcTemplate).update(eq("DELETE FROM address_utxo_unspent WHERE slot > :slot"), any(SqlParameterSource.class));
+        verify(jdbcTemplate, never()).update(eq(UnspentUtxoBackfillService.RESTORE_SPENT_AFTER), any(SqlParameterSource.class));
+        verify(jdbcTemplate, never()).update(eq(UnspentUtxoBackfillService.STATE_AFTER_ROLLBACK), any(SqlParameterSource.class));
+    }
+
+    @Test
+    void testExecuteRollback_UnspentUtxoRestoreFails_ShouldNotMoveItsState() {
+        RollbackContext context = RollbackContext.builder().epoch(100).eventPublisherId(1L).rollbackLedgerState(false).build();
+
+        when(databaseUtils.tableExists(anyString())).thenReturn(true);
+        when(jdbcTemplate.queryForObject(anyString(), any(SqlParameterSource.class), any(RowMapper.class))).thenReturn(
+                createMockRollbackBlock(100, 1000L, "block_hash_123", 2000L, 50, 5));
+        when(jdbcTemplate.queryForObject(contains("from store_state"), any(SqlParameterSource.class), eq(Integer.class))).thenReturn(1);
+        when(jdbcTemplate.update(anyString(), any(SqlParameterSource.class))).thenReturn(1);
+        when(jdbcTemplate.update(eq(UnspentUtxoBackfillService.RESTORE_SPENT_AFTER), any(SqlParameterSource.class)))
+                .thenThrow(new RuntimeException("restore failed"));
+        when(jdbcTemplate.getJdbcTemplate()).thenReturn(plainJdbcTemplate);
+        when(plainJdbcTemplate.update(anyString())).thenReturn(1);
+
+        var result = rollbackService.executeRollback(configLoader.loadRollbackConfig("rollback.yml"), context);
+
+        assertFalse(result.getSecond());
+        assertEquals(1, result.getFirst().size());
+        assertEquals(UnspentUtxoBackfillService.RESTORE_SPENT_AFTER, result.getFirst().get(0).getSql());
+        verify(jdbcTemplate, never()).update(eq(UnspentUtxoBackfillService.STATE_AFTER_ROLLBACK), any(SqlParameterSource.class));
     }
 
     @Test

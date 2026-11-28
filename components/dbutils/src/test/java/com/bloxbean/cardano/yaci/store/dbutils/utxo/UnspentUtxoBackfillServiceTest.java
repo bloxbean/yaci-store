@@ -127,13 +127,13 @@ class UnspentUtxoBackfillServiceTest {
 
     @Test
     void reportsTheCursorAndAnEmptyStore() {
-        assertThat(service.cursorSlot()).isNull();
+        assertThat(service.cursorSlot(1)).isNull();
         assertThat(service.maxOutputIndex()).isEqualTo(-1);
         assertThat(service.rebuild(0)).isZero();
 
         cursor(500);
         cursor(520);
-        assertThat(service.cursorSlot()).isEqualTo(520);
+        assertThat(service.cursorSlot(1)).isEqualTo(520);
     }
 
     @Test
@@ -144,7 +144,7 @@ class UnspentUtxoBackfillServiceTest {
 
         service.rebuild(0);
         assertThat(stateRows()).isZero();   //not current until the caller has checked the cursor did not move
-        service.markCurrentAtCursor();
+        service.markCurrentAtCursor(1);
 
         assertThat(state()).containsEntry("STATUS", "CURRENT").containsEntry("SLOT", 520L)
                 .containsEntry("BLOCK", 52L).containsEntry("BLOCK_HASH", "bh520");
@@ -153,7 +153,7 @@ class UnspentUtxoBackfillServiceTest {
     @Test
     void aRebuildDropsTheStateUntilItFinishes() {
         cursor(500);
-        service.markCurrentAtCursor();
+        service.markCurrentAtCursor(1);
         assertThat(stateRows()).isOne();
 
         service.rebuild(3);   //a resumed run that is interrupted again leaves no state
@@ -167,7 +167,7 @@ class UnspentUtxoBackfillServiceTest {
         var params = new MapSqlParameterSource("slot", 150L).addValue("block", 15L).addValue("block_hash", "bh150");
 
         cursor(200);
-        service.markCurrentAtCursor();
+        service.markCurrentAtCursor(1);
         named.update(UnspentUtxoBackfillService.STATE_AFTER_ROLLBACK, params);
         assertThat(state()).containsEntry("STATUS", "CURRENT").containsEntry("SLOT", 150L).containsEntry("BLOCK_HASH", "bh150");
 

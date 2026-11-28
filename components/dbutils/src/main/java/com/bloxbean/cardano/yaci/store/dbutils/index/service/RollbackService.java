@@ -57,10 +57,18 @@ public class RollbackService {
 
             //address_utxo_unspent also restores the outputs whose spend is rolled back. It is listed before
             //tx_input in rollback.yml, so those spends are still there. Its store_state row then moves to the point.
+            //Restoring is only worth it while the table is current at or after the point. Otherwise (never turned on,
+            //stale, built but not caught up, behind the point) the store builds it again anyway, and on a store that
+            //never used it the restore would fill it with rows nobody reads.
             if (UNSPENT_UTXO_TABLE.equalsIgnoreCase(tableName) && "DELETE".equalsIgnoreCase(tableDef.getOperation())) {
-                List<String> unspentSqls = new ArrayList<>(List.of(buildDeleteSql(tableDef), UnspentUtxoBackfillService.RESTORE_SPENT_AFTER));
-                if (databaseUtils.tableExists("store_state"))
+                List<String> unspentSqls = new ArrayList<>(List.of(buildDeleteSql(tableDef)));
+                if (isUnspentTableCurrentAt(rollbackBlock.getSlot())) {
+                    unspentSqls.add(UnspentUtxoBackfillService.RESTORE_SPENT_AFTER);
                     unspentSqls.add(UnspentUtxoBackfillService.STATE_AFTER_ROLLBACK);
+                } else {
+                    log.info("address_utxo_unspent is not current at slot {}: its rows after the point are deleted, "
+                            + "nothing is restored, and the store builds it again", rollbackBlock.getSlot());
+                }
 
                 var unspentParams = new MapSqlParameterSource(params.getValues())
                         .addValue("block", rollbackBlock.getNumber())
@@ -72,6 +80,9 @@ public class RollbackService {
                     } catch (Exception e) {
                         log.error("Failed to execute rollback on table '{}': {}", tableName, e.getMessage());
                         failedRollbackActions.add(new TableRollbackAction(tableName, unspentSql));
+                        //The state must not move to the point after a step that failed: the store would then take
+                        //the table as current there
+                        break;
                     }
                 }
                 continue;
@@ -124,6 +135,17 @@ public class RollbackService {
         return Pair.of(failedRollbackActions, rollbackSuccess);
     }
 
+
+    /** Whether address_utxo_unspent's store_state row is CURRENT at or after {@code slot}. */
+    private boolean isUnspentTableCurrentAt(long slot) {
+        if (!databaseUtils.tableExists("store_state"))
+            return false;
+        Integer rows = jdbcTemplate.queryForObject(
+                "select count(*) from store_state where state_id = :state_id and status = 'CURRENT' and slot >= :slot",
+                new MapSqlParameterSource("state_id", UnspentUtxoBackfillService.STATE_ID).addValue("slot", slot),
+                Integer.class);
+        return rows != null && rows > 0;
+    }
 
     private RollbackBlock getRollbackBlockByRollbackContext(RollbackContext context) {
         if (!databaseUtils.tableExists("block")) {

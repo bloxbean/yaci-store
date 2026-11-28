@@ -24,6 +24,13 @@ class UtxoStoreAutoConfigurationTest {
         UtxoStoreProperties properties = propertiesFrom(Map.of());
         assertThat(properties.isUnspentTableEnabled()).isFalse();
         assertThat(properties.isUnspentTableReadEnabled()).isFalse();
+        assertThat(properties.isUnspentTableBackfillAtTip()).isTrue();
+    }
+
+    @Test
+    void theBackfillAtTipFlagBindsFalse() {
+        UtxoStoreProperties properties = propertiesFrom(Map.of("store.utxo.unspent-table-backfill-at-tip", "false"));
+        assertThat(properties.isUnspentTableBackfillAtTip()).isFalse();
     }
 
     @Test

@@ -155,6 +155,12 @@ public class UnspentUtxoTable {
         this.buildTransactionTemplate.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);
         this.catchUpTransactionTemplate = new TransactionTemplate(transactionManager);
         this.catchUpTransactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        //Under MySQL's default repeatable read, the catch-up's INSERT ... SELECT and DELETE ... IN (SELECT) take shared
+        //next-key locks on the address_utxo and tx_input rows they scan (slot after the catch-up point), which blocks
+        //the sync's inserts there while a pass runs. Read committed reads them without locks. A pass does not need one
+        //snapshot: it is idempotent, and the next pass looks at every slot after the cursor read before this one.
+        if (dsl != null && dsl.dialect() != null && dsl.dialect().family() == SQLDialect.MYSQL)
+            this.catchUpTransactionTemplate.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
         this.storeStateService = storeStateService;
         this.cursorService = cursorService;
     }
@@ -180,6 +186,11 @@ public class UnspentUtxoTable {
 
     Phase phase() {
         return phase;
+    }
+
+    /** Built and catching up: a commit may switch it on ({@link #switchOnAtCommit}). */
+    public boolean isCatchingUp() {
+        return phase == Phase.CATCHING_UP;
     }
 
     /** True while the table is built or caught up in the background: tx_input rows must not be pruned meanwhile. */
@@ -217,8 +228,10 @@ public class UnspentUtxoTable {
     public boolean isReadable() {
         if (properties == null || !properties.isUnspentTableReadEnabled())
             return false;
+        //An API-only instance never writes the table, so unspent-table-enabled means nothing there: the writer's
+        //store_state row decides
         if (readOnly)
-            return properties.isUnspentTableEnabled() && isCurrentForReadOnly();
+            return isCurrentForReadOnly();
         return isActive() && !switchCommitPending;
     }
 
@@ -237,9 +250,12 @@ public class UnspentUtxoTable {
         Long stateSlot = null;
         Long cursorSlot = null;
         try {
+            //The cursor first: the writer moves the state with or before the cursor (same transaction in sync mode,
+            //the commit before the cursor in parallel mode), so a block committed between the two reads makes the
+            //state newer, never older, than the cursor read. The other order flips to "not used" for a second.
+            cursorSlot = cursorSlotInDatabase();
             StoreState state = currentState();
             stateSlot = state != null ? state.getSlot() : null;
-            cursorSlot = cursorSlotInDatabase();
             readable = stateSlot != null && (cursorSlot == null || stateSlot >= cursorSlot);
         } catch (Exception e) {
             log.warn("address_utxo_unspent: could not read its state or the cursor, queries use address_utxo and tx_input: {}",
@@ -316,6 +332,19 @@ public class UnspentUtxoTable {
             try {
                 synchronized (this) {
                     again = buildInvalidated;
+                }
+                if (!again) {
+                    //Recorded once the build is committed, in its own short transaction, so a long build never holds
+                    //or conflicts with an update of the state row. Written before the phase moves to CATCHING_UP and
+                    //under the lock: once a commit can switch the table on (and write CURRENT), this row is in place,
+                    //so it cannot overwrite that CURRENT row afterwards.
+                    catchUpTransactionTemplate.executeWithoutResult(status -> storeStateService.saveState(StoreState.builder()
+                            .stateId(STATE_ID)
+                            .status(STATUS_BUILT)
+                            .slot(snapshotSlot)
+                            .build()));
+                }
+                synchronized (this) {
                     if (again) {
                         phase = Phase.OFF;
                     } else {
@@ -332,14 +361,6 @@ public class UnspentUtxoTable {
                 startBuild("a rollback during the build");
                 return;
             }
-
-            //Recorded once the build is committed, in its own short transaction, so a long build never holds or
-            //conflicts with an update of the state row
-            catchUpTransactionTemplate.executeWithoutResult(status -> storeStateService.saveState(StoreState.builder()
-                    .stateId(STATE_ID)
-                    .status(STATUS_BUILT)
-                    .slot(snapshotSlot)
-                    .build()));
 
             log.info("address_utxo_unspent built: {} unspent outputs as of slot {} in {} s. Catching up with the blocks "
                     + "synced meanwhile; it is switched on at a commit close to the tip.",
@@ -358,6 +379,18 @@ public class UnspentUtxoTable {
     /** A build can fail on a transient conflict (e.g. a serialization failure): try it again a few times. */
     private long buildWithRetry(long[] copied) {
         for (int attempt = 1; ; attempt++) {
+            //Each attempt takes a new snapshot, so a rollback seen by an earlier attempt does not make this one
+            //invalid. Reset under the table lock: a rollback holds it until it commits, so none is half done here,
+            //and any rollback from now on sets the flag again (it decides from the phase, which is BUILDING).
+            tableLock.lock();
+            try {
+                synchronized (this) {
+                    buildInvalidated = false;
+                    buildSnapshotSlot = null;
+                }
+            } finally {
+                tableLock.unlock();
+            }
             try {
                 return build(copied);
             } catch (org.springframework.dao.TransientDataAccessException e) {
@@ -508,12 +541,17 @@ public class UnspentUtxoTable {
         }
 
         tableLock.lock();
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCompletion(int status) {
-                tableLock.unlock();
-            }
-        });
+        try {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCompletion(int status) {
+                    tableLock.unlock();
+                }
+            });
+        } catch (RuntimeException e) {
+            tableLock.unlock(); //not registered, so nothing else would release it
+            throw e;
+        }
         work.run();
     }
 
@@ -593,7 +631,7 @@ public class UnspentUtxoTable {
      * <p>
      * If blocks were skipped (a gap), the table is missing their outputs and spends and cannot be trusted. Then
      * it is marked stale and switched off: queries go back to address_utxo and tx_input, the sync keeps running,
-     * and the table is built again the next time the sync starts (restart or reconnect).
+     * and the caller starts a new build in the background once that commit has committed.
      *
      * @return true if there is a gap and the table was switched off
      */

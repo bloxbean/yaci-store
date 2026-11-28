@@ -79,9 +79,11 @@ public class UtxoStorageImpl implements UtxoStorage {
     private final PlatformTransactionManager transactionManager;
     private final UnspentUtxoTable unspentUtxoTable;
 
-    //Outputs saved and keys spent since the last commit, settled in address_utxo_unspent at commit
+    //Outputs saved and keys spent since the last commit, settled in address_utxo_unspent at commit. Each entry's value
+    //is the object its save put there, so the save's rollback and the commit remove only that entry, not a later save
+    //of the same key (see removeIfSame).
     private final Map<UtxoKey, PendingOutput> pendingOutputs = new ConcurrentHashMap<>();
-    private final Set<UtxoKey> pendingSpentKeys = ConcurrentHashMap.newKeySet();
+    private final Map<UtxoKey, Object> pendingSpentKeys = new ConcurrentHashMap<>();
 
     private record PendingOutput(AddressUtxo addressUtxo, LocalDateTime savedAt) {
     }
@@ -283,13 +285,18 @@ public class UtxoStorageImpl implements UtxoStorage {
 
         if (isUnspentTableEnabled()) {
             List<PendingOutput> genesisOutputs = new ArrayList<>();
+            Map<UtxoKey, PendingOutput> added = new LinkedHashMap<>();
             for (AddressUtxo addressUtxo : addressUtxoList) {
                 PendingOutput output = new PendingOutput(addressUtxo, localDateTime);
-                if (isGenesisOutput(addressUtxo))
+                if (isGenesisOutput(addressUtxo)) {
                     genesisOutputs.add(output);
-                else //A later save of the same output (pointer-address resolution at commit) replaces it
-                    pendingOutputs.put(new UtxoKey(addressUtxo.getTxHash(), addressUtxo.getOutputIndex()), output);
+                } else { //A later save of the same output (pointer-address resolution at commit) replaces it
+                    UtxoKey key = new UtxoKey(addressUtxo.getTxHash(), addressUtxo.getOutputIndex());
+                    pendingOutputs.put(key, output);
+                    added.put(key, output);
+                }
             }
+            forgetIfRolledBack(() -> added.forEach((key, output) -> removeIfSame(pendingOutputs, key, output)));
             writeGenesisOutputs(genesisOutputs);
         }
 
@@ -380,8 +387,37 @@ public class UtxoStorageImpl implements UtxoStorage {
         dsl.batch(inserts).execute();
 
         if (isUnspentTableEnabled()) {
-            txInputs.forEach(txInput -> pendingSpentKeys.add(new UtxoKey(txInput.getTxHash(), txInput.getOutputIndex())));
+            Object token = new Object();
+            List<UtxoKey> keys = txInputs.stream()
+                    .map(txInput -> new UtxoKey(txInput.getTxHash(), txInput.getOutputIndex()))
+                    .toList();
+            keys.forEach(key -> pendingSpentKeys.put(key, token));
+            forgetIfRolledBack(() -> keys.forEach(key -> removeIfSame(pendingSpentKeys, key, token)));
         }
+    }
+
+    /**
+     * The pending outputs and spends must not outlive the transaction that saved them. If it rolls back (a listener of
+     * the same block throws, a sync session that was replaced is stopped mid-block, ...), address_utxo and tx_input lose
+     * those rows, and the next commit would write outputs that are not in address_utxo or delete outputs that are still
+     * unspent. A RollbackEvent clears them too, but not every such failure is followed by one before the next commit.
+     */
+    private static void forgetIfRolledBack(Runnable forget) {
+        if (!org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive())
+            return;
+        org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                new org.springframework.transaction.support.TransactionSynchronization() {
+                    @Override
+                    public void afterCompletion(int status) {
+                        if (status == STATUS_ROLLED_BACK)
+                            forget.run();
+                    }
+                });
+    }
+
+    /** Removes the entry only if it is still the one put there (by identity), not a later save of the same key. */
+    private static <V> void removeIfSame(Map<UtxoKey, V> map, UtxoKey key, V value) {
+        map.computeIfPresent(key, (k, current) -> current == value ? null : current);
     }
 
     @Override
@@ -389,8 +425,9 @@ public class UtxoStorageImpl implements UtxoStorage {
         try {
             if (isUnspentTableEnabled()) {
                 commitUnspentTable(commitEvent);
-            } else if (unspentUtxoTable != null) {
-                //A table built in the background is switched on at a commit, in the commit's transaction
+            } else if (unspentUtxoTable != null && unspentUtxoTable.isCatchingUp()) {
+                //A table built in the background is switched on at a commit, in the commit's transaction. Only
+                //checked while it is catching up, so a store without the table opens no transaction per commit.
                 commitTransactionTemplate.executeWithoutResult(status ->
                         unspentUtxoTable.switchOnAtCommit(commitEvent.getMetadata()));
             }
@@ -406,7 +443,8 @@ public class UtxoStorageImpl implements UtxoStorage {
      */
     private void commitUnspentTable(CommitEvent commitEvent) {
         Map<UtxoKey, PendingOutput> outputs = Map.copyOf(pendingOutputs);
-        Set<UtxoKey> spentKeys = Set.copyOf(pendingSpentKeys);
+        Map<UtxoKey, Object> spent = Map.copyOf(pendingSpentKeys);
+        Set<UtxoKey> spentKeys = spent.keySet();
 
         List<PendingOutput> unspent = outputs.entrySet().stream()
                 .filter(entry -> !spentKeys.contains(entry.getKey()))
@@ -433,6 +471,7 @@ public class UtxoStorageImpl implements UtxoStorage {
             List<UtxoKey> toDelete = spentKeys.stream()
                     .filter(utxoKey -> !outputs.containsKey(utxoKey)
                             || keptSlot == null
+                            || outputs.get(utxoKey).addressUtxo().getSlot() == null
                             || outputs.get(utxoKey).addressUtxo().getSlot() <= keptSlot)
                     .toList();
             deleted[0] = toDelete.size();
@@ -461,9 +500,13 @@ public class UtxoStorageImpl implements UtxoStorage {
                 unspentUtxoTable.keptTo(metadata);
         });
 
-        //Only after the transaction succeeded: on failure the batch stays for the next commit
-        pendingOutputs.keySet().removeAll(outputs.keySet());
-        pendingSpentKeys.removeAll(spentKeys);
+        //Parallel mode: the commit has its own transaction, so if it fails the batch stays for the next commit (its
+        //blocks are already committed). Sync mode: this joined the block's transaction, which can still roll back; then
+        //the block's address_utxo and tx_input rows go too, and the block is processed again from the cursor, so the
+        //batch is saved again. Only the entries settled here are removed: a save of the same key since the copy above
+        //stays for the next commit.
+        outputs.forEach((key, output) -> removeIfSame(pendingOutputs, key, output));
+        spent.forEach((key, token) -> removeIfSame(pendingSpentKeys, key, token));
 
         if (gap[0]) {
             //After the commit that marked the table stale: a build started earlier would conflict with that update

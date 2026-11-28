@@ -44,20 +44,27 @@
       columns:
         - epoch
 
+# Every read of this table filters on one owner column and orders by slot, so each index carries slot:
+# a page is read in slot order and the scan stops, without sorting all of an address's outputs or walking
+# the slot index. The same index serves a plain filter on the owner column.
 - table: address_utxo_unspent
   indexes:
-    - name: idx_address_utxo_unspent_owner_addr
+    - name: idx_address_utxo_unspent_owner_addr_slot
       columns:
         - owner_addr
-    - name: idx_address_utxo_unspent_owner_stake_addr
+        - slot
+    - name: idx_address_utxo_unspent_owner_stake_addr_slot
       columns:
         - owner_stake_addr
-    - name: idx_address_utxo_unspent_owner_paykey_hash
+        - slot
+    - name: idx_address_utxo_unspent_owner_paykey_hash_slot
       columns:
         - owner_payment_credential
-    - name: idx_address_utxo_unspent_owner_stakekey_hash
+        - slot
+    - name: idx_address_utxo_unspent_owner_stakekey_hash_slot
       columns:
-      - owner_stake_credential
+        - owner_stake_credential
+        - slot
 
 #assets store
 - table: assets

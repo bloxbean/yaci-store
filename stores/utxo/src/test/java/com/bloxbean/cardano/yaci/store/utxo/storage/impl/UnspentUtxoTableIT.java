@@ -402,7 +402,8 @@ class UnspentUtxoTableIT {
     }
 
     /** A store with its own table and cursor, so the shared beans stay in from-genesis mode with no cursor. */
-    private record Store(UnspentUtxoTable table, UtxoStorageImpl storage, TransactionTemplate tx, Long cursorSlot) {
+    private record Store(UnspentUtxoTable table, UtxoStorageImpl storage, TransactionTemplate tx, Long cursorSlot,
+                         CursorService cursorService) {
         void commit() {
             storage.handleCommit(new CommitEvent<>(EventMetadata.builder().build(), List.of()));
         }
@@ -438,7 +439,7 @@ class UnspentUtxoTableIT {
         UnspentUtxoTable table = new UnspentUtxoTable(storeProperties, dsl, transactionManager, storeStateService, cursorService);
         table.buildExecutor = Runnable::run;   //build inline, so the tests see its result at once
         return new Store(table, new UtxoStorageImpl(utxoRepository, txInputRepository, dsl, new UtxoCache(), transactionManager, table),
-                new TransactionTemplate(transactionManager), cursorSlot);
+                new TransactionTemplate(transactionManager), cursorSlot, cursorService);
     }
 
     private Store atTip() {
@@ -699,15 +700,59 @@ class UnspentUtxoTableIT {
     }
 
     @Test
-    void aRollbackBelowTheBuildsStartDuringTheBuildBuildsAgain() {
+    void outputsAndSpendsOfABlockTransactionThatRollsBackAreNotSettledAtTheNextCommit() {
+        Store store = fromGenesisAt(null);
+        store.storage().saveUnspent(List.of(output(hash(80), 0, 100)));
+        store.commit(100);
+        assertThat(unspentKeys()).containsExactly(hash(80) + "#0");
+
+        //A block whose transaction rolls back (a listener throws, a replaced session is stopped) with no RollbackEvent
+        store.tx().executeWithoutResult(status -> {
+            store.storage().saveUnspent(List.of(output(hash(81), 0, 110)));
+            store.storage().saveSpent(List.of(spend(hash(80), 0, 110)));
+            status.setRollbackOnly();
+        });
+        store.commit(120);
+
+        //hash(81) is not in address_utxo and hash(80)'s spend is not in tx_input: neither reaches the table
+        assertThat(unspentKeys()).containsExactly(hash(80) + "#0").isEqualTo(expectedKeys());
+    }
+
+    @Test
+    void aRollbackCommittedBeforeTheBuildStartsNeedsNoSecondBuild() {
         Store store = store(UtxoStoreProperties.builder()
                 .unspentTableEnabled(true).unspentTableBackfillAtTip(true).unspentTableReadEnabled(true).build(), 200L);
+        store.storage().saveUnspent(List.of(output(hash(77), 0, 100), output(hash(78), 0, 180)));
+        store.commit(200);
         List<Runnable> builds = new ArrayList<>();
         store.table().buildExecutor = builds::add;
         store.table().handlePreBlockSync(new PreBlockSyncEvent(new Point(200, "bh200")));
         assertThat(store.table().phase()).isEqualTo(UnspentUtxoTable.Phase.BUILDING);
 
-        store.rollbackTo(150);   //before the build knew its starting point
+        store.rollbackTo(150);   //committed before the build's snapshot, so the build sees the store after it
+        builds.getFirst().run();
+
+        assertThat(builds).hasSize(1);
+        assertThat(store.table().phase()).isEqualTo(UnspentUtxoTable.Phase.CATCHING_UP);
+        assertThat(unspentKeys()).containsExactly(hash(77) + "#0").isEqualTo(expectedKeys());
+    }
+
+    @Test
+    void aRollbackDuringTheBuildBuildsAgain() {
+        Store store = store(UtxoStoreProperties.builder()
+                .unspentTableEnabled(true).unspentTableBackfillAtTip(true).unspentTableReadEnabled(true).build(), 200L);
+        List<Runnable> builds = new ArrayList<>();
+        store.table().buildExecutor = builds::add;
+        store.table().handlePreBlockSync(new PreBlockSyncEvent(new Point(200, "bh200")));
+
+        //The build reads the cursor inside its transaction. A rollback that is applied then (its transaction is not
+        //committed yet, so the build's snapshot may still hold the rolled-back blocks) must make it build again.
+        Cursor cursor = Cursor.builder().slot(200L).block(20L).blockHash("bh200").build();
+        when(store.cursorService().getCursor()).thenAnswer(invocation -> {
+            if (store.table().phase() == UnspentUtxoTable.Phase.BUILDING && builds.size() == 1)
+                store.table().rolledBackTo(150, false);
+            return Optional.of(cursor);
+        });
         builds.getFirst().run();
 
         assertThat(builds).hasSize(2);   //thrown away and started again

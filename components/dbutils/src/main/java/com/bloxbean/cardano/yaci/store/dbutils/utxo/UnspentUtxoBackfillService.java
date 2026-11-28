@@ -16,8 +16,8 @@ import java.util.List;
  *
  * <p>The store must be stopped for the whole run: the table is then exact at the store's cursor, and
  * the store continues from that point once it starts with {@code store.utxo.unspent-table-enabled=true}.
- * {@link #cursorSlot()} lets the caller check that the cursor did not move while the build ran, and
- * {@link #markCurrentAtCursor()} then records the table as current in store_state, which the store
+ * {@link #cursorSlot(long)} lets the caller check that the cursor did not move while the build ran, and
+ * {@link #markCurrentAtCursor(long)} then records the table as current in store_state, which the store
  * checks at startup. Until then the table's state row is absent, so an interrupted run is never used.
  *
  * <p>The unspent outputs are found one {@code output_index} at a time, in {@link #SLICE_BOUNDS
@@ -74,17 +74,24 @@ public class UnspentUtxoBackfillService {
         this.jdbc = jdbc;
     }
 
-    /** The highest slot in cursor_, or null when the store has not synced a block. */
-    public Long cursorSlot() {
-        return jdbc.queryForObject("select max(slot) from cursor_", Long.class);
+    /**
+     * The highest slot in cursor_ for this event publisher (cursor_ can hold the cursors of several stores, as
+     * UnspentUtxoTable in stores/utxo reads it too), or null when the store has not synced a block.
+     */
+    public Long cursorSlot(long eventPublisherId) {
+        return jdbc.queryForObject("select max(slot) from cursor_ where id = ?", Long.class, eventPublisherId);
     }
 
-    /** Records the table as current at the store's cursor, once a rebuild has finished with the store stopped. */
-    public void markCurrentAtCursor() {
+    /**
+     * Records the table as current at the store's cursor, once a rebuild has finished with the store stopped.
+     *
+     * @return false if the store has no cursor, so no state was recorded (the store then builds the table again)
+     */
+    public boolean markCurrentAtCursor(long eventPublisherId) {
         jdbc.update("delete from store_state where state_id = ?", STATE_ID);
-        jdbc.update("insert into store_state (state_id, status, slot, block, block_hash, update_datetime) "
+        return jdbc.update("insert into store_state (state_id, status, slot, block, block_hash, update_datetime) "
                 + "select ?, 'CURRENT', slot, block_number, block_hash, current_timestamp from cursor_ "
-                + "order by slot desc limit 1", STATE_ID);
+                + "where id = ? order by slot desc limit 1", STATE_ID, eventPublisherId) > 0;
     }
 
     /** The highest output_index in address_utxo, or -1 for an empty store. */
