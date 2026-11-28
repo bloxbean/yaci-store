@@ -39,7 +39,8 @@ public class TxLocalSubmitController {
             log.debug(String.valueOf(txResult));
 
         if (txResult.isAccepted()) {
-            return ResponseEntity.accepted()
+            //200 OK to align with Blockfrost
+            return ResponseEntity.ok()
                     .contentType(MediaType.APPLICATION_JSON)
                     .body("\"" + txResult.getTxHash() + "\"");
         } else

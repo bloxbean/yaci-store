@@ -43,7 +43,8 @@ public class OgmiosTxSubmissionController {
         try {
             Result<String> result = ogmiosService.submitTx(cborTx);
             if (result.isSuccessful()) {
-                return ResponseEntity.accepted()
+                //200 OK to align with Blockfrost
+                return ResponseEntity.ok()
                         .contentType(MediaType.APPLICATION_JSON)
                         .body("\"" + result.getValue() + "\"");
             } else {
