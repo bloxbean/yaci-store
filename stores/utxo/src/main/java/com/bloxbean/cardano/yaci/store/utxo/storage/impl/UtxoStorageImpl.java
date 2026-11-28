@@ -4,6 +4,7 @@ import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.TxInput;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
 import com.bloxbean.cardano.yaci.store.common.util.JsonUtil;
+import com.bloxbean.cardano.yaci.store.common.util.ListUtil;
 import com.bloxbean.cardano.yaci.store.events.internal.CommitEvent;
 import com.bloxbean.cardano.yaci.store.plugin.aspect.Plugin;
 import com.bloxbean.cardano.yaci.store.utxo.storage.UtxoStorage;
@@ -15,6 +16,8 @@ import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.UtxoReposito
 import lombok.extern.slf4j.Slf4j;
 import org.jooq.DSLContext;
 import org.jooq.JSON;
+import org.jooq.Record2;
+import org.jooq.Row2;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -28,11 +31,14 @@ import java.util.Optional;
 
 import static com.bloxbean.cardano.yaci.store.utxo.jooq.Tables.*;
 import static org.jooq.impl.DSL.row;
+import static org.jooq.impl.DSL.selectFrom;
+import static org.jooq.impl.DSL.values;
 
 @Slf4j
 public class UtxoStorageImpl implements UtxoStorage {
     private static final String PLUGIN_UNSPENT = "utxo.unspent.save";
     private static final String PLUGIN_SPENT = "utxo.spent.save";
+    private static final int PRUNING_DELETE_CHUNK_SIZE = 1000;
 
     private final UtxoRepository utxoRepository;
     private final TxInputRepository spentOutputRepository;
@@ -126,27 +132,39 @@ public class UtxoStorageImpl implements UtxoStorage {
 
         do {
             count = transactionTemplate.execute(status ->  {
-                var spentSubQuery = dsl.select(TX_INPUT.TX_HASH, TX_INPUT.OUTPUT_INDEX)
+                // Fetch the keys once and delete both tables by the same keys. spent_at_block is not unique,
+                // so two separate "order by spent_at_block limit N" selections can pick different rows (#1379).
+                var spentKeys = dsl.select(TX_INPUT.OUTPUT_INDEX, TX_INPUT.TX_HASH)
                         .from(TX_INPUT)
                         .where(TX_INPUT.SPENT_AT_BLOCK.lt(block))
                         .orderBy(TX_INPUT.SPENT_AT_BLOCK.asc())
-                        .limit(limit);
+                        .limit(limit)
+                        .fetch();
 
-                int addressUtxoCount = dsl.deleteFrom(ADDRESS_UTXO)
-                        .where(row(ADDRESS_UTXO.TX_HASH, ADDRESS_UTXO.OUTPUT_INDEX)
-                                .in(spentSubQuery))
-                        .execute();
+                if (spentKeys.isEmpty())
+                    return 0;
 
-                var txInputQuery = dsl.deleteFrom(TX_INPUT)
-                        .where(TX_INPUT.SPENT_AT_BLOCK.lt(block))
-                        .orderBy(TX_INPUT.SPENT_AT_BLOCK.asc())
-                        .limit(limit);
+                int addressUtxoCount = 0;
+                int txInputCount = 0;
+                // Each key is 2 bind values; delete in chunks to stay under the JDBC/DB bind limits.
+                for (var keys : ListUtil.partition(spentKeys.map(Record2::valuesRow), PRUNING_DELETE_CHUNK_SIZE)) {
+                    // IN (SELECT ... FROM (VALUES ...)) instead of a row-value IN list: PostgreSQL expands the
+                    // latter into a long OR chain, misestimates it and spends seconds in JIT on each delete.
+                    var keyTable = selectFrom(values(keys.toArray(new Row2[0])).as("k", "output_index", "tx_hash"));
 
-                int txInputCount = txInputQuery.execute();
+                    addressUtxoCount += dsl.deleteFrom(ADDRESS_UTXO)
+                            .where(row(ADDRESS_UTXO.OUTPUT_INDEX, ADDRESS_UTXO.TX_HASH)
+                                    .in(keyTable))
+                            .execute();
+
+                    txInputCount += dsl.deleteFrom(TX_INPUT)
+                            .where(row(TX_INPUT.OUTPUT_INDEX, TX_INPUT.TX_HASH)
+                                    .in(keyTable))
+                            .execute();
+                }
 
                 if (log.isDebugEnabled())
-                    log.debug("Deleted {} address_utxo and {} utxo_amount records and tx_inputs: {}",
-                            addressUtxoCount, txInputCount);
+                    log.debug("Deleted {} address_utxo and {} tx_input records", addressUtxoCount, txInputCount);
 
                 int delCount  = addressUtxoCount + txInputCount;
                 return delCount;
