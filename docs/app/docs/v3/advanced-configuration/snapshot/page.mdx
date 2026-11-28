@@ -117,10 +117,13 @@ same file under `docker/config/`):
 - turns every `*pruning-enabled` setting off, and `store.account.history-cleanup-enabled`;
 - saves the `address` table (`store.utxo.save-address=true`);
 - saves whole signed transaction CBOR (`store.transaction.save-full-tx-cbor=true`), which the
-  Blockfrost `/txs/{hash}` size and `/txs/{hash}/cbor` need.
+  Blockfrost `/txs/{hash}` size and `/txs/{hash}/cbor` need;
+- turns on the assets extension (`store.assets.ext.enabled=true`), so CIP-68 metadata and CIP-113
+  registry nodes are in the snapshot, with CIP-26 registry sync off
+  (`store.assets.ext.cip26.enabled=false`), since CIP-26 data is not part of a snapshot.
 
-Choose it before the first sync from genesis: the address table and the CBOR are complete only when
-saved from the start. Because `snapshot-settings` is the last profile in the group, these settings
+Choose it before the first sync from genesis: the address table, the CBOR and the assets extension's
+tables are complete only when saved from the start. Because `snapshot-settings` is the last profile in the group, these settings
 win over `config/application.properties` and over the other profiles' files, so a pruning or CBOR
 setting in any of them does not apply while the profile is active. Settings of your own go in a
 file for a profile listed after it (`SPRING_PROFILES_ACTIVE=snapshot,mine`), in an environment
@@ -145,8 +148,7 @@ registry nodes (`cip113_registry_node`) are exported and restored whenever the s
 extension; the table is empty when CIP-113 is off or no registry is known for the network. The
 target must follow the same registries as the source (`store.assets.ext.cip113.registry-nft-policy-ids`,
 or the ones bundled for the network): the snapshot carries only the nodes of the registries the
-source followed. CIP-26
-registry data is not part of a snapshot; when CIP-26 sync is on, the restored instance runs a full
+source followed. CIP-26 registry data is not part of a snapshot; when CIP-26 sync is on, the restored instance runs a full
 registry sync on start-up.
 
 The source must never prune. Every snapshot packages the full history, and a pruning target picks

@@ -58,6 +58,11 @@ class SnapshotProfileTest {
             }
             assertThat(env.getProperty("store.utxo.save-address")).isEqualTo("true");
             assertThat(env.getProperty("store.transaction.save-full-tx-cbor")).isEqualTo("true");
+            // assets extension: CIP-68 and CIP-113 in the snapshot, CIP-26 registry sync off
+            assertThat(env.getProperty("store.assets.ext.enabled")).isEqualTo("true");
+            assertThat(env.getProperty("store.assets.ext.cip26.enabled")).isEqualTo("false");
+            assertThat(env.getProperty("store.assets.ext.cip68.enabled", "true")).isEqualTo("true");
+            assertThat(env.getProperty("store.assets.ext.cip113.enabled", "true")).isEqualTo("true");
         }
     }
 
