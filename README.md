@@ -48,7 +48,7 @@
 
 ## Quick Start
 
-**Pre-requisites:** Java 21
+**Pre-requisites:** Java 21 (21.0.5 or later; earlier 21.0.x updates have virtual thread bugs that can hang or crash the JVM) or Java 24
 
 ### Option 1: Download Release
 

@@ -21,6 +21,7 @@ import com.bloxbean.cardano.yaci.store.common.aspect.EnableIf;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.common.domain.UtxoKey;
+import com.bloxbean.cardano.yaci.store.common.executor.InFlightTransactions;
 import com.bloxbean.cardano.yaci.store.common.executor.ParallelExecutor;
 import com.bloxbean.cardano.yaci.store.common.util.PointerAddress;
 import com.bloxbean.cardano.yaci.store.common.util.Tuple;
@@ -43,11 +44,12 @@ import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import javax.sql.DataSource;
 import java.math.BigInteger;
+import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutionException;
 
 import static com.bloxbean.cardano.yaci.core.util.Constants.LOVELACE;
 import static com.bloxbean.cardano.yaci.store.account.AccountStoreConfiguration.STORE_ACCOUNT_ENABLED;
@@ -71,6 +73,7 @@ public class AccountBalanceProcessor {
     private final PlatformTransactionManager transactionManager;
     private final MetricCollectorService metricCollectorService;
     private final EraService eraService;
+    private final DataSource dataSource;
 
     private volatile Integer firstConwayEpochCache;
 
@@ -94,7 +97,8 @@ public class AccountBalanceProcessor {
                                    ParallelExecutor parallelExecutor,
                                    PlatformTransactionManager transactionManager,
                                    MetricCollectorService metricCollectorService,
-                                   EraService eraService) {
+                                   EraService eraService,
+                                   DataSource dataSource) {
         this.accountBalanceStorage = accountBalanceStorage;
         this.accountBalanceCleanupHelper = accountBalanceCleanupHelper;
         this.accountStoreProperties = accountStoreProperties;
@@ -107,6 +111,7 @@ public class AccountBalanceProcessor {
         this.transactionManager = transactionManager;
         this.metricCollectorService = metricCollectorService;
         this.eraService = eraService;
+        this.dataSource = dataSource;
 
         init();
     }
@@ -250,6 +255,9 @@ public class AccountBalanceProcessor {
 
             //Create AddressBalance, StakeAddressBalance and store
             long t1 = System.currentTimeMillis();
+            // The saves run on other threads, each in its own transaction; a save that never returns must not hold
+            // this sync thread, and the row locks of its open transaction, forever (see awaitAll below)
+            InFlightTransactions balanceSaves = new InFlightTransactions(dataSource);
             CompletableFuture<Void> addressBalFuture = null;
             if (accountStoreProperties.isAddressBalanceEnabled()) {
                 addressBalFuture = CompletableFuture.supplyAsync(() -> getAddressBalances(firstBlockInBatchMetadata, addressAmtMap))
@@ -258,6 +266,7 @@ public class AccountBalanceProcessor {
                             var topAddressBalances = tuple._2;
 
                             transactionTemplate.execute(status -> {
+                                balanceSaves.trackCurrentTransaction();
                                 //Save address balances (AddressBalance)
                                 long t2 = System.currentTimeMillis();
                                 accountBalanceStorage.saveAddressBalances(addressBalances);
@@ -297,6 +306,7 @@ public class AccountBalanceProcessor {
                             var topStakeAddressBalances = tuple._2;
 
                             transactionTemplate.execute(status -> {
+                                balanceSaves.trackCurrentTransaction();
                                 //Save stake address balances (StakeAddressBalance)
                                 long t2 = System.currentTimeMillis();
                                 accountBalanceStorage.saveStakeAddressBalances(stakeAddressBalances);
@@ -328,16 +338,9 @@ public class AccountBalanceProcessor {
                 stakeAddrBalFuture = CompletableFuture.completedFuture(null);
             }
 
-            CompletableFuture.allOf(addressBalFuture, stakeAddrBalFuture).join();
-
-            try {
-                addressBalFuture.get();
-                stakeAddrBalFuture.get();
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
-            } catch (ExecutionException e) {
-                throw new RuntimeException(e);
-            }
+            balanceSaves.awaitAll(Duration.ofSeconds(accountStoreProperties.getBalanceSaveTimeoutSeconds()),
+                    "Account balance save up to block " + event.getMetadata().getBlock(),
+                    addressBalFuture, stakeAddrBalFuture);
 
             log.info("### Total balance processing and saving time {} ###\n", (System.currentTimeMillis() - t1));
             accountConfigService.upateConfig(ConfigIds.LAST_ACCOUNT_BALANCE_PROCESSED_BLOCK, null, event.getMetadata().getBlock(),
