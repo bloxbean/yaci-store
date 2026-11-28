@@ -13,7 +13,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.stream.Collectors;
 
 import static com.bloxbean.cardano.yaci.store.script.jooq.Tables.TRANSACTION_SCRIPTS;
 
@@ -29,20 +28,21 @@ public class TxScriptStorageImpl implements TxScriptStorage {
     @Plugin(key = PLUGIN_SCRIPT_TX_SCRIPT_SAVE)
     @Transactional //Called from parallel workers without the caller's transaction, keep the batch all or nothing
     public void saveAll(List<TxScript> txScripts) {
-        List<TxScriptEntity> txScriptEntities = txScripts.stream().map(scriptMapper::toTxScriptEntity).collect(Collectors.toList());
-
-        //One row per redeemer, so id from (tx_hash, purpose, redeemer_index) and a block processed again overwrites its rows
+        //One row per redeemer, so id from (tx_hash, purpose, redeemer_index, redeemer_position) and a block processed again overwrites its rows.
+        //A pre-Conway redeemer list can repeat (purpose, redeemer_index), the position keeps those rows apart
         var idField = UUIDUtil.idField(dsl, TRANSACTION_SCRIPTS.ID);
         LocalDateTime localDateTime = LocalDateTime.now();
-        var inserts = txScriptEntities.stream()
-                .map(entity -> {
+        var inserts = txScripts.stream()
+                .map(txScript -> {
+                    TxScriptEntity entity = scriptMapper.toTxScriptEntity(txScript);
                     String purpose = entity.getPurpose() != null ? entity.getPurpose().name() : null;
                     Short scriptType = entity.getType() != null ? (short) entity.getType().ordinal() : null;
                     Long unitMem = entity.getUnitMem() != null ? entity.getUnitMem().longValue() : null;
                     Long unitSteps = entity.getUnitSteps() != null ? entity.getUnitSteps().longValue() : null;
 
                     return dsl.insertInto(TRANSACTION_SCRIPTS)
-                            .set(idField, UUIDUtil.nameUUID(entity.getTxHash(), purpose, String.valueOf(entity.getRedeemerIndex())))
+                            .set(idField, UUIDUtil.nameUUID(entity.getTxHash(), purpose, String.valueOf(entity.getRedeemerIndex()),
+                                    String.valueOf(txScript.getRedeemerPosition())))
                             .set(TRANSACTION_SCRIPTS.SLOT, entity.getSlot())
                             .set(TRANSACTION_SCRIPTS.BLOCK_HASH, entity.getBlockHash())
                             .set(TRANSACTION_SCRIPTS.TX_HASH, entity.getTxHash())

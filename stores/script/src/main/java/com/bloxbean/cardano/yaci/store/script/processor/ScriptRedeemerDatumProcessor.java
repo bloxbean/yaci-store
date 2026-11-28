@@ -32,6 +32,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static com.bloxbean.cardano.yaci.store.common.util.ListUtil.partition;
 import static com.bloxbean.cardano.yaci.store.script.ScriptStoreConfiguration.STORE_SCRIPT_ENABLED;
@@ -141,8 +142,10 @@ public class ScriptRedeemerDatumProcessor {
         Map<String, String> datumHashToDatumMap = findWitnessDatum(transaction);
 
         //Convert to TxScript objects
-        List<TxScript> txScripts = scriptContexts.stream()
-                .map(scriptContext -> {
+        //One context per redeemer, in witness order. The position is part of the row id, since (purpose, redeemer_index) can repeat
+        List<TxScript> txScripts = IntStream.range(0, scriptContexts.size())
+                .mapToObj(position -> {
+                    ScriptContext scriptContext = scriptContexts.get(position);
                     //Try to set datum
                     if (StringUtil.isEmpty(scriptContext.getDatum())) {
                         String datumHash = scriptContext.getDatumHash();
@@ -174,6 +177,7 @@ public class ScriptRedeemerDatumProcessor {
                             .unitSteps(redeemer.getExUnits() != null? redeemer.getExUnits().getSteps(): null)
                             .purpose(redeemer.getTag())
                             .redeemerIndex(redeemer.getIndex())
+                            .redeemerPosition(position)
                             .redeemerData(redeemer.getData() != null? redeemer.getData().getCbor(): null)
                             .redeemerDatahash(redeemer.getData() != null? redeemer.getData().getHash(): null)
                             .build();

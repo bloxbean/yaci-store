@@ -46,10 +46,10 @@ class TxScriptStorageImplTest {
     @Test
     void saveAll_sameRowsTwice_keepsOneRowPerRedeemer() {
         //Same script for two spend redeemers and a mint redeemer with the same index
-        txScriptStorage.saveAll(List.of(txScript(RedeemerTag.Spend, 0, 100), txScript(RedeemerTag.Spend, 1, 100),
-                txScript(RedeemerTag.Mint, 0, 100)));
-        txScriptStorage.saveAll(List.of(txScript(RedeemerTag.Spend, 0, 200), txScript(RedeemerTag.Spend, 1, 200),
-                txScript(RedeemerTag.Mint, 0, 200)));
+        txScriptStorage.saveAll(List.of(txScript(RedeemerTag.Spend, 0, 0, 100), txScript(RedeemerTag.Spend, 1, 1, 100),
+                txScript(RedeemerTag.Mint, 0, 2, 100)));
+        txScriptStorage.saveAll(List.of(txScript(RedeemerTag.Spend, 0, 0, 200), txScript(RedeemerTag.Spend, 1, 1, 200),
+                txScript(RedeemerTag.Mint, 0, 2, 200)));
 
         List<TxScriptEntity> rows = repository.findAll();
         assertThat(rows).hasSize(3)
@@ -63,8 +63,24 @@ class TxScriptStorageImplTest {
                         tuple(RedeemerTag.Spend, 1),
                         tuple(RedeemerTag.Mint, 0));
         assertThat(rows).extracting(TxScriptEntity::getId)
-                .containsExactlyInAnyOrder(UUIDUtil.nameUUID(TX_HASH, "Spend", "0"), UUIDUtil.nameUUID(TX_HASH, "Spend", "1"),
-                        UUIDUtil.nameUUID(TX_HASH, "Mint", "0"));
+                .containsExactlyInAnyOrder(UUIDUtil.nameUUID(TX_HASH, "Spend", "0", "0"), UUIDUtil.nameUUID(TX_HASH, "Spend", "1", "1"),
+                        UUIDUtil.nameUUID(TX_HASH, "Mint", "0", "2"));
+    }
+
+    @Test
+    void saveAll_repeatedPurposeAndIndex_keepsOneRowPerPosition() {
+        //Pre-Conway redeemer list with three Mint redeemers at index 0, like preprod tx 008893de... in block 1705972
+        txScriptStorage.saveAll(List.of(txScript(RedeemerTag.Mint, 0, 0, 100), txScript(RedeemerTag.Mint, 0, 1, 101),
+                txScript(RedeemerTag.Mint, 0, 2, 102)));
+        txScriptStorage.saveAll(List.of(txScript(RedeemerTag.Mint, 0, 0, 100), txScript(RedeemerTag.Mint, 0, 1, 101),
+                txScript(RedeemerTag.Mint, 0, 2, 102)));
+
+        List<TxScriptEntity> rows = repository.findAll();
+        assertThat(rows).extracting(TxScriptEntity::getUnitMem)
+                .containsExactlyInAnyOrder(BigInteger.valueOf(100), BigInteger.valueOf(101), BigInteger.valueOf(102));
+        assertThat(rows).extracting(TxScriptEntity::getId)
+                .containsExactlyInAnyOrder(UUIDUtil.nameUUID(TX_HASH, "Mint", "0", "0"), UUIDUtil.nameUUID(TX_HASH, "Mint", "0", "1"),
+                        UUIDUtil.nameUUID(TX_HASH, "Mint", "0", "2"));
     }
 
     @Test
@@ -74,17 +90,17 @@ class TxScriptStorageImplTest {
         assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
         try {
             //Second row fails, script_hash is longer than the column
-            TxScript badRow = txScript(RedeemerTag.Spend, 1, 100);
+            TxScript badRow = txScript(RedeemerTag.Spend, 1, 1, 100);
             badRow.setScriptHash(SCRIPT_HASH + SCRIPT_HASH);
 
-            assertThatThrownBy(() -> txScriptStorage.saveAll(List.of(txScript(RedeemerTag.Spend, 0, 100), badRow)));
+            assertThatThrownBy(() -> txScriptStorage.saveAll(List.of(txScript(RedeemerTag.Spend, 0, 0, 100), badRow)));
             assertThat(repository.count()).isZero();
         } finally {
             repository.deleteAll();
         }
     }
 
-    private TxScript txScript(RedeemerTag purpose, int redeemerIndex, long unitMem) {
+    private TxScript txScript(RedeemerTag purpose, int redeemerIndex, int redeemerPosition, long unitMem) {
         return TxScript.builder()
                 .txHash(TX_HASH)
                 .scriptHash(SCRIPT_HASH)
@@ -96,6 +112,7 @@ class TxScriptStorageImplTest {
                 .unitSteps(BigInteger.valueOf(unitMem * 1000))
                 .purpose(purpose)
                 .redeemerIndex(redeemerIndex)
+                .redeemerPosition(redeemerPosition)
                 .blockNumber(179428L)
                 .blockTime(1666390776L)
                 .build();
