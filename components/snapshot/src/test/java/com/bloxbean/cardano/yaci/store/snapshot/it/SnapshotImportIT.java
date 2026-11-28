@@ -326,6 +326,25 @@ class SnapshotImportIT {
                         && b.contains("target runs with store.transaction.save-full-tx-cbor=true"));
     }
 
+    /** A source without store.utxo.save-address exports no address table; only a target that saves it refuses. */
+    @Test
+    void aTargetThatSavesAddressesNeedsASnapshotThatCarriesThem() throws Exception {
+        SnapshotFixture.Built built = fixture();
+        SnapshotManifest withoutAddress = replaceTables(built.manifest(), built.manifest().tables().stream()
+                .filter(t -> !t.specId().equals("address")).toList());
+        Path path = built.archiveDir().resolve("no-address.manifest.json");
+        new ManifestCodec().writeAtomically(withoutAddress, path);
+
+        var saving = registry.withoutDisabledOptionalTables("store.utxo.save-address"::equals);
+        assertThat(new SnapshotImporter(saving).preflight(options(path, 1)).blockers())
+                .anySatisfy(b -> assertThat(b).contains("does not carry address")
+                        .contains("store.utxo.save-address"));
+
+        var notSaving = registry.withoutDisabledOptionalTables(setting -> false);
+        assertThat(new SnapshotImporter(notSaving).preflight(options(path, 1)).blockers())
+                .noneMatch(b -> b.contains("does not carry address"));
+    }
+
     @Test
     void aTrustedSignatureReplacesAllowUnsignedAndABadOneIsNeverAccepted() throws Exception {
         var built = fixture();
@@ -366,7 +385,7 @@ class SnapshotImportIT {
         assertThat(pre.blockers()).isEmpty();
         var selection = importer.selection(pre.archive(), pre.manifest());
         assertThat(selection.parts()).hasSizeLessThan(built.manifest().parts().size());
-        assertThat(selection.files()).allMatch(f -> f.startsWith("main/block/") || f.startsWith("main/rollback/"));
+        assertThat(selection.files()).allMatch(f -> f.startsWith("main/block/"));
         assertThat(pre.warnings()).anyMatch(w -> w.startsWith("Reading " + selection.parts().size() + " of "));
 
         List<String> messages = new java.util.concurrent.CopyOnWriteArrayList<>();
@@ -560,7 +579,6 @@ class SnapshotImportIT {
         }
 
         assertThat(report.handlerResults()).hasSize(4);
-        assertThat(report.sequencesReset()).containsKey("rollback_id_seq");
     }
 
     @Test
@@ -604,20 +622,6 @@ class SnapshotImportIT {
         assertThat(banners.get(6)).startsWith("Control state");
         assertThat(banners.get(7)).startsWith("Schema and load checks");
         assertThat(banners.get(8)).startsWith("Semantic checks");
-    }
-
-    @Test
-    void sequencesAreResetSoTheNextInsertDoesNotCollide() throws Exception {
-        SnapshotFixture.Built built = fixture();
-        new SnapshotImporter(registry).importSnapshot(options(built.manifestPath(), 1), null);
-
-        try (Connection conn = PostgresSupport.connect(); Statement st = conn.createStatement()) {
-            long maxId = scalarLong(conn, "SELECT max(id) FROM " + qt("rollback"));
-            try (ResultSet rs = st.executeQuery("SELECT nextval('" + schema + ".rollback_id_seq')")) {
-                rs.next();
-                assertThat(rs.getLong(1)).isGreaterThan(maxId);
-            }
-        }
     }
 
     @Test

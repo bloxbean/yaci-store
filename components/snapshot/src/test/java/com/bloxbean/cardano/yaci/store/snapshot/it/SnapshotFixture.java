@@ -42,7 +42,7 @@ final class SnapshotFixture {
 
     record Built(Path archiveDir, Path manifestPath, SnapshotManifest manifest) {}
 
-    static final List<String> ALL_TABLES = List.of("block", "epoch", "address-utxo", "adapot", "rollback",
+    static final List<String> ALL_TABLES = List.of("block", "epoch", "address-utxo", "adapot",
             "epoch-stake", "transaction-cbor");
 
     /** {@code epoch_stake} rows per epoch partition; the partitions are epochs 0 to {@link #POINT_EPOCH}. */
@@ -77,7 +77,6 @@ final class SnapshotFixture {
             writeEpochs(st, dataDir);
             writeAddressUtxo(st, dataDir);
             writeAdaPot(st, dataDir);
-            writeRollback(st, dataDir);
             writeEpochStake(st, dataDir);
             writeTransactionCbor(st, dataDir);
         }
@@ -196,10 +195,6 @@ final class SnapshotFixture {
                     "pool_id", "varchar", "delegation_epoch", "int32", "active_epoch", "int32");
             case "transaction_cbor" -> ordered("tx_hash", "varchar", "cbor_data", "blob", "cbor_size", "int32",
                     "slot", "int64", "block", "int64", "epoch", "int32", "block_time", "timestamptz", "date", "date");
-            case "rollback" -> ordered("id", "int64", "rollback_to_block_hash", "varchar",
-                    "rollback_to_slot", "int64", "current_block_hash", "varchar",
-                    "current_slot", "int64", "current_block", "int64",
-                    "block_time", "timestamptz", "date", "date");
             default -> Map.of();
         };
     }
@@ -439,21 +434,6 @@ final class SnapshotFixture {
                     + " FROM range(" + from + ", " + to + ") t(n))"
                     + " TO '" + target + "' (FORMAT PARQUET)");
         }
-    }
-
-    private static void writeRollback(Statement st, Path dataDir) throws SQLException, IOException {
-        String target = parquetTarget(dataDir.resolve("main/rollback/date=2026-01-01"));
-        st.execute("COPY (SELECT"
-                + " CAST(n AS BIGINT) AS id,"
-                + " printf('%064x', n) AS rollback_to_block_hash,"
-                + " CAST(n * 20 AS BIGINT) AS rollback_to_slot,"
-                + " printf('%064x', n + 1) AS current_block_hash,"
-                + " CAST(n * 20 + 20 AS BIGINT) AS current_slot,"
-                + " CAST(n AS BIGINT) AS current_block,"
-                + " to_timestamp(1700000000 + n * 20) AS block_time,"
-                + " CAST(to_timestamp(1700000000 + n * 20) AS DATE) AS date"
-                + " FROM range(1, 6) t(n))"
-                + " TO '" + target + "' (FORMAT PARQUET)");
     }
 
     private static List<SnapshotManifest.FileEntry> collect(Path dataDir, String relativeDir)

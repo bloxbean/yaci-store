@@ -32,7 +32,9 @@ A ready-made profile lives at `config/application-blockfrost.properties` (and th
 SPRING_PROFILES_ACTIVE=ledger-state,blockfrost
 ```
 
-The profile sets `store.extensions.blockfrost.enabled=true` and overrides `blockfrost.apiPrefix=/api/v1/blockfrost` so the Blockfrost-compatible endpoints don't collide with yaci-store's own `/api/v1/...` controllers.
+The profile sets `store.extensions.blockfrost.enabled=true`, enables `store.epoch-aggr` for the `/epochs` endpoints, and overrides `blockfrost.apiPrefix=/api/v1/blockfrost` so the Blockfrost-compatible endpoints don't collide with yaci-store's own `/api/v1/...` controllers.
+
+For a new node that should serve the full Blockfrost surface, including address lists and transaction CBOR, the `snapshot` profile activates `ledger-state`, `analytics` and `blockfrost` together and also turns on `store.utxo.save-address` and `store.transaction.save-full-tx-cbor`. See [Snapshots](/docs/v3/advanced-configuration/snapshot#producing-a-snapshot).
 
 ## API base path
 

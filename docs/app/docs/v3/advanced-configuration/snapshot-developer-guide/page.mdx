@@ -142,7 +142,7 @@ fails the build's tests rather than an import hours later.
 |---|---|---|
 | `IMPORT` | An analytics exporter writes the table's rows. | `block`, `address_utxo`, `reward`, `adapot` |
 | `HANDLER` | The table is control state that is not a projection of exported rows; a small Java handler rebuilds it at the snapshot point. | `cursor_`, `era`, `account_config`, `adapot_jobs` |
-| `EMPTY_EXPECTED` | The table is always empty for a supported source, or is filled from outside the chain after start-up. | `cip26_metadata`, `error`, `analytics_export_state` |
+| `EMPTY_EXPECTED` | The table is always empty for a supported source, is filled from outside the chain after start-up, or records what one node went through. | `cip26_metadata`, `error`, `analytics_export_state`, `rollback` |
 | `RUNTIME_REBUILT` | The application refills it by itself after the restore (local state, caches). | `local_drep_dist`, `local_epoch_param`, the other `local_*` governance tables |
 | `NOT_RESTORED` | There is no source for it. This is a declared limitation, shown to operators. | `invalid_token`, `epoch_nonce`, `ptr_address`, `address_balance` |
 

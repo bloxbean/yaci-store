@@ -69,7 +69,7 @@ The export state (`analytics_export_state`) and the DuckLake catalog are stored 
 
 At startup the store compares the two (`ducklake.reconcile-state-on-startup`, default on). COMPLETED partitions with rows in the state but none in the catalog are reset to FAILED and exported again by the scheduler; this is logged at ERROR level per table. All catalog reads happen before any state is changed, so a catalog that cannot be reached changes nothing. Partitions with fewer rows in the catalog than in the state are only reported.
 
-The same startup step also resets COMPLETED partitions that were stored with no rows although the table always has rows for a final partition: `adapot`, `epoch_param` after Byron, and `epoch` for an epoch with blocks. Earlier versions stored them too early (for example every `epoch` partition while epoch-aggr was off), and they are exported again now. The `rollback` table cannot be checked this way, because an empty day is normal for it. Earlier versions left out most real rollbacks, so after upgrading, reset its days with `DELETE /api/v1/analytics/admin/state/rollback/range?startDate=…&endDate=…` to export them again.
+The same startup step also resets COMPLETED partitions that were stored with no rows although the table always has rows for a final partition: `adapot`, `epoch_param` after Byron, and `epoch` for an epoch with blocks. Earlier versions stored them too early (for example every `epoch` partition while epoch-aggr was off), and they are exported again now.
 
 <Callout type="warning">
 Re-exporting reads the rows from PostgreSQL again. If pruning has removed them there, the re-exported partitions are incomplete. Restore the catalog instead if you can.

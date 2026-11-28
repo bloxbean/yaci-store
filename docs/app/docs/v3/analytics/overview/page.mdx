@@ -110,11 +110,11 @@ The module includes 47 built-in table exporters covering all indexed Cardano dat
 
 ### Daily Tables (31 — partitioned by date)
 
-`address`, `address_balance`, `address_tx_amount`, `address_utxo`, `assets`, `block`, `committee_deregistration`, `committee_registration`, `cost_model`, `datum`, `delegation`, `delegation_vote`, `drep`, `drep_registration`, `gov_action_proposal`, `invalid_transaction`, `pool`, `pool_registration`, `pool_retirement`, `protocol_params_proposal`, `rollback`, `script`, `stake_address_balance`, `stake_registration`, `transaction`, `transaction_metadata`, `transaction_scripts`, `transaction_witness`, `tx_input`, `voting_procedure`, `withdrawal`
+`address`, `address_balance`, `address_tx_amount`, `address_utxo`, `assets`, `block`, `committee_deregistration`, `committee_registration`, `cost_model`, `datum`, `delegation`, `delegation_vote`, `drep`, `drep_registration`, `gov_action_proposal`, `invalid_transaction`, `pool`, `pool_registration`, `pool_retirement`, `protocol_params_proposal`, `script`, `stake_address_balance`, `stake_registration`, `transaction`, `transaction_metadata`, `transaction_scripts`, `transaction_witness`, `tx_input`, `voting_procedure`, `withdrawal`
 
 > **Note:** The `address` table is empty by default because address saving is disabled. To populate it, enable `store.utxo.save-address=true` in your configuration.
 
-> **Note:** A `rollback` row is filed under the day of its `current_slot` (the tip when the rollback happened). Its `block_time` is the start time of that slot, computed from the era configuration, because the block at `current_slot` is the one the rollback removed.
+> **Note:** The `rollback` table is not exported. It logs the rollbacks one node went through, which another node syncing the same chain does not share. Analytics stores written by earlier versions keep their `rollback` relation; nothing updates it any more.
 
 ### Epoch Tables (16 — partitioned by epoch)
 

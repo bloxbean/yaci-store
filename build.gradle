@@ -277,6 +277,7 @@ task distZip(type: Zip) {
         include 'application-blockfrost.properties'
         include 'application-custom-exporters.yml'
         include 'application-ledger-state.properties'
+        include 'application-snapshot-settings.properties'
         include 'application-plugins.yml'
         include 'application-mcp.yml'
         into zipDirName + '/' + configDir
@@ -323,6 +324,7 @@ task dockerZip(type: Zip) {
         include 'application.properties'
         include 'application-blockfrost.properties'
         include 'application-ledger-state.properties'
+        include 'application-snapshot-settings.properties'
         include 'application-plugins.yml'
         include 'application-analytics.properties'
         include 'application-custom-exporters.yml'

@@ -23,6 +23,13 @@ class SourcePruningTest {
     }
 
     @Test
+    void accountHistoryCleanupCountsAsPruning() {
+        assertThat(SourcePruning.enabled(Map.of("store.account.history-cleanup-enabled", "true")))
+                .containsExactly("store.account.history-cleanup-enabled=true");
+        assertThat(SourcePruning.enabled(Map.of("store.account.history-cleanup-enabled", "false"))).isEmpty();
+    }
+
+    @Test
     void aSourceWithoutPruningSettingsIsNotPruning() {
         assertThat(SourcePruning.enabled(null)).isEmpty();
         assertThat(SourcePruning.enabled(Map.of())).isEmpty();
