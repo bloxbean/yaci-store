@@ -2,6 +2,8 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.api.controller;
 
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.AssetsExtStoreProperties;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.service.TokenQueryService;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.model.ProgrammableTokenCip113;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.Cip113StorageReader;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.Cip26StorageReaderImpl;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.Item;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.Mapping;
@@ -55,14 +57,17 @@ class TokenApiEndToEndTest {
     private Cip68MetadataRepository cip68Repository;
     private Cip26MetadataRepository cip26Repository;
     private MockMvc mockMvc;
+    private Cip113StorageReader cip113Reader;
 
     @BeforeEach
     void setUp() {
         cip68Repository = mock(Cip68MetadataRepository.class);
         cip26Repository = mock(Cip26MetadataRepository.class);
+        cip113Reader = mock(Cip113StorageReader.class);
         Cip68TokenService cip68TokenService = new Cip68TokenService(cip68Repository);
         TokenQueryService queryService = new TokenQueryService(
-                new Cip26StorageReaderImpl(cip26Repository), new Cip68StorageReaderImpl(cip68TokenService));
+                new Cip26StorageReaderImpl(cip26Repository), new Cip68StorageReaderImpl(cip68TokenService),
+                cip113Reader);
 
         AssetsExtStoreProperties properties = new AssetsExtStoreProperties();
         TokenMetadataSubjectController subjectController = new TokenMetadataSubjectController(queryService, properties);
@@ -573,5 +578,77 @@ class TokenApiEndToEndTest {
                 .andExpect(jsonPath("$.subjects.length()").value(1))
                 .andExpect(jsonPath("$.subjects[0].metadata.name.value").value("matrix"))
                 .andExpect(jsonPath("$.subjects[0].standards.cip26.subject").value(FILE_SUBJECT));
+    }
+
+    // CIP-113: type and extensions.cip113
+
+    private static final ProgrammableTokenCip113 CIP113 = new ProgrammableTokenCip113(
+            "33".repeat(28), "11".repeat(28), "22".repeat(28), null, "44".repeat(28));
+
+    private void registered() {
+        when(cip113Reader.findByPolicyId(POLICY)).thenReturn(Optional.of(CIP113));
+        when(cip113Reader.findByPolicyIds(anyList())).thenReturn(Map.of(POLICY, CIP113));
+    }
+
+    @Test
+    void aNativeTokenIsTypedNativeAndHasNoExtensions() throws Exception {
+        store(row(333).name("Coin").description("A coin").validationErrors(List.of()).build());
+
+        mockMvc.perform(get("/api/v1/tokens/subject/{s}", FT_SUBJECT))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.subject.type").value("NATIVE"))
+                .andExpect(jsonPath("$.subject.extensions").doesNotExist());
+    }
+
+    @Test
+    void aProgrammableTokenHasItsMetadataAndTheRegistryNodeAsExtension() throws Exception {
+        store(row(333).name("Coin").description("A coin").validationErrors(List.of()).build());
+        registered();
+
+        mockMvc.perform(get("/api/v1/tokens/subject/{s}", FT_SUBJECT))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.subject.type").value("PROGRAMMABLE"))
+                .andExpect(jsonPath("$.subject.metadata.name.value").value("Coin"))
+                .andExpect(jsonPath("$.subject.metadata.valid").value(true))
+                .andExpect(jsonPath("$.subject.extensions.cip113.minting_logic_script").value("33".repeat(28)))
+                .andExpect(jsonPath("$.subject.extensions.cip113.transfer_logic_script").value("11".repeat(28)))
+                .andExpect(jsonPath("$.subject.extensions.cip113.third_party_transfer_logic_script").value("22".repeat(28)))
+                .andExpect(jsonPath("$.subject.extensions.cip113.unfracking_logic_script").doesNotExist())
+                .andExpect(jsonPath("$.subject.extensions.cip113.global_state_policy_id").value("44".repeat(28)));
+    }
+
+    @Test
+    void aProgrammableTokenWithoutCompanionMetadataIsServedWithTheErrorButNotUnderMandatoryOnly() throws Exception {
+        registered();
+        String withoutMetadata = POLICY + "4e6f4d657461"; // "NoMeta"
+
+        mockMvc.perform(get("/api/v1/tokens/subject/{s}", withoutMetadata))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.subject.type").value("PROGRAMMABLE"))
+                .andExpect(jsonPath("$.subject.extensions.cip113.transfer_logic_script").value("11".repeat(28)))
+                .andExpect(jsonPath("$.subject.metadata.valid").value(false))
+                .andExpect(jsonPath("$.subject.validation_errors.length()").value(1))
+                .andExpect(jsonPath("$.subject.validation_errors[0].cip").value("CIP-113"))
+                .andExpect(jsonPath("$.subject.validation_errors[0].field_name").value("companion_metadata"))
+                .andExpect(jsonPath("$.subject.validation_errors[0].field_category").value("MANDATORY"))
+                .andExpect(jsonPath("$.subject.validation_errors[0].code").value("missing_value"))
+                .andExpect(jsonPath("$.subject.validation_errors[0].sub_standard").doesNotExist());
+        mockMvc.perform(get("/api/v1/tokens/subject/{s}", withoutMetadata).param("validation", "MANDATORY_ONLY"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void theBatchServesProgrammableTokensAsTheSingleQueryDoes() throws Exception {
+        store(row(333).name("Coin").description("A coin").validationErrors(List.of()).build());
+        registered();
+        String withoutMetadata = POLICY + "4e6f4d657461";
+
+        mockMvc.perform(post("/api/v1/tokens/subject/query").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"subjects\":[\"" + FT_SUBJECT + "\",\"" + withoutMetadata + "\"]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.subjects.length()").value(2))
+                .andExpect(jsonPath("$.subjects[0].type").value("PROGRAMMABLE"))
+                .andExpect(jsonPath("$.subjects[1].type").value("PROGRAMMABLE"))
+                .andExpect(jsonPath("$.subjects[1].validation_errors[0].field_name").value("companion_metadata"));
     }
 }

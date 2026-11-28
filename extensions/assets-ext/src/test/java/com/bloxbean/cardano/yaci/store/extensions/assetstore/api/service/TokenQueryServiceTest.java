@@ -3,11 +3,16 @@ package com.bloxbean.cardano.yaci.store.extensions.assetstore.api.service;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.QueryPriority;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.ValidationScope;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.Subject;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.api.dto.TokenType;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.Item;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.model.Mapping;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.model.Cip26Metadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.Cip113Validation;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.model.ProgrammableTokenCip113;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.Cip113StorageReader;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.Cip26StorageReader;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.model.FungibleTokenMetadata;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.validation.FieldCategory;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.validation.ValidationError;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip68.storage.Cip68StorageReader;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,6 +32,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -46,11 +52,14 @@ class TokenQueryServiceTest {
     @Mock
     private Cip68StorageReader cip68StorageReader;
 
+    @Mock
+    private Cip113StorageReader cip113StorageReader;
+
     private TokenQueryService service;
 
     @BeforeEach
     void setUp() {
-        service = new TokenQueryService(cip26StorageReader, cip68StorageReader);
+        service = new TokenQueryService(cip26StorageReader, cip68StorageReader, cip113StorageReader);
 
         // Unknown subject: no CIP-26, no CIP-68
         when(cip26StorageReader.findBySubject(UNKNOWN_SUBJECT)).thenReturn(Optional.empty());
@@ -582,6 +591,105 @@ class TokenQueryServiceTest {
                     List.of(UNKNOWN_SUBJECT), List.of());
 
             assertThat(service.querySubjectBatch(UNKNOWN_SUBJECT, DEFAULT_PRIORITY, List.of(), prefetchData, false)).isEmpty();
+        }
+    }
+
+    @Nested
+    @DisplayName("CIP-113 programmable tokens")
+    class Cip113 {
+
+        // KNOWN_SUBJECT and UNKNOWN_SUBJECT share this policy: registering it makes both programmable
+        private static final String POLICY = KNOWN_SUBJECT.substring(0, 56);
+        private final ProgrammableTokenCip113 extension = new ProgrammableTokenCip113(
+                "33".repeat(28), "11".repeat(28), "22".repeat(28), null, "44".repeat(28));
+
+        private void registered() {
+            when(cip113StorageReader.findByPolicyId(POLICY)).thenReturn(Optional.of(extension));
+            when(cip113StorageReader.findByPolicyIds(any())).thenReturn(Map.of(POLICY, extension));
+        }
+
+        @Test
+        void aTokenOfAnUnregisteredPolicyIsNativeWithoutExtensions() {
+            Subject subject = service.querySubject(KNOWN_SUBJECT, DEFAULT_PRIORITY, List.of(), false).orElseThrow();
+
+            assertThat(subject.type()).isEqualTo(TokenType.NATIVE);
+            assertThat(subject.extensions()).isNull();
+        }
+
+        @Test
+        void aTokenOfARegisteredPolicyIsProgrammableWithItsMetadataAndTheExtension() {
+            registered();
+
+            Subject subject = service.querySubject(KNOWN_SUBJECT, DEFAULT_PRIORITY, List.of(), false).orElseThrow();
+
+            assertThat(subject.type()).isEqualTo(TokenType.PROGRAMMABLE);
+            assertThat(subject.extensions()).containsExactly(Map.entry("cip113", extension));
+            assertThat(subject.metadata().name().value()).isEqualTo("NUTCOIN");
+            assertThat(subject.validationErrors()).noneMatch(e -> ValidationError.CIP_113.equals(e.cip()));
+        }
+
+        @Test
+        void aTokenWithoutCompanionMetadataIsServedWithTheMandatoryError() {
+            registered();
+
+            Subject subject = service.querySubject(UNKNOWN_SUBJECT, DEFAULT_PRIORITY, List.of(), false).orElseThrow();
+
+            assertThat(subject.type()).isEqualTo(TokenType.PROGRAMMABLE);
+            assertThat(subject.extensions()).containsKey("cip113");
+            assertThat(subject.metadata().name()).isNull();
+            assertThat(subject.metadata().valid()).isFalse();
+            assertThat(subject.validationErrors()).containsExactly(Cip113Validation.missingCompanion());
+            ValidationError error = subject.validationErrors().getFirst();
+            assertThat(error.cip()).isEqualTo("CIP-113");
+            assertThat(error.fieldName()).isEqualTo("companion_metadata");
+            assertThat(error.fieldCategory()).isEqualTo(FieldCategory.MANDATORY);
+            assertThat(error.code()).isEqualTo("missing_value");
+        }
+
+        @Test
+        void mandatoryOnlyAndStrictLeaveOutATokenWithoutCompanionMetadata() {
+            registered();
+
+            assertThat(service.querySubject(UNKNOWN_SUBJECT, DEFAULT_PRIORITY, List.of(), false, ValidationScope.MANDATORY_ONLY)).isEmpty();
+            assertThat(service.querySubject(UNKNOWN_SUBJECT, DEFAULT_PRIORITY, List.of(), false, ValidationScope.STRICT)).isEmpty();
+        }
+
+        @Test
+        void aPropertyFilterKeepsTheCompanionError() {
+            registered();
+
+            Subject subject = service.querySubject(UNKNOWN_SUBJECT, DEFAULT_PRIORITY, List.of("ticker"), false).orElseThrow();
+
+            assertThat(subject.validationErrors()).containsExactly(Cip113Validation.missingCompanion());
+        }
+
+        @Test
+        void aSubjectInUpperCaseIsLookedUpByItsPolicyInLowerCase() {
+            registered();
+            String upper = UNKNOWN_SUBJECT.toUpperCase();
+
+            Subject subject = service.querySubject(upper, DEFAULT_PRIORITY, List.of(), false).orElseThrow();
+
+            assertThat(subject.subject()).isEqualTo(upper);
+            assertThat(subject.type()).isEqualTo(TokenType.PROGRAMMABLE);
+        }
+
+        @Test
+        void theBatchReadsTheRegistryOnceForTheDistinctPoliciesAndServesBothTokens() {
+            registered();
+
+            TokenQueryService.BatchPrefetchData prefetch = service.prefetchBatch(
+                    List.of(KNOWN_SUBJECT, UNKNOWN_SUBJECT, FLDT_SUBJECT), List.of());
+
+            verify(cip113StorageReader).findByPolicyIds(List.of(POLICY, FLDT_SUBJECT.substring(0, 56)));
+            Subject known = service.querySubjectBatch(KNOWN_SUBJECT, DEFAULT_PRIORITY, List.of(), prefetch, false).orElseThrow();
+            Subject unknown = service.querySubjectBatch(UNKNOWN_SUBJECT, DEFAULT_PRIORITY, List.of(), prefetch, false).orElseThrow();
+            Subject fldt = service.querySubjectBatch(FLDT_SUBJECT, DEFAULT_PRIORITY, List.of(), prefetch, false).orElseThrow();
+            assertThat(known.type()).isEqualTo(TokenType.PROGRAMMABLE);
+            assertThat(unknown.validationErrors()).containsExactly(Cip113Validation.missingCompanion());
+            assertThat(fldt.type()).isEqualTo(TokenType.NATIVE);
+            assertThat(service.querySubjectBatch(UNKNOWN_SUBJECT, DEFAULT_PRIORITY, List.of(), prefetch, false,
+                    ValidationScope.MANDATORY_ONLY)).isEmpty();
         }
     }
 }

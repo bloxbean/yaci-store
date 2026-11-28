@@ -1,5 +1,9 @@
 package com.bloxbean.cardano.yaci.store.extensions.assetstore;
 
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.Cip113Configuration;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.Cip113StorageReader;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.Cip113StorageReaderImpl;
+import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip113.storage.impl.repository.Cip113RegistryNodeRepository;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.Cip26StorageReader;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.Cip26StorageReaderImpl;
 import com.bloxbean.cardano.yaci.store.extensions.assetstore.cip26.storage.impl.repository.Cip26MetadataRepository;
@@ -22,7 +26,7 @@ import java.time.Clock;
 // Master gate, blockfrost-extension pattern (see BFAutoConfiguration): the master flag is
 // OFF by default (matchIfMissing = false), so enabling the single store.assets.ext.enabled
 // flag is the one opt-in an operator needs. The per-CIP sub-flags then default ON
-// (matchIfMissing = true) for CIP-26 and CIP-68, so the master flag alone gives the default
+// (matchIfMissing = true) for CIP-26, CIP-68 and CIP-113, so the master flag alone gives the default
 // behaviour.
 @ConditionalOnProperty(
         name = "store.assets.ext.enabled",
@@ -53,5 +57,12 @@ public class AssetsExtConfiguration {
     @ConditionalOnMissingBean
     public Cip68StorageReader cip68StorageReader(Cip68TokenService cip68TokenService) {
         return new Cip68StorageReaderImpl(cip68TokenService);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public Cip113StorageReader cip113StorageReader(Cip113RegistryNodeRepository cip113RegistryNodeRepository,
+                                                   Cip113Configuration cip113Configuration) {
+        return new Cip113StorageReaderImpl(cip113RegistryNodeRepository, cip113Configuration);
     }
 }

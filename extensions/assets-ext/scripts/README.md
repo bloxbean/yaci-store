@@ -90,9 +90,9 @@ have both. Use `--help` for the full flag list.
   the public `tokens.cardano.org`, which runs the registry's last release: point it
   at an instance of the build under test.
 - **Known differences** (`KNOWN_DIFFERENCES` in the script) are fields the registry
-  has and yaci-store does not, by design, and are not counted as divergences:
-  `subject.type` and `subject.extensions`, which come from the registry's CIP-113
-  support (assets-ext does not index CIP-113, ADR 0007).
+  has and yaci-store does not, by design, and are not counted as divergences. There
+  are none since assets-ext indexes CIP-113 (ADR 0011): `subject.type` and
+  `subject.extensions` are compared like every other field.
 - Subjects are compared in lower case: both services store them so (ADR 0001
   decision 7), and the registry has files written in upper case (39 on mainnet).
 

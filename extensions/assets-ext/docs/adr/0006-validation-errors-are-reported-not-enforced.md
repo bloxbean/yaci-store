@@ -4,6 +4,8 @@
 
 Accepted. Implemented in PR #1220 (merged 2026-11-05, `d187db632`). It is meant for yaci-store 3; decision 8 says what a 2.x backport would need.
 
+Amended by ADR 0012 for CIP-113 (2026-11-26): `cip` can be `CIP-113` (decision 2), and a registry output that is not a real node is dropped (decision 3).
+
 ## Date
 
 2026-10-20

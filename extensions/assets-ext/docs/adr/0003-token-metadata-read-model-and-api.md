@@ -4,6 +4,8 @@
 
 Accepted
 
+Amended by ADR 0012 for CIP-113 (2026-11-26): `type` and `extensions` on the subject, a subject found by its registry node alone, and a fourth batch query.
+
 Decisions 3, 4 and 5 and the `validation_errors` field apply ADR 0006 (validation errors are reported, not enforced) and are implemented in
 PR #1220 (merged 2026-11-05, `d187db632`).
 

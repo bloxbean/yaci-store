@@ -19,7 +19,7 @@ import java.util.Map;
 
 /**
  * Something that should have been a token and is not usable: a CIP-26 registry file with no usable subject, a CIP-68 datum that cannot be
- * decoded, an output whose indexing failed unexpectedly, and later the failures of CIP-113 (a jail with no token in it, ...). A token that
+ * decoded, an output whose indexing failed unexpectedly, a CIP-113 registry node that cannot be parsed or is spoofed. A token that
  * is indexed, whatever is wrong with it, is not here: its errors are in the {@code validation_errors} of its own row (ADR 0006, ADR 0007).
  * <p>
  * The columns are generic on purpose: {@code standard} is the standard whose rule found the problem and {@code combined_with} the other one
@@ -47,7 +47,7 @@ public class InvalidToken {
     @Column(nullable = false, length = 16)
     private String standard;
 
-    /** The other standard in a combination, for example {@code CIP-113} for a CIP-68 token in a jail. */
+    /** The other standard in a combination, for example {@code CIP-113} with {@code CIP-68}. */
     @Column(name = "combined_with", length = 16)
     @Nullable
     private String combinedWith;
