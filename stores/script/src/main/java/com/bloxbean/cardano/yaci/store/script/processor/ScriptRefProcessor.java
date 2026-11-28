@@ -45,8 +45,10 @@ public class ScriptRefProcessor {
                     .filter(Objects::nonNull)
                     .map(scriptRef -> {
                         com.bloxbean.cardano.client.spec.Script script;
+                        byte[] scriptRefBytes;
                         try {
-                            script = ScriptReferenceUtil.deserializeScriptRef(HexUtil.decodeHexString(scriptRef));
+                            scriptRefBytes = HexUtil.decodeHexString(scriptRef);
+                            script = ScriptReferenceUtil.deserializeScriptRef(scriptRefBytes);
                         } catch (Exception e) {
                             log.error("Script deserialization failed. Block hash: " + transactionEvent.getMetadata().getBlockHash(), e);
                             return null;
@@ -64,7 +66,7 @@ public class ScriptRefProcessor {
 
                             content = JsonUtil.getJson(nativeScript);
                             try {
-                                scriptHash = ScriptUtil.getNativeScriptHash(nativeScript);
+                                scriptHash = ScriptReferenceUtil.getReferenceScriptHash(scriptRefBytes);
                             } catch (Exception e) {
                                 log.error("Error getting native script hash, Block hash: " + transactionEvent.getMetadata().getBlockHash(), e);
                                 return null;
