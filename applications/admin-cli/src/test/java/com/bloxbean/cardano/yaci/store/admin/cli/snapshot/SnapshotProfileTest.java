@@ -93,6 +93,20 @@ class SnapshotProfileTest {
         }
     }
 
+    /** The /epochs endpoints need the epoch table even when blockfrost runs without ledger-state. */
+    @Test
+    void theBlockfrostProfileAloneCalculatesEpochs(@TempDir Path config) throws Exception {
+        copyProfileFiles(config);
+        Files.copy(REPO.resolve("config/application.properties"), config.resolve("application.properties"));
+
+        try (ConfigurableApplicationContext ctx = start("--spring.profiles.active=blockfrost",
+                "--spring.config.additional-location=file:" + config + "/")) {
+            Environment env = ctx.getEnvironment();
+            assertThat(env.getProperty("store.epoch-aggr.enabled")).isEqualTo("true");
+            assertThat(env.getProperty("store.epoch-aggr.epoch-calculation-enabled")).isEqualTo("true");
+        }
+    }
+
     @Test
     void theNodeDeclaresTheSameGroupAsTheCli() throws Exception {
         assertThat(group(REPO.resolve("applications/all/src/main/resources/application.yml")))

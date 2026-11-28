@@ -150,7 +150,9 @@ deletes rows before the analytics export reads them: UTxO pruning, for example, 
 output and its spend about 2160 blocks after the spend, so the spend never reaches the export and
 the snapshot would restore the output as unspent. Sync the source from genesis with every
 `*pruning-enabled` setting off (`store.utxo`, `store.transaction`, `store.adapot.reward`,
-`store.adapot.epoch-stake`, `store.account`, `store.blocks.cbor`, `store.transaction.cbor`).
+`store.adapot.epoch-stake`, `store.account`, `store.blocks.cbor`, `store.transaction.cbor`), and
+with `store.account.history-cleanup-enabled` off: it deletes older `address_balance` and
+`stake_address_balance` history the same way.
 Inspect and export refuse a source configured with any of them on, and import refuses a snapshot
 whose manifest records one. `snapshot inspect` exits with a non-zero code whenever export would be
 blocked.
@@ -867,7 +869,7 @@ original manifest or journal.
 | Remove or duplicate a table entry in a copied manifest. | Import rejects the manifest before loading. Include a zero-row table in this test. |
 | After interrupting import, change the manifest but keep its snapshot ID. | Resume rejects the manifest digest mismatch. |
 | Configure a different network/protocol magic. | Import rejects the network mismatch. |
-| Inspect or export with a `*pruning-enabled` setting on, or import a copied manifest whose `pruningSettings` has one set to `true`. | Export and import are blocked: a pruning source can drop spends before they are exported. |
+| Inspect or export with a `*pruning-enabled` setting or `store.account.history-cleanup-enabled` on, or import a copied manifest whose `pruningSettings` has one set to `true`. | Export and import are blocked: a pruning source can drop spends before they are exported. |
 | Import into a target containing chain data with no matching journal. | Import rejects the non-empty target. |
 | Inspect/export while another process holds the catalog open for writes. | Catalog access fails with instructions to stop analytics. |
 

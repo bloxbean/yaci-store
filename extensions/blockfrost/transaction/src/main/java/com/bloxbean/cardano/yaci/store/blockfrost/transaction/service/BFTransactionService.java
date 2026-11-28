@@ -75,7 +75,8 @@ public class BFTransactionService {
 
         String cborHex = storageReader.findTxCborHex(txHash)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "CBOR data not available. Enable store.transaction.save-cbor=true"));
+                        "CBOR data not available. Enable store.transaction.save-full-tx-cbor=true (whole transactions)"
+                                + " or store.transaction.save-cbor=true (bodies only)"));
 
         return BFTxCborDto.builder().cbor(cborHex).build();
     }
